@@ -1,0 +1,18 @@
+{
+  "name": "bun-testing",
+  "module": "src/bootstrap/server.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/bootstrap/server.ts",
+    "check": "tsc --noEmit",
+    "unit": "bun test tests/unit/router.test.ts tests/unit/simpleCache.test.ts tests/unit/database.test.ts tests/unit/providers.test.ts tests/unit/baseRepository.test.ts tests/unit/presentation.test.ts",
+    "integration": "bun test ./tests/integration/routes.integration.test.ts",
+    "test:all": "bun run unit && bun run integration",
+    "cli": "bun run src/cli/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.2"
+  }
+}
