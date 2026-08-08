@@ -6,6 +6,7 @@ import { appModules } from "./modules";
 import { createHttpKernel } from "./httpKernel";
 import { createHealthRoutes } from "./health";
 import { createMetricsRoutes } from "./metricsRoutes";
+import { createScimRoutes } from "./scimRoutes";
 import { prefixRouteMap } from "./prefixRouteMap";
 import { routeRegistry } from "./routeRegistry";
 import index from "../../index.html";
@@ -80,6 +81,10 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
 
   const healthRoutes = createHealthRoutes(dependencies);
   const metricsRoutes = createMetricsRoutes();
+  const scimRoutes = applyMiddlewareToRoutes(
+    registerRouteMap(createScimRoutes(dependencies), ["global", "scim"]),
+    kernel.globalMiddleware(),
+  );
   registerRoute("GET", "/health", []);
   registerRoute("GET", "/ready", []);
   registerRoute("GET", "/metrics", []);
@@ -87,6 +92,7 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
     ...healthRoutes,
     ...metricsRoutes,
+    ...scimRoutes,
     "/": index,
     ...wrappedModuleRoutes,
     [`${appConfig.apiPrefix}/*`]: async () => {

@@ -1,0 +1,39 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  sast:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          ignore-unfixed: true
+
+      - name: Run Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: .semgrep.yml
+
+      - name: Start services for dependency audit
+        run: docker compose up -d postgres redis --wait
+
+      - name: Dependency audit and secret scan
+        run: |
+          docker compose run --rm app sh -c "
+            bun install --frozen-lockfile &&
+            bun audit || true &&
+            sh scripts/security-scan.sh
+          "

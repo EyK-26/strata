@@ -69,6 +69,34 @@ Set unique token values in environment before starting with `APP_ENV=production`
 - **Headers:** CSP and HSTS enabled when `APP_ENV=production`
 - **Audit:** Model writes emit audit log entries with IP, user-agent, and checksum
 - **GDPR export:** `GET /api/v1/users/me/export` (authenticated)
+- **Field encryption:** user emails encrypted at rest with `KMS_ENCRYPTION_KEY` in production
+- **SCIM:** rotate `SCIM_BEARER_TOKEN`; provision via `/scim/v2/*`
+
+## SCIM provisioning incidents
+
+1. Verify IdP sends `Authorization: Bearer <SCIM_BEARER_TOKEN>`
+2. Check app logs for `401` on `/scim/v2/Users`
+3. Confirm newly provisioned users appear in `GET /scim/v2/Users`
+4. Group membership changes use `PATCH /scim/v2/Groups/:id` with `members` operations
+
+## Disaster recovery
+
+Full procedures: [docs/DR.md](docs/DR.md)
+
+| Target | Value |
+|--------|-------|
+| RPO | 1 hour |
+| RTO | 4 hours |
+
+**Quick failover:**
+
+1. Promote DR Postgres / restore latest backup
+2. Point `DATABASE_URL` and `REDIS_URL` to DR region
+3. Redeploy app + worker
+4. Update DNS to DR load balancer
+5. Run `bun run smoke` and monitor `/metrics`
+
+Quarterly DR drills are required — see checklist in `docs/DR.md`.
 
 ## Admin API
 

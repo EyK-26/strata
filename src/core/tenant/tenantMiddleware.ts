@@ -6,18 +6,26 @@ const DEFAULT_TENANT: TenantContext = {
   id: 1,
   slug: "default",
   plan: "enterprise",
+  region: "eu",
 };
 
 async function resolveTenant(tenantId: number): Promise<TenantContext | null> {
   const rows = (await db`
-    SELECT id, slug, plan
+    SELECT id, slug, plan, region
     FROM tenant
     WHERE id = ${tenantId}
     LIMIT 1
-  `) as Array<{ id: number; slug: string; plan: TenantContext["plan"] }>;
+  `) as Array<{
+    id: number;
+    slug: string;
+    plan: TenantContext["plan"];
+    region: TenantContext["region"];
+  }>;
 
   const row = rows[0];
-  return row ? { id: row.id, slug: row.slug, plan: row.plan } : null;
+  return row
+    ? { id: row.id, slug: row.slug, plan: row.plan, region: row.region ?? "eu" }
+    : null;
 }
 
 function createTenantMiddleware() {
@@ -33,6 +41,7 @@ function createTenantMiddleware() {
       const response = await next();
       const headers = new Headers(response.headers);
       headers.set("x-tenant-id", String(tenant.id));
+      headers.set("x-tenant-region", tenant.region);
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,

@@ -4,6 +4,7 @@ type TenantContext = {
   id: number;
   slug: string;
   plan: "free" | "pro" | "enterprise";
+  region: "eu" | "us" | "apac";
 };
 
 const tenantContext = new AsyncLocalStorage<TenantContext>();

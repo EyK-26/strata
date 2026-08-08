@@ -8,6 +8,7 @@ describe("discoverModules", () => {
 
     expect(orders).toEqual([...orders].sort((left, right) => left - right));
     expect(modules.map((module) => module.name)).toEqual([
+      "scim",
       "user",
       "admin",
       "organization",

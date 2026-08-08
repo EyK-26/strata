@@ -23,8 +23,13 @@ This document covers deploying WorkHub (42 API) to staging and production.
 | `RATE_LIMIT_PER_MINUTE` | No | Base rate limit (plan multipliers apply) |
 | `FEATURE_*` | No | Feature flags (`FEATURE_WEBHOOKS`, `FEATURE_AUDIT_LOG`, etc.) |
 | `OIDC_*` / `SAML_LOGIN_URL` | No | Enterprise SSO when enabled |
+| `SCIM_BEARER_TOKEN` | Prod | SCIM provisioning bearer token (rotate from default) |
+| `KMS_ENCRYPTION_KEY` | Prod | 32-byte hex/base64 key for email field encryption |
+| `FEATURE_FIELD_ENCRYPTION` | No | Defaults on in production |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | OpenTelemetry collector URL |
+| `SIEM_EXPORT_URL` | Prod | Audit log SIEM forwarding endpoint |
 
-Production startup refuses default `workhub-*-test-token` values. See `src/bootstrap/secretsGuard.ts`.
+Production startup refuses default `workhub-*-test-token` values and requires `KMS_ENCRYPTION_KEY` when field encryption is enabled. See `src/bootstrap/secretsGuard.ts`.
 
 ## Local development
 
@@ -127,3 +132,29 @@ k6 run scripts/load/k6-smoke.js
 ```
 
 Set `BASE_URL` and `ADMIN_API_TOKEN` environment variables as needed.
+
+## SCIM provisioning
+
+Enterprise IdPs (Okta, Azure AD) can provision users and groups via SCIM 2.0:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /scim/v2/ServiceProviderConfig` | Capability discovery |
+| `GET/POST /scim/v2/Users` | List/create users |
+| `GET/PATCH/DELETE /scim/v2/Users/:id` | Manage users |
+| `GET /scim/v2/Groups` | List organizations as groups |
+| `PATCH /scim/v2/Groups/:id` | Add members to organizations |
+
+Authenticate with `Authorization: Bearer <SCIM_BEARER_TOKEN>`.
+
+## Disaster recovery and multi-region
+
+See [docs/DR.md](docs/DR.md) for RPO/RTO targets, failover steps, and tenant region routing (`tenant.region`: `eu`, `us`, `apac`).
+
+## Security scanning
+
+CI runs Trivy, Semgrep, `bun audit`, and `scripts/security-scan.sh`. Run locally:
+
+```bash
+sh scripts/security-scan.sh
+```

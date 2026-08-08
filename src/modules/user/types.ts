@@ -4,6 +4,7 @@ interface UserRecord {
   id: number;
   name: string;
   email: string;
+  email_lookup?: string | null;
   role: UserRole;
   password_hash?: string | null;
   created_at: Date;

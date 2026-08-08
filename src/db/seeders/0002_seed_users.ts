@@ -13,12 +13,13 @@ const seeder: Seeder = {
     const memberPasswordHash = await hashPassword("password");
 
     await db`
-      INSERT INTO users (id, name, email, role, password_hash)
+      INSERT INTO users (id, name, email, email_lookup, role, password_hash)
       VALUES
-        (1, 'Admin User', 'admin@workhub.test', 'admin', ${adminPasswordHash}),
-        (2, 'Member User', 'member@workhub.test', 'member', ${memberPasswordHash})
+        (1, 'Admin User', 'admin@workhub.test', 'admin@workhub.test', 'admin', ${adminPasswordHash}),
+        (2, 'Member User', 'member@workhub.test', 'member@workhub.test', 'member', ${memberPasswordHash})
       ON CONFLICT (id) DO UPDATE SET
-        password_hash = EXCLUDED.password_hash
+        password_hash = EXCLUDED.password_hash,
+        email_lookup = EXCLUDED.email_lookup
     `;
     await db`
       SELECT setval(

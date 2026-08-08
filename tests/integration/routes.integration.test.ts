@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import {
-  TEST_ADMIN_API_TOKEN,
-  TEST_MEMBER_API_TOKEN,
-} from "../../src/domain/auth";
+import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../../src/domain/auth";
+import { TEST_SCIM_BEARER_TOKEN } from "../../src/domain/scim";
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 
@@ -672,5 +670,27 @@ describe("integration routes with postgres", () => {
     expect(response.headers.get("x-trace-id")).toBeTruthy();
     expect(response.headers.get("x-tenant-id")).toBe("1");
     expect(response.headers.get("server-timing")).toContain("app");
+  });
+
+  test("SCIM endpoints require bearer token and list seeded users", async () => {
+    const unauthorized = await fetch(`${baseUrl}/scim/v2/Users`);
+    expect(unauthorized.status).toBe(401);
+
+    const response = await fetch(`${baseUrl}/scim/v2/Users?count=10`, {
+      headers: {
+        authorization: `Bearer ${TEST_SCIM_BEARER_TOKEN}`,
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/scim+json");
+    const body = (await response.json()) as {
+      totalResults: number;
+      Resources: Array<{ userName: string }>;
+    };
+    expect(body.totalResults).toBeGreaterThanOrEqual(2);
+    expect(body.Resources.some((user) => user.userName === "admin@workhub.test")).toBe(
+      true,
+    );
   });
 });

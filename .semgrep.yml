@@ -1,0 +1,21 @@
+# Semgrep SAST rules for WorkHub
+
+rules:
+  - id: workhub-hardcoded-bearer-token
+    message: Avoid hard-coded bearer tokens outside test fixtures.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern-regex: Bearer workhub-[a-z-]+
+    paths:
+      exclude:
+        - tests/
+        - src/domain/
+
+  - id: workhub-sql-interpolation
+    message: Use parameterized SQL tagged templates instead of string interpolation.
+    severity: WARNING
+    languages: [typescript]
+    pattern-either:
+      - pattern: db`...${$VAR}...`
+      - pattern: `$SQL${$X}`
