@@ -19,6 +19,7 @@ import {
 import { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware";
 import { createCorsMiddleware } from "../core/http/corsMiddleware";
 import { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware";
+import { createMetricsMiddleware } from "../core/http/metricsMiddleware";
 import { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware";
 import type { AuthManager } from "../core/auth/guard";
 import type { Policy, PolicyGate } from "../core/auth/policy";
@@ -36,6 +37,7 @@ class HttpKernel {
     return [
       createCorsMiddleware(),
       createSecurityHeadersMiddleware(),
+      createMetricsMiddleware(),
       createRequestLoggingMiddleware(),
       requestIdMiddleware,
       createAuthMiddleware(auth),

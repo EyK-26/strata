@@ -5,8 +5,18 @@ interface UserRecord {
   name: string;
   email: string;
   role: UserRole;
+  password_hash?: string | null;
   created_at: Date;
   updated_at: Date;
+}
+
+interface OAuthIdentityRecord {
+  id: number;
+  user_id: number;
+  provider: string;
+  provider_user_id: string;
+  email: string | null;
+  created_at: Date;
 }
 
 interface ApiTokenRecord {
@@ -38,5 +48,6 @@ export type {
   ApiTokenRecord,
   ApiTokenResource,
   CreatedApiToken,
+  OAuthIdentityRecord,
   UserRecord,
 };

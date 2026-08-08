@@ -58,10 +58,15 @@ function resolveApplicationLogger(): Logger {
   return appLogger;
 }
 
+function resolveApplicationDependencies() {
+  return requireActiveApplicationContext().dependencies;
+}
+
 export {
   resolveApplicationAuth,
   resolveApplicationCache,
   resolveApplicationConfig,
+  resolveApplicationDependencies,
   resolveApplicationLogger,
   resolveApplicationPolicyGate,
   resolveApplicationQueue,

@@ -7,7 +7,7 @@
     "start": "bun run src/bootstrap/server.ts",
     "check": "tsc --noEmit",
     "unit": "bun test tests/unit",
-    "integration": "bun test ./tests/integration/routes.integration.test.ts",
+    "integration": "bun test ./tests/integration/routes.integration.test.ts ./tests/integration/queue.integration.test.ts",
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
     "cli": "bun run src/cli/index.ts"
   },

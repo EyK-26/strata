@@ -12,6 +12,12 @@ import {
 } from "../../core/validation/rules";
 
 type TokenIdParams = { id: string };
+type OAuthProviderParams = { provider: string };
+
+interface LoginBodyDto {
+  email: string;
+  password: string;
+}
 
 interface CreateApiTokenBodyDto {
   name: string;
@@ -47,6 +53,22 @@ class CreateApiTokenRequest extends FormRequest<CreateApiTokenBodyDto> {
 
 const createApiTokenRequest = new CreateApiTokenRequest();
 
+class LoginRequest extends FormRequest<LoginBodyDto> {
+  protected parse(payload: unknown): LoginBodyDto {
+    const validated = validateObject(payload, {
+      email: [required(), stringRule(), minLength(3), maxLength(255)],
+      password: [required(), stringRule(), minLength(8), maxLength(255)],
+    });
+
+    return {
+      email: validated.email as string,
+      password: validated.password as string,
+    };
+  }
+}
+
+const loginRequest = new LoginRequest();
+
 function parseTokenIdParams(params: TokenIdParams): { id: number } {
   return {
     id: parsePositiveIntParam(params.id, "token id"),
@@ -59,5 +81,9 @@ async function parseCreateApiTokenBody(
   return await createApiTokenRequest.validate(request);
 }
 
-export { parseCreateApiTokenBody, parseTokenIdParams };
-export type { CreateApiTokenBodyDto, TokenIdParams };
+async function parseLoginBody(request: Request): Promise<LoginBodyDto> {
+  return await loginRequest.validate(request);
+}
+
+export { parseCreateApiTokenBody, parseLoginBody, parseTokenIdParams };
+export type { CreateApiTokenBodyDto, LoginBodyDto, OAuthProviderParams, TokenIdParams };

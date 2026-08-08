@@ -52,6 +52,7 @@ WorkHub domain routes are served under **`/api/v1`** by default (`API_PREFIX`). 
 
 - `GET /health`
 - `GET /ready`
+- `GET /metrics` — Prometheus text metrics
 
 ### Model-aware authorization
 
@@ -84,6 +85,28 @@ Token lifecycle endpoints (authenticated):
 Protected mutations require both authentication and a matching ability (for example `projects:delete`, `organizations:update`). Seeded admin/member tokens use `["*"]`; create scoped tokens via `POST /auth/tokens`.
 
 Set `AUTH_DEV_HEADERS=false` in production and rely on bearer tokens only.
+
+Password and OAuth login:
+
+- `POST /api/v1/auth/login` — `{ "email": "...", "password": "..." }` returns a bearer token (seeded users use password `password`)
+- `GET /api/v1/auth/oauth/:provider` — redirect to provider (GitHub when configured; `mock` in non-production)
+- `GET /api/v1/auth/oauth/:provider/callback?code=...` — exchange OAuth code for a bearer token
+
+### Audit log, webhooks, and search
+
+- `GET /api/v1/audit-logs` — recent model change audit entries (`audit:read`)
+- `GET/POST /api/v1/webhooks` — register outbound webhook endpoints (`webhooks:read`, `webhooks:write`)
+- `GET /api/v1/search?q=registry` — PostgreSQL full-text search across tasks and comments
+
+Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC).
+
+### OpenAPI and SDK generation
+
+```bash
+bun run cli route:list
+bun run cli openapi:generate   # writes docs/openapi.json from registered routes
+bun run cli sdk:generate       # writes sdk/typescript/client.ts
+```
 
 ### Facades
 
@@ -118,10 +141,17 @@ Generated modules include HttpKernel-aware routes, FormRequest-style body parsin
 - Postgres connections use a configurable pool (`DB_POOL_*` env vars) with health-aware reconnect on `/ready`
 - `SIGINT` / `SIGTERM` drain the HTTP server and close database connections
 - `queue:work` stops cleanly on shutdown signals after the current Redis poll cycle
+- Production startup rejects default seed API tokens when `APP_ENV=production`
+- Migrations use a Postgres advisory lock for single-flight deploy safety
 
-### OpenAPI
+### Production Docker image
 
-A starter spec lives at `docs/openapi.yaml` (base URL `/api/v1`).
+```bash
+docker build -t workhub-app .
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+The production compose overlay sets `APP_ENV=production`, disables dev auth headers, and runs immutable images without bind mounts.
 
 ## Environment
 
@@ -145,6 +175,7 @@ A starter spec lives at `docs/openapi.yaml` (base URL `/api/v1`).
 | `DB_POOL_IDLE_TIMEOUT` | Close idle pool connections after N seconds (default `30`) |
 | `DB_POOL_MAX_LIFETIME` | Max connection lifetime in seconds (default `3600`) |
 | `DB_CONNECTION_TIMEOUT` | Connection establishment timeout in seconds (default `10`) |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `OAUTH_REDIRECT_URI` | GitHub OAuth login |
 
 Dev/test auth headers (`GuestGuard`, when `AUTH_DEV_HEADERS=true`):
 
@@ -173,6 +204,8 @@ bun run test:all
 bun run check
 bun run cli help
 bun run cli route:list
+bun run cli openapi:generate
+bun run cli sdk:generate
 bun run cli queue:work
 bun run cli schedule:run
 ```
@@ -212,6 +245,8 @@ bun run cli queue:failed
 bun run cli queue:retry <id>
 bun run cli queue:flush-failed
 bun run cli route:list
+bun run cli openapi:generate
+bun run cli sdk:generate
 bun run cli schedule:run
 ```
 
@@ -289,7 +324,12 @@ docker compose down -v --remove-orphans
 - `GET /reports/summary`
 - `GET /reports/organizations/:id`
 - `GET /auth/me`
+- `POST /auth/login`
+- `GET /auth/oauth/:provider` and `/callback`
 - `GET/POST /auth/tokens`
 - `DELETE /auth/tokens/:id`
+- `GET /audit-logs`
+- `GET/POST /webhooks`
+- `GET /search?q=...`
 
 Protected mutations (`PATCH`/`DELETE` on projects, tasks, comments, and organization updates) require authentication. Reports exclude soft-deleted records.

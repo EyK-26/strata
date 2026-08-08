@@ -5,6 +5,7 @@ import { applyMiddlewareToRoutes } from "../core/http/middleware";
 import { appModules } from "./modules";
 import { createHttpKernel } from "./httpKernel";
 import { createHealthRoutes } from "./health";
+import { createMetricsRoutes } from "./metricsRoutes";
 import { prefixRouteMap } from "./prefixRouteMap";
 import { routeRegistry } from "./routeRegistry";
 import index from "../../index.html";
@@ -78,11 +79,14 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
   );
 
   const healthRoutes = createHealthRoutes(dependencies);
+  const metricsRoutes = createMetricsRoutes();
   registerRoute("GET", "/health", []);
   registerRoute("GET", "/ready", []);
+  registerRoute("GET", "/metrics", []);
 
   return {
     ...healthRoutes,
+    ...metricsRoutes,
     "/": index,
     ...wrappedModuleRoutes,
     [`${appConfig.apiPrefix}/*`]: async () => {

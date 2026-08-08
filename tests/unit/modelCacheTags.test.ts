@@ -34,6 +34,8 @@ describe("discoverModelTableNames", () => {
       "project",
       "comment",
       "task",
+      "audit_log",
+      "webhook",
     ]);
   });
 });

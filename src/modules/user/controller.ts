@@ -8,9 +8,16 @@ import {
   withErrorHandling,
 } from "../../core/http";
 import type { AuthManager } from "../../core/auth/guard";
+import AuthService from "./authService";
 import TokenService from "./tokenService";
-import { tokenServiceToken } from "./provider";
-import { parseCreateApiTokenBody, parseTokenIdParams, type TokenIdParams } from "./requests";
+import { authServiceToken, tokenServiceToken } from "./provider";
+import {
+  parseCreateApiTokenBody,
+  parseLoginBody,
+  parseTokenIdParams,
+  type OAuthProviderParams,
+  type TokenIdParams,
+} from "./requests";
 import { toUserResource } from "./resources";
 
 class AuthController {
@@ -24,6 +31,10 @@ class AuthController {
     return resolveService(this.dependencies, tokenServiceToken);
   }
 
+  private get authService(): AuthService {
+    return resolveService(this.dependencies, authServiceToken);
+  }
+
   private async requireUserId(request: Request): Promise<number> {
     const user = await this.auth.requireUser(request);
     const userId = typeof user.id === "number" ? user.id : Number(user.id);
@@ -34,6 +45,61 @@ class AuthController {
 
     return userId;
   }
+
+  readonly login = withErrorHandling(async (request: Request) => {
+    const body = await parseLoginBody(request);
+    const created = await this.authService.loginWithPassword(body.email, body.password);
+    const authUser = await this.tokens.resolveUserFromToken(created.plainTextToken);
+
+    if (!authUser) {
+      throw new Error("Unable to resolve authenticated user.");
+    }
+
+    const user = await this.tokens.findByIdOrThrow(Number(authUser.id));
+
+    return createdResponse({
+      token: created.plainTextToken,
+      user: toUserResource(user),
+    });
+  });
+
+  readonly oauthRedirect = withErrorHandling(async (request: Request) => {
+    const params = (request as Request & { params?: OAuthProviderParams }).params;
+    const provider = params?.provider;
+
+    if (!provider) {
+      throw new Error("OAuth provider is required.");
+    }
+
+    const state = crypto.randomUUID();
+    const url = this.authService.buildOAuthAuthorizationUrl(provider, state);
+
+    return Response.redirect(url, 302);
+  });
+
+  readonly oauthCallback = withErrorHandling(async (request: Request) => {
+    const params = (request as Request & { params?: OAuthProviderParams }).params;
+    const provider = params?.provider;
+    const code = new URL(request.url).searchParams.get("code");
+
+    if (!provider || !code) {
+      throw new Error("OAuth provider and code are required.");
+    }
+
+    const created = await this.authService.loginWithOAuth(provider, code);
+    const authUser = await this.tokens.resolveUserFromToken(created.plainTextToken);
+
+    if (!authUser) {
+      throw new Error("Unable to resolve authenticated user.");
+    }
+
+    const user = await this.tokens.findByIdOrThrow(Number(authUser.id));
+
+    return createdResponse({
+      token: created.plainTextToken,
+      user: toUserResource(user),
+    });
+  });
 
   readonly me = withErrorHandling(async (request: Request) => {
     const userId = await this.requireUserId(request);

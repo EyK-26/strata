@@ -4,7 +4,7 @@ import type { UserRecord } from "./types";
 const userTable = defineTable<UserRecord, "id">({
   name: "users",
   primaryKey: "id",
-  columns: ["id", "name", "email", "role", "created_at", "updated_at"],
+  columns: ["id", "name", "email", "role", "password_hash", "created_at", "updated_at"],
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 

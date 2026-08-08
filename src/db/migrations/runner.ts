@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import db from "../connection";
 import { seedDatabase } from "../seeders/runner";
+import { withMigrationLock } from "./advisoryLock";
 import type { Migration } from "./types";
 
 type AppliedMigrationRow = {
@@ -43,7 +44,9 @@ async function loadMigrations(): Promise<Migration[]> {
         entry.endsWith(".ts") &&
         entry !== "types.ts" &&
         entry !== "index.ts" &&
-        entry !== "runner.ts",
+        entry !== "index.ts" &&
+        entry !== "runner.ts" &&
+        entry !== "advisoryLock.ts",
     )
     .sort();
 
@@ -55,7 +58,9 @@ async function loadMigrations(): Promise<Migration[]> {
     }),
   );
 
-  return loadedMigrations;
+  return loadedMigrations.filter(
+    (migration): migration is Migration => migration?.name !== undefined,
+  );
 }
 
 async function getMigrationStatus(): Promise<MigrationStatus[]> {
@@ -75,35 +80,37 @@ async function getMigrationStatus(): Promise<MigrationStatus[]> {
 }
 
 async function migrateDatabase(): Promise<void> {
-  const migrations = await loadMigrations();
-  const applied = await getAppliedMigrations();
-  const appliedNames = new Set(applied.map(({ name }) => name));
-  const nextBatch =
-    applied.reduce(
-      (currentMax, { batch }) => Math.max(currentMax, Number(batch)),
-      0,
-    ) + 1;
+  await withMigrationLock(async () => {
+    const migrations = await loadMigrations();
+    const applied = await getAppliedMigrations();
+    const appliedNames = new Set(applied.map(({ name }) => name));
+    const nextBatch =
+      applied.reduce(
+        (currentMax, { batch }) => Math.max(currentMax, Number(batch)),
+        0,
+      ) + 1;
 
-  const pendingMigrations = migrations.filter(
-    ({ name }) => !appliedNames.has(name),
-  );
+    const pendingMigrations = migrations.filter(
+      ({ name }) => !appliedNames.has(name),
+    );
 
-  if (pendingMigrations.length === 0) {
-    console.log("No pending migrations.");
-    return;
-  }
+    if (pendingMigrations.length === 0) {
+      console.log("No pending migrations.");
+      return;
+    }
 
-  for (const migration of pendingMigrations) {
-    console.log(`Migrating ${migration.name}...`);
-    await migration.up(db);
-    await db`
-      INSERT INTO framework_migrations (name, batch)
-      VALUES (${migration.name}, ${nextBatch})
-      ON CONFLICT (name) DO NOTHING
-    `;
-  }
+    for (const migration of pendingMigrations) {
+      console.log(`Migrating ${migration.name}...`);
+      await migration.up(db);
+      await db`
+        INSERT INTO framework_migrations (name, batch)
+        VALUES (${migration.name}, ${nextBatch})
+        ON CONFLICT (name) DO NOTHING
+      `;
+    }
 
-  console.log(`Applied ${pendingMigrations.length} migration(s).`);
+    console.log(`Applied ${pendingMigrations.length} migration(s).`);
+  });
 }
 
 async function rollbackDatabase(): Promise<void> {

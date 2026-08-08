@@ -1,17 +1,23 @@
 import type { ServiceProvider } from "../../bootstrap/contracts";
+import { GitHubOAuthProvider, MockOAuthProvider } from "../../core/auth/oauth/providers";
 import ApiTokenRepository from "./apiTokenRepository";
+import AuthService from "./authService";
+import OAuthIdentityRepository from "./oauthIdentityRepository";
 import UserRepository from "./repository";
 import TokenService from "./tokenService";
 
 const userRepositoryToken = "user.repository";
 const apiTokenRepositoryToken = "user.apiTokenRepository";
 const tokenServiceToken = "user.tokenService";
+const authServiceToken = "user.authService";
+const oauthIdentityRepositoryToken = "user.oauthIdentityRepository";
 
 const userProvider: ServiceProvider = {
   name: "user.provider",
   register({ container }) {
     container.singleton(userRepositoryToken, () => new UserRepository());
     container.singleton(apiTokenRepositoryToken, () => new ApiTokenRepository());
+    container.singleton(oauthIdentityRepositoryToken, () => new OAuthIdentityRepository());
   },
   boot({ container }) {
     container.singleton(tokenServiceToken, () => {
@@ -19,12 +25,48 @@ const userProvider: ServiceProvider = {
       const tokens = container.resolve<ApiTokenRepository>(apiTokenRepositoryToken);
       return new TokenService(users, tokens);
     });
+
+    container.singleton(authServiceToken, () => {
+      const authService = new AuthService(
+        container.resolve<UserRepository>(userRepositoryToken),
+        container.resolve<TokenService>(tokenServiceToken),
+        container.resolve<OAuthIdentityRepository>(oauthIdentityRepositoryToken),
+      );
+
+      const githubClientId = process.env.GITHUB_CLIENT_ID?.trim();
+      const githubClientSecret = process.env.GITHUB_CLIENT_SECRET?.trim();
+      const oauthRedirectUri = process.env.OAUTH_REDIRECT_URI?.trim();
+
+      if (githubClientId && githubClientSecret && oauthRedirectUri) {
+        authService.registerOAuthProvider(
+          new GitHubOAuthProvider({
+            clientId: githubClientId,
+            clientSecret: githubClientSecret,
+            redirectUri: oauthRedirectUri,
+          }),
+        );
+      }
+
+      if ((process.env.APP_ENV ?? "local") !== "production") {
+        authService.registerOAuthProvider(
+          new MockOAuthProvider({
+            providerUserId: "mock-user-1",
+            email: "oauth@workhub.test",
+            name: "OAuth User",
+          }),
+        );
+      }
+
+      return authService;
+    });
   },
 };
 
 export default userProvider;
 export {
   apiTokenRepositoryToken,
+  authServiceToken,
+  oauthIdentityRepositoryToken,
   tokenServiceToken,
   userRepositoryToken,
 };

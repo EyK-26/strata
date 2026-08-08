@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      AUTH_DEV_HEADERS: "false"
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
+      REDIS_URL: redis://redis:6379
+      CACHE_DRIVER: redis
+      QUEUE_DRIVER: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    command: ["sh", "-c", "bun run cli migrate && bun run start"]
+
+  worker:
+    build: .
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
+      REDIS_URL: redis://redis:6379
+      QUEUE_DRIVER: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["bun", "run", "cli", "queue:work"]

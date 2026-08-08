@@ -1,5 +1,6 @@
 import type { Seeder } from "./types";
 import { hashApiToken } from "../../core/auth/tokenHash";
+import { hashPassword } from "../../core/auth/password";
 import {
   TEST_ADMIN_API_TOKEN,
   TEST_MEMBER_API_TOKEN,
@@ -8,12 +9,16 @@ import {
 const seeder: Seeder = {
   name: "0002_seed_users",
   async run(db) {
+    const adminPasswordHash = await hashPassword("password");
+    const memberPasswordHash = await hashPassword("password");
+
     await db`
-      INSERT INTO users (id, name, email, role)
+      INSERT INTO users (id, name, email, role, password_hash)
       VALUES
-        (1, 'Admin User', 'admin@workhub.test', 'admin'),
-        (2, 'Member User', 'member@workhub.test', 'member')
-      ON CONFLICT (id) DO NOTHING
+        (1, 'Admin User', 'admin@workhub.test', 'admin', ${adminPasswordHash}),
+        (2, 'Member User', 'member@workhub.test', 'member', ${memberPasswordHash})
+      ON CONFLICT (id) DO UPDATE SET
+        password_hash = EXCLUDED.password_hash
     `;
     await db`
       SELECT setval(

@@ -12,6 +12,9 @@ describe("discoverModules", () => {
       "comment",
       "task",
       "report",
+      "audit",
+      "webhook",
+      "search",
     ]);
   });
 

@@ -17,6 +17,8 @@ import {
 import { queueWorkCommand } from "./commands/queueWork";
 import { rollbackCommand } from "./commands/rollback";
 import { routeListCommand } from "./commands/routeList";
+import { openapiGenerateCommand } from "./commands/openapiGenerate";
+import { sdkGenerateCommand } from "./commands/sdkGenerate";
 import { scheduleRunCommand } from "./commands/scheduleRun";
 import { seedCommand } from "./commands/seed";
 
@@ -46,6 +48,8 @@ const commands: Record<
   "queue:retry": (id?: string) => queueRetryCommand(id),
   "queue:flush-failed": () => queueFlushFailedCommand(),
   "route:list": () => routeListCommand(),
+  "openapi:generate": () => openapiGenerateCommand(),
+  "sdk:generate": () => sdkGenerateCommand(),
   "schedule:run": () => scheduleRunCommand(),
 };
 

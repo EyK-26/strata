@@ -7,6 +7,15 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
   const controller = new AuthController(dependencies);
 
   return {
+    "/auth/login": {
+      POST: controller.login,
+    },
+    "/auth/oauth/:provider": {
+      GET: controller.oauthRedirect,
+    },
+    "/auth/oauth/:provider/callback": {
+      GET: controller.oauthCallback,
+    },
     "/auth/me": kernel.wrapAuthenticated(
       controller.me as unknown as RouteHandler,
     ),

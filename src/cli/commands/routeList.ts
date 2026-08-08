@@ -1,6 +1,11 @@
+import { createAppContext } from "../../bootstrap/context";
+import { createRoutes } from "../../bootstrap/createRoutes";
 import { routeRegistry } from "../../bootstrap/routeRegistry";
 
 function routeListCommand(): void {
+  const { dependencies } = createAppContext();
+  createRoutes(dependencies);
+
   const routes = routeRegistry.list();
 
   if (routes.length === 0) {
