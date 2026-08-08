@@ -17,10 +17,12 @@ function createTaskRoutes(
     },
     "/tasks/:id": {
       GET: controller.show,
-      PATCH: kernel.wrapAuthenticated(
+      PATCH: kernel.wrapAbility(
+        "tasks:update",
         controller.update as unknown as RouteHandler,
       ),
-      DELETE: kernel.wrapAuthenticated(
+      DELETE: kernel.wrapAbility(
+        "tasks:delete",
         controller.destroy as unknown as RouteHandler,
       ),
     },

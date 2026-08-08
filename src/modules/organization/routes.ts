@@ -17,10 +17,14 @@ function createOrganizationRoutes(
     },
     "/organizations/:id": {
       GET: controller.show,
-      PATCH: kernel.wrapAuthenticated(
+      PATCH: kernel.wrapAbility(
+        "organizations:update",
         controller.update as unknown as RouteHandler,
       ),
-      DELETE: controller.destroy,
+      DELETE: kernel.wrapAbility(
+        "organizations:delete",
+        controller.destroy as unknown as RouteHandler,
+      ),
     },
   };
 }

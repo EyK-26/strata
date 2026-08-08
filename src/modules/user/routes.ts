@@ -11,15 +11,18 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
       controller.me as unknown as RouteHandler,
     ),
     "/auth/tokens": {
-      GET: kernel.wrapAuthenticated(
+      GET: kernel.wrapAbility(
+        "auth:tokens:read",
         controller.listTokens as unknown as RouteHandler,
       ),
-      POST: kernel.wrapAuthenticated(
+      POST: kernel.wrapAbility(
+        "auth:tokens:write",
         controller.storeToken as unknown as RouteHandler,
       ),
     },
     "/auth/tokens/:id": {
-      DELETE: kernel.wrapAuthenticated(
+      DELETE: kernel.wrapAbility(
+        "auth:tokens:delete",
         controller.destroyToken as unknown as RouteHandler,
       ),
     },

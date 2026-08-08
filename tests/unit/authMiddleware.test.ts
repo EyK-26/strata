@@ -15,7 +15,7 @@ describe("GuestGuard", () => {
       }),
     );
 
-    expect(user).toEqual({ id: "7", role: "member" });
+    expect(user).toEqual({ id: "7", role: "member", abilities: ["*"] });
   });
 });
 

@@ -77,6 +77,26 @@ const appEnvSchema: EnvSchema = defineEnvSchema({
   MEMBER_API_TOKEN: {
     default: "",
   },
+  DB_POOL_MAX: {
+    integer: true,
+    minimum: 1,
+    default: "10",
+  },
+  DB_POOL_IDLE_TIMEOUT: {
+    integer: true,
+    minimum: 0,
+    default: "30",
+  },
+  DB_POOL_MAX_LIFETIME: {
+    integer: true,
+    minimum: 0,
+    default: "3600",
+  },
+  DB_CONNECTION_TIMEOUT: {
+    integer: true,
+    minimum: 1,
+    default: "10",
+  },
 });
 
 const appConfigKeys = {

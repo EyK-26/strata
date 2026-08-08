@@ -17,10 +17,12 @@ function createProjectRoutes(
     },
     "/projects/:id": {
       GET: controller.show,
-      PATCH: kernel.wrapAuthenticated(
+      PATCH: kernel.wrapAbility(
+        "projects:update",
         controller.update as unknown as RouteHandler,
       ),
-      DELETE: kernel.wrapAuthenticated(
+      DELETE: kernel.wrapAbility(
+        "projects:delete",
         controller.destroy as unknown as RouteHandler,
       ),
     },

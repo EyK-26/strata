@@ -34,11 +34,22 @@ class RedisQueue implements Queue {
 }
 
 class QueueWorker {
+  private running = false;
+  private stopping = false;
+
   constructor(
     private readonly redisUrl: string,
     private readonly failedJobs: FailedJobService,
     private readonly timeoutSeconds = 5,
   ) {}
+
+  requestStop(): void {
+    this.stopping = true;
+  }
+
+  isRunning(): boolean {
+    return this.running;
+  }
 
   async processNext(): Promise<boolean> {
     const client = new RedisClient(this.redisUrl);
@@ -61,9 +72,13 @@ class QueueWorker {
   }
 
   async run(): Promise<void> {
-    while (true) {
+    this.running = true;
+
+    while (!this.stopping) {
       await this.processNext();
     }
+
+    this.running = false;
   }
 }
 

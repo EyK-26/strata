@@ -8,6 +8,8 @@ import {
 } from "../../src/bootstrap/config";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { ConfigStore } from "../../src/bootstrap/contracts";
+import { ForbiddenError } from "../../src/core/errors/http";
+import { tokenServiceToken } from "../../src/modules/user/provider";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
@@ -56,5 +58,23 @@ describe("HttpKernel", () => {
     const response = await handler(new Request("http://example.test/protected"));
 
     expect(response.status).toBe(401);
+  });
+
+  test("wrapAbility rejects guests before ability checks", async () => {
+    const dependencies = createKernelDependencies();
+    dependencies.container.set(tokenServiceToken, {
+      requireAbility: () => {
+        throw new ForbiddenError("Token ability required.");
+      },
+      tokenCan: () => false,
+    });
+
+    const kernel = createHttpKernel(dependencies);
+    const handler = kernel.wrapAbility("projects:delete", async () =>
+      Response.json({ ok: true }),
+    );
+
+    const guestResponse = await handler(new Request("http://example.test/projects/1"));
+    expect(guestResponse.status).toBe(401);
   });
 });

@@ -44,7 +44,7 @@ Routes are wrapped by an `HttpKernel` that applies middleware in layers:
 - **`api` group:** Redis-backed rate limiting when `REDIS_URL` is set (keyed by bearer token, user id, or IP)
 - **`authenticated` group:** requires a signed-in user (`401` for guests)
 
-Module routes use helpers such as `kernel.wrapAuthenticated(handler)` for protected mutations. See `src/bootstrap/httpKernel.ts`.
+Module routes use helpers such as `kernel.wrapAuthenticated(handler)` for protected mutations and `kernel.wrapAbility("projects:delete", handler)` when a bearer token must carry a specific scope. See `src/bootstrap/httpKernel.ts`.
 
 ### API prefix
 
@@ -77,9 +77,11 @@ Authorization: Bearer workhub-member-test-token
 Token lifecycle endpoints (authenticated):
 
 - `GET /api/v1/auth/me` — current user
-- `GET /api/v1/auth/tokens` — list tokens (hashes never returned)
+- `GET /api/v1/auth/tokens` — list tokens (requires `auth:tokens:read` or `*`)
 - `POST /api/v1/auth/tokens` — create token (`name`, optional `abilities`, `expires_in_days`)
 - `DELETE /api/v1/auth/tokens/:id` — revoke a token
+
+Protected mutations require both authentication and a matching ability (for example `projects:delete`, `organizations:update`). Seeded admin/member tokens use `["*"]`; create scoped tokens via `POST /auth/tokens`.
 
 Set `AUTH_DEV_HEADERS=false` in production and rely on bearer tokens only.
 
@@ -111,6 +113,12 @@ Generated modules include HttpKernel-aware routes, FormRequest-style body parsin
 - Local file storage via `storage()` (`STORAGE_PATH`, default `storage/`)
 - Log mail driver via `mail()` for development notifications
 
+### Production lifecycle
+
+- Postgres connections use a configurable pool (`DB_POOL_*` env vars) with health-aware reconnect on `/ready`
+- `SIGINT` / `SIGTERM` drain the HTTP server and close database connections
+- `queue:work` stops cleanly on shutdown signals after the current Redis poll cycle
+
 ### OpenAPI
 
 A starter spec lives at `docs/openapi.yaml` (base URL `/api/v1`).
@@ -133,6 +141,10 @@ A starter spec lives at `docs/openapi.yaml` (base URL `/api/v1`).
 | `CORS_ALLOWED_ORIGINS` | CORS allowlist (`*` in development) |
 | `RATE_LIMIT_PER_MINUTE` | Per-token/user/IP limit (default `120`) |
 | `STORAGE_PATH` | Local storage root (default `storage`) |
+| `DB_POOL_MAX` | Postgres pool size (default `10`) |
+| `DB_POOL_IDLE_TIMEOUT` | Close idle pool connections after N seconds (default `30`) |
+| `DB_POOL_MAX_LIFETIME` | Max connection lifetime in seconds (default `3600`) |
+| `DB_CONNECTION_TIMEOUT` | Connection establishment timeout in seconds (default `10`) |
 
 Dev/test auth headers (`GuestGuard`, when `AUTH_DEV_HEADERS=true`):
 

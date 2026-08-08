@@ -19,8 +19,11 @@ import {
 import { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware";
 import { createCorsMiddleware } from "../core/http/corsMiddleware";
 import { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware";
+import { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware";
 import type { AuthManager } from "../core/auth/guard";
 import type { Policy, PolicyGate } from "../core/auth/policy";
+import { tokenServiceToken } from "../modules/user/provider";
+import type TokenService from "../modules/user/tokenService";
 
 type MiddlewareGroupName = "api" | "authenticated";
 
@@ -93,6 +96,18 @@ class HttpKernel {
 
   wrapAuthenticated(handler: RouteHandler): RouteHandler {
     return this.wrap("authenticated", handler);
+  }
+
+  wrapAbility(ability: string, handler: RouteHandler): RouteHandler {
+    const tokenService =
+      this.dependencies.container.resolve<TokenService>(tokenServiceToken);
+    const requireAbility = createRequireAbilityMiddleware(tokenService);
+    const middleware = [
+      ...this.group("authenticated"),
+      requireAbility(ability),
+    ];
+
+    return withMiddleware(...middleware)(handler);
   }
 
   wrapPolicy(

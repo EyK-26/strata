@@ -15,6 +15,7 @@ import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { reportServiceToken } from "../../src/modules/report/provider";
+import { tokenServiceToken } from "../../src/modules/user/provider";
 
 function normalizeJson<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
@@ -40,6 +41,10 @@ function createTestDependencies() {
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
+  dependencies.container.set(tokenServiceToken, {
+    requireAbility: () => undefined,
+    tokenCan: () => true,
+  });
   dependencies.container.set(reportServiceToken, {
     getSummary: async () => {
       calls.summary += 1;

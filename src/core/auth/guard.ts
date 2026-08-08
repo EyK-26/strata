@@ -21,6 +21,7 @@ class GuestGuard implements AuthGuard {
 
     return {
       id: userId,
+      abilities: ["*"],
       ...(role ? { role } : {}),
     };
   }

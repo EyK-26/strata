@@ -1,5 +1,5 @@
 import { RedisClient } from "bun";
-import db from "../db/connection";
+import { pingDatabase, ensureDatabaseConnection } from "../db/connection";
 import { jsonResponse } from "../core/http";
 import type { AppDependencies } from "./contracts";
 import {
@@ -21,12 +21,8 @@ function resolveRedisUrl(dependencies: AppDependencies): string | undefined {
 }
 
 async function checkDatabase(): Promise<boolean> {
-  try {
-    await db`SELECT 1`;
-    return true;
-  } catch {
-    return false;
-  }
+  await ensureDatabaseConnection();
+  return await pingDatabase();
 }
 
 async function checkRedis(redisUrl: string): Promise<boolean> {

@@ -142,6 +142,55 @@ describe("integration routes with postgres", () => {
     expect(deleteResponse.status).toBe(204);
   });
 
+  test("DELETE /projects/:id returns 403 when token lacks delete ability", async () => {
+    const createTokenResponse = await fetch(api("/auth/tokens"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
+      },
+      body: JSON.stringify({
+        name: "read-only-projects",
+        abilities: ["projects:read"],
+      }),
+    });
+
+    expect(createTokenResponse.status).toBe(201);
+    const tokenBody = (await createTokenResponse.json()) as {
+      id: number;
+      token: string;
+    };
+
+    const createProjectResponse = await fetch(api("/projects"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        organization_id: 1,
+        name: "Ability Guard Project",
+        status: "draft",
+      }),
+    });
+
+    expect(createProjectResponse.status).toBe(201);
+    const project = (await createProjectResponse.json()) as { id: number };
+
+    const deleteResponse = await fetch(api(`/projects/${project.id}`), {
+      method: "DELETE",
+      headers: {
+        authorization: `Bearer ${tokenBody.token}`,
+      },
+    });
+
+    expect(deleteResponse.status).toBe(403);
+
+    await fetch(api(`/auth/tokens/${tokenBody.id}`), {
+      method: "DELETE",
+      headers: {
+        authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
+      },
+    });
+  });
+
   test("DELETE /projects/:id accepts database-backed bearer tokens", async () => {
     const createResponse = await fetch(api("/projects"), {
       method: "POST",
@@ -417,7 +466,12 @@ describe("integration routes with postgres", () => {
 
     const deleteResponse = await fetch(
       api(`/organizations/${created.id}`),
-      { method: "DELETE" },
+      {
+        method: "DELETE",
+        headers: {
+          authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
+        },
+      },
     );
 
     expect(deleteResponse.status).toBe(204);
@@ -453,7 +507,7 @@ describe("integration routes with postgres", () => {
       { method: "DELETE" },
     );
 
-    expect(guestDeleteResponse.status).toBe(403);
+    expect(guestDeleteResponse.status).toBe(401);
 
     const adminDeleteResponse = await fetch(
       api(`/organizations/${created.id}`),
@@ -506,7 +560,12 @@ describe("integration routes with postgres", () => {
 
     const deleteResponse = await fetch(
       api(`/organizations/${created.id}`),
-      { method: "DELETE" },
+      {
+        method: "DELETE",
+        headers: {
+          authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
+        },
+      },
     );
     expect(deleteResponse.status).toBe(204);
 
