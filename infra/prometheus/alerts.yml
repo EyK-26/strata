@@ -1,0 +1,18 @@
+groups:
+  - name: workhub
+    rules:
+      - alert: WorkHubReadyCheckFailing
+        expr: increase(http_requests_total{path="/ready",status="503"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: WorkHub readiness probe is failing
+
+      - alert: WorkHubHighErrorRate
+        expr: sum(increase(http_requests_total{status=~"5.."}[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: WorkHub is returning elevated 5xx responses

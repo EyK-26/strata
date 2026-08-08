@@ -1,4 +1,6 @@
 import { NotFoundError } from "../../core/errors/http";
+import type { QueryWhere } from "../../core/database/types";
+import { currentTenantId } from "../../core/tenant/tenantContext";
 import OrganizationRepository from "./repository";
 import type { OrganizationRecord } from "./types";
 
@@ -16,7 +18,10 @@ class OrganizationService {
   constructor(private readonly repository: OrganizationRepository) {}
 
   paginate(options: { page: number; perPage: number }) {
-    return this.repository.paginate(options);
+    return this.repository.paginate({
+      ...options,
+      where: { tenant_id: currentTenantId() } as unknown as QueryWhere<OrganizationRecord>,
+    });
   }
 
   findByIdOrThrow(id: number): Promise<OrganizationRecord> {
@@ -29,6 +34,7 @@ class OrganizationService {
     const now = new Date();
 
     return this.repository.create({
+      tenant_id: currentTenantId(),
       name: input.name,
       slug: input.slug,
       created_at: now,

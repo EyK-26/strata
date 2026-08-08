@@ -8,6 +8,7 @@ interface OpenApiSpec {
   paths: Record<string, Record<string, unknown>>;
   components: {
     securitySchemes: Record<string, unknown>;
+    schemas?: Record<string, unknown>;
   };
 }
 
@@ -95,6 +96,42 @@ function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
         bearerAuth: {
           type: "http",
           scheme: "bearer",
+        },
+      },
+      schemas: {
+        ErrorResponse: {
+          type: "object",
+          properties: {
+            error: { type: "string" },
+            details: { type: "object", additionalProperties: true },
+          },
+          required: ["error"],
+        },
+        UserResource: {
+          type: "object",
+          properties: {
+            id: { type: "integer" },
+            name: { type: "string" },
+            email: { type: "string" },
+            role: { type: "string" },
+          },
+        },
+        OrganizationResource: {
+          type: "object",
+          properties: {
+            id: { type: "integer" },
+            name: { type: "string" },
+            slug: { type: "string" },
+          },
+        },
+        PaginatedMeta: {
+          type: "object",
+          properties: {
+            page: { type: "integer" },
+            per_page: { type: "integer" },
+            total: { type: "integer" },
+            last_page: { type: "integer" },
+          },
         },
       },
     },

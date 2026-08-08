@@ -13,7 +13,10 @@ function createProjectRoutes(
   return {
     "/projects": {
       GET: controller.index,
-      POST: controller.store,
+      POST: kernel.wrapAbility(
+        "projects:create",
+        controller.store as unknown as RouteHandler,
+      ),
     },
     "/projects/:id": {
       GET: controller.show,

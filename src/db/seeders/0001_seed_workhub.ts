@@ -4,10 +4,10 @@ const seeder: Seeder = {
   name: "0001_seed_workhub",
   async run(db) {
     await db`
-      INSERT INTO organization (id, name, slug)
+      INSERT INTO organization (id, name, slug, tenant_id)
       VALUES
-        (1, 'Acme Labs', 'acme-labs'),
-        (2, 'Orbital Works', 'orbital-works')
+        (1, 'Acme Labs', 'acme-labs', 1),
+        (2, 'Orbital Works', 'orbital-works', 1)
       ON CONFLICT (id) DO NOTHING
     `;
     await db`

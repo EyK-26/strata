@@ -37,6 +37,14 @@ const seeder: Seeder = {
         (2, 'member', ${hashApiToken(memberToken)}, '["*"]'::jsonb)
       ON CONFLICT (token_hash) DO NOTHING
     `;
+
+    await db`
+      INSERT INTO organization_member (organization_id, user_id, role)
+      VALUES
+        (1, 1, 'owner'),
+        (1, 2, 'member')
+      ON CONFLICT (organization_id, user_id) DO NOTHING
+    `;
   },
 };
 

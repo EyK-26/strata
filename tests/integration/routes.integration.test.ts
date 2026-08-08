@@ -29,6 +29,13 @@ function api(pathname: string): string {
   return `${baseUrl}/api/v1${pathname}`;
 }
 
+function adminHeaders(extra?: Record<string, string>): Record<string, string> {
+  return {
+    authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
+    ...extra,
+  };
+}
+
 function root(pathname: string): string {
   return `${baseUrl}${pathname}`;
 }
@@ -163,7 +170,10 @@ describe("integration routes with postgres", () => {
 
     const createProjectResponse = await fetch(api("/projects"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         organization_id: 1,
         name: "Ability Guard Project",
@@ -194,7 +204,10 @@ describe("integration routes with postgres", () => {
   test("DELETE /projects/:id accepts database-backed bearer tokens", async () => {
     const createResponse = await fetch(api("/projects"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         organization_id: 1,
         name: "Bearer Auth Project",
@@ -278,10 +291,26 @@ describe("integration routes with postgres", () => {
     });
   });
 
-  test("POST /organizations returns 422 for invalid payloads", async () => {
+  test("POST /organizations returns 401 without credentials", async () => {
     const response = await fetch(api("/organizations"), {
       method: "POST",
       headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Unauthorized Org",
+        slug: "unauthorized-org",
+      }),
+    });
+
+    expect(response.status).toBe(401);
+  });
+
+  test("POST /organizations returns 422 for invalid payloads", async () => {
+    const response = await fetch(api("/organizations"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         name: "",
         slug: "Bad Slug",
@@ -304,7 +333,10 @@ describe("integration routes with postgres", () => {
 
     const response = await fetch(api("/organizations"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         name: "Stellar Forge",
         slug: "stellar-forge",
@@ -328,7 +360,10 @@ describe("integration routes with postgres", () => {
   test("POST /organizations returns 409 for duplicate slugs", async () => {
     const response = await fetch(api("/organizations"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         name: "Duplicate Acme",
         slug: "acme-labs",
@@ -356,7 +391,10 @@ describe("integration routes with postgres", () => {
   test("POST /projects returns 404 when organization does not exist", async () => {
     const response = await fetch(api("/projects"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         organization_id: 9999,
         name: "Ghost Project",
@@ -381,7 +419,10 @@ describe("integration routes with postgres", () => {
   test("POST /tasks creates a task for an existing project", async () => {
     const response = await fetch(api("/tasks"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         project_id: 2,
         title: "Write migration guide",
@@ -411,7 +452,10 @@ describe("integration routes with postgres", () => {
   test("POST /tasks/:id/comments creates a nested comment", async () => {
     const response = await fetch(api("/tasks/2/comments"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         body: "Query builder supports belongsTo eager loads.",
       }),
@@ -454,7 +498,10 @@ describe("integration routes with postgres", () => {
   test("DELETE /organizations/:id soft deletes the record", async () => {
     const createResponse = await fetch(api("/organizations"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         name: "Soft Delete Co",
         slug: "soft-delete-co",
@@ -492,7 +539,10 @@ describe("integration routes with postgres", () => {
   test("DELETE /organizations/:id enforces protected organization policy", async () => {
     const createResponse = await fetch(api("/organizations"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         name: "Protected Org",
         slug: "protected-org",
@@ -541,7 +591,10 @@ describe("integration routes with postgres", () => {
 
     const createResponse = await fetch(api("/organizations"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
       body: JSON.stringify({
         name: "Report Exclusion Co",
         slug: "report-exclusion-co",
@@ -580,5 +633,44 @@ describe("integration routes with postgres", () => {
       api(`/reports/organizations/${created.id}`),
     );
     expect(orgReportResponse.status).toBe(404);
+  });
+
+  test("GET /admin/stats returns platform counts for admin tokens", async () => {
+    const response = await fetch(api("/admin/stats"), {
+      headers: adminHeaders(),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      user_count: number;
+      organization_count: number;
+    };
+    expect(body.user_count).toBeGreaterThanOrEqual(2);
+    expect(body.organization_count).toBeGreaterThanOrEqual(2);
+  });
+
+  test("GET /users/me/export returns GDPR-style user export", async () => {
+    const response = await fetch(api("/users/me/export"), {
+      headers: adminHeaders(),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      user: { email: string };
+      exported_at: string;
+    };
+    expect(body.user.email).toBe("admin@workhub.test");
+    expect(body.exported_at).toBeTruthy();
+  });
+
+  test("responses include tracing and tenant headers", async () => {
+    const response = await fetch(api("/organizations"), {
+      headers: { "x-tenant-id": "1" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-trace-id")).toBeTruthy();
+    expect(response.headers.get("x-tenant-id")).toBe("1");
+    expect(response.headers.get("server-timing")).toContain("app");
   });
 });

@@ -22,5 +22,6 @@ jobs:
             bun install --frozen-lockfile &&
             bun run cli migrate:fresh --seed &&
             bun run check &&
+            bun run cli openapi:validate &&
             bun run test:all
           "

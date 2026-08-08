@@ -1,10 +1,24 @@
 import { RedisClient } from "bun";
-import { Job, type Queue } from "./index";
+import { Job, type Queue, type QueuePriority } from "./index";
 import { jobRegistry } from "./jobRegistry";
 import FailedJobService from "./failedJobService";
 import { runQueueJob, type QueueJobEnvelope } from "./jobRunner";
 
 const QUEUE_LIST_KEY = "workhub:queue:default";
+const QUEUE_HIGH_KEY = "workhub:queue:high";
+const QUEUE_LOW_KEY = "workhub:queue:low";
+const QUEUE_KEYS = [QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY] as const;
+
+function queueKeyForPriority(priority: QueuePriority = "default"): string {
+  switch (priority) {
+    case "high":
+      return QUEUE_HIGH_KEY;
+    case "low":
+      return QUEUE_LOW_KEY;
+    default:
+      return QUEUE_LIST_KEY;
+  }
+}
 
 class RedisQueue implements Queue {
   private readonly client: RedisClient;
@@ -29,7 +43,8 @@ class RedisQueue implements Queue {
       attempts: 0,
     };
 
-    await this.client.lpush(QUEUE_LIST_KEY, JSON.stringify(envelope));
+    const queueKey = queueKeyForPriority(job.priority);
+    await this.client.lpush(queueKey, JSON.stringify(envelope));
   }
 }
 
@@ -53,7 +68,19 @@ class QueueWorker {
 
   async processNext(): Promise<boolean> {
     const client = new RedisClient(this.redisUrl);
-    const result = await client.brpop(QUEUE_LIST_KEY, this.timeoutSeconds);
+    let result: [string, string] | null = null;
+
+    for (const queueKey of QUEUE_KEYS) {
+      result = await client.brpop(queueKey, 1);
+
+      if (result) {
+        break;
+      }
+    }
+
+    if (!result) {
+      result = await client.brpop(QUEUE_LIST_KEY, this.timeoutSeconds);
+    }
 
     if (!result) {
       return false;
@@ -82,5 +109,12 @@ class QueueWorker {
   }
 }
 
-export { QUEUE_LIST_KEY, QueueWorker, RedisQueue };
+export {
+  QUEUE_HIGH_KEY,
+  QUEUE_LIST_KEY,
+  QUEUE_LOW_KEY,
+  QueueWorker,
+  RedisQueue,
+  queueKeyForPriority,
+};
 export type { QueueJobEnvelope };

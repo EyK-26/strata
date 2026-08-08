@@ -20,6 +20,8 @@ import { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMi
 import { createCorsMiddleware } from "../core/http/corsMiddleware";
 import { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware";
 import { createMetricsMiddleware } from "../core/http/metricsMiddleware";
+import { createTenantMiddleware } from "../core/tenant/tenantMiddleware";
+import { createTracingMiddleware } from "../core/tracing/tracingMiddleware";
 import { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware";
 import type { AuthManager } from "../core/auth/guard";
 import type { Policy, PolicyGate } from "../core/auth/policy";
@@ -37,6 +39,8 @@ class HttpKernel {
     return [
       createCorsMiddleware(),
       createSecurityHeadersMiddleware(),
+      createTracingMiddleware(),
+      createTenantMiddleware(),
       createMetricsMiddleware(),
       createRequestLoggingMiddleware(),
       requestIdMiddleware,

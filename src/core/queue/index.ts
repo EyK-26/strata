@@ -1,6 +1,9 @@
+type QueuePriority = "high" | "default" | "low";
+
 abstract class Job<TPayload extends object = object> {
   readonly maxAttempts?: number;
   readonly backoffMs?: number;
+  readonly priority?: QueuePriority;
 
   abstract handle(payload: TPayload): Promise<void>;
 }
@@ -39,4 +42,4 @@ function createQueue(driver: "sync" | "async"): Queue {
 }
 
 export { AsyncQueue, Job, SyncQueue, createQueue };
-export type { Queue };
+export type { Queue, QueuePriority };

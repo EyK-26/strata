@@ -16,9 +16,16 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
     "/auth/oauth/:provider/callback": {
       GET: controller.oauthCallback,
     },
-    "/auth/me": kernel.wrapAuthenticated(
-      controller.me as unknown as RouteHandler,
-    ),
+    "/auth/me": {
+      GET: kernel.wrapAuthenticated(
+        controller.me as unknown as RouteHandler,
+      ),
+    },
+    "/users/me/export": {
+      GET: kernel.wrapAuthenticated(
+        controller.exportMe as unknown as RouteHandler,
+      ),
+    },
     "/auth/tokens": {
       GET: kernel.wrapAbility(
         "auth:tokens:read",

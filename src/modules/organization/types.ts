@@ -1,5 +1,6 @@
 interface OrganizationRecord {
   id: number;
+  tenant_id: number;
   name: string;
   slug: string;
   created_at: Date;

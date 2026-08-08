@@ -1,5 +1,6 @@
 import { RedisClient } from "bun";
 import { currentAuthUser } from "../auth/authContext";
+import { currentTenant, rateLimitMultiplierForPlan } from "../tenant/tenantContext";
 import type { Middleware } from "./middleware";
 
 interface ThrottleOptions {
@@ -40,7 +41,10 @@ function createThrottleMiddleware(options: ThrottleOptions): Middleware {
       await client.expire(throttleKey, options.decaySeconds);
     }
 
-    if (attempts > options.maxAttempts) {
+    const maxAttempts =
+      options.maxAttempts * rateLimitMultiplierForPlan(currentTenant()?.plan ?? "free");
+
+    if (attempts > maxAttempts) {
       return Response.json(
         { error: "Too many requests." },
         {

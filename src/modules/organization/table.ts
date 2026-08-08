@@ -5,7 +5,7 @@ import type { OrganizationRecord } from "./types";
 const organizationTable = defineTable<OrganizationRecord, "id">({
   name: ORGANIZATION_TABLE,
   primaryKey: "id",
-  columns: ["id", "name", "slug", "created_at", "updated_at", "deleted_at"],
+  columns: ["id", "tenant_id", "name", "slug", "created_at", "updated_at", "deleted_at"],
   softDeletes: true,
   defaultOrderBy: { column: "id", direction: "ASC" },
 });

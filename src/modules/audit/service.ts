@@ -1,4 +1,6 @@
 import { currentAuthUser } from "../../core/auth/authContext";
+import { currentRequestMeta } from "../../core/http/requestMetaContext";
+import { auditChecksum } from "../../core/tenant/tenantMiddleware";
 import AuditLogRepository from "./repository";
 import type { AuditLogRecord } from "./types";
 
@@ -7,6 +9,7 @@ interface RecordAuditInput {
   subjectType: string;
   subjectId?: number | null;
   payload?: Record<string, unknown>;
+  previousPayload?: Record<string, unknown> | null;
 }
 
 class AuditService {
@@ -14,13 +17,19 @@ class AuditService {
 
   async record(input: RecordAuditInput): Promise<AuditLogRecord> {
     const user = currentAuthUser();
+    const meta = currentRequestMeta();
+    const payload = input.payload ?? {};
 
     return await this.repository.create({
       user_id: user ? Number(user.id) : null,
       action: input.action,
       subject_type: input.subjectType,
       subject_id: input.subjectId ?? null,
-      payload: input.payload ?? {},
+      payload,
+      previous_payload: input.previousPayload ?? null,
+      ip_address: meta.ipAddress,
+      user_agent: meta.userAgent,
+      checksum: auditChecksum(payload),
       created_at: new Date(),
     });
   }

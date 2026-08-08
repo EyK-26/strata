@@ -25,7 +25,10 @@ function createCommentRoutes(
     },
     "/tasks/:id/comments": {
       GET: controller.byTask,
-      POST: controller.storeForTask,
+      POST: kernel.wrapAbility(
+        "comments:create",
+        controller.storeForTask as unknown as RouteHandler,
+      ),
     },
   };
 }

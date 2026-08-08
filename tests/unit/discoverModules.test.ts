@@ -7,6 +7,7 @@ describe("discoverModules", () => {
 
     expect(modules.map((module) => module.name)).toEqual([
       "user",
+      "admin",
       "organization",
       "project",
       "comment",

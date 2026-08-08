@@ -13,7 +13,10 @@ function createOrganizationRoutes(
   return {
     "/organizations": {
       GET: controller.index,
-      POST: controller.store,
+      POST: kernel.wrapAbility(
+        "organizations:create",
+        controller.store as unknown as RouteHandler,
+      ),
     },
     "/organizations/:id": {
       GET: controller.show,

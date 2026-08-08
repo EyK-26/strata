@@ -18,6 +18,7 @@ import { queueWorkCommand } from "./commands/queueWork";
 import { rollbackCommand } from "./commands/rollback";
 import { routeListCommand } from "./commands/routeList";
 import { openapiGenerateCommand } from "./commands/openapiGenerate";
+import { openapiValidateCommand } from "./commands/openapiValidate";
 import { sdkGenerateCommand } from "./commands/sdkGenerate";
 import { scheduleRunCommand } from "./commands/scheduleRun";
 import { seedCommand } from "./commands/seed";
@@ -49,6 +50,7 @@ const commands: Record<
   "queue:flush-failed": () => queueFlushFailedCommand(),
   "route:list": () => routeListCommand(),
   "openapi:generate": () => openapiGenerateCommand(),
+  "openapi:validate": () => openapiValidateCommand(),
   "sdk:generate": () => sdkGenerateCommand(),
   "schedule:run": () => scheduleRunCommand(),
 };

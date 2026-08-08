@@ -13,7 +13,10 @@ function createTaskRoutes(
   return {
     "/tasks": {
       GET: controller.index,
-      POST: controller.store,
+      POST: kernel.wrapAbility(
+        "tasks:create",
+        controller.store as unknown as RouteHandler,
+      ),
     },
     "/tasks/:id": {
       GET: controller.show,

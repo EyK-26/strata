@@ -1,5 +1,8 @@
 import type { ServiceProvider } from "../../bootstrap/contracts";
 import { GitHubOAuthProvider, MockOAuthProvider } from "../../core/auth/oauth/providers";
+import { OidcProvider } from "../../core/auth/oauth/oidcProvider";
+import { SamlProvider } from "../../core/auth/oauth/samlProvider";
+import { isFeatureEnabled } from "../../config/features";
 import ApiTokenRepository from "./apiTokenRepository";
 import AuthService from "./authService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
@@ -45,6 +48,26 @@ const userProvider: ServiceProvider = {
             redirectUri: oauthRedirectUri,
           }),
         );
+      }
+
+      const oidcIssuer = process.env.OIDC_ISSUER?.trim();
+      const oidcClientId = process.env.OIDC_CLIENT_ID?.trim();
+      const oidcClientSecret = process.env.OIDC_CLIENT_SECRET?.trim();
+
+      if (isFeatureEnabled("oauthLogin") && oidcIssuer && oidcClientId && oidcClientSecret && oauthRedirectUri) {
+        authService.registerOAuthProvider(
+          new OidcProvider({
+            name: "oidc",
+            issuer: oidcIssuer,
+            clientId: oidcClientId,
+            clientSecret: oidcClientSecret,
+            redirectUri: oauthRedirectUri,
+          }),
+        );
+      }
+
+      if (isFeatureEnabled("samlLogin") && process.env.SAML_LOGIN_URL?.trim()) {
+        authService.registerOAuthProvider(new SamlProvider(process.env.SAML_LOGIN_URL.trim()));
       }
 
       if ((process.env.APP_ENV ?? "local") !== "production") {

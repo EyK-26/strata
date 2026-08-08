@@ -10,6 +10,8 @@ import {
 import type { AuthManager } from "../../core/auth/guard";
 import AuthService from "./authService";
 import TokenService from "./tokenService";
+import ApiTokenRepository from "./apiTokenRepository";
+import OAuthIdentityRepository from "./oauthIdentityRepository";
 import { authServiceToken, tokenServiceToken } from "./provider";
 import {
   parseCreateApiTokenBody,
@@ -105,6 +107,36 @@ class AuthController {
     const userId = await this.requireUserId(request);
     const record = await this.tokens.findByIdOrThrow(userId);
     return jsonResponse(toUserResource(record));
+  });
+
+  readonly exportMe = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const user = await this.tokens.findByIdOrThrow(userId);
+    const tokenRepo = new ApiTokenRepository();
+    const oauthRepo = new OAuthIdentityRepository();
+
+    const tokens = await tokenRepo.findAll({
+      where: { user_id: userId },
+    });
+    const identities = await oauthRepo.findAll({
+      where: { user_id: userId },
+    });
+
+    return jsonResponse({
+      user: toUserResource(user),
+      api_tokens: tokens.map((token) => ({
+        id: token.id,
+        name: token.name,
+        abilities: token.abilities,
+        created_at: token.created_at.toISOString(),
+      })),
+      oauth_identities: identities.map((identity) => ({
+        provider: identity.provider,
+        email: identity.email,
+        created_at: identity.created_at.toISOString(),
+      })),
+      exported_at: new Date().toISOString(),
+    });
   });
 
   readonly listTokens = withErrorHandling(async (request: Request) => {

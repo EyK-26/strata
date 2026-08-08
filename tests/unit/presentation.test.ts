@@ -100,6 +100,7 @@ describe("module resources", () => {
   test("serializes organization timestamps", () => {
     const organization: OrganizationRecord = {
       id: 1,
+      tenant_id: 1,
       name: "Acme Labs",
       slug: "acme-labs",
       created_at: new Date("2024-01-01T00:00:00.000Z"),
