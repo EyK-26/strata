@@ -1,4 +1,6 @@
+import { currentAuthUser } from "../auth/authContext";
 import { BadRequestError } from "../errors/http";
+import { currentTenantId } from "../tenant/tenantContext";
 
 function buildRequestCacheKey(fallbackPath: string, request?: Request): string {
   if (!request) {
@@ -6,7 +8,11 @@ function buildRequestCacheKey(fallbackPath: string, request?: Request): string {
   }
 
   const url = new URL(request.url);
-  return `${url.pathname}${url.search}`;
+  const user = currentAuthUser();
+  const authScope = user ? `u:${user.id}` : "guest";
+  const tenantScope = `t:${currentTenantId()}`;
+
+  return `${authScope}|${tenantScope}|${url.pathname}${url.search}`;
 }
 
 function getQueryParams(request?: Request): URLSearchParams {

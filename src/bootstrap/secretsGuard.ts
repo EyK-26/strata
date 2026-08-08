@@ -17,6 +17,13 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
   const memberToken = env.MEMBER_API_TOKEN ?? TEST_MEMBER_API_TOKEN;
   const scimToken = env.SCIM_BEARER_TOKEN ?? DEFAULT_SCIM_BEARER_TOKEN;
   const encryptionEnabled = env.FEATURE_FIELD_ENCRYPTION !== "false";
+  const devHeadersEnabled = (env.AUTH_DEV_HEADERS ?? "true") !== "false";
+
+  if (devHeadersEnabled) {
+    throw new Error(
+      "Production startup blocked: set AUTH_DEV_HEADERS=false to disable development auth headers.",
+    );
+  }
 
   if (DEFAULT_TOKENS.has(adminToken) || DEFAULT_TOKENS.has(memberToken)) {
     throw new Error(
@@ -38,6 +45,14 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
 
   if (!env.SIEM_EXPORT_URL?.trim() && isFeatureEnabled("siemExport")) {
     console.warn("[secrets] SIEM_EXPORT_URL is not configured; audit logs remain database-only.");
+  }
+
+  const billingEnabled = (env.FEATURE_BILLING ?? "true") !== "false";
+
+  if (billingEnabled && !env.STRIPE_WEBHOOK_SECRET?.trim()) {
+    throw new Error(
+      "Production startup blocked: set STRIPE_WEBHOOK_SECRET when billing webhooks are enabled.",
+    );
   }
 }
 

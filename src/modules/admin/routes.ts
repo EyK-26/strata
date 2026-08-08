@@ -8,19 +8,16 @@ function createAdminRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
 
   return {
     "/admin/stats": {
-      GET: kernel.wrapAbility("admin:read", controller.stats as unknown as RouteHandler),
+      GET: kernel.wrapGlobalAdmin(controller.stats as unknown as RouteHandler),
     },
     "/admin/tenants": {
-      GET: kernel.wrapAbility("admin:read", controller.tenants as unknown as RouteHandler),
+      GET: kernel.wrapGlobalAdmin(controller.tenants as unknown as RouteHandler),
     },
     "/admin/organization-members": {
-      GET: kernel.wrapAbility(
-        "admin:read",
-        controller.organizationMembers as unknown as RouteHandler,
-      ),
+      GET: kernel.wrapGlobalAdmin(controller.organizationMembers as unknown as RouteHandler),
     },
     "/admin/features": {
-      GET: kernel.wrapAbility("admin:read", controller.features as unknown as RouteHandler),
+      GET: kernel.wrapGlobalAdmin(controller.features as unknown as RouteHandler),
     },
   };
 }

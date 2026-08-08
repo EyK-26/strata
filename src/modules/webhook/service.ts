@@ -1,4 +1,6 @@
 import { createHmac } from "node:crypto";
+import { appConfig } from "../../config/app";
+import { assertSafeOutboundUrl } from "../../core/security/safeUrl";
 import db from "../../db/connection";
 import type WebhookRepository from "./repository";
 import type { WebhookRecord } from "./types";
@@ -14,6 +16,8 @@ class WebhookService {
   constructor(private readonly repository: WebhookRepository) {}
 
   async create(input: CreateWebhookInput): Promise<WebhookRecord> {
+    assertSafeOutboundUrl(input.url, { allowHttp: appConfig.env !== "production" });
+
     return await this.repository.create({
       organization_id: input.organizationId ?? null,
       url: input.url,
@@ -41,6 +45,8 @@ class WebhookService {
       let responseStatus: number | null = null;
 
       try {
+        assertSafeOutboundUrl(webhook.url, { allowHttp: appConfig.env !== "production" });
+
         const response = await fetch(webhook.url, {
           method: "POST",
           headers: {

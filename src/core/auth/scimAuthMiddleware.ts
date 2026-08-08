@@ -1,5 +1,6 @@
 import { TEST_SCIM_BEARER_TOKEN } from "../../domain/scim";
 import type { Middleware } from "../http/middleware";
+import { timingSafeCompareString } from "../security/timingSafeCompare";
 
 function createScimAuthMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
@@ -12,7 +13,7 @@ function createScimAuthMiddleware(): Middleware {
 
     const token = authorization.slice("Bearer ".length).trim();
 
-    if (token !== configuredToken) {
+    if (!timingSafeCompareString(token, configuredToken)) {
       return jsonScimError("Invalid SCIM bearer token.", 401);
     }
 

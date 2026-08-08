@@ -31,8 +31,35 @@ describe("assertProductionSecrets", () => {
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
+        AUTH_DEV_HEADERS: "false",
         FEATURE_FIELD_ENCRYPTION: "true",
       }),
     ).toThrow(/KMS_ENCRYPTION_KEY/);
+  });
+
+  test("blocks AUTH_DEV_HEADERS in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        ADMIN_API_TOKEN: "rotated-admin-token",
+        MEMBER_API_TOKEN: "rotated-member-token",
+        SCIM_BEARER_TOKEN: "rotated-scim-token",
+        AUTH_DEV_HEADERS: "true",
+      }),
+    ).toThrow(/AUTH_DEV_HEADERS=false/);
+  });
+
+  test("blocks missing STRIPE_WEBHOOK_SECRET when billing is enabled in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        ADMIN_API_TOKEN: "rotated-admin-token",
+        MEMBER_API_TOKEN: "rotated-member-token",
+        SCIM_BEARER_TOKEN: "rotated-scim-token",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "true",
+      }),
+    ).toThrow(/STRIPE_WEBHOOK_SECRET/);
   });
 });

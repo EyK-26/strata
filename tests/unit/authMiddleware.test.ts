@@ -15,7 +15,18 @@ describe("GuestGuard", () => {
       }),
     );
 
-    expect(user).toEqual({ id: "7", role: "member", abilities: ["*"] });
+    expect(user).toEqual({
+      id: "7",
+      role: "member",
+      abilities: [
+        "organizations:read",
+        "projects:read",
+        "tasks:read",
+        "comments:read",
+        "auth:tokens:read",
+        "auth:tokens:write",
+      ],
+    });
   });
 });
 

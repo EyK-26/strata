@@ -1,6 +1,8 @@
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
+import { UnauthorizedError } from "../../core/errors/http";
 import { jsonResponse, withErrorHandling } from "../../core/http";
+import { verifyStripeWebhookSignature } from "../../core/security/stripeWebhook";
 import { currentTenantId } from "../../core/tenant/tenantContext";
 import { billingServiceToken } from "./provider";
 import type BillingService from "./service";
@@ -22,7 +24,16 @@ class BillingController {
   });
 
   readonly stripeWebhook = withErrorHandling(async (request: Request) => {
-    const payload = (await request.json()) as {
+    const rawBody = await request.text();
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+
+    if (!webhookSecret) {
+      throw new UnauthorizedError("Stripe webhook secret is not configured.");
+    }
+
+    verifyStripeWebhookSignature(rawBody, request.headers.get("stripe-signature"), webhookSecret);
+
+    const payload = JSON.parse(rawBody) as {
       type?: string;
       data?: { object?: { metadata?: { tenant_id?: string }; status?: string } };
     };

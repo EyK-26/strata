@@ -5,6 +5,42 @@ import { UnauthorizedError } from "../errors/http";
 import type { AuthUser } from "./authContext";
 import { currentAuthUser } from "./authContext";
 
+const DEV_MEMBER_ABILITIES = [
+  "organizations:read",
+  "projects:read",
+  "tasks:read",
+  "comments:read",
+  "auth:tokens:read",
+  "auth:tokens:write",
+];
+
+const DEV_ADMIN_ABILITIES = [
+  ...DEV_MEMBER_ABILITIES,
+  "organizations:create",
+  "organizations:update",
+  "organizations:delete",
+  "projects:create",
+  "projects:update",
+  "projects:delete",
+  "tasks:create",
+  "tasks:update",
+  "tasks:delete",
+  "comments:create",
+  "comments:update",
+  "comments:delete",
+  "webhooks:read",
+  "webhooks:write",
+  "audit:read",
+];
+
+function devHeaderAbilities(role: string | null): string[] {
+  if (role === "admin") {
+    return DEV_ADMIN_ABILITIES;
+  }
+
+  return DEV_MEMBER_ABILITIES;
+}
+
 interface AuthGuard {
   resolve(request: Request): AuthUser | null | Promise<AuthUser | null>;
 }
@@ -21,7 +57,7 @@ class GuestGuard implements AuthGuard {
 
     return {
       id: userId,
-      abilities: ["*"],
+      abilities: devHeaderAbilities(role),
       ...(role ? { role } : {}),
     };
   }

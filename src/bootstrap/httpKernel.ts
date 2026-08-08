@@ -8,6 +8,7 @@ import { createMetricsMiddleware } from "../core/http/metricsMiddleware";
 import { type Middleware, type RouteHandler, requestIdMiddleware } from "../core/http/middleware";
 import { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware";
 import { createRequireAuthMiddleware } from "../core/http/requireAuthMiddleware";
+import { createRequireGlobalAdminMiddleware } from "../core/http/requireGlobalAdminMiddleware";
 import { withMiddleware } from "../core/http/routeMiddleware";
 import { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware";
 import { createThrottleMiddleware } from "../core/http/throttleMiddleware";
@@ -95,6 +96,12 @@ class HttpKernel {
 
   wrapAuthenticated(handler: RouteHandler): RouteHandler {
     return this.wrap("authenticated", handler);
+  }
+
+  wrapGlobalAdmin(handler: RouteHandler): RouteHandler {
+    const middleware = [...this.group("authenticated"), createRequireGlobalAdminMiddleware()];
+
+    return withMiddleware(...middleware)(handler);
   }
 
   wrapAbility(ability: string, handler: RouteHandler): RouteHandler {

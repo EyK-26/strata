@@ -2,12 +2,18 @@ import { CORE_AUTH_TOKEN } from "../../bootstrap/config";
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import type { AuthManager } from "../../core/auth/guard";
+import { UnauthorizedError } from "../../core/errors/http";
 import {
   createdResponse,
   jsonResponse,
   noContentResponse,
   withErrorHandling,
 } from "../../core/http";
+import {
+  clearOAuthStateCookie,
+  createOAuthStateCookie,
+  verifyOAuthState,
+} from "../../core/security/oauthState";
 import ApiTokenRepository from "./apiTokenRepository";
 import type AuthService from "./authService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
@@ -73,19 +79,31 @@ class AuthController {
       throw new Error("OAuth provider is required.");
     }
 
-    const state = crypto.randomUUID();
+    const { state, cookie } = createOAuthStateCookie();
     const url = this.authService.buildOAuthAuthorizationUrl(provider, state);
 
-    return Response.redirect(url, 302);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: url,
+        "Set-Cookie": cookie,
+      },
+    });
   });
 
   readonly oauthCallback = withErrorHandling(async (request: Request) => {
     const params = (request as Request & { params?: OAuthProviderParams }).params;
     const provider = params?.provider;
-    const code = new URL(request.url).searchParams.get("code");
+    const callbackUrl = new URL(request.url);
+    const code = callbackUrl.searchParams.get("code");
+    const returnedState = callbackUrl.searchParams.get("state");
 
     if (!provider || !code) {
       throw new Error("OAuth provider and code are required.");
+    }
+
+    if (!verifyOAuthState(request, returnedState)) {
+      throw new UnauthorizedError("Invalid OAuth state.");
     }
 
     const created = await this.authService.loginWithOAuth(provider, code);
@@ -97,10 +115,17 @@ class AuthController {
 
     const user = await this.tokens.findByIdOrThrow(Number(authUser.id));
 
-    return createdResponse({
-      token: created.plainTextToken,
-      user: toUserResource(user),
-    });
+    return createdResponse(
+      {
+        token: created.plainTextToken,
+        user: toUserResource(user),
+      },
+      {
+        headers: {
+          "Set-Cookie": clearOAuthStateCookie(),
+        },
+      },
+    );
   });
 
   readonly me = withErrorHandling(async (request: Request) => {
