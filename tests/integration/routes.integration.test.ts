@@ -34,6 +34,7 @@ async function getJson<T>(pathname: string): Promise<{
 
 beforeAll(async () => {
   process.env.DATABASE_URL = TEST_DATABASE_URL;
+  process.env.QUEUE_DRIVER = "sync";
 
   const [{ freshDatabase }, { createAppDependencies }, { createRoutes }] =
     await Promise.all([
