@@ -14,8 +14,7 @@ function routeListCommand(): void {
   }
 
   for (const route of routes) {
-    const middleware =
-      route.middleware.length > 0 ? ` [${route.middleware.join(", ")}]` : "";
+    const middleware = route.middleware.length > 0 ? ` [${route.middleware.join(", ")}]` : "";
     console.log(`${route.method.padEnd(7)} ${route.path}${middleware}`);
   }
 }

@@ -7,19 +7,19 @@ import {
   createdResponse,
   jsonResponse,
   noContentResponse,
-  securedBindRouteModel,
   type RouteRequest,
+  securedBindRouteModel,
   withErrorHandling,
 } from "../../core/http";
-import ProjectService from "./service";
 import { projectServiceToken } from "./provider";
 import {
+  type ProjectIdParams,
   parseCreateProjectBody,
   parseProjectListQuery,
   parseUpdateProjectBody,
-  type ProjectIdParams,
 } from "./requests";
 import { toProjectPaginatedResourceCollection, toProjectResource } from "./resources";
+import type ProjectService from "./service";
 
 class ProjectController {
   constructor(
@@ -35,20 +35,16 @@ class ProjectController {
     const query = parseProjectListQuery(request);
     const cacheKey = buildRequestCacheKey("/projects", request);
 
-    return await this.cachedJson(
-      cacheKey,
-      async () => {
-        const result = await this.service.paginate({
-          page: query.page,
-          perPage: query.perPage,
-          organizationId: query.organizationId,
-          status: query.status,
-          includeOrganization: query.include === "organization",
-        });
-        return toProjectPaginatedResourceCollection(result.data, result.meta);
-      },
-      [CACHE_TAGS.projects],
-    );
+    return await this.cachedJson(cacheKey, async () => {
+      const result = await this.service.paginate({
+        page: query.page,
+        perPage: query.perPage,
+        organizationId: query.organizationId,
+        status: query.status,
+        includeOrganization: query.include === "organization",
+      });
+      return toProjectPaginatedResourceCollection(result.data, result.meta);
+    }, [CACHE_TAGS.projects]);
   });
 
   readonly show = withErrorHandling(

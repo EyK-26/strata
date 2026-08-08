@@ -1,11 +1,11 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import { hashPassword, verifyPassword } from "../../src/core/auth/password";
-import AuthService from "../../src/modules/user/authService";
-import UserRepository from "../../src/modules/user/repository";
-import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
-import OAuthIdentityRepository from "../../src/modules/user/oauthIdentityRepository";
-import TokenService from "../../src/modules/user/tokenService";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { MockOAuthProvider } from "../../src/core/auth/oauth/providers";
+import { hashPassword, verifyPassword } from "../../src/core/auth/password";
+import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
+import AuthService from "../../src/modules/user/authService";
+import OAuthIdentityRepository from "../../src/modules/user/oauthIdentityRepository";
+import UserRepository from "../../src/modules/user/repository";
+import TokenService from "../../src/modules/user/tokenService";
 
 beforeAll(async () => {
   const { freshDatabase } = await import("../../src/db/migrations/runner");
@@ -26,10 +26,7 @@ describe("password auth", () => {
       new OAuthIdentityRepository(),
     );
 
-    const created = await authService.loginWithPassword(
-      "admin@workhub.test",
-      "password",
-    );
+    const created = await authService.loginWithPassword("admin@workhub.test", "password");
 
     expect(created.plainTextToken.length).toBeGreaterThan(20);
   });

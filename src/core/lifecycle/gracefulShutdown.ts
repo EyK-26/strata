@@ -4,10 +4,7 @@ const shutdownHandlers = new Map<string, ShutdownHandler>();
 let shutdownInstalled = false;
 let shuttingDown = false;
 
-function registerShutdownHandler(
-  name: string,
-  handler: ShutdownHandler,
-): () => void {
+function registerShutdownHandler(name: string, handler: ShutdownHandler): () => void {
   shutdownHandlers.set(name, handler);
 
   return () => {
@@ -33,9 +30,7 @@ async function runGracefulShutdown(signal: string): Promise<void> {
   }
 }
 
-function installGracefulShutdownSignals(
-  signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"],
-): void {
+function installGracefulShutdownSignals(signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"]): void {
   if (shutdownInstalled) {
     return;
   }

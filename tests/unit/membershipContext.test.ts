@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { hasMinimumOrgRole as rankOrgRole } from "../../src/core/auth/accessControl";
-import {
-  hasMinimumOrgRole,
-  membershipContext,
-} from "../../src/core/auth/membershipContext";
-import { isGlobalAdmin } from "../../src/core/auth/accessControl";
+import { isGlobalAdmin, hasMinimumOrgRole as rankOrgRole } from "../../src/core/auth/accessControl";
+import { hasMinimumOrgRole, membershipContext } from "../../src/core/auth/membershipContext";
 
 describe("membershipContext", () => {
   test("isGlobalAdmin recognizes platform admins", () => {

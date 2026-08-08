@@ -1,11 +1,16 @@
-import { PROJECT_STATUSES } from "../../domain/workhub";
-import type { PaginatedResult } from "../../core/pagination";
+import {
+  appendOrganizationScope,
+  emptyPaginateResult,
+  scopedOrganizationIds,
+} from "../../core/auth/membershipScope";
 import { runInTransaction } from "../../core/database";
 import { NotFoundError } from "../../core/errors/http";
-import OrganizationRepository from "../organization/repository";
-import ProjectRepository from "./repository";
-import type { ProjectRecord, ProjectWithOrganizationRecord } from "./types";
+import type { PaginatedResult } from "../../core/pagination";
 import type { ProjectStatus } from "../../domain/workhub";
+import { PROJECT_STATUSES } from "../../domain/workhub";
+import type OrganizationRepository from "../organization/repository";
+import type ProjectRepository from "./repository";
+import type { ProjectRecord, ProjectWithOrganizationRecord } from "./types";
 
 interface CreateProjectInput {
   organization_id: number;
@@ -35,15 +40,21 @@ class ProjectService {
   async paginate(
     options: ProjectListOptions,
   ): Promise<PaginatedResult<ProjectWithOrganizationRecord>> {
+    const organizationIds = scopedOrganizationIds(options.organizationId);
+
+    if (organizationIds !== null && organizationIds.length === 0) {
+      return emptyPaginateResult(options.page, options.perPage);
+    }
+
     const result = await this.repository.paginate({
       page: options.page,
       perPage: options.perPage,
-      where: {
-        ...(options.organizationId === undefined
-          ? {}
-          : { organization_id: options.organizationId }),
-        ...(options.status === undefined ? {} : { status: options.status }),
-      },
+      where: appendOrganizationScope(
+        {
+          ...(options.status === undefined ? {} : { status: options.status }),
+        },
+        options.organizationId,
+      ),
     });
 
     if (!options.includeOrganization) {
@@ -60,17 +71,16 @@ class ProjectService {
     id: number,
     options: { includeOrganization?: boolean } = {},
   ): Promise<ProjectWithOrganizationRecord> {
-    const project = await this.repository.findByIdOrThrow(id, (projectId) =>
-      new NotFoundError(`Project ${projectId} not found.`),
+    const project = await this.repository.findByIdOrThrow(
+      id,
+      (projectId) => new NotFoundError(`Project ${projectId} not found.`),
     );
 
     if (!options.includeOrganization) {
       return project;
     }
 
-    const [withOrganization] = await this.repository.attachOrganizations([
-      project,
-    ]);
+    const [withOrganization] = await this.repository.attachOrganizations([project]);
     return withOrganization ?? project;
   }
 
@@ -78,18 +88,13 @@ class ProjectService {
     const now = new Date();
 
     return runInTransaction(async (connection) => {
-      const organizationRepository =
-        this.organizationRepository.withConnection(connection);
+      const organizationRepository = this.organizationRepository.withConnection(connection);
       const projectRepository = this.repository.withConnection(connection);
 
-      const organization = await organizationRepository.findById(
-        input.organization_id,
-      );
+      const organization = await organizationRepository.findById(input.organization_id);
 
       if (!organization) {
-        throw new NotFoundError(
-          `Organization ${input.organization_id} not found.`,
-        );
+        throw new NotFoundError(`Organization ${input.organization_id} not found.`);
       }
 
       return await projectRepository.create({
@@ -118,8 +123,10 @@ class ProjectService {
       changes.status = input.status;
     }
 
-    return await this.repository.updateByIdOrThrow(id, changes, (projectId) =>
-      new NotFoundError(`Project ${projectId} not found.`),
+    return await this.repository.updateByIdOrThrow(
+      id,
+      changes,
+      (projectId) => new NotFoundError(`Project ${projectId} not found.`),
     );
   }
 

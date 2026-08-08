@@ -1,5 +1,5 @@
-import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { AppDependencies } from "../../bootstrap/contracts";
+import type { HttpKernel } from "../../bootstrap/httpKernel";
 import SearchController from "./controller";
 
 function createSearchRoutes(dependencies: AppDependencies, _kernel: HttpKernel) {

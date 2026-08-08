@@ -14,11 +14,7 @@ interface PostgresErrorLike {
 }
 
 function isPostgresError(error: unknown): error is PostgresErrorLike {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    ("errno" in error || "code" in error)
-  );
+  return typeof error === "object" && error !== null && ("errno" in error || "code" in error);
 }
 
 function getPostgresSqlState(error: PostgresErrorLike): string | undefined {
@@ -52,30 +48,26 @@ function mapDatabaseError(error: unknown): HttpError {
 
   switch (sqlState) {
     case "23505":
-      return new ConflictError(
-        error.detail ?? "A record with these values already exists.",
-        { constraint: error.constraint },
-      );
+      return new ConflictError(error.detail ?? "A record with these values already exists.", {
+        constraint: error.constraint,
+      });
     case "23503":
-      return new UnprocessableEntityError(
-        error.detail ?? "Referenced record does not exist.",
-        { constraint: error.constraint },
-      );
+      return new UnprocessableEntityError(error.detail ?? "Referenced record does not exist.", {
+        constraint: error.constraint,
+      });
     case "23502":
-      return new BadRequestError(
-        error.detail ?? "Required field is missing.",
-        { constraint: error.constraint },
-      );
+      return new BadRequestError(error.detail ?? "Required field is missing.", {
+        constraint: error.constraint,
+      });
     case "23514":
-      return new BadRequestError(
-        error.detail ?? "Value violates a database constraint.",
-        { constraint: error.constraint },
-      );
+      return new BadRequestError(error.detail ?? "Value violates a database constraint.", {
+        constraint: error.constraint,
+      });
     default:
-      return new BadRequestError(
-        error.message ?? "Database operation failed.",
-        { code: error.code, sqlState },
-      );
+      return new BadRequestError(error.message ?? "Database operation failed.", {
+        code: error.code,
+        sqlState,
+      });
   }
 }
 
@@ -89,8 +81,4 @@ async function withDatabaseErrorHandling<TValue>(
   }
 }
 
-export {
-  isPostgresError,
-  mapDatabaseError,
-  withDatabaseErrorHandling,
-};
+export { isPostgresError, mapDatabaseError, withDatabaseErrorHandling };

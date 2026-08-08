@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   BaseRepository,
   buildSelectQuery,
-  defineTable,
   type DatabaseConnection,
+  defineTable,
 } from "../../src/core/database";
 import { eventBus } from "../../src/core/events";
 
@@ -29,10 +29,7 @@ class FakeConnection implements DatabaseConnection {
     this.responses.push(rows);
   }
 
-  async unsafe<T>(
-    query: string,
-    params: readonly unknown[] = [],
-  ): Promise<T[]> {
+  async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
     this.calls.push({ query, params: [...params] });
     return (this.responses.shift() ?? []) as T[];
   }

@@ -63,18 +63,13 @@ describe("wrapRouteHandler", () => {
     const wrapped = wrapRouteHandler(
       {
         GET: async (_request: Request) => Response.json({ method: "GET" }),
-        POST: async (_request: Request) =>
-          Response.json({ method: "POST" }, { status: 201 }),
+        POST: async (_request: Request) => Response.json({ method: "POST" }, { status: 201 }),
       },
       [requestIdMiddleware],
     );
 
-    const getResponse = await wrapped.GET(
-      new Request("http://example.test"),
-    );
-    const postResponse = await wrapped.POST(
-      new Request("http://example.test", { method: "POST" }),
-    );
+    const getResponse = await wrapped.GET(new Request("http://example.test"));
+    const postResponse = await wrapped.POST(new Request("http://example.test", { method: "POST" }));
 
     expect(getResponse.headers.get("x-request-id")).toBeTruthy();
     expect(await getResponse.json()).toEqual({ method: "GET" });

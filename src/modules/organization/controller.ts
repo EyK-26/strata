@@ -1,6 +1,7 @@
+import { CORE_POLICY_GATE_TOKEN } from "../../bootstrap/config";
 import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
-import { CORE_POLICY_GATE_TOKEN } from "../../bootstrap/config";
+import type { PolicyGate } from "../../core/auth/policy";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import {
   bindRouteModel,
@@ -8,23 +9,19 @@ import {
   createdResponse,
   jsonResponse,
   noContentResponse,
-  securedBindRouteModel,
   type RouteRequest,
+  securedBindRouteModel,
   withErrorHandling,
 } from "../../core/http";
-import type { PolicyGate } from "../../core/auth/policy";
-import OrganizationService from "./service";
 import { organizationServiceToken } from "./provider";
 import {
+  type OrganizationIdParams,
   parseCreateOrganizationBody,
   parseOrganizationListQuery,
   parseUpdateOrganizationBody,
-  type OrganizationIdParams,
 } from "./requests";
-import {
-  toOrganizationPaginatedResourceCollection,
-  toOrganizationResource,
-} from "./resources";
+import { toOrganizationPaginatedResourceCollection, toOrganizationResource } from "./resources";
+import type OrganizationService from "./service";
 
 class OrganizationController {
   constructor(
@@ -44,14 +41,10 @@ class OrganizationController {
     const query = parseOrganizationListQuery(request);
     const cacheKey = buildRequestCacheKey("/organizations", request);
 
-    return await this.cachedJson(
-      cacheKey,
-      async () => {
-        const result = await this.service.paginate(query);
-        return toOrganizationPaginatedResourceCollection(result.data, result.meta);
-      },
-      [CACHE_TAGS.organizations],
-    );
+    return await this.cachedJson(cacheKey, async () => {
+      const result = await this.service.paginate(query);
+      return toOrganizationPaginatedResourceCollection(result.data, result.meta);
+    }, [CACHE_TAGS.organizations]);
   });
 
   readonly show = withErrorHandling(

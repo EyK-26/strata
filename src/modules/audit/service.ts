@@ -1,9 +1,9 @@
 import { currentAuthUser } from "../../core/auth/authContext";
 import { currentRequestMeta } from "../../core/http/requestMetaContext";
-import { currentTraceId } from "../../core/tracing/traceContext";
 import { currentTenantId } from "../../core/tenant/tenantContext";
 import { auditChecksum } from "../../core/tenant/tenantMiddleware";
-import AuditLogRepository from "./repository";
+import { currentTraceId } from "../../core/tracing/traceContext";
+import type AuditLogRepository from "./repository";
 import type { AuditLogRecord } from "./types";
 
 interface RecordAuditInput {

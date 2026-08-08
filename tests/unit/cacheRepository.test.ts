@@ -1,14 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import SimpleCache from "../../src/core/cache/simpleCache";
 import CacheRepository from "../../src/core/cache/repository";
-import { CACHE_TAGS } from "../../src/core/cache/tags";
+import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
+import { CACHE_TAGS } from "../../src/core/cache/tags";
 
 describe("CacheRepository", () => {
   test("remember stores and returns cached values", async () => {
-    const repository = new CacheRepository(
-      new SimpleCacheStore(new SimpleCache(1_000, 10)),
-    );
+    const repository = new CacheRepository(new SimpleCacheStore(new SimpleCache(1_000, 10)));
     let calls = 0;
 
     const first = await repository.remember("users:1", async () => {
@@ -26,9 +24,7 @@ describe("CacheRepository", () => {
   });
 
   test("forget removes a single cache entry", async () => {
-    const repository = new CacheRepository(
-      new SimpleCacheStore(new SimpleCache(1_000, 10)),
-    );
+    const repository = new CacheRepository(new SimpleCacheStore(new SimpleCache(1_000, 10)));
 
     await repository.remember("users:1", async () => 1);
     expect(await repository.forget("users:1")).toBe(true);
@@ -36,16 +32,12 @@ describe("CacheRepository", () => {
   });
 
   test("tags flush only entries in the selected tag groups", async () => {
-    const repository = new CacheRepository(
-      new SimpleCacheStore(new SimpleCache(1_000, 10)),
-    );
+    const repository = new CacheRepository(new SimpleCacheStore(new SimpleCache(1_000, 10)));
 
-    await repository.tags(CACHE_TAGS.organizations).remember("organizations?page=1", async () => [
-      { id: 1 },
-    ]);
-    await repository.tags(CACHE_TAGS.projects).remember("projects?page=1", async () => [
-      { id: 2 },
-    ]);
+    await repository
+      .tags(CACHE_TAGS.organizations)
+      .remember("organizations?page=1", async () => [{ id: 1 }]);
+    await repository.tags(CACHE_TAGS.projects).remember("projects?page=1", async () => [{ id: 2 }]);
     await repository
       .tags(CACHE_TAGS.organizations, CACHE_TAGS.reports)
       .remember("reports/summary", async () => ({ total: 3 }));
@@ -57,8 +49,6 @@ describe("CacheRepository", () => {
     expect(removed).toBe(2);
     expect(await repository.get("organizations?page=1")).toBeUndefined();
     expect(await repository.get("reports/summary")).toBeUndefined();
-    expect(await repository.get<Array<{ id: number }>>("projects?page=1")).toEqual([
-      { id: 2 },
-    ]);
+    expect(await repository.get<Array<{ id: number }>>("projects?page=1")).toEqual([{ id: 2 }]);
   });
 });

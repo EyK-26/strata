@@ -74,9 +74,7 @@ function pattern(expression: RegExp): ValidationRule {
   };
 }
 
-function enumRule<TValue extends string>(
-  allowedValues: readonly TValue[],
-): ValidationRule {
+function enumRule<TValue extends string>(allowedValues: readonly TValue[]): ValidationRule {
   return (field, value) => {
     if (typeof value !== "string") {
       return undefined;
@@ -100,8 +98,7 @@ function integerRule(): ValidationRule {
       return undefined;
     }
 
-    const parsed =
-      typeof value === "number" ? value : Number.parseInt(String(value), 10);
+    const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
 
     if (!Number.isInteger(parsed)) {
       return `"${field}" must be an integer.`;
@@ -146,8 +143,7 @@ function positiveIntegerRule(): ValidationRule {
       return undefined;
     }
 
-    const parsed =
-      typeof value === "number" ? value : Number.parseInt(String(value), 10);
+    const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
 
     if (!Number.isInteger(parsed) || parsed <= 0) {
       return `"${field}" must be a positive integer.`;
@@ -163,8 +159,7 @@ function integerRange(minimum: number, maximum: number): ValidationRule {
       return undefined;
     }
 
-    const parsed =
-      typeof value === "number" ? value : Number.parseInt(String(value), 10);
+    const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
 
     if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
       return `"${field}" must be an integer between ${minimum} and ${maximum}.`;
@@ -174,10 +169,7 @@ function integerRange(minimum: number, maximum: number): ValidationRule {
   };
 }
 
-function validateObject(
-  payload: unknown,
-  schema: ValidationSchema,
-): Record<string, unknown> {
+function validateObject(payload: unknown, schema: ValidationSchema): Record<string, unknown> {
   if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
     throw new ValidationError("Request body must be a JSON object.");
   }
@@ -198,8 +190,7 @@ function validateObject(
 
     if (field in body && body[field] !== undefined) {
       const rawValue = body[field];
-      output[field] =
-        typeof rawValue === "string" ? rawValue.trim() : rawValue;
+      output[field] = typeof rawValue === "string" ? rawValue.trim() : rawValue;
     }
   }
 
@@ -210,6 +201,7 @@ function validateObject(
   return output;
 }
 
+export type { ValidationRule, ValidationSchema };
 export {
   confirmed,
   emailRule,
@@ -225,4 +217,3 @@ export {
   stringRule,
   validateObject,
 };
-export type { ValidationRule, ValidationSchema };

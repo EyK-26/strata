@@ -21,18 +21,13 @@ function qualifyColumn(tableName: string, column: string): string {
   return `${quoteIdentifier(tableName)}.${quoteIdentifier(column)}`;
 }
 
-function normalizeDirection(
-  direction: "ASC" | "DESC" | "asc" | "desc" = "ASC",
-): "ASC" | "DESC" {
+function normalizeDirection(direction: "ASC" | "DESC" | "asc" | "desc" = "ASC"): "ASC" | "DESC" {
   return direction.toUpperCase() === "DESC" ? "DESC" : "ASC";
 }
 
 function isQueryOperator(value: QueryFilterValue): value is QueryOperator {
   return (
-    value !== null &&
-    !Array.isArray(value) &&
-    !(value instanceof Date) &&
-    typeof value === "object"
+    value !== null && !Array.isArray(value) && !(value instanceof Date) && typeof value === "object"
   );
 }
 
@@ -41,18 +36,12 @@ function pushParam(values: unknown[], value: unknown): string {
   return `$${values.length}`;
 }
 
-function buildInClause(
-  column: string,
-  values: readonly unknown[],
-  params: unknown[],
-): string {
+function buildInClause(column: string, values: readonly unknown[], params: unknown[]): string {
   if (values.length === 0) {
     return "1 = 0";
   }
 
-  const placeholders = values
-    .map((value) => pushParam(params, value))
-    .join(", ");
+  const placeholders = values.map((value) => pushParam(params, value)).join(", ");
   return `${column} IN (${placeholders})`;
 }
 
@@ -142,9 +131,7 @@ function buildWhereClause<TEntity>(
   };
 }
 
-function resolveSoftDeleteColumn<TEntity>(
-  table: TableDefinition<TEntity>,
-): string | null {
+function resolveSoftDeleteColumn<TEntity>(table: TableDefinition<TEntity>): string | null {
   if (!table.softDeletes) {
     return null;
   }
@@ -181,14 +168,10 @@ function appendSoftDeleteScope<TEntity>(
 
 function buildQueryWhereClause<TEntity>(
   table: TableDefinition<TEntity>,
-  options: Pick<
-    QueryOptions<TEntity>,
-    "where" | "withTrashed" | "onlyTrashed"
-  > = {},
+  options: Pick<QueryOptions<TEntity>, "where" | "withTrashed" | "onlyTrashed"> = {},
 ): { clause: string; params: unknown[] } {
   const { clause, params } = buildWhereClause(table.name, options.where ?? {});
-  const clauses =
-    clause.length > 0 ? clause.replace(/^ WHERE /, "").split(" AND ") : [];
+  const clauses = clause.length > 0 ? clause.replace(/^ WHERE /, "").split(" AND ") : [];
 
   appendSoftDeleteScope(table, options, clauses);
 
@@ -243,18 +226,11 @@ function buildOffsetClause(offset?: number): string {
   return ` OFFSET ${offset}`;
 }
 
-function buildReturningColumns<TEntity>(
-  table: TableDefinition<TEntity>,
-): string {
-  return table.columns
-    .map((column) => qualifyColumn(table.name, column))
-    .join(", ");
+function buildReturningColumns<TEntity>(table: TableDefinition<TEntity>): string {
+  return table.columns.map((column) => qualifyColumn(table.name, column)).join(", ");
 }
 
-function getDefinedColumnEntries<
-  TEntity,
-  PrimaryKey extends keyof TEntity & string,
->(
+function getDefinedColumnEntries<TEntity, PrimaryKey extends keyof TEntity & string>(
   table: TableDefinition<TEntity, PrimaryKey>,
   values: Partial<TEntity>,
   options: { exclude?: readonly (keyof TEntity & string)[] } = {},
@@ -283,10 +259,7 @@ function buildSelectQuery<TEntity>(
 ): { text: string; params: unknown[] } {
   const columns = buildReturningColumns(table);
   const { clause, params } = buildQueryWhereClause(table, options);
-  const orderBy = buildOrderByClause(
-    table.name,
-    options.orderBy ?? table.defaultOrderBy,
-  );
+  const orderBy = buildOrderByClause(table.name, options.orderBy ?? table.defaultOrderBy);
   const limit = buildLimitClause(options.limit);
   const offset = buildOffsetClause(options.offset);
 
@@ -353,16 +326,12 @@ function buildInsertQuery<TEntity, PrimaryKey extends keyof TEntity & string>(
   const entries = getDefinedColumnEntries(table, values);
 
   if (entries.length === 0) {
-    throw new Error(
-      `Cannot insert into ${table.name} without any column values.`,
-    );
+    throw new Error(`Cannot insert into ${table.name} without any column values.`);
   }
 
   const params: unknown[] = [];
   const columns = entries.map(([column]) => quoteIdentifier(column)).join(", ");
-  const placeholders = entries
-    .map(([, value]) => pushParam(params, value))
-    .join(", ");
+  const placeholders = entries.map(([, value]) => pushParam(params, value)).join(", ");
   const returningColumns = buildReturningColumns(table);
 
   return {
@@ -381,17 +350,12 @@ function buildUpdateQuery<TEntity, PrimaryKey extends keyof TEntity & string>(
   });
 
   if (entries.length === 0) {
-    throw new Error(
-      `Cannot update ${table.name} without any changed column values.`,
-    );
+    throw new Error(`Cannot update ${table.name} without any changed column values.`);
   }
 
   const params: unknown[] = [];
   const setClause = entries
-    .map(
-      ([column, value]) =>
-        `${quoteIdentifier(column)} = ${pushParam(params, value)}`,
-    )
+    .map(([column, value]) => `${quoteIdentifier(column)} = ${pushParam(params, value)}`)
     .join(", ");
   const primaryKeyPlaceholder = pushParam(params, id);
   const returningColumns = buildReturningColumns(table);
@@ -399,8 +363,7 @@ function buildUpdateQuery<TEntity, PrimaryKey extends keyof TEntity & string>(
 
   appendSoftDeleteScope(table, {}, scopeClauses);
 
-  const scopeSuffix =
-    scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
+  const scopeSuffix = scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
 
   return {
     text: `UPDATE ${quoteIdentifier(table.name)} SET ${setClause} WHERE ${quoteIdentifier(table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix} RETURNING ${returningColumns}`,
@@ -408,10 +371,7 @@ function buildUpdateQuery<TEntity, PrimaryKey extends keyof TEntity & string>(
   };
 }
 
-function buildSoftDeleteByIdQuery<
-  TEntity,
-  PrimaryKey extends keyof TEntity & string,
->(
+function buildSoftDeleteByIdQuery<TEntity, PrimaryKey extends keyof TEntity & string>(
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
   deletedAt: Date,
@@ -425,8 +385,7 @@ function buildSoftDeleteByIdQuery<
   const returningColumns = buildReturningColumns(table);
   const scopeClauses: string[] = [];
   appendSoftDeleteScope(table, {}, scopeClauses);
-  const scopeSuffix =
-    scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
+  const scopeSuffix = scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
 
   return {
     text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = $1 WHERE ${quoteIdentifier(table.primaryKey)} = $2${scopeSuffix} RETURNING ${returningColumns}`,
@@ -434,10 +393,7 @@ function buildSoftDeleteByIdQuery<
   };
 }
 
-function buildRestoreByIdQuery<
-  TEntity,
-  PrimaryKey extends keyof TEntity & string,
->(
+function buildRestoreByIdQuery<TEntity, PrimaryKey extends keyof TEntity & string>(
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
 ): { text: string; params: unknown[] } {
@@ -455,10 +411,7 @@ function buildRestoreByIdQuery<
   };
 }
 
-function buildDeleteByIdQuery<
-  TEntity,
-  PrimaryKey extends keyof TEntity & string,
->(
+function buildDeleteByIdQuery<TEntity, PrimaryKey extends keyof TEntity & string>(
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
 ): { text: string; params: unknown[] } {

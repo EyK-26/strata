@@ -1,11 +1,6 @@
 import { access } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  moduleDirectory,
-  toCamelCase,
-  toKebabCase,
-  toPascalCase,
-} from "./utils";
+import { moduleDirectory, toCamelCase, toKebabCase, toPascalCase } from "./utils";
 
 async function makePolicyCommand(moduleName?: string): Promise<void> {
   if (!moduleName) {
@@ -27,10 +22,7 @@ async function makePolicyCommand(moduleName?: string): Promise<void> {
     await access(policyPath);
     throw new Error(`Policy already exists: ${policyPath}`);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith("Policy already exists:")
-    ) {
+    if (error instanceof Error && error.message.startsWith("Policy already exists:")) {
       throw error;
     }
   }

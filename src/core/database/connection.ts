@@ -12,5 +12,5 @@ function createDatabaseConnection(source: UnsafeQueryable): DatabaseConnection {
   };
 }
 
-export { createDatabaseConnection };
 export type { UnsafeQueryable };
+export { createDatabaseConnection };

@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import db from "../../db/connection";
-import WebhookRepository from "./repository";
+import type WebhookRepository from "./repository";
 import type { WebhookRecord } from "./types";
 
 interface CreateWebhookInput {

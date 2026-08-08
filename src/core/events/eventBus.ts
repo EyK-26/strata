@@ -32,5 +32,5 @@ class EventBus {
 
 const eventBus = new EventBus();
 
-export { EventBus, eventBus };
 export type { EventListener };
+export { EventBus, eventBus };

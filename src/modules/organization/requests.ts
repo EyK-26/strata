@@ -35,13 +35,7 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const createOrganizationRules = {
   name: [required(), stringRule(), minLength(1), maxLength(120)],
-  slug: [
-    required(),
-    stringRule(),
-    minLength(2),
-    maxLength(64),
-    pattern(SLUG_PATTERN),
-  ],
+  slug: [required(), stringRule(), minLength(2), maxLength(64), pattern(SLUG_PATTERN)],
 };
 
 class OrganizationListQueryRequest extends QueryFormRequest<OrganizationListQueryDto> {
@@ -79,21 +73,13 @@ class UpdateOrganizationRequest extends FormRequest<UpdateOrganizationBodyDto> {
 
     if ("slug" in body && body.slug !== undefined) {
       const validated = validateObject(body, {
-        slug: [
-          required(),
-          stringRule(),
-          minLength(2),
-          maxLength(64),
-          pattern(SLUG_PATTERN),
-        ],
+        slug: [required(), stringRule(), minLength(2), maxLength(64), pattern(SLUG_PATTERN)],
       }) as { slug: string };
       changes.slug = validated.slug.toLowerCase();
     }
 
     if (changes.name === undefined && changes.slug === undefined) {
-      throw new BadRequestError(
-        'At least one of "name" or "slug" must be provided.',
-      );
+      throw new BadRequestError('At least one of "name" or "slug" must be provided.');
     }
 
     return changes;
@@ -104,44 +90,36 @@ const organizationListQueryRequest = new OrganizationListQueryRequest();
 const createOrganizationRequest = new CreateOrganizationRequest();
 const updateOrganizationRequest = new UpdateOrganizationRequest();
 
-function parseOrganizationIdParams(
-  params: OrganizationIdParams,
-): { id: number } {
+function parseOrganizationIdParams(params: OrganizationIdParams): { id: number } {
   return {
     id: parsePositiveIntParam(params.id, "organization id"),
   };
 }
 
-function parseOrganizationListQuery(
-  request?: Request,
-): OrganizationListQueryDto {
+function parseOrganizationListQuery(request?: Request): OrganizationListQueryDto {
   return organizationListQueryRequest.validate(request);
 }
 
-async function parseCreateOrganizationBody(
-  request: Request,
-): Promise<CreateOrganizationBodyDto> {
+async function parseCreateOrganizationBody(request: Request): Promise<CreateOrganizationBodyDto> {
   return await createOrganizationRequest.validate(request);
 }
 
-async function parseUpdateOrganizationBody(
-  request: Request,
-): Promise<UpdateOrganizationBodyDto> {
+async function parseUpdateOrganizationBody(request: Request): Promise<UpdateOrganizationBodyDto> {
   return await updateOrganizationRequest.validate(request);
 }
 
-export {
-  CreateOrganizationRequest,
-  OrganizationListQueryRequest,
-  UpdateOrganizationRequest,
-  parseCreateOrganizationBody,
-  parseOrganizationIdParams,
-  parseOrganizationListQuery,
-  parseUpdateOrganizationBody,
-};
 export type {
   CreateOrganizationBodyDto,
   OrganizationIdParams,
   OrganizationListQueryDto,
   UpdateOrganizationBodyDto,
+};
+export {
+  CreateOrganizationRequest,
+  OrganizationListQueryRequest,
+  parseCreateOrganizationBody,
+  parseOrganizationIdParams,
+  parseOrganizationListQuery,
+  parseUpdateOrganizationBody,
+  UpdateOrganizationRequest,
 };

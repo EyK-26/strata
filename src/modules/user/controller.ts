@@ -1,26 +1,26 @@
+import { CORE_AUTH_TOKEN } from "../../bootstrap/config";
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
-import { CORE_AUTH_TOKEN } from "../../bootstrap/config";
+import type { AuthManager } from "../../core/auth/guard";
 import {
   createdResponse,
   jsonResponse,
   noContentResponse,
   withErrorHandling,
 } from "../../core/http";
-import type { AuthManager } from "../../core/auth/guard";
-import AuthService from "./authService";
-import TokenService from "./tokenService";
 import ApiTokenRepository from "./apiTokenRepository";
+import type AuthService from "./authService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
 import { authServiceToken, tokenServiceToken } from "./provider";
 import {
+  type OAuthProviderParams,
   parseCreateApiTokenBody,
   parseLoginBody,
   parseTokenIdParams,
-  type OAuthProviderParams,
   type TokenIdParams,
 } from "./requests";
 import { toUserResource } from "./resources";
+import type TokenService from "./tokenService";
 
 class AuthController {
   constructor(private readonly dependencies: AppDependencies) {}
@@ -137,6 +137,12 @@ class AuthController {
       })),
       exported_at: new Date().toISOString(),
     });
+  });
+
+  readonly deleteMe = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    await this.tokens.deleteUserAccount(userId);
+    return noContentResponse();
   });
 
   readonly listTokens = withErrorHandling(async (request: Request) => {

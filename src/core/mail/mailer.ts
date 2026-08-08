@@ -36,5 +36,5 @@ function mailer(): Mailer {
   return appMailer;
 }
 
-export { LogMailDriver, Mailer, mailer };
 export type { MailDriver, MailMessage };
+export { LogMailDriver, Mailer, mailer };

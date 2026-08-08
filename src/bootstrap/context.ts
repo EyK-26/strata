@@ -1,16 +1,16 @@
+import { setActiveApplicationContext } from "./applicationRegistry";
 import {
-  ConfigStore,
-  ServiceContainer,
-  assertAppDependenciesComplete,
   type AppContext,
   type AppModule,
+  assertAppDependenciesComplete,
+  ConfigStore,
   type MutableAppDependencies,
   type ProviderContext,
+  ServiceContainer,
   type ServiceProvider,
 } from "./contracts";
 import { appModules } from "./modules";
 import { coreProviders } from "./providers";
-import { setActiveApplicationContext } from "./applicationRegistry";
 import { assertProductionSecrets } from "./secretsGuard";
 
 function collectProviders(modules: AppModule[] = appModules): ServiceProvider[] {

@@ -25,5 +25,5 @@ function buildPaginationMeta(input: {
   };
 }
 
-export { buildPaginationMeta };
 export type { PaginatedResult, PaginationMeta };
+export { buildPaginationMeta };

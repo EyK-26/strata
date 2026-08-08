@@ -1,4 +1,5 @@
 import { resolveApplicationDependencies } from "../bootstrap/applicationRegistry";
+import { isFeatureEnabled } from "../config/features";
 import { eventBus, modelEventName } from "../core/events";
 import { auditServiceToken } from "../modules/audit/provider";
 import type AuditService from "../modules/audit/service";
@@ -7,6 +8,10 @@ const MODEL_ACTIONS = ["created", "updated", "deleted", "restored", "force-delet
 const MODEL_TABLES = ["organization", "project", "task", "comment"] as const;
 
 function registerAuditLogListeners(): void {
+  if (!isFeatureEnabled("auditLog")) {
+    return;
+  }
+
   for (const tableName of MODEL_TABLES) {
     for (const action of MODEL_ACTIONS) {
       eventBus.listen(modelEventName(tableName, action), async (payload) => {
@@ -21,9 +26,7 @@ function registerAuditLogListeners(): void {
               ? Number((payload as { id: number }).id)
               : null,
           payload:
-            payload && typeof payload === "object"
-              ? (payload as Record<string, unknown>)
-              : {},
+            payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {},
         });
       });
     }

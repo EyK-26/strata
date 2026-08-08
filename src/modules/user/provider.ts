@@ -1,8 +1,8 @@
 import type { ServiceProvider } from "../../bootstrap/contracts";
-import { GitHubOAuthProvider, MockOAuthProvider } from "../../core/auth/oauth/providers";
-import { OidcProvider } from "../../core/auth/oauth/oidcProvider";
-import { SamlProvider } from "../../core/auth/oauth/samlProvider";
 import { isFeatureEnabled } from "../../config/features";
+import { OidcProvider } from "../../core/auth/oauth/oidcProvider";
+import { GitHubOAuthProvider, MockOAuthProvider } from "../../core/auth/oauth/providers";
+import { SamlProvider } from "../../core/auth/oauth/samlProvider";
 import ApiTokenRepository from "./apiTokenRepository";
 import AuthService from "./authService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
@@ -54,7 +54,13 @@ const userProvider: ServiceProvider = {
       const oidcClientId = process.env.OIDC_CLIENT_ID?.trim();
       const oidcClientSecret = process.env.OIDC_CLIENT_SECRET?.trim();
 
-      if (isFeatureEnabled("oauthLogin") && oidcIssuer && oidcClientId && oidcClientSecret && oauthRedirectUri) {
+      if (
+        isFeatureEnabled("oauthLogin") &&
+        oidcIssuer &&
+        oidcClientId &&
+        oidcClientSecret &&
+        oauthRedirectUri
+      ) {
         authService.registerOAuthProvider(
           new OidcProvider({
             name: "oidc",

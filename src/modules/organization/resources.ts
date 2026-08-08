@@ -14,9 +14,7 @@ interface OrganizationResource {
   updated_at: string;
 }
 
-function toOrganizationResource(
-  record: OrganizationRecord,
-): OrganizationResource {
+function toOrganizationResource(record: OrganizationRecord): OrganizationResource {
   return {
     id: record.id,
     name: record.name,
@@ -36,16 +34,12 @@ function toOrganizationPaginatedResourceCollection(
   records: readonly OrganizationRecord[],
   meta: PaginationMeta,
 ) {
-  return toPaginatedResourceCollection(
-    records,
-    meta,
-    toOrganizationResource,
-  );
+  return toPaginatedResourceCollection(records, meta, toOrganizationResource);
 }
 
+export type { OrganizationResource };
 export {
   toOrganizationPaginatedResourceCollection,
   toOrganizationResource,
   toOrganizationResourceCollection,
 };
-export type { OrganizationResource };

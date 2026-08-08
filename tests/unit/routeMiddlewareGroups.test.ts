@@ -1,18 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { Policy, PolicyGate } from "../../src/core/auth/policy";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { createAuthorizeMiddleware } from "../../src/core/http/authorizeMiddleware";
-import { composeMiddleware } from "../../src/core/http/middleware";
+import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
+import type { AppDependencies } from "../../src/bootstrap/contracts";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
-import {
-  CORE_AUTH_TOKEN,
-  CORE_POLICY_GATE_TOKEN,
-} from "../../src/bootstrap/config";
 import { createHttpKernel } from "../../src/bootstrap/httpKernel";
+import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
+import { Policy, PolicyGate } from "../../src/core/auth/policy";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
-import type { AppDependencies } from "../../src/bootstrap/contracts";
+import { createAuthorizeMiddleware } from "../../src/core/http/authorizeMiddleware";
+import { composeMiddleware } from "../../src/core/http/middleware";
 
 class ProjectPolicy extends Policy {
   override delete(user: { role?: string } | null): boolean {
@@ -36,9 +33,9 @@ describe("createAuthorizeMiddleware", () => {
     const gate = new PolicyGate();
     const auth = new AuthManager(new GuestGuard());
     gate.register("project", new ProjectPolicy());
-    const handler = composeMiddleware(
-      createAuthorizeMiddleware(gate, auth, "project", "delete"),
-    )(async () => Response.json({ ok: true }));
+    const handler = composeMiddleware(createAuthorizeMiddleware(gate, auth, "project", "delete"))(
+      async () => Response.json({ ok: true }),
+    );
 
     const response = await handler(new Request("http://example.test/projects/1"));
 
@@ -49,9 +46,9 @@ describe("createAuthorizeMiddleware", () => {
     const gate = new PolicyGate();
     const auth = new AuthManager(new GuestGuard());
     gate.register("project", new ProjectPolicy());
-    const handler = composeMiddleware(
-      createAuthorizeMiddleware(gate, auth, "project", "delete"),
-    )(async () => Response.json({ ok: true }));
+    const handler = composeMiddleware(createAuthorizeMiddleware(gate, auth, "project", "delete"))(
+      async () => Response.json({ ok: true }),
+    );
 
     const response = await handler(
       new Request("http://example.test/projects/1", {
@@ -73,9 +70,7 @@ describe("HttpKernel.wrapPolicy", () => {
     gate.register("project", new ProjectPolicy());
 
     const kernel = createHttpKernel(dependencies);
-    const handler = kernel.wrapPolicy("project", "delete", async () =>
-      Response.json({ ok: true }),
-    );
+    const handler = kernel.wrapPolicy("project", "delete", async () => Response.json({ ok: true }));
 
     const response = await handler(
       new Request("http://example.test/projects/1", {

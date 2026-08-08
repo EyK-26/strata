@@ -11,14 +11,11 @@ interface TableDefinition<
   softDeletes?: boolean | { column?: keyof TEntity & string };
 }
 
-function defineTable<
-  TEntity,
-  PrimaryKey extends keyof TEntity & string = keyof TEntity & string,
->(
+function defineTable<TEntity, PrimaryKey extends keyof TEntity & string = keyof TEntity & string>(
   definition: TableDefinition<TEntity, PrimaryKey>,
 ): TableDefinition<TEntity, PrimaryKey> {
   return definition;
 }
 
-export { defineTable };
 export type { TableDefinition };
+export { defineTable };

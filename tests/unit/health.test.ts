@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "../../src/bootstrap/config";
 import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { createHealthRoutes } from "../../src/bootstrap/health";
-import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "../../src/bootstrap/config";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
@@ -10,9 +10,7 @@ describe("createHealthRoutes", () => {
   test("returns ok from /health without touching dependencies", async () => {
     const routes = createHealthRoutes({
       container: new ServiceContainer(),
-      cache: new CacheRepository(
-        new SimpleCacheStore(new SimpleCache(60_000, 20)),
-      ),
+      cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
     });
 
     const response = await routes["/health"]();
@@ -28,9 +26,7 @@ describe("createHealthRoutes", () => {
 
     const routes = createHealthRoutes({
       container,
-      cache: new CacheRepository(
-        new SimpleCacheStore(new SimpleCache(60_000, 20)),
-      ),
+      cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
     });
 
     const response = await routes["/ready"]();
@@ -40,8 +36,13 @@ describe("createHealthRoutes", () => {
     };
 
     expect(body.checks.database).toBe("ok");
-    expect(body.checks.redis).toBeDefined();
-    expect(["ok", "skipped", "error"]).toContain(body.checks.redis!);
+    const redisStatus = body.checks.redis;
+
+    if (!redisStatus) {
+      throw new Error("Expected redis readiness check.");
+    }
+
+    expect(["ok", "skipped", "error"]).toContain(redisStatus);
     expect([200, 503]).toContain(response.status);
   });
 });

@@ -11,7 +11,7 @@ describe("mapDatabaseError", () => {
     const error = mapDatabaseError({
       code: "ERR_POSTGRES_SERVER_ERROR",
       errno: "23505",
-      detail: 'Key (slug)=(acme) already exists.',
+      detail: "Key (slug)=(acme) already exists.",
       constraint: "organization_slug_key",
     });
 

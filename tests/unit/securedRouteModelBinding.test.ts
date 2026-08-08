@@ -1,19 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { ForbiddenError, NotFoundError } from "../../src/core/errors/http";
-import { securedBindRouteModel } from "../../src/core/http/securedRouteModelBinding";
 import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
-import {
-  ConfigStore,
-  ServiceContainer,
-  type AppDependencies,
-} from "../../src/bootstrap/contracts";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
+import { type AppDependencies, ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import type { AuthUser } from "../../src/core/auth/authContext";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { Policy, PolicyGate } from "../../src/core/auth/policy";
-import type { AuthUser } from "../../src/core/auth/authContext";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
+import { ForbiddenError, NotFoundError } from "../../src/core/errors/http";
+import { securedBindRouteModel } from "../../src/core/http/securedRouteModelBinding";
 
 interface WidgetRecord {
   id: number;
@@ -30,9 +26,7 @@ type WidgetParams = { id: string };
 
 function bootstrapPolicyGate(): AppDependencies {
   const container = new ServiceContainer();
-  const cache = new CacheRepository(
-    new SimpleCacheStore(new SimpleCache(60_000, 20)),
-  );
+  const cache = new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20)));
   const gate = new PolicyGate();
   gate.register("widget", new WidgetPolicy());
 

@@ -15,9 +15,7 @@ interface TestApp {
   stop: () => void;
 }
 
-async function createTestApp(
-  options: CreateTestAppOptions = {},
-): Promise<TestApp> {
+async function createTestApp(options: CreateTestAppOptions = {}): Promise<TestApp> {
   if (options.fresh) {
     await freshDatabase({ seed: true });
   }
@@ -41,5 +39,5 @@ async function createTestApp(
   };
 }
 
-export { createTestApp };
 export type { CreateTestAppOptions, TestApp };
+export { createTestApp };

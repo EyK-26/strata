@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   BaseRepository,
+  type DatabaseConnection,
   defineTable,
   hasMany,
-  type DatabaseConnection,
 } from "../../src/core/database";
 import { NotFoundError } from "../../src/core/errors/http";
 
@@ -40,10 +40,7 @@ class FakeConnection implements DatabaseConnection {
     this.responses.push(rows);
   }
 
-  async unsafe<T>(
-    query: string,
-    params: readonly unknown[] = [],
-  ): Promise<T[]> {
+  async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
     this.calls.push({ query, params: [...params] });
     return (this.responses.shift() ?? []) as T[];
   }
@@ -54,9 +51,7 @@ class CrewRepository extends BaseRepository<CrewMember, "id"> {
     super(crewMemberTable, connection);
   }
 
-  async loadBySquads(
-    squads: readonly Squad[],
-  ): Promise<Map<number, CrewMember[]>> {
+  async loadBySquads(squads: readonly Squad[]): Promise<Map<number, CrewMember[]>> {
     return await this.loadHasManyForParents(squads, squadHasManyCrewMembers);
   }
 }
@@ -119,13 +114,11 @@ describe("base repository", () => {
     expect(await repository.deleteById(7)).toBe(true);
     expect(await repository.deleteById(999)).toBe(false);
     expect(connection.calls[0]).toEqual({
-      query:
-        'DELETE FROM "crew_member" WHERE "id" = $1 RETURNING "id" AS "deleted_id"',
+      query: 'DELETE FROM "crew_member" WHERE "id" = $1 RETURNING "id" AS "deleted_id"',
       params: [7],
     });
     expect(connection.calls[1]).toEqual({
-      query:
-        'DELETE FROM "crew_member" WHERE "id" = $1 RETURNING "id" AS "deleted_id"',
+      query: 'DELETE FROM "crew_member" WHERE "id" = $1 RETURNING "id" AS "deleted_id"',
       params: [999],
     });
   });
@@ -137,10 +130,7 @@ describe("base repository", () => {
     connection.queue([]);
 
     await expect(
-      repository.findByIdOrThrow(
-        404,
-        (id) => new NotFoundError(`Crew member ${id} not found.`),
-      ),
+      repository.findByIdOrThrow(404, (id) => new NotFoundError(`Crew member ${id} not found.`)),
     ).rejects.toThrow("Crew member 404 not found.");
     expect(connection.calls[0]).toEqual({
       query:

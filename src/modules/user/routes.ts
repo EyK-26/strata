@@ -1,5 +1,5 @@
-import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { AppDependencies } from "../../bootstrap/contracts";
+import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { RouteHandler } from "../../core/http/middleware";
 import AuthController from "./controller";
 
@@ -17,20 +17,16 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
       GET: controller.oauthCallback,
     },
     "/auth/me": {
-      GET: kernel.wrapAuthenticated(
-        controller.me as unknown as RouteHandler,
-      ),
+      GET: kernel.wrapAuthenticated(controller.me as unknown as RouteHandler),
     },
     "/users/me/export": {
-      GET: kernel.wrapAuthenticated(
-        controller.exportMe as unknown as RouteHandler,
-      ),
+      GET: kernel.wrapAuthenticated(controller.exportMe as unknown as RouteHandler),
+    },
+    "/users/me": {
+      DELETE: kernel.wrapAuthenticated(controller.deleteMe as unknown as RouteHandler),
     },
     "/auth/tokens": {
-      GET: kernel.wrapAbility(
-        "auth:tokens:read",
-        controller.listTokens as unknown as RouteHandler,
-      ),
+      GET: kernel.wrapAbility("auth:tokens:read", controller.listTokens as unknown as RouteHandler),
       POST: kernel.wrapAbility(
         "auth:tokens:write",
         controller.storeToken as unknown as RouteHandler,

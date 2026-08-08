@@ -1,26 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { EventBus } from "../../src/core/events/eventBus";
-import { registerInvalidateCacheOnModelWriteListeners } from "../../src/bootstrap/listeners/invalidateCacheOnModelWrite";
 import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
-import {
-  ConfigStore,
-  ServiceContainer,
-  type AppDependencies,
-} from "../../src/bootstrap/contracts";
+import { CORE_QUEUE_TOKEN } from "../../src/bootstrap/config";
+import { type AppDependencies, ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import { registerInvalidateCacheOnModelWriteListeners } from "../../src/bootstrap/listeners/invalidateCacheOnModelWrite";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
-import { SyncQueue } from "../../src/core/queue";
-import { CORE_QUEUE_TOKEN } from "../../src/bootstrap/config";
 import { CACHE_TAGS } from "../../src/core/cache/tags";
+import { EventBus } from "../../src/core/events/eventBus";
+import { SyncQueue } from "../../src/core/queue";
 
 describe("registerInvalidateCacheOnModelWriteListeners", () => {
   test("flushes tagged cache entries when model write events fire", async () => {
     const bus = new EventBus();
     const container = new ServiceContainer();
-    const cache = new CacheRepository(
-      new SimpleCacheStore(new SimpleCache(60_000, 20)),
-    );
+    const cache = new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20)));
     const dependencies: AppDependencies = { container, cache };
 
     container.set(CORE_QUEUE_TOKEN, new SyncQueue());

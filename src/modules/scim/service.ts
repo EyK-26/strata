@@ -1,12 +1,12 @@
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
-import UserRepository from "../user/repository";
-import { userRepositoryToken } from "../user/provider";
-import OrganizationMemberRepository from "../organization/memberRepository";
-import db from "../../db/connection";
-import { SCIM_SCHEMAS } from "../../domain/scim";
 import { hashPassword } from "../../core/auth/password";
 import { NotFoundError } from "../../core/errors/http";
+import db from "../../db/connection";
+import { SCIM_SCHEMAS } from "../../domain/scim";
+import OrganizationMemberRepository from "../organization/memberRepository";
+import { userRepositoryToken } from "../user/provider";
+import type UserRepository from "../user/repository";
 
 interface ScimUserPayload {
   userName?: string;
@@ -226,12 +226,7 @@ class ScimService {
     };
   }
 
-  private toScimUser(user: {
-    id: number;
-    name: string;
-    email: string;
-    role: string;
-  }) {
+  private toScimUser(user: { id: number; name: string; email: string; role: string }) {
     return {
       schemas: [SCIM_SCHEMAS.user],
       id: String(user.id),
@@ -256,5 +251,5 @@ function createScimService(dependencies: AppDependencies): ScimService {
 }
 
 export default ScimService;
-export { createScimService };
 export type { ScimPatchOperation, ScimUserPayload };
+export { createScimService };

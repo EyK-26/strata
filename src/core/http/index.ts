@@ -1,7 +1,27 @@
-import { HttpError } from "../errors/http";
 import { mapDatabaseError } from "../database/errors";
-export { BadRequestError, ConflictError, ForbiddenError, HttpError, NotFoundError, UnauthorizedError, UnprocessableEntityError, ValidationError } from "../errors/http";
-export { serializeDate, toPaginatedResourceCollection, toResourceCollection } from "./resources";
+import { HttpError } from "../errors/http";
+
+export {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  HttpError,
+  NotFoundError,
+  UnauthorizedError,
+  UnprocessableEntityError,
+  ValidationError,
+} from "../errors/http";
+export type { PaginatedResult, PaginationMeta } from "../pagination";
+export { createAuthMiddleware } from "./authMiddleware";
+export { createAuthorizeMiddleware } from "./authorizeMiddleware";
+export { FormRequest, QueryFormRequest } from "./formRequest";
+export type { Middleware, RouteHandler } from "./middleware";
+export {
+  applyMiddlewareToRoutes,
+  composeMiddleware,
+  requestIdMiddleware,
+  wrapRouteHandler,
+} from "./middleware";
 export {
   buildPaginationMeta,
   DEFAULT_PER_PAGE,
@@ -9,21 +29,11 @@ export {
   paginatedResponse,
   parsePaginationQuery,
 } from "./pagination";
-export type { PaginatedResult, PaginationMeta } from "../pagination";
-export {
-  applyMiddlewareToRoutes,
-  composeMiddleware,
-  requestIdMiddleware,
-  wrapRouteHandler,
-} from "./middleware";
-export type { Middleware, RouteHandler } from "./middleware";
-export { FormRequest, QueryFormRequest } from "./formRequest";
+export { createRequireAuthMiddleware } from "./requireAuthMiddleware";
+export { serializeDate, toPaginatedResourceCollection, toResourceCollection } from "./resources";
+export { withMiddleware } from "./routeMiddleware";
 export { bindRouteModel } from "./routeModelBinding";
 export { securedBindRouteModel } from "./securedRouteModelBinding";
-export { createAuthMiddleware } from "./authMiddleware";
-export { createAuthorizeMiddleware } from "./authorizeMiddleware";
-export { createRequireAuthMiddleware } from "./requireAuthMiddleware";
-export { withMiddleware } from "./routeMiddleware";
 export {
   buildRequestCacheKey,
   expectObject,
@@ -57,15 +67,12 @@ function noContentResponse(): Response {
 }
 
 function errorResponse(error: unknown): Response {
-  const mappedError =
-    error instanceof HttpError ? error : mapDatabaseError(error);
+  const mappedError = error instanceof HttpError ? error : mapDatabaseError(error);
 
   return Response.json(
     {
       error: mappedError.message,
-      ...(mappedError.details === undefined
-        ? {}
-        : { details: mappedError.details }),
+      ...(mappedError.details === undefined ? {} : { details: mappedError.details }),
     },
     { status: mappedError.status },
   );
@@ -83,12 +90,6 @@ function withErrorHandling<TArgs extends unknown[]>(
   };
 }
 
-export { getRouteParams } from "./route";
 export type { RouteRequest } from "./route";
-export {
-  createdResponse,
-  errorResponse,
-  jsonResponse,
-  noContentResponse,
-  withErrorHandling,
-};
+export { getRouteParams } from "./route";
+export { createdResponse, errorResponse, jsonResponse, noContentResponse, withErrorHandling };

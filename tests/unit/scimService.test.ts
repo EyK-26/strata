@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { SCIM_SCHEMAS } from "../../src/domain/scim";
+import OrganizationMemberRepository from "../../src/modules/organization/memberRepository";
 import ScimService from "../../src/modules/scim/service";
 import UserRepository from "../../src/modules/user/repository";
-import OrganizationMemberRepository from "../../src/modules/organization/memberRepository";
 
 describe("ScimService", () => {
   test("returns service provider config", () => {

@@ -59,5 +59,5 @@ function formatCefLine(event: SiemAuditEvent): string {
   return `CEF:0|WorkHub|API|1.0|${event.action}|${event.subject_type}|5|${extension}`;
 }
 
-export { formatCefLine, formatSiemAuditEvent };
 export type { SiemAuditEvent };
+export { formatCefLine, formatSiemAuditEvent };

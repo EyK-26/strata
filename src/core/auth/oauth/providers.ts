@@ -23,22 +23,19 @@ class GitHubOAuthProvider implements OAuthProvider {
   }
 
   async exchangeCode(code: string): Promise<OAuthProfile> {
-    const tokenResponse = await fetch(
-      "https://github.com/login/oauth/access_token",
-      {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          client_id: this.options.clientId,
-          client_secret: this.options.clientSecret,
-          code,
-          redirect_uri: this.options.redirectUri,
-        }),
+    const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        client_id: this.options.clientId,
+        client_secret: this.options.clientSecret,
+        code,
+        redirect_uri: this.options.redirectUri,
+      }),
+    });
 
     const tokenBody = (await tokenResponse.json()) as { access_token?: string };
 
@@ -87,5 +84,5 @@ class MockOAuthProvider implements OAuthProvider {
   }
 }
 
-export { GitHubOAuthProvider, MockOAuthProvider };
 export type { GitHubOAuthOptions };
+export { GitHubOAuthProvider, MockOAuthProvider };

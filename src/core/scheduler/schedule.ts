@@ -36,5 +36,5 @@ class Schedule {
 
 const appSchedule = new Schedule();
 
-export { Schedule, appSchedule };
 export type { ScheduledTask };
+export { appSchedule, Schedule };

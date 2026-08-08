@@ -34,9 +34,7 @@ function toTaskResource(record: TaskWithProjectRecord): TaskResource {
   };
 }
 
-function toTaskResourceCollection(
-  records: readonly TaskWithProjectRecord[],
-): TaskResource[] {
+function toTaskResourceCollection(records: readonly TaskWithProjectRecord[]): TaskResource[] {
   return toResourceCollection(records, toTaskResource);
 }
 
@@ -47,9 +45,5 @@ function toTaskPaginatedResourceCollection(
   return toPaginatedResourceCollection(records, meta, toTaskResource);
 }
 
-export {
-  toTaskPaginatedResourceCollection,
-  toTaskResource,
-  toTaskResourceCollection,
-};
 export type { TaskResource };
+export { toTaskPaginatedResourceCollection, toTaskResource, toTaskResourceCollection };

@@ -1,6 +1,6 @@
 import db from "../../db/connection";
-import { createDatabaseConnection } from "./connection.ts";
 import type { DatabaseConnection } from "./baseRepository.ts";
+import { createDatabaseConnection } from "./connection.ts";
 
 async function runInTransaction<TValue>(
   operation: (connection: DatabaseConnection) => Promise<TValue>,

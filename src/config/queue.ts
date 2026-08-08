@@ -17,5 +17,5 @@ const queueConfig: QueueConfig = {
   backoffMs: Number(process.env.QUEUE_BACKOFF_MS ?? "1000"),
 };
 
-export { queueConfig };
 export type { QueueConfig };
+export { queueConfig };

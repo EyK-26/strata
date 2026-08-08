@@ -4,19 +4,27 @@ interface FeatureFlags {
   auditLog: boolean;
   oauthLogin: boolean;
   samlLogin: boolean;
+  scim: boolean;
+  billing: boolean;
 }
 
-const featureFlags: FeatureFlags = {
-  webhooks: (process.env.FEATURE_WEBHOOKS ?? "true") !== "false",
-  fullTextSearch: (process.env.FEATURE_SEARCH ?? "true") !== "false",
-  auditLog: (process.env.FEATURE_AUDIT_LOG ?? "true") !== "false",
-  oauthLogin: (process.env.FEATURE_OAUTH ?? "true") !== "false",
-  samlLogin: (process.env.FEATURE_SAML ?? "false") === "true",
-};
+function readFeatureFlags(): FeatureFlags {
+  return {
+    webhooks: (process.env.FEATURE_WEBHOOKS ?? "true") !== "false",
+    fullTextSearch: (process.env.FEATURE_SEARCH ?? "true") !== "false",
+    auditLog: (process.env.FEATURE_AUDIT_LOG ?? "true") !== "false",
+    oauthLogin: (process.env.FEATURE_OAUTH ?? "true") !== "false",
+    samlLogin: (process.env.FEATURE_SAML ?? "false") === "true",
+    scim: (process.env.FEATURE_SCIM ?? "true") !== "false",
+    billing: (process.env.FEATURE_BILLING ?? "true") !== "false",
+  };
+}
+
+const featureFlags: FeatureFlags = readFeatureFlags();
 
 function isFeatureEnabled(feature: keyof FeatureFlags): boolean {
-  return featureFlags[feature];
+  return readFeatureFlags()[feature];
 }
 
-export { featureFlags, isFeatureEnabled };
 export type { FeatureFlags };
+export { featureFlags, isFeatureEnabled, readFeatureFlags };

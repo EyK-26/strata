@@ -23,9 +23,7 @@ async function resolveTenant(tenantId: number): Promise<TenantContext | null> {
   }>;
 
   const row = rows[0];
-  return row
-    ? { id: row.id, slug: row.slug, plan: row.plan, region: row.region ?? "eu" }
-    : null;
+  return row ? { id: row.id, slug: row.slug, plan: row.plan, region: row.region ?? "eu" } : null;
 }
 
 function createTenantMiddleware() {
@@ -34,7 +32,7 @@ function createTenantMiddleware() {
     const tenantId = headerValue ? Number.parseInt(headerValue, 10) : DEFAULT_TENANT.id;
     const tenant =
       Number.isInteger(tenantId) && tenantId > 0
-        ? (await resolveTenant(tenantId)) ?? DEFAULT_TENANT
+        ? ((await resolveTenant(tenantId)) ?? DEFAULT_TENANT)
         : DEFAULT_TENANT;
 
     return await runWithTenant(tenant, async () => {

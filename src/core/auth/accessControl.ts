@@ -1,6 +1,6 @@
-import { currentAuthUser, type AuthUser } from "./authContext";
-import { ForbiddenError } from "../errors/http";
 import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
+import { ForbiddenError } from "../errors/http";
+import { type AuthUser, currentAuthUser } from "./authContext";
 
 const ROLE_RANK: Record<OrganizationMemberRole, number> = {
   member: 1,
@@ -43,10 +43,4 @@ function resolveUserId(user: AuthUser): number {
   return userId;
 }
 
-export {
-  hasMinimumOrgRole,
-  isGlobalAdmin,
-  requireAuthenticatedUser,
-  resolveUserId,
-  ROLE_RANK,
-};
+export { hasMinimumOrgRole, isGlobalAdmin, ROLE_RANK, requireAuthenticatedUser, resolveUserId };

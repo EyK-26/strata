@@ -1,10 +1,6 @@
+import { emailLookupForQuery, protectEmail, revealEmail } from "../../core/crypto/fieldEncryption";
 import { BaseRepository } from "../../core/database";
 import type { QueryWhere } from "../../core/database/types";
-import {
-  emailLookupForQuery,
-  protectEmail,
-  revealEmail,
-} from "../../core/crypto/fieldEncryption";
 import { userTable } from "./table";
 import type { UserRecord } from "./types";
 

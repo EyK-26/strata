@@ -3,10 +3,7 @@ import { join } from "node:path";
 import { createAppContext } from "../../bootstrap/context";
 import { createRoutes } from "../../bootstrap/createRoutes";
 import { routeRegistry } from "../../bootstrap/routeRegistry";
-import {
-  generateOpenApiSpec,
-  renderOpenApiDocument,
-} from "../../core/openapi/generator";
+import { generateOpenApiSpec, renderOpenApiDocument } from "../../core/openapi/generator";
 
 async function openapiGenerateCommand(): Promise<void> {
   const { dependencies } = createAppContext();

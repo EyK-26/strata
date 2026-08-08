@@ -1,8 +1,9 @@
-import type { ServiceProvider } from "../../bootstrap/contracts";
 import { CORE_POLICY_GATE_TOKEN } from "../../bootstrap/config";
+import type { ServiceProvider } from "../../bootstrap/contracts";
+import { projectRepositoryToken } from "../project/provider";
+import CommentPolicy from "./policy";
 import CommentRepository from "./repository";
 import CommentService from "./service";
-import CommentPolicy from "./policy";
 
 const commentRepositoryToken = "comment.repository";
 const commentServiceToken = "comment.service";
@@ -11,10 +12,7 @@ const commentPolicyToken = "comment.policy";
 const commentProvider: ServiceProvider = {
   name: "comment.provider",
   register({ container }) {
-    container.singleton(
-      commentRepositoryToken,
-      () => new CommentRepository(),
-    );
+    container.singleton(commentRepositoryToken, () => new CommentRepository());
     container.singleton(commentPolicyToken, () => new CommentPolicy());
   },
   boot({ container }) {
@@ -24,6 +22,7 @@ const commentProvider: ServiceProvider = {
         new CommentService(
           container.resolve(commentRepositoryToken),
           container.resolve("task.repository"),
+          container.resolve(projectRepositoryToken),
         ),
     );
 
@@ -35,4 +34,4 @@ const commentProvider: ServiceProvider = {
 };
 
 export default commentProvider;
-export { commentRepositoryToken, commentServiceToken, commentPolicyToken };
+export { commentPolicyToken, commentRepositoryToken, commentServiceToken };

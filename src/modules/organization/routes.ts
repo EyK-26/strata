@@ -1,5 +1,5 @@
-import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
+import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { RouteHandler } from "../../core/http/middleware";
 import OrganizationController from "./controller";
 import OrganizationMemberController from "./memberController";
@@ -15,10 +15,7 @@ function createOrganizationRoutes(
   return {
     "/organizations": {
       GET: controller.index,
-      POST: kernel.wrapAbility(
-        "organizations:create",
-        controller.store as unknown as RouteHandler,
-      ),
+      POST: kernel.wrapAbility("organizations:create", controller.store as unknown as RouteHandler),
     },
     "/organizations/:id": {
       GET: controller.show,
@@ -32,9 +29,7 @@ function createOrganizationRoutes(
       ),
     },
     "/organizations/:id/members": {
-      GET: kernel.wrapAuthenticated(
-        memberController.index as unknown as RouteHandler,
-      ),
+      GET: kernel.wrapAuthenticated(memberController.index as unknown as RouteHandler),
       POST: kernel.wrapAbility(
         "organizations:members:write",
         memberController.store as unknown as RouteHandler,

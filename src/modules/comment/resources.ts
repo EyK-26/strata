@@ -22,9 +22,7 @@ function toCommentResource(record: CommentRecord): CommentResource {
   };
 }
 
-function toCommentResourceCollection(
-  records: readonly CommentRecord[],
-): CommentResource[] {
+function toCommentResourceCollection(records: readonly CommentRecord[]): CommentResource[] {
   return toResourceCollection(records, toCommentResource);
 }
 
@@ -35,9 +33,5 @@ function toCommentPaginatedResourceCollection(
   return toPaginatedResourceCollection(records, meta, toCommentResource);
 }
 
-export {
-  toCommentPaginatedResourceCollection,
-  toCommentResource,
-  toCommentResourceCollection,
-};
 export type { CommentResource };
+export { toCommentPaginatedResourceCollection, toCommentResource, toCommentResourceCollection };

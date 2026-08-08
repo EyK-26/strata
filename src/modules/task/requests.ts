@@ -1,4 +1,3 @@
-import { TASK_STATUSES } from "../../domain/workhub";
 import {
   BadRequestError,
   FormRequest,
@@ -19,6 +18,7 @@ import {
   stringRule,
   validateObject,
 } from "../../core/validation/rules";
+import { TASK_STATUSES } from "../../domain/workhub";
 
 type TaskIdParams = { id: string };
 
@@ -50,9 +50,7 @@ class TaskListQueryRequest extends QueryFormRequest<TaskListQueryDto> {
     const pagination = parsePaginationQuery(request);
 
     if (include !== null && include !== "" && include !== "project") {
-      throw new BadRequestError(
-        'Invalid query parameter "include". Expected "project".',
-      );
+      throw new BadRequestError('Invalid query parameter "include". Expected "project".');
     }
 
     const projectIdRaw = params.get("projectId");
@@ -86,9 +84,7 @@ class CreateTaskRequest extends FormRequest<CreateTaskBodyDto> {
       ...(validated.status === undefined
         ? {}
         : { status: validated.status as (typeof TASK_STATUSES)[number] }),
-      ...(validated.priority === undefined
-        ? {}
-        : { priority: validated.priority as number }),
+      ...(validated.priority === undefined ? {} : { priority: validated.priority as number }),
     };
   }
 }
@@ -159,18 +155,13 @@ async function parseUpdateTaskBody(request: Request): Promise<UpdateTaskBodyDto>
   return await updateTaskRequest.validate(request);
 }
 
+export type { CreateTaskBodyDto, TaskIdParams, TaskListQueryDto, UpdateTaskBodyDto };
 export {
   CreateTaskRequest,
-  TaskListQueryRequest,
-  UpdateTaskRequest,
   parseCreateTaskBody,
   parseTaskIdParams,
   parseTaskListQuery,
   parseUpdateTaskBody,
-};
-export type {
-  CreateTaskBodyDto,
-  TaskIdParams,
-  TaskListQueryDto,
-  UpdateTaskBodyDto,
+  TaskListQueryRequest,
+  UpdateTaskRequest,
 };

@@ -1,15 +1,13 @@
-import type { AppDependencies } from "./contracts";
-import { withMiddleware } from "../core/http/routeMiddleware";
-import type { RouteHandler } from "../core/http/middleware";
 import { createScimAuthMiddleware } from "../core/auth/scimAuthMiddleware";
+import type { RouteHandler } from "../core/http/middleware";
+import { withMiddleware } from "../core/http/routeMiddleware";
 import ScimController from "../modules/scim/controller";
+import type { AppDependencies } from "./contracts";
 
 function createScimRoutes(dependencies: AppDependencies) {
   const secured = withMiddleware(createScimAuthMiddleware());
 
-  const bind = (
-    method: (controller: ScimController) => RouteHandler,
-  ): RouteHandler => {
+  const bind = (method: (controller: ScimController) => RouteHandler): RouteHandler => {
     return secured(async (request: Request) => {
       const controller = new ScimController(dependencies);
       return await method(controller)(request);

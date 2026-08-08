@@ -1,18 +1,15 @@
+import { defineEnvSchema, type EnvSchema } from "../core/config/envSchema";
 import {
   CACHE_MAX_ENTRIES_CONFIG_KEY,
   CACHE_TTL_MS_CONFIG_KEY,
   DATABASE_URL_CONFIG_KEY,
   DEFAULT_API_TOKEN,
   DEFAULT_APP_PORT,
+  DEFAULT_CACHE_DRIVER,
   DEFAULT_CACHE_MAX_ENTRIES,
   DEFAULT_CACHE_TTL_MS,
-  DEFAULT_CACHE_DRIVER,
   DEFAULT_QUEUE_DRIVER,
 } from "./config";
-import {
-  defineEnvSchema,
-  type EnvSchema,
-} from "../core/config/envSchema";
 
 const appEnvSchema: EnvSchema = defineEnvSchema({
   DATABASE_URL: { required: true, pattern: /^postgres(ql)?:\/\// },

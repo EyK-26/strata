@@ -1,14 +1,16 @@
 import type { AppDependencies } from "../../bootstrap/contracts";
+import { resolveMembershipService } from "../../core/auth/membershipService";
 import {
   createdResponse,
   jsonResponse,
   noContentResponse,
   withErrorHandling,
 } from "../../core/http";
-import { resolveMembershipService } from "../../core/auth/membershipService";
 
 class OrganizationMemberController {
-  constructor(_dependencies: AppDependencies) {}
+  constructor(dependencies: AppDependencies) {
+    void dependencies;
+  }
 
   readonly index = withErrorHandling(async (request: Request) => {
     const params = (request as Request & { params?: { id?: string } }).params;
@@ -19,9 +21,7 @@ class OrganizationMemberController {
     }
 
     await resolveMembershipService().requireOrgAccess(organizationId, "member");
-    const members = await resolveMembershipService().listMembersForOrganization(
-      organizationId,
-    );
+    const members = await resolveMembershipService().listMembersForOrganization(organizationId);
 
     return jsonResponse({
       data: members.map((member) => ({
@@ -43,7 +43,9 @@ class OrganizationMemberController {
       throw new Error("Organization id is required.");
     }
 
-    if (!Number.isInteger(body.user_id) || (body.user_id ?? 0) <= 0) {
+    const userId = body.user_id;
+
+    if (userId === undefined || !Number.isInteger(userId) || userId <= 0) {
       throw new Error("user_id is required.");
     }
 
@@ -51,7 +53,7 @@ class OrganizationMemberController {
 
     const member = await resolveMembershipService().addMember({
       organizationId,
-      userId: body.user_id!,
+      userId,
       role: (body.role as "owner" | "admin" | "member" | undefined) ?? "member",
     });
 
@@ -65,8 +67,7 @@ class OrganizationMemberController {
   });
 
   readonly destroy = withErrorHandling(async (request: Request) => {
-    const params = (request as Request & { params?: { id?: string; userId?: string } })
-      .params;
+    const params = (request as Request & { params?: { id?: string; userId?: string } }).params;
     const organizationId = Number.parseInt(params?.id ?? "", 10);
     const userId = Number.parseInt(params?.userId ?? "", 10);
 

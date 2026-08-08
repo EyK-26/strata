@@ -11,9 +11,7 @@ describe("parsePaginationQuery", () => {
   });
 
   test("parses page and per_page from the request URL", () => {
-    const request = new Request(
-      "http://example.test/organizations?page=2&per_page=10",
-    );
+    const request = new Request("http://example.test/organizations?page=2&per_page=10");
 
     expect(parsePaginationQuery(request)).toEqual({ page: 2, perPage: 10 });
   });
@@ -27,9 +25,7 @@ describe("parsePaginationQuery", () => {
   });
 
   test("rejects per_page above the configured maximum", () => {
-    const request = new Request(
-      "http://example.test/organizations?per_page=500",
-    );
+    const request = new Request("http://example.test/organizations?per_page=500");
 
     expect(() => parsePaginationQuery(request)).toThrow(
       'Invalid query parameter "per_page". Maximum allowed value is 100.',

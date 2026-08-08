@@ -6,6 +6,9 @@
   "scripts": {
     "start": "bun run src/bootstrap/server.ts",
     "check": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
     "unit": "bun test tests/unit",
     "integration": "bun test ./tests/integration/routes.integration.test.ts ./tests/integration/queue.integration.test.ts",
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
@@ -14,6 +17,7 @@
     "cli": "bun run src/cli/index.ts"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.7",
     "@types/bun": "latest",
     "typescript": "^5.9.2"
   }

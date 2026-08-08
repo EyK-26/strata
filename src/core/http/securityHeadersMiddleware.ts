@@ -1,5 +1,5 @@
-import type { Middleware } from "./middleware";
 import { appConfig } from "../../config/app";
+import type { Middleware } from "./middleware";
 
 function createSecurityHeadersMiddleware(): Middleware {
   return async (_request: Request, next: () => Promise<Response>) => {

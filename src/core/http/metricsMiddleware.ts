@@ -2,9 +2,7 @@ import { prometheusRegistry } from "../metrics/prometheus";
 import type { Middleware } from "./middleware";
 
 function normalizeMetricPath(pathname: string): string {
-  return pathname
-    .replace(/\/\d+/g, "/:id")
-    .replace(/\/[0-9a-f-]{36}/gi, "/:id");
+  return pathname.replace(/\/\d+/g, "/:id").replace(/\/[0-9a-f-]{36}/gi, "/:id");
 }
 
 function createMetricsMiddleware(): Middleware {

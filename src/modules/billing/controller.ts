@@ -2,8 +2,8 @@ import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { jsonResponse, withErrorHandling } from "../../core/http";
 import { currentTenantId } from "../../core/tenant/tenantContext";
-import BillingService from "./service";
 import { billingServiceToken } from "./provider";
+import type BillingService from "./service";
 
 class BillingController {
   constructor(private readonly dependencies: AppDependencies) {}
@@ -28,10 +28,7 @@ class BillingController {
     };
 
     if (payload.type === "customer.subscription.updated") {
-      const tenantId = Number.parseInt(
-        payload.data?.object?.metadata?.tenant_id ?? "",
-        10,
-      );
+      const tenantId = Number.parseInt(payload.data?.object?.metadata?.tenant_id ?? "", 10);
       const status = payload.data?.object?.status;
 
       if (Number.isInteger(tenantId) && tenantId > 0) {

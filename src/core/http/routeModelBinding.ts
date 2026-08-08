@@ -1,5 +1,5 @@
-import { parsePositiveIntParam } from "./validation";
 import type { RouteRequest } from "./route";
+import { parsePositiveIntParam } from "./validation";
 
 function bindRouteModel<
   TParams extends Record<string, string>,
@@ -8,10 +8,7 @@ function bindRouteModel<
 >(
   param: TParam,
   resolver: (id: number, request: RouteRequest<TParams>) => Promise<TModel>,
-  handler: (
-    request: RouteRequest<TParams>,
-    model: TModel,
-  ) => Response | Promise<Response>,
+  handler: (request: RouteRequest<TParams>, model: TModel) => Response | Promise<Response>,
 ): (request: RouteRequest<TParams>) => Promise<Response> {
   return async (request: RouteRequest<TParams>) => {
     const id = parsePositiveIntParam(String(request.params[param]), String(param));

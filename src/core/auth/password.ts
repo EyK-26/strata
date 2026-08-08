@@ -5,10 +5,7 @@ async function hashPassword(password: string): Promise<string> {
   });
 }
 
-async function verifyPassword(
-  password: string,
-  passwordHash: string,
-): Promise<boolean> {
+async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
   return await Bun.password.verify(password, passwordHash);
 }
 

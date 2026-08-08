@@ -1,4 +1,4 @@
-import { type AppModule } from "../../bootstrap/contracts";
+import type { AppModule } from "../../bootstrap/contracts";
 import ReportController from "./controller";
 import reportProvider, { reportServiceToken } from "./provider";
 import { createReportRoutes } from "./routes";
@@ -13,8 +13,6 @@ const reportModule: AppModule = {
 };
 
 export default reportModule;
-export { reportProvider, reportServiceToken };
-export { ReportController };
 export { parseOrganizationReportParams } from "./requests";
 export {
   toOrganizationReportResource,
@@ -23,3 +21,4 @@ export {
 export { createReportRoutes } from "./routes";
 export { default as ReportService } from "./service";
 export type { OrganizationReport, ReportSummary } from "./types";
+export { ReportController, reportProvider, reportServiceToken };

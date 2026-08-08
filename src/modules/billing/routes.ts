@@ -1,5 +1,5 @@
-import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { AppDependencies } from "../../bootstrap/contracts";
+import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { RouteHandler } from "../../core/http/middleware";
 import BillingController from "./controller";
 
@@ -8,9 +8,7 @@ function createBillingRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
 
   return {
     "/billing/subscription": {
-      GET: kernel.wrapAuthenticated(
-        controller.showSubscription as unknown as RouteHandler,
-      ),
+      GET: kernel.wrapAuthenticated(controller.showSubscription as unknown as RouteHandler),
     },
     "/billing/webhooks/stripe": {
       POST: controller.stripeWebhook,

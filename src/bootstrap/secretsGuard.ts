@@ -1,19 +1,11 @@
 import { appConfig } from "../config/app";
-import {
-  TEST_ADMIN_API_TOKEN,
-  TEST_MEMBER_API_TOKEN,
-} from "../domain/auth";
-import {
-  DEFAULT_SCIM_BEARER_TOKEN,
-  TEST_SCIM_BEARER_TOKEN,
-} from "../domain/scim";
+import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../domain/auth";
+import { DEFAULT_SCIM_BEARER_TOKEN, TEST_SCIM_BEARER_TOKEN } from "../domain/scim";
 
 const DEFAULT_TOKENS = new Set([TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN]);
 const DEFAULT_SCIM_TOKENS = new Set([TEST_SCIM_BEARER_TOKEN, DEFAULT_SCIM_BEARER_TOKEN]);
 
-function assertProductionSecrets(
-  env: Record<string, string | undefined> = process.env,
-): void {
+function assertProductionSecrets(env: Record<string, string | undefined> = process.env): void {
   const appEnv = env.APP_ENV ?? appConfig.env;
 
   if (appEnv !== "production") {
@@ -44,9 +36,7 @@ function assertProductionSecrets(
   }
 
   if (!env.SIEM_EXPORT_URL?.trim() && env.FEATURE_SIEM_EXPORT !== "false") {
-    console.warn(
-      "[secrets] SIEM_EXPORT_URL is not configured; audit logs remain database-only.",
-    );
+    console.warn("[secrets] SIEM_EXPORT_URL is not configured; audit logs remain database-only.");
   }
 }
 

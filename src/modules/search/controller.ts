@@ -1,8 +1,8 @@
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { jsonResponse, withErrorHandling } from "../../core/http";
-import SearchService from "./service";
 import { searchServiceToken } from "./provider";
+import type SearchService from "./service";
 
 class SearchController {
   constructor(private readonly dependencies: AppDependencies) {}

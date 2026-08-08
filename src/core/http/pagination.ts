@@ -1,10 +1,6 @@
 import { BadRequestError } from "../errors/http";
+import { buildPaginationMeta, type PaginatedResult, type PaginationMeta } from "../pagination";
 import { getQueryParams } from "./validation";
-import {
-  buildPaginationMeta,
-  type PaginatedResult,
-  type PaginationMeta,
-} from "../pagination";
 
 const DEFAULT_PER_PAGE = 15;
 const MAX_PER_PAGE = 100;
@@ -14,24 +10,17 @@ interface PaginationQuery {
   perPage: number;
 }
 
-function parseRequiredPositiveIntQueryParam(
-  params: URLSearchParams,
-  name: string,
-): number {
+function parseRequiredPositiveIntQueryParam(params: URLSearchParams, name: string): number {
   const value = params.get(name);
 
   if (value === null || value.trim() === "") {
-    throw new BadRequestError(
-      `Invalid query parameter "${name}". Expected a positive integer.`,
-    );
+    throw new BadRequestError(`Invalid query parameter "${name}". Expected a positive integer.`);
   }
 
   const parsed = Number.parseInt(value, 10);
 
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new BadRequestError(
-      `Invalid query parameter "${name}". Expected a positive integer.`,
-    );
+    throw new BadRequestError(`Invalid query parameter "${name}". Expected a positive integer.`);
   }
 
   return parsed;
@@ -62,19 +51,15 @@ function parsePaginationQuery(request?: Request): PaginationQuery {
   return { page, perPage };
 }
 
-function paginatedResponse<T>(
-  data: T[],
-  meta: PaginationMeta,
-  init: ResponseInit = {},
-): Response {
+function paginatedResponse<T>(data: T[], meta: PaginationMeta, init: ResponseInit = {}): Response {
   return Response.json({ data, meta }, init);
 }
 
+export type { PaginatedResult, PaginationMeta, PaginationQuery };
 export {
+  buildPaginationMeta,
   DEFAULT_PER_PAGE,
   MAX_PER_PAGE,
-  buildPaginationMeta,
   paginatedResponse,
   parsePaginationQuery,
 };
-export type { PaginatedResult, PaginationMeta, PaginationQuery };

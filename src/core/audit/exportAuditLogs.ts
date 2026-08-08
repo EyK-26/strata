@@ -91,8 +91,7 @@ async function exportPendingAuditLogs(): Promise<number> {
   const response = await fetch(config.endpoint, {
     method: "POST",
     headers: {
-      "content-type":
-        config.format === "cef" ? "text/plain" : "application/json",
+      "content-type": config.format === "cef" ? "text/plain" : "application/json",
       ...(process.env.SIEM_EXPORT_TOKEN
         ? { authorization: `Bearer ${process.env.SIEM_EXPORT_TOKEN}` }
         : {}),

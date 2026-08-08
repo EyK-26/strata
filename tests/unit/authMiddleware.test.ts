@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AuthManager, ApiTokenGuard, GuestGuard } from "../../src/core/auth/guard";
+import { ApiTokenGuard, AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { createAuthMiddleware } from "../../src/core/http/authMiddleware";
 import { composeMiddleware } from "../../src/core/http/middleware";
 

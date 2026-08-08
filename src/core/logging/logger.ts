@@ -46,5 +46,5 @@ class Logger {
 
 const appLogger = new Logger("app");
 
-export { Logger, appLogger };
 export type { LogContext, LogLevel };
+export { appLogger, Logger };

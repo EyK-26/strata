@@ -8,5 +8,5 @@ const authConfig: AuthConfig = {
   tokenDefaultAbilities: ["*"],
 };
 
-export { authConfig };
 export type { AuthConfig };
+export { authConfig };

@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
 import OrganizationMemberRepository from "../../modules/organization/memberRepository";
+import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
 import { isGlobalAdmin, resolveUserId } from "./accessControl";
 import { currentAuthUser } from "./authContext";
 
@@ -44,10 +44,7 @@ function currentOrganizationIds(): number[] {
   return membershipContext.getStore()?.organizationIds ?? [];
 }
 
-function hasMinimumOrgRole(
-  organizationId: number,
-  minimum: OrganizationMemberRole,
-): boolean {
+function hasMinimumOrgRole(organizationId: number, minimum: OrganizationMemberRole): boolean {
   const role = currentOrgRole(organizationId);
 
   if (!role) {
@@ -63,14 +60,13 @@ function hasMinimumOrgRole(
   return ranks[role] >= ranks[minimum];
 }
 
+export type { MembershipContext };
 export {
-  currentOrgRole,
   currentOrganizationIds,
+  currentOrgRole,
   hasMinimumOrgRole,
   hasOrgMembership,
   membershipContext,
   membershipRepository,
   runWithMembershipContext,
 };
-
-export type { MembershipContext };

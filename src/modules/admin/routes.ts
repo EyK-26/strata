@@ -1,5 +1,5 @@
-import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { AppDependencies } from "../../bootstrap/contracts";
+import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { RouteHandler } from "../../core/http/middleware";
 import AdminController from "./controller";
 

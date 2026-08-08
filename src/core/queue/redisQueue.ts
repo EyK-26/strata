@@ -1,8 +1,8 @@
 import { RedisClient } from "bun";
-import { Job, type Queue, type QueuePriority } from "./index";
+import type FailedJobService from "./failedJobService";
+import type { Job, Queue, QueuePriority } from "./index";
 import { jobRegistry } from "./jobRegistry";
-import FailedJobService from "./failedJobService";
-import { runQueueJob, type QueueJobEnvelope } from "./jobRunner";
+import { type QueueJobEnvelope, runQueueJob } from "./jobRunner";
 
 const QUEUE_LIST_KEY = "workhub:queue:default";
 const QUEUE_HIGH_KEY = "workhub:queue:high";
@@ -27,10 +27,7 @@ class RedisQueue implements Queue {
     this.client = new RedisClient(redisUrl);
   }
 
-  async dispatch<TPayload extends object>(
-    job: Job<TPayload>,
-    payload: TPayload,
-  ): Promise<void> {
+  async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
     const name = jobRegistry.resolveName(job);
 
     if (!name) {
@@ -109,12 +106,12 @@ class QueueWorker {
   }
 }
 
+export type { QueueJobEnvelope };
 export {
   QUEUE_HIGH_KEY,
   QUEUE_LIST_KEY,
   QUEUE_LOW_KEY,
   QueueWorker,
-  RedisQueue,
   queueKeyForPriority,
+  RedisQueue,
 };
-export type { QueueJobEnvelope };

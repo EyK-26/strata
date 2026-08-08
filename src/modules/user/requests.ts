@@ -1,7 +1,4 @@
-import {
-  FormRequest,
-  parsePositiveIntParam,
-} from "../../core/http";
+import { FormRequest, parsePositiveIntParam } from "../../core/http";
 import {
   maxLength,
   minLength,
@@ -40,9 +37,7 @@ class CreateApiTokenRequest extends FormRequest<CreateApiTokenBodyDto> {
       ...(abilities === undefined
         ? {}
         : {
-            abilities: Array.isArray(abilities)
-              ? abilities.map(String)
-              : undefined,
+            abilities: Array.isArray(abilities) ? abilities.map(String) : undefined,
           }),
       ...(validated.expires_in_days === undefined
         ? {}
@@ -75,9 +70,7 @@ function parseTokenIdParams(params: TokenIdParams): { id: number } {
   };
 }
 
-async function parseCreateApiTokenBody(
-  request: Request,
-): Promise<CreateApiTokenBodyDto> {
+async function parseCreateApiTokenBody(request: Request): Promise<CreateApiTokenBodyDto> {
   return await createApiTokenRequest.validate(request);
 }
 
@@ -85,5 +78,5 @@ async function parseLoginBody(request: Request): Promise<LoginBodyDto> {
   return await loginRequest.validate(request);
 }
 
-export { parseCreateApiTokenBody, parseLoginBody, parseTokenIdParams };
 export type { CreateApiTokenBodyDto, LoginBodyDto, OAuthProviderParams, TokenIdParams };
+export { parseCreateApiTokenBody, parseLoginBody, parseTokenIdParams };

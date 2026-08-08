@@ -63,5 +63,5 @@ function storage(): StorageManager {
   return defaultStorage;
 }
 
-export { LocalStorageDriver, StorageManager, storage };
 export type { StorageDriver };
+export { LocalStorageDriver, StorageManager, storage };

@@ -1,4 +1,3 @@
-import { PROJECT_STATUSES } from "../../domain/workhub";
 import {
   BadRequestError,
   FormRequest,
@@ -8,7 +7,6 @@ import {
   parsePositiveIntParam,
   QueryFormRequest,
 } from "../../core/http";
-import type { ProjectStatus } from "../../domain/workhub";
 import {
   enumRule,
   maxLength,
@@ -19,6 +17,8 @@ import {
   stringRule,
   validateObject,
 } from "../../core/validation/rules";
+import type { ProjectStatus } from "../../domain/workhub";
+import { PROJECT_STATUSES } from "../../domain/workhub";
 
 type ProjectIdParams = { id: string };
 
@@ -48,9 +48,7 @@ class ProjectListQueryRequest extends QueryFormRequest<ProjectListQueryDto> {
     const pagination = parsePaginationQuery(request);
 
     if (include !== null && include !== "" && include !== "organization") {
-      throw new BadRequestError(
-        'Invalid query parameter "include". Expected "organization".',
-      );
+      throw new BadRequestError('Invalid query parameter "include". Expected "organization".');
     }
 
     const organizationIdRaw = params.get("organizationId");
@@ -80,9 +78,7 @@ class CreateProjectRequest extends FormRequest<CreateProjectBodyDto> {
     return {
       organization_id: validated.organization_id as number,
       name: validated.name as string,
-      ...(validated.status === undefined
-        ? {}
-        : { status: validated.status as ProjectStatus }),
+      ...(validated.status === undefined ? {} : { status: validated.status as ProjectStatus }),
     };
   }
 }
@@ -111,9 +107,7 @@ class UpdateProjectRequest extends FormRequest<UpdateProjectBodyDto> {
     }
 
     if (changes.name === undefined && changes.status === undefined) {
-      throw new BadRequestError(
-        'At least one of "name" or "status" must be provided.',
-      );
+      throw new BadRequestError('At least one of "name" or "status" must be provided.');
     }
 
     return changes;
@@ -134,30 +128,21 @@ function parseProjectListQuery(request?: Request): ProjectListQueryDto {
   return projectListQueryRequest.validate(request);
 }
 
-async function parseCreateProjectBody(
-  request: Request,
-): Promise<CreateProjectBodyDto> {
+async function parseCreateProjectBody(request: Request): Promise<CreateProjectBodyDto> {
   return await createProjectRequest.validate(request);
 }
 
-async function parseUpdateProjectBody(
-  request: Request,
-): Promise<UpdateProjectBodyDto> {
+async function parseUpdateProjectBody(request: Request): Promise<UpdateProjectBodyDto> {
   return await updateProjectRequest.validate(request);
 }
 
+export type { CreateProjectBodyDto, ProjectIdParams, ProjectListQueryDto, UpdateProjectBodyDto };
 export {
   CreateProjectRequest,
   ProjectListQueryRequest,
-  UpdateProjectRequest,
   parseCreateProjectBody,
   parseProjectIdParams,
   parseProjectListQuery,
   parseUpdateProjectBody,
-};
-export type {
-  CreateProjectBodyDto,
-  ProjectIdParams,
-  ProjectListQueryDto,
-  UpdateProjectBodyDto,
+  UpdateProjectRequest,
 };

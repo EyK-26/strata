@@ -45,7 +45,13 @@ class OrganizationMemberRepository {
       RETURNING id, organization_id, user_id, role, created_at
     `) as OrganizationMemberRecord[];
 
-    return rows[0]!;
+    const row = rows[0];
+
+    if (!row) {
+      throw new Error("Organization member insert did not return a row.");
+    }
+
+    return row;
   }
 
   async removeMember(organizationId: number, userId: number): Promise<boolean> {

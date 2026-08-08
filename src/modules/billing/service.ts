@@ -62,7 +62,13 @@ class BillingService {
       `) as SubscriptionRecord[];
 
       await db`UPDATE tenant SET plan = ${input.plan} WHERE id = ${input.tenantId}`;
-      return rows[0]!;
+      const row = rows[0];
+
+      if (!row) {
+        throw new Error("Subscription update did not return a row.");
+      }
+
+      return row;
     }
 
     const rows = (await db`
@@ -87,7 +93,13 @@ class BillingService {
     `) as SubscriptionRecord[];
 
     await db`UPDATE tenant SET plan = ${input.plan} WHERE id = ${input.tenantId}`;
-    return rows[0]!;
+    const row = rows[0];
+
+    if (!row) {
+      throw new Error("Subscription insert did not return a row.");
+    }
+
+    return row;
   }
 }
 

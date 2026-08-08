@@ -1,13 +1,13 @@
-import type { ServiceProvider } from "../contracts";
-import { CORE_AUTH_TOKEN } from "../config";
 import { authConfig } from "../../config/auth";
 import {
+  type AuthGuard,
   AuthManager,
   CompositeGuard,
   DatabaseTokenGuard,
   GuestGuard,
-  type AuthGuard,
 } from "../../core/auth/guard";
+import { CORE_AUTH_TOKEN } from "../config";
+import type { ServiceProvider } from "../contracts";
 
 const authProvider: ServiceProvider = {
   name: "core.auth",

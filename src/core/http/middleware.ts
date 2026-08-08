@@ -1,7 +1,4 @@
-type Middleware = (
-  request: Request,
-  next: () => Promise<Response>,
-) => Promise<Response>;
+type Middleware = (request: Request, next: () => Promise<Response>) => Promise<Response>;
 
 type RouteHandler = (request: Request) => Response | Promise<Response>;
 
@@ -9,19 +6,14 @@ function isRouteHandler(value: unknown): value is RouteHandler {
   return typeof value === "function";
 }
 
-function isMethodRouteMap(
-  value: unknown,
-): value is Record<string, RouteHandler> {
+function isMethodRouteMap(value: unknown): value is Record<string, RouteHandler> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
 
   const entries = Object.entries(value);
 
-  return (
-    entries.length > 0 &&
-    entries.every(([, handler]) => isRouteHandler(handler))
-  );
+  return entries.length > 0 && entries.every(([, handler]) => isRouteHandler(handler));
 }
 
 function composeMiddleware(...middleware: Middleware[]) {
@@ -96,10 +88,5 @@ function applyMiddlewareToRoutes<T extends Record<string, unknown>>(
   return wrapped as T;
 }
 
-export {
-  applyMiddlewareToRoutes,
-  composeMiddleware,
-  requestIdMiddleware,
-  wrapRouteHandler,
-};
 export type { Middleware, RouteHandler };
+export { applyMiddlewareToRoutes, composeMiddleware, requestIdMiddleware, wrapRouteHandler };

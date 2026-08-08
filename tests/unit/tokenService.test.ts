@@ -1,8 +1,8 @@
-import { describe, expect, test, beforeAll } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { hashApiToken } from "../../src/core/auth/tokenHash";
-import TokenService from "../../src/modules/user/tokenService";
-import UserRepository from "../../src/modules/user/repository";
 import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
+import UserRepository from "../../src/modules/user/repository";
+import TokenService from "../../src/modules/user/tokenService";
 
 beforeAll(async () => {
   const { freshDatabase } = await import("../../src/db/migrations/runner");
@@ -32,9 +32,7 @@ describe("TokenService", () => {
       tokenId: created.token.id,
     });
 
-    const stored = await tokens.findByTokenHash(
-      hashApiToken(created.plainTextToken),
-    );
+    const stored = await tokens.findByTokenHash(hashApiToken(created.plainTextToken));
     expect(stored?.user_id).toBe(1);
   });
 

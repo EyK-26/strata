@@ -1,8 +1,4 @@
-import {
-  authContext,
-  runWithAuthUser,
-  type AuthUser,
-} from "../auth/authContext";
+import { type AuthUser, authContext, runWithAuthUser } from "../auth/authContext";
 import type { AuthManager } from "../auth/guard";
 
 function createAuthMiddleware(auth: AuthManager) {
@@ -27,5 +23,5 @@ function createAuthMiddleware(auth: AuthManager) {
   };
 }
 
-export { authContext, createAuthMiddleware };
 export type { AuthUser };
+export { authContext, createAuthMiddleware };

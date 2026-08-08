@@ -46,6 +46,30 @@ Routes are wrapped by an `HttpKernel` that applies middleware in layers:
 
 Module routes use helpers such as `kernel.wrapAuthenticated(handler)` for protected mutations and `kernel.wrapAbility("projects:delete", handler)` when a bearer token must carry a specific scope. See `src/bootstrap/httpKernel.ts`.
 
+### Adoption tiers
+
+The same codebase scales from hobby projects to enterprise deployments — enable only what you need:
+
+| Tier | Goal | Key settings |
+|------|------|--------------|
+| **Hobby** | Learn and prototype | `APP_ENV=local`, `AUTH_DEV_HEADERS=true`, `QUEUE_DRIVER=sync`, `CACHE_DRIVER=array` |
+| **Small production** | One team, one region | Rotate tokens, `AUTH_DEV_HEADERS=false`, Redis, backups — see `DEPLOY.md` |
+| **Mid-market SaaS** | Multi-tenant product | `x-tenant-id`, org membership RBAC, `FEATURE_BILLING`, OAuth/OIDC |
+| **Enterprise** | Regulated / IdP-driven | `KMS_ENCRYPTION_KEY`, `SCIM_BEARER_TOKEN`, `SIEM_EXPORT_URL`, `OTEL_*` |
+
+Feature flags (`FEATURE_*`) disable optional modules without removing code — see `.env.example`.
+
+- Integration stubs (SCIM, billing): [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
+- Disaster recovery: [docs/DR.md](docs/DR.md)
+- Operations: [RUNBOOK.md](RUNBOOK.md), [DEPLOY.md](DEPLOY.md)
+
+Seeded API tokens after `migrate:fresh --seed`:
+
+| Token | Abilities | Use case |
+|-------|-----------|----------|
+| `workhub-admin-test-token` | `*` | Full access |
+| `workhub-member-test-token` | read scopes | Scoped member demo |
+
 ### API prefix
 
 WorkHub domain routes are served under **`/api/v1`** by default (`API_PREFIX`). Operational probes stay at the root:
@@ -82,7 +106,7 @@ Token lifecycle endpoints (authenticated):
 - `POST /api/v1/auth/tokens` — create token (`name`, optional `abilities`, `expires_in_days`)
 - `DELETE /api/v1/auth/tokens/:id` — revoke a token
 
-Protected mutations require both authentication and a matching ability (for example `projects:delete`, `organizations:update`). Seeded admin/member tokens use `["*"]`; create scoped tokens via `POST /auth/tokens`.
+Protected mutations require both authentication and a matching ability (for example `projects:delete`, `organizations:update`). The seeded admin token uses `["*"]`; the member token demonstrates read-only scopes — create scoped tokens via `POST /auth/tokens`.
 
 Set `AUTH_DEV_HEADERS=false` in production and rely on bearer tokens only.
 
@@ -129,6 +153,14 @@ bun run cli make:factory user
 ```
 
 Generated modules include HttpKernel-aware routes, FormRequest-style body parsing via `validateObject`, and policy hooks for update/delete.
+
+Enterprise patterns:
+
+- Mutations use `kernel.wrapAbility("<resource>:create", handler)` — see generated `routes.ts`
+- Optional modules can gate routes with `isFeatureEnabled()` in `index.ts`
+- Register policies in `provider.ts` and enforce org scope in services via `membershipScope` helpers
+
+See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for SCIM/billing extension points.
 
 ### Scheduler, storage, and mail
 
@@ -188,8 +220,22 @@ Copy `.env.example` for a full local template.
 
 ```bash
 docker compose exec app bun run check
+docker compose exec app bun run lint
+docker compose exec app bun run lint:fix
 docker compose exec app bun run test:all
 ```
+
+## Lint and format
+
+[Biome](https://biomejs.dev/) handles linting and formatting in one pass:
+
+| Command | Purpose |
+|---------|---------|
+| `bun run lint` | Check formatting, import order, and lint rules (CI) |
+| `bun run lint:fix` | Apply safe fixes + format across the repo |
+| `bun run format` | Format only (no lint rules) |
+
+Generated artifacts (`docs/openapi.json`, `sdk/typescript/client.ts`) are excluded from Biome — regenerate them with the CLI instead of hand-editing.
 
 ## Enter the app container
 
@@ -202,6 +248,9 @@ Useful commands inside:
 ```bash
 bun run test:all
 bun run check
+bun run lint
+bun run lint:fix
+bun run format
 bun run cli help
 bun run cli route:list
 bun run cli openapi:generate

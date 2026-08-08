@@ -1,21 +1,18 @@
-import type { AppDependencies, AppRouteMap } from "./contracts";
+import index from "../../index.html";
 import { appConfig } from "../config/app";
+import { isFeatureEnabled } from "../config/features";
 import { jsonResponse } from "../core/http";
 import { applyMiddlewareToRoutes } from "../core/http/middleware";
-import { appModules } from "./modules";
-import { createHttpKernel } from "./httpKernel";
+import type { AppDependencies, AppRouteMap } from "./contracts";
 import { createHealthRoutes } from "./health";
+import { createHttpKernel } from "./httpKernel";
 import { createMetricsRoutes } from "./metricsRoutes";
-import { createScimRoutes } from "./scimRoutes";
+import { appModules } from "./modules";
 import { prefixRouteMap } from "./prefixRouteMap";
 import { routeRegistry } from "./routeRegistry";
-import index from "../../index.html";
+import { createScimRoutes } from "./scimRoutes";
 
-function registerRoute(
-  method: string,
-  path: string,
-  middleware: string[],
-): void {
+function registerRoute(method: string, path: string, middleware: string[]): void {
   routeRegistry.register({ method, path, middleware });
 }
 
@@ -67,10 +64,7 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
       continue;
     }
 
-    Object.assign(
-      moduleRoutes,
-      module.routes({ dependencies, cachedJson, kernel }),
-    );
+    Object.assign(moduleRoutes, module.routes({ dependencies, cachedJson, kernel }));
   }
 
   const prefixedModuleRoutes = prefixRouteMap(appConfig.apiPrefix, moduleRoutes);
@@ -81,10 +75,12 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
 
   const healthRoutes = createHealthRoutes(dependencies);
   const metricsRoutes = createMetricsRoutes();
-  const scimRoutes = applyMiddlewareToRoutes(
-    registerRouteMap(createScimRoutes(dependencies), ["global", "scim"]),
-    kernel.globalMiddleware(),
-  );
+  const scimRoutes = isFeatureEnabled("scim")
+    ? applyMiddlewareToRoutes(
+        registerRouteMap(createScimRoutes(dependencies), ["global", "scim"]),
+        kernel.globalMiddleware(),
+      )
+    : {};
   registerRoute("GET", "/health", []);
   registerRoute("GET", "/ready", []);
   registerRoute("GET", "/metrics", []);

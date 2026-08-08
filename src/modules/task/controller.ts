@@ -7,11 +7,10 @@ import {
   createdResponse,
   jsonResponse,
   noContentResponse,
-  securedBindRouteModel,
   type RouteRequest,
+  securedBindRouteModel,
   withErrorHandling,
 } from "../../core/http";
-import TaskService from "./service";
 import { taskServiceToken } from "./provider";
 import {
   parseCreateTaskBody,
@@ -20,6 +19,7 @@ import {
   type TaskIdParams,
 } from "./requests";
 import { toTaskPaginatedResourceCollection, toTaskResource } from "./resources";
+import type TaskService from "./service";
 
 class TaskController {
   constructor(
@@ -35,20 +35,16 @@ class TaskController {
     const query = parseTaskListQuery(request);
     const cacheKey = buildRequestCacheKey("/tasks", request);
 
-    return await this.cachedJson(
-      cacheKey,
-      async () => {
-        const result = await this.service.paginate({
-          page: query.page,
-          perPage: query.perPage,
-          projectId: query.projectId,
-          status: query.status,
-          includeProject: query.include === "project",
-        });
-        return toTaskPaginatedResourceCollection(result.data, result.meta);
-      },
-      [CACHE_TAGS.tasks],
-    );
+    return await this.cachedJson(cacheKey, async () => {
+      const result = await this.service.paginate({
+        page: query.page,
+        perPage: query.perPage,
+        projectId: query.projectId,
+        status: query.status,
+        includeProject: query.include === "project",
+      });
+      return toTaskPaginatedResourceCollection(result.data, result.meta);
+    }, [CACHE_TAGS.tasks]);
   });
 
   readonly show = withErrorHandling(

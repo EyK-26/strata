@@ -1,4 +1,4 @@
-import { type AppModule } from "../../bootstrap/contracts";
+import type { AppModule } from "../../bootstrap/contracts";
 
 const scimModule: AppModule = {
   name: "scim",

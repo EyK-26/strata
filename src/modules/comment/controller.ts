@@ -7,24 +7,21 @@ import {
   createdResponse,
   jsonResponse,
   noContentResponse,
-  securedBindRouteModel,
   type RouteRequest,
+  securedBindRouteModel,
   withErrorHandling,
 } from "../../core/http";
-import CommentService from "./service";
 import { commentServiceToken } from "./provider";
 import {
+  type CommentIdParams,
   parseCommentListQuery,
   parseCreateCommentBody,
   parseTaskCommentParams,
   parseUpdateCommentBody,
-  type CommentIdParams,
   type TaskCommentParams,
 } from "./requests";
-import {
-  toCommentPaginatedResourceCollection,
-  toCommentResource,
-} from "./resources";
+import { toCommentPaginatedResourceCollection, toCommentResource } from "./resources";
+import type CommentService from "./service";
 
 class CommentController {
   constructor(
@@ -40,14 +37,10 @@ class CommentController {
     const query = parseCommentListQuery(request);
     const cacheKey = buildRequestCacheKey("/comments", request);
 
-    return await this.cachedJson(
-      cacheKey,
-      async () => {
-        const result = await this.service.paginate(query);
-        return toCommentPaginatedResourceCollection(result.data, result.meta);
-      },
-      [CACHE_TAGS.comments],
-    );
+    return await this.cachedJson(cacheKey, async () => {
+      const result = await this.service.paginate(query);
+      return toCommentPaginatedResourceCollection(result.data, result.meta);
+    }, [CACHE_TAGS.comments]);
   });
 
   readonly show = withErrorHandling(
@@ -60,34 +53,26 @@ class CommentController {
     ),
   );
 
-  readonly byTask = withErrorHandling(
-    async (req: RouteRequest<TaskCommentParams>) => {
-      const { taskId } = parseTaskCommentParams(req.params);
-      const query = parseCommentListQuery(req);
-      const cacheKey = buildRequestCacheKey(`/tasks/${taskId}/comments`, req);
+  readonly byTask = withErrorHandling(async (req: RouteRequest<TaskCommentParams>) => {
+    const { taskId } = parseTaskCommentParams(req.params);
+    const query = parseCommentListQuery(req);
+    const cacheKey = buildRequestCacheKey(`/tasks/${taskId}/comments`, req);
 
-      return await this.cachedJson(
-        cacheKey,
-        async () => {
-          const result = await this.service.paginateByTaskId(taskId, query);
-          return toCommentPaginatedResourceCollection(result.data, result.meta);
-        },
-        [CACHE_TAGS.comments],
-      );
-    },
-  );
+    return await this.cachedJson(cacheKey, async () => {
+      const result = await this.service.paginateByTaskId(taskId, query);
+      return toCommentPaginatedResourceCollection(result.data, result.meta);
+    }, [CACHE_TAGS.comments]);
+  });
 
-  readonly storeForTask = withErrorHandling(
-    async (req: RouteRequest<TaskCommentParams>) => {
-      const { taskId } = parseTaskCommentParams(req.params);
-      const body = await parseCreateCommentBody(req);
-      const comment = await this.service.create({
-        task_id: taskId,
-        body: body.body,
-      });
-      return createdResponse(toCommentResource(comment));
-    },
-  );
+  readonly storeForTask = withErrorHandling(async (req: RouteRequest<TaskCommentParams>) => {
+    const { taskId } = parseTaskCommentParams(req.params);
+    const body = await parseCreateCommentBody(req);
+    const comment = await this.service.create({
+      task_id: taskId,
+      body: body.body,
+    });
+    return createdResponse(toCommentResource(comment));
+  });
 
   readonly update = withErrorHandling(
     securedBindRouteModel(

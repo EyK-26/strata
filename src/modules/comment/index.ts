@@ -1,10 +1,7 @@
-import { type AppModule } from "../../bootstrap/contracts";
+import type { AppModule } from "../../bootstrap/contracts";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import CommentController from "./controller";
-import commentProvider, {
-  commentRepositoryToken,
-  commentServiceToken,
-} from "./provider";
+import commentProvider, { commentRepositoryToken, commentServiceToken } from "./provider";
 import { createCommentRoutes } from "./routes";
 import { commentTable } from "./table";
 
@@ -21,8 +18,7 @@ const commentModule: AppModule = {
 
 export default commentModule;
 export { commentBelongsToTask } from "./relationships";
-export { commentProvider, commentRepositoryToken, commentServiceToken };
-export { CommentController };
+export { default as CommentRepository } from "./repository";
 export {
   parseCommentIdParams,
   parseCommentListQuery,
@@ -31,7 +27,7 @@ export {
 } from "./requests";
 export { toCommentResource, toCommentResourceCollection } from "./resources";
 export { createCommentRoutes } from "./routes";
-export { default as CommentRepository } from "./repository";
 export { default as CommentService } from "./service";
 export { commentTable } from "./table";
 export type { CommentRecord } from "./types";
+export { CommentController, commentProvider, commentRepositoryToken, commentServiceToken };

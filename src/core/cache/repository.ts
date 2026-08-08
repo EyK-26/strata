@@ -8,11 +8,7 @@ class CacheRepository {
     return this.store.get<T>(key);
   }
 
-  async remember<T>(
-    key: string,
-    callback: () => Promise<T>,
-    ttlMs?: number,
-  ): Promise<T> {
+  async remember<T>(key: string, callback: () => Promise<T>, ttlMs?: number): Promise<T> {
     return this.store.getOrSet(key, callback, ttlMs);
   }
 
@@ -28,11 +24,7 @@ class CacheRepository {
     return new TaggedCache(this.store, names);
   }
 
-  async getOrSet<T>(
-    key: string,
-    loader: () => Promise<T>,
-    ttlMs?: number,
-  ): Promise<T> {
+  async getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T> {
     return this.remember(key, loader, ttlMs);
   }
 

@@ -5,10 +5,7 @@ import {
   CACHE_TTL_MS_CONFIG_KEY,
   CORE_CACHE_TOKEN,
 } from "../../src/bootstrap/config";
-import {
-  ConfigStore,
-  ServiceContainer,
-} from "../../src/bootstrap/contracts";
+import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { createAppContext } from "../../src/bootstrap/dependencies";
 import { commentServiceToken } from "../../src/modules/comment/provider";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
@@ -43,9 +40,7 @@ describe("config store", () => {
 
     expect(config.get<string>("app.name")).toBe("BunTesting");
     expect(config.require<string>("app.name")).toBe("BunTesting");
-    expect(() => config.require("missing.key")).toThrow(
-      'Config key "missing.key" is not defined.',
-    );
+    expect(() => config.require("missing.key")).toThrow('Config key "missing.key" is not defined.');
   });
 });
 
@@ -65,9 +60,7 @@ describe("app providers", () => {
       expect(context.config.require<number>(APP_PORT_CONFIG_KEY)).toBe(4100);
       expect(context.config.require<number>(CACHE_TTL_MS_CONFIG_KEY)).toBe(2500);
       expect(context.config.require<number>(CACHE_MAX_ENTRIES_CONFIG_KEY)).toBe(25);
-      expect(context.dependencies.cache).toBe(
-        context.container.resolve(CORE_CACHE_TOKEN),
-      );
+      expect(context.dependencies.cache).toBe(context.container.resolve(CORE_CACHE_TOKEN));
       expect(context.dependencies.container.resolve(organizationServiceToken)).toBeDefined();
       expect(context.dependencies.container.resolve(projectServiceToken)).toBeDefined();
       expect(context.dependencies.container.resolve(taskServiceToken)).toBeDefined();

@@ -1,10 +1,5 @@
 import { join } from "node:path";
-import {
-  ensureDirectory,
-  moduleDirectory,
-  toPascalCase,
-  toKebabCase,
-} from "./utils";
+import { ensureDirectory, moduleDirectory, toKebabCase, toPascalCase } from "./utils";
 
 async function makeRequestCommand(moduleName?: string): Promise<void> {
   if (!moduleName) {

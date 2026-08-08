@@ -2,10 +2,7 @@ import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { toCamelCase, toKebabCase, toPascalCase } from "./utils";
 
-async function makeListenerCommand(
-  name?: string,
-  eventName?: string,
-): Promise<void> {
+async function makeListenerCommand(name?: string, eventName?: string): Promise<void> {
   if (!name) {
     throw new Error("make:listener requires a listener name.");
   }
@@ -22,10 +19,7 @@ async function makeListenerCommand(
     await access(listenerPath);
     throw new Error(`Listener already exists: ${listenerPath}`);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith("Listener already exists:")
-    ) {
+    if (error instanceof Error && error.message.startsWith("Listener already exists:")) {
       throw error;
     }
   }
@@ -45,9 +39,7 @@ export default ${registerFunction};
 
   console.log(`Created listener in: ${listenerPath}`);
   console.log(`Listening for event: ${resolvedEventName}`);
-  console.log(
-    "It will be auto-discovered from src/listeners/ on the next app boot.",
-  );
+  console.log("It will be auto-discovered from src/listeners/ on the next app boot.");
 }
 
 export { makeListenerCommand };

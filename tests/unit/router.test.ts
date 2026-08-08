@@ -1,19 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import type { AppDependencies } from "../../src/bootstrap/dependencies";
-import { ServiceContainer } from "../../src/bootstrap/contracts";
-import { createRoutes } from "../../src/bootstrap/createRoutes";
-import { appConfig } from "../../src/config/app";
 import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
 } from "../../src/bootstrap/config";
+import { ServiceContainer } from "../../src/bootstrap/contracts";
+import { createRoutes } from "../../src/bootstrap/createRoutes";
+import type { AppDependencies } from "../../src/bootstrap/dependencies";
+import { appConfig } from "../../src/config/app";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";
-import { SyncQueue } from "../../src/core/queue";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
+import { SyncQueue } from "../../src/core/queue";
 import { reportServiceToken } from "../../src/modules/report/provider";
 import { tokenServiceToken } from "../../src/modules/user/provider";
 
@@ -86,9 +86,7 @@ describe("routes", () => {
     const { dependencies } = createTestDependencies();
     const routes = createRoutes(dependencies);
 
-    const response = await routes["/*"](
-      new Request("http://example.test/unknown"),
-    );
+    const response = await routes["/*"](new Request("http://example.test/unknown"));
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Not Found" });

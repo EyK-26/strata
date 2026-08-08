@@ -14,5 +14,5 @@ const appConfig: AppConfig = {
   apiPrefix: process.env.API_PREFIX ?? "/api/v1",
 };
 
-export { appConfig };
 export type { AppConfig };
+export { appConfig };

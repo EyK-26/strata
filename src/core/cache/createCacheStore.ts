@@ -18,17 +18,11 @@ function createCacheStore(options: CreateCacheStoreOptions): CacheStore {
       throw new Error('CACHE_DRIVER="redis" requires REDIS_URL to be set.');
     }
 
-    return new RedisCacheStore(
-      options.redisUrl,
-      options.ttlMs,
-      options.maxEntries,
-    );
+    return new RedisCacheStore(options.redisUrl, options.ttlMs, options.maxEntries);
   }
 
-  return new SimpleCacheStore(
-    new SimpleCache(options.ttlMs, options.maxEntries),
-  );
+  return new SimpleCacheStore(new SimpleCache(options.ttlMs, options.maxEntries));
 }
 
-export { createCacheStore };
 export type { CacheDriver, CreateCacheStoreOptions };
+export { createCacheStore };

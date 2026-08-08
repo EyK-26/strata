@@ -1,20 +1,15 @@
 import { RedisClient } from "bun";
-import { pingDatabase, ensureDatabaseConnection } from "../db/connection";
 import { jsonResponse } from "../core/http";
-import type { AppDependencies } from "./contracts";
-import {
-  CORE_CONFIG_TOKEN,
-  REDIS_URL_CONFIG_KEY,
-} from "./config";
-import type { ConfigStore } from "./contracts";
+import { ensureDatabaseConnection, pingDatabase } from "../db/connection";
+import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "./config";
+import type { AppDependencies, ConfigStore } from "./contracts";
 
 function resolveRedisUrl(dependencies: AppDependencies): string | undefined {
   if (!dependencies.container.has(CORE_CONFIG_TOKEN)) {
     return process.env.REDIS_URL?.trim() || undefined;
   }
 
-  const config =
-    dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
+  const config = dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
   const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim();
 
   return redisUrl || undefined;
@@ -54,8 +49,7 @@ function createHealthRoutes(dependencies: AppDependencies) {
       }
 
       const ready =
-        checks.database === "ok" &&
-        (checks.redis === "ok" || checks.redis === "skipped");
+        checks.database === "ok" && (checks.redis === "ok" || checks.redis === "skipped");
 
       return jsonResponse(
         {

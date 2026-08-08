@@ -26,12 +26,7 @@ class PolicyGate {
     this.policies.set(resource, policy);
   }
 
-  allows(
-    resource: string,
-    action: keyof Policy,
-    user?: unknown,
-    model?: unknown,
-  ): boolean {
+  allows(resource: string, action: keyof Policy, user?: unknown, model?: unknown): boolean {
     const policy = this.policies.get(resource);
 
     if (!policy) {
@@ -48,19 +43,10 @@ class PolicyGate {
 
     return model === undefined
       ? (handler as (user?: unknown) => boolean).call(policy, resolvedUser)
-      : (handler as (user: unknown, model: unknown) => boolean).call(
-          policy,
-          resolvedUser,
-          model,
-        );
+      : (handler as (user: unknown, model: unknown) => boolean).call(policy, resolvedUser, model);
   }
 
-  authorize(
-    resource: string,
-    action: keyof Policy,
-    user?: unknown,
-    model?: unknown,
-  ): void {
+  authorize(resource: string, action: keyof Policy, user?: unknown, model?: unknown): void {
     if (!this.allows(resource, action, user, model)) {
       throw new ForbiddenError();
     }

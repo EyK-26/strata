@@ -1,19 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { ServiceContainer } from "../../src/bootstrap/contracts";
-import { createHttpKernel } from "../../src/bootstrap/httpKernel";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
   REDIS_URL_CONFIG_KEY,
 } from "../../src/bootstrap/config";
+import type { AppDependencies } from "../../src/bootstrap/contracts";
+import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import { createHttpKernel } from "../../src/bootstrap/httpKernel";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { ConfigStore } from "../../src/bootstrap/contracts";
-import { ForbiddenError } from "../../src/core/errors/http";
-import { tokenServiceToken } from "../../src/modules/user/provider";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
-import type { AppDependencies } from "../../src/bootstrap/contracts";
+import { ForbiddenError } from "../../src/core/errors/http";
+import { tokenServiceToken } from "../../src/modules/user/provider";
 
 function createKernelDependencies(config?: ConfigStore): AppDependencies {
   const container = new ServiceContainer();
@@ -70,9 +69,7 @@ describe("HttpKernel", () => {
     });
 
     const kernel = createHttpKernel(dependencies);
-    const handler = kernel.wrapAbility("projects:delete", async () =>
-      Response.json({ ok: true }),
-    );
+    const handler = kernel.wrapAbility("projects:delete", async () => Response.json({ ok: true }));
 
     const guestResponse = await handler(new Request("http://example.test/projects/1"));
     expect(guestResponse.status).toBe(401);

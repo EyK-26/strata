@@ -1,15 +1,11 @@
-import type { AppContext } from "./contracts";
-import { ConfigStore, getRequiredDependency } from "./contracts";
-import {
-  CORE_AUTH_TOKEN,
-  CORE_POLICY_GATE_TOKEN,
-  CORE_QUEUE_TOKEN,
-} from "./config";
 import type { AuthManager } from "../core/auth/guard";
 import type { PolicyGate } from "../core/auth/policy";
+import { appLogger, type Logger } from "../core/logging/logger";
 import type { Queue } from "../core/queue";
 import type { CacheLike } from "../types/services";
-import { appLogger, type Logger } from "../core/logging/logger";
+import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN, CORE_QUEUE_TOKEN } from "./config";
+import type { AppContext } from "./contracts";
+import { type ConfigStore, getRequiredDependency } from "./contracts";
 
 let activeContext: AppContext | undefined;
 
@@ -26,28 +22,19 @@ function requireActiveApplicationContext(): AppContext {
 }
 
 function resolveApplicationCache(): CacheLike {
-  return getRequiredDependency(
-    requireActiveApplicationContext().dependencies,
-    "cache",
-  );
+  return getRequiredDependency(requireActiveApplicationContext().dependencies, "cache");
 }
 
 function resolveApplicationQueue(): Queue {
-  return requireActiveApplicationContext().container.resolve<Queue>(
-    CORE_QUEUE_TOKEN,
-  );
+  return requireActiveApplicationContext().container.resolve<Queue>(CORE_QUEUE_TOKEN);
 }
 
 function resolveApplicationAuth(): AuthManager {
-  return requireActiveApplicationContext().container.resolve<AuthManager>(
-    CORE_AUTH_TOKEN,
-  );
+  return requireActiveApplicationContext().container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 }
 
 function resolveApplicationPolicyGate(): PolicyGate {
-  return requireActiveApplicationContext().container.resolve<PolicyGate>(
-    CORE_POLICY_GATE_TOKEN,
-  );
+  return requireActiveApplicationContext().container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
 }
 
 function resolveApplicationConfig(): ConfigStore {

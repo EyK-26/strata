@@ -78,32 +78,28 @@ function parseCommentListQuery(request?: Request): CommentListQueryDto {
   return commentListQueryRequest.validate(request);
 }
 
-async function parseCreateCommentBody(
-  request: Request,
-): Promise<CreateCommentBodyDto> {
+async function parseCreateCommentBody(request: Request): Promise<CreateCommentBodyDto> {
   return await createCommentRequest.validate(request);
 }
 
-async function parseUpdateCommentBody(
-  request: Request,
-): Promise<UpdateCommentBodyDto> {
+async function parseUpdateCommentBody(request: Request): Promise<UpdateCommentBodyDto> {
   return await updateCommentRequest.validate(request);
 }
 
-export {
-  CommentListQueryRequest,
-  CreateCommentRequest,
-  UpdateCommentRequest,
-  parseCommentIdParams,
-  parseCommentListQuery,
-  parseCreateCommentBody,
-  parseTaskCommentParams,
-  parseUpdateCommentBody,
-};
 export type {
   CommentIdParams,
   CommentListQueryDto,
   CreateCommentBodyDto,
   TaskCommentParams,
   UpdateCommentBodyDto,
+};
+export {
+  CommentListQueryRequest,
+  CreateCommentRequest,
+  parseCommentIdParams,
+  parseCommentListQuery,
+  parseCreateCommentBody,
+  parseTaskCommentParams,
+  parseUpdateCommentBody,
+  UpdateCommentRequest,
 };

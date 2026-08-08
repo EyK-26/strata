@@ -1,9 +1,9 @@
 import type { ServiceContainer } from "../../bootstrap/contracts";
-import { UnauthorizedError } from "../errors/http";
-import { currentAuthUser } from "./authContext";
-import type { AuthUser } from "./authContext";
 import { tokenServiceToken } from "../../modules/user/provider";
 import type TokenService from "../../modules/user/tokenService";
+import { UnauthorizedError } from "../errors/http";
+import type { AuthUser } from "./authContext";
+import { currentAuthUser } from "./authContext";
 
 interface AuthGuard {
   resolve(request: Request): AuthUser | null | Promise<AuthUser | null>;
@@ -123,11 +123,5 @@ class AuthManager {
   }
 }
 
-export {
-  ApiTokenGuard,
-  AuthManager,
-  CompositeGuard,
-  DatabaseTokenGuard,
-  GuestGuard,
-};
 export type { AuthGuard, AuthUser };
+export { ApiTokenGuard, AuthManager, CompositeGuard, DatabaseTokenGuard, GuestGuard };

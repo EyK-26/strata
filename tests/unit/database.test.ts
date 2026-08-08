@@ -111,11 +111,7 @@ describe("database relationship helpers", () => {
       },
     ];
 
-    const tasksByProjectId = indexHasManyRelation(
-      projects,
-      tasks,
-      projectHasManyTasks,
-    );
+    const tasksByProjectId = indexHasManyRelation(projects, tasks, projectHasManyTasks);
 
     expect(tasksByProjectId.get(1)).toEqual(tasks);
     expect(tasksByProjectId.get(2)).toEqual([]);

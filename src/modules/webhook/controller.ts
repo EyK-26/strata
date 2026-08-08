@@ -1,8 +1,8 @@
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { createdResponse, jsonResponse, withErrorHandling } from "../../core/http";
-import WebhookService from "./service";
 import { webhookServiceToken } from "./provider";
+import type WebhookService from "./service";
 
 class WebhookController {
   constructor(private readonly dependencies: AppDependencies) {}

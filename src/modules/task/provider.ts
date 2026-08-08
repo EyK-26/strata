@@ -1,9 +1,9 @@
-import type { ServiceProvider } from "../../bootstrap/contracts";
 import { CORE_POLICY_GATE_TOKEN } from "../../bootstrap/config";
-import ProjectRepository from "../project/repository";
+import type { ServiceProvider } from "../../bootstrap/contracts";
+import type ProjectRepository from "../project/repository";
+import TaskPolicy from "./policy";
 import TaskRepository from "./repository";
 import TaskService from "./service";
-import TaskPolicy from "./policy";
 
 const taskRepositoryToken = "task.repository";
 const taskServiceToken = "task.service";
@@ -13,9 +13,7 @@ const taskProvider: ServiceProvider = {
   name: "task.provider",
   register({ container }) {
     container.singleton(taskRepositoryToken, () => {
-      const projectRepository = container.resolve<ProjectRepository>(
-        "project.repository",
-      );
+      const projectRepository = container.resolve<ProjectRepository>("project.repository");
       return new TaskRepository(projectRepository);
     });
     container.singleton(taskPolicyToken, () => new TaskPolicy());
@@ -38,4 +36,4 @@ const taskProvider: ServiceProvider = {
 };
 
 export default taskProvider;
-export { taskRepositoryToken, taskServiceToken, taskPolicyToken };
+export { taskPolicyToken, taskRepositoryToken, taskServiceToken };

@@ -1,12 +1,6 @@
 import { access } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  ensureDirectory,
-  moduleDirectory,
-  toCamelCase,
-  toKebabCase,
-  toPascalCase,
-} from "./utils";
+import { ensureDirectory, moduleDirectory, toCamelCase, toKebabCase, toPascalCase } from "./utils";
 
 async function makeModuleCommand(name?: string): Promise<void> {
   if (!name) {
@@ -28,15 +22,8 @@ async function makeModuleCommand(name?: string): Promise<void> {
     await access(directory);
     throw new Error(`Module already exists: ${directory}`);
   } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !("code" in error) ||
-      error.code !== "ENOENT"
-    ) {
-      if (
-        error instanceof Error &&
-        error.message.startsWith("Module already exists:")
-      ) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
+      if (error instanceof Error && error.message.startsWith("Module already exists:")) {
         throw error;
       }
       throw error;
@@ -425,14 +412,19 @@ function create${moduleName}Routes(
   return {
     "/${pluralSlug}": {
       GET: controller.index,
-      POST: controller.store,
+      POST: kernel.wrapAbility(
+        "${pluralSlug}:create",
+        controller.store as unknown as RouteHandler,
+      ),
     },
     "/${pluralSlug}/:id": {
       GET: controller.show,
-      PATCH: kernel.wrapAuthenticated(
+      PATCH: kernel.wrapAbility(
+        "${pluralSlug}:update",
         controller.update as unknown as RouteHandler,
       ),
-      DELETE: kernel.wrapAuthenticated(
+      DELETE: kernel.wrapAbility(
+        "${pluralSlug}:delete",
         controller.destroy as unknown as RouteHandler,
       ),
     },
@@ -459,6 +451,7 @@ const ${moduleVariable}: AppModule = {
   tableName: ${moduleIdentifier}Table.name,
   cacheTags: ["${pluralSlug}"],
   providers: [${moduleIdentifier}Provider],
+  // Optional: gate routes with isFeatureEnabled("yourFlag") from ../../config/features
   routes({ dependencies, cachedJson, kernel }) {
     return create${moduleName}Routes(dependencies, cachedJson, kernel);
   },

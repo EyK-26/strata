@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { ValidationError } from "../../src/core/errors/http";
 import {
+  confirmed,
+  emailRule,
   enumRule,
+  integerRule,
   maxLength,
   minLength,
   pattern,
   required,
   stringRule,
   validateObject,
-  integerRule,
-  emailRule,
-  confirmed,
 } from "../../src/core/validation/rules";
 
 describe("validateObject", () => {

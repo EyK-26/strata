@@ -1,4 +1,4 @@
-import { type AppModule } from "../../bootstrap/contracts";
+import type { AppModule } from "../../bootstrap/contracts";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import TaskController from "./controller";
 import taskProvider, { taskRepositoryToken, taskServiceToken } from "./provider";
@@ -18,8 +18,7 @@ const taskModule: AppModule = {
 
 export default taskModule;
 export { taskBelongsToProject } from "./relationships";
-export { taskProvider, taskRepositoryToken, taskServiceToken };
-export { TaskController };
+export { default as TaskRepository } from "./repository";
 export {
   parseCreateTaskBody,
   parseTaskIdParams,
@@ -28,7 +27,7 @@ export {
 } from "./requests";
 export { toTaskResource, toTaskResourceCollection } from "./resources";
 export { createTaskRoutes } from "./routes";
-export { default as TaskRepository } from "./repository";
 export { default as TaskService } from "./service";
 export { taskTable } from "./table";
 export type { TaskRecord, TaskWithProjectRecord } from "./types";
+export { TaskController, taskProvider, taskRepositoryToken, taskServiceToken };

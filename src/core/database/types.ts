@@ -11,11 +11,8 @@ type QueryOperator = {
   isNull?: boolean;
 };
 
-type QueryFilterValue =
-  DatabaseScalar | readonly DatabaseScalar[] | QueryOperator;
-type QueryWhere<TEntity> = Partial<
-  Record<keyof TEntity & string, QueryFilterValue>
->;
+type QueryFilterValue = DatabaseScalar | readonly DatabaseScalar[] | QueryOperator;
+type QueryWhere<TEntity> = Partial<Record<keyof TEntity & string, QueryFilterValue>>;
 
 type QueryOrder<TEntity> = {
   column: keyof TEntity & string;

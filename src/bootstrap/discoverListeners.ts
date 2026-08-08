@@ -14,11 +14,7 @@ async function loadDiscoveredListeners(): Promise<ListenerRegistrar[]> {
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => entry.name);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return [];
     }
 
@@ -27,9 +23,7 @@ async function loadDiscoveredListeners(): Promise<ListenerRegistrar[]> {
 
   const listeners = await Promise.all(
     entries.map(async (fileName) => {
-      const moduleUrl = pathToFileURL(
-        join(listenersDirectory, fileName),
-      ).href;
+      const moduleUrl = pathToFileURL(join(listenersDirectory, fileName)).href;
       const loaded = (await import(moduleUrl)) as { default?: ListenerRegistrar };
       return loaded.default;
     }),
@@ -46,5 +40,5 @@ function discoverListeners(): ListenerRegistrar[] {
   return appListeners;
 }
 
-export { appListeners, discoverListeners };
 export type { ListenerRegistrar };
+export { appListeners, discoverListeners };

@@ -3,8 +3,8 @@ import {
   resolveApplicationPolicyGate,
 } from "../../bootstrap/applicationRegistry";
 import type { Policy } from "../auth/policy";
-import { parsePositiveIntParam } from "./validation";
 import type { RouteRequest } from "./route";
+import { parsePositiveIntParam } from "./validation";
 
 interface RouteModelAuthorization {
   resource: string;
@@ -19,10 +19,7 @@ function securedBindRouteModel<
   param: TParam,
   resolver: (id: number, request: RouteRequest<TParams>) => Promise<TModel>,
   authorization: RouteModelAuthorization,
-  handler: (
-    request: RouteRequest<TParams>,
-    model: TModel,
-  ) => Response | Promise<Response>,
+  handler: (request: RouteRequest<TParams>, model: TModel) => Response | Promise<Response>,
 ): (request: RouteRequest<TParams>) => Promise<Response> {
   return async (request: RouteRequest<TParams>) => {
     const id = parsePositiveIntParam(String(request.params[param]), String(param));
@@ -41,5 +38,5 @@ function securedBindRouteModel<
   };
 }
 
-export { securedBindRouteModel };
 export type { RouteModelAuthorization };
+export { securedBindRouteModel };

@@ -1,4 +1,4 @@
-import SimpleCache from "./simpleCache";
+import type SimpleCache from "./simpleCache";
 import type { CacheStore } from "./store";
 
 class SimpleCacheStore implements CacheStore {
@@ -13,11 +13,7 @@ class SimpleCacheStore implements CacheStore {
     return Promise.resolve();
   }
 
-  getOrSet<T>(
-    key: string,
-    loader: () => Promise<T>,
-    ttlMs?: number,
-  ): Promise<T> {
+  getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T> {
     return this.cache.getOrSet(key, loader, ttlMs);
   }
 

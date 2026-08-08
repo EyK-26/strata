@@ -18,5 +18,5 @@ function currentTraceId(): string | null {
   return traceContextStorage.getStore()?.traceId ?? null;
 }
 
-export { currentTraceId, runWithTraceContext, traceContextStorage };
 export type { TraceContext };
+export { currentTraceId, runWithTraceContext, traceContextStorage };

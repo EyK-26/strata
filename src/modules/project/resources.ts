@@ -45,9 +45,5 @@ function toProjectPaginatedResourceCollection(
   return toPaginatedResourceCollection(records, meta, toProjectResource);
 }
 
-export {
-  toProjectPaginatedResourceCollection,
-  toProjectResource,
-  toProjectResourceCollection,
-};
 export type { ProjectResource };
+export { toProjectPaginatedResourceCollection, toProjectResource, toProjectResourceCollection };

@@ -1,4 +1,4 @@
-import FailedJobRepository from "./failedJobRepository";
+import type FailedJobRepository from "./failedJobRepository";
 import type { FailedJobRecord } from "./types";
 
 class FailedJobService {
@@ -25,8 +25,9 @@ class FailedJobService {
   }
 
   async retry(id: number): Promise<FailedJobRecord> {
-    const failedJob = await this.repository.findByIdOrThrow(id, (jobId) =>
-      new Error(`Failed job ${jobId} not found.`),
+    const failedJob = await this.repository.findByIdOrThrow(
+      id,
+      (jobId) => new Error(`Failed job ${jobId} not found.`),
     );
 
     await this.repository.deleteById(id);

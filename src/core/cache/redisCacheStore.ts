@@ -40,11 +40,7 @@ class RedisCacheStore implements CacheStore {
     await this.enforceMaxEntries();
   }
 
-  async getOrSet<T>(
-    key: string,
-    loader: () => Promise<T>,
-    ttlMs?: number,
-  ): Promise<T> {
+  async getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T> {
     const cached = await this.get<T>(key);
 
     if (cached !== undefined) {

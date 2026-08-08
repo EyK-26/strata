@@ -1,33 +1,28 @@
-import type { AppDependencies } from "./contracts";
+import type { AuthManager } from "../core/auth/guard";
+import { createMembershipMiddleware } from "../core/auth/membershipMiddleware";
+import type { Policy, PolicyGate } from "../core/auth/policy";
+import { createAuthMiddleware } from "../core/http/authMiddleware";
+import { createAuthorizeMiddleware } from "../core/http/authorizeMiddleware";
+import { createCorsMiddleware } from "../core/http/corsMiddleware";
+import { createMetricsMiddleware } from "../core/http/metricsMiddleware";
+import { type Middleware, type RouteHandler, requestIdMiddleware } from "../core/http/middleware";
+import { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware";
+import { createRequireAuthMiddleware } from "../core/http/requireAuthMiddleware";
+import { withMiddleware } from "../core/http/routeMiddleware";
+import { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware";
+import { createThrottleMiddleware } from "../core/http/throttleMiddleware";
+import { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware";
+import { createTenantMiddleware } from "../core/tenant/tenantMiddleware";
+import { createTracingMiddleware } from "../core/tracing/tracingMiddleware";
+import { tokenServiceToken } from "../modules/user/provider";
+import type TokenService from "../modules/user/tokenService";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   REDIS_URL_CONFIG_KEY,
 } from "./config";
-import type { ConfigStore } from "./contracts";
-import { createAuthMiddleware } from "../core/http/authMiddleware";
-import { createMembershipMiddleware } from "../core/auth/membershipMiddleware";
-import { createRequireAuthMiddleware } from "../core/http/requireAuthMiddleware";
-import { createAuthorizeMiddleware } from "../core/http/authorizeMiddleware";
-import { createThrottleMiddleware } from "../core/http/throttleMiddleware";
-import { withMiddleware } from "../core/http/routeMiddleware";
-import {
-  requestIdMiddleware,
-  type Middleware,
-  type RouteHandler,
-} from "../core/http/middleware";
-import { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware";
-import { createCorsMiddleware } from "../core/http/corsMiddleware";
-import { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware";
-import { createMetricsMiddleware } from "../core/http/metricsMiddleware";
-import { createTenantMiddleware } from "../core/tenant/tenantMiddleware";
-import { createTracingMiddleware } from "../core/tracing/tracingMiddleware";
-import { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware";
-import type { AuthManager } from "../core/auth/guard";
-import type { Policy, PolicyGate } from "../core/auth/policy";
-import { tokenServiceToken } from "../modules/user/provider";
-import type TokenService from "../modules/user/tokenService";
+import type { AppDependencies, ConfigStore } from "./contracts";
 
 type MiddlewareGroupName = "api" | "authenticated";
 
@@ -61,8 +56,7 @@ class HttpKernel {
           return [];
         }
 
-        const config =
-          this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
+        const config = this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
         const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? "";
 
         if (!redisUrl) {
@@ -84,10 +78,7 @@ class HttpKernel {
     }
   }
 
-  wrap(
-    groups: MiddlewareGroupName | MiddlewareGroupName[],
-    handler: RouteHandler,
-  ): RouteHandler {
+  wrap(groups: MiddlewareGroupName | MiddlewareGroupName[], handler: RouteHandler): RouteHandler {
     const names = Array.isArray(groups) ? groups : [groups];
     const middleware = names.flatMap((name) => this.group(name));
 
@@ -107,29 +98,18 @@ class HttpKernel {
   }
 
   wrapAbility(ability: string, handler: RouteHandler): RouteHandler {
-    const tokenService =
-      this.dependencies.container.resolve<TokenService>(tokenServiceToken);
+    const tokenService = this.dependencies.container.resolve<TokenService>(tokenServiceToken);
     const requireAbility = createRequireAbilityMiddleware(tokenService);
-    const middleware = [
-      ...this.group("authenticated"),
-      requireAbility(ability),
-    ];
+    const middleware = [...this.group("authenticated"), requireAbility(ability)];
 
     return withMiddleware(...middleware)(handler);
   }
 
-  wrapPolicy(
-    resource: string,
-    action: keyof Policy,
-    handler: RouteHandler,
-  ): RouteHandler {
+  wrapPolicy(resource: string, action: keyof Policy, handler: RouteHandler): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
-    const gate =
-      this.dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
+    const gate = this.dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
 
-    return withMiddleware(createAuthorizeMiddleware(gate, auth, resource, action))(
-      handler,
-    );
+    return withMiddleware(createAuthorizeMiddleware(gate, auth, resource, action))(handler);
   }
 }
 
@@ -137,5 +117,5 @@ function createHttpKernel(dependencies: AppDependencies): HttpKernel {
   return new HttpKernel(dependencies);
 }
 
-export { HttpKernel, createHttpKernel };
 export type { MiddlewareGroupName };
+export { createHttpKernel, HttpKernel };

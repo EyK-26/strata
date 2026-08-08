@@ -16,5 +16,5 @@ function toUserResource(record: UserRecord): UserResource {
   };
 }
 
-export { toUserResource };
 export type { UserResource };
+export { toUserResource };

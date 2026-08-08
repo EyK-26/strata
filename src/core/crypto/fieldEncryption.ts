@@ -114,6 +114,6 @@ export {
   isFieldEncryptionEnabled,
   normalizeEmail,
   protectEmail,
-  revealEmail,
   resolveEncryptionKey,
+  revealEmail,
 };

@@ -1,9 +1,9 @@
-import { UnauthorizedError } from "../../core/errors/http";
 import type { OAuthProvider } from "../../core/auth/oauth/types";
 import { verifyPassword } from "../../core/auth/password";
-import TokenService from "./tokenService";
-import UserRepository from "./repository";
-import OAuthIdentityRepository from "./oauthIdentityRepository";
+import { UnauthorizedError } from "../../core/errors/http";
+import type OAuthIdentityRepository from "./oauthIdentityRepository";
+import type UserRepository from "./repository";
+import type TokenService from "./tokenService";
 import type { CreatedApiToken, UserRecord } from "./types";
 
 class AuthService {
@@ -23,10 +23,7 @@ class AuthService {
     return this.oauthProviders.get(name);
   }
 
-  async loginWithPassword(
-    email: string,
-    password: string,
-  ): Promise<CreatedApiToken> {
+  async loginWithPassword(email: string, password: string): Promise<CreatedApiToken> {
     const user = await this.users.findByEmail(email);
 
     if (!user?.password_hash) {

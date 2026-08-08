@@ -1,6 +1,6 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import AuditService from "../../src/modules/audit/service";
+import { beforeAll, describe, expect, test } from "bun:test";
 import AuditLogRepository from "../../src/modules/audit/repository";
+import AuditService from "../../src/modules/audit/service";
 
 beforeAll(async () => {
   const { freshDatabase } = await import("../../src/db/migrations/runner");

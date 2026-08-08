@@ -7,10 +7,7 @@ type RequestMeta = {
 
 const requestMetaContext = new AsyncLocalStorage<RequestMeta>();
 
-function runWithRequestMeta<T>(
-  meta: RequestMeta,
-  callback: () => T | Promise<T>,
-): T | Promise<T> {
+function runWithRequestMeta<T>(meta: RequestMeta, callback: () => T | Promise<T>): T | Promise<T> {
   return requestMetaContext.run(meta, callback);
 }
 
@@ -23,5 +20,5 @@ function currentRequestMeta(): RequestMeta {
   );
 }
 
-export { currentRequestMeta, requestMetaContext, runWithRequestMeta };
 export type { RequestMeta };
+export { currentRequestMeta, requestMetaContext, runWithRequestMeta };

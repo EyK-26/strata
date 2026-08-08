@@ -20,10 +20,7 @@ function validateEnv(
 
   for (const [name, rule] of Object.entries(schema)) {
     const rawValue = env[name];
-    const value =
-      rawValue === undefined || rawValue.trim() === ""
-        ? rule.default
-        : rawValue;
+    const value = rawValue === undefined || rawValue.trim() === "" ? rule.default : rawValue;
 
     if (value === undefined || value.trim() === "") {
       if (rule.required) {
@@ -39,17 +36,13 @@ function validateEnv(
 
       if (!Number.isInteger(parsed) || parsed < minimum) {
         const comparison =
-          minimum === Number.NEGATIVE_INFINITY
-            ? "an integer"
-            : `an integer >= ${minimum}`;
+          minimum === Number.NEGATIVE_INFINITY ? "an integer" : `an integer >= ${minimum}`;
         throw new Error(`Environment variable "${name}" must be ${comparison}.`);
       }
     }
 
     if (rule.pattern && !rule.pattern.test(value)) {
-      throw new Error(
-        `Environment variable "${name}" has an invalid format.`,
-      );
+      throw new Error(`Environment variable "${name}" has an invalid format.`);
     }
 
     resolved[name] = value;
@@ -58,5 +51,5 @@ function validateEnv(
   return resolved;
 }
 
-export { defineEnvSchema, validateEnv };
 export type { EnvRule, EnvSchema };
+export { defineEnvSchema, validateEnv };

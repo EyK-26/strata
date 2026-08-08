@@ -1,11 +1,11 @@
-import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
-import { appContext } from "./context";
-import { routes } from "./routes";
-import { closeDatabase } from "../db/connection";
 import {
   installGracefulShutdownSignals,
   registerShutdownHandler,
 } from "../core/lifecycle/gracefulShutdown";
+import { closeDatabase } from "../db/connection";
+import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
+import { appContext } from "./context";
+import { routes } from "./routes";
 
 class App {
   private server?: ReturnType<typeof Bun.serve>;
@@ -38,9 +38,7 @@ class App {
   }
 
   private resolvePort(): number {
-    return (
-      appContext.config.get<number>(APP_PORT_CONFIG_KEY) ?? DEFAULT_APP_PORT
-    );
+    return appContext.config.get<number>(APP_PORT_CONFIG_KEY) ?? DEFAULT_APP_PORT;
   }
 }
 

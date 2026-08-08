@@ -1,7 +1,4 @@
-function prefixRouteMap(
-  prefix: string,
-  routes: Record<string, unknown>,
-): Record<string, unknown> {
+function prefixRouteMap(prefix: string, routes: Record<string, unknown>): Record<string, unknown> {
   const normalizedPrefix = prefix.replace(/\/$/, "");
   const prefixed: Record<string, unknown> = {};
 

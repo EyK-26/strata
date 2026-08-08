@@ -1,6 +1,6 @@
-import { Job, type Queue } from "./index";
+import type FailedJobService from "./failedJobService";
+import type { Job, Queue } from "./index";
 import { jobRegistry } from "./jobRegistry";
-import FailedJobService from "./failedJobService";
 import { runQueueJob } from "./jobRunner";
 
 class ResilientQueue implements Queue {
@@ -9,10 +9,7 @@ class ResilientQueue implements Queue {
     private readonly asyncDispatch = false,
   ) {}
 
-  async dispatch<TPayload extends object>(
-    job: Job<TPayload>,
-    payload: TPayload,
-  ): Promise<void> {
+  async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
     const name = jobRegistry.resolveName(job);
 
     if (!name) {

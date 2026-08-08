@@ -65,5 +65,5 @@ class OidcProvider implements OAuthProvider {
   }
 }
 
-export { OidcProvider };
 export type { OidcProviderOptions };
+export { OidcProvider };

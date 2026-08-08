@@ -1,9 +1,6 @@
 import { appModules } from "../../bootstrap/modules";
 
-function cacheTagsForModelWrite(
-  tableName: string,
-  action: string,
-): string[] {
+function cacheTagsForModelWrite(tableName: string, action: string): string[] {
   const module = appModules.find((entry) => entry.tableName === tableName);
   const baseTags = module?.cacheTags ?? [`${tableName}s`];
   const isDelete = action === "deleted" || action === "force-deleted";

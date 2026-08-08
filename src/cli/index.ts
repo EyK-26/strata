@@ -1,14 +1,16 @@
 import { helpCommand } from "./commands/help";
 import { makeFactoryCommand } from "./commands/makeFactory";
-import { makeMigrationCommand } from "./commands/makeMigration";
-import { makeModuleCommand } from "./commands/makeModule";
 import { makeJobCommand } from "./commands/makeJob";
 import { makeListenerCommand } from "./commands/makeListener";
+import { makeMigrationCommand } from "./commands/makeMigration";
+import { makeModuleCommand } from "./commands/makeModule";
 import { makePolicyCommand } from "./commands/makePolicy";
 import { makeRequestCommand } from "./commands/makeRequest";
 import { migrateCommand } from "./commands/migrate";
 import { migrateFreshCommand } from "./commands/migrateFresh";
 import { migrateStatusCommand } from "./commands/migrateStatus";
+import { openapiGenerateCommand } from "./commands/openapiGenerate";
+import { openapiValidateCommand } from "./commands/openapiValidate";
 import {
   queueFailedCommand,
   queueFlushFailedCommand,
@@ -17,23 +19,17 @@ import {
 import { queueWorkCommand } from "./commands/queueWork";
 import { rollbackCommand } from "./commands/rollback";
 import { routeListCommand } from "./commands/routeList";
-import { openapiGenerateCommand } from "./commands/openapiGenerate";
-import { openapiValidateCommand } from "./commands/openapiValidate";
-import { sdkGenerateCommand } from "./commands/sdkGenerate";
 import { scheduleRunCommand } from "./commands/scheduleRun";
+import { sdkGenerateCommand } from "./commands/sdkGenerate";
 import { seedCommand } from "./commands/seed";
 
 const [command = "help", ...args] = process.argv.slice(2);
 
-const commands: Record<
-  string,
-  (...commandArgs: string[]) => Promise<void> | void
-> = {
+const commands: Record<string, (...commandArgs: string[]) => Promise<void> | void> = {
   help: () => helpCommand(),
   migrate: () => migrateCommand(),
   "migrate:status": () => migrateStatusCommand(),
-  "migrate:fresh": (...commandArgs: string[]) =>
-    migrateFreshCommand(...commandArgs),
+  "migrate:fresh": (...commandArgs: string[]) => migrateFreshCommand(...commandArgs),
   rollback: () => rollbackCommand(),
   seed: () => seedCommand(),
   "make:migration": (name?: string) => makeMigrationCommand(name),

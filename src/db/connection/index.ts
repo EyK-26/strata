@@ -1,8 +1,5 @@
 import { databaseConfig } from "../../config/database";
-import {
-  createDatabaseConnection,
-  type DatabaseConnection,
-} from "./createConnection";
+import { createDatabaseConnection, type DatabaseConnection } from "./createConnection";
 
 const connectionHolder = {
   connection: createDatabaseConnection(databaseConfig),
@@ -12,9 +9,7 @@ function getDatabase(): DatabaseConnection {
   return connectionHolder.connection;
 }
 
-async function pingDatabase(
-  connection: DatabaseConnection = getDatabase(),
-): Promise<boolean> {
+async function pingDatabase(connection: DatabaseConnection = getDatabase()): Promise<boolean> {
   try {
     await connection`SELECT 1`;
     return true;
@@ -28,7 +23,9 @@ async function ensureDatabaseConnection(): Promise<DatabaseConnection> {
     return getDatabase();
   }
 
-  await getDatabase().close().catch(() => undefined);
+  await getDatabase()
+    .close()
+    .catch(() => undefined);
   connectionHolder.connection = createDatabaseConnection(databaseConfig);
   return getDatabase();
 }
@@ -46,15 +43,14 @@ const db = new Proxy(function database() {} as unknown as DatabaseConnection, {
     return (getDatabase() as unknown as (...args: unknown[]) => unknown)(...args);
   },
   get(_target, property) {
-    const value = (getDatabase() as unknown as Record<string | symbol, unknown>)[
-      property
-    ];
+    const value = (getDatabase() as unknown as Record<string | symbol, unknown>)[property];
 
     return typeof value === "function" ? value.bind(getDatabase()) : value;
   },
 });
 
 export default db;
+export type { DatabaseConnection };
 export {
   closeDatabase,
   ensureDatabaseConnection,
@@ -62,4 +58,3 @@ export {
   pingDatabase,
   resetDatabaseConnectionForTests,
 };
-export type { DatabaseConnection };

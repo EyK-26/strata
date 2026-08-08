@@ -12,9 +12,7 @@ async function queueFailedCommand(): Promise<void> {
   }
 
   for (const job of jobs) {
-    console.log(
-      `#${job.id} ${job.job_name} failed at ${job.failed_at.toISOString()}`,
-    );
+    console.log(`#${job.id} ${job.job_name} failed at ${job.failed_at.toISOString()}`);
   }
 }
 

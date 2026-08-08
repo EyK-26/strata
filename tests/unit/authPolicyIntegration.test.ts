@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { PolicyGate } from "../../src/core/auth/policy";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
+import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
+import { PolicyGate } from "../../src/core/auth/policy";
 import OrganizationPolicy from "../../src/modules/organization/policy";
 import type { OrganizationRecord } from "../../src/modules/organization/types";
 
@@ -23,9 +23,7 @@ describe("policy integration with auth context", () => {
       slug: "protected-org",
     } as OrganizationRecord;
 
-    expect(gate.allows("organization", "delete", null, organization)).toBe(
-      false,
-    );
+    expect(gate.allows("organization", "delete", null, organization)).toBe(false);
   });
 
   test("allows admins to delete protected organizations", () => {
@@ -36,9 +34,9 @@ describe("policy integration with auth context", () => {
       slug: "protected-org",
     } as OrganizationRecord;
 
-    expect(
-      gate.allows("organization", "delete", { id: 1, role: "admin" }, organization),
-    ).toBe(true);
+    expect(gate.allows("organization", "delete", { id: 1, role: "admin" }, organization)).toBe(
+      true,
+    );
   });
 });
 

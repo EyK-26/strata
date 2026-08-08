@@ -1,5 +1,5 @@
-import db from "../../db/connection";
 import { BaseRepository } from "../../core/database";
+import db from "../../db/connection";
 import { apiTokenTable } from "./apiTokenTable";
 import type { ApiTokenRecord } from "./types";
 

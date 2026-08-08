@@ -32,11 +32,5 @@ function rateLimitMultiplierForPlan(plan: TenantContext["plan"]): number {
   }
 }
 
-export {
-  currentTenant,
-  currentTenantId,
-  rateLimitMultiplierForPlan,
-  runWithTenant,
-  tenantContext,
-};
 export type { TenantContext };
+export { currentTenant, currentTenantId, rateLimitMultiplierForPlan, runWithTenant, tenantContext };

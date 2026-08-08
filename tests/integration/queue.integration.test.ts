@@ -1,16 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { RedisClient } from "bun";
 import { Job } from "../../src/core/queue";
-import { jobRegistry } from "../../src/core/queue/jobRegistry";
 import {
-  createQueueWorker,
   createFailedJobService,
+  createQueueWorker,
   registerDefaultJobs,
 } from "../../src/core/queue/createAppQueue";
-import {
-  QUEUE_LIST_KEY,
-  RedisQueue,
-} from "../../src/core/queue/redisQueue";
-import { RedisClient } from "bun";
+import { jobRegistry } from "../../src/core/queue/jobRegistry";
+import { QUEUE_LIST_KEY, RedisQueue } from "../../src/core/queue/redisQueue";
 
 interface EchoPayload {
   message: string;

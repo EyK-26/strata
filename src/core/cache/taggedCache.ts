@@ -6,11 +6,7 @@ class TaggedCache {
     private readonly tags: string[],
   ) {}
 
-  async remember<T>(
-    key: string,
-    callback: () => Promise<T>,
-    ttlMs?: number,
-  ): Promise<T> {
+  async remember<T>(key: string, callback: () => Promise<T>, ttlMs?: number): Promise<T> {
     const value = await this.store.getOrSet(key, callback, ttlMs);
     await this.store.attachTags(key, this.tags);
     return value;

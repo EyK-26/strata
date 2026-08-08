@@ -1,9 +1,9 @@
+import { isGlobalAdmin } from "../../core/auth/accessControl";
+import type { AuthUser } from "../../core/auth/authContext";
 import {
   hasMinimumOrgRole as hasMinimumOrgRoleInContext,
   hasOrgMembership,
 } from "../../core/auth/membershipContext";
-import { isGlobalAdmin } from "../../core/auth/accessControl";
-import type { AuthUser } from "../../core/auth/authContext";
 import { Policy } from "../../core/auth/policy";
 import type { CommentRecord } from "./types";
 

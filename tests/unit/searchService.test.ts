@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeAll } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import SearchService from "../../src/modules/search/service";
 
 beforeAll(async () => {

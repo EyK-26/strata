@@ -1,4 +1,7 @@
 import db from "../../db/connection";
+import { eventBus, modelEventName } from "../events/index.ts";
+import { buildPaginationMeta, type PaginatedResult } from "../pagination/index.ts";
+import { withDatabaseErrorHandling } from "./errors.ts";
 import {
   buildCountQuery,
   buildDeleteByIdQuery,
@@ -12,25 +15,14 @@ import {
   qualifyColumn,
   resolveSoftDeleteColumn,
 } from "./query.ts";
-import { eventBus, modelEventName } from "../events/index.ts";
 import {
-  indexBelongsToRelation,
-  indexHasManyRelation,
   type BelongsToRelation,
   type HasManyRelation,
+  indexBelongsToRelation,
+  indexHasManyRelation,
 } from "./relationships.ts";
-import { withDatabaseErrorHandling } from "./errors.ts";
 import type { TableDefinition } from "./table.ts";
-import type {
-  MutationValues,
-  QueryOptions,
-  QueryWhere,
-  UpdateValues,
-} from "./types.ts";
-import {
-  buildPaginationMeta,
-  type PaginatedResult,
-} from "../pagination/index.ts";
+import type { MutationValues, QueryOptions, QueryWhere, UpdateValues } from "./types.ts";
 
 interface DatabaseConnection {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
@@ -42,10 +34,7 @@ type DeletedRow = { deleted_id: string | number };
 
 type ErrorFactory<TValue> = (value: TValue) => Error;
 
-class BaseRepository<
-  TEntity extends object,
-  PrimaryKey extends keyof TEntity & string,
-> {
+class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   constructor(
     protected readonly table: TableDefinition<TEntity, PrimaryKey>,
     protected readonly connection: DatabaseConnection = db,
@@ -103,10 +92,7 @@ class BaseRepository<
       return record;
     }
 
-    throw (
-      errorFactory?.(id) ??
-      new Error(`${this.table.name} ${String(id)} was not found.`)
-    );
+    throw errorFactory?.(id) ?? new Error(`${this.table.name} ${String(id)} was not found.`);
   }
 
   async findByIds(ids: readonly TEntity[PrimaryKey][]): Promise<TEntity[]> {
@@ -132,21 +118,17 @@ class BaseRepository<
   async create(values: MutationValues<TEntity>): Promise<TEntity> {
     return await withDatabaseErrorHandling(async () => {
       const { text, params } = buildInsertQuery(this.table, values);
-      const [record] = await this.connection.unsafe<
-        TEntity & Record<string, unknown>
-      >(text, params);
+      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+        text,
+        params,
+      );
 
       if (!record) {
-        throw new Error(
-          `Insert into ${this.table.name} did not return a record.`,
-        );
+        throw new Error(`Insert into ${this.table.name} did not return a record.`);
       }
 
       const entity = record as TEntity;
-      await eventBus.dispatch(
-        modelEventName(this.table.name, "created"),
-        entity,
-      );
+      await eventBus.dispatch(modelEventName(this.table.name, "created"), entity);
       return entity;
     });
   }
@@ -157,17 +139,15 @@ class BaseRepository<
   ): Promise<TEntity | null> {
     return await withDatabaseErrorHandling(async () => {
       const { text, params } = buildUpdateQuery(this.table, id, changes);
-      const [record] = await this.connection.unsafe<
-        TEntity & Record<string, unknown>
-      >(text, params);
+      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+        text,
+        params,
+      );
 
       const entity = (record as TEntity | undefined) ?? null;
 
       if (entity) {
-        await eventBus.dispatch(
-          modelEventName(this.table.name, "updated"),
-          entity,
-        );
+        await eventBus.dispatch(modelEventName(this.table.name, "updated"), entity);
       }
 
       return entity;
@@ -185,10 +165,7 @@ class BaseRepository<
       return record;
     }
 
-    throw (
-      errorFactory?.(id) ??
-      new Error(`${this.table.name} ${String(id)} was not found.`)
-    );
+    throw errorFactory?.(id) ?? new Error(`${this.table.name} ${String(id)} was not found.`);
   }
 
   async deleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
@@ -201,23 +178,17 @@ class BaseRepository<
 
   async softDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
     return await withDatabaseErrorHandling(async () => {
-      const { text, params } = buildSoftDeleteByIdQuery(
-        this.table,
-        id,
-        new Date(),
+      const { text, params } = buildSoftDeleteByIdQuery(this.table, id, new Date());
+      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+        text,
+        params,
       );
-      const [record] = await this.connection.unsafe<
-        TEntity & Record<string, unknown>
-      >(text, params);
 
       if (!record) {
         return false;
       }
 
-      await eventBus.dispatch(
-        modelEventName(this.table.name, "deleted"),
-        record as TEntity,
-      );
+      await eventBus.dispatch(modelEventName(this.table.name, "deleted"), record as TEntity);
       return true;
     });
   }
@@ -241,19 +212,17 @@ class BaseRepository<
   async restoreById(id: TEntity[PrimaryKey]): Promise<TEntity | null> {
     return await withDatabaseErrorHandling(async () => {
       const { text, params } = buildRestoreByIdQuery(this.table, id);
-      const [record] = await this.connection.unsafe<
-        TEntity & Record<string, unknown>
-      >(text, params);
+      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+        text,
+        params,
+      );
 
       if (!record) {
         return null;
       }
 
       const entity = record as TEntity;
-      await eventBus.dispatch(
-        modelEventName(this.table.name, "restored"),
-        entity,
-      );
+      await eventBus.dispatch(modelEventName(this.table.name, "restored"), entity);
       return entity;
     });
   }
@@ -261,8 +230,7 @@ class BaseRepository<
   withConnection(connection: DatabaseConnection): this {
     const clone = Object.create(Object.getPrototypeOf(this)) as this;
     Object.assign(clone, this);
-    (clone as unknown as { connection: DatabaseConnection }).connection =
-      connection;
+    (clone as unknown as { connection: DatabaseConnection }).connection = connection;
     return clone;
   }
 
@@ -287,11 +255,7 @@ class BaseRepository<
     where: QueryWhere<TEntity> = {},
   ): Promise<number> {
     const qualifiedColumn = qualifyColumn(this.table.name, column);
-    return await this.averageExpression(
-      `AVG(${qualifiedColumn})`,
-      "value",
-      where,
-    );
+    return await this.averageExpression(`AVG(${qualifiedColumn})`, "value", where);
   }
 
   protected async averageExpression(
@@ -299,15 +263,11 @@ class BaseRepository<
     alias: string,
     where: QueryWhere<TEntity> = {},
   ): Promise<number> {
-    const { text, params } = buildProjectionQuery(
-      this.table,
-      expression,
-      alias,
-      { where },
+    const { text, params } = buildProjectionQuery(this.table, expression, alias, { where });
+    const [row] = await this.connection.unsafe<Record<string, number | string | null>>(
+      text,
+      params,
     );
-    const [row] = await this.connection.unsafe<
-      Record<string, number | string | null>
-    >(text, params);
 
     return Math.round(Number(row?.[alias] ?? 0));
   }
@@ -317,15 +277,8 @@ class BaseRepository<
     alias: string,
     options: QueryOptions<TEntity> = {},
   ): Promise<number[]> {
-    const { text, params } = buildProjectionQuery(
-      this.table,
-      expression,
-      alias,
-      options,
-    );
-    const rows = await this.connection.unsafe<
-      Record<string, number | string | null>
-    >(text, params);
+    const { text, params } = buildProjectionQuery(this.table, expression, alias, options);
+    const rows = await this.connection.unsafe<Record<string, number | string | null>>(text, params);
 
     return rows.flatMap((row) => {
       const value = row[alias];
@@ -338,10 +291,7 @@ class BaseRepository<
     where: QueryWhere<TEntity> = {},
   ): Promise<Array<{ value: TEntity[K] | null; count: number }>> {
     const { text, params } = buildGroupedCountQuery(this.table, column, where);
-    const rows = await this.connection.unsafe<ValueCountRow<TEntity[K]>>(
-      text,
-      params,
-    );
+    const rows = await this.connection.unsafe<ValueCountRow<TEntity[K]>>(text, params);
 
     return rows.map(({ value, count }) => ({
       value,
@@ -379,9 +329,7 @@ class BaseRepository<
       return indexHasManyRelation(parents, [], relation);
     }
 
-    const parentIds = [
-      ...new Set(parents.map((parent) => parent[relation.localKey])),
-    ];
+    const parentIds = [...new Set(parents.map((parent) => parent[relation.localKey]))];
     const children = await this.findWhere(
       {
         [relation.foreignKey]: parentIds,
@@ -407,17 +355,13 @@ class BaseRepository<
       return new Map();
     }
 
-    const ownerIds = [
-      ...new Set(children.map((child) => child[relation.foreignKey])),
-    ];
-    const parents = await parentRepository
-      .withConnection(this.connection)
-      .findWhere(
-        {
-          [relation.ownerKey]: ownerIds,
-        } as unknown as QueryWhere<TParent>,
-        options,
-      );
+    const ownerIds = [...new Set(children.map((child) => child[relation.foreignKey]))];
+    const parents = await parentRepository.withConnection(this.connection).findWhere(
+      {
+        [relation.ownerKey]: ownerIds,
+      } as unknown as QueryWhere<TParent>,
+      options,
+    );
 
     return indexBelongsToRelation(children, parents, relation);
   }

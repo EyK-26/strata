@@ -64,13 +64,8 @@ async function loadMigrations(): Promise<Migration[]> {
 }
 
 async function getMigrationStatus(): Promise<MigrationStatus[]> {
-  const [migrations, applied] = await Promise.all([
-    loadMigrations(),
-    getAppliedMigrations(),
-  ]);
-  const appliedByName = new Map(
-    applied.map(({ name, batch }) => [name, Number(batch)]),
-  );
+  const [migrations, applied] = await Promise.all([loadMigrations(), getAppliedMigrations()]);
+  const appliedByName = new Map(applied.map(({ name, batch }) => [name, Number(batch)]));
 
   return migrations.map(({ name }) => ({
     name,
@@ -85,14 +80,9 @@ async function migrateDatabase(): Promise<void> {
     const applied = await getAppliedMigrations();
     const appliedNames = new Set(applied.map(({ name }) => name));
     const nextBatch =
-      applied.reduce(
-        (currentMax, { batch }) => Math.max(currentMax, Number(batch)),
-        0,
-      ) + 1;
+      applied.reduce((currentMax, { batch }) => Math.max(currentMax, Number(batch)), 0) + 1;
 
-    const pendingMigrations = migrations.filter(
-      ({ name }) => !appliedNames.has(name),
-    );
+    const pendingMigrations = migrations.filter(({ name }) => !appliedNames.has(name));
 
     if (pendingMigrations.length === 0) {
       console.log("No pending migrations.");
@@ -153,18 +143,12 @@ async function freshDatabase(options: { seed?: boolean } = {}): Promise<void> {
   const migrations = await loadMigrations();
   const applied = await getAppliedMigrations();
   const appliedNames = new Set(applied.map(({ name }) => name));
-  const appliedMigrations = migrations.filter(({ name }) =>
-    appliedNames.has(name),
-  );
+  const appliedMigrations = migrations.filter(({ name }) => appliedNames.has(name));
 
   if (appliedMigrations.length === 0) {
-    console.log(
-      "No applied migrations found. Running a clean migrate instead.",
-    );
+    console.log("No applied migrations found. Running a clean migrate instead.");
   } else {
-    console.log(
-      `Refreshing database by rolling back ${appliedMigrations.length} migration(s)...`,
-    );
+    console.log(`Refreshing database by rolling back ${appliedMigrations.length} migration(s)...`);
 
     for (const migration of [...appliedMigrations].reverse()) {
       console.log(`Dropping ${migration.name}...`);
@@ -182,6 +166,7 @@ async function freshDatabase(options: { seed?: boolean } = {}): Promise<void> {
   }
 }
 
+export type { MigrationStatus };
 export {
   ensureMigrationsTable,
   freshDatabase,
@@ -189,4 +174,3 @@ export {
   migrateDatabase,
   rollbackDatabase,
 };
-export type { MigrationStatus };

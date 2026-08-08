@@ -1,11 +1,16 @@
-import type { PaginatedResult } from "../../core/pagination";
-import { TASK_STATUSES } from "../../domain/workhub";
+import {
+  appendProjectScope,
+  emptyPaginateResult,
+  scopedOrganizationIds,
+} from "../../core/auth/membershipScope";
 import { runInTransaction } from "../../core/database";
 import { BadRequestError, NotFoundError } from "../../core/errors/http";
-import ProjectRepository from "../project/repository";
-import TaskRepository from "./repository";
-import type { TaskRecord, TaskWithProjectRecord } from "./types";
+import type { PaginatedResult } from "../../core/pagination";
 import type { TaskStatus } from "../../domain/workhub";
+import { TASK_STATUSES } from "../../domain/workhub";
+import type ProjectRepository from "../project/repository";
+import type TaskRepository from "./repository";
+import type { TaskRecord, TaskWithProjectRecord } from "./types";
 
 interface CreateTaskInput {
   project_id: number;
@@ -34,18 +39,23 @@ class TaskService {
     private readonly projectRepository: ProjectRepository,
   ) {}
 
-  async paginate(
-    options: TaskListOptions,
-  ): Promise<PaginatedResult<TaskWithProjectRecord>> {
+  async paginate(options: TaskListOptions): Promise<PaginatedResult<TaskWithProjectRecord>> {
+    const accessibleProjectIds = await this.resolveAccessibleProjectIds(options.projectId);
+
+    if (accessibleProjectIds !== null && accessibleProjectIds.length === 0) {
+      return emptyPaginateResult(options.page, options.perPage);
+    }
+
     const result = await this.repository.paginate({
       page: options.page,
       perPage: options.perPage,
-      where: {
-        ...(options.projectId === undefined
-          ? {}
-          : { project_id: options.projectId }),
-        ...(options.status === undefined ? {} : { status: options.status }),
-      },
+      where: appendProjectScope(
+        {
+          ...(options.status === undefined ? {} : { status: options.status }),
+        },
+        accessibleProjectIds,
+        options.projectId,
+      ),
     });
 
     if (!options.includeProject) {
@@ -62,8 +72,9 @@ class TaskService {
     id: number,
     options: { includeProject?: boolean } = {},
   ): Promise<TaskWithProjectRecord> {
-    const task = await this.repository.findByIdOrThrow(id, (taskId) =>
-      new NotFoundError(`Task ${taskId} not found.`),
+    const task = await this.repository.findByIdOrThrow(
+      id,
+      (taskId) => new NotFoundError(`Task ${taskId} not found.`),
     );
 
     if (!options.includeProject) {
@@ -83,8 +94,7 @@ class TaskService {
     }
 
     return runInTransaction(async (connection) => {
-      const projectRepository =
-        this.projectRepository.withConnection(connection);
+      const projectRepository = this.projectRepository.withConnection(connection);
       const taskRepository = this.repository.withConnection(connection);
 
       const project = await projectRepository.findById(input.project_id);
@@ -127,8 +137,10 @@ class TaskService {
       changes.priority = input.priority;
     }
 
-    return await this.repository.updateByIdOrThrow(id, changes, (taskId) =>
-      new NotFoundError(`Task ${taskId} not found.`),
+    return await this.repository.updateByIdOrThrow(
+      id,
+      changes,
+      (taskId) => new NotFoundError(`Task ${taskId} not found.`),
     );
   }
 
@@ -138,6 +150,26 @@ class TaskService {
     if (!deleted) {
       throw new NotFoundError(`Task ${id} not found.`);
     }
+  }
+
+  private async resolveAccessibleProjectIds(requestedProjectId?: number): Promise<number[] | null> {
+    const organizationIds = scopedOrganizationIds();
+
+    if (organizationIds === null) {
+      return requestedProjectId === undefined ? null : [requestedProjectId];
+    }
+
+    if (organizationIds.length === 0) {
+      return [];
+    }
+
+    const projectIds = await this.projectRepository.findIdsByOrganizationIds(organizationIds);
+
+    if (requestedProjectId === undefined) {
+      return projectIds;
+    }
+
+    return projectIds.includes(requestedProjectId) ? [requestedProjectId] : [];
   }
 }
 

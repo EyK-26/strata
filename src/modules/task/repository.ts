@@ -5,9 +5,7 @@ import { taskTable } from "./table";
 import type { TaskRecord, TaskWithProjectRecord } from "./types";
 
 class TaskRepository extends BaseRepository<TaskRecord, "id"> {
-  constructor(
-    private readonly projectRepository: ProjectRepository = new ProjectRepository(),
-  ) {
+  constructor(private readonly projectRepository: ProjectRepository = new ProjectRepository()) {
     super(taskTable);
   }
 
@@ -15,9 +13,7 @@ class TaskRepository extends BaseRepository<TaskRecord, "id"> {
     return await this.findWhere({ project_id: projectId });
   }
 
-  async attachProjects(
-    tasks: readonly TaskRecord[],
-  ): Promise<TaskWithProjectRecord[]> {
+  async attachProjects(tasks: readonly TaskRecord[]): Promise<TaskWithProjectRecord[]> {
     if (tasks.length === 0) {
       return [];
     }

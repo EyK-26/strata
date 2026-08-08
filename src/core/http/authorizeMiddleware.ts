@@ -1,6 +1,5 @@
 import type { AuthManager } from "../auth/guard";
-import type { PolicyGate } from "../auth/policy";
-import type { Policy } from "../auth/policy";
+import type { Policy, PolicyGate } from "../auth/policy";
 import { ForbiddenError } from "../errors/http";
 import type { Middleware } from "./middleware";
 

@@ -1,10 +1,7 @@
-import { type AppModule } from "../../bootstrap/contracts";
+import type { AppModule } from "../../bootstrap/contracts";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import ProjectController from "./controller";
-import projectProvider, {
-  projectRepositoryToken,
-  projectServiceToken,
-} from "./provider";
+import projectProvider, { projectRepositoryToken, projectServiceToken } from "./provider";
 import { createProjectRoutes } from "./routes";
 import { projectTable } from "./table";
 
@@ -21,8 +18,7 @@ const projectModule: AppModule = {
 
 export default projectModule;
 export { projectBelongsToOrganization } from "./relationships";
-export { projectProvider, projectRepositoryToken, projectServiceToken };
-export { ProjectController };
+export { default as ProjectRepository } from "./repository";
 export {
   parseCreateProjectBody,
   parseProjectIdParams,
@@ -31,7 +27,7 @@ export {
 } from "./requests";
 export { toProjectResource, toProjectResourceCollection } from "./resources";
 export { createProjectRoutes } from "./routes";
-export { default as ProjectRepository } from "./repository";
 export { default as ProjectService } from "./service";
 export { projectTable } from "./table";
 export type { ProjectRecord, ProjectWithOrganizationRecord } from "./types";
+export { ProjectController, projectProvider, projectRepositoryToken, projectServiceToken };

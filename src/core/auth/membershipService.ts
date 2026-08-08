@@ -1,12 +1,8 @@
 import { resolveApplicationDependencies } from "../../bootstrap/applicationRegistry";
 import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
 import { ForbiddenError } from "../errors/http";
-import {
-  hasMinimumOrgRole,
-  isGlobalAdmin,
-  resolveUserId,
-} from "./accessControl";
-import { currentAuthUser, type AuthUser } from "./authContext";
+import { hasMinimumOrgRole, isGlobalAdmin, resolveUserId } from "./accessControl";
+import { type AuthUser, currentAuthUser } from "./authContext";
 import { membershipRepository } from "./membershipContext";
 
 class MembershipService {
@@ -15,10 +11,7 @@ class MembershipService {
     return memberships.map((membership) => membership.organization_id);
   }
 
-  async getOrgRole(
-    userId: number,
-    organizationId: number,
-  ): Promise<OrganizationMemberRole | null> {
+  async getOrgRole(userId: number, organizationId: number): Promise<OrganizationMemberRole | null> {
     const membership = await membershipRepository.findMembership(userId, organizationId);
     return membership?.role ?? null;
   }
@@ -38,11 +31,11 @@ class MembershipService {
 
     const role = await this.getOrgRole(resolveUserId(user), organizationId);
 
-    if (!hasMinimumOrgRole(role, minimumRole)) {
+    if (!role || !hasMinimumOrgRole(role, minimumRole)) {
       throw new ForbiddenError("Organization membership required.");
     }
 
-    return role!;
+    return role;
   }
 
   async filterAccessibleOrganizationIds(
@@ -73,11 +66,7 @@ class MembershipService {
     return membershipRepository.listForOrganization(organizationId);
   }
 
-  addMember(input: {
-    organizationId: number;
-    userId: number;
-    role?: OrganizationMemberRole;
-  }) {
+  addMember(input: { organizationId: number; userId: number; role?: OrganizationMemberRole }) {
     return membershipRepository.addMember(input);
   }
 

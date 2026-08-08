@@ -40,11 +40,7 @@ class SimpleCache {
     this.evictOverflow();
   }
 
-  async getOrSet<T>(
-    key: string,
-    loader: () => Promise<T>,
-    ttlMs?: number,
-  ): Promise<T> {
+  async getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T> {
     this.pruneExpired();
 
     const cachedEntry = this.getFreshEntry<T>(key);

@@ -1,11 +1,11 @@
-import { describe, expect, test, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
+  decryptField,
   emailLookupForQuery,
   encryptField,
-  decryptField,
   protectEmail,
-  revealEmail,
   resolveEncryptionKey,
+  revealEmail,
 } from "../../src/core/crypto/fieldEncryption";
 
 const previousEncryptionKey = process.env.KMS_ENCRYPTION_KEY;
@@ -31,12 +31,15 @@ describe("fieldEncryption", () => {
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
 
     const key = resolveEncryptionKey();
-    expect(key).not.toBeNull();
 
-    const ciphertext = encryptField("admin@workhub.test", key!);
+    if (!key) {
+      throw new Error("Expected encryption key to be configured.");
+    }
+
+    const ciphertext = encryptField("admin@workhub.test", key);
     expect(ciphertext.startsWith("enc:v1:")).toBe(true);
     expect(revealEmail(ciphertext)).toBe("admin@workhub.test");
-    expect(decryptField(ciphertext, key!)).toBe("admin@workhub.test");
+    expect(decryptField(ciphertext, key)).toBe("admin@workhub.test");
   });
 
   test("creates deterministic lookup hashes for encrypted emails", () => {

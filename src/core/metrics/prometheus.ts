@@ -55,5 +55,5 @@ class PrometheusRegistry {
 
 const prometheusRegistry = new PrometheusRegistry();
 
-export { PrometheusRegistry, prometheusRegistry };
 export type { MetricLabels };
+export { PrometheusRegistry, prometheusRegistry };

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   BaseRepository,
+  type DatabaseConnection,
   defineTable,
   hasMany,
   indexBelongsToRelation,
-  type DatabaseConnection,
 } from "../../src/core/database";
 
 type Squad = {
@@ -46,10 +46,7 @@ class FakeConnection implements DatabaseConnection {
     this.responses.push(rows);
   }
 
-  async unsafe<T>(
-    query: string,
-    params: readonly unknown[] = [],
-  ): Promise<T[]> {
+  async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
     this.calls.push({ query, params: [...params] });
     return (this.responses.shift() ?? []) as T[];
   }
@@ -66,9 +63,9 @@ class CrewRepository extends BaseRepository<CrewMember, "id"> {
     super(crewTable, connection);
   }
 
-  async attachSquads(members: readonly CrewMember[]): Promise<
-    Array<CrewMember & { squad?: Squad }>
-  > {
+  async attachSquads(
+    members: readonly CrewMember[],
+  ): Promise<Array<CrewMember & { squad?: Squad }>> {
     const squadsById = await this.loadBelongsToForParents(
       members,
       {
@@ -101,7 +98,10 @@ describe("belongsTo eager loading", () => {
       { id: 3, name: "Bishop", squad_id: 20 },
     ];
 
-    connection.queue([{ id: 10, label: "Alpha" }, { id: 20, label: "Beta" }]);
+    connection.queue([
+      { id: 10, label: "Alpha" },
+      { id: 20, label: "Beta" },
+    ]);
 
     const withSquads = await crewRepository.attachSquads(members);
 

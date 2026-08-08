@@ -1,8 +1,8 @@
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { jsonResponse, withErrorHandling } from "../../core/http";
-import AdminService from "./service";
 import { adminServiceToken } from "./provider";
+import type AdminService from "./service";
 
 class AdminController {
   constructor(private readonly dependencies: AppDependencies) {}

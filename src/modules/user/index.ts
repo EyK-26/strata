@@ -1,4 +1,4 @@
-import { type AppModule } from "../../bootstrap/contracts";
+import type { AppModule } from "../../bootstrap/contracts";
 import AuthController from "./controller";
 import userProvider, { tokenServiceToken, userRepositoryToken } from "./provider";
 import { createAuthRoutes } from "./routes";
@@ -15,10 +15,9 @@ const userModule: AppModule = {
 };
 
 export default userModule;
-export { userProvider, tokenServiceToken, userRepositoryToken };
-export { AuthController };
-export { createAuthRoutes } from "./routes";
 export { default as UserRepository } from "./repository";
-export { default as TokenService } from "./tokenService";
+export { createAuthRoutes } from "./routes";
 export { userTable } from "./table";
+export { default as TokenService } from "./tokenService";
 export type { UserRecord } from "./types";
+export { AuthController, tokenServiceToken, userProvider, userRepositoryToken };

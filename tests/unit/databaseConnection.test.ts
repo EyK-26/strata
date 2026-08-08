@@ -12,9 +12,7 @@ describe("databaseConfig", () => {
 
 describe("createDatabaseConnection", () => {
   test("throws when DATABASE_URL is missing", async () => {
-    const { createDatabaseConnection } = await import(
-      "../../src/db/connection/createConnection"
-    );
+    const { createDatabaseConnection } = await import("../../src/db/connection/createConnection");
 
     expect(() =>
       createDatabaseConnection({

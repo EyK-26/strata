@@ -1,7 +1,7 @@
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { jsonResponse, withErrorHandling } from "../../core/http";
-import { createScimService } from "./service";
 import type { ScimPatchOperation, ScimUserPayload } from "./service";
+import { createScimService } from "./service";
 
 function scimResponse(data: unknown, status = 200): Response {
   return jsonResponse(data, {

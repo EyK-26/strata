@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { createRequireAuthMiddleware } from "../../src/core/http/requireAuthMiddleware";
 import { composeMiddleware } from "../../src/core/http/middleware";
+import { createRequireAuthMiddleware } from "../../src/core/http/requireAuthMiddleware";
 
 describe("createRequireAuthMiddleware", () => {
   test("allows authenticated requests through", async () => {
     const auth = new AuthManager(new GuestGuard());
-    const handler = composeMiddleware(createRequireAuthMiddleware(auth))(
-      async () => Response.json({ ok: true }),
+    const handler = composeMiddleware(createRequireAuthMiddleware(auth))(async () =>
+      Response.json({ ok: true }),
     );
 
     const response = await handler(
@@ -25,8 +25,8 @@ describe("createRequireAuthMiddleware", () => {
 
   test("rejects guests with UnauthorizedError", async () => {
     const auth = new AuthManager(new GuestGuard());
-    const handler = composeMiddleware(createRequireAuthMiddleware(auth))(
-      async () => Response.json({ ok: true }),
+    const handler = composeMiddleware(createRequireAuthMiddleware(auth))(async () =>
+      Response.json({ ok: true }),
     );
 
     const response = await handler(

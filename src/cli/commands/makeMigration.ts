@@ -1,11 +1,6 @@
 import { access } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  ensureDirectory,
-  migrationDirectory,
-  timestampForFilename,
-  toKebabCase,
-} from "./utils";
+import { ensureDirectory, migrationDirectory, timestampForFilename, toKebabCase } from "./utils";
 
 async function makeMigrationCommand(name?: string): Promise<void> {
   if (!name) {
@@ -27,15 +22,8 @@ async function makeMigrationCommand(name?: string): Promise<void> {
     await access(filePath);
     throw new Error(`Migration already exists: ${filePath}`);
   } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !("code" in error) ||
-      error.code !== "ENOENT"
-    ) {
-      if (
-        error instanceof Error &&
-        error.message.startsWith("Migration already exists:")
-      ) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
+      if (error instanceof Error && error.message.startsWith("Migration already exists:")) {
         throw error;
       }
       throw error;

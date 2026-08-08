@@ -2,9 +2,9 @@ import { resolveApplicationCache } from "../../bootstrap/applicationRegistry";
 import InvalidateCacheTagsJob from "../jobs/invalidateCacheTagsJob";
 import FailedJobRepository from "./failedJobRepository";
 import FailedJobService from "./failedJobService";
+import type { Job, Queue } from "./index";
 import { jobRegistry } from "./jobRegistry";
-import { Job, type Queue } from "./index";
-import { RedisQueue, QueueWorker } from "./redisQueue";
+import { QueueWorker, RedisQueue } from "./redisQueue";
 import { ResilientQueue } from "./resilientQueue";
 
 const FAILED_JOB_SERVICE_TOKEN = "core.failedJobs";

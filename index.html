@@ -162,7 +162,7 @@
                     const suffix = form.getAttribute("data-suffix") ?? "";
                     const input = form.querySelector('input[name="id"]');
 
-                    if (!prefix || !input || !input.value) {
+                    if (!prefix || !input?.value) {
                         return;
                     }
 

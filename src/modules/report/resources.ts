@@ -8,14 +8,9 @@ function toReportSummaryResource(summary: ReportSummary): ReportSummaryResource 
   return summary;
 }
 
-function toOrganizationReportResource(
-  report: OrganizationReport,
-): OrganizationReportResource {
+function toOrganizationReportResource(report: OrganizationReport): OrganizationReportResource {
   return report;
 }
 
-export {
-  toOrganizationReportResource,
-  toReportSummaryResource,
-};
 export type { OrganizationReportResource, ReportSummaryResource };
+export { toOrganizationReportResource, toReportSummaryResource };

@@ -1,8 +1,8 @@
 import { NotFoundError } from "../../core/errors/http";
-import CommentRepository from "../comment/repository";
-import OrganizationRepository from "../organization/repository";
-import ProjectRepository from "../project/repository";
-import TaskRepository from "../task/repository";
+import type CommentRepository from "../comment/repository";
+import type OrganizationRepository from "../organization/repository";
+import type ProjectRepository from "../project/repository";
+import type TaskRepository from "../task/repository";
 import type { OrganizationReport, ReportSummary } from "./types";
 
 class ReportService {

@@ -30,9 +30,7 @@ function parseOptionalPositiveIntQueryParam(
   const parsed = Number.parseInt(value, 10);
 
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new BadRequestError(
-      `Invalid query parameter "${name}". Expected a positive integer.`,
-    );
+    throw new BadRequestError(`Invalid query parameter "${name}". Expected a positive integer.`);
   }
 
   return parsed;
@@ -56,9 +54,7 @@ function parseOptionalBooleanQueryParam(
     case "0":
       return false;
     default:
-      throw new BadRequestError(
-        `Invalid query parameter "${name}". Expected a boolean.`,
-      );
+      throw new BadRequestError(`Invalid query parameter "${name}". Expected a boolean.`);
   }
 }
 
@@ -82,10 +78,7 @@ function parseOptionalEnumQueryParam<TValue extends string>(
   return value as TValue;
 }
 
-function expectObject(
-  value: unknown,
-  label: string = "request body",
-): Record<string, unknown> {
+function expectObject(value: unknown, label: string = "request body"): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new BadRequestError(`${label} must be a JSON object.`);
   }
@@ -122,15 +115,11 @@ function readRequiredString(
   const trimmed = value.trim();
 
   if (options.minLength !== undefined && trimmed.length < options.minLength) {
-    throw new BadRequestError(
-      `"${field}" must be at least ${options.minLength} characters.`,
-    );
+    throw new BadRequestError(`"${field}" must be at least ${options.minLength} characters.`);
   }
 
   if (options.maxLength !== undefined && trimmed.length > options.maxLength) {
-    throw new BadRequestError(
-      `"${field}" must be at most ${options.maxLength} characters.`,
-    );
+    throw new BadRequestError(`"${field}" must be at most ${options.maxLength} characters.`);
   }
 
   if (options.pattern && !options.pattern.test(trimmed)) {
@@ -160,9 +149,7 @@ function readRequiredEnum<TValue extends string>(
   const value = readRequiredString(payload, field);
 
   if (!allowedValues.includes(value as TValue)) {
-    throw new BadRequestError(
-      `"${field}" must be one of: ${allowedValues.join(", ")}.`,
-    );
+    throw new BadRequestError(`"${field}" must be one of: ${allowedValues.join(", ")}.`);
   }
 
   return value as TValue;
@@ -180,16 +167,11 @@ function readOptionalEnum<TValue extends string>(
   return readRequiredEnum(payload, field, allowedValues);
 }
 
-function readRequiredPositiveInt(
-  payload: Record<string, unknown>,
-  field: string,
-): number {
+function readRequiredPositiveInt(payload: Record<string, unknown>, field: string): number {
   const value = payload[field];
 
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw new BadRequestError(
-      `"${field}" is required and must be a positive integer.`,
-    );
+    throw new BadRequestError(`"${field}" is required and must be a positive integer.`);
   }
 
   return value;

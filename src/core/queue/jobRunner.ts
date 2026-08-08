@@ -1,6 +1,6 @@
 import { queueConfig } from "../../config/queue";
+import type FailedJobService from "./failedJobService";
 import { jobRegistry } from "./jobRegistry";
-import FailedJobService from "./failedJobService";
 
 interface QueueJobEnvelope {
   name: string;
@@ -42,12 +42,12 @@ async function runQueueJob(
     await failedJobs.recordFailure({
       jobName: envelope.name,
       payload: envelope.payload,
-      exception: error instanceof Error ? error.stack ?? error.message : String(error),
+      exception: error instanceof Error ? (error.stack ?? error.message) : String(error),
     });
 
     throw error;
   }
 }
 
-export { runQueueJob };
 export type { QueueJobEnvelope };
+export { runQueueJob };

@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { ApiTokenGuard, AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { UnauthorizedError } from "../../src/core/errors/http";
-import {
-  ApiTokenGuard,
-  AuthManager,
-  GuestGuard,
-} from "../../src/core/auth/guard";
 
 describe("AuthManager", () => {
   test("GuestGuard always resolves null without dev headers", async () => {
@@ -30,9 +26,7 @@ describe("AuthManager", () => {
   });
 
   test("ApiTokenGuard rejects missing or invalid tokens", async () => {
-    const auth = new AuthManager(
-      new ApiTokenGuard({ token: "secret-token", user: { id: 1 } }),
-    );
+    const auth = new AuthManager(new ApiTokenGuard({ token: "secret-token", user: { id: 1 } }));
 
     expect(await auth.check(new Request("http://example.test"))).toBe(false);
     expect(

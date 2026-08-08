@@ -10,10 +10,10 @@ import {
   parseOrganizationIdParams,
   parseOrganizationListQuery,
 } from "../../src/modules/organization/requests";
-import { parseProjectListQuery } from "../../src/modules/project/requests";
-import { parseTaskListQuery } from "../../src/modules/task/requests";
 import { toOrganizationResource } from "../../src/modules/organization/resources";
 import type { OrganizationRecord } from "../../src/modules/organization/types";
+import { parseProjectListQuery } from "../../src/modules/project/requests";
+import { parseTaskListQuery } from "../../src/modules/task/requests";
 
 describe("module request helpers", () => {
   test("parseOrganizationIdParams returns a typed integer id", () => {
@@ -24,9 +24,7 @@ describe("module request helpers", () => {
   });
 
   test("parses validated query DTOs for workhub list endpoints", () => {
-    const organizationRequest = new Request(
-      "http://example.test/organizations?page=2&per_page=10",
-    );
+    const organizationRequest = new Request("http://example.test/organizations?page=2&per_page=10");
     const projectRequest = new Request(
       "http://example.test/projects?per_page=5&organizationId=1&include=organization",
     );
@@ -60,13 +58,9 @@ describe("http validation helpers", () => {
 
     expect(parseOptionalPositiveIntQueryParam(params, "limit")).toBe(3);
     expect(parseOptionalBooleanQueryParam(params, "isAlive")).toBe(false);
-    expect(
-      parseOptionalEnumQueryParam(params, "status", [
-        "draft",
-        "active",
-        "archived",
-      ]),
-    ).toBe("active");
+    expect(parseOptionalEnumQueryParam(params, "status", ["draft", "active", "archived"])).toBe(
+      "active",
+    );
   });
 
   test("parses JSON bodies through a DTO validator", async () => {

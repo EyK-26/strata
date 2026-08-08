@@ -1,6 +1,6 @@
-import { appLogger } from "./logger";
 import type { Middleware } from "../http/middleware";
 import { runWithRequestMeta } from "../http/requestMetaContext";
+import { appLogger } from "./logger";
 
 function createRequestLoggingMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {

@@ -104,9 +104,7 @@ function indexBelongsToRelation<
 
   for (const child of children) {
     const foreignKey = child[relation.foreignKey];
-    const parent = parentsById.get(
-      foreignKey as unknown as TParent[OwnerKey],
-    );
+    const parent = parentsById.get(foreignKey as unknown as TParent[OwnerKey]);
 
     if (parent) {
       result.set(foreignKey, parent);
@@ -116,5 +114,5 @@ function indexBelongsToRelation<
   return result;
 }
 
-export { belongsTo, hasMany, indexBelongsToRelation, indexHasManyRelation };
 export type { BelongsToRelation, HasManyRelation };
+export { belongsTo, hasMany, indexBelongsToRelation, indexHasManyRelation };

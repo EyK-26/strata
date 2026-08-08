@@ -5,15 +5,14 @@ type CachedJson = <T>(
   loader: () => Promise<T>,
   tags?: string[],
 ) => Promise<Response>;
+// Bun.serve routes accept heterogeneous handler shapes that are awkward to type strictly.
+// biome-ignore lint/suspicious/noExplicitAny: matches Bun's Routes map expectations
 type AppRouteMap = Record<string, any>;
 type ServiceFactory<T> = (container: ServiceContainer) => T;
 
 class ServiceContainer {
   private readonly services = new Map<string, unknown>();
-  private readonly singletonFactories = new Map<
-    string,
-    ServiceFactory<unknown>
-  >();
+  private readonly singletonFactories = new Map<string, ServiceFactory<unknown>>();
   private readonly bindings = new Map<string, ServiceFactory<unknown>>();
 
   set<T>(key: string, value: T): T {
@@ -62,11 +61,7 @@ class ServiceContainer {
   }
 
   has(key: string): boolean {
-    return (
-      this.services.has(key) ||
-      this.singletonFactories.has(key) ||
-      this.bindings.has(key)
-    );
+    return this.services.has(key) || this.singletonFactories.has(key) || this.bindings.has(key);
   }
 }
 
@@ -165,10 +160,7 @@ function assertAppDependenciesComplete(
   }
 }
 
-function resolveService<T>(
-  dependencies: AppDependencies,
-  token: string,
-): T {
+function resolveService<T>(dependencies: AppDependencies, token: string): T {
   return dependencies.container.resolve<T>(token);
 }
 
@@ -178,16 +170,16 @@ export type {
   AppModule,
   AppRouteMap,
   CachedJson,
-  MutableAppDependencies,
   ModuleRouteContext,
+  MutableAppDependencies,
   ProviderContext,
   ServiceFactory,
   ServiceProvider,
 };
 export {
-  ConfigStore,
-  ServiceContainer,
   assertAppDependenciesComplete,
+  ConfigStore,
   getRequiredDependency,
   resolveService,
+  ServiceContainer,
 };

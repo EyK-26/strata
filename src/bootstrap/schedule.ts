@@ -1,6 +1,6 @@
-import { appSchedule } from "../core/scheduler/schedule";
-import { appLogger } from "../core/logging/logger";
 import { exportPendingAuditLogs } from "../core/audit/exportAuditLogs";
+import { appLogger } from "../core/logging/logger";
+import { appSchedule } from "../core/scheduler/schedule";
 
 appSchedule.command("* * * * *", "heartbeat", () => {
   appLogger.debug("Scheduler heartbeat");

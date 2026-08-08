@@ -1,9 +1,9 @@
+import { isGlobalAdmin } from "../../core/auth/accessControl";
+import type { AuthUser } from "../../core/auth/authContext";
 import {
   hasMinimumOrgRole as hasMinimumOrgRoleInContext,
   hasOrgMembership,
 } from "../../core/auth/membershipContext";
-import { isGlobalAdmin } from "../../core/auth/accessControl";
-import type { AuthUser } from "../../core/auth/authContext";
 import { Policy } from "../../core/auth/policy";
 import type { OrganizationRecord } from "./types";
 
@@ -32,10 +32,7 @@ class OrganizationPolicy extends Policy {
     return hasMinimumOrgRoleInContext(organization.id, "admin");
   }
 
-  override delete(
-    user: AuthUser | null,
-    organization: OrganizationRecord,
-  ): boolean {
+  override delete(user: AuthUser | null, organization: OrganizationRecord): boolean {
     if (organization.slug === "protected-org") {
       return user?.role === "admin";
     }

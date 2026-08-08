@@ -1,8 +1,8 @@
 import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { jsonResponse, withErrorHandling } from "../../core/http";
-import AuditService from "./service";
 import { auditServiceToken } from "./provider";
+import type AuditService from "./service";
 
 class AuditController {
   constructor(private readonly dependencies: AppDependencies) {}

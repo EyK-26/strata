@@ -1,9 +1,9 @@
-import { describe, expect, test, beforeAll } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { Job } from "../../src/core/queue";
-import FailedJobService from "../../src/core/queue/failedJobService";
 import FailedJobRepository from "../../src/core/queue/failedJobRepository";
-import { runQueueJob } from "../../src/core/queue/jobRunner";
+import FailedJobService from "../../src/core/queue/failedJobService";
 import { jobRegistry } from "../../src/core/queue/jobRegistry";
+import { runQueueJob } from "../../src/core/queue/jobRunner";
 
 beforeAll(async () => {
   const { freshDatabase } = await import("../../src/db/migrations/runner");

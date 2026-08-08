@@ -38,7 +38,10 @@ function root(pathname: string): string {
   return `${baseUrl}${pathname}`;
 }
 
-async function getJson<T>(pathname: string, init?: RequestInit): Promise<{
+async function getJson<T>(
+  pathname: string,
+  init?: RequestInit,
+): Promise<{
   response: Response;
   body: T;
 }> {
@@ -53,12 +56,11 @@ beforeAll(async () => {
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.QUEUE_DRIVER = "sync";
 
-  const [{ freshDatabase }, { createAppDependencies }, { createRoutes }] =
-    await Promise.all([
-      import("../../src/db/migrations/runner"),
-      import("../../src/bootstrap/dependencies"),
-      import("../../src/bootstrap/createRoutes"),
-    ]);
+  const [{ freshDatabase }, { createAppDependencies }, { createRoutes }] = await Promise.all([
+    import("../../src/db/migrations/runner"),
+    import("../../src/bootstrap/dependencies"),
+    import("../../src/bootstrap/createRoutes"),
+  ]);
 
   await freshDatabase({ seed: true });
 
@@ -227,13 +229,18 @@ describe("integration routes with postgres", () => {
         authorization: `Bearer ${TEST_MEMBER_API_TOKEN}`,
       },
     });
-    expect(memberDeleteResponse.status).toBe(204);
+    expect(memberDeleteResponse.status).toBe(403);
+
+    const adminDeleteResponse = await fetch(api(`/projects/${created.id}`), {
+      method: "DELETE",
+      headers: adminHeaders(),
+    });
+    expect(adminDeleteResponse.status).toBe(204);
   });
 
   test("GET /organizations returns paginated seeded organizations", async () => {
-    const { response, body } = await getJson<
-      PaginatedBody<{ id: number; slug: string; name: string }>
-    >("/organizations");
+    const { response, body } =
+      await getJson<PaginatedBody<{ id: number; slug: string; name: string }>>("/organizations");
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
@@ -253,9 +260,9 @@ describe("integration routes with postgres", () => {
   });
 
   test("GET /organizations supports page and per_page query params", async () => {
-    const { response, body } = await getJson<
-      PaginatedBody<{ id: number; slug: string }>
-    >("/organizations?per_page=1&page=2");
+    const { response, body } = await getJson<PaginatedBody<{ id: number; slug: string }>>(
+      "/organizations?per_page=1&page=2",
+    );
 
     expect(response.status).toBe(200);
     expect(body.data).toHaveLength(1);
@@ -268,9 +275,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("GET /organizations returns 400 for invalid query params", async () => {
-    const { response, body } = await getJson<{ error: string }>(
-      "/organizations?per_page=0",
-    );
+    const { response, body } = await getJson<{ error: string }>("/organizations?per_page=0");
 
     expect(response.status).toBe(400);
     expect(body).toEqual({
@@ -279,9 +284,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("GET /organizations/:id returns 404 for missing rows", async () => {
-    const { response, body } = await getJson<{ error: string }>(
-      "/organizations/9999",
-    );
+    const { response, body } = await getJson<{ error: string }>("/organizations/9999");
 
     expect(response.status).toBe(404);
     expect(body).toEqual({
@@ -403,9 +406,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("GET /tasks returns paginated seeded tasks", async () => {
-    const { response, body } = await getJson<
-      PaginatedBody<{ title: string }>
-    >("/tasks");
+    const { response, body } = await getJson<PaginatedBody<{ title: string }>>("/tasks");
 
     expect(response.status).toBe(200);
     expect(body.data.length).toBeGreaterThanOrEqual(4);
@@ -438,9 +439,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("GET /tasks/:id/comments returns paginated comments for a task", async () => {
-    const { response, body } = await getJson<PaginatedBody<{ body: string }>>(
-      "/tasks/1/comments",
-    );
+    const { response, body } = await getJson<PaginatedBody<{ body: string }>>("/tasks/1/comments");
 
     expect(response.status).toBe(200);
     expect(body.data.length).toBeGreaterThanOrEqual(2);
@@ -509,29 +508,20 @@ describe("integration routes with postgres", () => {
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { id: number };
 
-    const deleteResponse = await fetch(
-      api(`/organizations/${created.id}`),
-      {
-        method: "DELETE",
-        headers: {
-          authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
-        },
+    const deleteResponse = await fetch(api(`/organizations/${created.id}`), {
+      method: "DELETE",
+      headers: {
+        authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
       },
-    );
+    });
 
     expect(deleteResponse.status).toBe(204);
 
-    const showResponse = await fetch(
-      api(`/organizations/${created.id}`),
-    );
+    const showResponse = await fetch(api(`/organizations/${created.id}`));
     expect(showResponse.status).toBe(404);
 
-    const { body } = await getJson<PaginatedBody<{ slug: string }>>(
-      "/organizations",
-    );
-    expect(body.data.some((organization) => organization.slug === "soft-delete-co")).toBe(
-      false,
-    );
+    const { body } = await getJson<PaginatedBody<{ slug: string }>>("/organizations");
+    expect(body.data.some((organization) => organization.slug === "soft-delete-co")).toBe(false);
   });
 
   test("DELETE /organizations/:id enforces protected organization policy", async () => {
@@ -550,29 +540,23 @@ describe("integration routes with postgres", () => {
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { id: number };
 
-    const guestDeleteResponse = await fetch(
-      api(`/organizations/${created.id}`),
-      { method: "DELETE" },
-    );
+    const guestDeleteResponse = await fetch(api(`/organizations/${created.id}`), {
+      method: "DELETE",
+    });
 
     expect(guestDeleteResponse.status).toBe(401);
 
-    const adminDeleteResponse = await fetch(
-      api(`/organizations/${created.id}`),
-      {
-        method: "DELETE",
-        headers: {
-          "x-authenticated-user-id": "1",
-          "x-authenticated-user-role": "admin",
-        },
+    const adminDeleteResponse = await fetch(api(`/organizations/${created.id}`), {
+      method: "DELETE",
+      headers: {
+        "x-authenticated-user-id": "1",
+        "x-authenticated-user-role": "admin",
       },
-    );
+    });
 
     expect(adminDeleteResponse.status).toBe(204);
 
-    const showResponse = await fetch(
-      api(`/organizations/${created.id}`),
-    );
+    const showResponse = await fetch(api(`/organizations/${created.id}`));
     expect(showResponse.status).toBe(404);
   });
 
@@ -602,34 +586,21 @@ describe("integration routes with postgres", () => {
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { id: number };
 
-    const afterCreate = await getJson<{ organization_count: number }>(
-      "/reports/summary",
-    );
-    expect(afterCreate.body.organization_count).toBe(
-      before.body.organization_count + 1,
-    );
+    const afterCreate = await getJson<{ organization_count: number }>("/reports/summary");
+    expect(afterCreate.body.organization_count).toBe(before.body.organization_count + 1);
 
-    const deleteResponse = await fetch(
-      api(`/organizations/${created.id}`),
-      {
-        method: "DELETE",
-        headers: {
-          authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
-        },
+    const deleteResponse = await fetch(api(`/organizations/${created.id}`), {
+      method: "DELETE",
+      headers: {
+        authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
       },
-    );
+    });
     expect(deleteResponse.status).toBe(204);
 
-    const afterDelete = await getJson<{ organization_count: number }>(
-      "/reports/summary",
-    );
-    expect(afterDelete.body.organization_count).toBe(
-      before.body.organization_count,
-    );
+    const afterDelete = await getJson<{ organization_count: number }>("/reports/summary");
+    expect(afterDelete.body.organization_count).toBe(before.body.organization_count);
 
-    const orgReportResponse = await fetch(
-      api(`/reports/organizations/${created.id}`),
-    );
+    const orgReportResponse = await fetch(api(`/reports/organizations/${created.id}`));
     expect(orgReportResponse.status).toBe(404);
   });
 
@@ -645,6 +616,21 @@ describe("integration routes with postgres", () => {
     };
     expect(body.user_count).toBeGreaterThanOrEqual(2);
     expect(body.organization_count).toBeGreaterThanOrEqual(2);
+  });
+
+  test("GET /search returns results when feature is enabled", async () => {
+    const response = await fetch(api("/search?q=Registry"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: unknown[] };
+    expect(body.data.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("DELETE /users/me returns 401 without credentials", async () => {
+    const response = await fetch(api("/users/me"), {
+      method: "DELETE",
+    });
+
+    expect(response.status).toBe(401);
   });
 
   test("GET /users/me/export returns GDPR-style user export", async () => {
@@ -689,8 +675,146 @@ describe("integration routes with postgres", () => {
       Resources: Array<{ userName: string }>;
     };
     expect(body.totalResults).toBeGreaterThanOrEqual(2);
-    expect(body.Resources.some((user) => user.userName === "admin@workhub.test")).toBe(
-      true,
-    );
+    expect(body.Resources.some((user) => user.userName === "admin@workhub.test")).toBe(true);
+  });
+
+  test("DELETE /users/me anonymizes account and revokes tokens", async () => {
+    const loginResponse = await fetch(api("/auth/login"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "member@workhub.test",
+        password: "password",
+      }),
+    });
+
+    expect(loginResponse.status).toBe(201);
+    const loginBody = (await loginResponse.json()) as {
+      token: string;
+      user: { id: number; email: string };
+    };
+    expect(loginBody.user.email).toBe("member@workhub.test");
+
+    const meResponse = await fetch(api("/auth/me"), {
+      headers: { authorization: `Bearer ${loginBody.token}` },
+    });
+    expect(meResponse.status).toBe(200);
+
+    const deleteResponse = await fetch(api("/users/me"), {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${loginBody.token}` },
+    });
+    expect(deleteResponse.status).toBe(204);
+
+    const revokedMeResponse = await fetch(api("/auth/me"), {
+      headers: { authorization: `Bearer ${loginBody.token}` },
+    });
+    expect(revokedMeResponse.status).toBe(401);
+
+    const seededMemberResponse = await fetch(api("/auth/me"), {
+      headers: { authorization: `Bearer ${TEST_MEMBER_API_TOKEN}` },
+    });
+    expect(seededMemberResponse.status).toBe(401);
+
+    const reloginResponse = await fetch(api("/auth/login"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "member@workhub.test",
+        password: "password",
+      }),
+    });
+    expect(reloginResponse.status).toBe(401);
+
+    const adminResponse = await fetch(api("/auth/me"), {
+      headers: { authorization: `Bearer ${TEST_ADMIN_API_TOKEN}` },
+    });
+    expect(adminResponse.status).toBe(200);
+  });
+});
+
+const DISABLED_FEATURE_FLAGS = {
+  FEATURE_AUDIT_LOG: "false",
+  FEATURE_WEBHOOKS: "false",
+  FEATURE_SEARCH: "false",
+  FEATURE_SCIM: "false",
+  FEATURE_BILLING: "false",
+} as const;
+
+describe("feature flags disable optional routes", () => {
+  let disabledServer: ReturnType<typeof Bun.serve>;
+  let disabledBaseUrl: string;
+  const previousFlagValues: Partial<
+    Record<keyof typeof DISABLED_FEATURE_FLAGS, string | undefined>
+  > = {};
+
+  function disabledApi(pathname: string): string {
+    return `${disabledBaseUrl}/api/v1${pathname}`;
+  }
+
+  beforeAll(async () => {
+    for (const [key, value] of Object.entries(DISABLED_FEATURE_FLAGS)) {
+      const flag = key as keyof typeof DISABLED_FEATURE_FLAGS;
+      previousFlagValues[flag] = process.env[flag];
+      process.env[flag] = value;
+    }
+
+    const { createAppDependencies } = await import("../../src/bootstrap/dependencies");
+    const { createRoutes } = await import("../../src/bootstrap/createRoutes");
+
+    disabledServer = Bun.serve({
+      port: 0,
+      routes: createRoutes(createAppDependencies()),
+    });
+
+    disabledBaseUrl = disabledServer.url.toString().replace(/\/$/, "");
+  });
+
+  afterAll(() => {
+    disabledServer.stop(true);
+
+    for (const flag of Object.keys(DISABLED_FEATURE_FLAGS)) {
+      const key = flag as keyof typeof DISABLED_FEATURE_FLAGS;
+      const previous = previousFlagValues[key];
+
+      if (previous === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous;
+      }
+    }
+  });
+
+  test("GET /search returns 404 when FEATURE_SEARCH=false", async () => {
+    const response = await fetch(`${disabledApi("/search")}?q=registry`);
+    expect(response.status).toBe(404);
+  });
+
+  test("GET /audit-logs returns 404 when FEATURE_AUDIT_LOG=false", async () => {
+    const response = await fetch(disabledApi("/audit-logs"), {
+      headers: { authorization: `Bearer ${TEST_ADMIN_API_TOKEN}` },
+    });
+    expect(response.status).toBe(404);
+  });
+
+  test("GET /webhooks returns 404 when FEATURE_WEBHOOKS=false", async () => {
+    const response = await fetch(disabledApi("/webhooks"), {
+      headers: { authorization: `Bearer ${TEST_ADMIN_API_TOKEN}` },
+    });
+    expect(response.status).toBe(404);
+  });
+
+  test("GET /billing/subscription returns 404 when FEATURE_BILLING=false", async () => {
+    const response = await fetch(disabledApi("/billing/subscription"), {
+      headers: { authorization: `Bearer ${TEST_ADMIN_API_TOKEN}` },
+    });
+    expect(response.status).toBe(404);
+  });
+
+  test("GET /scim/v2/Users returns 404 when FEATURE_SCIM=false", async () => {
+    const response = await fetch(`${disabledBaseUrl}/scim/v2/Users`, {
+      headers: { authorization: `Bearer ${TEST_SCIM_BEARER_TOKEN}` },
+    });
+    expect(response.status).toBe(404);
   });
 });

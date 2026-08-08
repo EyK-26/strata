@@ -1,5 +1,5 @@
-import type { ServiceProvider } from "../contracts";
 import { eventBus } from "../../core/events";
+import type { ServiceProvider } from "../contracts";
 
 const CORE_EVENT_BUS_TOKEN = "core.eventBus";
 

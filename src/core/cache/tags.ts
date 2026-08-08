@@ -8,5 +8,5 @@ const CACHE_TAGS = {
 
 type CacheTag = (typeof CACHE_TAGS)[keyof typeof CACHE_TAGS];
 
-export { CACHE_TAGS };
 export type { CacheTag };
+export { CACHE_TAGS };

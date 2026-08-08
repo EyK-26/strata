@@ -3,11 +3,8 @@ import { join } from "node:path";
 import { createAppContext } from "../../bootstrap/context";
 import { createRoutes } from "../../bootstrap/createRoutes";
 import { routeRegistry } from "../../bootstrap/routeRegistry";
-import {
-  generateOpenApiSpec,
-  renderTypeScriptSdk,
-} from "../../core/openapi/generator";
 import { appConfig } from "../../config/app";
+import { generateOpenApiSpec, renderTypeScriptSdk } from "../../core/openapi/generator";
 
 async function sdkGenerateCommand(): Promise<void> {
   const { dependencies } = createAppContext();

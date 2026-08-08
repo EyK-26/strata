@@ -12,13 +12,11 @@ class RouteRegistry {
   }
 
   list(): RegisteredRoute[] {
-    return [...this.routes].sort((left, right) =>
-      left.path.localeCompare(right.path),
-    );
+    return [...this.routes].sort((left, right) => left.path.localeCompare(right.path));
   }
 }
 
 const routeRegistry = new RouteRegistry();
 
-export { RouteRegistry, routeRegistry };
 export type { RegisteredRoute };
+export { RouteRegistry, routeRegistry };

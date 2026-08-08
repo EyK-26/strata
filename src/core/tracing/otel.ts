@@ -65,5 +65,5 @@ async function exportOtelSpan(span: OtelSpan): Promise<void> {
   });
 }
 
-export { createSpan, exportOtelSpan };
 export type { OtelSpan };
+export { createSpan, exportOtelSpan };

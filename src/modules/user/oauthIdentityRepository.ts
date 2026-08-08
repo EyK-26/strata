@@ -1,6 +1,5 @@
-import { BaseRepository } from "../../core/database";
+import { BaseRepository, defineTable } from "../../core/database";
 import type { QueryWhere } from "../../core/database/types";
-import { defineTable } from "../../core/database";
 import type { OAuthIdentityRecord } from "./types";
 
 const oauthIdentityTable = defineTable<OAuthIdentityRecord, "id">({

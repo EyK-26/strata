@@ -11,9 +11,7 @@ async function loadDiscoveredModules(): Promise<AppModule[]> {
 
   const modules = await Promise.all(
     moduleNames.map(async (moduleName) => {
-      const moduleUrl = pathToFileURL(
-        join(modulesDirectory, moduleName, "index.ts"),
-      ).href;
+      const moduleUrl = pathToFileURL(join(modulesDirectory, moduleName, "index.ts")).href;
       const loaded = (await import(moduleUrl)) as { default: AppModule };
       return loaded.default;
     }),

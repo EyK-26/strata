@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ForbiddenError } from "../../src/core/errors/http";
 import { Policy, PolicyGate } from "../../src/core/auth/policy";
+import { ForbiddenError } from "../../src/core/errors/http";
 
 class OrganizationRecord {
   constructor(
@@ -14,10 +14,7 @@ class OrganizationPolicy extends Policy {
     return true;
   }
 
-  override delete(
-    _user: unknown,
-    organization: OrganizationRecord,
-  ): boolean {
+  override delete(_user: unknown, organization: OrganizationRecord): boolean {
     return organization.slug !== "protected-org";
   }
 }
@@ -29,12 +26,7 @@ describe("PolicyGate", () => {
 
     expect(gate.allows("organization", "create")).toBe(true);
     expect(
-      gate.allows(
-        "organization",
-        "delete",
-        undefined,
-        new OrganizationRecord(1, "acme-labs"),
-      ),
+      gate.allows("organization", "delete", undefined, new OrganizationRecord(1, "acme-labs")),
     ).toBe(true);
   });
 
@@ -43,12 +35,7 @@ describe("PolicyGate", () => {
     gate.register("organization", new OrganizationPolicy());
 
     expect(
-      gate.allows(
-        "organization",
-        "delete",
-        undefined,
-        new OrganizationRecord(2, "protected-org"),
-      ),
+      gate.allows("organization", "delete", undefined, new OrganizationRecord(2, "protected-org")),
     ).toBe(false);
   });
 

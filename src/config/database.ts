@@ -20,5 +20,5 @@ const databaseConfig: DatabaseConfig = {
   connectionTimeoutSeconds: readInteger("DB_CONNECTION_TIMEOUT", 10),
 };
 
-export { databaseConfig };
 export type { DatabaseConfig };
+export { databaseConfig };

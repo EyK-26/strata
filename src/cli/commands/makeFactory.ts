@@ -1,11 +1,5 @@
 import { join } from "node:path";
-import {
-  ensureDirectory,
-  moduleDirectory,
-  toCamelCase,
-  toKebabCase,
-  toPascalCase,
-} from "./utils";
+import { ensureDirectory, moduleDirectory, toCamelCase, toKebabCase, toPascalCase } from "./utils";
 
 async function makeFactoryCommand(name?: string): Promise<void> {
   if (!name) {

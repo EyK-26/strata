@@ -21,5 +21,5 @@ const corsConfig: CorsConfig = {
   maxAgeSeconds: 86_400,
 };
 
-export { corsConfig };
 export type { CorsConfig };
+export { corsConfig };

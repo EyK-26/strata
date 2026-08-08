@@ -19,5 +19,5 @@ function createDatabaseConnection(config: DatabaseConfig): DatabaseConnection {
   });
 }
 
-export { createDatabaseConnection };
 export type { DatabaseConnection };
+export { createDatabaseConnection };

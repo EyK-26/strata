@@ -21,9 +21,7 @@ function resolveThrottleIdentity(request: Request): string {
     return `user:${user.id}`;
   }
 
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
-  );
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 }
 
 function createThrottleMiddleware(options: ThrottleOptions): Middleware {
@@ -60,5 +58,5 @@ function createThrottleMiddleware(options: ThrottleOptions): Middleware {
   };
 }
 
-export { createThrottleMiddleware, resolveThrottleIdentity };
 export type { ThrottleOptions };
+export { createThrottleMiddleware, resolveThrottleIdentity };

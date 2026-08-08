@@ -1,11 +1,11 @@
-import { NotFoundError } from "../../core/errors/http";
-import type { QueryWhere } from "../../core/database/types";
-import { currentOrganizationIds } from "../../core/auth/membershipContext";
 import { isGlobalAdmin } from "../../core/auth/accessControl";
 import { currentAuthUser } from "../../core/auth/authContext";
-import { currentTenantId } from "../../core/tenant/tenantContext";
+import { currentOrganizationIds } from "../../core/auth/membershipContext";
 import { resolveMembershipService } from "../../core/auth/membershipService";
-import OrganizationRepository from "./repository";
+import type { QueryWhere } from "../../core/database/types";
+import { NotFoundError } from "../../core/errors/http";
+import { currentTenantId } from "../../core/tenant/tenantContext";
+import type OrganizationRepository from "./repository";
 import type { OrganizationRecord } from "./types";
 
 interface CreateOrganizationInput {
@@ -37,7 +37,9 @@ class OrganizationService {
         });
       }
 
-      Object.assign(where, { id: organizationIds as unknown as QueryWhere<OrganizationRecord>["id"] });
+      Object.assign(where, {
+        id: organizationIds as unknown as QueryWhere<OrganizationRecord>["id"],
+      });
     }
 
     return this.repository.paginate({
@@ -47,8 +49,9 @@ class OrganizationService {
   }
 
   findByIdOrThrow(id: number): Promise<OrganizationRecord> {
-    return this.repository.findByIdOrThrow(id, (organizationId) =>
-      new NotFoundError(`Organization ${organizationId} not found.`),
+    return this.repository.findByIdOrThrow(
+      id,
+      (organizationId) => new NotFoundError(`Organization ${organizationId} not found.`),
     );
   }
 
@@ -68,20 +71,14 @@ class OrganizationService {
       const userId = typeof user.id === "number" ? user.id : Number(user.id);
 
       if (Number.isInteger(userId) && userId > 0) {
-        await resolveMembershipService().addOwnerOnOrganizationCreate(
-          organization.id,
-          userId,
-        );
+        await resolveMembershipService().addOwnerOnOrganizationCreate(organization.id, userId);
       }
     }
 
     return organization;
   }
 
-  async update(
-    id: number,
-    input: UpdateOrganizationInput,
-  ): Promise<OrganizationRecord> {
+  async update(id: number, input: UpdateOrganizationInput): Promise<OrganizationRecord> {
     const changes: UpdateOrganizationInput & { updated_at: Date } = {
       updated_at: new Date(),
     };

@@ -1,4 +1,5 @@
 import { BaseRepository } from "../../core/database";
+import type { QueryWhere } from "../../core/database/types";
 import OrganizationRepository from "../organization/repository";
 import { projectBelongsToOrganization } from "./relationships";
 import { projectTable } from "./table";
@@ -40,6 +41,14 @@ class ProjectRepository extends BaseRepository<ProjectRecord, "id"> {
           : {}),
       };
     });
+  }
+
+  async findIdsByOrganizationIds(organizationIds: number | number[]): Promise<number[]> {
+    const records = await this.findWhere({
+      organization_id: organizationIds,
+    } as QueryWhere<ProjectRecord>);
+
+    return records.map((project) => project.id);
   }
 }
 

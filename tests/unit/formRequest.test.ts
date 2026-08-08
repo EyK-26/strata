@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-  FormRequest,
-  QueryFormRequest,
-} from "../../src/core/http/formRequest";
 import { BadRequestError, ForbiddenError } from "../../src/core/errors/http";
+import { FormRequest, QueryFormRequest } from "../../src/core/http/formRequest";
 
 class CreateWidgetRequest extends FormRequest<{ name: string }> {
   constructor(private readonly allowed: boolean = true) {
@@ -31,9 +28,7 @@ class CreateWidgetRequest extends FormRequest<{ name: string }> {
 
 class WidgetListQueryRequest extends QueryFormRequest<{ page: number }> {
   protected parseQuery(request?: Request): { page: number } {
-    const value = new URL(request?.url ?? "http://example.test/widgets").searchParams.get(
-      "page",
-    );
+    const value = new URL(request?.url ?? "http://example.test/widgets").searchParams.get("page");
 
     if (value === null) {
       return { page: 1 };
@@ -42,9 +37,7 @@ class WidgetListQueryRequest extends QueryFormRequest<{ page: number }> {
     const page = Number.parseInt(value, 10);
 
     if (!Number.isInteger(page) || page <= 0) {
-      throw new BadRequestError(
-        'Invalid query parameter "page". Expected a positive integer.',
-      );
+      throw new BadRequestError('Invalid query parameter "page". Expected a positive integer.');
     }
 
     return { page };
@@ -71,9 +64,7 @@ describe("FormRequest", () => {
       body: JSON.stringify({ name: "Relay" }),
     });
 
-    await expect(
-      new CreateWidgetRequest(false).validate(request),
-    ).rejects.toThrow(ForbiddenError);
+    await expect(new CreateWidgetRequest(false).validate(request)).rejects.toThrow(ForbiddenError);
   });
 });
 

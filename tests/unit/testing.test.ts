@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { createTestApp } from "../../src/testing/createTestApp";
 import { appConfig } from "../../src/config/app";
+import { createTestApp } from "../../src/testing/createTestApp";
 
 describe("createTestApp", () => {
   const apps: Array<Awaited<ReturnType<typeof createTestApp>>> = [];

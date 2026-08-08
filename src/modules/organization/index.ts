@@ -1,4 +1,4 @@
-import { type AppModule } from "../../bootstrap/contracts";
+import type { AppModule } from "../../bootstrap/contracts";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import OrganizationController from "./controller";
 import organizationProvider, {
@@ -21,8 +21,7 @@ const organizationModule: AppModule = {
 };
 
 export default organizationModule;
-export { organizationProvider, organizationRepositoryToken, organizationServiceToken };
-export { OrganizationController };
+export { default as OrganizationRepository } from "./repository";
 export {
   parseCreateOrganizationBody,
   parseOrganizationIdParams,
@@ -34,7 +33,12 @@ export {
   toOrganizationResourceCollection,
 } from "./resources";
 export { createOrganizationRoutes } from "./routes";
-export { default as OrganizationRepository } from "./repository";
 export { default as OrganizationService } from "./service";
 export { organizationTable } from "./table";
 export type { OrganizationRecord } from "./types";
+export {
+  OrganizationController,
+  organizationProvider,
+  organizationRepositoryToken,
+  organizationServiceToken,
+};

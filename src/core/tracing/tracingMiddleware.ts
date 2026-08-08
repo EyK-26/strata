@@ -4,10 +4,7 @@ import { runWithTraceContext } from "./traceContext";
 
 function createTracingMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    const traceId = (request.headers.get("x-trace-id") ?? crypto.randomUUID()).replace(
-      /-/g,
-      "",
-    );
+    const traceId = (request.headers.get("x-trace-id") ?? crypto.randomUUID()).replace(/-/g, "");
     const spanId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const startedAt = performance.now();
     const path = new URL(request.url).pathname;

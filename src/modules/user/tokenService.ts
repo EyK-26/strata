@@ -2,14 +2,9 @@ import { randomBytes } from "node:crypto";
 import type { AuthUser } from "../../core/auth/authContext";
 import { hashApiToken } from "../../core/auth/tokenHash";
 import { ForbiddenError, NotFoundError } from "../../core/errors/http";
-import ApiTokenRepository from "./apiTokenRepository";
-import UserRepository from "./repository";
-import type {
-  ApiTokenRecord,
-  ApiTokenResource,
-  CreatedApiToken,
-  UserRecord,
-} from "./types";
+import type ApiTokenRepository from "./apiTokenRepository";
+import type UserRepository from "./repository";
+import type { ApiTokenRecord, ApiTokenResource, CreatedApiToken, UserRecord } from "./types";
 
 interface CreateTokenInput {
   name: string;
@@ -93,13 +88,8 @@ class TokenService {
     };
   }
 
-  async createToken(
-    userId: number,
-    input: CreateTokenInput,
-  ): Promise<CreatedApiToken> {
-    await this.users.findByIdOrThrow(userId, (id) =>
-      new NotFoundError(`User ${id} not found.`),
-    );
+  async createToken(userId: number, input: CreateTokenInput): Promise<CreatedApiToken> {
+    await this.users.findByIdOrThrow(userId, (id) => new NotFoundError(`User ${id} not found.`));
 
     const plainTextToken = generatePlainTextToken();
     const record = await this.tokens.create({
@@ -157,9 +147,29 @@ class TokenService {
   }
 
   findByIdOrThrow(id: number): Promise<UserRecord> {
-    return this.users.findByIdOrThrow(id, (userId) =>
-      new NotFoundError(`User ${userId} not found.`),
+    return this.users.findByIdOrThrow(
+      id,
+      (userId) => new NotFoundError(`User ${userId} not found.`),
     );
+  }
+
+  async deleteUserAccount(userId: number): Promise<void> {
+    await this.users.findByIdOrThrow(userId, (id) => new NotFoundError(`User ${id} not found.`));
+
+    const tokens = await this.tokens.findAll({
+      where: { user_id: userId },
+    });
+
+    for (const token of tokens) {
+      await this.tokens.deleteById(token.id);
+    }
+
+    await this.users.updateByIdOrThrow(userId, {
+      name: "Deleted User",
+      email: `deleted-${userId}@anonymous.local`,
+      password_hash: null,
+      updated_at: new Date(),
+    });
   }
 }
 

@@ -1,10 +1,7 @@
-import type { Seeder } from "./types";
-import { hashApiToken } from "../../core/auth/tokenHash";
 import { hashPassword } from "../../core/auth/password";
-import {
-  TEST_ADMIN_API_TOKEN,
-  TEST_MEMBER_API_TOKEN,
-} from "../../domain/auth";
+import { hashApiToken } from "../../core/auth/tokenHash";
+import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../../domain/auth";
+import type { Seeder } from "./types";
 
 const seeder: Seeder = {
   name: "0002_seed_users",
@@ -35,7 +32,7 @@ const seeder: Seeder = {
       INSERT INTO api_token (user_id, name, token_hash, abilities)
       VALUES
         (1, 'admin', ${hashApiToken(adminToken)}, '["*"]'::jsonb),
-        (2, 'member', ${hashApiToken(memberToken)}, '["*"]'::jsonb)
+        (2, 'member', ${hashApiToken(memberToken)}, '["organizations:read","projects:read","tasks:read"]'::jsonb)
       ON CONFLICT (token_hash) DO NOTHING
     `;
 

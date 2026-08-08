@@ -6,9 +6,8 @@ describe("resolveThrottleIdentity", () => {
   test("prefers token id for bearer-authenticated requests", () => {
     const request = new Request("http://example.test/api/v1/projects");
 
-    const identity = runWithAuthUser(
-      { id: 1, role: "admin", tokenId: 42 },
-      () => resolveThrottleIdentity(request),
+    const identity = runWithAuthUser({ id: 1, role: "admin", tokenId: 42 }, () =>
+      resolveThrottleIdentity(request),
     );
 
     expect(identity).toBe("token:42");

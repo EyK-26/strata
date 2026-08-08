@@ -45,10 +45,4 @@ interface CreatedApiToken {
   plainTextToken: string;
 }
 
-export type {
-  ApiTokenRecord,
-  ApiTokenResource,
-  CreatedApiToken,
-  OAuthIdentityRecord,
-  UserRecord,
-};
+export type { ApiTokenRecord, ApiTokenResource, CreatedApiToken, OAuthIdentityRecord, UserRecord };

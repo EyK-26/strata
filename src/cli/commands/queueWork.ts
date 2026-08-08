@@ -1,13 +1,13 @@
 import { createAppContext } from "../../bootstrap/context";
-import { registerDefaultJobs } from "../../core/queue/createAppQueue";
-import {
-  createQueueWorker,
-  createFailedJobService,
-} from "../../core/queue/createAppQueue";
 import {
   installGracefulShutdownSignals,
   registerShutdownHandler,
 } from "../../core/lifecycle/gracefulShutdown";
+import {
+  createFailedJobService,
+  createQueueWorker,
+  registerDefaultJobs,
+} from "../../core/queue/createAppQueue";
 import { closeDatabase } from "../../db/connection";
 
 async function queueWorkCommand(): Promise<void> {
