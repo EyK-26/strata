@@ -10,6 +10,19 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
     "/auth/me": kernel.wrapAuthenticated(
       controller.me as unknown as RouteHandler,
     ),
+    "/auth/tokens": {
+      GET: kernel.wrapAuthenticated(
+        controller.listTokens as unknown as RouteHandler,
+      ),
+      POST: kernel.wrapAuthenticated(
+        controller.storeToken as unknown as RouteHandler,
+      ),
+    },
+    "/auth/tokens/:id": {
+      DELETE: kernel.wrapAuthenticated(
+        controller.destroyToken as unknown as RouteHandler,
+      ),
+    },
   };
 }
 

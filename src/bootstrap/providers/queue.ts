@@ -4,7 +4,11 @@ import {
   DEFAULT_QUEUE_DRIVER,
   REDIS_URL_CONFIG_KEY,
 } from "../config";
-import { createAppQueue } from "../../core/queue/createAppQueue";
+import {
+  createAppQueue,
+  createFailedJobService,
+  FAILED_JOB_SERVICE_TOKEN,
+} from "../../core/queue/createAppQueue";
 
 const queueProvider: ServiceProvider = {
   name: "core.queue",
@@ -18,11 +22,14 @@ const queueProvider: ServiceProvider = {
         : DEFAULT_QUEUE_DRIVER;
 
     config.set("queue.driver", driver);
+    const failedJobs = createFailedJobService();
+    container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
     container.set(
       CORE_QUEUE_TOKEN,
       createAppQueue(
         driver,
         config.get<string>(REDIS_URL_CONFIG_KEY) ?? process.env.REDIS_URL,
+        failedJobs,
       ),
     );
   },

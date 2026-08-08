@@ -1,6 +1,6 @@
 import { createAppContext } from "../../bootstrap/context";
 import { registerDefaultJobs } from "../../core/queue/createAppQueue";
-import { QueueWorker } from "../../core/queue/redisQueue";
+import { createQueueWorker, createFailedJobService } from "../../core/queue/createAppQueue";
 
 async function queueWorkCommand(): Promise<void> {
   const redisUrl = process.env.REDIS_URL;
@@ -13,7 +13,7 @@ async function queueWorkCommand(): Promise<void> {
   registerDefaultJobs();
 
   console.log("[queue:work] Listening for jobs on Redis...");
-  const worker = new QueueWorker(redisUrl);
+  const worker = createQueueWorker(redisUrl, createFailedJobService());
   await worker.run();
 }
 

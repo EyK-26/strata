@@ -1,14 +1,23 @@
 import { helpCommand } from "./commands/help";
+import { makeFactoryCommand } from "./commands/makeFactory";
 import { makeMigrationCommand } from "./commands/makeMigration";
 import { makeModuleCommand } from "./commands/makeModule";
 import { makeJobCommand } from "./commands/makeJob";
 import { makeListenerCommand } from "./commands/makeListener";
 import { makePolicyCommand } from "./commands/makePolicy";
+import { makeRequestCommand } from "./commands/makeRequest";
 import { migrateCommand } from "./commands/migrate";
 import { migrateFreshCommand } from "./commands/migrateFresh";
 import { migrateStatusCommand } from "./commands/migrateStatus";
+import {
+  queueFailedCommand,
+  queueFlushFailedCommand,
+  queueRetryCommand,
+} from "./commands/queueFailed";
 import { queueWorkCommand } from "./commands/queueWork";
 import { rollbackCommand } from "./commands/rollback";
+import { routeListCommand } from "./commands/routeList";
+import { scheduleRunCommand } from "./commands/scheduleRun";
 import { seedCommand } from "./commands/seed";
 
 const [command = "help", ...args] = process.argv.slice(2);
@@ -28,8 +37,16 @@ const commands: Record<
   "make:module": (name?: string) => makeModuleCommand(name),
   "make:policy": (moduleName?: string) => makePolicyCommand(moduleName),
   "make:job": (jobName?: string) => makeJobCommand(jobName),
-  "make:listener": (...args: string[]) => makeListenerCommand(args[0], args[1]),
+  "make:listener": (...commandArgs: string[]) =>
+    makeListenerCommand(commandArgs[0], commandArgs[1]),
+  "make:request": (moduleName?: string) => makeRequestCommand(moduleName),
+  "make:factory": (name?: string) => makeFactoryCommand(name),
   "queue:work": () => queueWorkCommand(),
+  "queue:failed": () => queueFailedCommand(),
+  "queue:retry": (id?: string) => queueRetryCommand(id),
+  "queue:flush-failed": () => queueFlushFailedCommand(),
+  "route:list": () => routeListCommand(),
+  "schedule:run": () => scheduleRunCommand(),
 };
 
 const handler = commands[command];

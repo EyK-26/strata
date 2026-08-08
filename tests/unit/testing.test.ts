@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { createTestApp } from "../../src/testing/createTestApp";
+import { appConfig } from "../../src/config/app";
 
 describe("createTestApp", () => {
   const apps: Array<Awaited<ReturnType<typeof createTestApp>>> = [];
@@ -14,7 +15,7 @@ describe("createTestApp", () => {
     const app = await createTestApp({ fresh: true });
     apps.push(app);
 
-    const response = await fetch(`${app.baseUrl}/reports/summary`);
+    const response = await fetch(`${app.baseUrl}${appConfig.apiPrefix}/reports/summary`);
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { organization_count: number };
@@ -26,6 +27,6 @@ describe("createTestApp", () => {
     apps.push(app);
 
     expect(app.dependencies.container.resolve("organization.service")).toBeDefined();
-    expect(app.routes["/reports/summary"]).toBeDefined();
+    expect(app.routes[`${appConfig.apiPrefix}/reports/summary`]).toBeDefined();
   });
 });

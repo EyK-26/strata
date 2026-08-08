@@ -1,4 +1,7 @@
 abstract class Job<TPayload extends object = object> {
+  readonly maxAttempts?: number;
+  readonly backoffMs?: number;
+
   abstract handle(payload: TPayload): Promise<void>;
 }
 

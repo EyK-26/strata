@@ -46,8 +46,36 @@ const appEnvSchema: EnvSchema = defineEnvSchema({
     default: "true",
     pattern: /^(true|false|0|1)$/,
   },
-  API_TOKEN: {
+  APP_ENV: {
+    default: "local",
+  },
+  APP_DEBUG: {
+    default: "true",
+  },
+  APP_URL: {
+    default: "http://localhost:3000",
+  },
+  API_PREFIX: {
+    default: "/api/v1",
+  },
+  CORS_ALLOWED_ORIGINS: {
+    default: "*",
+  },
+  QUEUE_MAX_ATTEMPTS: {
+    integer: true,
+    minimum: 1,
+    default: "3",
+  },
+  QUEUE_BACKOFF_MS: {
+    integer: true,
+    minimum: 0,
+    default: "1000",
+  },
+  ADMIN_API_TOKEN: {
     default: DEFAULT_API_TOKEN,
+  },
+  MEMBER_API_TOKEN: {
+    default: "",
   },
 });
 

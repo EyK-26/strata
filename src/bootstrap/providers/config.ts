@@ -14,6 +14,9 @@ import {
 import { appConfigKeys, appEnvSchema } from "../env";
 import { validateEnv } from "../../core/config/envSchema";
 import type { ServiceProvider } from "../contracts";
+import { appConfig } from "../../config/app";
+import { authConfig } from "../../config/auth";
+import { queueConfig } from "../../config/queue";
 
 function parseInteger(value: string, envName: string, minimum: number): number {
   const parsed = Number.parseInt(value, 10);
@@ -58,6 +61,14 @@ const configProvider: ServiceProvider = {
       env.CACHE_DRIVER ?? DEFAULT_CACHE_DRIVER,
     );
     config.set(REDIS_URL_CONFIG_KEY, env.REDIS_URL ?? "");
+    config.set("app.env", appConfig.env);
+    config.set("app.debug", appConfig.debug);
+    config.set("app.url", appConfig.url);
+    config.set("app.apiPrefix", appConfig.apiPrefix);
+    config.set("auth.allowDevHeaders", authConfig.allowDevHeaders);
+    config.set("queue.driver", queueConfig.driver);
+    config.set("queue.maxAttempts", queueConfig.maxAttempts);
+    config.set("queue.backoffMs", queueConfig.backoffMs);
   },
 };
 

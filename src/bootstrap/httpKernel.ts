@@ -17,6 +17,8 @@ import {
   type RouteHandler,
 } from "../core/http/middleware";
 import { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware";
+import { createCorsMiddleware } from "../core/http/corsMiddleware";
+import { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware";
 import type { AuthManager } from "../core/auth/guard";
 import type { Policy, PolicyGate } from "../core/auth/policy";
 
@@ -29,6 +31,8 @@ class HttpKernel {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
     return [
+      createCorsMiddleware(),
+      createSecurityHeadersMiddleware(),
       createRequestLoggingMiddleware(),
       requestIdMiddleware,
       createAuthMiddleware(auth),

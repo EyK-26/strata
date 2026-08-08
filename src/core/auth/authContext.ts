@@ -3,6 +3,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 type AuthUser = {
   id: number | string;
   role?: string;
+  abilities?: string[];
+  tokenId?: number;
 };
 
 const authContext = new AsyncLocalStorage<AuthUser | null>();

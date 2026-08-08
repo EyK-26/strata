@@ -1,4 +1,5 @@
 import { RedisClient } from "bun";
+import { currentAuthUser } from "../auth/authContext";
 import type { Middleware } from "./middleware";
 
 interface ThrottleOptions {
@@ -8,16 +9,30 @@ interface ThrottleOptions {
   keyPrefix?: string;
 }
 
+function resolveThrottleIdentity(request: Request): string {
+  const user = currentAuthUser();
+
+  if (user?.tokenId !== undefined) {
+    return `token:${user.tokenId}`;
+  }
+
+  if (user) {
+    return `user:${user.id}`;
+  }
+
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
+  );
+}
+
 function createThrottleMiddleware(options: ThrottleOptions): Middleware {
   const client = new RedisClient(options.redisUrl);
   const prefix = options.keyPrefix ?? "workhub:throttle:";
 
   return async (request: Request, next: () => Promise<Response>) => {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      "unknown";
+    const identity = resolveThrottleIdentity(request);
     const path = new URL(request.url).pathname;
-    const throttleKey = `${prefix}${ip}:${path}`;
+    const throttleKey = `${prefix}${identity}:${path}`;
 
     const attempts = Number(await client.incr(throttleKey));
 
@@ -41,5 +56,5 @@ function createThrottleMiddleware(options: ThrottleOptions): Middleware {
   };
 }
 
-export { createThrottleMiddleware };
+export { createThrottleMiddleware, resolveThrottleIdentity };
 export type { ThrottleOptions };

@@ -7,6 +7,8 @@ import {
   resolveApplicationQueue,
 } from "../../bootstrap/applicationRegistry";
 import { eventBus } from "../events";
+import { mailer } from "../mail/mailer";
+import { storage } from "../storage/storage";
 
 function cache() {
   return resolveApplicationCache();
@@ -36,4 +38,12 @@ function log() {
   return resolveApplicationLogger();
 }
 
-export { auth, cache, config, events, log, policyGate, queue };
+function mail() {
+  return mailer();
+}
+
+function storageFacade() {
+  return storage();
+}
+
+export { auth, cache, config, events, log, mail, policyGate, queue, storageFacade as storage };

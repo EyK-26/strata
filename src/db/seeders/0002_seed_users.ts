@@ -26,10 +26,10 @@ const seeder: Seeder = {
     const memberToken = process.env.MEMBER_API_TOKEN ?? TEST_MEMBER_API_TOKEN;
 
     await db`
-      INSERT INTO api_token (user_id, name, token_hash)
+      INSERT INTO api_token (user_id, name, token_hash, abilities)
       VALUES
-        (1, 'admin', ${hashApiToken(adminToken)}),
-        (2, 'member', ${hashApiToken(memberToken)})
+        (1, 'admin', ${hashApiToken(adminToken)}, '["*"]'::jsonb),
+        (2, 'member', ${hashApiToken(memberToken)}, '["*"]'::jsonb)
       ON CONFLICT (token_hash) DO NOTHING
     `;
   },

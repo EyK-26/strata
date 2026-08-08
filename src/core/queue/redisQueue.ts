@@ -1,13 +1,10 @@
 import { RedisClient } from "bun";
 import { Job, type Queue } from "./index";
 import { jobRegistry } from "./jobRegistry";
+import FailedJobService from "./failedJobService";
+import { runQueueJob, type QueueJobEnvelope } from "./jobRunner";
 
 const QUEUE_LIST_KEY = "workhub:queue:default";
-
-interface SerializedQueueJob {
-  name: string;
-  payload: Record<string, unknown>;
-}
 
 class RedisQueue implements Queue {
   private readonly client: RedisClient;
@@ -26,9 +23,10 @@ class RedisQueue implements Queue {
       throw new Error("Job is not registered with the queue worker registry.");
     }
 
-    const envelope: SerializedQueueJob = {
+    const envelope: QueueJobEnvelope = {
       name,
       payload: payload as Record<string, unknown>,
+      attempts: 0,
     };
 
     await this.client.lpush(QUEUE_LIST_KEY, JSON.stringify(envelope));
@@ -38,6 +36,7 @@ class RedisQueue implements Queue {
 class QueueWorker {
   constructor(
     private readonly redisUrl: string,
+    private readonly failedJobs: FailedJobService,
     private readonly timeoutSeconds = 5,
   ) {}
 
@@ -50,15 +49,14 @@ class QueueWorker {
     }
 
     const [, rawPayload] = result;
-    const envelope = JSON.parse(rawPayload) as SerializedQueueJob;
-    const job = jobRegistry.create(envelope.name);
+    const envelope = JSON.parse(rawPayload) as QueueJobEnvelope;
 
-    if (!job) {
-      console.error(`[QueueWorker] Unknown job "${envelope.name}".`);
-      return true;
+    try {
+      await runQueueJob(envelope, this.failedJobs);
+    } catch (error) {
+      console.error("[QueueWorker] Job failed:", error);
     }
 
-    await job.handle(envelope.payload);
     return true;
   }
 
@@ -70,4 +68,4 @@ class QueueWorker {
 }
 
 export { QUEUE_LIST_KEY, QueueWorker, RedisQueue };
-export type { SerializedQueueJob };
+export type { QueueJobEnvelope };

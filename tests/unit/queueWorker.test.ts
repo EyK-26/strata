@@ -1,37 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { Job } from "../../src/core/queue";
 import { jobRegistry } from "../../src/core/queue/jobRegistry";
-import { registerDefaultJobs } from "../../src/core/queue/createAppQueue";
-import { QUEUE_LIST_KEY, QueueWorker, RedisQueue } from "../../src/core/queue/redisQueue";
-import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import {
-  ConfigStore,
-  ServiceContainer,
-  type AppDependencies,
-} from "../../src/bootstrap/contracts";
-import CacheRepository from "../../src/core/cache/repository";
-import SimpleCache from "../../src/core/cache/simpleCache";
-import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
+  createQueueWorker,
+  createFailedJobService,
+  registerDefaultJobs,
+} from "../../src/core/queue/createAppQueue";
+import {
+  QUEUE_LIST_KEY,
+  RedisQueue,
+} from "../../src/core/queue/redisQueue";
 import { RedisClient } from "bun";
 
 interface EchoPayload {
   message: string;
-}
-
-function bootstrapQueueContext(): AppDependencies {
-  const container = new ServiceContainer();
-  const cache = new CacheRepository(
-    new SimpleCacheStore(new SimpleCache(60_000, 20)),
-  );
-  const dependencies = { container, cache };
-
-  setActiveApplicationContext({
-    container,
-    config: new ConfigStore(),
-    dependencies,
-  });
-
-  return dependencies;
 }
 
 describe("QueueWorker", () => {
@@ -43,7 +25,6 @@ describe("QueueWorker", () => {
       return;
     }
 
-    bootstrapQueueContext();
     registerDefaultJobs();
 
     const messages: string[] = [];
@@ -58,7 +39,7 @@ describe("QueueWorker", () => {
     jobRegistry.register("test.echo", () => echoJob);
     jobRegistry.track("test.echo", echoJob);
     const queue = new RedisQueue(redisUrl);
-    const worker = new QueueWorker(redisUrl, 1);
+    const worker = createQueueWorker(redisUrl, createFailedJobService());
     const client = new RedisClient(redisUrl);
 
     await client.del(QUEUE_LIST_KEY);

@@ -32,7 +32,7 @@ describe("HttpKernel", () => {
     const kernel = createHttpKernel(createKernelDependencies());
     const middleware = kernel.globalMiddleware();
 
-    expect(middleware.length).toBe(3);
+    expect(middleware.length).toBe(5);
   });
 
   test("skips api throttle middleware when config is not registered", () => {

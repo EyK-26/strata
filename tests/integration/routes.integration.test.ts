@@ -25,11 +25,19 @@ interface PaginatedBody<T> {
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
 
-async function getJson<T>(pathname: string): Promise<{
+function api(pathname: string): string {
+  return `${baseUrl}/api/v1${pathname}`;
+}
+
+function root(pathname: string): string {
+  return `${baseUrl}${pathname}`;
+}
+
+async function getJson<T>(pathname: string, init?: RequestInit): Promise<{
   response: Response;
   body: T;
 }> {
-  const response = await fetch(`${baseUrl}${pathname}`);
+  const response = await fetch(api(pathname), init);
   return {
     response,
     body: (await response.json()) as T,
@@ -63,13 +71,13 @@ afterAll(() => {
 
 describe("integration routes with postgres", () => {
   test("GET /health returns ok", async () => {
-    const response = await fetch(`${baseUrl}/health`);
+    const response = await fetch(root("/health"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: "ok" });
   });
 
   test("GET /ready reports database and redis checks", async () => {
-    const response = await fetch(`${baseUrl}/ready`);
+    const response = await fetch(root("/ready"));
     const body = (await response.json()) as {
       status: string;
       checks: Record<string, string>;
@@ -80,7 +88,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("GET /auth/me returns the bearer-authenticated user", async () => {
-    const response = await fetch(`${baseUrl}/auth/me`, {
+    const response = await fetch(api("/auth/me"), {
       headers: {
         authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
       },
@@ -95,12 +103,47 @@ describe("integration routes with postgres", () => {
   });
 
   test("GET /auth/me returns 401 without credentials", async () => {
-    const response = await fetch(`${baseUrl}/auth/me`);
+    const response = await fetch(api("/auth/me"));
     expect(response.status).toBe(401);
   });
 
+  test("POST /auth/tokens creates a revocable bearer token", async () => {
+    const createResponse = await fetch(api("/auth/tokens"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
+      },
+      body: JSON.stringify({
+        name: "integration-token",
+        abilities: ["*"],
+      }),
+    });
+
+    expect(createResponse.status).toBe(201);
+    const body = (await createResponse.json()) as {
+      id: number;
+      token: string;
+      name: string;
+    };
+
+    expect(body.name).toBe("integration-token");
+    expect(body.token.length).toBeGreaterThan(20);
+
+    const meResponse = await fetch(api("/auth/me"), {
+      headers: { authorization: `Bearer ${body.token}` },
+    });
+    expect(meResponse.status).toBe(200);
+
+    const deleteResponse = await fetch(api(`/auth/tokens/${body.id}`), {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${body.token}` },
+    });
+    expect(deleteResponse.status).toBe(204);
+  });
+
   test("DELETE /projects/:id accepts database-backed bearer tokens", async () => {
-    const createResponse = await fetch(`${baseUrl}/projects`, {
+    const createResponse = await fetch(api("/projects"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -113,12 +156,12 @@ describe("integration routes with postgres", () => {
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { id: number };
 
-    const guestDeleteResponse = await fetch(`${baseUrl}/projects/${created.id}`, {
+    const guestDeleteResponse = await fetch(api(`/projects/${created.id}`), {
       method: "DELETE",
     });
     expect(guestDeleteResponse.status).toBe(401);
 
-    const memberDeleteResponse = await fetch(`${baseUrl}/projects/${created.id}`, {
+    const memberDeleteResponse = await fetch(api(`/projects/${created.id}`), {
       method: "DELETE",
       headers: {
         authorization: `Bearer ${TEST_MEMBER_API_TOKEN}`,
@@ -187,7 +230,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("POST /organizations returns 422 for invalid payloads", async () => {
-    const response = await fetch(`${baseUrl}/organizations`, {
+    const response = await fetch(api("/organizations"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -210,7 +253,7 @@ describe("integration routes with postgres", () => {
     const before = await getJson<PaginatedBody<{ slug: string }>>("/organizations");
     const initialTotal = before.body.meta.total;
 
-    const response = await fetch(`${baseUrl}/organizations`, {
+    const response = await fetch(api("/organizations"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -234,7 +277,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("POST /organizations returns 409 for duplicate slugs", async () => {
-    const response = await fetch(`${baseUrl}/organizations`, {
+    const response = await fetch(api("/organizations"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -262,7 +305,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("POST /projects returns 404 when organization does not exist", async () => {
-    const response = await fetch(`${baseUrl}/projects`, {
+    const response = await fetch(api("/projects"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -287,7 +330,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("POST /tasks creates a task for an existing project", async () => {
-    const response = await fetch(`${baseUrl}/tasks`, {
+    const response = await fetch(api("/tasks"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -317,7 +360,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("POST /tasks/:id/comments creates a nested comment", async () => {
-    const response = await fetch(`${baseUrl}/tasks/2/comments`, {
+    const response = await fetch(api("/tasks/2/comments"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -360,7 +403,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("DELETE /organizations/:id soft deletes the record", async () => {
-    const createResponse = await fetch(`${baseUrl}/organizations`, {
+    const createResponse = await fetch(api("/organizations"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -373,14 +416,14 @@ describe("integration routes with postgres", () => {
     const created = (await createResponse.json()) as { id: number };
 
     const deleteResponse = await fetch(
-      `${baseUrl}/organizations/${created.id}`,
+      api(`/organizations/${created.id}`),
       { method: "DELETE" },
     );
 
     expect(deleteResponse.status).toBe(204);
 
     const showResponse = await fetch(
-      `${baseUrl}/organizations/${created.id}`,
+      api(`/organizations/${created.id}`),
     );
     expect(showResponse.status).toBe(404);
 
@@ -393,7 +436,7 @@ describe("integration routes with postgres", () => {
   });
 
   test("DELETE /organizations/:id enforces protected organization policy", async () => {
-    const createResponse = await fetch(`${baseUrl}/organizations`, {
+    const createResponse = await fetch(api("/organizations"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -406,14 +449,14 @@ describe("integration routes with postgres", () => {
     const created = (await createResponse.json()) as { id: number };
 
     const guestDeleteResponse = await fetch(
-      `${baseUrl}/organizations/${created.id}`,
+      api(`/organizations/${created.id}`),
       { method: "DELETE" },
     );
 
     expect(guestDeleteResponse.status).toBe(403);
 
     const adminDeleteResponse = await fetch(
-      `${baseUrl}/organizations/${created.id}`,
+      api(`/organizations/${created.id}`),
       {
         method: "DELETE",
         headers: {
@@ -426,13 +469,13 @@ describe("integration routes with postgres", () => {
     expect(adminDeleteResponse.status).toBe(204);
 
     const showResponse = await fetch(
-      `${baseUrl}/organizations/${created.id}`,
+      api(`/organizations/${created.id}`),
     );
     expect(showResponse.status).toBe(404);
   });
 
   test("DELETE /projects/:id returns 401 for unauthenticated requests", async () => {
-    const response = await fetch(`${baseUrl}/projects/1`, {
+    const response = await fetch(api("/projects/1"), {
       method: "DELETE",
     });
 
@@ -442,7 +485,7 @@ describe("integration routes with postgres", () => {
   test("GET /reports/summary excludes soft-deleted organizations", async () => {
     const before = await getJson<{ organization_count: number }>("/reports/summary");
 
-    const createResponse = await fetch(`${baseUrl}/organizations`, {
+    const createResponse = await fetch(api("/organizations"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -462,7 +505,7 @@ describe("integration routes with postgres", () => {
     );
 
     const deleteResponse = await fetch(
-      `${baseUrl}/organizations/${created.id}`,
+      api(`/organizations/${created.id}`),
       { method: "DELETE" },
     );
     expect(deleteResponse.status).toBe(204);
@@ -475,7 +518,7 @@ describe("integration routes with postgres", () => {
     );
 
     const orgReportResponse = await fetch(
-      `${baseUrl}/reports/organizations/${created.id}`,
+      api(`/reports/organizations/${created.id}`),
     );
     expect(orgReportResponse.status).toBe(404);
   });

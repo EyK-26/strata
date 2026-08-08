@@ -29,6 +29,7 @@ After schema changes, rebuild from migrations:
 
 ```bash
 docker compose exec app bun run cli migrate:fresh --seed
+docker compose restart app
 ```
 
 ## Framework overview
@@ -39,11 +40,18 @@ The app boots through **service providers** and **auto-discovered modules** unde
 
 Routes are wrapped by an `HttpKernel` that applies middleware in layers:
 
-- **Global:** structured request logging, `x-request-id`, auth context
-- **`api` group:** Redis-backed rate limiting when `REDIS_URL` is set
+- **Global:** CORS, security headers, structured request logging, `x-request-id`, auth context
+- **`api` group:** Redis-backed rate limiting when `REDIS_URL` is set (keyed by bearer token, user id, or IP)
 - **`authenticated` group:** requires a signed-in user (`401` for guests)
 
 Module routes use helpers such as `kernel.wrapAuthenticated(handler)` for protected mutations. See `src/bootstrap/httpKernel.ts`.
+
+### API prefix
+
+WorkHub domain routes are served under **`/api/v1`** by default (`API_PREFIX`). Operational probes stay at the root:
+
+- `GET /health`
+- `GET /ready`
 
 ### Model-aware authorization
 
@@ -54,14 +62,33 @@ Policies are registered per resource (`organization`, `project`, …). Route han
 - Tagged cache (`array` or `redis` driver) with automatic invalidation on model writes
 - Model lifecycle events dispatched from repositories
 - Queue drivers: `sync`, `async`, or `redis` (`QUEUE_DRIVER`)
+- Failed job recording with retry/backoff (`queue:failed`, `queue:retry`, `queue:flush-failed`)
 - Run a Redis worker: `bun run cli queue:work` (requires `REDIS_URL`)
+
+### Auth and API tokens
+
+Production auth uses database-backed bearer tokens. Seeded tokens after `migrate:fresh --seed`:
+
+```bash
+Authorization: Bearer workhub-admin-test-token
+Authorization: Bearer workhub-member-test-token
+```
+
+Token lifecycle endpoints (authenticated):
+
+- `GET /api/v1/auth/me` — current user
+- `GET /api/v1/auth/tokens` — list tokens (hashes never returned)
+- `POST /api/v1/auth/tokens` — create token (`name`, optional `abilities`, `expires_in_days`)
+- `DELETE /api/v1/auth/tokens/:id` — revoke a token
+
+Set `AUTH_DEV_HEADERS=false` in production and rely on bearer tokens only.
 
 ### Facades
 
 Lazy helpers for jobs, listeners, and CLI code live in `src/core/facades/`:
 
 ```typescript
-import { cache, auth, policyGate, queue, events, config, log } from "../core/facades";
+import { cache, auth, policyGate, queue, events, config, log, storage, mail } from "../core/facades";
 ```
 
 ### Generators
@@ -72,9 +99,21 @@ bun run cli make:migration create_invoice
 bun run cli make:policy invoice
 bun run cli make:job sendInvoice
 bun run cli make:listener invalidateCache organization.created
+bun run cli make:request user
+bun run cli make:factory user
 ```
 
 Generated modules include HttpKernel-aware routes, FormRequest-style body parsing via `validateObject`, and policy hooks for update/delete.
+
+### Scheduler, storage, and mail
+
+- `bun run cli schedule:run` — run due scheduled tasks (`src/bootstrap/schedule.ts`)
+- Local file storage via `storage()` (`STORAGE_PATH`, default `storage/`)
+- Log mail driver via `mail()` for development notifications
+
+### OpenAPI
+
+A starter spec lives at `docs/openapi.yaml` (base URL `/api/v1`).
 
 ## Environment
 
@@ -82,28 +121,25 @@ Generated modules include HttpKernel-aware routes, FormRequest-style body parsin
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string (required) |
 | `PORT` | HTTP port (default `3000`) |
+| `APP_ENV`, `APP_DEBUG`, `APP_URL` | Application metadata |
+| `API_PREFIX` | API route prefix (default `/api/v1`) |
 | `CACHE_DRIVER` | `array` or `redis` |
 | `CACHE_TTL_MS`, `CACHE_MAX_ENTRIES` | In-memory cache limits |
 | `REDIS_URL` | Redis for cache, throttling, and queues |
 | `QUEUE_DRIVER` | `sync`, `async`, or `redis` (app defaults to `redis` in Docker) |
-| `AUTH_DEV_HEADERS` | Allow `x-authenticated-user-*` headers (default `true`) |
-| `ADMIN_API_TOKEN` | Seed token for the admin user (default test token) |
-| `MEMBER_API_TOKEN` | Seed token for the member user (default test token) |
-| `RATE_LIMIT_PER_MINUTE` | Per-IP/per-path limit (default `120`) |
+| `QUEUE_MAX_ATTEMPTS`, `QUEUE_BACKOFF_MS` | Job retry settings |
+| `AUTH_DEV_HEADERS` | Allow `x-authenticated-user-*` headers (default `true`; set `false` in production) |
+| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Seed tokens for WorkHub users |
+| `CORS_ALLOWED_ORIGINS` | CORS allowlist (`*` in development) |
+| `RATE_LIMIT_PER_MINUTE` | Per-token/user/IP limit (default `120`) |
+| `STORAGE_PATH` | Local storage root (default `storage`) |
 
 Dev/test auth headers (`GuestGuard`, when `AUTH_DEV_HEADERS=true`):
 
 - `x-authenticated-user-id`
 - `x-authenticated-user-role` (`admin` or `member`)
 
-Production auth uses database-backed bearer tokens seeded for WorkHub:
-
-```bash
-Authorization: Bearer workhub-admin-test-token
-Authorization: Bearer workhub-member-test-token
-```
-
-After `migrate:fresh --seed`, use `GET /auth/me` to verify the current user.
+Copy `.env.example` for a full local template.
 
 ## Run tests
 
@@ -124,7 +160,9 @@ Useful commands inside:
 bun run test:all
 bun run check
 bun run cli help
+bun run cli route:list
 bun run cli queue:work
+bun run cli schedule:run
 ```
 
 ## CLI
@@ -135,58 +173,34 @@ Show commands:
 bun run cli help
 ```
 
-Run migrations:
+Database:
 
 ```bash
 bun run cli migrate
-```
-
-Check migration status:
-
-```bash
 bun run cli migrate:status
-```
-
-Rebuild the schema from migrations:
-
-```bash
-bun run cli migrate:fresh
-```
-
-Rebuild the schema and seed it:
-
-```bash
 bun run cli migrate:fresh --seed
-```
-
-Run seeders:
-
-```bash
+bun run cli rollback
 bun run cli seed
 ```
 
-Rollback the latest migration batch:
-
-```bash
-bun run cli rollback
-```
-
-Create a migration file:
+Scaffolding:
 
 ```bash
 bun run cli make:migration create_users
-```
-
-Create a module scaffold:
-
-```bash
 bun run cli make:module user
+bun run cli make:request user
+bun run cli make:factory user
 ```
 
-Start the Redis queue worker:
+Queue and ops:
 
 ```bash
 bun run cli queue:work
+bun run cli queue:failed
+bun run cli queue:retry <id>
+bun run cli queue:flush-failed
+bun run cli route:list
+bun run cli schedule:run
 ```
 
 In Docker Compose a dedicated `worker` service runs the queue worker alongside the app.
@@ -200,23 +214,31 @@ Health checks (no rate limiting):
 
 ## WorkHub API examples
 
+All examples use the `/api/v1` prefix.
+
 List endpoints accept validated query params:
 
-- `/organizations?page=1&perPage=10`
-- `/projects?organizationId=1&status=active&include=organization`
-- `/tasks?projectId=1&status=in_progress&include=project`
+- `/api/v1/organizations?page=1&perPage=10`
+- `/api/v1/projects?organizationId=1&status=active&include=organization`
+- `/api/v1/tasks?projectId=1&status=in_progress&include=project`
 
 Write endpoints accept JSON bodies:
 
-- `POST /organizations` with `{ "name": "...", "slug": "..." }`
-- `POST /projects` with `{ "organization_id": 1, "name": "...", "status": "draft" }`
-- `POST /tasks` with `{ "project_id": 1, "title": "...", "priority": 2 }`
-- `POST /tasks/:id/comments` with `{ "body": "..." }`
+- `POST /api/v1/organizations` with `{ "name": "...", "slug": "..." }`
+- `POST /api/v1/projects` with `{ "organization_id": 1, "name": "...", "status": "draft" }`
+- `POST /api/v1/tasks` with `{ "project_id": 1, "title": "...", "priority": 2 }`
+- `POST /api/v1/tasks/:id/comments` with `{ "body": "..." }`
+
+Verify auth:
+
+```bash
+curl -H "Authorization: Bearer workhub-admin-test-token" http://localhost:3000/api/v1/auth/me
+```
 
 Open:
 
 - App: `http://localhost:3000`
-- API: `http://localhost:3000/organizations`
+- API: `http://localhost:3000/api/v1/organizations`
 - Adminer: `http://localhost:8080`
 
 Adminer login:
@@ -241,7 +263,7 @@ docker compose down -v --remove-orphans
 
 ## Main endpoints
 
-### WorkHub domain
+### WorkHub domain (under `/api/v1`)
 
 - `GET/POST /organizations`
 - `GET/PATCH/DELETE /organizations/:id`
@@ -255,5 +277,7 @@ docker compose down -v --remove-orphans
 - `GET /reports/summary`
 - `GET /reports/organizations/:id`
 - `GET /auth/me`
+- `GET/POST /auth/tokens`
+- `DELETE /auth/tokens/:id`
 
 Protected mutations (`PATCH`/`DELETE` on projects, tasks, comments, and organization updates) require authentication. Reports exclude soft-deleted records.

@@ -48,12 +48,14 @@ const migration: Migration = {
   name: "${fileBaseName}",
   async up(db) {
     await db\`
-      -- TODO: implement migration ${fileBaseName}
+      -- Write SQL for ${fileBaseName}
+      SELECT 1
     \`;
   },
   async down(db) {
     await db\`
-      -- TODO: rollback migration ${fileBaseName}
+      -- Roll back ${fileBaseName}
+      SELECT 1
     \`;
   },
 };

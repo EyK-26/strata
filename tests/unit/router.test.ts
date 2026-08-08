@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { AppDependencies } from "../../src/bootstrap/dependencies";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { createRoutes } from "../../src/bootstrap/createRoutes";
+import { appConfig } from "../../src/config/app";
 import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
@@ -62,11 +63,12 @@ describe("routes", () => {
     const { dependencies, calls, summary } = createTestDependencies();
     const routes = createRoutes(dependencies);
 
-    const firstResponse = await routes["/reports/summary"](
-      new Request("http://example.test/reports/summary"),
+    const summaryPath = `${appConfig.apiPrefix}/reports/summary`;
+    const firstResponse = await routes[summaryPath](
+      new Request(`http://example.test${summaryPath}`),
     );
-    const secondResponse = await routes["/reports/summary"](
-      new Request("http://example.test/reports/summary"),
+    const secondResponse = await routes[summaryPath](
+      new Request(`http://example.test${summaryPath}`),
     );
 
     expect(firstResponse.status).toBe(200);
