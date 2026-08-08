@@ -57,6 +57,23 @@ afterAll(() => {
 });
 
 describe("integration routes with postgres", () => {
+  test("GET /health returns ok", async () => {
+    const response = await fetch(`${baseUrl}/health`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok" });
+  });
+
+  test("GET /ready reports database and redis checks", async () => {
+    const response = await fetch(`${baseUrl}/ready`);
+    const body = (await response.json()) as {
+      status: string;
+      checks: Record<string, string>;
+    };
+
+    expect(body.checks.database).toBe("ok");
+    expect(body.status).toBe("ready");
+  });
+
   test("GET /organizations returns paginated seeded organizations", async () => {
     const { response, body } = await getJson<
       PaginatedBody<{ id: number; slug: string; name: string }>

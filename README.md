@@ -88,6 +88,7 @@ Generated modules include HttpKernel-aware routes, FormRequest-style body parsin
 | `QUEUE_DRIVER` | `sync`, `async`, or `redis` |
 | `API_TOKEN` | Bearer token for API auth |
 | `RATE_LIMIT_PER_MINUTE` | Per-IP/per-path limit (default `120`) |
+| `QUEUE_DRIVER` | `sync`, `async`, or `redis` (app defaults to `redis` in Docker) |
 
 Dev/test auth headers (GuestGuard):
 
@@ -178,6 +179,15 @@ Start the Redis queue worker:
 bun run cli queue:work
 ```
 
+In Docker Compose a dedicated `worker` service runs the queue worker alongside the app.
+
+## Operations
+
+Health checks (no rate limiting):
+
+- `GET /health` — liveness probe
+- `GET /ready` — readiness probe (Postgres + Redis)
+
 ## WorkHub API examples
 
 List endpoints accept validated query params:
@@ -230,7 +240,7 @@ docker compose down -v --remove-orphans
 - `GET/POST /tasks`
 - `GET/PATCH/DELETE /tasks/:id`
 - `GET /comments`
-- `GET/DELETE /comments/:id`
+- `GET/PATCH/DELETE /comments/:id`
 - `GET/POST /tasks/:id/comments`
 - `GET /reports/summary`
 - `GET /reports/organizations/:id`

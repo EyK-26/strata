@@ -7,6 +7,10 @@ class CommentPolicy extends Policy {
     return true;
   }
 
+  override update(user: AuthUser | null, _comment: CommentRecord): boolean {
+    return user?.role === "admin" || user?.role === "member";
+  }
+
   override delete(user: AuthUser | null, _comment: CommentRecord): boolean {
     return user?.role === "admin" || user?.role === "member";
   }

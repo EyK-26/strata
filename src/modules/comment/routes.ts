@@ -14,6 +14,9 @@ function createCommentRoutes(
     "/comments": controller.index,
     "/comments/:id": {
       GET: controller.show,
+      PATCH: kernel.wrapAuthenticated(
+        controller.update as unknown as RouteHandler,
+      ),
       DELETE: kernel.wrapAuthenticated(
         controller.destroy as unknown as RouteHandler,
       ),

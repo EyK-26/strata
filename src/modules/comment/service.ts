@@ -62,6 +62,12 @@ class CommentService {
       throw new NotFoundError(`Comment ${id} not found.`);
     }
   }
+
+  update(id: number, input: { body: string }): Promise<CommentRecord> {
+    return this.repository.updateByIdOrThrow(id, input, (commentId) =>
+      new NotFoundError(`Comment ${commentId} not found.`),
+    );
+  }
 }
 
 export default CommentService;

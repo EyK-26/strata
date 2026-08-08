@@ -2,11 +2,13 @@ import type { AppDependencies } from "./contracts";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
+  CORE_POLICY_GATE_TOKEN,
   REDIS_URL_CONFIG_KEY,
 } from "./config";
 import type { ConfigStore } from "./contracts";
 import { createAuthMiddleware } from "../core/http/authMiddleware";
 import { createRequireAuthMiddleware } from "../core/http/requireAuthMiddleware";
+import { createAuthorizeMiddleware } from "../core/http/authorizeMiddleware";
 import { createThrottleMiddleware } from "../core/http/throttleMiddleware";
 import { withMiddleware } from "../core/http/routeMiddleware";
 import {
@@ -16,6 +18,7 @@ import {
 } from "../core/http/middleware";
 import { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware";
 import type { AuthManager } from "../core/auth/guard";
+import type { Policy, PolicyGate } from "../core/auth/policy";
 
 type MiddlewareGroupName = "api" | "authenticated";
 
@@ -45,8 +48,7 @@ class HttpKernel {
 
         const config =
           this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
-        const redisUrl =
-          config.get<string>(REDIS_URL_CONFIG_KEY) ?? process.env.REDIS_URL ?? "";
+        const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? "";
 
         if (!redisUrl) {
           return [];
@@ -87,6 +89,20 @@ class HttpKernel {
 
   wrapAuthenticated(handler: RouteHandler): RouteHandler {
     return this.wrap("authenticated", handler);
+  }
+
+  wrapPolicy(
+    resource: string,
+    action: keyof Policy,
+    handler: RouteHandler,
+  ): RouteHandler {
+    const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
+    const gate =
+      this.dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
+
+    return withMiddleware(createAuthorizeMiddleware(gate, auth, resource, action))(
+      handler,
+    );
   }
 }
 

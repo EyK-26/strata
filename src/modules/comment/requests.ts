@@ -1,10 +1,16 @@
 import {
-  expectObject,
-  parseJsonBody,
+  FormRequest,
   parsePaginationQuery,
   parsePositiveIntParam,
-  readRequiredString,
+  QueryFormRequest,
 } from "../../core/http";
+import {
+  maxLength,
+  minLength,
+  required,
+  stringRule,
+  validateObject,
+} from "../../core/validation/rules";
 
 type CommentIdParams = { id: string };
 type TaskCommentParams = { id: string };
@@ -17,6 +23,44 @@ interface CommentListQueryDto {
 interface CreateCommentBodyDto {
   body: string;
 }
+
+interface UpdateCommentBodyDto {
+  body: string;
+}
+
+class CommentListQueryRequest extends QueryFormRequest<CommentListQueryDto> {
+  protected parseQuery(request?: Request): CommentListQueryDto {
+    return parsePaginationQuery(request);
+  }
+}
+
+class CreateCommentRequest extends FormRequest<CreateCommentBodyDto> {
+  protected parse(payload: unknown): CreateCommentBodyDto {
+    const validated = validateObject(payload, {
+      body: [required(), stringRule(), minLength(1), maxLength(4000)],
+    });
+
+    return {
+      body: validated.body as string,
+    };
+  }
+}
+
+class UpdateCommentRequest extends FormRequest<UpdateCommentBodyDto> {
+  protected parse(payload: unknown): UpdateCommentBodyDto {
+    const validated = validateObject(payload, {
+      body: [required(), stringRule(), minLength(1), maxLength(4000)],
+    });
+
+    return {
+      body: validated.body as string,
+    };
+  }
+}
+
+const commentListQueryRequest = new CommentListQueryRequest();
+const createCommentRequest = new CreateCommentRequest();
+const updateCommentRequest = new UpdateCommentRequest();
 
 function parseCommentIdParams(params: CommentIdParams): { id: number } {
   return {
@@ -31,30 +75,35 @@ function parseTaskCommentParams(params: TaskCommentParams): { taskId: number } {
 }
 
 function parseCommentListQuery(request?: Request): CommentListQueryDto {
-  return parsePaginationQuery(request);
+  return commentListQueryRequest.validate(request);
 }
 
 async function parseCreateCommentBody(
   request: Request,
 ): Promise<CreateCommentBodyDto> {
-  return await parseJsonBody(request, (payload) => {
-    const body = expectObject(payload);
+  return await createCommentRequest.validate(request);
+}
 
-    return {
-      body: readRequiredString(body, "body", { minLength: 1, maxLength: 4000 }),
-    };
-  });
+async function parseUpdateCommentBody(
+  request: Request,
+): Promise<UpdateCommentBodyDto> {
+  return await updateCommentRequest.validate(request);
 }
 
 export {
+  CommentListQueryRequest,
+  CreateCommentRequest,
+  UpdateCommentRequest,
   parseCommentIdParams,
   parseCommentListQuery,
   parseCreateCommentBody,
   parseTaskCommentParams,
+  parseUpdateCommentBody,
 };
 export type {
   CommentIdParams,
   CommentListQueryDto,
   CreateCommentBodyDto,
   TaskCommentParams,
+  UpdateCommentBodyDto,
 };

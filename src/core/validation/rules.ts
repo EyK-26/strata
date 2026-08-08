@@ -140,6 +140,40 @@ function confirmed(fieldName: string): ValidationRule {
   };
 }
 
+function positiveIntegerRule(): ValidationRule {
+  return (field, value) => {
+    if (value === undefined || value === null || value === "") {
+      return undefined;
+    }
+
+    const parsed =
+      typeof value === "number" ? value : Number.parseInt(String(value), 10);
+
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return `"${field}" must be a positive integer.`;
+    }
+
+    return undefined;
+  };
+}
+
+function integerRange(minimum: number, maximum: number): ValidationRule {
+  return (field, value) => {
+    if (value === undefined || value === null || value === "") {
+      return undefined;
+    }
+
+    const parsed =
+      typeof value === "number" ? value : Number.parseInt(String(value), 10);
+
+    if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+      return `"${field}" must be an integer between ${minimum} and ${maximum}.`;
+    }
+
+    return undefined;
+  };
+}
+
 function validateObject(
   payload: unknown,
   schema: ValidationSchema,
@@ -180,11 +214,13 @@ export {
   confirmed,
   emailRule,
   enumRule,
+  integerRange,
   integerRule,
   maxLength,
   minLength,
   optional,
   pattern,
+  positiveIntegerRule,
   required,
   stringRule,
   validateObject,

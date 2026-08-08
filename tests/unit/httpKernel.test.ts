@@ -4,6 +4,7 @@ import { createHttpKernel } from "../../src/bootstrap/httpKernel";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
+  REDIS_URL_CONFIG_KEY,
 } from "../../src/bootstrap/config";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { ConfigStore } from "../../src/bootstrap/contracts";
@@ -42,6 +43,7 @@ describe("HttpKernel", () => {
 
   test("skips api throttle middleware when redis url is missing", () => {
     const config = new ConfigStore();
+    config.set(REDIS_URL_CONFIG_KEY, "");
     const kernel = createHttpKernel(createKernelDependencies(config));
 
     expect(kernel.group("api")).toEqual([]);

@@ -3,10 +3,12 @@ import { jsonResponse } from "../core/http";
 import { applyMiddlewareToRoutes } from "../core/http/middleware";
 import { appModules } from "./modules";
 import { createHttpKernel } from "./httpKernel";
+import { createHealthRoutes } from "./health";
 import index from "../../index.html";
 
 function createRoutes(dependencies: AppDependencies): AppRouteMap {
   const kernel = createHttpKernel(dependencies);
+  const middleware = [...kernel.globalMiddleware(), ...kernel.group("api")];
 
   const cachedJson = async <T>(
     cacheKey: string,
@@ -34,16 +36,19 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
     );
   }
 
-  return applyMiddlewareToRoutes(
-    {
-      "/": index,
-      ...moduleRoutes,
-      "/*": async () => {
-        return jsonResponse({ error: "Not Found" }, { status: 404 });
+  return {
+    ...createHealthRoutes(dependencies),
+    "/": index,
+    ...applyMiddlewareToRoutes(
+      {
+        ...moduleRoutes,
+        "/*": async () => {
+          return jsonResponse({ error: "Not Found" }, { status: 404 });
+        },
       },
-    },
-    [...kernel.globalMiddleware(), ...kernel.group("api")],
-  );
+      middleware,
+    ),
+  };
 }
 
 export { createRoutes };

@@ -17,6 +17,8 @@ import {
   parseCommentListQuery,
   parseCreateCommentBody,
   parseTaskCommentParams,
+  parseUpdateCommentBody,
+  type CommentIdParams,
   type TaskCommentParams,
 } from "./requests";
 import {
@@ -85,6 +87,19 @@ class CommentController {
       });
       return createdResponse(toCommentResource(comment));
     },
+  );
+
+  readonly update = withErrorHandling(
+    securedBindRouteModel(
+      "id",
+      (id) => this.service.findByIdOrThrow(id),
+      { resource: "comment", action: "update" },
+      async (req: RouteRequest<CommentIdParams>, comment) => {
+        const body = await parseUpdateCommentBody(req);
+        const updated = await this.service.update(comment.id, body);
+        return jsonResponse(toCommentResource(updated));
+      },
+    ),
   );
 
   readonly destroy = withErrorHandling(
