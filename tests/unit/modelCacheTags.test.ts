@@ -29,6 +29,7 @@ describe("cacheTagsForModelWrite", () => {
 describe("discoverModelTableNames", () => {
   test("discovers WorkHub model tables from module metadata", () => {
     expect(discoverModelTableNames()).toEqual([
+      "users",
       "organization",
       "project",
       "comment",

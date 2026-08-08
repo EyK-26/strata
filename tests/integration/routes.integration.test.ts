@@ -1,4 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  TEST_ADMIN_API_TOKEN,
+  TEST_MEMBER_API_TOKEN,
+} from "../../src/domain/auth";
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 
@@ -73,6 +77,54 @@ describe("integration routes with postgres", () => {
 
     expect(body.checks.database).toBe("ok");
     expect(body.status).toBe("ready");
+  });
+
+  test("GET /auth/me returns the bearer-authenticated user", async () => {
+    const response = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: 1,
+      email: "admin@workhub.test",
+      role: "admin",
+    });
+  });
+
+  test("GET /auth/me returns 401 without credentials", async () => {
+    const response = await fetch(`${baseUrl}/auth/me`);
+    expect(response.status).toBe(401);
+  });
+
+  test("DELETE /projects/:id accepts database-backed bearer tokens", async () => {
+    const createResponse = await fetch(`${baseUrl}/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        organization_id: 1,
+        name: "Bearer Auth Project",
+        status: "draft",
+      }),
+    });
+
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { id: number };
+
+    const guestDeleteResponse = await fetch(`${baseUrl}/projects/${created.id}`, {
+      method: "DELETE",
+    });
+    expect(guestDeleteResponse.status).toBe(401);
+
+    const memberDeleteResponse = await fetch(`${baseUrl}/projects/${created.id}`, {
+      method: "DELETE",
+      headers: {
+        authorization: `Bearer ${TEST_MEMBER_API_TOKEN}`,
+      },
+    });
+    expect(memberDeleteResponse.status).toBe(204);
   });
 
   test("GET /organizations returns paginated seeded organizations", async () => {

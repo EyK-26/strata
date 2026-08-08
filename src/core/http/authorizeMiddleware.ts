@@ -11,7 +11,7 @@ function createAuthorizeMiddleware(
   action: keyof Policy,
 ): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    const user = auth.resolve(request);
+    const user = await auth.resolve(request);
 
     if (!gate.allows(resource, action, user)) {
       const error = new ForbiddenError();

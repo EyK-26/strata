@@ -48,7 +48,7 @@ describe("AuthManager with PolicyGate", () => {
 
     await expect(
       runWithAuthUser(null, async () => {
-        auth.requireUser();
+        await auth.requireUser();
       }),
     ).rejects.toThrow();
   });

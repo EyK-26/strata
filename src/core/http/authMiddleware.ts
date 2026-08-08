@@ -7,7 +7,7 @@ import type { AuthManager } from "../auth/guard";
 
 function createAuthMiddleware(auth: AuthManager) {
   return async (request: Request, next: () => Promise<Response>) => {
-    const user = auth.resolve(request);
+    const user = await auth.resolve(request);
 
     return await runWithAuthUser(user, async () => {
       const response = await next();

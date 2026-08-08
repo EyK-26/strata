@@ -33,7 +33,7 @@ function securedBindRouteModel<
     gate.authorize(
       authorization.resource,
       authorization.action,
-      auth.resolve(request),
+      await auth.resolve(request),
       model,
     );
 

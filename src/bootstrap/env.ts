@@ -42,6 +42,10 @@ const appEnvSchema: EnvSchema = defineEnvSchema({
     default: DEFAULT_QUEUE_DRIVER,
     pattern: /^(sync|async|redis)$/,
   },
+  AUTH_DEV_HEADERS: {
+    default: "true",
+    pattern: /^(true|false|0|1)$/,
+  },
   API_TOKEN: {
     default: DEFAULT_API_TOKEN,
   },

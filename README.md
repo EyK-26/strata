@@ -85,15 +85,25 @@ Generated modules include HttpKernel-aware routes, FormRequest-style body parsin
 | `CACHE_DRIVER` | `array` or `redis` |
 | `CACHE_TTL_MS`, `CACHE_MAX_ENTRIES` | In-memory cache limits |
 | `REDIS_URL` | Redis for cache, throttling, and queues |
-| `QUEUE_DRIVER` | `sync`, `async`, or `redis` |
-| `API_TOKEN` | Bearer token for API auth |
-| `RATE_LIMIT_PER_MINUTE` | Per-IP/per-path limit (default `120`) |
 | `QUEUE_DRIVER` | `sync`, `async`, or `redis` (app defaults to `redis` in Docker) |
+| `AUTH_DEV_HEADERS` | Allow `x-authenticated-user-*` headers (default `true`) |
+| `ADMIN_API_TOKEN` | Seed token for the admin user (default test token) |
+| `MEMBER_API_TOKEN` | Seed token for the member user (default test token) |
+| `RATE_LIMIT_PER_MINUTE` | Per-IP/per-path limit (default `120`) |
 
-Dev/test auth headers (GuestGuard):
+Dev/test auth headers (`GuestGuard`, when `AUTH_DEV_HEADERS=true`):
 
 - `x-authenticated-user-id`
 - `x-authenticated-user-role` (`admin` or `member`)
+
+Production auth uses database-backed bearer tokens seeded for WorkHub:
+
+```bash
+Authorization: Bearer workhub-admin-test-token
+Authorization: Bearer workhub-member-test-token
+```
+
+After `migrate:fresh --seed`, use `GET /auth/me` to verify the current user.
 
 ## Run tests
 
@@ -244,5 +254,6 @@ docker compose down -v --remove-orphans
 - `GET/POST /tasks/:id/comments`
 - `GET /reports/summary`
 - `GET /reports/organizations/:id`
+- `GET /auth/me`
 
 Protected mutations (`PATCH`/`DELETE` on projects, tasks, comments, and organization updates) require authentication. Reports exclude soft-deleted records.

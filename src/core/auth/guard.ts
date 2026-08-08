@@ -1,9 +1,12 @@
+import type { ServiceContainer } from "../../bootstrap/contracts";
 import { UnauthorizedError } from "../errors/http";
 import { currentAuthUser } from "./authContext";
 import type { AuthUser } from "./authContext";
+import { tokenServiceToken } from "../../modules/user/provider";
+import type TokenService from "../../modules/user/tokenService";
 
 interface AuthGuard {
-  resolve(request: Request): AuthUser | null;
+  resolve(request: Request): AuthUser | null | Promise<AuthUser | null>;
 }
 
 class GuestGuard implements AuthGuard {
@@ -48,27 +51,68 @@ class ApiTokenGuard implements AuthGuard {
   }
 }
 
+class DatabaseTokenGuard implements AuthGuard {
+  constructor(private readonly container: ServiceContainer) {}
+
+  async resolve(request: Request): Promise<AuthUser | null> {
+    const authorization = request.headers.get("authorization");
+
+    if (!authorization?.startsWith("Bearer ")) {
+      return null;
+    }
+
+    const token = authorization.slice("Bearer ".length).trim();
+
+    if (!token) {
+      return null;
+    }
+
+    if (!this.container.has(tokenServiceToken)) {
+      return null;
+    }
+
+    const tokenService = this.container.resolve<TokenService>(tokenServiceToken);
+    return await tokenService.resolveUserFromToken(token);
+  }
+}
+
+class CompositeGuard implements AuthGuard {
+  constructor(private readonly guards: AuthGuard[]) {}
+
+  async resolve(request: Request): Promise<AuthUser | null> {
+    for (const guard of this.guards) {
+      const user = await Promise.resolve(guard.resolve(request));
+
+      if (user) {
+        return user;
+      }
+    }
+
+    return null;
+  }
+}
+
 class AuthManager {
   constructor(private readonly guard: AuthGuard) {}
 
-  resolve(request?: Request): AuthUser | null {
+  async resolve(request?: Request): Promise<AuthUser | null> {
     if (request) {
-      return this.guard.resolve(request);
+      return await Promise.resolve(this.guard.resolve(request));
     }
 
     return currentAuthUser();
   }
 
-  user(request?: Request): AuthUser | null {
+  user(request?: Request): Promise<AuthUser | null> {
     return this.resolve(request);
   }
 
-  check(request?: Request): boolean {
-    return this.user(request) !== null;
+  async check(request?: Request): Promise<boolean> {
+    return (await this.user(request)) !== null;
   }
 
-  requireUser(request?: Request): AuthUser {
-    const user = this.user(request);
+  async requireUser(request?: Request): Promise<AuthUser> {
+    const user = await this.user(request);
 
     if (!user) {
       throw new UnauthorizedError();
@@ -78,5 +122,11 @@ class AuthManager {
   }
 }
 
-export { ApiTokenGuard, AuthManager, GuestGuard };
+export {
+  ApiTokenGuard,
+  AuthManager,
+  CompositeGuard,
+  DatabaseTokenGuard,
+  GuestGuard,
+};
 export type { AuthGuard, AuthUser };

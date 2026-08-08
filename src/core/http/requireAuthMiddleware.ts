@@ -4,7 +4,7 @@ import type { Middleware } from "./middleware";
 
 function createRequireAuthMiddleware(auth: AuthManager): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    if (!auth.check(request)) {
+    if (!(await auth.check(request))) {
       const error = new UnauthorizedError();
       return Response.json({ error: error.message }, { status: error.status });
     }

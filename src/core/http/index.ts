@@ -25,10 +25,6 @@ export { createAuthorizeMiddleware } from "./authorizeMiddleware";
 export { createRequireAuthMiddleware } from "./requireAuthMiddleware";
 export { withMiddleware } from "./routeMiddleware";
 export {
-  applyRouteMiddleware,
-  resolveRouteMiddleware,
-} from "./routeMiddlewareGroups";
-export {
   buildRequestCacheKey,
   expectObject,
   getQueryParams,

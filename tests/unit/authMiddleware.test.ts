@@ -4,9 +4,9 @@ import { createAuthMiddleware } from "../../src/core/http/authMiddleware";
 import { composeMiddleware } from "../../src/core/http/middleware";
 
 describe("GuestGuard", () => {
-  test("resolves users from development auth headers", () => {
+  test("resolves users from development auth headers", async () => {
     const auth = new AuthManager(new GuestGuard());
-    const user = auth.resolve(
+    const user = await auth.resolve(
       new Request("http://example.test/organizations", {
         headers: {
           "x-authenticated-user-id": "7",

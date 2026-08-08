@@ -3,17 +3,32 @@ import { Policy, PolicyGate } from "../../src/core/auth/policy";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { createAuthorizeMiddleware } from "../../src/core/http/authorizeMiddleware";
 import { composeMiddleware } from "../../src/core/http/middleware";
-import { createRouteMiddleware } from "../../src/bootstrap/routeMiddleware";
-import { applyRouteMiddleware, parseRouteMiddlewareName } from "../../src/core/http/routeMiddlewareGroups";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
-import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
-import type { RouteHandler } from "../../src/core/http/middleware";
+import {
+  CORE_AUTH_TOKEN,
+  CORE_POLICY_GATE_TOKEN,
+} from "../../src/bootstrap/config";
+import { createHttpKernel } from "../../src/bootstrap/httpKernel";
+import CacheRepository from "../../src/core/cache/repository";
+import SimpleCache from "../../src/core/cache/simpleCache";
+import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import type { AppDependencies } from "../../src/bootstrap/contracts";
 
 class ProjectPolicy extends Policy {
   override delete(user: { role?: string } | null): boolean {
     return user?.role === "member";
   }
+}
+
+function createKernelDependencies(): AppDependencies {
+  const container = new ServiceContainer();
+  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+  container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
+
+  return {
+    container,
+    cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+  };
 }
 
 describe("createAuthorizeMiddleware", () => {
@@ -51,38 +66,15 @@ describe("createAuthorizeMiddleware", () => {
   });
 });
 
-describe("route middleware groups", () => {
-  test("parses auth and can middleware names", () => {
-    const container = new ServiceContainer();
-    container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
-    container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
-
-    const middleware = createRouteMiddleware({
-      container,
-      cache: {} as AppDependencies["cache"],
-    });
-
-    expect(parseRouteMiddlewareName(middleware, "auth")).toBe(middleware.auth);
-    expect(typeof parseRouteMiddlewareName(middleware, "can:delete,project")).toBe(
-      "function",
-    );
-  });
-
-  test("applies middleware groups to route handlers", async () => {
-    const gate = new PolicyGate();
+describe("HttpKernel.wrapPolicy", () => {
+  test("applies auth and policy middleware to route handlers", async () => {
+    const dependencies = createKernelDependencies();
+    const gate = dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
     gate.register("project", new ProjectPolicy());
-    const container = new ServiceContainer();
-    container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
-    container.set(CORE_POLICY_GATE_TOKEN, gate);
-    const routeMiddleware = createRouteMiddleware({
-      container,
-      cache: {} as AppDependencies["cache"],
-    });
 
-    const handler = applyRouteMiddleware(
-      routeMiddleware,
-      ["auth", "can:delete,project"],
-      (async () => Response.json({ ok: true })) as RouteHandler,
+    const kernel = createHttpKernel(dependencies);
+    const handler = kernel.wrapPolicy("project", "delete", async () =>
+      Response.json({ ok: true }),
     );
 
     const response = await handler(
