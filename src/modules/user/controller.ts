@@ -56,7 +56,9 @@ class AuthController {
 
   readonly login = withErrorHandling(async (request: Request) => {
     const body = await parseLoginBody(request);
-    const created = await this.authService.loginWithPassword(body.email, body.password);
+    const created = await this.authService.loginWithPassword(body.email, body.password, {
+      mfaCode: body.mfa_code,
+    });
     const authUser = await this.tokens.resolveUserFromToken(created.plainTextToken);
 
     if (!authUser) {

@@ -1,0 +1,56 @@
+import { RedisClient } from "bun";
+import type { Middleware } from "./middleware";
+
+interface LoginThrottleOptions {
+  redisUrl: string;
+  maxAttempts: number;
+  decaySeconds: number;
+  keyPrefix?: string;
+}
+
+function resolveLoginIdentity(request: Request): string {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+}
+
+async function resolveLoginEmail(request: Request): Promise<string> {
+  try {
+    const payload = (await request.clone().json()) as { email?: unknown };
+    return typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function createLoginThrottleMiddleware(options: LoginThrottleOptions): Middleware {
+  const client = new RedisClient(options.redisUrl);
+  const prefix = options.keyPrefix ?? "workhub:login-throttle:";
+
+  return async (request: Request, next: () => Promise<Response>) => {
+    const identity = resolveLoginIdentity(request);
+    const email = await resolveLoginEmail(request);
+    const throttleKey = `${prefix}${identity}:${email}`;
+
+    const attempts = Number(await client.incr(throttleKey));
+
+    if (attempts === 1) {
+      await client.expire(throttleKey, options.decaySeconds);
+    }
+
+    if (attempts > options.maxAttempts) {
+      return Response.json(
+        { error: "Too many login attempts. Try again later." },
+        {
+          status: 429,
+          headers: {
+            "retry-after": String(options.decaySeconds),
+          },
+        },
+      );
+    }
+
+    return await next();
+  };
+}
+
+export type { LoginThrottleOptions };
+export { createLoginThrottleMiddleware, resolveLoginIdentity };

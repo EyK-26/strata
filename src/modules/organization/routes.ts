@@ -14,11 +14,11 @@ function createOrganizationRoutes(
 
   return {
     "/organizations": {
-      GET: controller.index,
+      GET: kernel.wrapPublicRead(controller.index as unknown as RouteHandler),
       POST: kernel.wrapAbility("organizations:create", controller.store as unknown as RouteHandler),
     },
     "/organizations/:id": {
-      GET: controller.show,
+      GET: kernel.wrapPublicRead(controller.show as unknown as RouteHandler),
       PATCH: kernel.wrapAbility(
         "organizations:update",
         controller.update as unknown as RouteHandler,

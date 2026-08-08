@@ -122,6 +122,16 @@ class TaskService {
         throw new NotFoundError(`Project ${input.project_id} not found.`);
       }
 
+      const organizationRepository = this.organizationRepository.withConnection(connection);
+      const organization = await organizationRepository.findById(project.organization_id);
+
+      if (!organization) {
+        throw new NotFoundError(`Project ${input.project_id} not found.`);
+      }
+
+      assertResourceInCurrentTenant(organization.tenant_id, "Project", input.project_id);
+      assertOrganizationReadable(project.organization_id);
+
       return await taskRepository.create({
         project_id: input.project_id,
         title: input.title,

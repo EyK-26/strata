@@ -11,14 +11,14 @@ function createCommentRoutes(
   const controller = new CommentController(dependencies, cachedJson);
 
   return {
-    "/comments": controller.index,
+    "/comments": kernel.wrapPublicRead(controller.index as unknown as RouteHandler),
     "/comments/:id": {
-      GET: controller.show,
+      GET: kernel.wrapPublicRead(controller.show as unknown as RouteHandler),
       PATCH: kernel.wrapAbility("comments:update", controller.update as unknown as RouteHandler),
       DELETE: kernel.wrapAbility("comments:delete", controller.destroy as unknown as RouteHandler),
     },
     "/tasks/:id/comments": {
-      GET: controller.byTask,
+      GET: kernel.wrapPublicRead(controller.byTask as unknown as RouteHandler),
       POST: kernel.wrapAbility(
         "comments:create",
         controller.storeForTask as unknown as RouteHandler,

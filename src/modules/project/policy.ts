@@ -5,6 +5,7 @@ import {
   hasOrgMembership,
 } from "../../core/auth/membershipContext";
 import { Policy } from "../../core/auth/policy";
+import { guestCanViewResource } from "../../core/security/publicReads";
 import type { ProjectRecord } from "./types";
 
 class ProjectPolicy extends Policy {
@@ -14,7 +15,7 @@ class ProjectPolicy extends Policy {
 
   override view(user: AuthUser | null, project: ProjectRecord): boolean {
     if (!user) {
-      return true;
+      return guestCanViewResource();
     }
 
     return isGlobalAdmin(user) || hasOrgMembership(project.organization_id);

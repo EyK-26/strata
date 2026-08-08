@@ -24,6 +24,10 @@ function required(): ValidationRule {
 
 function stringRule(): ValidationRule {
   return (field, value) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
     if (typeof value !== "string") {
       return `"${field}" must be a string.`;
     }

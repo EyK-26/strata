@@ -27,3 +27,12 @@ jobs:
             bun run cli openapi:check &&
             bun run test:all
           "
+
+      - name: Start app for smoke tests
+        run: |
+          docker compose up -d app --wait
+          sleep 3
+
+      - name: Run smoke tests
+        run: |
+          docker compose exec -T app sh -c "BASE_URL=http://localhost:3000 bun run smoke"

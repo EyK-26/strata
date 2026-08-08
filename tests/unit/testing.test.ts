@@ -15,7 +15,11 @@ describe("createTestApp", () => {
     const app = await createTestApp({ fresh: true });
     apps.push(app);
 
-    const response = await fetch(`${app.baseUrl}${appConfig.apiPrefix}/reports/summary`);
+    const response = await fetch(`${app.baseUrl}${appConfig.apiPrefix}/reports/summary`, {
+      headers: {
+        authorization: "Bearer workhub-admin-test-token",
+      },
+    });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { organization_count: number };

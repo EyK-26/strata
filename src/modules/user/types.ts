@@ -8,6 +8,9 @@ interface UserRecord {
   role: UserRole;
   tenant_id: number;
   password_hash?: string | null;
+  email_verified_at?: Date | null;
+  mfa_secret?: string | null;
+  mfa_enabled?: boolean;
   created_at: Date;
   updated_at: Date;
 }

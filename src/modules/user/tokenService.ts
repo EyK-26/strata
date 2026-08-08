@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { AuthUser } from "../../core/auth/authContext";
 import { hashApiToken } from "../../core/auth/tokenHash";
 import { ForbiddenError, NotFoundError } from "../../core/errors/http";
+import { resolveDefaultTokenExpiryDays } from "../../core/security/tokenExpiry";
 import type ApiTokenRepository from "./apiTokenRepository";
 import type UserRepository from "./repository";
 import type { ApiTokenRecord, ApiTokenResource, CreatedApiToken, UserRecord } from "./types";
@@ -33,12 +34,20 @@ function resolveExpiresAt(input: CreateTokenInput): Date | null {
     return input.expiresAt;
   }
 
-  if (input.expiresInDays === undefined) {
+  if (input.expiresInDays !== undefined) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + input.expiresInDays);
+    return expiresAt;
+  }
+
+  const defaultExpiryDays = resolveDefaultTokenExpiryDays();
+
+  if (defaultExpiryDays === null) {
     return null;
   }
 
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + input.expiresInDays);
+  expiresAt.setDate(expiresAt.getDate() + defaultExpiryDays);
   return expiresAt;
 }
 

@@ -3,6 +3,7 @@ import db from "../../db/connection";
 import { isGlobalAdmin } from "../auth/accessControl";
 import { currentAuthUser } from "../auth/authContext";
 import { ForbiddenError, HttpError } from "../errors/http";
+import { resolveTenant } from "./resolveTenant";
 import { runWithTenant, type TenantContext } from "./tenantContext";
 
 const DEFAULT_TENANT: TenantContext = {
@@ -11,23 +12,6 @@ const DEFAULT_TENANT: TenantContext = {
   plan: "enterprise",
   region: "eu",
 };
-
-async function resolveTenant(tenantId: number): Promise<TenantContext | null> {
-  const rows = (await db`
-    SELECT id, slug, plan, region
-    FROM tenant
-    WHERE id = ${tenantId}
-    LIMIT 1
-  `) as Array<{
-    id: number;
-    slug: string;
-    plan: TenantContext["plan"];
-    region: TenantContext["region"];
-  }>;
-
-  const row = rows[0];
-  return row ? { id: row.id, slug: row.slug, plan: row.plan, region: row.region ?? "eu" } : null;
-}
 
 async function resolveUserTenantId(userId: number): Promise<number> {
   const rows = (await db`
@@ -85,6 +69,7 @@ function createTenantMiddleware() {
       const tenant = await resolveTenantForRequest(request);
 
       return await runWithTenant(tenant, async () => {
+        await db`SELECT set_config('app.tenant_id', ${String(tenant.id)}, false)`;
         const response = await next();
         const headers = new Headers(response.headers);
         headers.set("x-tenant-id", String(tenant.id));
@@ -105,10 +90,4 @@ function createTenantMiddleware() {
   };
 }
 
-export {
-  auditChecksum,
-  createTenantMiddleware,
-  DEFAULT_TENANT,
-  resolveTenant,
-  resolveUserTenantId,
-};
+export { auditChecksum, createTenantMiddleware, DEFAULT_TENANT, resolveUserTenantId };

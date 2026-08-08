@@ -7,6 +7,9 @@ interface FeatureFlags {
   scim: boolean;
   billing: boolean;
   siemExport: boolean;
+  publicReads: boolean;
+  emailVerification: boolean;
+  mfa: boolean;
 }
 
 function readFeatureFlags(): FeatureFlags {
@@ -19,6 +22,9 @@ function readFeatureFlags(): FeatureFlags {
     scim: (process.env.FEATURE_SCIM ?? "true") !== "false",
     billing: (process.env.FEATURE_BILLING ?? "true") !== "false",
     siemExport: (process.env.FEATURE_SIEM_EXPORT ?? "true") !== "false",
+    publicReads: (process.env.FEATURE_PUBLIC_READS ?? "true") !== "false",
+    emailVerification: (process.env.FEATURE_EMAIL_VERIFICATION ?? "false") === "true",
+    mfa: (process.env.FEATURE_MFA ?? "false") === "true",
   };
 }
 

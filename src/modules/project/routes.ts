@@ -12,11 +12,11 @@ function createProjectRoutes(
 
   return {
     "/projects": {
-      GET: controller.index,
+      GET: kernel.wrapPublicRead(controller.index as unknown as RouteHandler),
       POST: kernel.wrapAbility("projects:create", controller.store as unknown as RouteHandler),
     },
     "/projects/:id": {
-      GET: controller.show,
+      GET: kernel.wrapPublicRead(controller.show as unknown as RouteHandler),
       PATCH: kernel.wrapAbility("projects:update", controller.update as unknown as RouteHandler),
       DELETE: kernel.wrapAbility("projects:delete", controller.destroy as unknown as RouteHandler),
     },

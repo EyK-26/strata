@@ -48,11 +48,21 @@ class ScimService {
   }
 
   async listUsers(startIndex = 1, count = 100) {
+    const tenantId = currentTenantId();
     const offset = Math.max(startIndex - 1, 0);
-    const records = await this.users.findAll({ limit: count, offset });
+    const records = await this.users.findAll({
+      limit: count,
+      offset,
+      where: { tenant_id: tenantId },
+    });
     const total = Number(
-      ((await db`SELECT COUNT(*)::int AS count FROM users`) as Array<{ count: number }>)[0]
-        ?.count ?? records.length,
+      (
+        (await db`
+          SELECT COUNT(*)::int AS count
+          FROM users
+          WHERE tenant_id = ${tenantId}
+        `) as Array<{ count: number }>
+      )[0]?.count ?? records.length,
     );
 
     return {
@@ -67,7 +77,7 @@ class ScimService {
   async getUser(id: number) {
     const user = await this.users.findById(id);
 
-    if (!user) {
+    if (!user || user.tenant_id !== currentTenantId()) {
       throw new NotFoundError(`SCIM user ${id} not found.`);
     }
 
@@ -101,7 +111,7 @@ class ScimService {
   async patchUser(id: number, operations: ScimPatchOperation[]) {
     const user = await this.users.findById(id);
 
-    if (!user) {
+    if (!user || user.tenant_id !== currentTenantId()) {
       throw new NotFoundError(`SCIM user ${id} not found.`);
     }
 
@@ -133,6 +143,12 @@ class ScimService {
   }
 
   async deleteUser(id: number): Promise<void> {
+    const user = await this.users.findById(id);
+
+    if (!user || user.tenant_id !== currentTenantId()) {
+      throw new NotFoundError(`SCIM user ${id} not found.`);
+    }
+
     const deleted = await this.users.deleteById(id);
 
     if (!deleted) {
@@ -141,11 +157,12 @@ class ScimService {
   }
 
   async listGroups(startIndex = 1, count = 100) {
+    const tenantId = currentTenantId();
     const offset = Math.max(startIndex - 1, 0);
     const rows = (await db`
       SELECT id, name, slug
       FROM organization
-      WHERE deleted_at IS NULL
+      WHERE deleted_at IS NULL AND tenant_id = ${tenantId}
       ORDER BY id
       LIMIT ${count} OFFSET ${offset}
     `) as Array<{ id: number; name: string; slug: string }>;
@@ -154,7 +171,7 @@ class ScimService {
         (await db`
           SELECT COUNT(*)::int AS count
           FROM organization
-          WHERE deleted_at IS NULL
+          WHERE deleted_at IS NULL AND tenant_id = ${tenantId}
         `) as Array<{ count: number }>
       )[0]?.count ?? rows.length,
     );
@@ -199,10 +216,11 @@ class ScimService {
   }
 
   private async toScimGroup(organizationId: number) {
+    const tenantId = currentTenantId();
     const rows = (await db`
       SELECT id, name, slug
       FROM organization
-      WHERE id = ${organizationId} AND deleted_at IS NULL
+      WHERE id = ${organizationId} AND deleted_at IS NULL AND tenant_id = ${tenantId}
       LIMIT 1
     `) as Array<{ id: number; name: string; slug: string }>;
     const organization = rows[0];

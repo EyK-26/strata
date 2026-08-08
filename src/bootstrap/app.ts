@@ -1,3 +1,4 @@
+import { resolveMaxBodyBytes } from "../core/http/bodySizeLimitMiddleware";
 import {
   installGracefulShutdownSignals,
   registerShutdownHandler,
@@ -20,6 +21,7 @@ class App {
     this.server = Bun.serve({
       port,
       routes,
+      maxRequestBodySize: resolveMaxBodyBytes(),
     });
 
     registerShutdownHandler("http-server", async () => {

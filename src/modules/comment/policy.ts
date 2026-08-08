@@ -5,6 +5,7 @@ import {
   hasOrgMembership,
 } from "../../core/auth/membershipContext";
 import { Policy } from "../../core/auth/policy";
+import { guestCanViewResource } from "../../core/security/publicReads";
 import type { CommentRecord } from "./types";
 
 interface CommentWithScope extends CommentRecord {
@@ -18,7 +19,7 @@ class CommentPolicy extends Policy {
 
   override view(user: AuthUser | null, comment: CommentWithScope): boolean {
     if (!user) {
-      return true;
+      return guestCanViewResource();
     }
 
     if (comment.organization_id === undefined) {

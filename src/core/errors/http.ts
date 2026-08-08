@@ -52,12 +52,19 @@ class UnauthorizedError extends HttpError {
   }
 }
 
+class PayloadTooLargeError extends HttpError {
+  constructor(message: string = "Payload Too Large", details?: unknown) {
+    super(413, message, details);
+  }
+}
+
 export {
   BadRequestError,
   ConflictError,
   ForbiddenError,
   HttpError,
   NotFoundError,
+  PayloadTooLargeError,
   UnauthorizedError,
   UnprocessableEntityError,
   ValidationError,

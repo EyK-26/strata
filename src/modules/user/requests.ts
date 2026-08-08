@@ -14,6 +14,7 @@ type OAuthProviderParams = { provider: string };
 interface LoginBodyDto {
   email: string;
   password: string;
+  mfa_code?: string;
 }
 
 interface CreateApiTokenBodyDto {
@@ -53,11 +54,13 @@ class LoginRequest extends FormRequest<LoginBodyDto> {
     const validated = validateObject(payload, {
       email: [required(), stringRule(), minLength(3), maxLength(255)],
       password: [required(), stringRule(), minLength(8), maxLength(255)],
+      mfa_code: [optional(), stringRule(), minLength(6), maxLength(6)],
     });
 
     return {
       email: validated.email as string,
       password: validated.password as string,
+      ...(validated.mfa_code === undefined ? {} : { mfa_code: validated.mfa_code as string }),
     };
   }
 }

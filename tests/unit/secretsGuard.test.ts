@@ -59,7 +59,40 @@ describe("assertProductionSecrets", () => {
         AUTH_DEV_HEADERS: "false",
         FEATURE_FIELD_ENCRYPTION: "false",
         FEATURE_BILLING: "true",
+        CORS_ALLOWED_ORIGINS: "https://app.example.com",
+        API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
       }),
     ).toThrow(/STRIPE_WEBHOOK_SECRET/);
+  });
+
+  test("blocks wildcard CORS in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        ADMIN_API_TOKEN: "rotated-admin-token",
+        MEMBER_API_TOKEN: "rotated-member-token",
+        SCIM_BEARER_TOKEN: "rotated-scim-token",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        CORS_ALLOWED_ORIGINS: "*",
+        API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
+      }),
+    ).toThrow(/CORS_ALLOWED_ORIGINS/);
+  });
+
+  test("blocks missing token expiry policy in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        ADMIN_API_TOKEN: "rotated-admin-token",
+        MEMBER_API_TOKEN: "rotated-member-token",
+        SCIM_BEARER_TOKEN: "rotated-scim-token",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        CORS_ALLOWED_ORIGINS: "https://app.example.com",
+      }),
+    ).toThrow(/API_TOKEN_DEFAULT_EXPIRY_DAYS/);
   });
 });

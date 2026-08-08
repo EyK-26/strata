@@ -5,6 +5,7 @@ import {
   hasOrgMembership,
 } from "../../core/auth/membershipContext";
 import { Policy } from "../../core/auth/policy";
+import { guestCanViewResource } from "../../core/security/publicReads";
 import type { TaskWithProjectRecord } from "./types";
 
 function organizationIdForTask(task: TaskWithProjectRecord): number | null {
@@ -18,7 +19,7 @@ class TaskPolicy extends Policy {
 
   override view(user: AuthUser | null, task: TaskWithProjectRecord): boolean {
     if (!user) {
-      return true;
+      return guestCanViewResource();
     }
 
     const organizationId = organizationIdForTask(task);

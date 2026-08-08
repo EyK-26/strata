@@ -106,6 +106,22 @@ class CommentService {
         throw new NotFoundError(`Task ${input.task_id} not found.`);
       }
 
+      const projectRepository = this.projectRepository.withConnection(connection);
+      const organizationRepository = this.organizationRepository.withConnection(connection);
+      const project = await projectRepository.findById(task.project_id);
+
+      if (!project) {
+        throw new NotFoundError(`Task ${input.task_id} not found.`);
+      }
+
+      const organization = await organizationRepository.findById(project.organization_id);
+
+      if (!organization) {
+        throw new NotFoundError(`Task ${input.task_id} not found.`);
+      }
+
+      assertResourceInCurrentTenant(organization.tenant_id, "Task", input.task_id);
+
       return await commentRepository.create({
         task_id: input.task_id,
         body: input.body,

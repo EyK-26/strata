@@ -54,6 +54,26 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
       "Production startup blocked: set STRIPE_WEBHOOK_SECRET when billing webhooks are enabled.",
     );
   }
+
+  const corsOrigins = (env.CORS_ALLOWED_ORIGINS ?? "*").split(",").map((origin) => origin.trim());
+
+  if (corsOrigins.includes("*")) {
+    throw new Error(
+      "Production startup blocked: set explicit CORS_ALLOWED_ORIGINS instead of wildcard.",
+    );
+  }
+
+  if ((env.FEATURE_PUBLIC_READS ?? "true") !== "false") {
+    console.warn(
+      "[secrets] FEATURE_PUBLIC_READS is enabled in production; disable for authenticated-only reads.",
+    );
+  }
+
+  if (!env.API_TOKEN_DEFAULT_EXPIRY_DAYS?.trim()) {
+    throw new Error(
+      "Production startup blocked: set API_TOKEN_DEFAULT_EXPIRY_DAYS to enforce token rotation.",
+    );
+  }
 }
 
 export { assertProductionSecrets };

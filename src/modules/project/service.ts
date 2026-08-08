@@ -108,6 +108,9 @@ class ProjectService {
         throw new NotFoundError(`Organization ${input.organization_id} not found.`);
       }
 
+      assertResourceInCurrentTenant(organization.tenant_id, "Organization", input.organization_id);
+      assertOrganizationReadable(input.organization_id);
+
       return await projectRepository.create({
         organization_id: input.organization_id,
         name: input.name,

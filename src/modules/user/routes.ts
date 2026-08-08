@@ -8,7 +8,7 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
 
   return {
     "/auth/login": {
-      POST: controller.login,
+      POST: kernel.wrapLogin(controller.login),
     },
     "/auth/oauth/:provider": {
       GET: controller.oauthRedirect,

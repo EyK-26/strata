@@ -1,4 +1,6 @@
+import { assertResourceInCurrentTenant } from "../../core/auth/membershipScope";
 import { NotFoundError } from "../../core/errors/http";
+import { currentTenantId } from "../../core/tenant/tenantContext";
 import type CommentRepository from "../comment/repository";
 import type OrganizationRepository from "../organization/repository";
 import type ProjectRepository from "../project/repository";
@@ -14,20 +16,39 @@ class ReportService {
   ) {}
 
   async getSummary(): Promise<ReportSummary> {
-    const [organizations, projects, tasks, comments] = await Promise.all([
-      this.organizationRepository.findAll(),
-      this.projectRepository.findAll(),
-      this.taskRepository.findAll(),
-      this.commentRepository.findAll(),
-    ]);
+    const tenantId = currentTenantId();
+    const organizations = await this.organizationRepository.findAll({
+      where: { tenant_id: tenantId },
+    });
+    const organizationIds = new Set(organizations.map((organization) => organization.id));
+    const projects =
+      organizationIds.size === 0
+        ? []
+        : await this.projectRepository.findAll({
+            where: { organization_id: [...organizationIds] },
+          });
+    const projectIds = new Set(projects.map((project) => project.id));
+    const scopedTasks =
+      projectIds.size === 0
+        ? []
+        : await this.taskRepository.findAll({
+            where: { project_id: [...projectIds] },
+          });
+    const taskIds = new Set(scopedTasks.map((task) => task.id));
+    const scopedComments =
+      taskIds.size === 0
+        ? []
+        : await this.commentRepository.findAll({
+            where: { task_id: [...taskIds] },
+          });
 
     return {
       organization_count: organizations.length,
       project_count: projects.length,
-      task_count: tasks.length,
-      comment_count: comments.length,
+      task_count: scopedTasks.length,
+      comment_count: scopedComments.length,
       projects_by_status: this.countByField(projects, "status"),
-      tasks_by_status: this.countByField(tasks, "status"),
+      tasks_by_status: this.countByField(scopedTasks, "status"),
     };
   }
 
@@ -36,6 +57,8 @@ class ReportService {
       organizationId,
       (id) => new NotFoundError(`Organization ${id} not found.`),
     );
+
+    assertResourceInCurrentTenant(organization.tenant_id, "Organization", organizationId);
 
     const projects = await this.projectRepository.findAll({
       where: { organization_id: organizationId },

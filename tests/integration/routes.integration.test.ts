@@ -478,7 +478,7 @@ describe("integration routes with postgres", () => {
       organization_count: number;
       task_count: number;
       projects_by_status: Record<string, number>;
-    }>("/reports/summary");
+    }>("/reports/summary", { headers: adminHeaders() });
 
     expect(response.status).toBe(200);
     expect(body.organization_count).toBeGreaterThanOrEqual(2);
@@ -491,7 +491,7 @@ describe("integration routes with postgres", () => {
       organization: { slug: string };
       project_count: number;
       task_count: number;
-    }>("/reports/organizations/1");
+    }>("/reports/organizations/1", { headers: adminHeaders() });
 
     expect(response.status).toBe(200);
     expect(body.organization.slug).toBe("acme-labs");
@@ -576,7 +576,9 @@ describe("integration routes with postgres", () => {
   });
 
   test("GET /reports/summary excludes soft-deleted organizations", async () => {
-    const before = await getJson<{ organization_count: number }>("/reports/summary");
+    const before = await getJson<{ organization_count: number }>("/reports/summary", {
+      headers: adminHeaders(),
+    });
 
     const createResponse = await fetch(api("/organizations"), {
       method: "POST",
@@ -593,7 +595,9 @@ describe("integration routes with postgres", () => {
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { id: number };
 
-    const afterCreate = await getJson<{ organization_count: number }>("/reports/summary");
+    const afterCreate = await getJson<{ organization_count: number }>("/reports/summary", {
+      headers: adminHeaders(),
+    });
     expect(afterCreate.body.organization_count).toBe(before.body.organization_count + 1);
 
     const deleteResponse = await fetch(api(`/organizations/${created.id}`), {
@@ -604,10 +608,14 @@ describe("integration routes with postgres", () => {
     });
     expect(deleteResponse.status).toBe(204);
 
-    const afterDelete = await getJson<{ organization_count: number }>("/reports/summary");
+    const afterDelete = await getJson<{ organization_count: number }>("/reports/summary", {
+      headers: adminHeaders(),
+    });
     expect(afterDelete.body.organization_count).toBe(before.body.organization_count);
 
-    const orgReportResponse = await fetch(api(`/reports/organizations/${created.id}`));
+    const orgReportResponse = await fetch(api(`/reports/organizations/${created.id}`), {
+      headers: adminHeaders(),
+    });
     expect(orgReportResponse.status).toBe(404);
   });
 
@@ -625,8 +633,50 @@ describe("integration routes with postgres", () => {
     expect(body.organization_count).toBeGreaterThanOrEqual(2);
   });
 
+  test("GET /admin/stats returns 403 for member tokens", async () => {
+    const response = await fetch(api("/admin/stats"), {
+      headers: memberHeaders(),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  test("POST /projects returns 404 when member targets organization outside membership", async () => {
+    const response = await fetch(api("/projects"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...memberHeaders(),
+      },
+      body: JSON.stringify({
+        organization_id: 2,
+        name: "Cross Org Project",
+      }),
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  test("POST /tasks returns 404 when member targets project outside membership", async () => {
+    const response = await fetch(api("/tasks"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...memberHeaders(),
+      },
+      body: JSON.stringify({
+        project_id: 3,
+        title: "Cross Org Task",
+      }),
+    });
+
+    expect(response.status).toBe(404);
+  });
+
   test("GET /search returns results when feature is enabled", async () => {
-    const response = await fetch(api("/search?q=Registry"));
+    const response = await fetch(api("/search?q=Registry"), {
+      headers: adminHeaders(),
+    });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { data: unknown[] };
     expect(body.data.length).toBeGreaterThanOrEqual(1);

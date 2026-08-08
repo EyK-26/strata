@@ -3,7 +3,9 @@ import { createMembershipMiddleware } from "../core/auth/membershipMiddleware";
 import type { Policy, PolicyGate } from "../core/auth/policy";
 import { createAuthMiddleware } from "../core/http/authMiddleware";
 import { createAuthorizeMiddleware } from "../core/http/authorizeMiddleware";
+import { createBodySizeLimitMiddleware } from "../core/http/bodySizeLimitMiddleware";
 import { createCorsMiddleware } from "../core/http/corsMiddleware";
+import { createLoginThrottleMiddleware } from "../core/http/loginThrottleMiddleware";
 import { createMetricsMiddleware } from "../core/http/metricsMiddleware";
 import { type Middleware, type RouteHandler, requestIdMiddleware } from "../core/http/middleware";
 import { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware";
@@ -13,6 +15,7 @@ import { withMiddleware } from "../core/http/routeMiddleware";
 import { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware";
 import { createThrottleMiddleware } from "../core/http/throttleMiddleware";
 import { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware";
+import { isPublicReadsEnabled } from "../core/security/publicReads";
 import { createTenantMiddleware } from "../core/tenant/tenantMiddleware";
 import { createTracingMiddleware } from "../core/tracing/tracingMiddleware";
 import { tokenServiceToken } from "../modules/user/provider";
@@ -36,6 +39,7 @@ class HttpKernel {
     return [
       createCorsMiddleware(),
       createSecurityHeadersMiddleware(),
+      createBodySizeLimitMiddleware(),
       createTracingMiddleware(),
       createMetricsMiddleware(),
       createRequestLoggingMiddleware(),
@@ -98,6 +102,14 @@ class HttpKernel {
     return this.wrap("authenticated", handler);
   }
 
+  wrapPublicRead(handler: RouteHandler): RouteHandler {
+    if (isPublicReadsEnabled()) {
+      return handler;
+    }
+
+    return this.wrapAuthenticated(handler);
+  }
+
   wrapGlobalAdmin(handler: RouteHandler): RouteHandler {
     const middleware = [...this.group("authenticated"), createRequireGlobalAdminMiddleware()];
 
@@ -117,6 +129,34 @@ class HttpKernel {
     const gate = this.dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
 
     return withMiddleware(createAuthorizeMiddleware(gate, auth, resource, action))(handler);
+  }
+
+  wrapLogin(handler: RouteHandler): RouteHandler {
+    const middleware: Middleware[] = [];
+
+    if (this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
+      const config = this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
+      const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? "";
+
+      if (redisUrl) {
+        const maxAttempts = Number(process.env.LOGIN_RATE_LIMIT_PER_WINDOW ?? "5");
+        const decaySeconds = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS ?? "900");
+
+        middleware.push(
+          createLoginThrottleMiddleware({
+            redisUrl,
+            maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 5,
+            decaySeconds: Number.isFinite(decaySeconds) ? decaySeconds : 900,
+          }),
+        );
+      }
+    }
+
+    if (middleware.length === 0) {
+      return handler;
+    }
+
+    return withMiddleware(...middleware)(handler);
   }
 }
 

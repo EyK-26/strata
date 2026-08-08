@@ -1,10 +1,10 @@
-import { TEST_SCIM_BEARER_TOKEN } from "../../domain/scim";
 import type { Middleware } from "../http/middleware";
-import { timingSafeCompareString } from "../security/timingSafeCompare";
+import { resolveScimTenantFromToken } from "../security/scimTenantTokens";
+import { resolveTenant } from "../tenant/resolveTenant";
+import { runWithTenant } from "../tenant/tenantContext";
 
 function createScimAuthMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    const configuredToken = process.env.SCIM_BEARER_TOKEN ?? TEST_SCIM_BEARER_TOKEN;
     const authorization = request.headers.get("authorization");
 
     if (!authorization?.startsWith("Bearer ")) {
@@ -12,12 +12,19 @@ function createScimAuthMiddleware(): Middleware {
     }
 
     const token = authorization.slice("Bearer ".length).trim();
+    const tenantId = resolveScimTenantFromToken(token);
 
-    if (!timingSafeCompareString(token, configuredToken)) {
+    if (tenantId === null) {
       return jsonScimError("Invalid SCIM bearer token.", 401);
     }
 
-    return await next();
+    const tenant = await resolveTenant(tenantId);
+
+    if (!tenant) {
+      return jsonScimError("SCIM tenant not found.", 401);
+    }
+
+    return await runWithTenant(tenant, async () => await next());
   };
 }
 

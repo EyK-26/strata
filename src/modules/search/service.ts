@@ -1,3 +1,4 @@
+import { currentTenantId } from "../../core/tenant/tenantContext";
 import db from "../../db/connection";
 
 interface SearchHit {
@@ -9,21 +10,29 @@ interface SearchHit {
 
 class SearchService {
   async search(query: string, limit = 20): Promise<SearchHit[]> {
+    const tenantId = currentTenantId();
     const rows = (await db`
       SELECT type, id, snippet, rank FROM (
         SELECT 'task'::text AS type,
-               id,
-               title AS snippet,
-               ts_rank(search_vector, plainto_tsquery('english', ${query})) AS rank
+               task.id,
+               task.title AS snippet,
+               ts_rank(task.search_vector, plainto_tsquery('english', ${query})) AS rank
         FROM task
-        WHERE search_vector @@ plainto_tsquery('english', ${query})
+        INNER JOIN project ON project.id = task.project_id
+        INNER JOIN organization ON organization.id = project.organization_id
+        WHERE task.search_vector @@ plainto_tsquery('english', ${query})
+          AND organization.tenant_id = ${tenantId}
         UNION ALL
         SELECT 'comment'::text AS type,
-               id,
-               body AS snippet,
-               ts_rank(search_vector, plainto_tsquery('english', ${query})) AS rank
+               comment.id,
+               comment.body AS snippet,
+               ts_rank(comment.search_vector, plainto_tsquery('english', ${query})) AS rank
         FROM comment
-        WHERE search_vector @@ plainto_tsquery('english', ${query})
+        INNER JOIN task ON task.id = comment.task_id
+        INNER JOIN project ON project.id = task.project_id
+        INNER JOIN organization ON organization.id = project.organization_id
+        WHERE comment.search_vector @@ plainto_tsquery('english', ${query})
+          AND organization.tenant_id = ${tenantId}
       ) results
       WHERE rank > 0
       ORDER BY rank DESC

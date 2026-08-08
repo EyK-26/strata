@@ -69,11 +69,20 @@ describe("routes", () => {
     const routes = createRoutes(dependencies);
 
     const summaryPath = `${appConfig.apiPrefix}/reports/summary`;
-    const firstResponse = await routes[summaryPath](
-      new Request(`http://example.test${summaryPath}`),
-    );
+    const request = new Request(`http://example.test${summaryPath}`, {
+      headers: {
+        "x-authenticated-user-id": "1",
+        "x-authenticated-user-role": "admin",
+      },
+    });
+    const firstResponse = await routes[summaryPath](request);
     const secondResponse = await routes[summaryPath](
-      new Request(`http://example.test${summaryPath}`),
+      new Request(`http://example.test${summaryPath}`, {
+        headers: {
+          "x-authenticated-user-id": "1",
+          "x-authenticated-user-role": "admin",
+        },
+      }),
     );
 
     expect(firstResponse.status).toBe(200);
