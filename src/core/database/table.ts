@@ -8,6 +8,7 @@ interface TableDefinition<
   primaryKey: PrimaryKey;
   columns: readonly (keyof TEntity & string)[];
   defaultOrderBy?: QueryOrder<TEntity> | QueryOrder<TEntity>[];
+  softDeletes?: boolean | { column?: keyof TEntity & string };
 }
 
 function defineTable<

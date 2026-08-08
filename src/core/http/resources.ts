@@ -9,4 +9,15 @@ function toResourceCollection<TInput, TOutput>(
   return items.map(transformer);
 }
 
-export { serializeDate, toResourceCollection };
+function toPaginatedResourceCollection<TInput, TOutput, TMeta extends object>(
+  items: readonly TInput[],
+  meta: TMeta,
+  transformer: (item: TInput) => TOutput,
+): { data: TOutput[]; meta: TMeta } {
+  return {
+    data: toResourceCollection(items, transformer),
+    meta,
+  };
+}
+
+export { serializeDate, toPaginatedResourceCollection, toResourceCollection };

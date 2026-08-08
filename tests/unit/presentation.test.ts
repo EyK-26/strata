@@ -7,244 +7,112 @@ import {
   parseOptionalPositiveIntQueryParam,
 } from "../../src/core/http";
 import {
-  parseCharacterIdParams,
-  parseCharacterListQuery,
-} from "../../src/modules/character/requests";
-import { parseNemesisListQuery } from "../../src/modules/nemesis/requests";
-import {
-  toCharacterResource,
-  toJSONTreeResource,
-} from "../../src/modules/character/resources";
-import type { JSONTree } from "../../src/types/JSONTree";
-import type { Character } from "../../src/types/character";
+  parseOrganizationIdParams,
+  parseOrganizationListQuery,
+} from "../../src/modules/organization/requests";
+import { parseProjectListQuery } from "../../src/modules/project/requests";
+import { parseTaskListQuery } from "../../src/modules/task/requests";
+import { toOrganizationResource } from "../../src/modules/organization/resources";
+import type { OrganizationRecord } from "../../src/modules/organization/types";
 
 describe("module request helpers", () => {
-  test("parseCharacterIdParams returns a typed integer id", () => {
-    expect(parseCharacterIdParams({ id: "42" })).toEqual({ id: 42 });
-    expect(() => parseCharacterIdParams({ id: "nope" })).toThrow(
-      "Invalid character id. Expected a positive integer.",
+  test("parseOrganizationIdParams returns a typed integer id", () => {
+    expect(parseOrganizationIdParams({ id: "42" })).toEqual({ id: 42 });
+    expect(() => parseOrganizationIdParams({ id: "nope" })).toThrow(
+      "Invalid organization id. Expected a positive integer.",
     );
   });
 
-  test("parses validated query DTOs for character and nemesis lists", () => {
-    const characterRequest = new Request(
-      "http://example.test/characters?limit=1&gender=male",
+  test("parses validated query DTOs for workhub list endpoints", () => {
+    const organizationRequest = new Request(
+      "http://example.test/organizations?page=2&per_page=10",
     );
-    const nemesisRequest = new Request(
-      "http://example.test/nemesis?limit=2&isAlive=true",
+    const projectRequest = new Request(
+      "http://example.test/projects?per_page=5&organizationId=1&include=organization",
+    );
+    const taskRequest = new Request(
+      "http://example.test/tasks?projectId=2&status=in_progress&include=project",
     );
 
-    expect(parseCharacterListQuery(characterRequest)).toEqual({
-      limit: 1,
-      gender: "male",
+    expect(parseOrganizationListQuery(organizationRequest)).toEqual({
+      page: 2,
+      perPage: 10,
     });
-    expect(parseNemesisListQuery(nemesisRequest)).toEqual({
-      limit: 2,
-      isAlive: true,
+    expect(parseProjectListQuery(projectRequest)).toEqual({
+      page: 1,
+      perPage: 5,
+      organizationId: 1,
+      include: "organization",
+    });
+    expect(parseTaskListQuery(taskRequest)).toEqual({
+      page: 1,
+      perPage: 15,
+      projectId: 2,
+      status: "in_progress",
+      include: "project",
     });
   });
 });
 
 describe("http validation helpers", () => {
   test("validates primitive query helpers", () => {
-    const params = new URLSearchParams("limit=3&isAlive=false&gender=female");
+    const params = new URLSearchParams("limit=3&isAlive=false&status=active");
 
     expect(parseOptionalPositiveIntQueryParam(params, "limit")).toBe(3);
     expect(parseOptionalBooleanQueryParam(params, "isAlive")).toBe(false);
     expect(
-      parseOptionalEnumQueryParam(params, "gender", [
-        "female",
-        "male",
-        "other",
+      parseOptionalEnumQueryParam(params, "status", [
+        "draft",
+        "active",
+        "archived",
       ]),
-    ).toBe("female");
+    ).toBe("active");
   });
 
   test("parses JSON bodies through a DTO validator", async () => {
     const request = new Request("http://example.test", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Arthur Dent", active: true }),
+      body: JSON.stringify({ name: "Acme Labs", slug: "acme-labs" }),
     });
 
     const dto = await parseJsonBody(request, (payload) => {
       const body = expectObject(payload);
       const name = body.name;
-      const active = body.active;
+      const slug = body.slug;
 
       if (typeof name !== "string" || name.length === 0) {
         throw new Error("name is required");
       }
 
-      if (typeof active !== "boolean") {
-        throw new Error("active must be boolean");
+      if (typeof slug !== "string" || slug.length === 0) {
+        throw new Error("slug is required");
       }
 
-      return { name, active };
+      return { name, slug };
     });
 
-    expect(dto).toEqual({ name: "Arthur Dent", active: true });
+    expect(dto).toEqual({ name: "Acme Labs", slug: "acme-labs" });
   });
 });
 
 describe("module resources", () => {
-  test("serializes character dates and nested relations", () => {
-    const character: Character = {
+  test("serializes organization timestamps", () => {
+    const organization: OrganizationRecord = {
       id: 1,
-      name: "Arthur Dent",
-      gender: "male",
-      ability: "panic",
-      minimal_distance: "5m",
-      weight: 82,
-      born: new Date("2000-01-01T00:00:00.000Z"),
-      in_space_since: new Date("2024-01-01T00:00:00.000Z"),
-      beer_consumption: 3,
-      knows_the_answer: false,
-      nemeses: [
-        {
-          id: 10,
-          character_id: 1,
-          is_alive: true,
-          years: 120,
-          secrets: [
-            {
-              id: 100,
-              nemesis_id: 10,
-              secret_code: "42",
-            },
-          ],
-        },
-      ],
+      name: "Acme Labs",
+      slug: "acme-labs",
+      created_at: new Date("2024-01-01T00:00:00.000Z"),
+      updated_at: new Date("2024-06-01T00:00:00.000Z"),
+      deleted_at: null,
     };
 
-    expect(toCharacterResource(character)).toEqual({
+    expect(toOrganizationResource(organization)).toEqual({
       id: 1,
-      name: "Arthur Dent",
-      gender: "male",
-      ability: "panic",
-      minimal_distance: "5m",
-      weight: 82,
-      born: "2000-01-01T00:00:00.000Z",
-      in_space_since: "2024-01-01T00:00:00.000Z",
-      beer_consumption: 3,
-      knows_the_answer: false,
-      nemeses: [
-        {
-          id: 10,
-          character_id: 1,
-          is_alive: true,
-          years: 120,
-          secrets: [
-            {
-              id: 100,
-              nemesis_id: 10,
-              secret_code: "42",
-            },
-          ],
-        },
-      ],
-    });
-  });
-
-  test("serializes the final JSON tree recursively", () => {
-    const tree: JSONTree = {
-      characters_count: 1,
-      average_age: 84,
-      average_weight: 82,
-      genders: { female: 0, male: 1, other: 0 },
-      characters: [
-        {
-          data: {
-            id: 1,
-            name: "Arthur Dent",
-            gender: "male",
-            ability: "panic",
-            minimal_distance: "5m",
-            weight: 82,
-            born: new Date("2000-01-01T00:00:00.000Z"),
-            in_space_since: new Date("2024-01-01T00:00:00.000Z"),
-            beer_consumption: 3,
-            knows_the_answer: false,
-          },
-          children: {
-            has_nemesis: {
-              records: [
-                {
-                  data: {
-                    id: 10,
-                    character_id: 1,
-                    is_alive: true,
-                    years: 120,
-                  },
-                  children: {
-                    has_secret: {
-                      records: [
-                        {
-                          data: {
-                            id: 100,
-                            nemesis_id: 10,
-                            secret_code: "42",
-                          },
-                        },
-                      ],
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        },
-      ],
-    };
-
-    expect(toJSONTreeResource(tree)).toEqual({
-      characters_count: 1,
-      average_age: 84,
-      average_weight: 82,
-      genders: { female: 0, male: 1, other: 0 },
-      characters: [
-        {
-          data: {
-            id: 1,
-            name: "Arthur Dent",
-            gender: "male",
-            ability: "panic",
-            minimal_distance: "5m",
-            weight: 82,
-            born: "2000-01-01T00:00:00.000Z",
-            in_space_since: "2024-01-01T00:00:00.000Z",
-            beer_consumption: 3,
-            knows_the_answer: false,
-          },
-          children: {
-            has_nemesis: {
-              records: [
-                {
-                  data: {
-                    id: 10,
-                    character_id: 1,
-                    is_alive: true,
-                    years: 120,
-                  },
-                  children: {
-                    has_secret: {
-                      records: [
-                        {
-                          data: {
-                            id: 100,
-                            nemesis_id: 10,
-                            secret_code: "42",
-                          },
-                        },
-                      ],
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        },
-      ],
+      name: "Acme Labs",
+      slug: "acme-labs",
+      created_at: "2024-01-01T00:00:00.000Z",
+      updated_at: "2024-06-01T00:00:00.000Z",
     });
   });
 });

@@ -3,26 +3,43 @@ import {
   buildSelectQuery,
   buildWhereClause,
   defineTable,
+  hasMany,
   indexHasManyRelation,
 } from "../../src/core/database";
-import { characterHasManyNemeses } from "../../src/modules/character/relationships";
-import { nemesisHasManySecrets } from "../../src/modules/nemesis/relationships";
-import type { Character } from "../../src/types/character";
-import type { Nemesis } from "../../src/types/nemesis";
-import type { Secret } from "../../src/types/secret";
+
+type Project = {
+  id: number;
+  organization_id: number;
+  name: string;
+  status: string;
+};
+
+type Task = {
+  id: number;
+  project_id: number;
+  title: string;
+  status: string;
+  priority: number;
+};
+
+const projectHasManyTasks = hasMany<Project, Task, "id", "project_id">({
+  name: "tasks",
+  localKey: "id",
+  foreignKey: "project_id",
+});
 
 describe("database query helpers", () => {
   test("builds where clauses with equality, ranges, and IN filters", () => {
-    const { clause, params } = buildWhereClause<Nemesis>("nemesis", {
-      is_alive: true,
-      years: { gt: 0, lte: 300 },
-      character_id: [1, 2],
+    const { clause, params } = buildWhereClause<Task>("task", {
+      status: "todo",
+      priority: { gte: 1, lte: 5 },
+      project_id: [1, 2],
     });
 
     expect(clause).toBe(
-      ' WHERE "nemesis"."is_alive" = $1 AND "nemesis"."years" > $2 AND "nemesis"."years" <= $3 AND "nemesis"."character_id" IN ($4, $5)',
+      ' WHERE "task"."status" = $1 AND "task"."priority" >= $2 AND "task"."priority" <= $3 AND "task"."project_id" IN ($4, $5)',
     );
-    expect(params).toEqual([true, 0, 300, 1, 2]);
+    expect(params).toEqual(["todo", 1, 5, 1, 2]);
   });
 
   test("builds select queries with table metadata defaults", () => {
@@ -43,61 +60,64 @@ describe("database query helpers", () => {
     );
     expect(params).toEqual([10]);
   });
+
+  test("builds select queries with offset for pagination", () => {
+    const userTable = defineTable<{ id: number; name: string }, "id">({
+      name: "user_account",
+      primaryKey: "id",
+      columns: ["id", "name"],
+    });
+
+    const { text } = buildSelectQuery(userTable, {
+      limit: 15,
+      offset: 30,
+    });
+
+    expect(text).toContain("LIMIT 15 OFFSET 30");
+  });
 });
 
 describe("database relationship helpers", () => {
   test("indexes hasMany relations while preserving empty parent groups", () => {
-    const characters: Character[] = [
+    const projects: Project[] = [
       {
         id: 1,
-        name: "Arthur Dent",
-        gender: "male",
-        ability: "panic",
-        minimal_distance: "5m",
-        weight: 82,
-        born: new Date("2000-01-01T00:00:00.000Z"),
-        in_space_since: new Date("2024-01-01T00:00:00.000Z"),
-        beer_consumption: 3,
-        knows_the_answer: false,
+        organization_id: 10,
+        name: "Platform Rewrite",
+        status: "active",
       },
       {
         id: 2,
-        name: "Ford Prefect",
-        gender: "male",
-        ability: "improvise",
-        minimal_distance: "10m",
-        weight: 75,
-        born: new Date("1990-01-01T00:00:00.000Z"),
-        in_space_since: new Date("2020-01-01T00:00:00.000Z"),
-        beer_consumption: 7,
-        knows_the_answer: true,
+        organization_id: 10,
+        name: "Legacy Migration",
+        status: "draft",
       },
     ];
 
-    const nemeses: Nemesis[] = [
-      { id: 1, character_id: 1, is_alive: true, years: 120 },
-      { id: 2, character_id: 1, is_alive: false, years: 0 },
+    const tasks: Task[] = [
+      {
+        id: 1,
+        project_id: 1,
+        title: "Design module registry",
+        status: "done",
+        priority: 3,
+      },
+      {
+        id: 2,
+        project_id: 1,
+        title: "Implement query layer",
+        status: "in_progress",
+        priority: 4,
+      },
     ];
 
-    const secrets: Secret[] = [
-      { id: 1, nemesis_id: 1, secret_code: "42" },
-      { id: 2, nemesis_id: 1, secret_code: "DON'T PANIC" },
-    ];
-
-    const nemesesByCharacterId = indexHasManyRelation(
-      characters,
-      nemeses,
-      characterHasManyNemeses,
-    );
-    const secretsByNemesisId = indexHasManyRelation(
-      nemeses,
-      secrets,
-      nemesisHasManySecrets,
+    const tasksByProjectId = indexHasManyRelation(
+      projects,
+      tasks,
+      projectHasManyTasks,
     );
 
-    expect(nemesesByCharacterId.get(1)).toEqual(nemeses);
-    expect(nemesesByCharacterId.get(2)).toEqual([]);
-    expect(secretsByNemesisId.get(1)).toEqual(secrets);
-    expect(secretsByNemesisId.get(2)).toEqual([]);
+    expect(tasksByProjectId.get(1)).toEqual(tasks);
+    expect(tasksByProjectId.get(2)).toEqual([]);
   });
 });

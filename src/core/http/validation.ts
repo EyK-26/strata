@@ -108,6 +108,114 @@ async function parseJsonBody<TValue>(
   return validator(payload);
 }
 
+function readRequiredString(
+  payload: Record<string, unknown>,
+  field: string,
+  options: { minLength?: number; maxLength?: number; pattern?: RegExp } = {},
+): string {
+  const value = payload[field];
+
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new BadRequestError(`"${field}" is required and must be a string.`);
+  }
+
+  const trimmed = value.trim();
+
+  if (options.minLength !== undefined && trimmed.length < options.minLength) {
+    throw new BadRequestError(
+      `"${field}" must be at least ${options.minLength} characters.`,
+    );
+  }
+
+  if (options.maxLength !== undefined && trimmed.length > options.maxLength) {
+    throw new BadRequestError(
+      `"${field}" must be at most ${options.maxLength} characters.`,
+    );
+  }
+
+  if (options.pattern && !options.pattern.test(trimmed)) {
+    throw new BadRequestError(`"${field}" has an invalid format.`);
+  }
+
+  return trimmed;
+}
+
+function readOptionalString(
+  payload: Record<string, unknown>,
+  field: string,
+  options: { minLength?: number; maxLength?: number; pattern?: RegExp } = {},
+): string | undefined {
+  if (!(field in payload) || payload[field] === undefined) {
+    return undefined;
+  }
+
+  return readRequiredString(payload, field, options);
+}
+
+function readRequiredEnum<TValue extends string>(
+  payload: Record<string, unknown>,
+  field: string,
+  allowedValues: readonly TValue[],
+): TValue {
+  const value = readRequiredString(payload, field);
+
+  if (!allowedValues.includes(value as TValue)) {
+    throw new BadRequestError(
+      `"${field}" must be one of: ${allowedValues.join(", ")}.`,
+    );
+  }
+
+  return value as TValue;
+}
+
+function readOptionalEnum<TValue extends string>(
+  payload: Record<string, unknown>,
+  field: string,
+  allowedValues: readonly TValue[],
+): TValue | undefined {
+  if (!(field in payload) || payload[field] === undefined) {
+    return undefined;
+  }
+
+  return readRequiredEnum(payload, field, allowedValues);
+}
+
+function readRequiredPositiveInt(
+  payload: Record<string, unknown>,
+  field: string,
+): number {
+  const value = payload[field];
+
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new BadRequestError(
+      `"${field}" is required and must be a positive integer.`,
+    );
+  }
+
+  return value;
+}
+
+function readOptionalPositiveInt(
+  payload: Record<string, unknown>,
+  field: string,
+): number | undefined {
+  if (!(field in payload) || payload[field] === undefined) {
+    return undefined;
+  }
+
+  return readRequiredPositiveInt(payload, field);
+}
+
+function parsePositiveIntParam(value: string, name: string = "id"): number {
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new BadRequestError(`Invalid ${name}. Expected a positive integer.`);
+  }
+
+  return parsed;
+}
+
 export {
   buildRequestCacheKey,
   expectObject,
@@ -116,4 +224,11 @@ export {
   parseOptionalBooleanQueryParam,
   parseOptionalEnumQueryParam,
   parseOptionalPositiveIntQueryParam,
+  parsePositiveIntParam,
+  readOptionalEnum,
+  readOptionalPositiveInt,
+  readOptionalString,
+  readRequiredEnum,
+  readRequiredPositiveInt,
+  readRequiredString,
 };

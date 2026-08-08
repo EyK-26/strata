@@ -1,41 +1,25 @@
-import type { CharacterRecord, Genders, JSONTree } from "./JSONTree";
-import type { Character } from "./character";
-import type { Statistics } from "./statistics";
-
 interface CacheLike {
-  getOrSet<T>(key: string, loader: () => Promise<T>): Promise<T>;
-  invalidate(key: string): boolean;
-  clear(): void;
-  size(): number;
+  get<T>(key: string): Promise<T | undefined>;
+  remember<T>(
+    key: string,
+    callback: () => Promise<T>,
+    ttlMs?: number,
+  ): Promise<T>;
+  forget(key: string): Promise<boolean>;
+  flush(): Promise<void>;
+  tags(...names: string[]): {
+    remember<T>(
+      key: string,
+      callback: () => Promise<T>,
+      ttlMs?: number,
+    ): Promise<T>;
+    flush(): Promise<number>;
+  };
+  getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T>;
+  invalidate(key: string): Promise<boolean>;
+  invalidateByPrefix(prefix: string): Promise<number>;
+  clear(): Promise<void>;
+  size(): Promise<number>;
 }
 
-interface CharacterServiceLike {
-  getCharactersWithNemesisAndSecrets(): Promise<Character[]>;
-  getCharactersWithNemesisAndSecrets(options: {
-    asTree: false;
-  }): Promise<Character[]>;
-  getCharactersWithNemesisAndSecrets(options: {
-    asTree: true;
-  }): Promise<CharacterRecord[]>;
-  getCharactersWithNemesisAndSecrets(options?: {
-    asTree?: boolean;
-  }): Promise<Character[] | CharacterRecord[]>;
-}
-
-interface StatisticsServiceLike {
-  getAverageWeightOfCharacters(): Promise<number>;
-  getGroupedGenderCountOfCharacters(): Promise<Genders>;
-  getAverageAgeOfAll(): Promise<number>;
-  getStatistics(): Promise<Statistics>;
-}
-
-interface JSONTreeServiceLike {
-  buildJSONTree(): Promise<JSONTree>;
-}
-
-export type {
-  CacheLike,
-  CharacterServiceLike,
-  JSONTreeServiceLike,
-  StatisticsServiceLike,
-};
+export type { CacheLike };

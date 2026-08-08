@@ -84,5 +84,37 @@ function indexHasManyRelation<
   return groups;
 }
 
-export { belongsTo, hasMany, indexHasManyRelation };
+function indexBelongsToRelation<
+  TChild,
+  TParent,
+  ForeignKey extends keyof TChild & string,
+  OwnerKey extends keyof TParent & string,
+>(
+  children: readonly TChild[],
+  parents: readonly TParent[],
+  relation: BelongsToRelation<TChild, TParent, ForeignKey, OwnerKey>,
+): Map<TChild[ForeignKey], TParent> {
+  const parentsById = new Map<TParent[OwnerKey], TParent>();
+
+  for (const parent of parents) {
+    parentsById.set(parent[relation.ownerKey], parent);
+  }
+
+  const result = new Map<TChild[ForeignKey], TParent>();
+
+  for (const child of children) {
+    const foreignKey = child[relation.foreignKey];
+    const parent = parentsById.get(
+      foreignKey as unknown as TParent[OwnerKey],
+    );
+
+    if (parent) {
+      result.set(foreignKey, parent);
+    }
+  }
+
+  return result;
+}
+
+export { belongsTo, hasMany, indexBelongsToRelation, indexHasManyRelation };
 export type { BelongsToRelation, HasManyRelation };

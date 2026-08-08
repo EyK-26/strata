@@ -22,4 +22,43 @@ class NotFoundError extends HttpError {
   }
 }
 
-export { BadRequestError, HttpError, NotFoundError };
+class ConflictError extends HttpError {
+  constructor(message: string = "Conflict", details?: unknown) {
+    super(409, message, details);
+  }
+}
+
+class UnprocessableEntityError extends HttpError {
+  constructor(message: string = "Unprocessable Entity", details?: unknown) {
+    super(422, message, details);
+  }
+}
+
+class ValidationError extends HttpError {
+  constructor(message: string = "Validation failed", details?: unknown) {
+    super(422, message, details);
+  }
+}
+
+class ForbiddenError extends HttpError {
+  constructor(message: string = "Forbidden", details?: unknown) {
+    super(403, message, details);
+  }
+}
+
+class UnauthorizedError extends HttpError {
+  constructor(message: string = "Unauthorized", details?: unknown) {
+    super(401, message, details);
+  }
+}
+
+export {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  HttpError,
+  NotFoundError,
+  UnauthorizedError,
+  UnprocessableEntityError,
+  ValidationError,
+};

@@ -26,6 +26,9 @@ interface QueryOptions<TEntity> {
   where?: QueryWhere<TEntity>;
   orderBy?: QueryOrder<TEntity> | QueryOrder<TEntity>[];
   limit?: number;
+  offset?: number;
+  withTrashed?: boolean;
+  onlyTrashed?: boolean;
 }
 
 type MutationValues<TEntity> = Partial<TEntity>;

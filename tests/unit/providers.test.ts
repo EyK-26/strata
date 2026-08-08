@@ -10,6 +10,11 @@ import {
   ServiceContainer,
 } from "../../src/bootstrap/contracts";
 import { createAppContext } from "../../src/bootstrap/dependencies";
+import { commentServiceToken } from "../../src/modules/comment/provider";
+import { organizationServiceToken } from "../../src/modules/organization/provider";
+import { projectServiceToken } from "../../src/modules/project/provider";
+import { reportServiceToken } from "../../src/modules/report/provider";
+import { taskServiceToken } from "../../src/modules/task/provider";
 
 describe("service container", () => {
   test("memoizes singleton services and creates transient bindings", () => {
@@ -63,9 +68,11 @@ describe("app providers", () => {
       expect(context.dependencies.cache).toBe(
         context.container.resolve(CORE_CACHE_TOKEN),
       );
-      expect(context.dependencies.characterRepository).toBeDefined();
-      expect(context.dependencies.statisticsService).toBeDefined();
-      expect(context.dependencies.jsonTreeService).toBeDefined();
+      expect(context.dependencies.container.resolve(organizationServiceToken)).toBeDefined();
+      expect(context.dependencies.container.resolve(projectServiceToken)).toBeDefined();
+      expect(context.dependencies.container.resolve(taskServiceToken)).toBeDefined();
+      expect(context.dependencies.container.resolve(commentServiceToken)).toBeDefined();
+      expect(context.dependencies.container.resolve(reportServiceToken)).toBeDefined();
     } finally {
       process.env.PORT = previousPort;
       process.env.CACHE_TTL_MS = previousTtl;

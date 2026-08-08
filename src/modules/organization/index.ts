@@ -1,0 +1,40 @@
+import { type AppModule } from "../../bootstrap/contracts";
+import { CACHE_TAGS } from "../../core/cache/tags";
+import OrganizationController from "./controller";
+import organizationProvider, {
+  organizationRepositoryToken,
+  organizationServiceToken,
+} from "./provider";
+import { createOrganizationRoutes } from "./routes";
+import { organizationTable } from "./table";
+
+const organizationModule: AppModule = {
+  name: "organization",
+  order: 10,
+  tableName: organizationTable.name,
+  cacheTags: [CACHE_TAGS.organizations, CACHE_TAGS.reports],
+  cacheDeleteExtraTags: [CACHE_TAGS.projects],
+  providers: [organizationProvider],
+  routes({ dependencies, cachedJson, kernel }) {
+    return createOrganizationRoutes(dependencies, cachedJson, kernel);
+  },
+};
+
+export default organizationModule;
+export { organizationProvider, organizationRepositoryToken, organizationServiceToken };
+export { OrganizationController };
+export {
+  parseCreateOrganizationBody,
+  parseOrganizationIdParams,
+  parseOrganizationListQuery,
+  parseUpdateOrganizationBody,
+} from "./requests";
+export {
+  toOrganizationResource,
+  toOrganizationResourceCollection,
+} from "./resources";
+export { createOrganizationRoutes } from "./routes";
+export { default as OrganizationRepository } from "./repository";
+export { default as OrganizationService } from "./service";
+export { organizationTable } from "./table";
+export type { OrganizationRecord } from "./types";

@@ -1,18 +1,9 @@
-import type {
-  CharacterRepositoryLike,
-  NemesisRepositoryLike,
-  SecretRepositoryLike,
-} from "../types/repositories";
-import type {
-  CacheLike,
-  CharacterServiceLike,
-  JSONTreeServiceLike,
-  StatisticsServiceLike,
-} from "../types/services";
+import type { CacheLike } from "../types/services";
 
 type CachedJson = <T>(
   cacheKey: string,
   loader: () => Promise<T>,
+  tags?: string[],
 ) => Promise<Response>;
 type AppRouteMap = Record<string, any>;
 type ServiceFactory<T> = (container: ServiceContainer) => T;
@@ -107,12 +98,6 @@ class ConfigStore {
 interface AppDependencies {
   container: ServiceContainer;
   cache: CacheLike;
-  characterRepository: CharacterRepositoryLike;
-  nemesisRepository: NemesisRepositoryLike;
-  secretRepository: SecretRepositoryLike;
-  characterService: CharacterServiceLike;
-  statisticsService: StatisticsServiceLike;
-  jsonTreeService: JSONTreeServiceLike;
 }
 
 type MutableAppDependencies = Partial<Omit<AppDependencies, "container">> &
@@ -124,9 +109,12 @@ interface ProviderContext {
   dependencies: MutableAppDependencies;
 }
 
+import type { HttpKernel } from "./httpKernel";
+
 interface ModuleRouteContext {
   dependencies: AppDependencies;
   cachedJson: CachedJson;
+  kernel: HttpKernel;
 }
 
 interface ServiceProvider {
@@ -137,6 +125,10 @@ interface ServiceProvider {
 
 interface AppModule {
   name: string;
+  order?: number;
+  tableName?: string;
+  cacheTags?: readonly string[];
+  cacheDeleteExtraTags?: readonly string[];
   providers?: ServiceProvider[];
   routes?(context: ModuleRouteContext): AppRouteMap;
 }
@@ -150,12 +142,6 @@ interface AppContext {
 const requiredDependencyKeys = [
   "container",
   "cache",
-  "characterRepository",
-  "nemesisRepository",
-  "secretRepository",
-  "characterService",
-  "statisticsService",
-  "jsonTreeService",
 ] as const satisfies readonly (keyof AppDependencies)[];
 
 function getRequiredDependency<K extends keyof AppDependencies>(
@@ -179,6 +165,13 @@ function assertAppDependenciesComplete(
   }
 }
 
+function resolveService<T>(
+  dependencies: AppDependencies,
+  token: string,
+): T {
+  return dependencies.container.resolve<T>(token);
+}
+
 export type {
   AppContext,
   AppDependencies,
@@ -196,4 +189,5 @@ export {
   ServiceContainer,
   assertAppDependenciesComplete,
   getRequiredDependency,
+  resolveService,
 };

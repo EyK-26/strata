@@ -1,9 +1,5 @@
-import createCharacter from "./0001_create_character";
-import createNemesis from "./0002_create_nemesis";
-import createSecret from "./0003_create_secret";
-import type { Migration } from "./types";
-
-const migrations: Migration[] = [createCharacter, createNemesis, createSecret];
-
-export { migrations };
-export type { Migration };
+export { default as createOrganizationMigration } from "./0001_create_organization";
+export { default as createProjectMigration } from "./0002_create_project";
+export { default as createTaskMigration } from "./0003_create_task";
+export { default as createCommentMigration } from "./0004_create_comment";
+export { default as addSoftDeletesMigration } from "./0005_add_soft_deletes";

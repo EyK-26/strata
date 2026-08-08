@@ -142,6 +142,62 @@ function buildWhereClause<TEntity>(
   };
 }
 
+function resolveSoftDeleteColumn<TEntity>(
+  table: TableDefinition<TEntity>,
+): string | null {
+  if (!table.softDeletes) {
+    return null;
+  }
+
+  if (table.softDeletes === true) {
+    return "deleted_at";
+  }
+
+  return table.softDeletes.column ?? "deleted_at";
+}
+
+function appendSoftDeleteScope<TEntity>(
+  table: TableDefinition<TEntity>,
+  options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed">,
+  clauses: string[],
+): void {
+  const column = resolveSoftDeleteColumn(table);
+
+  if (!column) {
+    return;
+  }
+
+  const qualifiedColumn = qualifyColumn(table.name, column);
+
+  if (options.onlyTrashed) {
+    clauses.push(`${qualifiedColumn} IS NOT NULL`);
+    return;
+  }
+
+  if (!options.withTrashed) {
+    clauses.push(`${qualifiedColumn} IS NULL`);
+  }
+}
+
+function buildQueryWhereClause<TEntity>(
+  table: TableDefinition<TEntity>,
+  options: Pick<
+    QueryOptions<TEntity>,
+    "where" | "withTrashed" | "onlyTrashed"
+  > = {},
+): { clause: string; params: unknown[] } {
+  const { clause, params } = buildWhereClause(table.name, options.where ?? {});
+  const clauses =
+    clause.length > 0 ? clause.replace(/^ WHERE /, "").split(" AND ") : [];
+
+  appendSoftDeleteScope(table, options, clauses);
+
+  return {
+    clause: clauses.length > 0 ? ` WHERE ${clauses.join(" AND ")}` : "",
+    params,
+  };
+}
+
 function normalizeOrderBy<TEntity>(
   orderBy?: QueryOrder<TEntity> | QueryOrder<TEntity>[],
 ): QueryOrder<TEntity>[] {
@@ -173,6 +229,18 @@ function buildLimitClause(limit?: number): string {
   }
 
   return ` LIMIT ${limit}`;
+}
+
+function buildOffsetClause(offset?: number): string {
+  if (offset === undefined) {
+    return "";
+  }
+
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new Error("Query offset must be a non-negative integer.");
+  }
+
+  return ` OFFSET ${offset}`;
 }
 
 function buildReturningColumns<TEntity>(
@@ -214,15 +282,16 @@ function buildSelectQuery<TEntity>(
   options: QueryOptions<TEntity> = {},
 ): { text: string; params: unknown[] } {
   const columns = buildReturningColumns(table);
-  const { clause, params } = buildWhereClause(table.name, options.where);
+  const { clause, params } = buildQueryWhereClause(table, options);
   const orderBy = buildOrderByClause(
     table.name,
     options.orderBy ?? table.defaultOrderBy,
   );
   const limit = buildLimitClause(options.limit);
+  const offset = buildOffsetClause(options.offset);
 
   return {
-    text: `SELECT ${columns} FROM ${quoteIdentifier(table.name)}${clause}${orderBy}${limit}`,
+    text: `SELECT ${columns} FROM ${quoteIdentifier(table.name)}${clause}${orderBy}${limit}${offset}`,
     params,
   };
 }
@@ -230,8 +299,12 @@ function buildSelectQuery<TEntity>(
 function buildCountQuery<TEntity>(
   table: TableDefinition<TEntity>,
   where: QueryWhere<TEntity> = {},
+  options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed"> = {},
 ): { text: string; params: unknown[] } {
-  const { clause, params } = buildWhereClause(table.name, where);
+  const { clause, params } = buildQueryWhereClause(table, {
+    where,
+    ...options,
+  });
 
   return {
     text: `SELECT COUNT(*) AS count FROM ${quoteIdentifier(table.name)}${clause}`,
@@ -245,7 +318,7 @@ function buildProjectionQuery<TEntity>(
   alias: string,
   options: QueryOptions<TEntity> = {},
 ): { text: string; params: unknown[] } {
-  const { clause, params } = buildWhereClause(table.name, options.where);
+  const { clause, params } = buildQueryWhereClause(table, options);
   const orderBy = buildOrderByClause(table.name, options.orderBy);
   const limit = buildLimitClause(options.limit);
 
@@ -259,9 +332,13 @@ function buildGroupedCountQuery<TEntity, K extends keyof TEntity & string>(
   table: TableDefinition<TEntity>,
   column: K,
   where: QueryWhere<TEntity> = {},
+  options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed"> = {},
 ): { text: string; params: unknown[] } {
   const qualifiedColumn = qualifyColumn(table.name, column);
-  const { clause, params } = buildWhereClause(table.name, where);
+  const { clause, params } = buildQueryWhereClause(table, {
+    where,
+    ...options,
+  });
 
   return {
     text: `SELECT ${qualifiedColumn} AS ${quoteIdentifier("value")}, COUNT(*) AS ${quoteIdentifier("count")} FROM ${quoteIdentifier(table.name)}${clause} GROUP BY ${qualifiedColumn} ORDER BY ${qualifiedColumn} ASC`,
@@ -318,10 +395,63 @@ function buildUpdateQuery<TEntity, PrimaryKey extends keyof TEntity & string>(
     .join(", ");
   const primaryKeyPlaceholder = pushParam(params, id);
   const returningColumns = buildReturningColumns(table);
+  const scopeClauses: string[] = [];
+
+  appendSoftDeleteScope(table, {}, scopeClauses);
+
+  const scopeSuffix =
+    scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
 
   return {
-    text: `UPDATE ${quoteIdentifier(table.name)} SET ${setClause} WHERE ${quoteIdentifier(table.primaryKey)} = ${primaryKeyPlaceholder} RETURNING ${returningColumns}`,
+    text: `UPDATE ${quoteIdentifier(table.name)} SET ${setClause} WHERE ${quoteIdentifier(table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix} RETURNING ${returningColumns}`,
     params,
+  };
+}
+
+function buildSoftDeleteByIdQuery<
+  TEntity,
+  PrimaryKey extends keyof TEntity & string,
+>(
+  table: TableDefinition<TEntity, PrimaryKey>,
+  id: TEntity[PrimaryKey],
+  deletedAt: Date,
+): { text: string; params: unknown[] } {
+  const deletedAtColumn = resolveSoftDeleteColumn(table);
+
+  if (!deletedAtColumn) {
+    throw new Error(`Table ${table.name} does not support soft deletes.`);
+  }
+
+  const returningColumns = buildReturningColumns(table);
+  const scopeClauses: string[] = [];
+  appendSoftDeleteScope(table, {}, scopeClauses);
+  const scopeSuffix =
+    scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
+
+  return {
+    text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = $1 WHERE ${quoteIdentifier(table.primaryKey)} = $2${scopeSuffix} RETURNING ${returningColumns}`,
+    params: [deletedAt, id],
+  };
+}
+
+function buildRestoreByIdQuery<
+  TEntity,
+  PrimaryKey extends keyof TEntity & string,
+>(
+  table: TableDefinition<TEntity, PrimaryKey>,
+  id: TEntity[PrimaryKey],
+): { text: string; params: unknown[] } {
+  const deletedAtColumn = resolveSoftDeleteColumn(table);
+
+  if (!deletedAtColumn) {
+    throw new Error(`Table ${table.name} does not support soft deletes.`);
+  }
+
+  const returningColumns = buildReturningColumns(table);
+
+  return {
+    text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = $1 WHERE ${quoteIdentifier(table.primaryKey)} = $2 AND ${qualifyColumn(table.name, deletedAtColumn)} IS NOT NULL RETURNING ${returningColumns}`,
+    params: [null, id],
   };
 }
 
@@ -345,9 +475,13 @@ export {
   buildInsertQuery,
   buildOrderByClause,
   buildProjectionQuery,
+  buildQueryWhereClause,
+  buildRestoreByIdQuery,
   buildSelectQuery,
+  buildSoftDeleteByIdQuery,
   buildUpdateQuery,
   buildWhereClause,
   qualifyColumn,
   quoteIdentifier,
+  resolveSoftDeleteColumn,
 };

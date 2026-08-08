@@ -8,49 +8,6 @@ import {
   toPascalCase,
 } from "./utils";
 
-async function registerModuleInBootstrap(
-  moduleSlug: string,
-  moduleVariable: string,
-): Promise<void> {
-  const registryPath = join(
-    import.meta.dir,
-    "..",
-    "..",
-    "bootstrap",
-    "modules.ts",
-  );
-  const importStatement = `import ${moduleVariable} from "../modules/${moduleSlug}/index.ts";`;
-  const moduleEntry = `  ${moduleVariable},`;
-  const currentContent = await Bun.file(registryPath).text();
-
-  if (currentContent.includes(importStatement)) {
-    return;
-  }
-
-  const withImport = currentContent.replace(
-    'import type { AppModule } from "./contracts";',
-    `import type { AppModule } from "./contracts";\n${importStatement}`,
-  );
-
-  if (withImport === currentContent) {
-    throw new Error(
-      "Could not register module import in src/bootstrap/modules.ts.",
-    );
-  }
-
-  const listTerminator = "\n];";
-  const listTerminatorIndex = withImport.lastIndexOf(listTerminator);
-
-  if (listTerminatorIndex === -1) {
-    throw new Error(
-      "Could not register module entry in src/bootstrap/modules.ts.",
-    );
-  }
-
-  const withEntry = `${withImport.slice(0, listTerminatorIndex)}\n${moduleEntry}${withImport.slice(listTerminatorIndex)}`;
-  await Bun.write(registryPath, withEntry);
-}
-
 async function makeModuleCommand(name?: string): Promise<void> {
   if (!name) {
     throw new Error("make:module requires a name.");
@@ -95,6 +52,7 @@ async function makeModuleCommand(name?: string): Promise<void> {
       "types.ts",
       `interface ${moduleName}Record {
   id: number;
+  name: string;
 }
 
 export type { ${moduleName}Record };
@@ -108,7 +66,7 @@ import type { ${moduleName}Record } from "./types";
 const ${moduleIdentifier}Table = defineTable<${moduleName}Record, "id">({
   name: "${moduleSlug}",
   primaryKey: "id",
-  columns: ["id"],
+  columns: ["id", "name"],
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
@@ -133,10 +91,33 @@ export default ${moduleName}Repository;
     [
       "service.ts",
       `import ${moduleName}Repository from "./repository";
+import type { ${moduleName}Record } from "./types";
+import type { PaginatedResult } from "../../core/pagination";
 
 class ${moduleName}Service {
-  constructor(private readonly repository: ${moduleName}Repository) {
-    void this.repository;
+  constructor(private readonly repository: ${moduleName}Repository) {}
+
+  paginate(options: {
+    page: number;
+    perPage: number;
+  }): Promise<PaginatedResult<${moduleName}Record>> {
+    return this.repository.paginate(options);
+  }
+
+  findByIdOrThrow(id: number): Promise<${moduleName}Record> {
+    return this.repository.findByIdOrThrow(id);
+  }
+
+  create(input: { name: string }): Promise<${moduleName}Record> {
+    return this.repository.create(input);
+  }
+
+  update(id: number, input: { name?: string }): Promise<${moduleName}Record> {
+    return this.repository.update(id, input);
+  }
+
+  delete(id: number): Promise<void> {
+    return this.repository.delete(id);
   }
 }
 
@@ -144,36 +125,96 @@ export default ${moduleName}Service;
 `,
     ],
     [
+      "policy.ts",
+      `import type { AuthUser } from "../../core/auth/authContext";
+import { Policy } from "../../core/auth/policy";
+import type { ${moduleName}Record } from "./types";
+
+class ${moduleName}Policy extends Policy {
+  override create(_user: AuthUser | null): boolean {
+    return true;
+  }
+
+  override update(_user: AuthUser | null, _resource: ${moduleName}Record): boolean {
+    return true;
+  }
+
+  override delete(user: AuthUser | null, _resource: ${moduleName}Record): boolean {
+    return user?.role === "admin" || user?.role === "member";
+  }
+}
+
+export default ${moduleName}Policy;
+`,
+    ],
+    [
       "provider.ts",
       `import type { ServiceProvider } from "../../bootstrap/contracts";
+import { CORE_POLICY_GATE_TOKEN } from "../../bootstrap/config";
 import ${moduleName}Repository from "./repository";
 import ${moduleName}Service from "./service";
+import ${moduleName}Policy from "./policy";
 
 const ${moduleIdentifier}RepositoryToken = "${moduleSlug}.repository";
 const ${moduleIdentifier}ServiceToken = "${moduleSlug}.service";
+const ${moduleIdentifier}PolicyToken = "${moduleSlug}.policy";
 
 const ${moduleIdentifier}Provider: ServiceProvider = {
   name: "${moduleSlug}.provider",
   register({ container }) {
     container.singleton(${moduleIdentifier}RepositoryToken, () => new ${moduleName}Repository());
+    container.singleton(${moduleIdentifier}PolicyToken, () => new ${moduleName}Policy());
   },
   boot({ container }) {
     container.singleton(${moduleIdentifier}ServiceToken, () => {
       const repository = container.resolve<${moduleName}Repository>(${moduleIdentifier}RepositoryToken);
       return new ${moduleName}Service(repository);
     });
+
+    const gate = container.resolve<{ register: (resource: string, policy: unknown) => void }>(
+      CORE_POLICY_GATE_TOKEN,
+    );
+    gate.register("${moduleSlug}", container.resolve(${moduleIdentifier}PolicyToken));
   },
 };
 
 export default ${moduleIdentifier}Provider;
-export { ${moduleIdentifier}RepositoryToken, ${moduleIdentifier}ServiceToken };
+export {
+  ${moduleIdentifier}PolicyToken,
+  ${moduleIdentifier}RepositoryToken,
+  ${moduleIdentifier}ServiceToken,
+};
 `,
     ],
     [
       "requests.ts",
-      `import { parsePositiveIntParam } from "../../core/http";
+      `import {
+  parseJsonBody,
+  parsePaginationQuery,
+  parsePositiveIntParam,
+} from "../../core/http";
+import {
+  maxLength,
+  minLength,
+  required,
+  stringRule,
+  validateObject,
+} from "../../core/validation/rules";
 
 type ${moduleName}IdParams = { id: string };
+
+interface ${moduleName}ListQueryDto {
+  page: number;
+  perPage: number;
+}
+
+interface Create${moduleName}BodyDto {
+  name: string;
+}
+
+interface Update${moduleName}BodyDto {
+  name?: string;
+}
 
 function parse${moduleName}IdParams(params: ${moduleName}IdParams): { id: number } {
   return {
@@ -181,22 +222,70 @@ function parse${moduleName}IdParams(params: ${moduleName}IdParams): { id: number
   };
 }
 
-export { parse${moduleName}IdParams };
-export type { ${moduleName}IdParams };
+function parse${moduleName}ListQuery(request?: Request): ${moduleName}ListQueryDto {
+  return parsePaginationQuery(request);
+}
+
+async function parseCreate${moduleName}Body(
+  request: Request,
+): Promise<Create${moduleName}BodyDto> {
+  return await parseJsonBody(request, (payload) => {
+    const body = validateObject(payload, {
+      name: [required(), stringRule(), minLength(1), maxLength(120)],
+    });
+
+    return {
+      name: body.name as string,
+    };
+  });
+}
+
+async function parseUpdate${moduleName}Body(
+  request: Request,
+): Promise<Update${moduleName}BodyDto> {
+  return await parseJsonBody(request, (payload) => {
+    const body = validateObject(payload, {
+      name: [stringRule(), minLength(1), maxLength(120)],
+    });
+
+    return {
+      ...(body.name === undefined ? {} : { name: body.name as string }),
+    };
+  });
+}
+
+export {
+  parseCreate${moduleName}Body,
+  parse${moduleName}IdParams,
+  parse${moduleName}ListQuery,
+  parseUpdate${moduleName}Body,
+};
+export type {
+  Create${moduleName}BodyDto,
+  ${moduleName}IdParams,
+  ${moduleName}ListQueryDto,
+  Update${moduleName}BodyDto,
+};
 `,
     ],
     [
       "resources.ts",
-      `import { toResourceCollection } from "../../core/http";
+      `import {
+  toPaginatedResourceCollection,
+  toResourceCollection,
+} from "../../core/http";
+import type { PaginationMeta } from "../../core/pagination";
 import type { ${moduleName}Record } from "./types";
 
 interface ${moduleName}Resource {
   id: number;
+  name: string;
 }
 
 function to${moduleName}Resource(record: ${moduleName}Record): ${moduleName}Resource {
   return {
     id: record.id,
+    name: record.name,
   };
 }
 
@@ -206,46 +295,113 @@ function to${moduleName}ResourceCollection(
   return toResourceCollection(records, to${moduleName}Resource);
 }
 
-export { to${moduleName}Resource, to${moduleName}ResourceCollection };
+function to${moduleName}PaginatedResourceCollection(
+  records: readonly ${moduleName}Record[],
+  meta: PaginationMeta,
+) {
+  return toPaginatedResourceCollection(records, meta, to${moduleName}Resource);
+}
+
+export {
+  to${moduleName}PaginatedResourceCollection,
+  to${moduleName}Resource,
+  to${moduleName}ResourceCollection,
+};
 export type { ${moduleName}Resource };
 `,
     ],
     [
       "controller.ts",
       `import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
-import { jsonResponse, withErrorHandling } from "../../core/http";
-import type ${moduleName}Repository from "./repository";
-import { ${moduleIdentifier}RepositoryToken } from "./provider";
-import { parse${moduleName}IdParams, type ${moduleName}IdParams } from "./requests";
+import { resolveService } from "../../bootstrap/contracts";
 import {
+  bindRouteModel,
+  buildRequestCacheKey,
+  createdResponse,
+  jsonResponse,
+  noContentResponse,
+  securedBindRouteModel,
+  type RouteRequest,
+  withErrorHandling,
+} from "../../core/http";
+import ${moduleName}Service from "./service";
+import { ${moduleIdentifier}ServiceToken } from "./provider";
+import {
+  parseCreate${moduleName}Body,
+  parse${moduleName}ListQuery,
+  parseUpdate${moduleName}Body,
+  type ${moduleName}IdParams,
+} from "./requests";
+import {
+  to${moduleName}PaginatedResourceCollection,
   to${moduleName}Resource,
-  to${moduleName}ResourceCollection,
 } from "./resources";
 
-class ${moduleName}Controller {
-  private readonly repository: ${moduleName}Repository;
+const ${moduleIdentifier.toUpperCase()}_CACHE_TAG = "${pluralSlug}";
 
+class ${moduleName}Controller {
   constructor(
     private readonly dependencies: AppDependencies,
     private readonly cachedJson: CachedJson,
-  ) {
-    this.repository = dependencies.container.resolve<${moduleName}Repository>(
-      ${moduleIdentifier}RepositoryToken,
-    );
+  ) {}
+
+  private get service(): ${moduleName}Service {
+    return resolveService(this.dependencies, ${moduleIdentifier}ServiceToken);
   }
 
-  readonly index = withErrorHandling(async () => {
-    return await this.cachedJson("/${pluralSlug}", async () => {
-      return to${moduleName}ResourceCollection(await this.repository.findAll());
-    });
+  readonly index = withErrorHandling(async (request?: Request) => {
+    const query = parse${moduleName}ListQuery(request);
+    const cacheKey = buildRequestCacheKey("/${pluralSlug}", request);
+
+    return await this.cachedJson(
+      cacheKey,
+      async () => {
+        const result = await this.service.paginate(query);
+        return to${moduleName}PaginatedResourceCollection(result.data, result.meta);
+      },
+      [${moduleIdentifier.toUpperCase()}_CACHE_TAG],
+    );
   });
 
   readonly show = withErrorHandling(
-    async ({ params }: { params: ${moduleName}IdParams }) => {
-      const { id } = parse${moduleName}IdParams(params);
-      const record = await this.repository.findByIdOrThrow(id);
-      return jsonResponse(to${moduleName}Resource(record));
-    },
+    bindRouteModel(
+      "id",
+      (id) => this.service.findByIdOrThrow(id),
+      async (_request, record) => {
+        return jsonResponse(to${moduleName}Resource(record));
+      },
+    ),
+  );
+
+  readonly store = withErrorHandling(async (request: Request) => {
+    const body = await parseCreate${moduleName}Body(request);
+    const record = await this.service.create(body);
+    return createdResponse(to${moduleName}Resource(record));
+  });
+
+  readonly update = withErrorHandling(
+    securedBindRouteModel(
+      "id",
+      (id) => this.service.findByIdOrThrow(id),
+      { resource: "${moduleSlug}", action: "update" },
+      async (req: RouteRequest<${moduleName}IdParams>, record) => {
+        const body = await parseUpdate${moduleName}Body(req);
+        const updated = await this.service.update(record.id, body);
+        return jsonResponse(to${moduleName}Resource(updated));
+      },
+    ),
+  );
+
+  readonly destroy = withErrorHandling(
+    securedBindRouteModel(
+      "id",
+      (id) => this.service.findByIdOrThrow(id),
+      { resource: "${moduleSlug}", action: "delete" },
+      async (_request, record) => {
+        await this.service.delete(record.id);
+        return noContentResponse();
+      },
+    ),
   );
 }
 
@@ -254,18 +410,32 @@ export default ${moduleName}Controller;
     ],
     [
       "routes.ts",
-      `import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
+      `import type { HttpKernel } from "../../bootstrap/httpKernel";
+import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
+import type { RouteHandler } from "../../core/http/middleware";
 import ${moduleName}Controller from "./controller";
 
 function create${moduleName}Routes(
   dependencies: AppDependencies,
   cachedJson: CachedJson,
+  kernel: HttpKernel,
 ) {
   const controller = new ${moduleName}Controller(dependencies, cachedJson);
 
   return {
-    "/${pluralSlug}": controller.index,
-    "/${pluralSlug}/:id": controller.show,
+    "/${pluralSlug}": {
+      GET: controller.index,
+      POST: controller.store,
+    },
+    "/${pluralSlug}/:id": {
+      GET: controller.show,
+      PATCH: kernel.wrapAuthenticated(
+        controller.update as unknown as RouteHandler,
+      ),
+      DELETE: kernel.wrapAuthenticated(
+        controller.destroy as unknown as RouteHandler,
+      ),
+    },
   };
 }
 
@@ -281,12 +451,16 @@ import ${moduleIdentifier}Provider, {
   ${moduleIdentifier}ServiceToken,
 } from "./provider";
 import { create${moduleName}Routes } from "./routes";
+import { ${moduleIdentifier}Table } from "./table";
 
 const ${moduleVariable}: AppModule = {
   name: "${moduleSlug}",
+  order: 100,
+  tableName: ${moduleIdentifier}Table.name,
+  cacheTags: ["${pluralSlug}"],
   providers: [${moduleIdentifier}Provider],
-  routes({ dependencies, cachedJson }) {
-    return create${moduleName}Routes(dependencies, cachedJson);
+  routes({ dependencies, cachedJson, kernel }) {
+    return create${moduleName}Routes(dependencies, cachedJson, kernel);
   },
 };
 
@@ -297,8 +471,12 @@ export {
   ${moduleIdentifier}ServiceToken,
 };
 export { ${moduleName}Controller };
-export { parse${moduleName}IdParams } from "./requests";
-export { to${moduleName}Resource, to${moduleName}ResourceCollection } from "./resources";
+export { parse${moduleName}IdParams, parse${moduleName}ListQuery } from "./requests";
+export {
+  to${moduleName}PaginatedResourceCollection,
+  to${moduleName}Resource,
+  to${moduleName}ResourceCollection,
+} from "./resources";
 export { create${moduleName}Routes } from "./routes";
 export { default as ${moduleName}Repository } from "./repository";
 export { default as ${moduleName}Service } from "./service";
@@ -312,10 +490,9 @@ export type { ${moduleName}Record } from "./types";
     await Bun.write(join(directory, fileName), content);
   }
 
-  await registerModuleInBootstrap(moduleSlug, moduleVariable);
-
   console.log(`Created module scaffold in: ${directory}`);
-  console.log(`Registered module in: src/bootstrap/modules.ts`);
+  console.log(`Module will be auto-discovered from src/modules/${moduleSlug}/`);
+  console.log(`Next: bun run cli make:migration create_${moduleSlug} && bun run cli migrate`);
 }
 
 export { makeModuleCommand };

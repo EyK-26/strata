@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>42 API</title>
+        <title>WorkHub API</title>
         <style>
             :root {
                 color-scheme: dark;
@@ -78,82 +78,79 @@
     </head>
 
     <body>
-        <h1>42 API</h1>
+        <h1>WorkHub API</h1>
         <p class="hint">
-            Collection endpoints are linked below. For ID-based endpoints, use
-            the forms so you can request a real numeric ID.
+            Framework reference domain for organizations, projects, tasks, and
+            comments.
         </p>
 
         <section>
             <h2>Collections</h2>
             <ul>
-                <li><a href="/characters">/characters</a></li>
-                <li><a href="/nemesis">/nemesis</a></li>
-                <li><a href="/secrets">/secrets</a></li>
-                <li>
-                    <a href="/characters-formatted">/characters-formatted</a>
-                </li>
-                <li><a href="/statistics">/statistics</a></li>
-                <li><a href="/final-json-tree">/final-json-tree</a></li>
+                <li><a href="/organizations">/organizations</a></li>
+                <li><a href="/projects?include=organization">/projects</a></li>
+                <li><a href="/tasks?include=project">/tasks</a></li>
+                <li><a href="/comments">/comments</a></li>
+                <li><a href="/reports/summary">/reports/summary</a></li>
             </ul>
         </section>
 
         <section>
             <h2>Lookup by ID</h2>
 
-            <form data-prefix="/characters/">
+            <form data-prefix="/organizations/">
                 <input
                     type="number"
                     min="1"
                     name="id"
-                    placeholder="Character ID"
+                    placeholder="Organization ID"
                     required
                 />
-                <button type="submit">Open /characters/:id</button>
+                <button type="submit">Open /organizations/:id</button>
             </form>
 
-            <form data-prefix="/nemesis/">
+            <form data-prefix="/projects/">
                 <input
                     type="number"
                     min="1"
                     name="id"
-                    placeholder="Nemesis ID"
+                    placeholder="Project ID"
                     required
                 />
-                <button type="submit">Open /nemesis/:id</button>
+                <button type="submit">Open /projects/:id</button>
             </form>
 
-            <form data-prefix="/nemesis/character/">
+            <form data-prefix="/tasks/">
                 <input
                     type="number"
                     min="1"
                     name="id"
-                    placeholder="Character ID"
+                    placeholder="Task ID"
                     required
                 />
-                <button type="submit">Open /nemesis/character/:id</button>
+                <button type="submit">Open /tasks/:id</button>
             </form>
 
-            <form data-prefix="/secrets/">
+            <form data-prefix="/tasks/" data-suffix="/comments">
                 <input
                     type="number"
                     min="1"
                     name="id"
-                    placeholder="Secret ID"
+                    placeholder="Task ID"
                     required
                 />
-                <button type="submit">Open /secrets/:id</button>
+                <button type="submit">Open /tasks/:id/comments</button>
             </form>
 
-            <form data-prefix="/secrets/nemesis/">
+            <form data-prefix="/reports/organizations/">
                 <input
                     type="number"
                     min="1"
                     name="id"
-                    placeholder="Nemesis ID"
+                    placeholder="Organization ID"
                     required
                 />
-                <button type="submit">Open /secrets/nemesis/:id</button>
+                <button type="submit">Open /reports/organizations/:id</button>
             </form>
         </section>
 
@@ -162,13 +159,14 @@
                 form.addEventListener("submit", (event) => {
                     event.preventDefault();
                     const prefix = form.getAttribute("data-prefix");
+                    const suffix = form.getAttribute("data-suffix") ?? "";
                     const input = form.querySelector('input[name="id"]');
 
                     if (!prefix || !input || !input.value) {
                         return;
                     }
 
-                    window.location.href = `${prefix}${input.value}`;
+                    window.location.href = `${prefix}${input.value}${suffix}`;
                 });
             }
         </script>

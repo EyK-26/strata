@@ -149,6 +149,32 @@ describe("base repository", () => {
     });
   });
 
+  test("paginates records with total metadata", async () => {
+    const connection = new FakeConnection();
+    const repository = new CrewRepository(connection);
+
+    connection.queue([{ count: "25" }]);
+    connection.queue([
+      { id: 11, name: "Arthur", squad_id: 1, is_active: true },
+      { id: 12, name: "Ford", squad_id: 1, is_active: true },
+    ]);
+
+    const result = await repository.paginate({ page: 2, perPage: 10 });
+
+    expect(result.meta).toEqual({
+      page: 2,
+      per_page: 10,
+      total: 25,
+      last_page: 3,
+    });
+    expect(result.data).toHaveLength(2);
+    expect(connection.calls[1]).toEqual({
+      query:
+        'SELECT "crew_member"."id", "crew_member"."name", "crew_member"."squad_id", "crew_member"."is_active" FROM "crew_member" ORDER BY "crew_member"."id" ASC LIMIT 10 OFFSET 10',
+      params: [],
+    });
+  });
+
   test("eager loads hasMany relations for multiple parents in one query", async () => {
     const connection = new FakeConnection();
     const repository = new CrewRepository(connection);

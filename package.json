@@ -6,7 +6,7 @@
   "scripts": {
     "start": "bun run src/bootstrap/server.ts",
     "check": "tsc --noEmit",
-    "unit": "bun test tests/unit/router.test.ts tests/unit/simpleCache.test.ts tests/unit/database.test.ts tests/unit/providers.test.ts tests/unit/baseRepository.test.ts tests/unit/presentation.test.ts",
+    "unit": "bun test tests/unit/router.test.ts tests/unit/simpleCache.test.ts tests/unit/cacheRepository.test.ts tests/unit/modelCacheTags.test.ts tests/unit/invalidateCacheOnModelWrite.test.ts tests/unit/createCacheStore.test.ts tests/unit/requireAuthMiddleware.test.ts tests/unit/routeMiddlewareGroups.test.ts tests/unit/database.test.ts tests/unit/providers.test.ts tests/unit/baseRepository.test.ts tests/unit/presentation.test.ts tests/unit/databaseErrors.test.ts tests/unit/belongsTo.test.ts tests/unit/pagination.test.ts tests/unit/middleware.test.ts tests/unit/testing.test.ts tests/unit/softDeletes.test.ts tests/unit/events.test.ts tests/unit/formRequest.test.ts tests/unit/discoverModules.test.ts tests/unit/envSchema.test.ts tests/unit/validationRules.test.ts tests/unit/policy.test.ts tests/unit/queue.test.ts tests/unit/queueWorker.test.ts tests/unit/authGuard.test.ts tests/unit/authMiddleware.test.ts tests/unit/routeModelBinding.test.ts tests/unit/securedRouteModelBinding.test.ts tests/unit/httpKernel.test.ts tests/unit/authPolicyIntegration.test.ts",
     "integration": "bun test ./tests/integration/routes.integration.test.ts",
     "test:all": "bun run unit && bun run integration",
     "cli": "bun run src/cli/index.ts"

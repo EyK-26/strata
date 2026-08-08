@@ -5,11 +5,21 @@ import {
   buildGroupedCountQuery,
   buildInsertQuery,
   buildProjectionQuery,
+  buildRestoreByIdQuery,
   buildSelectQuery,
+  buildSoftDeleteByIdQuery,
   buildUpdateQuery,
   qualifyColumn,
+  resolveSoftDeleteColumn,
 } from "./query.ts";
-import { indexHasManyRelation, type HasManyRelation } from "./relationships.ts";
+import { eventBus, modelEventName } from "../events/index.ts";
+import {
+  indexBelongsToRelation,
+  indexHasManyRelation,
+  type BelongsToRelation,
+  type HasManyRelation,
+} from "./relationships.ts";
+import { withDatabaseErrorHandling } from "./errors.ts";
 import type { TableDefinition } from "./table.ts";
 import type {
   MutationValues,
@@ -17,6 +27,10 @@ import type {
   QueryWhere,
   UpdateValues,
 } from "./types.ts";
+import {
+  buildPaginationMeta,
+  type PaginatedResult,
+} from "../pagination/index.ts";
 
 interface DatabaseConnection {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
@@ -38,11 +52,39 @@ class BaseRepository<
   ) {}
 
   async findAll(options: QueryOptions<TEntity> = {}): Promise<TEntity[]> {
-    const { text, params } = buildSelectQuery(this.table, options);
-    return (await this.connection.unsafe<TEntity & Record<string, unknown>>(
-      text,
-      params,
-    )) as TEntity[];
+    return await withDatabaseErrorHandling(async () => {
+      const { text, params } = buildSelectQuery(this.table, options);
+      return (await this.connection.unsafe<TEntity & Record<string, unknown>>(
+        text,
+        params,
+      )) as TEntity[];
+    });
+  }
+
+  async paginate(
+    options: {
+      page: number;
+      perPage: number;
+    } & Omit<QueryOptions<TEntity>, "limit" | "offset">,
+  ): Promise<PaginatedResult<TEntity>> {
+    const where = options.where ?? {};
+    const total = await this.countWhere(where, {
+      withTrashed: options.withTrashed,
+      onlyTrashed: options.onlyTrashed,
+    });
+    const offset = (options.page - 1) * options.perPage;
+    const { page, perPage, ...queryOptions } = options;
+    const data = await this.findAll({
+      ...queryOptions,
+      where,
+      limit: perPage,
+      offset,
+    });
+
+    return {
+      data,
+      meta: buildPaginationMeta({ page, perPage, total }),
+    };
   }
 
   async findById(id: TEntity[PrimaryKey]): Promise<TEntity | null> {
@@ -88,30 +130,48 @@ class BaseRepository<
   }
 
   async create(values: MutationValues<TEntity>): Promise<TEntity> {
-    const { text, params } = buildInsertQuery(this.table, values);
-    const [record] = await this.connection.unsafe<
-      TEntity & Record<string, unknown>
-    >(text, params);
+    return await withDatabaseErrorHandling(async () => {
+      const { text, params } = buildInsertQuery(this.table, values);
+      const [record] = await this.connection.unsafe<
+        TEntity & Record<string, unknown>
+      >(text, params);
 
-    if (!record) {
-      throw new Error(
-        `Insert into ${this.table.name} did not return a record.`,
+      if (!record) {
+        throw new Error(
+          `Insert into ${this.table.name} did not return a record.`,
+        );
+      }
+
+      const entity = record as TEntity;
+      await eventBus.dispatch(
+        modelEventName(this.table.name, "created"),
+        entity,
       );
-    }
-
-    return record as TEntity;
+      return entity;
+    });
   }
 
   async updateById(
     id: TEntity[PrimaryKey],
     changes: UpdateValues<TEntity, PrimaryKey>,
   ): Promise<TEntity | null> {
-    const { text, params } = buildUpdateQuery(this.table, id, changes);
-    const [record] = await this.connection.unsafe<
-      TEntity & Record<string, unknown>
-    >(text, params);
+    return await withDatabaseErrorHandling(async () => {
+      const { text, params } = buildUpdateQuery(this.table, id, changes);
+      const [record] = await this.connection.unsafe<
+        TEntity & Record<string, unknown>
+      >(text, params);
 
-    return (record as TEntity | undefined) ?? null;
+      const entity = (record as TEntity | undefined) ?? null;
+
+      if (entity) {
+        await eventBus.dispatch(
+          modelEventName(this.table.name, "updated"),
+          entity,
+        );
+      }
+
+      return entity;
+    });
   }
 
   async updateByIdOrThrow(
@@ -132,9 +192,78 @@ class BaseRepository<
   }
 
   async deleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
-    const { text, params } = buildDeleteByIdQuery(this.table, id);
-    const [row] = await this.connection.unsafe<DeletedRow>(text, params);
-    return row !== undefined;
+    if (resolveSoftDeleteColumn(this.table)) {
+      return await this.softDeleteById(id);
+    }
+
+    return await this.forceDeleteById(id);
+  }
+
+  async softDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
+    return await withDatabaseErrorHandling(async () => {
+      const { text, params } = buildSoftDeleteByIdQuery(
+        this.table,
+        id,
+        new Date(),
+      );
+      const [record] = await this.connection.unsafe<
+        TEntity & Record<string, unknown>
+      >(text, params);
+
+      if (!record) {
+        return false;
+      }
+
+      await eventBus.dispatch(
+        modelEventName(this.table.name, "deleted"),
+        record as TEntity,
+      );
+      return true;
+    });
+  }
+
+  async forceDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
+    return await withDatabaseErrorHandling(async () => {
+      const { text, params } = buildDeleteByIdQuery(this.table, id);
+      const [row] = await this.connection.unsafe<DeletedRow>(text, params);
+
+      if (!row) {
+        return false;
+      }
+
+      await eventBus.dispatch(modelEventName(this.table.name, "force-deleted"), {
+        id,
+      });
+      return true;
+    });
+  }
+
+  async restoreById(id: TEntity[PrimaryKey]): Promise<TEntity | null> {
+    return await withDatabaseErrorHandling(async () => {
+      const { text, params } = buildRestoreByIdQuery(this.table, id);
+      const [record] = await this.connection.unsafe<
+        TEntity & Record<string, unknown>
+      >(text, params);
+
+      if (!record) {
+        return null;
+      }
+
+      const entity = record as TEntity;
+      await eventBus.dispatch(
+        modelEventName(this.table.name, "restored"),
+        entity,
+      );
+      return entity;
+    });
+  }
+
+  withConnection(connection: DatabaseConnection): this {
+    const clone = Object.create(Object.getPrototypeOf(this)) as this;
+    Object.assign(clone, this);
+    (clone as unknown as { connection: DatabaseConnection }).connection =
+      connection;
+    return clone;
   }
 
   protected async findWhere(
@@ -144,8 +273,11 @@ class BaseRepository<
     return await this.findAll({ ...options, where });
   }
 
-  protected async countWhere(where: QueryWhere<TEntity> = {}): Promise<number> {
-    const { text, params } = buildCountQuery(this.table, where);
+  protected async countWhere(
+    where: QueryWhere<TEntity> = {},
+    options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed"> = {},
+  ): Promise<number> {
+    const { text, params } = buildCountQuery(this.table, where, options);
     const [row] = await this.connection.unsafe<CountRow>(text, params);
     return Number(row?.count ?? 0);
   }
@@ -258,6 +390,36 @@ class BaseRepository<
     );
 
     return indexHasManyRelation(parents, children, relation);
+  }
+
+  protected async loadBelongsToForParents<
+    TChild extends object,
+    TParent extends object,
+    ForeignKey extends keyof TChild & string,
+    OwnerKey extends keyof TParent & string,
+  >(
+    children: readonly TChild[],
+    relation: BelongsToRelation<TChild, TParent, ForeignKey, OwnerKey>,
+    parentRepository: BaseRepository<TParent, OwnerKey>,
+    options: Omit<QueryOptions<TParent>, "where"> = {},
+  ): Promise<Map<TChild[ForeignKey], TParent>> {
+    if (children.length === 0) {
+      return new Map();
+    }
+
+    const ownerIds = [
+      ...new Set(children.map((child) => child[relation.foreignKey])),
+    ];
+    const parents = await parentRepository
+      .withConnection(this.connection)
+      .findWhere(
+        {
+          [relation.ownerKey]: ownerIds,
+        } as unknown as QueryWhere<TParent>,
+        options,
+      );
+
+    return indexBelongsToRelation(children, parents, relation);
   }
 }
 

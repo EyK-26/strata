@@ -10,6 +10,7 @@ import {
 } from "./contracts";
 import { appModules } from "./modules";
 import { coreProviders } from "./providers";
+import { setActiveApplicationContext } from "./applicationRegistry";
 
 function collectProviders(modules: AppModule[] = appModules): ServiceProvider[] {
   return [...coreProviders, ...modules.flatMap((module) => module.providers ?? [])];
@@ -43,11 +44,15 @@ function createAppContext(): AppContext {
 
   assertAppDependenciesComplete(dependencies);
 
-  return {
+  const appContext = {
     container,
     config,
     dependencies,
   };
+
+  setActiveApplicationContext(appContext);
+
+  return appContext;
 }
 
 const appContext = createAppContext();
