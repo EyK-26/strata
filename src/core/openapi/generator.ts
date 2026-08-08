@@ -105,7 +105,28 @@ function renderOpenApiDocument(spec: OpenApiSpec): string {
   return `${JSON.stringify(spec, null, 2)}\n`;
 }
 
-function renderTypeScriptSdk(spec: OpenApiSpec): string {
+function toMethodName(method: string, path: string, apiPrefix: string): string {
+  const relativePath = path.startsWith(apiPrefix)
+    ? path.slice(apiPrefix.length) || "/"
+    : path;
+
+  const segments = relativePath
+    .replace(/\{|\}/g, "")
+    .split("/")
+    .filter(Boolean)
+    .flatMap((segment) => segment.split("-"))
+    .map((segment) => segment.replace(/[^a-zA-Z0-9]/g, ""))
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1));
+
+  return `${method.toLowerCase()}${segments.join("")}`;
+}
+
+function toRequestPath(path: string, apiPrefix: string): string {
+  return path.startsWith(apiPrefix) ? path.slice(apiPrefix.length) || "/" : path;
+}
+
+function renderTypeScriptSdk(spec: OpenApiSpec, apiPrefix = "/api/v1"): string {
   const lines = [
     "export class WorkHubClient {",
     `  constructor(private readonly baseUrl = "${spec.servers[0]?.url ?? ""}") {}`,
@@ -117,17 +138,14 @@ function renderTypeScriptSdk(spec: OpenApiSpec): string {
   ];
 
   for (const [path, methods] of Object.entries(spec.paths)) {
+    const requestPath = toRequestPath(path, apiPrefix);
+
     for (const method of Object.keys(methods)) {
-      const functionName = `${method.toLowerCase()}${path
-        .replace(/\{|\}/g, "")
-        .split("/")
-        .filter(Boolean)
-        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-        .join("")}`;
+      const functionName = toMethodName(method, path, apiPrefix);
 
       lines.push(
         `  async ${functionName}(init: RequestInit = {}): Promise<Response> {`,
-        `    return await this.request("${path}", { ...init, method: "${method.toUpperCase()}" });`,
+        `    return await this.request("${requestPath}", { ...init, method: "${method.toUpperCase()}" });`,
         "  }",
         "",
       );

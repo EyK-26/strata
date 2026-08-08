@@ -7,6 +7,7 @@ import {
   generateOpenApiSpec,
   renderTypeScriptSdk,
 } from "../../core/openapi/generator";
+import { appConfig } from "../../config/app";
 
 async function sdkGenerateCommand(): Promise<void> {
   const { dependencies } = createAppContext();
@@ -17,7 +18,7 @@ async function sdkGenerateCommand(): Promise<void> {
   const outputPath = join(outputDirectory, "client.ts");
 
   await mkdir(outputDirectory, { recursive: true });
-  await writeFile(outputPath, renderTypeScriptSdk(spec), "utf8");
+  await writeFile(outputPath, renderTypeScriptSdk(spec, appConfig.apiPrefix), "utf8");
 
   console.log(`TypeScript SDK written to ${outputPath}.`);
 }
