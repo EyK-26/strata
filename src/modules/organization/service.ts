@@ -1,6 +1,10 @@
 import { NotFoundError } from "../../core/errors/http";
 import type { QueryWhere } from "../../core/database/types";
+import { currentOrganizationIds } from "../../core/auth/membershipContext";
+import { isGlobalAdmin } from "../../core/auth/accessControl";
+import { currentAuthUser } from "../../core/auth/authContext";
 import { currentTenantId } from "../../core/tenant/tenantContext";
+import { resolveMembershipService } from "../../core/auth/membershipService";
 import OrganizationRepository from "./repository";
 import type { OrganizationRecord } from "./types";
 
@@ -18,9 +22,27 @@ class OrganizationService {
   constructor(private readonly repository: OrganizationRepository) {}
 
   paginate(options: { page: number; perPage: number }) {
+    const user = currentAuthUser();
+    const where: QueryWhere<OrganizationRecord> = {
+      tenant_id: currentTenantId(),
+    } as unknown as QueryWhere<OrganizationRecord>;
+
+    if (user && !isGlobalAdmin(user)) {
+      const organizationIds = currentOrganizationIds();
+
+      if (organizationIds.length === 0) {
+        return this.repository.paginate({
+          ...options,
+          where: { id: -1 } as unknown as QueryWhere<OrganizationRecord>,
+        });
+      }
+
+      Object.assign(where, { id: organizationIds as unknown as QueryWhere<OrganizationRecord>["id"] });
+    }
+
     return this.repository.paginate({
       ...options,
-      where: { tenant_id: currentTenantId() } as unknown as QueryWhere<OrganizationRecord>,
+      where,
     });
   }
 
@@ -30,16 +52,30 @@ class OrganizationService {
     );
   }
 
-  create(input: CreateOrganizationInput): Promise<OrganizationRecord> {
+  async create(input: CreateOrganizationInput): Promise<OrganizationRecord> {
     const now = new Date();
+    const user = currentAuthUser();
 
-    return this.repository.create({
+    const organization = await this.repository.create({
       tenant_id: currentTenantId(),
       name: input.name,
       slug: input.slug,
       created_at: now,
       updated_at: now,
     });
+
+    if (user) {
+      const userId = typeof user.id === "number" ? user.id : Number(user.id);
+
+      if (Number.isInteger(userId) && userId > 0) {
+        await resolveMembershipService().addOwnerOnOrganizationCreate(
+          organization.id,
+          userId,
+        );
+      }
+    }
+
+    return organization;
   }
 
   async update(

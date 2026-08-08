@@ -1,18 +1,69 @@
+import {
+  hasMinimumOrgRole as hasMinimumOrgRoleInContext,
+  hasOrgMembership,
+} from "../../core/auth/membershipContext";
+import { isGlobalAdmin } from "../../core/auth/accessControl";
 import type { AuthUser } from "../../core/auth/authContext";
 import { Policy } from "../../core/auth/policy";
-import type { TaskRecord } from "./types";
+import type { TaskWithProjectRecord } from "./types";
+
+function organizationIdForTask(task: TaskWithProjectRecord): number | null {
+  return task.project?.organization_id ?? null;
+}
 
 class TaskPolicy extends Policy {
-  override create(_user: AuthUser | null): boolean {
-    return true;
+  override create(user: AuthUser | null): boolean {
+    return user !== null;
   }
 
-  override update(_user: AuthUser | null, _task: TaskRecord): boolean {
-    return true;
+  override view(user: AuthUser | null, task: TaskWithProjectRecord): boolean {
+    if (!user) {
+      return false;
+    }
+
+    const organizationId = organizationIdForTask(task);
+
+    if (organizationId === null) {
+      return isGlobalAdmin(user);
+    }
+
+    return isGlobalAdmin(user) || hasOrgMembership(organizationId);
   }
 
-  override delete(user: AuthUser | null, _task: TaskRecord): boolean {
-    return user?.role === "admin" || user?.role === "member";
+  override update(user: AuthUser | null, task: TaskWithProjectRecord): boolean {
+    if (!user) {
+      return false;
+    }
+
+    const organizationId = organizationIdForTask(task);
+
+    if (organizationId === null) {
+      return isGlobalAdmin(user);
+    }
+
+    if (isGlobalAdmin(user)) {
+      return true;
+    }
+
+    return hasMinimumOrgRoleInContext(organizationId, "member");
+  }
+
+  override delete(user: AuthUser | null, task: TaskWithProjectRecord): boolean {
+    if (!user) {
+      return false;
+    }
+
+    const organizationId = organizationIdForTask(task);
+
+    if (organizationId === null) {
+      return isGlobalAdmin(user);
+    }
+
+    if (isGlobalAdmin(user)) {
+      return true;
+    }
+
+    return hasMinimumOrgRoleInContext(organizationId, "admin");
   }
 }
 

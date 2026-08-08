@@ -1,38 +1,47 @@
-import { randomUUID } from "node:crypto";
 import type { Middleware } from "../http/middleware";
-
-interface TraceContext {
-  traceId: string;
-  spanId: string;
-}
-
-const traceStorage = new Map<string, TraceContext>();
+import { createSpan, exportOtelSpan } from "./otel";
+import { runWithTraceContext } from "./traceContext";
 
 function createTracingMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    const traceId = request.headers.get("x-trace-id") ?? randomUUID();
-    const spanId = randomUUID().slice(0, 16);
+    const traceId = (request.headers.get("x-trace-id") ?? crypto.randomUUID()).replace(
+      /-/g,
+      "",
+    );
+    const spanId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const startedAt = performance.now();
+    const path = new URL(request.url).pathname;
 
-    const response = await next();
-    const headers = new Headers(response.headers);
-    headers.set("x-trace-id", traceId);
-    headers.set("x-span-id", spanId);
-    headers.set("server-timing", `app;dur=${(performance.now() - startedAt).toFixed(2)}`);
+    return await runWithTraceContext({ traceId, spanId }, async () => {
+      const response = await next();
+      const endedAt = performance.now();
+      const headers = new Headers(response.headers);
+      headers.set("x-trace-id", traceId);
+      headers.set("x-span-id", spanId);
+      headers.set("traceparent", `00-${traceId}-${spanId}-01`);
+      headers.set("server-timing", `app;dur=${(endedAt - startedAt).toFixed(2)}`);
 
-    traceStorage.set(traceId, { traceId, spanId });
+      void exportOtelSpan(
+        createSpan({
+          traceId,
+          name: `${request.method} ${path}`,
+          startedAt,
+          endedAt,
+          attributes: {
+            "http.method": request.method,
+            "http.route": path,
+            "http.status_code": String(response.status),
+          },
+        }),
+      ).catch(() => undefined);
 
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
     });
   };
 }
 
-function getTraceContext(traceId: string): TraceContext | undefined {
-  return traceStorage.get(traceId);
-}
-
-export { createTracingMiddleware, getTraceContext };
-export type { TraceContext };
+export { createTracingMiddleware };

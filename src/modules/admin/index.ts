@@ -4,7 +4,7 @@ import { createAdminRoutes } from "./routes";
 
 const adminModule: AppModule = {
   name: "admin",
-  order: 5,
+  order: 6,
   providers: [adminProvider],
   routes({ dependencies, kernel }) {
     return createAdminRoutes(dependencies, kernel);

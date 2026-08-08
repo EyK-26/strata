@@ -1,0 +1,62 @@
+import db from "../../db/connection";
+import type { OrganizationMemberRecord, OrganizationMemberRole } from "./memberTypes";
+
+class OrganizationMemberRepository {
+  async findMembership(
+    userId: number,
+    organizationId: number,
+  ): Promise<OrganizationMemberRecord | null> {
+    const rows = (await db`
+      SELECT id, organization_id, user_id, role, created_at
+      FROM organization_member
+      WHERE user_id = ${userId} AND organization_id = ${organizationId}
+      LIMIT 1
+    `) as OrganizationMemberRecord[];
+
+    return rows[0] ?? null;
+  }
+
+  async listForUser(userId: number): Promise<OrganizationMemberRecord[]> {
+    return (await db`
+      SELECT id, organization_id, user_id, role, created_at
+      FROM organization_member
+      WHERE user_id = ${userId}
+      ORDER BY organization_id
+    `) as OrganizationMemberRecord[];
+  }
+
+  async listForOrganization(organizationId: number): Promise<OrganizationMemberRecord[]> {
+    return (await db`
+      SELECT id, organization_id, user_id, role, created_at
+      FROM organization_member
+      WHERE organization_id = ${organizationId}
+      ORDER BY id
+    `) as OrganizationMemberRecord[];
+  }
+
+  async addMember(input: {
+    organizationId: number;
+    userId: number;
+    role?: OrganizationMemberRole;
+  }): Promise<OrganizationMemberRecord> {
+    const rows = (await db`
+      INSERT INTO organization_member (organization_id, user_id, role)
+      VALUES (${input.organizationId}, ${input.userId}, ${input.role ?? "member"})
+      RETURNING id, organization_id, user_id, role, created_at
+    `) as OrganizationMemberRecord[];
+
+    return rows[0]!;
+  }
+
+  async removeMember(organizationId: number, userId: number): Promise<boolean> {
+    const rows = (await db`
+      DELETE FROM organization_member
+      WHERE organization_id = ${organizationId} AND user_id = ${userId}
+      RETURNING id
+    `) as Array<{ id: number }>;
+
+    return rows.length > 0;
+  }
+}
+
+export default OrganizationMemberRepository;

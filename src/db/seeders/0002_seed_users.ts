@@ -42,7 +42,7 @@ const seeder: Seeder = {
       INSERT INTO organization_member (organization_id, user_id, role)
       VALUES
         (1, 1, 'owner'),
-        (1, 2, 'member')
+        (1, 2, 'admin')
       ON CONFLICT (organization_id, user_id) DO NOTHING
     `;
   },

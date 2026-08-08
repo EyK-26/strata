@@ -7,6 +7,7 @@ import {
 } from "./config";
 import type { ConfigStore } from "./contracts";
 import { createAuthMiddleware } from "../core/http/authMiddleware";
+import { createMembershipMiddleware } from "../core/auth/membershipMiddleware";
 import { createRequireAuthMiddleware } from "../core/http/requireAuthMiddleware";
 import { createAuthorizeMiddleware } from "../core/http/authorizeMiddleware";
 import { createThrottleMiddleware } from "../core/http/throttleMiddleware";
@@ -45,6 +46,7 @@ class HttpKernel {
       createRequestLoggingMiddleware(),
       requestIdMiddleware,
       createAuthMiddleware(auth),
+      createMembershipMiddleware(),
     ];
   }
 

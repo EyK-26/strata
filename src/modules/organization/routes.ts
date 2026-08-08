@@ -2,6 +2,7 @@ import type { HttpKernel } from "../../bootstrap/httpKernel";
 import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
 import type { RouteHandler } from "../../core/http/middleware";
 import OrganizationController from "./controller";
+import OrganizationMemberController from "./memberController";
 
 function createOrganizationRoutes(
   dependencies: AppDependencies,
@@ -9,6 +10,7 @@ function createOrganizationRoutes(
   kernel: HttpKernel,
 ) {
   const controller = new OrganizationController(dependencies, cachedJson);
+  const memberController = new OrganizationMemberController(dependencies);
 
   return {
     "/organizations": {
@@ -27,6 +29,21 @@ function createOrganizationRoutes(
       DELETE: kernel.wrapAbility(
         "organizations:delete",
         controller.destroy as unknown as RouteHandler,
+      ),
+    },
+    "/organizations/:id/members": {
+      GET: kernel.wrapAuthenticated(
+        memberController.index as unknown as RouteHandler,
+      ),
+      POST: kernel.wrapAbility(
+        "organizations:members:write",
+        memberController.store as unknown as RouteHandler,
+      ),
+    },
+    "/organizations/:id/members/:userId": {
+      DELETE: kernel.wrapAbility(
+        "organizations:members:delete",
+        memberController.destroy as unknown as RouteHandler,
       ),
     },
   };

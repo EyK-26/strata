@@ -4,7 +4,9 @@ import { discoverModules } from "../../src/bootstrap/discoverModules";
 describe("discoverModules", () => {
   test("discovers WorkHub modules in route priority order", () => {
     const modules = discoverModules();
+    const orders = modules.map((module) => module.order ?? 100);
 
+    expect(orders).toEqual([...orders].sort((left, right) => left - right));
     expect(modules.map((module) => module.name)).toEqual([
       "user",
       "admin",
@@ -16,6 +18,7 @@ describe("discoverModules", () => {
       "audit",
       "webhook",
       "search",
+      "billing",
     ]);
   });
 

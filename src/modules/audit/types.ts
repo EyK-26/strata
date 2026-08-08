@@ -9,6 +9,9 @@ interface AuditLogRecord {
   ip_address: string | null;
   user_agent: string | null;
   checksum: string | null;
+  tenant_id?: number | null;
+  trace_id?: string | null;
+  exported_at?: Date | null;
   created_at: Date;
 }
 

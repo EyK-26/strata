@@ -1,5 +1,7 @@
 import { currentAuthUser } from "../../core/auth/authContext";
 import { currentRequestMeta } from "../../core/http/requestMetaContext";
+import { currentTraceId } from "../../core/tracing/traceContext";
+import { currentTenantId } from "../../core/tenant/tenantContext";
 import { auditChecksum } from "../../core/tenant/tenantMiddleware";
 import AuditLogRepository from "./repository";
 import type { AuditLogRecord } from "./types";
@@ -30,6 +32,8 @@ class AuditService {
       ip_address: meta.ipAddress,
       user_agent: meta.userAgent,
       checksum: auditChecksum(payload),
+      tenant_id: currentTenantId(),
+      trace_id: currentTraceId(),
       created_at: new Date(),
     });
   }
