@@ -159,6 +159,7 @@ Enterprise patterns:
 - Mutations use `kernel.wrapAbility("<resource>:create", handler)` — see generated `routes.ts`
 - Optional modules can gate routes with `isFeatureEnabled()` in `index.ts`
 - Register policies in `provider.ts` and enforce org scope in services via `membershipScope` helpers
+- Show routes use `securedBindRouteModel` with `view` policy; guests retain public read access for hobby/demo
 
 See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for SCIM/billing extension points.
 
@@ -234,8 +235,11 @@ docker compose exec app bun run test:all
 | `bun run lint` | Check formatting, import order, and lint rules (CI) |
 | `bun run lint:fix` | Apply safe fixes + format across the repo |
 | `bun run format` | Format only (no lint rules) |
+| `bun run validate` | Typecheck, lint, OpenAPI validate, and all tests |
 
 Generated artifacts (`docs/openapi.json`, `sdk/typescript/client.ts`) are excluded from Biome — regenerate them with the CLI instead of hand-editing.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. Use `bun run validate` before opening a PR.
 
 ## Enter the app container
 

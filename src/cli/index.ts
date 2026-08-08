@@ -9,6 +9,7 @@ import { makeRequestCommand } from "./commands/makeRequest";
 import { migrateCommand } from "./commands/migrate";
 import { migrateFreshCommand } from "./commands/migrateFresh";
 import { migrateStatusCommand } from "./commands/migrateStatus";
+import { openapiCheckCommand } from "./commands/openapiCheck";
 import { openapiGenerateCommand } from "./commands/openapiGenerate";
 import { openapiValidateCommand } from "./commands/openapiValidate";
 import {
@@ -47,6 +48,7 @@ const commands: Record<string, (...commandArgs: string[]) => Promise<void> | voi
   "route:list": () => routeListCommand(),
   "openapi:generate": () => openapiGenerateCommand(),
   "openapi:validate": () => openapiValidateCommand(),
+  "openapi:check": () => openapiCheckCommand(),
   "sdk:generate": () => sdkGenerateCommand(),
   "schedule:run": () => scheduleRunCommand(),
 };

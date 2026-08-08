@@ -31,5 +31,6 @@ describe("feature flags", () => {
   test("exports current flag snapshot", () => {
     expect(typeof featureFlags.oauthLogin).toBe("boolean");
     expect(typeof featureFlags.scim).toBe("boolean");
+    expect(typeof featureFlags.siemExport).toBe("boolean");
   });
 });

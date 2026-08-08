@@ -4,7 +4,6 @@ import { resolveService } from "../../bootstrap/contracts";
 import type { PolicyGate } from "../../core/auth/policy";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import {
-  bindRouteModel,
   buildRequestCacheKey,
   createdResponse,
   jsonResponse,
@@ -48,9 +47,10 @@ class OrganizationController {
   });
 
   readonly show = withErrorHandling(
-    bindRouteModel(
+    securedBindRouteModel(
       "id",
       (id) => this.service.findByIdOrThrow(id),
+      { resource: "organization", action: "view" },
       async (_request, organization) => {
         return jsonResponse(toOrganizationResource(organization));
       },

@@ -25,6 +25,7 @@ const taskProvider: ServiceProvider = {
         new TaskService(
           container.resolve(taskRepositoryToken),
           container.resolve("project.repository"),
+          container.resolve("organization.repository"),
         ),
     );
 

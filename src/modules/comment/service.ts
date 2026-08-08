@@ -1,15 +1,19 @@
 import {
   appendProjectScope,
+  assertResourceInCurrentTenant,
   emptyPaginateResult,
   scopedOrganizationIds,
 } from "../../core/auth/membershipScope";
 import { runInTransaction } from "../../core/database";
 import { NotFoundError } from "../../core/errors/http";
 import type { PaginatedResult } from "../../core/pagination";
+import type OrganizationRepository from "../organization/repository";
 import type ProjectRepository from "../project/repository";
 import type TaskRepository from "../task/repository";
 import type CommentRepository from "./repository";
 import type { CommentRecord } from "./types";
+
+export type CommentWithScope = CommentRecord & { organization_id?: number };
 
 interface CreateCommentInput {
   task_id: number;
@@ -21,6 +25,7 @@ class CommentService {
     private readonly repository: CommentRepository,
     private readonly taskRepository: TaskRepository,
     private readonly projectRepository: ProjectRepository,
+    private readonly organizationRepository: OrganizationRepository,
   ) {}
 
   async paginate(options: { page: number; perPage: number }) {
@@ -50,11 +55,40 @@ class CommentService {
     });
   }
 
-  findByIdOrThrow(id: number): Promise<CommentRecord> {
-    return this.repository.findByIdOrThrow(
+  async findByIdOrThrow(id: number): Promise<CommentWithScope> {
+    const comment = await this.repository.findByIdOrThrow(
       id,
       (commentId) => new NotFoundError(`Comment ${commentId} not found.`),
     );
+
+    const task = await this.taskRepository.findById(comment.task_id);
+
+    if (!task) {
+      throw new NotFoundError(`Comment ${id} not found.`);
+    }
+
+    const project = await this.projectRepository.findById(task.project_id);
+
+    if (!project) {
+      throw new NotFoundError(`Comment ${id} not found.`);
+    }
+
+    const organization = await this.organizationRepository.findById(project.organization_id);
+
+    if (!organization) {
+      throw new NotFoundError(`Comment ${id} not found.`);
+    }
+
+    assertResourceInCurrentTenant(organization.tenant_id, "Comment", id);
+
+    if (!(await this.canAccessTask(comment.task_id, task.project_id))) {
+      throw new NotFoundError(`Comment ${id} not found.`);
+    }
+
+    return {
+      ...comment,
+      organization_id: project.organization_id,
+    };
   }
 
   create(input: CreateCommentInput): Promise<CommentRecord> {

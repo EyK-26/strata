@@ -23,6 +23,7 @@ const commentProvider: ServiceProvider = {
           container.resolve(commentRepositoryToken),
           container.resolve("task.repository"),
           container.resolve(projectRepositoryToken),
+          container.resolve("organization.repository"),
         ),
     );
 

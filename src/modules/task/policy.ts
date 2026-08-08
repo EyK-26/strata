@@ -18,7 +18,7 @@ class TaskPolicy extends Policy {
 
   override view(user: AuthUser | null, task: TaskWithProjectRecord): boolean {
     if (!user) {
-      return false;
+      return true;
     }
 
     const organizationId = organizationIdForTask(task);

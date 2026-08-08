@@ -1,5 +1,7 @@
 import {
   appendProjectScope,
+  assertOrganizationReadable,
+  assertResourceInCurrentTenant,
   emptyPaginateResult,
   scopedOrganizationIds,
 } from "../../core/auth/membershipScope";
@@ -8,6 +10,7 @@ import { BadRequestError, NotFoundError } from "../../core/errors/http";
 import type { PaginatedResult } from "../../core/pagination";
 import type { TaskStatus } from "../../domain/workhub";
 import { TASK_STATUSES } from "../../domain/workhub";
+import type OrganizationRepository from "../organization/repository";
 import type ProjectRepository from "../project/repository";
 import type TaskRepository from "./repository";
 import type { TaskRecord, TaskWithProjectRecord } from "./types";
@@ -37,6 +40,7 @@ class TaskService {
   constructor(
     private readonly repository: TaskRepository,
     private readonly projectRepository: ProjectRepository,
+    private readonly organizationRepository: OrganizationRepository,
   ) {}
 
   async paginate(options: TaskListOptions): Promise<PaginatedResult<TaskWithProjectRecord>> {
@@ -77,12 +81,27 @@ class TaskService {
       (taskId) => new NotFoundError(`Task ${taskId} not found.`),
     );
 
-    if (!options.includeProject) {
-      return task;
+    const project = await this.projectRepository.findById(task.project_id);
+
+    if (!project) {
+      throw new NotFoundError(`Task ${id} not found.`);
     }
 
-    const [withProject] = await this.repository.attachProjects([task]);
-    return withProject ?? task;
+    const organization = await this.organizationRepository.findById(project.organization_id);
+
+    if (!organization) {
+      throw new NotFoundError(`Task ${id} not found.`);
+    }
+
+    assertResourceInCurrentTenant(organization.tenant_id, "Task", id);
+    assertOrganizationReadable(project.organization_id);
+
+    const result =
+      options.includeProject === true
+        ? ((await this.repository.attachProjects([task]))[0] ?? task)
+        : task;
+
+    return result;
   }
 
   create(input: CreateTaskInput): Promise<TaskRecord> {

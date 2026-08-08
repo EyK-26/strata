@@ -2,7 +2,6 @@ import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import {
-  bindRouteModel,
   buildRequestCacheKey,
   createdResponse,
   jsonResponse,
@@ -48,7 +47,7 @@ class ProjectController {
   });
 
   readonly show = withErrorHandling(
-    bindRouteModel(
+    securedBindRouteModel(
       "id",
       (id, request) => {
         const query = parseProjectListQuery(request);
@@ -56,6 +55,7 @@ class ProjectController {
           includeOrganization: query.include === "organization",
         });
       },
+      { resource: "project", action: "view" },
       async (_request, project) => {
         return jsonResponse(toProjectResource(project));
       },

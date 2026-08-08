@@ -34,6 +34,13 @@ function adminHeaders(extra?: Record<string, string>): Record<string, string> {
   };
 }
 
+function memberHeaders(extra?: Record<string, string>): Record<string, string> {
+  return {
+    authorization: `Bearer ${TEST_MEMBER_API_TOKEN}`,
+    ...extra,
+  };
+}
+
 function root(pathname: string): string {
   return `${baseUrl}${pathname}`;
 }
@@ -623,6 +630,109 @@ describe("integration routes with postgres", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { data: unknown[] };
     expect(body.data.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("GET /audit-logs returns entries for admin tokens when enabled", async () => {
+    const response = await fetch(api("/audit-logs"), {
+      headers: adminHeaders(),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: unknown[] };
+    expect(Array.isArray(body.data)).toBe(true);
+  });
+
+  test("GET /webhooks returns list for admin tokens when enabled", async () => {
+    const response = await fetch(api("/webhooks"), {
+      headers: adminHeaders(),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: unknown[] };
+    expect(Array.isArray(body.data)).toBe(true);
+  });
+
+  test("GET /billing/subscription returns tenant subscription when enabled", async () => {
+    const response = await fetch(api("/billing/subscription"), {
+      headers: adminHeaders(),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      tenant_id: number;
+      subscription: { plan: string } | null;
+    };
+    expect(body.tenant_id).toBe(1);
+  });
+
+  test("guest can read project show routes for hobby/demo mode", async () => {
+    const response = await fetch(api("/projects/1"));
+    expect(response.status).toBe(200);
+  });
+
+  test("member receives 403 when showing organizations outside membership", async () => {
+    const response = await fetch(api("/organizations/2"), {
+      headers: memberHeaders(),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  test("member receives 404 when showing projects outside membership", async () => {
+    const response = await fetch(api("/projects/3"), {
+      headers: memberHeaders(),
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  test("member can show organizations within membership", async () => {
+    const response = await fetch(api("/organizations/1"), {
+      headers: memberHeaders(),
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  test("member scoped list excludes organizations outside membership", async () => {
+    const { response, body } = await getJson<PaginatedBody<{ id: number }>>("/organizations", {
+      headers: memberHeaders(),
+    });
+
+    expect(response.status).toBe(200);
+    expect(body.data.some((organization) => organization.id === 2)).toBe(false);
+    expect(body.data.some((organization) => organization.id === 1)).toBe(true);
+  });
+
+  test("member cannot spoof x-tenant-id header", async () => {
+    const response = await fetch(api("/auth/me"), {
+      headers: memberHeaders({ "x-tenant-id": "2" }),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  test("cross-tenant resources return 404 for members in another tenant", async () => {
+    const createResponse = await fetch(api("/organizations"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders({ "x-tenant-id": "2" }),
+      },
+      body: JSON.stringify({
+        name: "Tenant Two Org",
+        slug: "tenant-two-org",
+      }),
+    });
+
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { id: number };
+
+    const memberResponse = await fetch(api(`/organizations/${created.id}`), {
+      headers: memberHeaders(),
+    });
+
+    expect(memberResponse.status).toBe(404);
   });
 
   test("DELETE /users/me returns 401 without credentials", async () => {

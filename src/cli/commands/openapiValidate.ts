@@ -1,5 +1,3 @@
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { createAppContext } from "../../bootstrap/context";
 import { createRoutes } from "../../bootstrap/createRoutes";
 import { routeRegistry } from "../../bootstrap/routeRegistry";
@@ -21,8 +19,6 @@ async function openapiValidateCommand(): Promise<void> {
     process.exit(1);
   }
 
-  const jsonPath = join(process.cwd(), "docs/openapi.json");
-  await writeFile(jsonPath, `${JSON.stringify(spec, null, 2)}\n`, "utf8");
   console.log(`OpenAPI spec valid (${routeRegistry.list().length} routes).`);
 }
 

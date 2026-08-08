@@ -1,6 +1,7 @@
 import { emailLookupForQuery, protectEmail, revealEmail } from "../../core/crypto/fieldEncryption";
 import { BaseRepository } from "../../core/database";
 import type { QueryWhere } from "../../core/database/types";
+import { currentTenantId } from "../../core/tenant/tenantContext";
 import { userTable } from "./table";
 import type { UserRecord } from "./types";
 
@@ -40,6 +41,7 @@ class UserRepository extends BaseRepository<UserRecord, "id"> {
     const protectedEmail = protectEmail(email);
     const record = await super.create({
       ...values,
+      tenant_id: values.tenant_id ?? currentTenantId(),
       email: protectedEmail.storedEmail,
       email_lookup: protectedEmail.emailLookup,
     } as StoredUserRecord);

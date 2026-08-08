@@ -1,6 +1,7 @@
 import { isGlobalAdmin } from "../../core/auth/accessControl";
 import { currentAuthUser } from "../../core/auth/authContext";
 import { currentOrganizationIds } from "../../core/auth/membershipContext";
+import { assertResourceInCurrentTenant } from "../../core/auth/membershipScope";
 import { resolveMembershipService } from "../../core/auth/membershipService";
 import type { QueryWhere } from "../../core/database/types";
 import { NotFoundError } from "../../core/errors/http";
@@ -48,11 +49,15 @@ class OrganizationService {
     });
   }
 
-  findByIdOrThrow(id: number): Promise<OrganizationRecord> {
-    return this.repository.findByIdOrThrow(
+  async findByIdOrThrow(id: number): Promise<OrganizationRecord> {
+    const organization = await this.repository.findByIdOrThrow(
       id,
       (organizationId) => new NotFoundError(`Organization ${organizationId} not found.`),
     );
+
+    assertResourceInCurrentTenant(organization.tenant_id, "Organization", id);
+
+    return organization;
   }
 
   async create(input: CreateOrganizationInput): Promise<OrganizationRecord> {

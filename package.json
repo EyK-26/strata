@@ -9,6 +9,9 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
+    "validate": "bun run check && bun run lint && bun run cli openapi:validate && bun run test:all",
+    "validate:ci": "bun run check && bun run lint && bun run cli openapi:validate && bun run cli openapi:check && bun run test:all",
+    "prepare": "lefthook install || true",
     "unit": "bun test tests/unit",
     "integration": "bun test ./tests/integration/routes.integration.test.ts ./tests/integration/queue.integration.test.ts",
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
@@ -19,6 +22,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.7",
     "@types/bun": "latest",
+    "lefthook": "^2.1.10",
     "typescript": "^5.9.2"
   }
 }

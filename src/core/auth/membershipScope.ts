@@ -1,3 +1,5 @@
+import { NotFoundError } from "../errors/http";
+import { currentTenantId } from "../tenant/tenantContext";
 import { isGlobalAdmin } from "./accessControl";
 import { currentAuthUser } from "./authContext";
 import { currentOrganizationIds } from "./membershipContext";
@@ -98,9 +100,39 @@ function emptyPaginateResult<T>(page: number, perPage: number) {
   };
 }
 
+function assertResourceInCurrentTenant(
+  resourceTenantId: number,
+  resourceLabel: string,
+  resourceId: number,
+): void {
+  if (resourceTenantId !== currentTenantId()) {
+    throw new NotFoundError(`${resourceLabel} ${resourceId} not found.`);
+  }
+}
+
+function assertOrganizationReadable(organizationId: number): void {
+  const user = currentAuthUser();
+
+  if (!user || isGlobalAdmin(user)) {
+    return;
+  }
+
+  const organizationIds = scopedOrganizationIds();
+
+  if (organizationIds === null) {
+    return;
+  }
+
+  if (!organizationIds.includes(organizationId)) {
+    throw new NotFoundError(`Organization ${organizationId} not found.`);
+  }
+}
+
 export {
   appendOrganizationScope,
   appendProjectScope,
+  assertOrganizationReadable,
+  assertResourceInCurrentTenant,
   emptyPaginateResult,
   resolveOrganizationScope,
   scopedOrganizationIds,

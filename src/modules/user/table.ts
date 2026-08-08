@@ -10,6 +10,7 @@ const userTable = defineTable<UserRecord, "id">({
     "email",
     "email_lookup",
     "role",
+    "tenant_id",
     "password_hash",
     "created_at",
     "updated_at",

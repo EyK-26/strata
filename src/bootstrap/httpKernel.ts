@@ -36,12 +36,12 @@ class HttpKernel {
       createCorsMiddleware(),
       createSecurityHeadersMiddleware(),
       createTracingMiddleware(),
-      createTenantMiddleware(),
       createMetricsMiddleware(),
       createRequestLoggingMiddleware(),
       requestIdMiddleware,
       createAuthMiddleware(auth),
       createMembershipMiddleware(),
+      createTenantMiddleware(),
     ];
   }
 

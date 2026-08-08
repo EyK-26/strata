@@ -1,4 +1,5 @@
 import { appConfig } from "../config/app";
+import { isFeatureEnabled } from "../config/features";
 import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../domain/auth";
 import { DEFAULT_SCIM_BEARER_TOKEN, TEST_SCIM_BEARER_TOKEN } from "../domain/scim";
 
@@ -35,7 +36,7 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
     );
   }
 
-  if (!env.SIEM_EXPORT_URL?.trim() && env.FEATURE_SIEM_EXPORT !== "false") {
+  if (!env.SIEM_EXPORT_URL?.trim() && isFeatureEnabled("siemExport")) {
     console.warn("[secrets] SIEM_EXPORT_URL is not configured; audit logs remain database-only.");
   }
 }

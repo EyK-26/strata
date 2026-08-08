@@ -14,7 +14,7 @@ class ProjectPolicy extends Policy {
 
   override view(user: AuthUser | null, project: ProjectRecord): boolean {
     if (!user) {
-      return false;
+      return true;
     }
 
     return isGlobalAdmin(user) || hasOrgMembership(project.organization_id);

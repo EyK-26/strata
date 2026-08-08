@@ -2,7 +2,6 @@ import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import {
-  bindRouteModel,
   buildRequestCacheKey,
   createdResponse,
   jsonResponse,
@@ -44,9 +43,10 @@ class CommentController {
   });
 
   readonly show = withErrorHandling(
-    bindRouteModel(
+    securedBindRouteModel(
       "id",
       (id) => this.service.findByIdOrThrow(id),
+      { resource: "comment", action: "view" },
       async (_request, comment) => {
         return jsonResponse(toCommentResource(comment));
       },

@@ -14,7 +14,7 @@ class OrganizationPolicy extends Policy {
 
   override view(user: AuthUser | null, organization: OrganizationRecord): boolean {
     if (!user) {
-      return false;
+      return true;
     }
 
     return isGlobalAdmin(user) || hasOrgMembership(organization.id);

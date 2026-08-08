@@ -6,6 +6,7 @@ interface UserRecord {
   email: string;
   email_lookup?: string | null;
   role: UserRole;
+  tenant_id: number;
   password_hash?: string | null;
   created_at: Date;
   updated_at: Date;

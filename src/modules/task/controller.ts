@@ -2,7 +2,6 @@ import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { CACHE_TAGS } from "../../core/cache/tags";
 import {
-  bindRouteModel,
   buildRequestCacheKey,
   createdResponse,
   jsonResponse,
@@ -48,14 +47,13 @@ class TaskController {
   });
 
   readonly show = withErrorHandling(
-    bindRouteModel(
+    securedBindRouteModel(
       "id",
-      (id, request) => {
-        const query = parseTaskListQuery(request);
-        return this.service.findByIdOrThrow(id, {
-          includeProject: query.include === "project",
-        });
-      },
+      (id) =>
+        this.service.findByIdOrThrow(id, {
+          includeProject: true,
+        }),
+      { resource: "task", action: "view" },
       async (_request, task) => {
         return jsonResponse(toTaskResource(task));
       },

@@ -10,6 +10,7 @@ class UserFactory extends Factory<UserRecord> {
       name: "Factory User",
       email: `factory-${crypto.randomUUID()}@workhub.test`,
       role: "member",
+      tenant_id: 1,
       created_at: now,
       updated_at: now,
     };

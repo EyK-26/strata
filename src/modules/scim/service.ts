@@ -2,6 +2,7 @@ import type { AppDependencies } from "../../bootstrap/contracts";
 import { resolveService } from "../../bootstrap/contracts";
 import { hashPassword } from "../../core/auth/password";
 import { NotFoundError } from "../../core/errors/http";
+import { currentTenantId } from "../../core/tenant/tenantContext";
 import db from "../../db/connection";
 import { SCIM_SCHEMAS } from "../../domain/scim";
 import OrganizationMemberRepository from "../organization/memberRepository";
@@ -88,6 +89,7 @@ class ScimService {
       name: payload.name?.formatted ?? email.split("@")[0] ?? "SCIM User",
       email,
       role: "member",
+      tenant_id: currentTenantId(),
       password_hash: passwordHash,
       created_at: new Date(),
       updated_at: new Date(),

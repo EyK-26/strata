@@ -1,5 +1,7 @@
 import {
   appendOrganizationScope,
+  assertOrganizationReadable,
+  assertResourceInCurrentTenant,
   emptyPaginateResult,
   scopedOrganizationIds,
 } from "../../core/auth/membershipScope";
@@ -75,6 +77,15 @@ class ProjectService {
       id,
       (projectId) => new NotFoundError(`Project ${projectId} not found.`),
     );
+
+    const organization = await this.organizationRepository.findById(project.organization_id);
+
+    if (!organization) {
+      throw new NotFoundError(`Project ${id} not found.`);
+    }
+
+    assertResourceInCurrentTenant(organization.tenant_id, "Project", id);
+    assertOrganizationReadable(project.organization_id);
 
     if (!options.includeOrganization) {
       return project;

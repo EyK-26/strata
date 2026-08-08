@@ -6,6 +6,7 @@ interface FeatureFlags {
   samlLogin: boolean;
   scim: boolean;
   billing: boolean;
+  siemExport: boolean;
 }
 
 function readFeatureFlags(): FeatureFlags {
@@ -17,6 +18,7 @@ function readFeatureFlags(): FeatureFlags {
     samlLogin: (process.env.FEATURE_SAML ?? "false") === "true",
     scim: (process.env.FEATURE_SCIM ?? "true") !== "false",
     billing: (process.env.FEATURE_BILLING ?? "true") !== "false",
+    siemExport: (process.env.FEATURE_SIEM_EXPORT ?? "true") !== "false",
   };
 }
 

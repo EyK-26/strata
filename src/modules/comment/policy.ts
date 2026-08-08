@@ -16,6 +16,18 @@ class CommentPolicy extends Policy {
     return user !== null;
   }
 
+  override view(user: AuthUser | null, comment: CommentWithScope): boolean {
+    if (!user) {
+      return true;
+    }
+
+    if (comment.organization_id === undefined) {
+      return isGlobalAdmin(user);
+    }
+
+    return isGlobalAdmin(user) || hasOrgMembership(comment.organization_id);
+  }
+
   override update(user: AuthUser | null, comment: CommentWithScope): boolean {
     if (!user) {
       return false;

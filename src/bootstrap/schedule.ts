@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from "../config/features";
 import { exportPendingAuditLogs } from "../core/audit/exportAuditLogs";
 import { appLogger } from "../core/logging/logger";
 import { appSchedule } from "../core/scheduler/schedule";
@@ -7,6 +8,10 @@ appSchedule.command("* * * * *", "heartbeat", () => {
 });
 
 appSchedule.command("* * * * *", "audit-export", async () => {
+  if (!isFeatureEnabled("siemExport")) {
+    return;
+  }
+
   try {
     const exported = await exportPendingAuditLogs();
 

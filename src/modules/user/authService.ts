@@ -1,6 +1,7 @@
 import type { OAuthProvider } from "../../core/auth/oauth/types";
 import { verifyPassword } from "../../core/auth/password";
 import { UnauthorizedError } from "../../core/errors/http";
+import { currentTenantId } from "../../core/tenant/tenantContext";
 import type OAuthIdentityRepository from "./oauthIdentityRepository";
 import type UserRepository from "./repository";
 import type TokenService from "./tokenService";
@@ -88,6 +89,7 @@ class AuthService {
         name: profile.name,
         email: profile.email,
         role: "member",
+        tenant_id: currentTenantId(),
         created_at: new Date(),
         updated_at: new Date(),
       }));
