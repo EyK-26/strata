@@ -43,7 +43,7 @@ Versions are asserted by `scripts/verify-package-versions.ts`.
 1. The [`@getstrata`](https://www.npmjs.com/org/getstrata) org must exist on npm.
 2. Add `NPM_TOKEN` to GitHub repository secrets (Automation token with publish access).
 3. Tag a release: `git tag v1.0.0 && git push origin v1.0.0`.
-4. The release workflow publishes npm from the tag. The GitHub Release job does not wait on Docker. The container job uses `docker build --pull` (same as CI `docker-install`) so it refreshes `oven/bun:1.4` and does not pull BuildKit from Docker Hub.
+4. The release workflow publishes npm from the tag. If that version is already on npm, it skips publish. It does not unpublish older versions (the GitHub `NPM_TOKEN` cannot). The GitHub Release job does not wait on Docker. The container job uses `docker build --pull` (same as CI `docker-install`) so it refreshes `oven/bun:1.4` and does not pull BuildKit from Docker Hub.
 5. To finish GHCR or GitHub Release notes after a tag without retagging: Actions, Release, Run workflow, set `tag` to the existing tag (example `v1.0.0`). That path skips npm.
 
 See `packages/strata-core/CHANGELOG.md` for release notes.
