@@ -123,6 +123,12 @@ describe("MySQL portability", () => {
     expect(ensure).toContain('from "mysql2/promise"');
     expect(ensure).toContain("connection.end()");
     expect(ensure).toContain("safeDatabaseName");
+
+    const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies.eta).toBe("^4.6.0");
+    expect(pkg.dependencies.mysql2).toBe("^3.24.3");
   });
 
   test("timestamp parameters use a format MySQL DATETIME accepts", async () => {

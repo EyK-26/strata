@@ -25,7 +25,7 @@
     "build:framework": "bun run --filter @getstrata/core build",
     "build:bootstrap": "bun run --filter @getstrata/bootstrap build",
     "build:starter": "bun run --filter @getstrata/starter build",
-    "verify:framework": "bun run build:framework && bun scripts/verify-core-shared-subpaths.ts && bun scripts/verify-bundled-subpaths.ts && bun scripts/verify-no-root-imports.ts && bun scripts/verify-no-shared-barrel-imports.ts && bun scripts/verify-export-types.ts && bun -e \"import('./packages/strata-core/dist/index.js').then((m) => { if (typeof m.BaseRepository !== 'function') throw new Error('missing BaseRepository export'); })\"",
+    "verify:framework": "bun run build:framework && bun scripts/verify-core-shared-subpaths.ts && bun scripts/verify-bundled-subpaths.ts && bun scripts/verify-optional-peers.ts && bun scripts/verify-no-root-imports.ts && bun scripts/verify-no-shared-barrel-imports.ts && bun scripts/verify-export-types.ts && bun -e \"import('./packages/strata-core/dist/index.js').then((m) => { if (typeof m.BaseRepository !== 'function') throw new Error('missing BaseRepository export'); })\"",
     "verify:shared-subpaths": "bun scripts/verify-core-shared-subpaths.ts",
     "verify:bootstrap": "bun run build:bootstrap && bun -e \"import('./packages/strata-bootstrap/dist/index.js').then((m) => { if (typeof m.createWebServer !== 'function') throw new Error('missing createWebServer export'); })\"",
     "verify:starter": "bun run build:starter && bun packages/strata-starter/dist/cli.js --help",

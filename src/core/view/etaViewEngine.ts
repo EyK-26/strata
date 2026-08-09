@@ -1,6 +1,6 @@
 import { join, relative } from "node:path";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { Eta } from "eta";
+import { missingOptionalPeer } from "../runtime/optionalPeer.ts";
 import { assertEtaHtmlSource } from "./assertEtaHtmlSource";
 import type { ViewEngine } from "./viewEngine";
 
@@ -14,30 +14,59 @@ interface RenderOptions {
 
 type LayoutDataResolver = (request?: Request) => Promise<Record<string, unknown>>;
 
+type EtaEngine = {
+  renderAsync(template: string, data: unknown): Promise<string> | string;
+  readFile?: (path: string) => string;
+};
+
 /**
  * Renders `.eta` files as HTML + Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`).
  * Pug class/attribute shorthand is rejected at render time.
  */
 class EtaViewEngine implements ViewEngine {
-  private readonly eta: Eta;
+  private eta: EtaEngine | null = null;
+  private etaPending: Promise<EtaEngine> | null = null;
+  private readonly viewsDirectory: string;
   private readonly resolveLayoutData?: LayoutDataResolver;
 
   constructor(
     viewsDirectory: string = DEFAULT_VIEWS_DIRECTORY,
     resolveLayoutData?: LayoutDataResolver,
   ) {
-    this.eta = new Eta({
-      views: viewsDirectory,
-      autoTrim: false,
-    });
+    this.viewsDirectory = viewsDirectory;
     this.resolveLayoutData = resolveLayoutData;
+  }
 
-    const readFile = this.eta.readFile?.bind(this.eta);
-    this.eta.readFile = (path: string) => {
+  private async getEta(): Promise<EtaEngine> {
+    if (this.eta) {
+      return this.eta;
+    }
+    if (!this.etaPending) {
+      this.etaPending = this.createEta();
+    }
+    return this.etaPending;
+  }
+
+  private async createEta(): Promise<EtaEngine> {
+    let eta: EtaEngine;
+    try {
+      const mod = await import("eta");
+      eta = new mod.Eta({
+        views: this.viewsDirectory,
+        autoTrim: false,
+      }) as unknown as EtaEngine;
+    } catch (error) {
+      this.etaPending = null;
+      throw missingOptionalPeer("eta", "to render HTML views", error);
+    }
+    const readFile = eta.readFile?.bind(eta);
+    eta.readFile = (path: string) => {
       const source = readFile ? readFile(path) : "";
-      assertEtaHtmlSource(relative(viewsDirectory, path) || path, source);
+      assertEtaHtmlSource(relative(this.viewsDirectory, path) || path, source);
       return source;
     };
+    this.eta = eta;
+    return eta;
   }
 
   async render(
@@ -49,7 +78,8 @@ class EtaViewEngine implements ViewEngine {
     const request = options.request ?? currentRequestMeta().request;
     const layoutData = this.resolveLayoutData ? await this.resolveLayoutData(request) : {};
     const mergedData = { ...layoutData, ...data };
-    const body = await this.eta.renderAsync(template, mergedData);
+    const eta = await this.getEta();
+    const body = await eta.renderAsync(template, mergedData);
     const layout = options.layout ?? DEFAULT_LAYOUT;
 
     if (layout === false) {
@@ -58,7 +88,7 @@ class EtaViewEngine implements ViewEngine {
 
     const layoutTemplate = layout.endsWith(".eta") ? layout : `${layout}.eta`;
 
-    return await this.eta.renderAsync(layoutTemplate, {
+    return await eta.renderAsync(layoutTemplate, {
       ...mergedData,
       body,
     });

@@ -37,7 +37,6 @@ export {
   registerModelClass,
   registerModelRepository,
 } from "./model.ts";
-export { createMysqlConnection, createMysqlConnectionFromPool } from "./mysqlConnection.ts";
 export type { NamedConnectionEntry } from "./namedConnections.ts";
 export {
   getNamedConnection,

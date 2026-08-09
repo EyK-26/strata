@@ -128,11 +128,6 @@ export {
   registerModelRepository,
 } from "../core/database/model.ts";
 export {
-  createMysqlConnection,
-  createMysqlConnectionFromPool,
-  createMysqlPool,
-} from "../core/database/mysqlConnection.ts";
-export {
   getNamedConnection,
   hasNamedConnection,
   registerNamedConnection,

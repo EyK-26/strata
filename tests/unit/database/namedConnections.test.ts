@@ -134,7 +134,7 @@ describe("MySQL connection adapter", () => {
 
   test("pool reads and writes DATETIME as UTC and pins the session time zone", async () => {
     const { createMysqlPool } = await import("@getstrata/core/database/mysqlConnection");
-    const pool = createMysqlPool("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
+    const pool = await createMysqlPool("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
     const core = (pool as unknown as { pool: MysqlCorePool }).pool;
     try {
       expect(core.config.connectionConfig.timezone).toBe("Z");
@@ -155,7 +155,7 @@ describe("MySQL connection adapter", () => {
 
   test("warns instead of throwing when the session time zone cannot be set", async () => {
     const { createMysqlPool } = await import("@getstrata/core/database/mysqlConnection");
-    const pool = createMysqlPool("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
+    const pool = await createMysqlPool("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
     const core = (pool as unknown as { pool: MysqlCorePool }).pool;
     const warn = spyOn(console, "warn").mockImplementation(() => undefined);
     try {

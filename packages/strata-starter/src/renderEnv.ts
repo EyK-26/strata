@@ -308,6 +308,7 @@ function renderPackageJson(
         "@getstrata/cli": "^1.0.2",
         "@getstrata/core": "^1.0.2",
       };
+  coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
     coreDeps.mysql2 = "^3.24.3";
   }

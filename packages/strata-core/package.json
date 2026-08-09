@@ -904,12 +904,18 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
-    "eta": "^4.6.0",
-    "mysql2": "^3.24.3"
-  },
   "peerDependencies": {
+    "eta": "^4.6.0",
+    "mysql2": "^3.24.3",
     "typescript": "^5.9.0"
+  },
+  "peerDependenciesMeta": {
+    "eta": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    }
   },
   "engines": {
     "bun": ">=1.4.0"
