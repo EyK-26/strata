@@ -437,7 +437,7 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
 function renderApiDocs(projectName: string, layers: StarterLayers): string {
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
   rows.push(
-    "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) when the database or the migrated schema is unavailable. `/ready` returns the same checks as JSON. |",
+    "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) until the database ping succeeds and the migrated `notes` table exists. Docker HEALTHCHECK uses this path. |",
   );
   rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
 

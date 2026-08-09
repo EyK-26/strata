@@ -55,7 +55,7 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 
 ## What you get that actually runs
 
-- `GET /health` after `strata migrate` (migrate also seeds when the tables are empty)
+- `GET /health` after `strata migrate` (plain text `ok`, or 503 `degraded` until the database ping and the `notes` table exist). Docker HEALTHCHECK uses `/health`. Migrate also seeds when the tables are empty.
 - Notes table on every app
 - Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Seed `demo@example.com` / `password`
 - Token apps: `POST /api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`
