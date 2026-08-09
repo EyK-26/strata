@@ -11,6 +11,7 @@ type MysqlExecutable = {
 };
 
 type MysqlPool = MysqlExecutable & {
+  end(): Promise<void>;
   on(event: "connection", listener: (connection: unknown) => void): void;
 };
 
