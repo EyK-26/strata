@@ -1,0 +1,80 @@
+import { setActiveApplicationContext } from "@getstrata/core";
+import {
+  type AppContext,
+  type AppModule,
+  assertAppDependenciesComplete,
+  ConfigStore,
+  type MutableAppDependencies,
+  type ProviderContext,
+  ServiceContainer,
+  type ServiceProvider,
+} from "./contracts";
+import { appModules } from "./modules";
+import { coreProviders } from "./providers";
+import { assertProductionSecrets } from "./secretsGuard";
+
+function collectProviders(modules: AppModule[] = appModules): ServiceProvider[] {
+  return [...coreProviders, ...modules.flatMap((module) => module.providers ?? [])];
+}
+
+function runProviderPhase(
+  providers: ServiceProvider[],
+  phase: "register" | "boot",
+  context: ProviderContext,
+): void {
+  for (const provider of providers) {
+    provider[phase]?.(context);
+  }
+}
+
+function createAppContext(): AppContext {
+  assertProductionSecrets();
+
+  const container = new ServiceContainer();
+  const config = new ConfigStore();
+  const dependencies: MutableAppDependencies = {
+    container,
+  };
+  const context: ProviderContext = {
+    container,
+    config,
+    dependencies,
+  };
+  const providers = collectProviders();
+
+  runProviderPhase(providers, "register", context);
+  runProviderPhase(providers, "boot", context);
+
+  assertAppDependenciesComplete(dependencies);
+
+  const appContext = {
+    container,
+    config,
+    dependencies,
+  };
+
+  setActiveApplicationContext(appContext);
+
+  return appContext;
+}
+
+let cachedAppContext: AppContext | undefined;
+
+function getAppContext(): AppContext {
+  cachedAppContext ??= createAppContext();
+  return cachedAppContext;
+}
+
+const appContext: AppContext = {
+  get container() {
+    return getAppContext().container;
+  },
+  get config() {
+    return getAppContext().config;
+  },
+  get dependencies() {
+    return getAppContext().dependencies;
+  },
+};
+
+export { appContext, collectProviders, createAppContext, runProviderPhase };

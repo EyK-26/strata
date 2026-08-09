@@ -1,0 +1,118 @@
+import { describe, expect, test } from "bun:test";
+import { runWithAuthUser } from "../../src/core/auth/authContext";
+
+describe("createTenantMiddleware", () => {
+  test("resolves tenant from header for anonymous requests", async () => {
+    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+
+    const response = await middleware(
+      new Request("http://example.test/tasks", {
+        headers: { "x-tenant-id": "1" },
+      }),
+      async () => Response.json({ ok: true }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-tenant-id")).toBe("1");
+    expect(response.headers.get("x-tenant-region")).toBeTruthy();
+  });
+
+  test("uses the authenticated user tenant and rejects mismatched headers", async () => {
+    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+
+    await runWithAuthUser({ id: 2, role: "member" }, async () => {
+      const response = await middleware(
+        new Request("http://example.test/tasks", {
+          headers: { "x-tenant-id": "999" },
+        }),
+        async () => Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        error: "Tenant header does not match your account.",
+      });
+    });
+  });
+
+  test("allows global admins to override tenant via header", async () => {
+    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+
+    await runWithAuthUser({ id: 1, role: "admin" }, async () => {
+      const response = await middleware(
+        new Request("http://example.test/tasks", {
+          headers: { "x-tenant-id": "1" },
+        }),
+        async () => Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-tenant-id")).toBe("1");
+    });
+  });
+
+  test("falls back to default tenant for invalid user ids", async () => {
+    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+
+    await runWithAuthUser({ id: "invalid", role: "member" }, async () => {
+      const response = await middleware(new Request("http://example.test/tasks"), async () =>
+        Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-tenant-id")).toBe("1");
+    });
+  });
+
+  test("auditChecksum returns a stable sha256 digest", async () => {
+    const { auditChecksum } = await import("../../src/core/tenant/tenantMiddleware");
+
+    expect(auditChecksum({ action: "login" })).toMatch(/^[a-f0-9]{64}$/);
+    expect(auditChecksum({ action: "login" })).toBe(auditChecksum({ action: "login" }));
+  });
+
+  test("resolveUserTenantId returns the user tenant or default", async () => {
+    const { resolveUserTenantId, DEFAULT_TENANT } = await import(
+      "../../src/core/tenant/tenantMiddleware"
+    );
+
+    await expect(resolveUserTenantId(1)).resolves.toBe(1);
+    await expect(resolveUserTenantId(999_999)).resolves.toBe(DEFAULT_TENANT.id);
+  });
+
+  test("maps forbidden errors to json responses", async () => {
+    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+
+    await runWithAuthUser({ id: 2, role: "member" }, async () => {
+      const response = await middleware(
+        new Request("http://example.test/tasks", {
+          headers: { "x-tenant-id": "999" },
+        }),
+        async () => Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        error: "Tenant header does not match your account.",
+      });
+    });
+  });
+});
+
+describe("tenant middleware error propagation", () => {
+  test("rethrows non-http errors from downstream handlers", async () => {
+    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+
+    await expect(
+      middleware(new Request("http://example.test/tasks"), async () => {
+        throw new Error("handler failed");
+      }),
+    ).rejects.toThrow("handler failed");
+  });
+});

@@ -1,0 +1,13 @@
+<section class="page-header">
+  <h1>Tasks</h1>
+  <p class="hint">Server-rendered task list with HTMX pagination and HTML form validation.</p>
+</section>
+
+<section class="create-form">
+  <h2>Create task</h2>
+  <%~ include('./_form', it) %>
+</section>
+
+<div id="task-table">
+  <%~ include('./_table', it) %>
+</div>

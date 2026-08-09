@@ -1,0 +1,108 @@
+<section class="page-header">
+  <h1>Admin dashboard</h1>
+  <p class="hint">Read-only platform overview for global admins.</p>
+  <nav class="inline-links">
+    <a href="/admin/queue">Queue monitor</a>
+    <a href="/admin/resources">Resources</a>
+    <a href="/admin/audit">Audit log</a>
+  </nav>
+</section>
+
+<section class="card">
+  <h2>Counts</h2>
+  <ul>
+    <li>Users: <%= it.stats.user_count %></li>
+    <li>Organizations: <%= it.stats.organization_count %></li>
+    <li>Projects: <%= it.stats.project_count %></li>
+    <li>Tasks: <%= it.stats.task_count %></li>
+    <li>Tenants: <%= it.stats.tenant_count %></li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Tenants</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Plan</th>
+        <th>Organizations</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const tenant of it.tenants ?? []) { %>
+      <tr>
+        <td><%= tenant.name %></td>
+        <td><%= tenant.plan %></td>
+        <td><%= tenant.organization_count %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Queue metrics</h2>
+  <p class="hint">Horizon-lite snapshot (driver: <%= it.queueMetrics?.driver ?? "unknown" %>).</p>
+  <ul>
+    <li>Pending (high): <%= it.queueMetrics?.pending?.high ?? 0 %></li>
+    <li>Pending (default): <%= it.queueMetrics?.pending?.default ?? 0 %></li>
+    <li>Pending (low): <%= it.queueMetrics?.pending?.low ?? 0 %></li>
+    <li>Pending total: <%= it.queueMetrics?.pending?.total ?? 0 %></li>
+    <li>Failed jobs: <%= it.queueMetrics?.failedCount ?? 0 %></li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>HTTP metrics</h2>
+  <p class="hint">In-process counters from the metrics middleware.</p>
+  <ul>
+    <li>Total requests: <%= it.httpMetrics?.totalRequests ?? 0 %></li>
+    <% for (const [status, count] of Object.entries(it.httpMetrics?.byStatus ?? {})) { %>
+    <li>Status <%= status %>: <%= count %></li>
+    <% } %>
+  </ul>
+  <% if ((it.httpMetrics?.topPaths ?? []).length > 0) { %>
+  <table>
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Path</th>
+        <th>Count</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const row of it.httpMetrics.topPaths) { %>
+      <tr>
+        <td><%= row.method %></td>
+        <td><code><%= row.path %></code></td>
+        <td><%= row.count %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>Failed jobs</h2>
+  <div id="failed-jobs-panel">
+    <%~ include('./_failed_jobs', { failedJobs: it.failedJobs, csrfToken: it.csrfToken }) %>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Audit log</h2>
+  <div id="audit-log-table">
+    <%~ include('./_audit_logs', { auditLogs: it.auditLogs, auditMeta: it.auditMeta, csrfToken: it.csrfToken }) %>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Feature flags</h2>
+  <ul>
+    <% for (const [flag, enabled] of Object.entries(it.features ?? {})) { %>
+    <li><code><%= flag %></code>: <%= enabled ? "on" : "off" %></li>
+    <% } %>
+  </ul>
+</section>

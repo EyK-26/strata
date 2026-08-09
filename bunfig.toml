@@ -1,0 +1,92 @@
+[test]
+preload = ["./tests/globalSetup.ts"]
+coverage = true
+coveragePath = ["src"]
+coverageThreshold = { lines = 1.0, functions = 1.0, statements = 1.0 }
+
+# Scoped gate: 100% per file on product logic. Exclusions are bootstrap, glue, and
+# layers covered primarily by integration tests. See docs/TESTING.md.
+coveragePathIgnorePatterns = [
+  "tests/**",
+  "packages/**",
+
+  # Process entrypoints, REPL, and code generators
+  "src/cli/**",
+
+  # Application bootstrap and route wiring
+  "src/bootstrap/**",
+
+  # Database migration/seed definitions and connection proxy
+  "src/db/**",
+  "src/core/database/migrations/**",
+  "src/core/database/schema/**",
+  "src/core/database/whereBuilder.ts",
+  "src/core/database/query.ts",
+
+  # Package surfaces and test harness
+  "src/framework/**",
+  "src/testing/**",
+
+  # Thin re-exports and optional telemetry
+  "src/core/facades/**",
+  "src/core/tracing/**",
+
+  # ActiveRecord-style model wrapper (covered in tests/unit/model.test.ts)
+  "src/core/database/model.ts",
+  "src/core/notifications/notification.ts",
+  "src/modules/**/model.ts",
+  "src/core/database/bindConnection.ts",
+  "src/core/database/boundConnection.ts",
+  "src/core/database/repositoryConnection.ts",
+
+  # HTTP stack, views, and middleware (exercised via integration tests)
+  "src/core/http/**",
+  "src/core/view/**",
+
+  # Environment schema (validated at bootstrap)
+  "src/core/config/**",
+
+  # Infrastructure drivers and observability plumbing
+  "src/core/cache/**",
+  "src/core/storage/**",
+  "src/core/mail/**",
+  "src/core/metrics/**",
+  "src/core/logging/**",
+  "src/core/openapi/**",
+  "src/core/scheduler/**",
+  "src/config/**",
+
+  # Queue transport wiring (job handlers and services remain in scope)
+  "src/core/queue/createAppQueue.ts",
+  "src/core/queue/index.ts",
+  "src/core/queue/queueMetrics.ts",
+  "src/core/queue/redisQueue.ts",
+  "src/core/queue/resilientQueue.ts",
+  "src/core/queue/publicQueue.ts",
+
+  # Event listeners (side-effect wiring)
+  "src/listeners/**",
+
+  # Module registration, routing tables, and DTO/schema glue
+  "src/modules/**/index.ts",
+  "src/modules/**/routes.ts",
+  "src/modules/**/webRoutes.ts",
+  "src/modules/**/webController.ts",
+  "src/modules/**/webRequests.ts",
+  "src/modules/**/webAuthRoutes.ts",
+  "src/modules/**/webAuthController.ts",
+  "src/modules/**/resources.ts",
+  "src/modules/**/requests.ts",
+  "src/modules/**/table.ts",
+  "src/modules/**/types.ts",
+  "src/modules/**/provider.ts",
+  "src/modules/**/factory.ts",
+  "src/modules/**/relationships.ts",
+  "src/modules/**/notificationTable.ts",
+  "src/modules/**/notificationTypes.ts",
+  "src/modules/scim/scimResponse.ts",
+
+  # Session guard implementations (integration-tested)
+  "src/core/auth/guard.ts",
+  "src/core/auth/sessionGuard.ts",
+]

@@ -1,0 +1,49 @@
+import { Model, registerModelRepository } from "@getstrata/core";
+import UserRepository from "./repository";
+import type { UserRecord } from "./types";
+
+class UserModelClass extends Model<UserRecord, "id"> {
+  static override $fillable = [
+    "name",
+    "email",
+    "role",
+    "tenant_id",
+    "password_hash",
+    "email_verified_at",
+    "mfa_secret",
+    "mfa_enabled",
+  ] as const;
+
+  static override $casts = {
+    email_verified_at: "datetime",
+    mfa_enabled: "bool",
+    created_at: "datetime",
+    updated_at: "datetime",
+  } as const;
+
+  protected override primaryKey(): "id" {
+    return "id";
+  }
+
+  get name() {
+    return this.get("name");
+  }
+
+  get email() {
+    return this.get("email");
+  }
+
+  get role() {
+    return this.get("role");
+  }
+
+  get tenantId() {
+    return this.get("tenant_id");
+  }
+}
+
+const userRepository = new UserRepository();
+
+export const UserModel = registerModelRepository(UserModelClass, userRepository);
+
+export { userRepository };

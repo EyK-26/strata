@@ -1,0 +1,26 @@
+import type { AbilityChecker } from "../auth/abilityChecker";
+import { currentAuthUser } from "../auth/authContext";
+import { ForbiddenError } from "../errors/http";
+import type { Middleware } from "./middleware";
+
+function createRequireAbilityMiddleware(abilityChecker: AbilityChecker) {
+  return (ability: string): Middleware => {
+    return async (_request: Request, next: () => Promise<Response>) => {
+      const user = currentAuthUser();
+
+      try {
+        abilityChecker.requireAbility(user, ability);
+      } catch (error) {
+        if (error instanceof ForbiddenError) {
+          return Response.json({ error: error.message }, { status: error.status });
+        }
+
+        throw error;
+      }
+
+      return await next();
+    };
+  };
+}
+
+export { createRequireAbilityMiddleware };

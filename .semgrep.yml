@@ -1,0 +1,13 @@
+# Semgrep SAST rules for WorkHub
+
+rules:
+  - id: workhub-hardcoded-bearer-token
+    message: Avoid hard-coded bearer tokens outside test fixtures.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern-regex: Bearer workhub-[a-z-]+
+    paths:
+      exclude:
+        - tests/
+        - src/domain/

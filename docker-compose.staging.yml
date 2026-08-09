@@ -1,0 +1,16 @@
+services:
+  app:
+    environment:
+      APP_ENV: staging
+      APP_DEBUG: "false"
+      AUTH_DEV_HEADERS: "false"
+    command:
+      [
+        "sh",
+        "-c",
+        "bun run cli migrate && bun run cli seed && bun run start",
+      ]
+
+  worker:
+    environment:
+      APP_ENV: staging

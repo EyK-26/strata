@@ -1,0 +1,37 @@
+<section class="page-header">
+  <h1>Organizations</h1>
+  <p class="hint">Server-rendered list with HTMX pagination and HTML form validation.</p>
+</section>
+
+<section class="create-form">
+  <h2>Create organization</h2>
+
+  <% if (Object.keys(it.errors ?? {}).length > 0) { %>
+  <div class="form-errors" role="alert">
+    <% for (const [field, messages] of Object.entries(it.errors)) { %>
+      <% for (const message of messages) { %>
+        <p><strong><%= field %></strong>: <%= message %></p>
+      <% } %>
+    <% } %>
+  </div>
+  <% } %>
+
+  <form method="post" action="/organizations" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Name
+      <input type="text" name="name" value="<%= it.old?.name ?? '' %>" required />
+    </label>
+
+    <label>
+      Slug
+      <input type="text" name="slug" value="<%= it.old?.slug ?? '' %>" required />
+    </label>
+
+    <button type="submit">Create</button>
+  </form>
+</section>
+
+<div id="org-table">
+  <%~ include('./_table', it) %>
+</div>

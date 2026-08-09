@@ -1,0 +1,51 @@
+<% if (it.flashMessage) { %>
+<p class="hint" role="status"><%= it.flashMessage %></p>
+<% } %>
+
+<% if ((it.failedJobs ?? []).length === 0) { %>
+<p class="hint">No failed jobs.</p>
+<% } else { %>
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Job</th>
+      <th>Failed at</th>
+      <th>Exception</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const job of it.failedJobs ?? []) { %>
+    <tr>
+      <td><%= job.id %></td>
+      <td><code><%= job.job_name %></code></td>
+      <td><%= job.failed_at?.toISOString?.() ?? job.failed_at %></td>
+      <td><pre class="code-block"><%= job.exception %></pre></td>
+      <td class="table-actions">
+        <form
+          method="post"
+          action="/admin/queue/failed/<%= job.id %>/retry"
+          hx-post="/admin/queue/failed/<%= job.id %>/retry"
+          hx-target="#failed-jobs-panel"
+          hx-swap="innerHTML"
+        >
+          <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+          <button type="submit">Retry</button>
+        </form>
+        <form
+          method="post"
+          action="/admin/queue/failed/<%= job.id %>/delete"
+          hx-post="/admin/queue/failed/<%= job.id %>/delete"
+          hx-target="#failed-jobs-panel"
+          hx-swap="innerHTML"
+        >
+          <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+          <button type="submit" class="danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    <% } %>
+  </tbody>
+</table>
+<% } %>

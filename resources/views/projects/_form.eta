@@ -1,0 +1,45 @@
+<% if (Object.keys(it.errors ?? {}).length > 0) { %>
+<div class="form-errors" role="alert">
+  <% for (const [field, messages] of Object.entries(it.errors)) { %>
+    <% for (const message of messages) { %>
+      <p><strong><%= field %></strong>: <%= message %></p>
+    <% } %>
+  <% } %>
+</div>
+<% } %>
+
+<form method="post" action="/projects" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+  <label>
+    Organization
+    <select name="organization_id" required>
+      <option value="">Select organization</option>
+      <% for (const organization of it.organizations ?? []) { %>
+      <option
+        value="<%= organization.id %>"
+        <%= String(it.old?.organization_id ?? "") === String(organization.id) ? "selected" : "" %>
+      >
+        <%= organization.name %>
+      </option>
+      <% } %>
+    </select>
+  </label>
+
+  <label>
+    Name
+    <input type="text" name="name" value="<%= it.old?.name ?? '' %>" required />
+  </label>
+
+  <label>
+    Status
+    <select name="status">
+      <% for (const status of ["draft", "active", "archived"]) { %>
+      <option value="<%= status %>" <%= (it.old?.status ?? "draft") === status ? "selected" : "" %>>
+        <%= status %>
+      </option>
+      <% } %>
+    </select>
+  </label>
+
+  <button type="submit">Create project</button>
+</form>

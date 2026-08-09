@@ -1,0 +1,21 @@
+{
+  "name": "{{PROJECT_NAME}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --preload ./src/bootstrap/preload.ts --watch src/bootstrap/server.ts",
+    "start": "bun --preload ./src/bootstrap/preload.ts src/bootstrap/server.ts",
+    "db:migrate": "bun --preload ./src/bootstrap/preload.ts src/db/migrate.ts",
+    "db:fresh": "bun --preload ./src/bootstrap/preload.ts src/db/fresh.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@getstrata/bootstrap": "^0.1.0",
+    "@getstrata/core": "^0.5.6"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.2"
+  }
+}

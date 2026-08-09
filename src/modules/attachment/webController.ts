@@ -1,0 +1,102 @@
+import type { AppDependencies } from "@getstrata/bootstrap/contracts";
+import { resolveService } from "@getstrata/bootstrap/contracts";
+import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { CACHE_TAGS } from "@getstrata/core/cache/tags";
+import { parseMultipartUpload, type RouteRequest, withErrorHandling } from "@getstrata/core/http";
+import type { RouteHandler } from "@getstrata/core/http/middleware";
+import type { ViewEngine } from "@getstrata/core/view";
+import { htmlResponse, isHtmxRequest } from "@getstrata/core/view";
+import { attachmentServiceToken } from "./provider";
+import { parseAttachmentIdParams, parseTaskAttachmentParams } from "./requests";
+import type AttachmentService from "./service";
+
+class AttachmentWebController {
+  constructor(private readonly dependencies: AppDependencies) {}
+
+  private get service(): AttachmentService {
+    return resolveService(this.dependencies, attachmentServiceToken);
+  }
+
+  private get view(): ViewEngine {
+    return resolveService(this.dependencies, CORE_VIEW_TOKEN);
+  }
+
+  private async renderTaskAttachments(taskId: number, extras: Record<string, unknown> = {}) {
+    const attachments = await this.service.listByTaskId(taskId);
+
+    return this.view.render(
+      "attachments/_list",
+      {
+        taskId,
+        attachments,
+        errors: {},
+        ...extras,
+      },
+      { layout: false },
+    );
+  }
+
+  readonly listForTask = withErrorHandling(async (req: RouteRequest<{ id: string }>) => {
+    const { taskId } = parseTaskAttachmentParams(req.params);
+
+    return htmlResponse(await this.renderTaskAttachments(taskId));
+  });
+
+  readonly storeForTask = withErrorHandling(async (req: RouteRequest<{ id: string }>) => {
+    const { taskId } = parseTaskAttachmentParams(req.params);
+    const upload = await parseMultipartUpload(req);
+
+    await this.service.create({ taskId, upload });
+    await this.dependencies.cache.tags(CACHE_TAGS.attachments).flush();
+
+    return htmlResponse(await this.renderTaskAttachments(taskId), { status: 201 });
+  });
+
+  readonly download = withErrorHandling(async (req: RouteRequest<{ id: string }>) => {
+    const { attachmentId } = parseAttachmentIdParams(req.params);
+    const { attachment, contents } = await this.service.readContents(attachmentId);
+
+    return new Response(contents, {
+      headers: {
+        "Content-Type": attachment.mime_type,
+        "Content-Disposition": `attachment; filename="${attachment.original_name.replace(/"/g, "")}"`,
+      },
+    });
+  });
+
+  readonly destroy = withErrorHandling(async (req: RouteRequest<{ id: string }>) => {
+    const { attachmentId } = parseAttachmentIdParams(req.params);
+    const attachment = await this.service.findByIdOrThrow(attachmentId);
+    const taskId = attachment.task_id;
+
+    await this.service.delete(attachmentId);
+    await this.dependencies.cache.tags(CACHE_TAGS.attachments).flush();
+
+    if (isHtmxRequest(req)) {
+      return htmlResponse(await this.renderTaskAttachments(taskId));
+    }
+
+    return Response.redirect(`/tasks/${taskId}`, 302);
+  });
+}
+
+function createAttachmentWebRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
+  const controller = new AttachmentWebController(dependencies);
+
+  return {
+    "/tasks/:id/attachments": {
+      GET: kernel.wrapWebPublicRead(controller.listForTask as unknown as RouteHandler),
+      POST: kernel.wrapWebAuthenticated(controller.storeForTask as unknown as RouteHandler),
+    },
+    "/attachments/:id/download": kernel.wrapWebPublicRead(
+      controller.download as unknown as RouteHandler,
+    ),
+    "/attachments/:id": {
+      DELETE: kernel.wrapWebAuthenticated(controller.destroy as unknown as RouteHandler),
+    },
+  };
+}
+
+export default AttachmentWebController;
+export { createAttachmentWebRoutes };

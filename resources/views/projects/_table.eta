@@ -1,0 +1,44 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Status</th>
+      <th>Organization</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const project of it.projects ?? []) { %>
+    <tr>
+      <td><a href="/projects/<%= project.id %>"><%= project.name %></a></td>
+      <td><%= project.status %></td>
+      <td><%= project.organization?.name ?? project.organization_id %></td>
+    </tr>
+    <% } %>
+  </tbody>
+</table>
+
+<% if (it.meta) { %>
+<nav class="pagination" aria-label="Project pagination">
+  <% if (it.meta.page > 1) { %>
+  <a
+    href="/projects?page=<%= it.meta.page - 1 %>&per_page=<%= it.meta.per_page %>"
+    hx-get="/projects?page=<%= it.meta.page - 1 %>&per_page=<%= it.meta.per_page %>"
+    hx-target="#project-table"
+    hx-swap="innerHTML"
+  >
+    Previous
+  </a>
+  <% } %>
+  <span>Page <%= it.meta.page %> of <%= it.meta.last_page %> (<%= it.meta.total %> total)</span>
+  <% if (it.meta.page < it.meta.last_page) { %>
+  <a
+    href="/projects?page=<%= it.meta.page + 1 %>&per_page=<%= it.meta.per_page %>"
+    hx-get="/projects?page=<%= it.meta.page + 1 %>&per_page=<%= it.meta.per_page %>"
+    hx-target="#project-table"
+    hx-swap="innerHTML"
+  >
+    Next
+  </a>
+  <% } %>
+</nav>
+<% } %>

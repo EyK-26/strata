@@ -1,0 +1,326 @@
+{
+  "name": "@getstrata/core",
+  "version": "0.5.13",
+  "description": "Strata — Laravel-inspired Bun framework public API",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EyK-26/strata.git",
+    "directory": "packages/strata-core"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/framework/public-api.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./auth/accessControl": {
+      "types": "./dist/core/auth/accessControl.d.ts",
+      "import": "./dist/entries/auth/accessControl.js",
+      "default": "./dist/entries/auth/accessControl.js"
+    },
+    "./auth/authContext": {
+      "types": "./dist/core/auth/authContext.d.ts",
+      "import": "./dist/entries/auth/authContext.js",
+      "default": "./dist/entries/auth/authContext.js"
+    },
+    "./auth/guard": {
+      "types": "./dist/core/auth/guard.d.ts",
+      "import": "./dist/entries/auth/guard.js",
+      "default": "./dist/entries/auth/guard.js"
+    },
+    "./auth/membershipContext": {
+      "types": "./dist/core/auth/membershipContext.d.ts",
+      "import": "./dist/entries/auth/membershipContext.js",
+      "default": "./dist/entries/auth/membershipContext.js"
+    },
+    "./auth/membershipScope": {
+      "types": "./dist/core/auth/membershipScope.d.ts",
+      "import": "./dist/entries/auth/membershipScope.js",
+      "default": "./dist/entries/auth/membershipScope.js"
+    },
+    "./auth/membershipService": {
+      "types": "./dist/core/auth/membershipService.d.ts",
+      "import": "./dist/entries/auth/membershipService.js",
+      "default": "./dist/entries/auth/membershipService.js"
+    },
+    "./auth/oauth/oidcProvider": {
+      "types": "./dist/core/auth/oauth/oidcProvider.d.ts",
+      "import": "./dist/entries/auth/oauth/oidcProvider.js",
+      "default": "./dist/entries/auth/oauth/oidcProvider.js"
+    },
+    "./auth/oauth/providers": {
+      "types": "./dist/core/auth/oauth/providers.d.ts",
+      "import": "./dist/entries/auth/oauth/providers.js",
+      "default": "./dist/entries/auth/oauth/providers.js"
+    },
+    "./auth/oauth/samlProvider": {
+      "types": "./dist/core/auth/oauth/samlProvider.d.ts",
+      "import": "./dist/entries/auth/oauth/samlProvider.js",
+      "default": "./dist/entries/auth/oauth/samlProvider.js"
+    },
+    "./auth/oauth/types": {
+      "types": "./dist/core/auth/oauth/types.d.ts",
+      "import": "./dist/entries/auth/oauth/types.js",
+      "default": "./dist/entries/auth/oauth/types.js"
+    },
+    "./auth/password": {
+      "types": "./dist/core/auth/password.d.ts",
+      "import": "./dist/entries/auth/password.js",
+      "default": "./dist/entries/auth/password.js"
+    },
+    "./auth/policy": {
+      "types": "./dist/core/auth/policy.d.ts",
+      "import": "./dist/entries/auth/policy.js",
+      "default": "./dist/entries/auth/policy.js"
+    },
+    "./auth/sessionCookie": {
+      "types": "./dist/core/auth/sessionCookie.d.ts",
+      "import": "./dist/entries/auth/sessionCookie.js",
+      "default": "./dist/entries/auth/sessionCookie.js"
+    },
+    "./auth/tokenHash": {
+      "types": "./dist/core/auth/tokenHash.d.ts",
+      "import": "./dist/entries/auth/tokenHash.js",
+      "default": "./dist/entries/auth/tokenHash.js"
+    },
+    "./cache/tags": {
+      "types": "./dist/core/cache/tags.d.ts",
+      "import": "./dist/entries/cache/tags.js",
+      "default": "./dist/entries/cache/tags.js"
+    },
+    "./crypto/fieldEncryption": {
+      "types": "./dist/core/crypto/fieldEncryption.d.ts",
+      "import": "./dist/entries/crypto/fieldEncryption.js",
+      "default": "./dist/entries/crypto/fieldEncryption.js"
+    },
+    "./crypto/mfaSecret": {
+      "types": "./dist/core/crypto/mfaSecret.d.ts",
+      "import": "./dist/entries/crypto/mfaSecret.js",
+      "default": "./dist/entries/crypto/mfaSecret.js"
+    },
+    "./database": {
+      "types": "./dist/core/database/index.d.ts",
+      "import": "./dist/entries/database.js",
+      "default": "./dist/entries/database.js"
+    },
+    "./database/factory": {
+      "types": "./dist/core/database/factory.d.ts",
+      "import": "./dist/entries/database/factory.js",
+      "default": "./dist/entries/database/factory.js"
+    },
+    "./database/seeders": {
+      "types": "./dist/core/database/seeders/runner.d.ts",
+      "import": "./dist/entries/database/seeders.js",
+      "default": "./dist/entries/database/seeders.js"
+    },
+    "./database/types": {
+      "types": "./dist/core/database/types.d.ts",
+      "import": "./dist/entries/database/types.js",
+      "default": "./dist/entries/database/types.js"
+    },
+    "./errors/http": {
+      "types": "./dist/core/errors/http.d.ts",
+      "import": "./dist/entries/errors/http.js",
+      "default": "./dist/entries/errors/http.js"
+    },
+    "./http": {
+      "types": "./dist/core/http/index.d.ts",
+      "import": "./dist/entries/http.js",
+      "default": "./dist/entries/http.js"
+    },
+    "./http/contentNegotiation": {
+      "types": "./dist/core/http/contentNegotiation.d.ts",
+      "import": "./dist/entries/http/contentNegotiation.js",
+      "default": "./dist/entries/http/contentNegotiation.js"
+    },
+    "./http/csrfToken": {
+      "types": "./dist/core/http/csrfToken.d.ts",
+      "import": "./dist/entries/http/csrfToken.js",
+      "default": "./dist/entries/http/csrfToken.js"
+    },
+    "./http/etag": {
+      "types": "./dist/core/http/etag.d.ts",
+      "import": "./dist/entries/http/etag.js",
+      "default": "./dist/entries/http/etag.js"
+    },
+    "./http/flashSession": {
+      "types": "./dist/core/http/flashSession.d.ts",
+      "import": "./dist/entries/http/flashSession.js",
+      "default": "./dist/entries/http/flashSession.js"
+    },
+    "./http/middleware": {
+      "types": "./dist/core/http/middleware.d.ts",
+      "import": "./dist/entries/http/middleware.js",
+      "default": "./dist/entries/http/middleware.js"
+    },
+    "./http/parseFormBody": {
+      "types": "./dist/core/http/parseFormBody.d.ts",
+      "import": "./dist/entries/http/parseFormBody.js",
+      "default": "./dist/entries/http/parseFormBody.js"
+    },
+    "./http/resources": {
+      "types": "./dist/core/http/resources.d.ts",
+      "import": "./dist/entries/http/resources.js",
+      "default": "./dist/entries/http/resources.js"
+    },
+    "./http/requestMetaContext": {
+      "types": "./dist/core/http/requestMetaContext.d.ts",
+      "import": "./dist/entries/http/requestMetaContext.js",
+      "default": "./dist/entries/http/requestMetaContext.js"
+    },
+    "./http/webErrorResponse": {
+      "types": "./dist/core/http/webErrorResponse.d.ts",
+      "import": "./dist/entries/http/webErrorResponse.js",
+      "default": "./dist/entries/http/webErrorResponse.js"
+    },
+    "./http/webFormRequest": {
+      "types": "./dist/core/http/webFormRequest.d.ts",
+      "import": "./dist/entries/http/webFormRequest.js",
+      "default": "./dist/entries/http/webFormRequest.js"
+    },
+    "./jobs/dispatchWebhookJob": {
+      "types": "./dist/core/jobs/dispatchWebhookJob.d.ts",
+      "import": "./dist/entries/jobs/dispatchWebhookJob.js",
+      "default": "./dist/entries/jobs/dispatchWebhookJob.js"
+    },
+    "./lifecycle/gracefulShutdown": {
+      "types": "./dist/core/lifecycle/gracefulShutdown.d.ts",
+      "import": "./dist/entries/lifecycle/gracefulShutdown.js",
+      "default": "./dist/entries/lifecycle/gracefulShutdown.js"
+    },
+    "./metrics/prometheus": {
+      "types": "./dist/core/metrics/prometheus.d.ts",
+      "import": "./dist/entries/metrics/prometheus.js",
+      "default": "./dist/entries/metrics/prometheus.js"
+    },
+    "./pagination": {
+      "types": "./dist/core/pagination/index.d.ts",
+      "import": "./dist/entries/pagination.js",
+      "default": "./dist/entries/pagination.js"
+    },
+    "./queue/createAppQueue": {
+      "types": "./dist/core/queue/createAppQueue.d.ts",
+      "import": "./dist/entries/queue/createAppQueue.js",
+      "default": "./dist/entries/queue/createAppQueue.js"
+    },
+    "./queue/failedJobService": {
+      "types": "./dist/core/queue/failedJobService.d.ts",
+      "import": "./dist/entries/queue/failedJobService.js",
+      "default": "./dist/entries/queue/failedJobService.js"
+    },
+    "./queue/jobRegistry": {
+      "types": "./dist/core/queue/jobRegistry.d.ts",
+      "import": "./dist/entries/queue/jobRegistry.js",
+      "default": "./dist/entries/queue/jobRegistry.js"
+    },
+    "./queue/jobRunner": {
+      "types": "./dist/core/queue/jobRunner.d.ts",
+      "import": "./dist/entries/queue/jobRunner.js",
+      "default": "./dist/entries/queue/jobRunner.js"
+    },
+    "./queue/queueMetrics": {
+      "types": "./dist/core/queue/queueMetrics.d.ts",
+      "import": "./dist/entries/queue/queueMetrics.js",
+      "default": "./dist/entries/queue/queueMetrics.js"
+    },
+    "./queue/publicQueue": {
+      "types": "./dist/core/queue/publicQueue.d.ts",
+      "import": "./dist/entries/queue/publicQueue.js",
+      "default": "./dist/entries/queue/publicQueue.js"
+    },
+    "./queue/types": {
+      "types": "./dist/core/queue/types.d.ts",
+      "import": "./dist/entries/queue/types.js",
+      "default": "./dist/entries/queue/types.js"
+    },
+    "./security/oauthState": {
+      "types": "./dist/core/security/oauthState.d.ts",
+      "import": "./dist/entries/security/oauthState.js",
+      "default": "./dist/entries/security/oauthState.js"
+    },
+    "./security/publicReads": {
+      "types": "./dist/core/security/publicReads.d.ts",
+      "import": "./dist/entries/security/publicReads.js",
+      "default": "./dist/entries/security/publicReads.js"
+    },
+    "./security/safeUrl": {
+      "types": "./dist/core/security/safeUrl.d.ts",
+      "import": "./dist/entries/security/safeUrl.js",
+      "default": "./dist/entries/security/safeUrl.js"
+    },
+    "./security/securityEvents": {
+      "types": "./dist/core/security/securityEvents.d.ts",
+      "import": "./dist/entries/security/securityEvents.js",
+      "default": "./dist/entries/security/securityEvents.js"
+    },
+    "./security/stripeWebhook": {
+      "types": "./dist/core/security/stripeWebhook.d.ts",
+      "import": "./dist/entries/security/stripeWebhook.js",
+      "default": "./dist/entries/security/stripeWebhook.js"
+    },
+    "./security/tokenExpiry": {
+      "types": "./dist/core/security/tokenExpiry.d.ts",
+      "import": "./dist/entries/security/tokenExpiry.js",
+      "default": "./dist/entries/security/tokenExpiry.js"
+    },
+    "./security/totp": {
+      "types": "./dist/core/security/totp.d.ts",
+      "import": "./dist/entries/security/totp.js",
+      "default": "./dist/entries/security/totp.js"
+    },
+    "./storage/storage": {
+      "types": "./dist/core/storage/storage.d.ts",
+      "import": "./dist/entries/storage/storage.js",
+      "default": "./dist/entries/storage/storage.js"
+    },
+    "./tenant/tenantContext": {
+      "types": "./dist/core/tenant/tenantContext.d.ts",
+      "import": "./dist/entries/tenant/tenantContext.js",
+      "default": "./dist/entries/tenant/tenantContext.js"
+    },
+    "./tenant/tenantMiddleware": {
+      "types": "./dist/core/tenant/tenantMiddleware.d.ts",
+      "import": "./dist/entries/tenant/tenantMiddleware.js",
+      "default": "./dist/entries/tenant/tenantMiddleware.js"
+    },
+    "./tracing/traceContext": {
+      "types": "./dist/core/tracing/traceContext.d.ts",
+      "import": "./dist/entries/tracing/traceContext.js",
+      "default": "./dist/entries/tracing/traceContext.js"
+    },
+    "./validation/rules": {
+      "types": "./dist/core/validation/rules.d.ts",
+      "import": "./dist/entries/validation/rules.js",
+      "default": "./dist/entries/validation/rules.js"
+    },
+    "./view": {
+      "types": "./dist/core/view/index.d.ts",
+      "import": "./dist/entries/view.js",
+      "default": "./dist/entries/view.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/framework/public-api.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun run build:bundle && bun run build:types",
+    "build:bundle": "bun run build:subpaths",
+    "build:types": "tsc -p tsconfig.types.json",
+    "prepublishOnly": "bun run build",
+    "build:subpaths": "bun build index.ts entries/auth/accessControl.ts entries/auth/authContext.ts entries/auth/guard.ts entries/auth/membershipContext.ts entries/auth/membershipScope.ts entries/auth/membershipService.ts entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/policy.ts entries/auth/sessionCookie.ts entries/auth/tokenHash.ts entries/cache/tags.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database.ts entries/database/factory.ts entries/database/seeders.ts entries/database/types.ts entries/errors/http.ts entries/http.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/middleware.ts entries/http/parseFormBody.ts entries/http/resources.ts entries/http/requestMetaContext.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/lifecycle/gracefulShutdown.ts entries/metrics/prometheus.ts entries/pagination.ts entries/queue/createAppQueue.ts entries/queue/failedJobService.ts entries/queue/jobRegistry.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/types.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeUrl.ts entries/security/securityEvents.ts entries/security/stripeWebhook.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/tenant/tenantContext.ts entries/tenant/tenantMiddleware.ts entries/tracing/traceContext.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "eta": "^4.6.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

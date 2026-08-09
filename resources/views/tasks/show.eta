@@ -1,0 +1,133 @@
+<section class="page-header">
+  <h1><%= it.task.title %></h1>
+  <p class="hint">Task #<%= it.task.id %></p>
+</section>
+
+<div class="card">
+  <dl>
+    <dt>Status</dt>
+    <dd><%= it.task.status %></dd>
+    <dt>Priority</dt>
+    <dd><%= it.task.priority %></dd>
+    <dt>Project</dt>
+    <dd><%= it.task.project?.name ?? it.task.project_id %></dd>
+  </dl>
+</div>
+
+<section class="edit-form">
+  <h2>Edit task</h2>
+
+  <% if (Object.keys(it.errors ?? {}).length > 0) { %>
+  <div class="form-errors" role="alert">
+    <% for (const [field, messages] of Object.entries(it.errors)) { %>
+      <% for (const message of messages) { %>
+        <p><strong><%= field %></strong>: <%= message %></p>
+      <% } %>
+    <% } %>
+  </div>
+  <% } %>
+
+  <form
+    method="post"
+    action="/tasks/<%= it.task.id %>"
+    hx-patch="/tasks/<%= it.task.id %>"
+    hx-target="body"
+    hx-swap="innerHTML"
+    class="stack-form"
+  >
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+
+    <label>
+      Title
+      <input type="text" name="title" value="<%= it.old?.title ?? it.task.title %>" required />
+    </label>
+
+    <label>
+      Status
+      <select name="status">
+        <% for (const status of ["todo", "in_progress", "done"]) { %>
+        <option
+          value="<%= status %>"
+          <%= (it.old?.status ?? it.task.status) === status ? "selected" : "" %>
+        >
+          <%= status %>
+        </option>
+        <% } %>
+      </select>
+    </label>
+
+    <label>
+      Priority
+      <input
+        type="number"
+        name="priority"
+        min="0"
+        max="5"
+        value="<%= it.old?.priority ?? it.task.priority %>"
+      />
+    </label>
+
+    <button type="submit">Save changes</button>
+  </form>
+
+  <button
+    type="button"
+    class="danger-button"
+    hx-delete="/tasks/<%= it.task.id %>"
+    hx-confirm="Delete this task?"
+  >
+    Delete task
+  </button>
+</section>
+
+<section class="comments-panel">
+  <h2>Comments</h2>
+
+  <form
+    method="post"
+    action="/tasks/<%= it.task.id %>/comments"
+    hx-post="/tasks/<%= it.task.id %>/comments"
+    hx-target="#comments-list"
+    hx-swap="innerHTML"
+    class="stack-form"
+  >
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Add comment
+      <textarea name="body" rows="3" required><%= it.old?.body ?? '' %></textarea>
+    </label>
+    <button type="submit">Post comment</button>
+  </form>
+
+  <div id="comments-list">
+    <%~ include('../comments/_list', { comments: it.comments, csrfToken: it.csrfToken, errors: it.errors, old: it.old }) %>
+  </div>
+</section>
+
+<section class="attachments-panel">
+  <h2>Attachments</h2>
+
+  <form
+    method="post"
+    action="/tasks/<%= it.task.id %>/attachments"
+    enctype="multipart/form-data"
+    hx-post="/tasks/<%= it.task.id %>/attachments"
+    hx-encoding="multipart/form-data"
+    hx-target="#attachments-list"
+    hx-swap="innerHTML"
+    class="stack-form upload-form"
+  >
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      File
+      <input type="file" name="file" required />
+    </label>
+    <button type="submit">Upload</button>
+  </form>
+
+  <div id="attachments-list">
+    <%~ include('../attachments/_list', { attachments: it.attachments, taskId: it.task.id }) %>
+  </div>
+</section>
+
+<p><a href="/tasks">Back to tasks</a></p>

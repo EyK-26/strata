@@ -1,0 +1,31 @@
+<section class="page-header">
+  <h1><%= it.organization.name %></h1>
+  <p class="hint"><code><%= it.organization.slug %></code></p>
+</section>
+
+<dl class="detail-list">
+  <div>
+    <dt>ID</dt>
+    <dd><%= it.organization.id %></dd>
+  </div>
+  <div>
+    <dt>Created</dt>
+    <dd><%= it.organization.created_at.toISOString?.() ?? it.organization.created_at %></dd>
+  </div>
+  <div>
+    <dt>Updated</dt>
+    <dd><%= it.organization.updated_at.toISOString?.() ?? it.organization.updated_at %></dd>
+  </div>
+</dl>
+
+<p><a href="/organizations">← Back to organizations</a></p>
+
+<section
+  class="htmx-demo"
+  hx-get="/organizations"
+  hx-trigger="revealed"
+  hx-select="#org-table"
+  hx-swap="outerHTML"
+>
+  <p class="hint">HTMX preview loads when this section scrolls into view.</p>
+</section>

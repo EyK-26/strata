@@ -1,0 +1,46 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Slug</th>
+      <th>Updated</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const organization of it.organizations) { %>
+    <tr>
+      <td><a href="/organizations/<%= organization.id %>"><%= organization.id %></a></td>
+      <td><%= organization.name %></td>
+      <td><%= organization.slug %></td>
+      <td><%= organization.updated_at.toISOString?.() ?? organization.updated_at %></td>
+    </tr>
+    <% } %>
+  </tbody>
+</table>
+
+<% if (it.meta) { %>
+<nav class="pagination" aria-label="Organization pagination">
+  <% if (it.meta.page > 1) { %>
+  <a
+    href="/organizations?page=<%= it.meta.page - 1 %>&per_page=<%= it.meta.per_page %>"
+    hx-get="/organizations?page=<%= it.meta.page - 1 %>&per_page=<%= it.meta.per_page %>"
+    hx-target="#org-table"
+    hx-swap="innerHTML"
+  >
+    Previous
+  </a>
+  <% } %>
+  <span>Page <%= it.meta.page %> of <%= it.meta.last_page %> (<%= it.meta.total %> total)</span>
+  <% if (it.meta.page < it.meta.last_page) { %>
+  <a
+    href="/organizations?page=<%= it.meta.page + 1 %>&per_page=<%= it.meta.per_page %>"
+    hx-get="/organizations?page=<%= it.meta.page + 1 %>&per_page=<%= it.meta.per_page %>"
+    hx-target="#org-table"
+    hx-swap="innerHTML"
+  >
+    Next
+  </a>
+  <% } %>
+</nav>
+<% } %>

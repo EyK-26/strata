@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Start services
+        run: docker compose up -d postgres redis --wait
+
+      - name: Install dependencies and run checks
+        env:
+          WORKHUB_SKIP_TEST_BOOTSTRAP: 1
+        run: |
+          bun install --frozen-lockfile
+          scripts/with-host-env.sh sh -c "
+            bun run cli migrate:fresh --seed &&
+            bun run validate:ci &&
+            bun run verify:framework
+          "
+
+      - name: Build spa-react frontend
+        run: bun run build:frontend
+
+      - name: Start app for smoke tests
+        run: |
+          scripts/with-host-env.sh sh -c "bun run start" &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health >/dev/null; then
+              echo "App ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "App failed to become ready" >&2
+          exit 1
+
+      - name: Run smoke tests
+        env:
+          BASE_URL: http://localhost:3000
+        run: bun run smoke

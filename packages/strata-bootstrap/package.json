@@ -1,0 +1,79 @@
+{
+  "name": "@getstrata/bootstrap",
+  "version": "0.2.5",
+  "description": "Strata application bootstrap — HttpKernel, DI, web session helpers",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EyK-26/strata.git",
+    "directory": "packages/strata-bootstrap"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/bootstrap/public-api.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./applicationRegistry": {
+      "types": "./dist/bootstrap/applicationRegistry.d.ts",
+      "import": "./dist/entries/applicationRegistry.js",
+      "default": "./dist/entries/applicationRegistry.js"
+    },
+    "./config": {
+      "types": "./dist/bootstrap/config.d.ts",
+      "import": "./dist/entries/config.js",
+      "default": "./dist/entries/config.js"
+    },
+    "./context": {
+      "types": "./dist/bootstrap/context.d.ts",
+      "import": "./dist/entries/context.js",
+      "default": "./dist/entries/context.js"
+    },
+    "./contracts": {
+      "types": "./dist/bootstrap/contracts.d.ts",
+      "import": "./dist/entries/contracts.js",
+      "default": "./dist/entries/contracts.js"
+    },
+    "./createWebRoutes": {
+      "types": "./dist/bootstrap/createWebRoutes.d.ts",
+      "import": "./dist/entries/createWebRoutes.js",
+      "default": "./dist/entries/createWebRoutes.js"
+    },
+    "./httpKernel": {
+      "types": "./dist/bootstrap/httpKernel.d.ts",
+      "import": "./dist/entries/httpKernel.js",
+      "default": "./dist/entries/httpKernel.js"
+    },
+    "./providers": {
+      "types": "./dist/bootstrap/providers/index.d.ts",
+      "import": "./dist/entries/providers.js",
+      "default": "./dist/entries/providers.js"
+    },
+    "./providers/view": {
+      "types": "./dist/bootstrap/providers/view/index.d.ts",
+      "import": "./dist/entries/providers/view.js",
+      "default": "./dist/entries/providers/view.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/bootstrap/public-api.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun run build:bundle && bun run build:types",
+    "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta --external @getstrata/core",
+    "build:types": "tsc -p tsconfig.types.json",
+    "prepublishOnly": "bun run build",
+    "build:subpaths": "bun build index.ts entries/applicationRegistry.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/httpKernel.ts entries/providers.ts entries/providers/view.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@getstrata/core": "^0.5.9",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,56 @@
+<% if (Object.keys(it.errors ?? {}).length > 0) { %>
+<div class="form-errors" role="alert">
+  <% for (const [field, messages] of Object.entries(it.errors)) { %>
+    <% for (const message of messages) { %>
+      <p><strong><%= field %></strong>: <%= message %></p>
+    <% } %>
+  <% } %>
+</div>
+<% } %>
+
+<form method="post" action="/tasks" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+  <label>
+    Project
+    <select name="project_id" required>
+      <option value="">Select project</option>
+      <% for (const project of it.projects ?? []) { %>
+      <option
+        value="<%= project.id %>"
+        <%= String(it.old?.project_id ?? "") === String(project.id) ? "selected" : "" %>
+      >
+        <%= project.name %>
+      </option>
+      <% } %>
+    </select>
+  </label>
+
+  <label>
+    Title
+    <input type="text" name="title" value="<%= it.old?.title ?? '' %>" required />
+  </label>
+
+  <label>
+    Status
+    <select name="status">
+      <% for (const status of ["todo", "in_progress", "done"]) { %>
+      <option value="<%= status %>" <%= (it.old?.status ?? "todo") === status ? "selected" : "" %>>
+        <%= status %>
+      </option>
+      <% } %>
+    </select>
+  </label>
+
+  <label>
+    Priority
+    <input
+      type="number"
+      name="priority"
+      min="0"
+      max="5"
+      value="<%= it.old?.priority ?? '0' %>"
+    />
+  </label>
+
+  <button type="submit">Create task</button>
+</form>

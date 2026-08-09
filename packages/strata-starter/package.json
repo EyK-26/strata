@@ -1,0 +1,29 @@
+{
+  "name": "@getstrata/starter",
+  "version": "0.1.0",
+  "description": "Scaffold a new Strata app — bun create strata",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EyK-26/strata.git",
+    "directory": "packages/strata-starter"
+  },
+  "bin": {
+    "create-strata": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun build cli.ts --outdir dist --target bun && cp -r templates dist/templates",
+    "prepublishOnly": "bun run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

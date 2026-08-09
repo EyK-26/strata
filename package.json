@@ -1,0 +1,55 @@
+{
+  "name": "bun-testing",
+  "module": "src/bootstrap/server.ts",
+  "type": "module",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EyK-26/strata.git"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "bun run src/bootstrap/server.ts",
+    "dev": "bun --watch src/bootstrap/server.ts",
+    "check": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:ci": "biome ci .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "validate": "bun run check && bun run lint && bun run cli openapi:validate && bun run test:all",
+    "validate:ci": "bun run check && bun run lint:ci && bun run check:module-imports && bun run verify:versions && bun run parity:audit && bun run cli openapi:validate && bun run cli openapi:check && bun run test:coverage",
+    "parity:audit": "bun scripts/parity-audit.ts --write docs/PARITY-AUDIT.md",
+    "verify:versions": "bun scripts/verify-package-versions.ts",
+    "build:framework": "bun run --filter @getstrata/core build",
+    "build:bootstrap": "bun run --filter @getstrata/bootstrap build",
+    "build:starter": "bun run --filter @getstrata/starter build",
+    "build:cli": "bun run --filter @getstrata/cli build",
+    "verify:framework": "bun run build:framework && bun -e \"import('./packages/strata-core/dist/index.js').then((m) => { if (typeof m.BaseRepository !== 'function') throw new Error('missing BaseRepository export'); })\"",
+    "verify:bootstrap": "bun run build:bootstrap && bun -e \"import('./packages/strata-bootstrap/dist/index.js').then((m) => { if (typeof m.createWebServer !== 'function') throw new Error('missing createWebServer export'); })\"",
+    "verify:starter": "bun run build:starter && bun packages/strata-starter/dist/cli.js --help",
+    "dev:host": "scripts/with-host-env.sh bun --watch src/bootstrap/server.ts",
+    "validate:host": "scripts/with-host-env.sh sh -c 'bun run cli migrate:fresh --seed && WORKHUB_SKIP_TEST_BOOTSTRAP=1 bun run validate:ci'",
+    "test:host": "scripts/with-host-env.sh sh -c 'bun run cli migrate:fresh --seed && WORKHUB_SKIP_TEST_BOOTSTRAP=1 QUEUE_DRIVER=sync bun run test:coverage'",
+    "build:frontend": "cd frontend && bun install --frozen-lockfile && bun run build",
+    "prepare": "lefthook install || true",
+    "unit": "bun test tests/unit",
+    "integration": "bun test ./tests/integration/routes.integration.test.ts ./tests/integration/webRoutes.integration.test.ts ./tests/integration/spaRoutes.integration.test.ts ./tests/integration/redisCache.integration.test.ts ./tests/integration/queue.integration.test.ts",
+    "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
+    "test:coverage": "QUEUE_DRIVER=sync bun test --coverage --max-concurrency=1 tests/unit tests/integration",
+    "openapi:validate": "bun run cli openapi:validate",
+    "smoke": "bun scripts/smoke-test.ts",
+    "check:module-imports": "bun scripts/check-module-imports.ts",
+    "cli": "bun run src/cli/index.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.7",
+    "@types/bun": "latest",
+    "lefthook": "^2.1.10",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "eta": "^4.6.0"
+  }
+}

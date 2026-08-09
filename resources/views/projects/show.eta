@@ -1,0 +1,72 @@
+<section class="page-header">
+  <h1><%= it.project.name %></h1>
+  <p class="hint">Project #<%= it.project.id %></p>
+</section>
+
+<div class="card">
+  <dl>
+    <dt>Status</dt>
+    <dd><%= it.project.status %></dd>
+    <dt>Organization</dt>
+    <dd><%= it.project.organization?.name ?? it.project.organization_id %></dd>
+    <dt>Updated</dt>
+    <dd><%= it.project.updated_at %></dd>
+  </dl>
+</div>
+
+<section class="edit-form">
+  <h2>Edit project</h2>
+
+  <% if (Object.keys(it.errors ?? {}).length > 0) { %>
+  <div class="form-errors" role="alert">
+    <% for (const [field, messages] of Object.entries(it.errors)) { %>
+      <% for (const message of messages) { %>
+        <p><strong><%= field %></strong>: <%= message %></p>
+      <% } %>
+    <% } %>
+  </div>
+  <% } %>
+
+  <form
+    method="post"
+    action="/projects/<%= it.project.id %>"
+    hx-patch="/projects/<%= it.project.id %>"
+    hx-target="body"
+    hx-swap="innerHTML"
+    class="stack-form"
+  >
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+
+    <label>
+      Name
+      <input type="text" name="name" value="<%= it.old?.name ?? it.project.name %>" required />
+    </label>
+
+    <label>
+      Status
+      <select name="status">
+        <% for (const status of ["draft", "active", "archived"]) { %>
+        <option
+          value="<%= status %>"
+          <%= (it.old?.status ?? it.project.status) === status ? "selected" : "" %>
+        >
+          <%= status %>
+        </option>
+        <% } %>
+      </select>
+    </label>
+
+    <button type="submit">Save changes</button>
+  </form>
+
+  <button
+    type="button"
+    class="danger-button"
+    hx-delete="/projects/<%= it.project.id %>"
+    hx-confirm="Delete this project?"
+  >
+    Delete project
+  </button>
+</section>
+
+<p><a href="/projects">Back to projects</a></p>
