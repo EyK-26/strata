@@ -1,5 +1,11 @@
 # @getstrata/core changelog
 
+## 1.0.3
+
+- `eta` and `mysql2` are optional peers, loaded with `import()` on first use. SQLite and Postgres apps no longer install `mysql2` through core. If a package is missing, the error names `bun add` for that package.
+- `createMysqlPool(url)` is async because it lazy-loads `mysql2`. `createMysqlConnection(url)` stays synchronous and opens the pool on the first query.
+- MySQL helpers are no longer re-exported from `@getstrata/core` or `@getstrata/core/database`. Import `@getstrata/core/database/mysqlConnection`.
+
 ## 1.0.2
 
 - Lockstep with `create-strata` 1.0.2. No runtime changes.
