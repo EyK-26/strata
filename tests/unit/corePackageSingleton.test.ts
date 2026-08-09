@@ -45,4 +45,11 @@ describe("@getstrata/core published bundle singletons", () => {
 
     expect(main.currentTenantId).toBe(subpath.currentTenantId);
   });
+
+  test("main and view subpath share configureWebErrorView", async () => {
+    const main = await import(join(CORE_DIST, "index.js"));
+    const subpath = await import(join(CORE_DIST, "entries/view.js"));
+
+    expect(main.configureWebErrorView).toBe(subpath.configureWebErrorView);
+  });
 });

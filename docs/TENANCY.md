@@ -10,7 +10,7 @@
 
 The default in core (unset env) is `rls`. Generated apps write the driver you picked into `.env.example`. Hobby SQLite defaults to `none`.
 
-HTTP requests and background jobs must call `runWithTenantDatabase()` when RLS is on so `app.tenant_id` is set on the connection. Migrations and seeds use `runWithMigrationBypass()`. `column` and `none` skip those Postgres session GUCs.
+HTTP requests and background jobs must call `runWithTenantDatabase()` when RLS is on so `app.tenant_id` is set on the connection. Migrations and seeds use `runWithMigrationBypass()`, which opens a transaction and `SET LOCAL` so the bypass cannot leak onto the next pooled checkout. `column` and `none` skip those Postgres session GUCs. Postgres RLS is the only driver with database-level enforcement; SQLite and MySQL apps should use `column` (application ALS) or `none`.
 
 ## Generated HiroApp
 

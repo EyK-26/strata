@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
-import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
+import { isProductionEnv } from "../runtime/appEnv";
+import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 import { readRequestCookie } from "./cookies.ts";
 import { currentRequestMeta } from "./requestMetaContext";
 
@@ -11,11 +12,9 @@ function csrfCookieName(): string {
 }
 
 function resolveCsrfSecret(): string {
-  return (
-    process.env.SESSION_SECRET?.trim() ||
-    process.env.OAUTH_STATE_SECRET?.trim() ||
-    process.env.ADMIN_API_TOKEN?.trim() ||
-    appDevSecret("csrf-secret")
+  return requireConfiguredSecret(
+    ["SESSION_SECRET", "OAUTH_STATE_SECRET", "ADMIN_API_TOKEN"],
+    "csrf-secret",
   );
 }
 
@@ -37,7 +36,7 @@ function tokensMatch(left: string, right: string): boolean {
 function createCsrfTokenCookie(): { token: string; cookie: string } {
   const token = Bun.CSRF.generate(resolveCsrfSecret(), { expiresIn: CSRF_TTL_MS });
 
-  const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
+  const secure = isProductionEnv() ? "; Secure" : "";
 
   return {
     token,

@@ -1,8 +1,8 @@
 # Coverage
 
-CI requires **100% lines on in-scope files** through `scripts/assert-core-coverage.ts` (`bun run test:coverage`).
+CI requires **100% lines on in-scope files** through `scripts/assert-core-coverage.ts` (`bun run test:coverage`). That is not 100% of `src/`. Ignore lists in `bunfig.toml` and `scripts/assert-core-coverage.ts` drop whole trees (`src/core/http/**`, `src/bootstrap/**`, `src/core/auth/guard.ts`, and others). New files under those globs are excluded unless you take them off the list.
 
-Do not set Bun `coverageThreshold`. OpenAPI and CLI tests load HiroApp `createApp`, so one process would score both trees and fail a naive 100% gate. Ignore lists live in `bunfig.toml` (`coveragePathIgnorePatterns`) and `scripts/assert-core-coverage.ts`.
+Do not set Bun `coverageThreshold`. OpenAPI and CLI tests load HiroApp `createApp`, so one process would score both trees and fail a naive 100% gate.
 
 ## Why scoped coverage?
 
@@ -35,4 +35,4 @@ CI migrates the fixture schema (core RLS tests), then HiroApp, then the core cov
 2. New route or middleware: extend framework request tests or a generated example app.
 3. New public framework API: export from `src/framework/public-api.ts` and extend `tests/unit/frameworkPublicApi.test.ts`.
 
-If a file should move between in-scope and out-of-scope, update `bunfig.toml` and say why in the PR. Do not silently widen exclusions.
+If a file should move between in-scope and out-of-scope, update `bunfig.toml` and `scripts/assert-core-coverage.ts` and say why in the PR. Do not silently widen exclusions. Prefer adding a new security-sensitive file to the in-scope set (remove it from the ignore list) rather than putting it under an ignored glob.

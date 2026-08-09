@@ -80,6 +80,8 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.createCacheStore).toBe("function");
     expect(typeof core.configureContentSecurityPolicy).toBe("function");
     expect(typeof core.configureWebErrorView).toBe("function");
+    expect(typeof core.isProductionEnv).toBe("function");
+    expect(typeof core.envFlagEnabled).toBe("function");
     expect(typeof core.loginRedirectLocation).toBe("function");
   });
 });

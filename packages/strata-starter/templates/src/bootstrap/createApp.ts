@@ -10,6 +10,7 @@ import {
   ServiceContainer,
 } from "@getstrata/bootstrap/contracts";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { migrate } from "../db/migrate.ts";
 import { buildRoutes } from "../routes.ts";
@@ -68,7 +69,7 @@ function createAppContext(): AppContext {
 }
 
 export async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
-  const isProduction = process.env.APP_ENV === "production";
+  const isProduction = isProductionEnv();
   const { migrate: runMigrate = !isProduction } = options;
 
   const appConfig = loadConfig();

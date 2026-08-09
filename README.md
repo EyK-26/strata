@@ -28,7 +28,7 @@ Guides: [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDIN
 
 ## Packages
 
-Published as **1.0.3**:
+Published as **1.0.4**:
 
 | Package | What it is |
 |---------|------------|
@@ -92,7 +92,9 @@ tests/                  Framework tests
 - CI and `apps/hiroapp` use PostgreSQL. `tsMatch` (full-text search) throws on other dialects.
 - MySQL and SQLite SQL compilation exists. Query execution against those engines is not a CI guarantee.
 - An app picks one primary database. Do not run Postgres and MySQL together as two OLTP stores for the same product.
-- `AUTH_DEV_HEADERS=true` is for tests. Production must set it to `false`.
+- `AUTH_DEV_HEADERS=true` is for tests. Only that exact string enables header auth. Production must set it to `false`.
+- Production secret checks also run when `NODE_ENV=production` or `APP_ENV` is an unrecognized value. Do not derive JWT or session secrets from the app name.
+- The coverage gate is 100% of in-scope files, not all of `src/core`. See [docs/COVERAGE.md](docs/COVERAGE.md).
 - Published seed tokens such as `strata-admin-test-token` are blocked in production.
 
 ## License

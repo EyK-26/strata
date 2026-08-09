@@ -408,6 +408,7 @@ export {
 } from "../core/queue/publicQueue.ts";
 export type { QueueMetricsSnapshot } from "../core/queue/queueMetrics.ts";
 export { collectQueueMetrics } from "../core/queue/queueMetrics.ts";
+export { envFlagEnabled, isProductionEnv } from "../core/runtime/appEnv.ts";
 export {
   resolveApplicationAuth,
   resolveApplicationCache,

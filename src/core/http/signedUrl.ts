@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
-import { appDevSecret } from "../runtime/appKeyPrefix";
+import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
 import type { Middleware } from "./middleware";
 
 interface TemporarySignedUrlOptions {
@@ -10,11 +10,9 @@ interface TemporarySignedUrlOptions {
 }
 
 function resolveSignedUrlSecret(): string {
-  return (
-    process.env.SIGNED_URL_SECRET?.trim() ||
-    process.env.SESSION_SECRET?.trim() ||
-    process.env.OAUTH_STATE_SECRET?.trim() ||
-    appDevSecret("signed-url-secret")
+  return requireConfiguredSecret(
+    ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+    "signed-url-secret",
   );
 }
 

@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## 1.0.4
+
+- `assertProductionSecrets()` uses `isProductionEnv()`, so `NODE_ENV=production` and `APP_ENV=Production` cannot skip the guard.
+- Feature flags parse with `envFlagEnabled()` (`=== "true"` only).
+
 ## 1.0.3
 
 - Lockstep with `create-strata` 1.0.3. No runtime changes.

@@ -1,5 +1,13 @@
 # @getstrata/core changelog
 
+## 1.0.4
+
+- `isProductionEnv()` treats `APP_ENV` or `NODE_ENV` `production` as production (case-insensitive) and default-denies unrecognized `APP_ENV` values such as `prod`.
+- `envFlagEnabled()` is true only for the exact string `true`.
+- JWT, session, CSRF, flash, signed-URL, OAuth-state, and token-pepper resolvers throw outside development when the secret is unset. They no longer derive a secret from the app name.
+- `runWithMigrationBypass()` uses a transaction and `SET LOCAL` so `app.bypass_rls` cannot leak across pooled connections.
+- `@getstrata/core/view` (and related singleton subpaths) re-export the main bundle so `configureWebErrorView` is shared.
+
 ## 1.0.3
 
 - `eta` and `mysql2` are optional peers, loaded with `import()` on first use. SQLite and Postgres apps no longer install `mysql2` through core. If a package is missing, the error names `bun add` for that package.

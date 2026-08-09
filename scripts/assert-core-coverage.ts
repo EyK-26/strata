@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 /**
  * Fail if any in-scope framework file is below 100% lines.
+ * This is a scoped gate. Ignore lists drop HTTP, bootstrap, guard.ts, and
+ * other trees; it is not 100% of src/core.
  * Bun's coverageThreshold cannot be used: core tests load HiroApp createApp
  * via OpenAPI, which would fail an aggregate 100% gate.
  */

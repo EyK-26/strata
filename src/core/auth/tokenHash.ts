@@ -1,8 +1,8 @@
 import { createHash, createHmac } from "node:crypto";
-import { appDevSecret } from "../runtime/appKeyPrefix";
+import { appDevSecret, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 function resolveTokenPepper(): string {
-  return process.env.TOKEN_HASH_PEPPER?.trim() ?? appDevSecret("token-pepper");
+  return requireConfiguredSecret(["TOKEN_HASH_PEPPER"], "token-pepper");
 }
 
 function hashApiToken(token: string): string {

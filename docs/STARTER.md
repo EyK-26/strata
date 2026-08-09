@@ -66,7 +66,7 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 - Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa`), email verification (`/email/verify`), SCIM `/scim/v2/Users`, metrics `GET /metrics` (only when that extra is on)
 - `strata.layers.json` records the choices
 
-`APP_ENV=production` calls `assertProductionSecrets()` on boot.
+`APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot.
 
 ## In this repo
 

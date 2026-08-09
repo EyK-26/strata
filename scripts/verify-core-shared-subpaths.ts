@@ -7,7 +7,11 @@ import { CORE_SHARED_SUBPATHS } from "./core-shared-subpaths.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const ENTRIES_DIR = join(ROOT, "packages/strata-core/dist/entries");
-const CONSUMER_SCAN_ROOTS = [join(ROOT, "..", "getstrata", "src")];
+const CONSUMER_SCAN_ROOTS = [
+  join(ROOT, "apps"),
+  join(ROOT, "packages/strata-starter/templates"),
+  join(ROOT, "src"),
+];
 
 const IMPORT_PATTERN =
   /import\s+(?!type\s)\{([^}]+)\}\s+from\s+["']@getstrata\/core\/([^"']+)["']/g;
@@ -70,7 +74,9 @@ for (const scanRoot of CONSUMER_SCAN_ROOTS) {
   let files: string[] = [];
   try {
     files = await collectSourceFiles(scanRoot);
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.warn(`Skipping consumer scan root ${scanRoot}: ${detail}`);
     continue;
   }
 

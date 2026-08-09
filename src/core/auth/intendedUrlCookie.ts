@@ -1,4 +1,5 @@
 import { safeInternalRedirectPath, sanitizeInternalPath } from "../http/safeInternalPath";
+import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName } from "../runtime/appKeyPrefix";
 
 const INTENDED_URL_COOKIE = appCookieName("intended");
@@ -27,7 +28,7 @@ function intendedUrlTtlSeconds(): number {
 }
 
 function cookieSecureFlag(): string {
-  return process.env.APP_ENV === "production" ? "; Secure" : "";
+  return isProductionEnv() ? "; Secure" : "";
 }
 
 function pathnameOf(path: string): string {

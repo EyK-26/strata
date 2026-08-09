@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { appDevSecret } from "../runtime/appKeyPrefix";
+import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 interface JwtPayload {
   sub: string | number;
@@ -17,12 +17,11 @@ interface SignJwtOptions {
 }
 
 function resolveJwtSecret(secret?: string): string {
-  return (
-    secret?.trim() ||
-    process.env.JWT_SECRET?.trim() ||
-    process.env.SESSION_SECRET?.trim() ||
-    appDevSecret("jwt-secret")
-  );
+  if (secret?.trim()) {
+    return secret.trim();
+  }
+
+  return requireConfiguredSecret(["JWT_SECRET", "SESSION_SECRET"], "jwt-secret");
 }
 
 function jwtTtlSeconds(override?: number): number {

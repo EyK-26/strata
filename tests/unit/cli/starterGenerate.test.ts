@@ -238,8 +238,13 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("WorkHub");
     expect(readme).not.toContain("—");
 
+    const authProvider = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
+    expect(authProvider).toContain("envFlagEnabled(process.env.AUTH_DEV_HEADERS)");
+    expect(authProvider).not.toContain('AUTH_DEV_HEADERS === "false"');
+
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
+    expect(createApp).toContain("isProductionEnv()");
     expect(readme).not.toContain("GET /metrics");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");
@@ -250,7 +255,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.0.3");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.0.4");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");

@@ -10,6 +10,7 @@ import {
   appUserAgent,
   namespacedRedisKey,
   otelServiceName,
+  requireConfiguredSecret,
   sdkClientClassName,
   siemEventType,
   smtpEhloHost,
@@ -201,5 +202,20 @@ describe("appKeyPrefix", () => {
       restoreEnvVar("APP_NAME", previous.APP_NAME);
       restoreEnvVar("APP_SDK_CLASS", previous.APP_SDK_CLASS);
     }
+  });
+
+  test("requireConfiguredSecret throws outside development and falls back locally", () => {
+    expect(requireConfiguredSecret(["JWT_SECRET"], "jwt-secret", { APP_ENV: "local" })).toBe(
+      "strata-dev-jwt-secret",
+    );
+    expect(
+      requireConfiguredSecret(["JWT_SECRET"], "jwt-secret", {
+        APP_ENV: "local",
+        JWT_SECRET: " configured ",
+      }),
+    ).toBe("configured");
+    expect(() =>
+      requireConfiguredSecret(["JWT_SECRET"], "jwt-secret", { NODE_ENV: "production" }),
+    ).toThrow(/JWT_SECRET must be set outside development/);
   });
 });
