@@ -1,25 +1,21 @@
 type EnvRecord = Record<string, string | undefined>;
 
-/** App environments that are allowed to boot without production secret checks. */
-const NON_PRODUCTION_APP_ENVS = new Set([
-  "local",
-  "development",
-  "dev",
-  "test",
-  "testing",
-  "staging",
-  "ci",
-]);
+/**
+ * App environments that may boot without production secret checks.
+ * Staging is not in this set: it is typically internet-exposed with
+ * production-like data, so it must use real secrets.
+ */
+const NON_PRODUCTION_APP_ENVS = new Set(["local", "development", "dev", "test", "testing", "ci"]);
 
 function normalizeEnvValue(value: string | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
 /**
- * Production when APP_ENV or NODE_ENV says so. Unrecognized APP_ENV values
- * (for example "prod" or "Production" after case-folding fails to match
- * "production") default to production so secrets checks cannot be skipped by
- * capitalization or a typo.
+ * Production when APP_ENV or NODE_ENV says so, including `staging`.
+ * Unrecognized APP_ENV values (for example "prod" or "Production" after
+ * case-folding fails to match "production") default to production so secrets
+ * checks cannot be skipped by capitalization or a typo.
  */
 function isProductionEnv(env: EnvRecord = process.env): boolean {
   const appEnv = normalizeEnvValue(env.APP_ENV);

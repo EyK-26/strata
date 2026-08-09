@@ -1,3 +1,7 @@
+# Staging overlay. APP_ENV=staging runs production secret checks, so inject
+# SESSION_SECRET (and JWT_SECRET if you mint JWTs) from the host. Do not rely
+# on app-name fallbacks.
+
 services:
   app:
     environment:
@@ -14,3 +18,4 @@ services:
   worker:
     environment:
       APP_ENV: staging
+      AUTH_DEV_HEADERS: "false"

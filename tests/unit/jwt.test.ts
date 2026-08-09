@@ -80,6 +80,9 @@ describe("jwt helpers", () => {
       delete process.env.APP_ENV;
       try {
         expect(() => signJwt({ sub: 4 })).toThrow(/JWT_SECRET must be set outside development/);
+        process.env.NODE_ENV = "test";
+        process.env.APP_ENV = "staging";
+        expect(() => signJwt({ sub: 5 })).toThrow(/JWT_SECRET must be set outside development/);
       } finally {
         restoreEnvVar("NODE_ENV", previousNode);
         restoreEnvVar("APP_ENV", previousApp);

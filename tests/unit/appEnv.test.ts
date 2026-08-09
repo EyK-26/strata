@@ -18,8 +18,12 @@ describe("isProductionEnv", () => {
     expect(isProductionEnv({ APP_ENV: "local" })).toBe(false);
     expect(isProductionEnv({ APP_ENV: "development" })).toBe(false);
     expect(isProductionEnv({ APP_ENV: "test" })).toBe(false);
-    expect(isProductionEnv({ APP_ENV: "staging" })).toBe(false);
     expect(isProductionEnv({ NODE_ENV: "test" })).toBe(false);
+  });
+
+  test("treats staging as production so secrets cannot stay as app-name fallbacks", () => {
+    expect(isProductionEnv({ APP_ENV: "staging" })).toBe(true);
+    expect(isProductionEnv({ APP_ENV: "Staging" })).toBe(true);
   });
 
   test("default-denies unrecognized APP_ENV values", () => {

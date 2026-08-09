@@ -85,11 +85,21 @@ describe("assertProductionSecrets", () => {
   test("still skips known non-production APP_ENV values", () => {
     expect(() =>
       assertProductionSecrets({
-        APP_ENV: "staging",
+        APP_ENV: "local",
         AUTH_DEV_HEADERS: "true",
         ADMIN_API_TOKEN: TEST_ADMIN_API_TOKEN,
       }),
     ).not.toThrow();
+  });
+
+  test("runs when APP_ENV is staging", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "staging",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "true",
+      }),
+    ).toThrow(/AUTH_DEV_HEADERS=false/);
   });
 
   test("blocks missing STRIPE_WEBHOOK_SECRET when billing is enabled in production", () => {

@@ -2,7 +2,7 @@
 
 ## 1.0.4
 
-- `assertProductionSecrets()` uses `isProductionEnv()`, so `NODE_ENV=production` and `APP_ENV=Production` cannot skip the guard.
+- `assertProductionSecrets()` uses `isProductionEnv()`, so `NODE_ENV=production`, `APP_ENV=Production`, and `APP_ENV=staging` cannot skip the guard.
 - Feature flags parse with `envFlagEnabled()` (`=== "true"` only).
 
 ## 1.0.3

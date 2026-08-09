@@ -97,7 +97,7 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 | Variable | Meaning |
 |----------|---------|
 | `SESSION_SECRET` | 32+ characters in production for HTMX cookie apps |
-| `JWT_SECRET` | HS256 key. Falls back to `SESSION_SECRET` locally. Outside development it must be set; it is not derived from the app name |
+| `JWT_SECRET` | HS256 key. Falls back to `SESSION_SECRET` locally. Outside development (including staging) it must be set; it is not derived from the app name |
 | `JWT_TTL_SECONDS` | Default 3600 |
 | `AUTH_DEV_HEADERS` | Must be `false` in production |
 | `TOKEN_HASH_PEPPER` | Required in production when token auth is on |

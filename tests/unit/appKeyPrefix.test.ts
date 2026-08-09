@@ -217,5 +217,8 @@ describe("appKeyPrefix", () => {
     expect(() =>
       requireConfiguredSecret(["JWT_SECRET"], "jwt-secret", { NODE_ENV: "production" }),
     ).toThrow(/JWT_SECRET must be set outside development/);
+    expect(() =>
+      requireConfiguredSecret(["JWT_SECRET"], "jwt-secret", { APP_ENV: "staging" }),
+    ).toThrow(/JWT_SECRET must be set outside development/);
   });
 });

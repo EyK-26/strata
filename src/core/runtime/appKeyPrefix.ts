@@ -13,9 +13,9 @@ function appDevSecret(kind: string): string {
 }
 
 /**
- * Use a configured secret, or a predictable local fallback. Production (and
- * unrecognized APP_ENV values treated as production) must set a real secret;
- * never derive one from the app name.
+ * Use a configured secret, or a predictable local fallback. Production,
+ * staging, and unrecognized APP_ENV values treated as production must set a
+ * real secret; never derive one from the app name.
  */
 function requireConfiguredSecret(
   names: readonly string[],
