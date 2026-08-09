@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= it.title ?? "Strata" %></title>
+    <meta name="csrf-token" content="<%= it.csrfToken ?? "" %>" />
+    <meta name="htmx-config" content='{"inlineStyleNonce":"<%= it.cspNonce ?? "" %>"}' />
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script nonce="<%= it.cspNonce ?? "" %>">
+      document.addEventListener("htmx:configRequest", (event) => {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+        if (token) {
+          event.detail.headers["X-CSRF-Token"] = token;
+        }
+      });
+    </script>
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/organizations" class="brand">Strata</a>
+      <nav>
+        <a href="/organizations">Organizations</a>
+      </nav>
+    </header>
+    <main class="site-main">
+      <% if (it.flash) { %>
+      <div class="flash flash-<%= it.flash.level %>" role="status"><%= it.flash.message %></div>
+      <% } %>
+      <%~ it.body %>
+    </main>
+  </body>
+</html>

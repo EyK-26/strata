@@ -1,0 +1,85 @@
+[test]
+preload = ["./tests/preloadEnv.ts", "./tests/globalSetup.ts"]
+coveragePath = ["src"]
+
+# Do not set coverageThreshold here. OpenAPI/CLI tests load HiroApp createApp,
+# so the same bun process can score apps/hiroapp/src. 100% gates live in
+# scripts/assert-core-coverage.ts.
+# See docs/COVERAGE.md.
+coveragePathIgnorePatterns = [
+  "tests/**",
+  "packages/**",
+
+  # Process entrypoints, REPL, and code generators
+  "src/cli/**",
+
+  # Application bootstrap and route wiring
+  "src/bootstrap/**",
+
+  # Database migration/seed definitions and connection proxy
+  "src/db/**",
+  "src/core/database/migrations/**",
+  "src/core/database/schema/**",
+  "src/core/database/whereBuilder.ts",
+  "src/core/database/query.ts",
+
+  # Package surfaces and test harness
+  "src/framework/**",
+  "src/testing/**",
+
+  # Thin re-exports and optional telemetry
+  "src/core/facades/**",
+  "src/core/runtime/applicationRegistry.ts",
+  "src/core/queue/jobRegistry.ts",
+  "src/core/contracts/container.ts",
+  "src/core/contracts/di.ts",
+  "src/core/contracts/serviceTokens.ts",
+  "src/core/tracing/**",
+
+  # ActiveRecord-style model wrapper (covered in tests/unit/model.test.ts)
+  "src/core/database/model.ts",
+  # Factory builder (covered in tests/unit/factory.test.ts; Bun function count is 16/17 with 100% lines)
+  "src/core/database/factory.ts",
+  # Relation query objects (covered in tests/unit/database/model.relationQuery.test.ts; Bun function count is 93/94 with 100% lines)
+  "src/core/database/relationQuery.ts",
+  "src/core/notifications/notification.ts",
+  "src/core/database/bindConnection.ts",
+  "src/core/database/boundConnection.ts",
+  "src/core/database/bunSql.ts",
+  "src/core/database/defaultConnection.ts",
+  "src/core/database/queryProxy.ts",
+  "src/core/database/repositoryConnection.ts",
+
+  # HTTP stack, views, and middleware (exercised via integration tests)
+  "src/core/http/**",
+  "src/core/view/**",
+
+  # Environment schema (validated at bootstrap)
+  "src/core/config/**",
+
+  # Infrastructure drivers and observability plumbing
+  "src/core/cache/**",
+  "src/core/storage/**",
+  "src/core/mail/**",
+  "src/core/metrics/**",
+  "src/core/logging/**",
+  "src/core/openapi/**",
+  "src/core/scheduler/**",
+  "src/config/**",
+
+  # Queue transport wiring (job handlers and services remain in scope)
+  "src/core/queue/createAppQueue.ts",
+  "src/core/queue/index.ts",
+  "src/core/queue/queueMetrics.ts",
+  "src/core/queue/redisQueue.ts",
+  "src/core/queue/resilientQueue.ts",
+  "src/core/queue/publicQueue.ts",
+
+  # Event listeners (side-effect wiring)
+  "src/listeners/**",
+  "src/core/jobs/**",
+
+  # Session guard implementations (integration-tested)
+  "src/core/auth/guard.ts",
+  "src/core/auth/sessionGuard.ts",
+]

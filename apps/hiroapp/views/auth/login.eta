@@ -1,0 +1,29 @@
+<section class="auth-card">
+  <h1>Sign in</h1>
+  <% if (it.status) { %>
+  <p class="ok"><%= it.status %></p>
+  <% } %>
+  <% if (it.errors && it.errors.form) { %>
+  <p class="error"><%= it.errors.form %></p>
+  <% } %>
+  <form method="post" action="/login">
+    <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+    <label>
+      Email
+      <% if (it.errors && it.errors.email) { %><span class="error"><%= it.errors.email %></span><% } %>
+      <input type="email" name="email" value="<%= it.email || "" %>" required autocomplete="username" />
+    </label>
+    <label>
+      Password
+      <% if (it.errors && it.errors.password) { %><span class="error"><%= it.errors.password %></span><% } %>
+      <input type="password" name="password" value="<%= it.password || "" %>" required autocomplete="current-password" />
+    </label>
+    <div class="actions">
+      <button type="submit">Sign in</button>
+    </div>
+  </form>
+  <div class="auth-links">
+    <a href="/register">Create account</a>
+    <a href="/forgot-password">Forgot password</a>
+  </div>
+</section>

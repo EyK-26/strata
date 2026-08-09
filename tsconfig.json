@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "types": ["bun"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "paths": {
+      "@getstrata/core": ["./packages/strata-core/index.ts"],
+      "@getstrata/core/*": ["./src/core/*"],
+      "@getstrata/bootstrap": ["./packages/strata-bootstrap/index.ts"],
+      "@getstrata/bootstrap/*": ["./src/bootstrap/*"],
+      "@getstrata/cli": ["./packages/strata-cli/src/index.ts"]
+    }
+  },
+  "include": ["src", "tests", "scripts"],
+  "exclude": ["templates", "frontend", "apps/hiroapp"]
+}

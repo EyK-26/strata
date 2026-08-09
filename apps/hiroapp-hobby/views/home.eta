@@ -1,0 +1,6 @@
+<section class="section hero">
+  <h1>Welcome to hiroapp-hobby</h1>
+  <p class="lede">Edit <code>views/home.eta</code> and <code>public/assets/site.css</code> to restyle this page.</p>
+  <p class="muted">Auth stack: <code>headers</code>.</p>
+  <p>Health check: <a href="/health"><code>/health</code></a>.</p>
+</section>

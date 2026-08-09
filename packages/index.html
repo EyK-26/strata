@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Strata</title>
+        <style>
+            :root {
+                color-scheme: dark;
+            }
+
+            body {
+                font-family: sans-serif;
+                background-color: #000;
+                color: #fff;
+                margin: 0;
+                padding: 2rem;
+                line-height: 1.5;
+            }
+
+            h1,
+            h2 {
+                margin-top: 0;
+            }
+
+            section {
+                margin-bottom: 2rem;
+            }
+
+            ul {
+                padding-left: 1.25rem;
+            }
+
+            li {
+                padding: 0.35rem 0;
+            }
+
+            a {
+                color: #fff;
+            }
+
+            code,
+            input,
+            button {
+                font: inherit;
+            }
+
+            form {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                margin: 0.75rem 0;
+            }
+
+            input {
+                border: 1px solid #555;
+                background-color: #111;
+                color: #fff;
+                padding: 0.5rem 0.75rem;
+                border-radius: 0.35rem;
+                min-width: 14rem;
+            }
+
+            button {
+                border: 1px solid #777;
+                background-color: #222;
+                color: #fff;
+                padding: 0.5rem 0.9rem;
+                border-radius: 0.35rem;
+                cursor: pointer;
+            }
+
+            .hint {
+                color: #bbb;
+                font-size: 0.95rem;
+            }
+        </style>
+    <script type="module" crossorigin src="./packages/strata-bootstrap/index-sfreg6q3.js"></script></head>
+
+    <body>
+        <h1>Strata</h1>
+        <p class="hint">
+            Framework reference domain for organizations, projects, tasks, and
+            comments.
+        </p>
+
+        <section>
+            <h2>Collections</h2>
+            <ul>
+                <li><a href="/organizations">/organizations</a></li>
+                <li><a href="/projects?include=organization">/projects</a></li>
+                <li><a href="/tasks?include=project">/tasks</a></li>
+                <li><a href="/comments">/comments</a></li>
+                <li><a href="/reports/summary">/reports/summary</a></li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>Lookup by ID</h2>
+
+            <form data-prefix="/organizations/">
+                <input
+                    type="number"
+                    min="1"
+                    name="id"
+                    placeholder="Organization ID"
+                    required
+                />
+                <button type="submit">Open /organizations/:id</button>
+            </form>
+
+            <form data-prefix="/projects/">
+                <input
+                    type="number"
+                    min="1"
+                    name="id"
+                    placeholder="Project ID"
+                    required
+                />
+                <button type="submit">Open /projects/:id</button>
+            </form>
+
+            <form data-prefix="/tasks/">
+                <input
+                    type="number"
+                    min="1"
+                    name="id"
+                    placeholder="Task ID"
+                    required
+                />
+                <button type="submit">Open /tasks/:id</button>
+            </form>
+
+            <form data-prefix="/tasks/" data-suffix="/comments">
+                <input
+                    type="number"
+                    min="1"
+                    name="id"
+                    placeholder="Task ID"
+                    required
+                />
+                <button type="submit">Open /tasks/:id/comments</button>
+            </form>
+
+            <form data-prefix="/reports/organizations/">
+                <input
+                    type="number"
+                    min="1"
+                    name="id"
+                    placeholder="Organization ID"
+                    required
+                />
+                <button type="submit">Open /reports/organizations/:id</button>
+            </form>
+        </section>
+
+        <script>
+            for (const form of document.querySelectorAll("form[data-prefix]")) {
+                form.addEventListener("submit", (event) => {
+                    event.preventDefault();
+                    const prefix = form.getAttribute("data-prefix");
+                    const suffix = form.getAttribute("data-suffix") ?? "";
+                    const input = form.querySelector('input[name="id"]');
+
+                    if (!prefix || !input?.value) {
+                        return;
+                    }
+
+                    window.location.href = `${prefix}${input.value}${suffix}`;
+                });
+            }
+        </script>
+    </body>
+</html>

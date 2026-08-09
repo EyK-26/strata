@@ -1,0 +1,5 @@
+<section class="section">
+  <h1>Welcome to Strata</h1>
+  <p>Your app <strong>{{PROJECT_NAME}}</strong> is running.</p>
+  <p>Edit <code>src/routes.ts</code> and <code>views/home.eta</code> to get started.</p>
+</section>

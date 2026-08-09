@@ -1,0 +1,3 @@
+<% if (it.flash) { %>
+<div class="flash flash-<%= it.flash.level %>" role="status"><%= it.flash.message %></div>
+<% } %>

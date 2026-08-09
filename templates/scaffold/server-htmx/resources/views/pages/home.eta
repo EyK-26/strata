@@ -1,0 +1,4 @@
+<section class="page-header">
+  <h1>Welcome</h1>
+  <p class="hint">Replace this page by adding modules with webRoutes().</p>
+</section>

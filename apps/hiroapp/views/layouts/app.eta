@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= it.layout.title %> · hiroapp</title>
+    <% if (it.layout.description) { %>
+    <meta name="description" content="<%= it.layout.description %>" />
+    <% } %>
+    <link rel="stylesheet" href="/assets/site.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">hiroapp</a>
+      <nav>
+        <% if (it.currentUser) { %>
+        <span class="muted"><%= it.currentUser.email %></span>
+        <a href="/account/mfa">MFA</a>
+        <form method="post" action="/logout">
+          <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+          <button class="button-secondary" type="submit">Sign out</button>
+        </form>
+      <% } else { %>
+        <a href="/login">Sign in</a>
+        <a href="/register">Create account</a>
+      <% } %>
+      </nav>
+    </header>
+    <main>
+      <% if (it.flash && it.flash.message) { %>
+      <p class="flash flash-<%= it.flash.level %>"><%= it.flash.message %></p>
+      <% } %>
+      <%~ it.body %>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "../../src",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["bun"],
+    "paths": {
+      "@getstrata/core": ["../../src/framework/public-api.ts"],
+      "@getstrata/core/*": ["../../src/core/*"],
+      "@getstrata/bootstrap": ["../../src/bootstrap/public-api.ts"],
+      "@getstrata/bootstrap/*": ["../../src/bootstrap/*"]
+    }
+  },
+  "include": ["../../src/framework/public-api.ts", "../../src/core/**/*.ts"]
+}

@@ -1,0 +1,67 @@
+import { type FormEvent, useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
+import { ApiError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+
+export default function LoginPage() {
+  const { login, token } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("admin@example.test");
+  const [password, setPassword] = useState("password");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  if (token) {
+    return <Navigate to="/organizations" replace />;
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await login(email, password);
+      navigate("/organizations");
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : "Login failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="card">
+      <h1>Sign in</h1>
+      <p className="hint">Use seeded credentials or your own API user.</p>
+
+      {error ? <p className="error">{error}</p> : null}
+
+      <form className="stack-form" onSubmit={onSubmit}>
+        <label>
+          Email
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </label>
+
+        <label>
+          Password
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </label>
+
+        <button type="submit" disabled={submitting}>
+          {submitting ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+    </section>
+  );
+}

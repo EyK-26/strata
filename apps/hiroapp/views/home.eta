@@ -1,0 +1,17 @@
+<section class="section hero">
+  <h1>Welcome to hiroapp</h1>
+  <% if (!it.currentUser) { %>
+  <p class="lede">Sign in or create an account. Edit <code>views/home.eta</code> and <code>public/assets/site.css</code> to restyle this page.</p>
+  <div class="actions">
+    <a class="button" href="/register">Create account</a>
+    <a class="button button-secondary" href="/login">Sign in</a>
+  </div>
+  <p class="muted">Seeded demo: <code>demo@example.com</code> / <code>password</code>.</p>
+<% } else { %>
+  <p class="lede">You are signed in as <strong><%= it.currentUser.email %></strong>.</p>
+  <p>Add routes in <code>src/modules</code>. This homepage is yours to restyle.</p>
+<% } %>
+  <p>Health check: <a href="/health"><code>/health</code></a>.</p>
+  <p class="muted">API token: <code>POST /api/v1/auth/login</code> with email and password.</p>
+  <p class="muted">JWT: <code>POST /api/auth/token</code> with email and password.</p>
+</section>

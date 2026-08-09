@@ -1,0 +1,23 @@
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Slug</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const organization of it.organizations ?? []) { %>
+    <tr>
+      <td><%= organization.name %></td>
+      <td><code><%= organization.slug %></code></td>
+      <td>
+        <form method="post" action="/organizations/<%= organization.id %>/delete" class="inline-form">
+          <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+          <button type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    <% } %>
+  </tbody>
+</table>

@@ -1,0 +1,33 @@
+<section class="auth-card">
+  <h1>Create account</h1>
+  <% if (it.status) { %>
+  <p class="ok"><%= it.status %></p>
+  <% } %>
+  <% if (it.errors && it.errors.form) { %>
+  <p class="error"><%= it.errors.form %></p>
+  <% } %>
+  <form method="post" action="/register">
+    <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+    <label>
+      Name
+      <% if (it.errors && it.errors.name) { %><span class="error"><%= it.errors.name %></span><% } %>
+      <input type="text" name="name" value="<%= it.name || "" %>" required />
+    </label>
+    <label>
+      Email
+      <% if (it.errors && it.errors.email) { %><span class="error"><%= it.errors.email %></span><% } %>
+      <input type="email" name="email" value="<%= it.email || "" %>" required autocomplete="email" />
+    </label>
+    <label>
+      Password
+      <% if (it.errors && it.errors.password) { %><span class="error"><%= it.errors.password %></span><% } %>
+      <input type="password" name="password" value="<%= it.password || "" %>" required minlength="8" autocomplete="new-password" />
+    </label>
+    <div class="actions">
+      <button type="submit">Create account</button>
+    </div>
+  </form>
+  <div class="auth-links">
+    <a href="/login">Already have an account</a>
+  </div>
+</section>

@@ -1,0 +1,16 @@
+import { describe, expect, test } from "bun:test";
+import { resolveAbilitiesForRole } from "../../src/domain/abilities";
+
+describe("abilities", () => {
+  test("members receive scoped abilities", () => {
+    const abilities = resolveAbilitiesForRole("member");
+
+    expect(abilities).toContain("profile:read");
+    expect(abilities).toContain("auth:tokens:write");
+    expect(abilities).not.toContain("*");
+  });
+
+  test("platform admins receive wildcard abilities", () => {
+    expect(resolveAbilitiesForRole("admin")).toEqual(["*"]);
+  });
+});

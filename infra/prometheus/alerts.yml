@@ -1,0 +1,18 @@
+groups:
+  - name: strata
+    rules:
+      - alert: StrataReadyCheckFailing
+        expr: increase(http_requests_total{path="/ready",status="503"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: The app readiness probe is failing
+
+      - alert: StrataHighErrorRate
+        expr: sum(increase(http_requests_total{status=~"5.."}[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The app is returning elevated 5xx responses

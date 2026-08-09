@@ -1,0 +1,191 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to release (example v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  # Notes and the GitHub Release must not wait on Docker Hub. v0.7.3 timed out
+  # pulling moby/buildkit:buildx-stable-1 during setup-buildx, so the release
+  # notes never ran even though npm had already published.
+  github-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set container image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      # Same `docker build` path as CI `docker-install`. Do not boot Buildx:
+      # that pulls moby/buildkit from Docker Hub before the app image builds.
+      - name: Build and push image
+        run: |
+          set -eu
+          image="${IMAGE}:${RELEASE_TAG}"
+          latest="${IMAGE}:latest"
+          attempt=1
+          while [ "$attempt" -le 4 ]; do
+            if docker build --pull --tag "$image" --tag "$latest" .; then
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 8))
+            attempt=$((attempt + 1))
+          done
+          docker push "$image"
+          docker push "$latest"
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}:${{ env.RELEASE_TAG }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-release-assets: false
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: sbom
+          path: sbom.spdx.json
+
+  # npm publish must not wait on GHCR. Release v0.5.103 built the image first;
+  # bun dedupe then failed because the install stage omitted apps/hiroapp, so
+  # @getstrata/core@0.5.101 never published. Tag-push only: a dispatch retry
+  # of GHCR / GitHub Release must not republish.
+  publish-framework:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bun_testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bun_testing"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Set up Node.js for npm publish
+        uses: actions/setup-node@v7
+        with:
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate release quality gate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bun_testing
+          REDIS_URL: redis://localhost:6379
+          SKIP_FIXTURE_TEST_BOOTSTRAP: 1
+          CACHE_DRIVER: array
+          QUEUE_DRIVER: sync
+          FEATURE_SCIM: "true"
+          SCIM_BEARER_TOKEN: strata-scim-test-token
+          ADMIN_API_TOKEN: strata-admin-test-token
+          MEMBER_API_TOKEN: strata-member-test-token
+        run: |
+          scripts/with-host-env.sh sh -c "
+            bun run build:framework &&
+            bun run build:bootstrap &&
+            STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed &&
+            DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
+            bun run validate:ci
+          "
+
+      - name: Build framework packages
+        run: |
+          bun run --filter @getstrata/core build
+          bun run --filter @getstrata/bootstrap build
+          bun run --filter @getstrata/cli build
+          bun run --filter @getstrata/starter build
+
+      - name: Publish to npm
+        run: |
+          publish_package() {
+            pkg_dir="$1"
+            name="$(node -p "require('./${pkg_dir}/package.json').name")"
+            version="$(node -p "require('./${pkg_dir}/package.json').version")"
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "Skipping ${name}@${version} (already on npm)"
+              return 0
+            fi
+            npm publish --workspace "${name}" --access public
+          }
+
+          publish_package packages/strata-core
+          publish_package packages/strata-bootstrap
+          publish_package packages/strata-cli
+          publish_package packages/strata-starter
+
+          bun scripts/unpublish-pre-1.ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

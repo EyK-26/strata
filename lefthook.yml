@@ -1,0 +1,11 @@
+pre-commit:
+  commands:
+    biome:
+      glob: "*.{js,ts,jsx,tsx,json,html,css}"
+      run: bunx biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+
+pre-push:
+  commands:
+    validate:
+      run: bun run validate:host

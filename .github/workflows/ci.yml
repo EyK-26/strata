@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  docker-install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Build Docker install stage
+        run: docker build --pull --target install -t strata-install .
+
+  test-parallel:
+    runs-on: ubuntu-latest
+    continue-on-error: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Start services
+        run: docker compose up -d postgres redis --wait
+
+      - name: Run Bun 1.4 parallel unit tests
+        env:
+          SKIP_FIXTURE_TEST_BOOTSTRAP: 1
+          PORT: "3000"
+          CACHE_DRIVER: array
+          QUEUE_DRIVER: sync
+          FEATURE_SCIM: "true"
+          SCIM_BEARER_TOKEN: strata-scim-test-token
+          ADMIN_API_TOKEN: strata-admin-test-token
+          MEMBER_API_TOKEN: strata-member-test-token
+        run: |
+          bun install --frozen-lockfile
+          bun dedupe
+          bun run build:framework
+          bun run build:bootstrap
+          bun run test:parallel
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Start services
+        run: docker compose up -d postgres redis --wait
+
+      - name: Install dependencies and run checks
+        env:
+          SKIP_FIXTURE_TEST_BOOTSTRAP: 1
+          PORT: "3000"
+          CACHE_DRIVER: array
+          QUEUE_DRIVER: sync
+          FEATURE_SCIM: "true"
+          SCIM_BEARER_TOKEN: strata-scim-test-token
+          ADMIN_API_TOKEN: strata-admin-test-token
+          MEMBER_API_TOKEN: strata-member-test-token
+        run: |
+          bun install --frozen-lockfile
+          bun dedupe
+          bun run build:framework
+          bun run build:bootstrap
+          scripts/with-host-env.sh sh -c "
+            STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed &&
+            DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
+            bun run validate:ci &&
+            bun run verify:framework
+          "
+
+      - name: Start app for smoke tests
+        env:
+          DOGFOOD_APP: hiroapp
+          FRONTEND_MODE: server-htmx
+          APP_KEY_PREFIX: hiroapp
+          APP_NAME: HiroApp
+          API_PREFIX: /api
+          REDIS_URL: redis://localhost:6379
+          DATABASE_URL: postgresql://postgres:postgres@localhost:54329/bun_testing_test
+        run: |
+          scripts/with-host-env.sh sh -c "bun run start" &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health >/dev/null; then
+              echo "App ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "App failed to become ready" >&2
+          exit 1
+
+      - name: Run smoke tests
+        env:
+          BASE_URL: http://localhost:3000
+          APP_URL: http://localhost:3000
+          FRONTEND_MODE: server-htmx
+        run: |
+          bun run smoke
+          bun run deps:audit || true
