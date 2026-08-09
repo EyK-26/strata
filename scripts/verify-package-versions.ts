@@ -7,11 +7,11 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 
 const EXPECTED: Record<string, string> = {
-  "@getstrata/core": "1.0.1",
-  "@getstrata/bootstrap": "1.0.1",
-  "@getstrata/cli": "1.0.1",
-  "@getstrata/starter": "1.0.1",
-  "create-strata": "1.0.1",
+  "@getstrata/core": "1.0.2",
+  "@getstrata/bootstrap": "1.0.2",
+  "@getstrata/cli": "1.0.2",
+  "@getstrata/starter": "1.0.2",
+  "create-strata": "1.0.2",
 };
 
 const PACKAGE_DIRS: Record<string, string> = {

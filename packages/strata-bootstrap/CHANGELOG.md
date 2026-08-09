@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 1.0.2
+
+- Lockstep with `create-strata` 1.0.2. No runtime changes.
+
 ## 1.0.1
 
 - `assertProductionSecrets()` rejects secrets still holding a generated `change-me` placeholder. The shipped `SESSION_SECRET` placeholder was 38 characters, so it passed the length check and booted in production unchanged.
