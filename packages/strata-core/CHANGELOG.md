@@ -2,7 +2,7 @@
 
 ## 1.0.4
 
-- `isProductionEnv()` treats `APP_ENV` or `NODE_ENV` `production` as production (case-insensitive) and default-denies unrecognized `APP_ENV` values such as `prod`.
+- `isProductionEnv()` treats `APP_ENV` or `NODE_ENV` `production` as production (case-insensitive), treats `staging` as production, and default-denies unrecognized `APP_ENV` values such as `prod`.
 - `envFlagEnabled()` is true only for the exact string `true`.
 - JWT, session, CSRF, flash, signed-URL, OAuth-state, and token-pepper resolvers throw outside development when the secret is unset. They no longer derive a secret from the app name.
 - `runWithMigrationBypass()` uses a transaction and `SET LOCAL` so `app.bypass_rls` cannot leak across pooled connections.
