@@ -410,6 +410,23 @@ export type { QueueMetricsSnapshot } from "../core/queue/queueMetrics.ts";
 export { collectQueueMetrics } from "../core/queue/queueMetrics.ts";
 export { envFlagEnabled, isProductionEnv } from "../core/runtime/appEnv.ts";
 export {
+  apiPrefix,
+  appCookieName,
+  appDevSecret,
+  appDisplayName,
+  appEnv,
+  appKeyPrefix,
+  appUrl,
+  appUserAgent,
+  namespacedRedisKey,
+  otelServiceName,
+  requireConfiguredSecret,
+  sdkClientClassName,
+  siemEventType,
+  smtpEhloHost,
+  webhookSignatureHeader,
+} from "../core/runtime/appKeyPrefix.ts";
+export {
   resolveApplicationAuth,
   resolveApplicationCache,
   resolveApplicationConfig,

@@ -42,7 +42,7 @@ function parseImportNames(specifier: string): string[] {
     .filter((part) => !part.startsWith("type "))
     .map((part) => {
       const aliasMatch = part.match(/^(\w+)(?:\s+as\s+(\w+))?$/);
-      return aliasMatch?.[2] ?? aliasMatch?.[1] ?? part;
+      return aliasMatch?.[1] ?? part;
     });
 }
 

@@ -82,6 +82,8 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.configureWebErrorView).toBe("function");
     expect(typeof core.isProductionEnv).toBe("function");
     expect(typeof core.envFlagEnabled).toBe("function");
+    expect(typeof core.appDisplayName).toBe("function");
+    expect(typeof core.requireConfiguredSecret).toBe("function");
     expect(typeof core.loginRedirectLocation).toBe("function");
   });
 });
