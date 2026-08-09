@@ -22,8 +22,10 @@ env:
 jobs:
   # Notes and the GitHub Release must not wait on Docker Hub. v0.7.3 timed out
   # pulling moby/buildkit:buildx-stable-1 during setup-buildx, so the release
-  # notes never ran even though npm had already published.
+  # notes never ran even though npm had already published. They do wait on
+  # npm: do not cut a GitHub Release for a version that is not on the registry.
   github-release:
+    needs: [publish-framework]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -38,6 +40,7 @@ jobs:
           generate_release_notes: true
 
   container:
+    needs: [publish-framework]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -92,13 +95,14 @@ jobs:
 
   # npm publish must not wait on GHCR. Release v0.5.103 built the image first;
   # bun dedupe then failed because the install stage omitted apps/hiroapp, so
-  # @getstrata/core@0.5.101 never published. Tag-push only: a dispatch retry
-  # of GHCR / GitHub Release must not republish.
+  # @getstrata/core@0.5.101 never published.
+  # publish_package skips versions already on npm, so workflow_dispatch can
+  # retry a failed or partial publish without double-publishing.
   # npm trusted publishing (GitHub OIDC). Job permissions replace workflow
   # permissions: id-token: write is required; do not set NODE_AUTH_TOKEN.
   # setup-node registry-url writes an empty _authToken that blocks OIDC.
   publish-framework:
-    if: github.event_name == 'push'
+    if: ${{ github.event_name == 'push' || inputs.tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -132,6 +136,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
