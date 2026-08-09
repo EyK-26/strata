@@ -37,15 +37,43 @@ Versions are asserted by `scripts/verify-package-versions.ts`.
 | Local build | `bun run build:framework` | Builds `packages/strata-core/dist/` |
 | Smoke verify | `bun run verify:framework` | Build plus public API tests |
 | CI | `validate:ci` | Includes `verify:framework` on every push |
-| npm publish | Push git tag `v*` | `.github/workflows/release.yml` publishes core, bootstrap, cli, and starter |
+| npm publish | Push git tag `v*` on `main` | `.github/workflows/release.yml` publishes core, bootstrap, cli, starter, and `create-strata` |
+
+## Ship a version
+
+Merging a version-bump PR to `main` does not publish. npm, the GitHub Release, and GHCR start when you push a `v*` tag.
+
+Do this after the bump is on `main`, and tag the merge commit (not the PR branch):
+
+```bash
+git fetch origin main
+# Confirm packages/strata-core/package.json on origin/main is X.Y.Z
+git tag vX.Y.Z origin/main
+git push origin vX.Y.Z
+```
+
+The tag must equal `v` plus the lockstep version in `packages/strata-core/package.json`. Watch the **Release** workflow, job **publish-framework**. That job only runs on a tag `push`. GitHub may show `+ package@version` before `npm view` sees it; wait a few minutes, then check all five packages:
+
+```bash
+npm view @getstrata/core version
+npm view @getstrata/bootstrap version
+npm view @getstrata/cli version
+npm view @getstrata/starter version
+npm view create-strata version
+```
+
+Do not:
+
+- Tag a PR branch or a commit that is not `origin/main`.
+- Use Actions, Release, Run workflow for the first npm publish. `workflow_dispatch` creates notes and GHCR only; it skips npm.
+- Change the workflow so a merge to `main` publishes. Keep publish on an explicit tag push.
 
 ## npm publish (`@getstrata`)
 
 1. The [`@getstrata`](https://www.npmjs.com/org/getstrata) org must exist on npm.
 2. Add `NPM_TOKEN` to GitHub repository secrets (Automation token with publish access).
-3. Tag a release: `git tag v1.0.0 && git push origin v1.0.0`.
-4. The release workflow publishes npm from the tag. If that version is already on npm, it skips publish. It does not unpublish older versions (the GitHub `NPM_TOKEN` cannot). The GitHub Release job does not wait on Docker. The container job uses `docker build --pull` (same as CI `docker-install`) so it refreshes `oven/bun:1.4` and does not pull BuildKit from Docker Hub.
-5. To finish GHCR or GitHub Release notes after a tag without retagging: Actions, Release, Run workflow, set `tag` to the existing tag (example `v1.0.0`). That path skips npm.
+3. Push `vX.Y.Z` as above. The release workflow publishes from the tag. If that version is already on npm, it skips publish. It does not unpublish older versions (the GitHub `NPM_TOKEN` cannot). The GitHub Release job does not wait on Docker. The container job uses `docker build --pull` (same as CI `docker-install`) so it refreshes `oven/bun:1.4` and does not pull BuildKit from Docker Hub.
+4. To finish GHCR or GitHub Release notes after a tag without retagging: Actions, Release, Run workflow, set `tag` to the existing tag (example `v1.0.0`). That path skips npm.
 
 See `packages/strata-core/CHANGELOG.md` for release notes.
 
