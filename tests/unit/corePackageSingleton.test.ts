@@ -46,6 +46,16 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(main.currentTenantId).toBe(subpath.currentTenantId);
   });
 
+  test("main and mysqlConnection subpath share createMysqlPool", async () => {
+    const main = await import(join(CORE_DIST, "index.js"));
+    const subpath = await import(join(CORE_DIST, "entries/database/mysqlConnection.js"));
+
+    expect(main.createMysqlPool).toBe(subpath.createMysqlPool);
+    expect(main.createMysqlConnection).toBe(subpath.createMysqlConnection);
+    expect(main.createMysqlConnectionFromPool).toBe(subpath.createMysqlConnectionFromPool);
+    expect(main.resetMysqlLoaderForTests).toBe(subpath.resetMysqlLoaderForTests);
+  });
+
   test("main and view subpath share configureWebErrorView", async () => {
     const main = await import(join(CORE_DIST, "index.js"));
     const subpath = await import(join(CORE_DIST, "entries/view.js"));

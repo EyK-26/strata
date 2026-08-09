@@ -84,6 +84,9 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.envFlagEnabled).toBe("function");
     expect(typeof core.appDisplayName).toBe("function");
     expect(typeof core.requireConfiguredSecret).toBe("function");
+    expect(typeof core.resetMysqlLoaderForTests).toBe("function");
+    expect(typeof core.createMysqlPool).toBe("function");
+    expect(typeof core.createMysqlConnectionFromPool).toBe("function");
     expect(typeof core.loginRedirectLocation).toBe("function");
     expect(typeof core.assertSafeOutboundUrl).toBe("function");
     expect(typeof core.webErrorResponse).toBe("function");

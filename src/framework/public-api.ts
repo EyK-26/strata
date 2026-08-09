@@ -142,6 +142,7 @@ export {
   createMysqlConnection,
   createMysqlConnectionFromPool,
   createMysqlPool,
+  resetMysqlLoaderForTests,
 } from "../core/database/mysqlConnection.ts";
 export {
   getNamedConnection,

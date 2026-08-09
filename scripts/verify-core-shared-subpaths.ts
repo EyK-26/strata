@@ -32,6 +32,12 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   ],
   "database/bunSql": ["bindBunSql", "createBunSqlPool"],
   "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],
+  "database/mysqlConnection": [
+    "createMysqlConnection",
+    "createMysqlConnectionFromPool",
+    "createMysqlPool",
+    "resetMysqlLoaderForTests",
+  ],
   "http/loginThrottleMiddleware": [
     "createLoginThrottleMiddleware",
     "createMemoryLoginThrottleMiddleware",
