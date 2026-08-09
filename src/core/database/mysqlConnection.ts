@@ -25,10 +25,23 @@ type RawPoolConnection = {
   query: (sql: string, callback: (error: unknown) => void) => unknown;
 };
 
+type MysqlModuleLike = MysqlPromiseModule | { default?: MysqlPromiseModule };
+
 let mysqlModule: MysqlPromiseModule | undefined;
 let mysqlPending: Promise<MysqlPromiseModule> | undefined;
+let importMysql: () => Promise<MysqlModuleLike> = defaultImportMysql;
 
-function mysqlApi(mod: MysqlPromiseModule | { default?: MysqlPromiseModule }): MysqlPromiseModule {
+async function defaultImportMysql(): Promise<MysqlModuleLike> {
+  return import("mysql2/promise") as Promise<MysqlModuleLike>;
+}
+
+function resetMysqlLoaderForTests(importer?: () => Promise<unknown>): void {
+  mysqlModule = undefined;
+  mysqlPending = undefined;
+  importMysql = importer ? async () => (await importer()) as MysqlModuleLike : defaultImportMysql;
+}
+
+function mysqlApi(mod: MysqlModuleLike): MysqlPromiseModule {
   if (typeof (mod as MysqlPromiseModule).createPool === "function") {
     return mod as MysqlPromiseModule;
   }
@@ -44,15 +57,22 @@ async function loadMysql(): Promise<MysqlPromiseModule> {
     return mysqlModule;
   }
   if (!mysqlPending) {
-    mysqlPending = import("mysql2/promise")
-      .then((mod) => {
-        mysqlModule = mysqlApi(mod as MysqlPromiseModule);
-        return mysqlModule;
-      })
-      .catch((error: unknown) => {
+    mysqlPending = (async () => {
+      let mod: MysqlModuleLike;
+      try {
+        mod = await importMysql();
+      } catch (error: unknown) {
         mysqlPending = undefined;
         throw missingOptionalPeer("mysql2", "to open a MySQL connection", error);
-      });
+      }
+      try {
+        mysqlModule = mysqlApi(mod);
+        return mysqlModule;
+      } catch (error: unknown) {
+        mysqlPending = undefined;
+        throw error;
+      }
+    })();
   }
   return mysqlPending;
 }
@@ -134,4 +154,9 @@ function createMysqlConnection(url: string): MysqlConnection {
 }
 
 export type { MysqlConnection, MysqlExecutable, MysqlPool };
-export { createMysqlConnection, createMysqlConnectionFromPool, createMysqlPool };
+export {
+  createMysqlConnection,
+  createMysqlConnectionFromPool,
+  createMysqlPool,
+  resetMysqlLoaderForTests,
+};
