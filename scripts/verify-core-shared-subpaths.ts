@@ -32,6 +32,20 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   ],
   "database/bunSql": ["bindBunSql", "createBunSqlPool"],
   "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],
+  "http/loginThrottleMiddleware": [
+    "createLoginThrottleMiddleware",
+    "createMemoryLoginThrottleMiddleware",
+    "resolveLoginEmail",
+    "resolveLoginIdentity",
+  ],
+  "http/webErrorResponse": ["logServerError", "normalizeFieldErrors", "webErrorResponse"],
+  "security/safeUrl": [
+    "assertSafeOutboundUrl",
+    "assertSafeOutboundUrlResolved",
+    "isBlockedHostname",
+    "isBlockedIpAddress",
+  ],
+  view: ["configureWebErrorView", "renderWebErrorHtml"],
 };
 
 function parseImportNames(specifier: string): string[] {

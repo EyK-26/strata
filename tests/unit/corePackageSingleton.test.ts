@@ -52,4 +52,31 @@ describe("@getstrata/core published bundle singletons", () => {
 
     expect(main.configureWebErrorView).toBe(subpath.configureWebErrorView);
   });
+
+  test("shared shims keep subpath-only helpers reachable at runtime", async () => {
+    const main = await import(join(CORE_DIST, "index.js"));
+    const safeUrl = await import(join(CORE_DIST, "entries/security/safeUrl.js"));
+    const webError = await import(join(CORE_DIST, "entries/http/webErrorResponse.js"));
+    const loginThrottle = await import(join(CORE_DIST, "entries/http/loginThrottleMiddleware.js"));
+    const view = await import(join(CORE_DIST, "entries/view.js"));
+
+    expect(typeof safeUrl.assertSafeOutboundUrl).toBe("function");
+    expect(typeof safeUrl.assertSafeOutboundUrlResolved).toBe("function");
+    expect(typeof safeUrl.isBlockedHostname).toBe("function");
+    expect(typeof safeUrl.isBlockedIpAddress).toBe("function");
+    expect(safeUrl.assertSafeOutboundUrl).toBe(main.assertSafeOutboundUrl);
+
+    expect(typeof webError.webErrorResponse).toBe("function");
+    expect(typeof webError.logServerError).toBe("function");
+    expect(typeof webError.normalizeFieldErrors).toBe("function");
+    expect(webError.webErrorResponse).toBe(main.webErrorResponse);
+
+    expect(typeof loginThrottle.resolveLoginIdentity).toBe("function");
+    expect(typeof loginThrottle.resolveLoginEmail).toBe("function");
+    expect(typeof loginThrottle.createMemoryLoginThrottleMiddleware).toBe("function");
+    expect(loginThrottle.resolveLoginIdentity).toBe(main.resolveLoginIdentity);
+
+    expect(typeof view.renderWebErrorHtml).toBe("function");
+    expect(view.renderWebErrorHtml).toBe(main.renderWebErrorHtml);
+  });
 });

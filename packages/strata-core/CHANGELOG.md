@@ -7,6 +7,7 @@
 - JWT, session, CSRF, flash, signed-URL, OAuth-state, and token-pepper resolvers throw outside development when the secret is unset. They no longer derive a secret from the app name.
 - `runWithMigrationBypass()` uses a transaction and `SET LOCAL` so `app.bypass_rls` cannot leak across pooled connections.
 - `@getstrata/core/view` (and related singleton subpaths) re-export the main bundle so `configureWebErrorView` is shared.
+- Shared subpath shims re-export the barrel. Subpath-only helpers such as `assertSafeOutboundUrl`, `webErrorResponse`, and `renderWebErrorHtml` are now on the public API so those imports work at runtime, not only in `.d.ts` files.
 
 ## 1.0.3
 
