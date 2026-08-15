@@ -1,3 +1,4 @@
+import type { StorageManager } from "../core/storage/storage";
 import type { CacheLike } from "../types/services";
 
 type CachedJson = <T>(
@@ -94,6 +95,7 @@ class ConfigStore {
 interface AppDependencies {
   container: ServiceContainer;
   cache: CacheLike;
+  storage: StorageManager;
 }
 
 type MutableAppDependencies = Partial<Omit<AppDependencies, "container">> &
@@ -139,6 +141,7 @@ interface AppContext {
 const requiredDependencyKeys = [
   "container",
   "cache",
+  "storage",
 ] as const satisfies readonly (keyof AppDependencies)[];
 
 function getRequiredDependency<K extends keyof AppDependencies>(

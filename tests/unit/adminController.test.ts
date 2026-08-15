@@ -2,17 +2,14 @@ import { describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import AdminController from "../../src/modules/admin/controller";
 import { adminServiceToken } from "../../src/modules/admin/provider";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 describe("AdminController", () => {
   function createController(service: Record<string, unknown>): AdminController {
     const container = new ServiceContainer();
     container.set(adminServiceToken, service);
 
-    return new AdminController({
-      container,
-      cache: createMockCache(),
-    });
+    return new AdminController(createMockDependencies(container, createMockCache()));
   }
 
   test("returns admin stats", async () => {

@@ -1,6 +1,5 @@
 import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
-import { storage } from "@getstrata/core/storage/storage";
+import { getRequiredDependency, type ServiceProvider } from "@getstrata/bootstrap/contracts";
 import type OrganizationRepository from "../organization/repository";
 import type ProjectRepository from "../project/repository";
 import type TaskRepository from "../task/repository";
@@ -18,7 +17,7 @@ const attachmentProvider: ServiceProvider = {
     container.singleton(attachmentRepositoryToken, () => new AttachmentRepository());
     container.singleton(attachmentPolicyToken, () => new AttachmentPolicy());
   },
-  boot({ container }) {
+  boot({ container, dependencies }) {
     container.singleton(
       attachmentServiceToken,
       () =>
@@ -27,7 +26,7 @@ const attachmentProvider: ServiceProvider = {
           container.resolve<TaskRepository>("task.repository"),
           container.resolve<ProjectRepository>("project.repository"),
           container.resolve<OrganizationRepository>("organization.repository"),
-          storage(),
+          getRequiredDependency(dependencies, "storage"),
         ),
     );
 

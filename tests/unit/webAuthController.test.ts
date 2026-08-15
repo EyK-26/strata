@@ -3,6 +3,7 @@ import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { CORE_VIEW_TOKEN } from "../../src/bootstrap/providers/view";
 import { authServiceToken, tokenServiceToken } from "../../src/modules/user/provider";
 import WebAuthController from "../../src/modules/user/webAuthController";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 function createController(services: {
   authService?: Record<string, unknown>;
@@ -25,24 +26,7 @@ function createController(services: {
     ...services.view,
   });
 
-  return new WebAuthController({
-    container,
-    cache: {
-      get: async () => undefined,
-      remember: async (_key, callback) => callback(),
-      forget: async () => true,
-      flush: async () => undefined,
-      tags: () => ({
-        remember: async (_key, callback) => callback(),
-        flush: async () => 0,
-      }),
-      getOrSet: async (_key, loader) => loader(),
-      invalidate: async () => true,
-      invalidateByPrefix: async () => 0,
-      clear: async () => undefined,
-      size: async () => 0,
-    },
-  });
+  return new WebAuthController(createMockDependencies(container, createMockCache()));
 }
 
 describe("WebAuthController", () => {

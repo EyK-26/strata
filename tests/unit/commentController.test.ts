@@ -9,7 +9,7 @@ import CommentController from "../../src/modules/comment/controller";
 import CommentPolicy from "../../src/modules/comment/policy";
 import { commentServiceToken } from "../../src/modules/comment/provider";
 import type { CommentRecord } from "../../src/modules/comment/types";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -30,7 +30,7 @@ function bootstrapController(service: Record<string, unknown>): CommentControlle
   container.set(CORE_POLICY_GATE_TOKEN, gate);
   container.set(commentServiceToken, service);
 
-  const dependencies = { container, cache: createMockCache() };
+  const dependencies = createMockDependencies(container, createMockCache());
   setActiveApplicationContext({
     container,
     config: { get: () => undefined, set: () => undefined, has: () => false } as never,

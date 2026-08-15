@@ -13,7 +13,7 @@ import AttachmentPolicy from "../../src/modules/attachment/policy";
 import { attachmentServiceToken } from "../../src/modules/attachment/provider";
 import type { AttachmentRecord } from "../../src/modules/attachment/types";
 import { tokenServiceToken } from "../../src/modules/user/provider";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -51,12 +51,12 @@ function bootstrapDependencies(service: Record<string, unknown>): AppDependencie
   });
 
   const cacheFlush = mock(async () => 0);
-  const dependencies: AppDependencies = {
+  const dependencies = createMockDependencies(
     container,
-    cache: createMockCache({
+    createMockCache({
       tags: () => ({ remember: async (_key, callback) => callback(), flush: cacheFlush }),
     }),
-  };
+  );
 
   setActiveApplicationContext({
     container,

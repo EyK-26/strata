@@ -1,14 +1,14 @@
 # Laravel parity audit
 
-Generated: 2026-08-10T21:15:38.244Z
+Generated: 2026-08-15T15:47:43.914Z
 
 ## Score
 
 | Metric | Value |
 |--------|-------|
 | **Core parity score** | **100%** |
-| Core sections | 43 |
-| Covered | 43 |
+| Core sections | 44 |
+| Covered | 44 |
 | Partial | 0 |
 | Gaps | 0 |
 | Ecosystem exclusions (1%) | 2 |
@@ -62,6 +62,7 @@ Target: ≥99% core coverage. Ecosystem items are intentional Laravel-package ex
 | ✅ covered | [Eloquent: Polymorphic Relations](https://laravel.com/docs/eloquent-relationships#polymorphic-relationships) | morphTo, morphMany, morphOne… | `unit/database/morphRelations.test.ts` |
 | ✅ covered | [Notifications](https://laravel.com/docs/notifications) | Notification, NotificationDispatcher, createNotificationDispatcher | `unit/notifications.test.ts` |
 | ✅ covered | [Mail: Markdown Templates](https://laravel.com/docs/mail#markdown-mailables) | renderMarkdownMail, buildMarkdownMailMessage, sendMarkdownMail… | `unit/markdownMail.test.ts` |
+| ✅ covered | [Artisan Console](https://laravel.com/docs/artisan) | @getstrata/bootstrap:scheduleRunCommand | `unit/bootstrapSchedule.test.ts` |
 
 ## Ecosystem exclusions (~1%)
 

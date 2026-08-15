@@ -5,7 +5,7 @@ import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { SyncQueue } from "../../src/core/queue/index";
 import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
 import UserRepository from "../../src/modules/user/repository";
-import { createMockCache, defaultTestTenant } from "./testHelpers";
+import { createMockCache, createMockDependencies, defaultTestTenant } from "./testHelpers";
 
 beforeAll(async () => {
   const container = new ServiceContainer();
@@ -14,10 +14,7 @@ beforeAll(async () => {
   setActiveApplicationContext({
     container,
     config: new ConfigStore(),
-    dependencies: {
-      container,
-      cache: createMockCache(),
-    },
+    dependencies: createMockDependencies(container, createMockCache()),
   });
 });
 

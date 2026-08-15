@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
+
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 
 if (!TEST_DATABASE_URL) {
@@ -94,6 +96,7 @@ async function fetchCsrfFromPath(
 }
 
 beforeAll(async () => {
+  pinWorkhubIntegrationEnv();
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.QUEUE_DRIVER = "sync";
   process.env.FRONTEND_MODE = "server-htmx";

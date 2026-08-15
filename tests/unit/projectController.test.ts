@@ -9,7 +9,7 @@ import ProjectController from "../../src/modules/project/controller";
 import ProjectPolicy from "../../src/modules/project/policy";
 import { projectServiceToken } from "../../src/modules/project/provider";
 import type { ProjectWithOrganizationRecord } from "../../src/modules/project/types";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -37,7 +37,7 @@ function bootstrapController(service: Record<string, unknown>): ProjectControlle
   container.set(CORE_POLICY_GATE_TOKEN, gate);
   container.set(projectServiceToken, service);
 
-  const dependencies = { container, cache: createMockCache() };
+  const dependencies = createMockDependencies(container, createMockCache());
   setActiveApplicationContext({
     container,
     config: { get: () => undefined, set: () => undefined, has: () => false } as never,

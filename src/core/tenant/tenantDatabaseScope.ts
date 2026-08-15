@@ -1,6 +1,10 @@
 import { getDatabase } from "../../db/connection";
-import { runWithDatabaseConnection } from "../database/connectionContext";
-import { runWithTenant, type TenantContext } from "./tenantContext";
+import {
+  getActiveDatabaseConnection,
+  hasActiveDatabaseConnection,
+  runWithDatabaseConnection,
+} from "../database/connectionContext";
+import { currentTenant, runWithTenant, type TenantContext } from "./tenantContext";
 
 type TransactionHandle = {
   unsafe(query: string, params?: readonly unknown[]): Promise<unknown[]>;
@@ -18,6 +22,13 @@ async function runWithTenantDatabase<T>(
   tenant: TenantContext,
   callback: () => T | Promise<T>,
 ): Promise<T> {
+  if (hasActiveDatabaseConnection()) {
+    const activeConnection = getActiveDatabaseConnection(getDatabase());
+    await applyTenantContextToTransaction(activeConnection, tenant.id);
+
+    return await runWithTenant(tenant, callback);
+  }
+
   return await getDatabase().begin(async (transaction) => {
     await applyTenantContextToTransaction(transaction, tenant.id);
 
@@ -27,4 +38,8 @@ async function runWithTenantDatabase<T>(
   });
 }
 
-export { applyTenantContextToTransaction, runWithTenantDatabase };
+function isInsideTenantDatabaseScope(tenantId = currentTenant()?.id): boolean {
+  return hasActiveDatabaseConnection() && currentTenant()?.id === tenantId;
+}
+
+export { applyTenantContextToTransaction, isInsideTenantDatabaseScope, runWithTenantDatabase };

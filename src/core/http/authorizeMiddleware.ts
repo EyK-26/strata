@@ -1,3 +1,4 @@
+import { currentAuthUser } from "../auth/authContext";
 import type { AuthManager } from "../auth/guard";
 import type { Policy, PolicyGate } from "../auth/policy";
 import { ForbiddenError } from "../errors/http";
@@ -10,7 +11,7 @@ function createAuthorizeMiddleware(
   action: keyof Policy,
 ): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    const user = await auth.resolve(request);
+    const user = currentAuthUser() ?? (await auth.resolve(request));
 
     if (!gate.allows(resource, action, user)) {
       const error = new ForbiddenError();

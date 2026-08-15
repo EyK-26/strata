@@ -11,6 +11,7 @@ import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { ForbiddenError, NotFoundError, PreconditionFailedError } from "../../src/core/errors/http";
 import { etagFromResource } from "../../src/core/http/etag";
 import { securedBindRouteModel } from "../../src/core/http/securedRouteModelBinding";
+import { createStorageDriver, StorageManager } from "../../src/core/storage/storage";
 
 interface WidgetRecord {
   id: number;
@@ -39,7 +40,7 @@ function bootstrapPolicyGate(): AppDependencies {
   container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   container.set(CORE_POLICY_GATE_TOKEN, gate);
 
-  const dependencies = { container, cache };
+  const dependencies = { container, cache, storage: new StorageManager(createStorageDriver()) };
 
   setActiveApplicationContext({
     container,

@@ -6,7 +6,7 @@ import db from "../../src/db/connection";
 import BillingController from "../../src/modules/billing/controller";
 import { billingServiceToken } from "../../src/modules/billing/provider";
 import BillingService from "../../src/modules/billing/service";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 function stripeSignature(rawBody: string, secret: string): string {
   const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -22,10 +22,7 @@ describe("BillingController", () => {
     const container = new ServiceContainer();
     container.set(billingServiceToken, new BillingService());
 
-    return new BillingController({
-      container,
-      cache: createMockCache(),
-    });
+    return new BillingController(createMockDependencies(container, createMockCache()));
   }
 
   test("returns the current tenant subscription", async () => {

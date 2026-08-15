@@ -1,18 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { createSpaRoutes, SPA_DIST_DIRECTORY } from "../../src/bootstrap/createSpaRoutes";
+import { createMockDependencies } from "./testHelpers";
 
 const DIST_DIR = join(process.cwd(), "frontend/dist");
 const INDEX_FILE = join(DIST_DIR, "index.html");
 
 function createDependencies() {
-  return {
-    container: new ServiceContainer(),
-    cache: {} as never,
-    config: new ConfigStore(),
-  };
+  return createMockDependencies(new ServiceContainer(), {} as never);
 }
 
 describe("createSpaRoutes", () => {

@@ -6,7 +6,6 @@ import {
 } from "../../src/bootstrap/config";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { createRoutes } from "../../src/bootstrap/createRoutes";
-import type { AppDependencies } from "../../src/bootstrap/dependencies";
 import { appConfig } from "../../src/config/app";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";
@@ -16,6 +15,7 @@ import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { SyncQueue } from "../../src/core/queue";
 import { reportServiceToken } from "../../src/modules/report/provider";
 import { tokenServiceToken } from "../../src/modules/user/provider";
+import { createMockDependencies } from "./testHelpers";
 
 function normalizeJson<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
@@ -33,10 +33,11 @@ function createTestDependencies() {
 
   const calls = { summary: 0 };
 
-  const dependencies: AppDependencies = {
-    container: new ServiceContainer(),
-    cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-  };
+  const container = new ServiceContainer();
+  const dependencies = createMockDependencies(
+    container,
+    new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+  );
 
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());

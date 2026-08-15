@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { currentTenant, currentTenantId } from "../../src/core/tenant/tenantContext";
-import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
+import {
+  isInsideTenantDatabaseScope,
+  runWithTenantDatabase,
+} from "../../src/core/tenant/tenantDatabaseScope";
 import { defaultTestTenant } from "./testHelpers";
 
 describe("runWithTenantDatabase", () => {
@@ -15,5 +18,25 @@ describe("runWithTenantDatabase", () => {
     });
 
     expect(currentTenant()).toBeNull();
+  });
+
+  test("reuses the active connection instead of opening nested transactions", async () => {
+    const { hasActiveDatabaseConnection } = await import(
+      "../../src/core/database/connectionContext"
+    );
+
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      expect(hasActiveDatabaseConnection()).toBe(true);
+      expect(isInsideTenantDatabaseScope()).toBe(true);
+      expect(isInsideTenantDatabaseScope(99)).toBe(false);
+
+      await runWithTenantDatabase(defaultTestTenant, async () => {
+        expect(hasActiveDatabaseConnection()).toBe(true);
+        expect(currentTenantId()).toBe(1);
+        expect(isInsideTenantDatabaseScope()).toBe(true);
+      });
+    });
+
+    expect(isInsideTenantDatabaseScope()).toBe(false);
   });
 });

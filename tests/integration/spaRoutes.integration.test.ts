@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
+
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 
 if (!TEST_DATABASE_URL) {
@@ -14,6 +16,7 @@ const previousFrontendMode = process.env.FRONTEND_MODE;
 const DIST_DIR = join(process.cwd(), "frontend/dist");
 
 beforeAll(async () => {
+  pinWorkhubIntegrationEnv();
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.QUEUE_DRIVER = "sync";
   process.env.FRONTEND_MODE = "spa-react";

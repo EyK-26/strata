@@ -9,7 +9,7 @@ import TaskController from "../../src/modules/task/controller";
 import TaskPolicy from "../../src/modules/task/policy";
 import { taskServiceToken } from "../../src/modules/task/provider";
 import type { TaskWithProjectRecord } from "../../src/modules/task/types";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -38,7 +38,7 @@ function bootstrapController(service: Record<string, unknown>): TaskController {
   container.set(CORE_POLICY_GATE_TOKEN, gate);
   container.set(taskServiceToken, service);
 
-  const dependencies = { container, cache: createMockCache() };
+  const dependencies = createMockDependencies(container, createMockCache());
   setActiveApplicationContext({
     container,
     config: { get: () => undefined, set: () => undefined, has: () => false } as never,

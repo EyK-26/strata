@@ -9,7 +9,7 @@ import {
   tokenServiceToken,
 } from "../../src/modules/user/provider";
 import type { UserRecord } from "../../src/modules/user/types";
-import { defaultTestTenant } from "./testHelpers";
+import { createMockCache, createMockDependencies, defaultTestTenant } from "./testHelpers";
 
 type AuthControllerClass = typeof import("../../src/modules/user/controller").default;
 type AuthControllerInstance = InstanceType<AuthControllerClass>;
@@ -75,24 +75,7 @@ function createController(services: {
     markAllRead: mock(async () => 0),
   });
 
-  return new AuthControllerClass({
-    container,
-    cache: {
-      get: async () => undefined,
-      remember: async (_key, callback) => callback(),
-      forget: async () => true,
-      flush: async () => undefined,
-      tags: () => ({
-        remember: async (_key, callback) => callback(),
-        flush: async () => 0,
-      }),
-      getOrSet: async (_key, loader) => loader(),
-      invalidate: async () => true,
-      invalidateByPrefix: async () => 0,
-      clear: async () => undefined,
-      size: async () => 0,
-    },
-  });
+  return new AuthControllerClass(createMockDependencies(container, createMockCache()));
 }
 
 beforeAll(async () => {

@@ -3,7 +3,7 @@ import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegi
 import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import { ForbiddenError } from "../../src/core/errors/http";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const membershipRepository = {
   listForUser: mock(async (userId: number) =>
@@ -163,10 +163,7 @@ describe("MembershipService", () => {
     setActiveApplicationContext({
       container,
       config: new ConfigStore(),
-      dependencies: {
-        container,
-        cache: createMockCache(),
-      },
+      dependencies: createMockDependencies(container, createMockCache()),
     });
 
     expect(resolveMembershipService()).toBe(registered);
@@ -178,10 +175,7 @@ describe("MembershipService", () => {
     setActiveApplicationContext({
       container,
       config: new ConfigStore(),
-      dependencies: {
-        container,
-        cache: createMockCache(),
-      },
+      dependencies: createMockDependencies(container, createMockCache()),
     });
 
     expect(resolveMembershipService()).toBeInstanceOf(MembershipService);

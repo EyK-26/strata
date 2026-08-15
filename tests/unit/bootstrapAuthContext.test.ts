@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type AuthUser, createAuthMiddleware, currentAuthUser } from "@getstrata/core";
+import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { CORE_AUTH_TOKEN } from "../../src/bootstrap/config";
 import { type AppDependencies, ServiceContainer } from "../../src/bootstrap/contracts";
 import { createHttpKernel } from "../../src/bootstrap/httpKernel";
@@ -21,6 +22,7 @@ function createDependencies(authUser: AuthUser | null): AppDependencies {
         flush: async () => 0,
       }),
     },
+    storage: new StorageManager(createStorageDriver()),
   } as AppDependencies;
 }
 

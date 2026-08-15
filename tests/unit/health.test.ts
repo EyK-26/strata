@@ -5,13 +5,16 @@ import { createHealthRoutes } from "../../src/bootstrap/health";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
+import { createMockDependencies } from "./testHelpers";
 
 describe("createHealthRoutes", () => {
   test("returns ok from /health without touching dependencies", async () => {
-    const routes = createHealthRoutes({
-      container: new ServiceContainer(),
-      cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-    });
+    const routes = createHealthRoutes(
+      createMockDependencies(
+        new ServiceContainer(),
+        new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+      ),
+    );
 
     const response = await routes["/health"]();
     expect(response.status).toBe(200);
@@ -24,10 +27,12 @@ describe("createHealthRoutes", () => {
     config.set(REDIS_URL_CONFIG_KEY, process.env.REDIS_URL ?? "");
     container.set(CORE_CONFIG_TOKEN, config);
 
-    const routes = createHealthRoutes({
-      container,
-      cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-    });
+    const routes = createHealthRoutes(
+      createMockDependencies(
+        container,
+        new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+      ),
+    );
 
     const response = await routes["/ready"]();
     const body = (await response.json()) as {

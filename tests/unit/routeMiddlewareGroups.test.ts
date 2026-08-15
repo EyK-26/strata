@@ -17,15 +17,17 @@ class ProjectPolicy extends Policy {
   }
 }
 
+import { createMockDependencies } from "./testHelpers";
+
 function createKernelDependencies(): AppDependencies {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
 
-  return {
+  return createMockDependencies(
     container,
-    cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-  };
+    new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+  );
 }
 
 describe("createAuthorizeMiddleware", () => {

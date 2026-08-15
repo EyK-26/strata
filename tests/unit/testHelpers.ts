@@ -3,6 +3,7 @@ import type { AppDependencies } from "../../src/bootstrap/contracts";
 import type { DatabaseConnection as CoreDatabaseConnection } from "../../src/core/database/baseRepository.ts";
 import { bindDatabaseConnection } from "../../src/core/database/bindConnection.ts";
 import { resetBoundDatabaseConnection } from "../../src/core/database/boundConnection.ts";
+import { createStorageDriver, StorageManager } from "../../src/core/storage/storage";
 import type { DatabaseConnection } from "../../src/db/connection";
 import type { CacheLike } from "../../src/types/services";
 
@@ -103,8 +104,9 @@ function createMockCache(overrides: Partial<CacheLike> = {}): CacheLike {
 function createMockDependencies(
   container: AppDependencies["container"],
   cache: CacheLike = createMockCache(),
+  storage: StorageManager = new StorageManager(createStorageDriver()),
 ): AppDependencies {
-  return { container, cache };
+  return { container, cache, storage };
 }
 
 function mockFetch(implementation: (...args: never[]) => unknown): typeof fetch {

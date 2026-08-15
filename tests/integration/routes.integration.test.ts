@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../../src/domain/auth";
 import { TEST_SCIM_BEARER_TOKEN } from "../../src/domain/scim";
+import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 
@@ -82,6 +83,7 @@ async function getJson<T>(
 }
 
 beforeAll(async () => {
+  pinWorkhubIntegrationEnv();
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.QUEUE_DRIVER = "sync";
   process.env.LOGIN_RATE_LIMIT_PER_WINDOW = "1000";
@@ -89,15 +91,12 @@ beforeAll(async () => {
   process.env.STORAGE_PATH = storageDirectory;
   await rm(join(process.cwd(), "storage"), { recursive: true, force: true });
 
-  const [{ freshDatabase }, { createAppDependencies }, { createRoutes }, { resetDefaultStorage }] =
-    await Promise.all([
-      import("../../src/db/migrations/runner"),
-      import("../../src/bootstrap/dependencies"),
-      import("../../src/bootstrap/createRoutes"),
-      import("@getstrata/core/storage/storage"),
-    ]);
+  const [{ freshDatabase }, { createAppDependencies }, { createRoutes }] = await Promise.all([
+    import("../../src/db/migrations/runner"),
+    import("../../src/bootstrap/dependencies"),
+    import("../../src/bootstrap/createRoutes"),
+  ]);
 
-  resetDefaultStorage();
   await freshDatabase({ seed: true });
 
   server = Bun.serve({
@@ -1163,6 +1162,7 @@ describe("feature flags disable optional routes", () => {
   }
 
   beforeAll(async () => {
+    pinWorkhubIntegrationEnv();
     for (const [key, value] of Object.entries(DISABLED_FEATURE_FLAGS)) {
       const flag = key as keyof typeof DISABLED_FEATURE_FLAGS;
       previousFlagValues[flag] = process.env[flag];

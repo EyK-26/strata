@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, mock, test } from "bun:test";
 import { CORE_AUTH_TOKEN } from "../../src/bootstrap/config";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { notificationServiceToken, tokenServiceToken } from "../../src/modules/user/provider";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 type AuthControllerClass = typeof import("../../src/modules/user/controller").default;
 type AuthControllerInstance = InstanceType<AuthControllerClass>;
@@ -58,10 +58,7 @@ function createController(): AuthControllerInstance {
     markAllRead: mock(async () => 2),
   });
 
-  return new AuthControllerClass({
-    container,
-    cache: createMockCache(),
-  });
+  return new AuthControllerClass(createMockDependencies(container, createMockCache()));
 }
 
 beforeAll(async () => {

@@ -46,11 +46,14 @@ describe("testHelpers", () => {
     expect(await tagged.flush()).toBe(0);
   });
 
-  test("createMockDependencies wraps container and cache", () => {
+  test("createMockDependencies wraps container, cache, and storage", () => {
     const container = { resolve: () => "service" } as never;
     const cache = createMockCache({ size: async () => 3 });
+    const dependencies = createMockDependencies(container, cache);
 
-    expect(createMockDependencies(container, cache)).toEqual({ container, cache });
+    expect(dependencies.container).toBe(container);
+    expect(dependencies.cache).toBe(cache);
+    expect(dependencies.storage).toBeDefined();
   });
 
   test("mockFetch returns the provided implementation as fetch", async () => {

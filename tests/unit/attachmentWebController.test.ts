@@ -9,7 +9,7 @@ import type { AttachmentRecord } from "../../src/modules/attachment/types";
 import AttachmentWebController, {
   createAttachmentWebRoutes,
 } from "../../src/modules/attachment/webController";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -44,12 +44,14 @@ function createController(service: Record<string, unknown>): AttachmentWebContro
 
   const cacheFlush = mock(async () => 0);
 
-  return new AttachmentWebController({
-    container,
-    cache: createMockCache({
-      tags: () => ({ remember: async (_key, callback) => callback(), flush: cacheFlush }),
-    }),
-  });
+  return new AttachmentWebController(
+    createMockDependencies(
+      container,
+      createMockCache({
+        tags: () => ({ remember: async (_key, callback) => callback(), flush: cacheFlush }),
+      }),
+    ),
+  );
 }
 
 describe("AttachmentWebController", () => {
@@ -145,10 +147,7 @@ describe("AttachmentWebController", () => {
     container.set(attachmentServiceToken, {});
     container.set(CORE_VIEW_TOKEN, { render: async () => "" });
 
-    const dependencies = {
-      container,
-      cache: createMockCache(),
-    };
+    const dependencies = createMockDependencies(container, createMockCache());
 
     const kernel = createHttpKernel(dependencies);
     const routes = createAttachmentWebRoutes(dependencies, kernel);

@@ -17,5 +17,9 @@ function getActiveDatabaseConnection<T extends ActiveDatabaseHandle>(fallback: T
   return (activeConnection.getStore() as T | undefined) ?? fallback;
 }
 
+function hasActiveDatabaseConnection(): boolean {
+  return activeConnection.getStore() !== undefined;
+}
+
 export type { ActiveDatabaseHandle };
-export { getActiveDatabaseConnection, runWithDatabaseConnection };
+export { getActiveDatabaseConnection, hasActiveDatabaseConnection, runWithDatabaseConnection };

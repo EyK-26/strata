@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { etagFromResource } from "../../src/core/http/etag";
 import ScimService from "../../src/modules/scim/service";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -38,10 +38,9 @@ afterAll(() => {
 
 describe("ScimController", () => {
   function createController(): InstanceType<ScimControllerClass> {
-    return new ScimControllerClass({
-      container: new ServiceContainer(),
-      cache: createMockCache(),
-    });
+    return new ScimControllerClass(
+      createMockDependencies(new ServiceContainer(), createMockCache()),
+    );
   }
 
   test("returns service provider config", async () => {

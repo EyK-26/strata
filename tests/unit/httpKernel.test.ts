@@ -14,6 +14,8 @@ import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { ForbiddenError } from "../../src/core/errors/http";
 import { tokenServiceToken } from "../../src/modules/user/provider";
 
+import { createMockDependencies } from "./testHelpers";
+
 function createKernelDependencies(config?: ConfigStore): AppDependencies {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
@@ -22,10 +24,10 @@ function createKernelDependencies(config?: ConfigStore): AppDependencies {
     container.set(CORE_CONFIG_TOKEN, config);
   }
 
-  return {
+  return createMockDependencies(
     container,
-    cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-  };
+    new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+  );
 }
 
 describe("HttpKernel", () => {

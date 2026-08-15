@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, mock, test } from "bun:test";
 import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
-import { createMockCache } from "./testHelpers";
+import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const membershipService = {
   requireOrgAccess: mock(async () => "admin" as const),
@@ -42,10 +42,7 @@ beforeAll(async () => {
   setActiveApplicationContext({
     container,
     config: new ConfigStore(),
-    dependencies: {
-      container,
-      cache: createMockCache(),
-    },
+    dependencies: createMockDependencies(container, createMockCache()),
   });
 
   ({ default: OrganizationMemberControllerClass } = await import(

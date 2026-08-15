@@ -2,6 +2,7 @@ import {
   resolveApplicationAuth,
   resolveApplicationPolicyGate,
 } from "../../bootstrap/applicationRegistry";
+import { currentAuthUser } from "../auth/authContext";
 import type { Policy } from "../auth/policy";
 import { BadRequestError } from "../errors/http";
 import {
@@ -39,13 +40,9 @@ function securedBindRouteModel<
     const model = await resolver(id, request);
     const gate = resolveApplicationPolicyGate();
     const auth = resolveApplicationAuth();
+    const user = currentAuthUser() ?? (await auth.resolve(request));
 
-    gate.authorize(
-      authorization.resource,
-      authorization.action,
-      await auth.resolve(request),
-      model,
-    );
+    gate.authorize(authorization.resource, authorization.action, user, model);
 
     if (isEtagEnabled() && isMutatingPolicyAction(authorization.action)) {
       assertIfMatch(request, etagFromResource(model as EtagVersioned), {
@@ -82,13 +79,9 @@ function securedBindRouteModelByKey<
     const model = await resolver(key, request);
     const gate = resolveApplicationPolicyGate();
     const auth = resolveApplicationAuth();
+    const user = currentAuthUser() ?? (await auth.resolve(request));
 
-    gate.authorize(
-      authorization.resource,
-      authorization.action,
-      await auth.resolve(request),
-      model,
-    );
+    gate.authorize(authorization.resource, authorization.action, user, model);
 
     if (isEtagEnabled() && isMutatingPolicyAction(authorization.action)) {
       assertIfMatch(request, etagFromResource(model as EtagVersioned), {
