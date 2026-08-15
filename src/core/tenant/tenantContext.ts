@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { createAsyncContextStore } from "../runtime/asyncContextStore";
 
 type TenantContext = {
   id: number;
@@ -7,7 +7,7 @@ type TenantContext = {
   region: "eu" | "us" | "apac";
 };
 
-const tenantContext = new AsyncLocalStorage<TenantContext>();
+const tenantContext = createAsyncContextStore<TenantContext>("@getstrata/tenantContext");
 
 function runWithTenant<T>(tenant: TenantContext, callback: () => T | Promise<T>): T | Promise<T> {
   return tenantContext.run(tenant, callback);

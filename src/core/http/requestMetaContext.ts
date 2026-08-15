@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { createAsyncContextStore } from "../runtime/asyncContextStore";
 
 type RequestMeta = {
   ipAddress: string | null;
@@ -8,7 +8,7 @@ type RequestMeta = {
   csrfToken?: string;
 };
 
-const requestMetaContext = new AsyncLocalStorage<RequestMeta>();
+const requestMetaContext = createAsyncContextStore<RequestMeta>("@getstrata/requestMetaContext");
 
 function runWithRequestMeta<T>(meta: RequestMeta, callback: () => T | Promise<T>): T | Promise<T> {
   return requestMetaContext.run(meta, callback);

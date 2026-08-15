@@ -1,3 +1,4 @@
+import { resolveApplicationAuth, resolveApplicationPolicyGate } from "@getstrata/core";
 import { currentAuthUser } from "../../core/auth/authContext";
 import type { Policy } from "../../core/auth/policy";
 import { BadRequestError } from "../../core/errors/http";
@@ -10,7 +11,6 @@ import {
 } from "../../core/http/etag";
 import type { RouteRequest } from "../../core/http/route";
 import { parsePositiveIntParam } from "../../core/http/validation";
-import { resolveApplicationAuth, resolveApplicationPolicyGate } from "../applicationRegistry";
 
 interface RouteModelAuthorization {
   resource: string;

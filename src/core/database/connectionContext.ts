@@ -1,10 +1,12 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { createAsyncContextStore } from "../runtime/asyncContextStore";
 
 type ActiveDatabaseHandle = {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
 };
 
-const activeConnection = new AsyncLocalStorage<ActiveDatabaseHandle>();
+const activeConnection = createAsyncContextStore<ActiveDatabaseHandle>(
+  "@getstrata/databaseConnectionContext",
+);
 
 function runWithDatabaseConnection<T>(
   connection: ActiveDatabaseHandle,

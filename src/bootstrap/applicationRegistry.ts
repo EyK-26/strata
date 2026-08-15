@@ -7,18 +7,39 @@ import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN, CORE_QUEUE_TOKEN } from "./con
 import type { AppContext } from "./contracts";
 import { type ConfigStore, getRequiredDependency } from "./contracts";
 
+const APPLICATION_CONTEXT_KEY = Symbol.for("@getstrata/applicationContext");
+
 let activeContext: AppContext | undefined;
 
-function setActiveApplicationContext(context: AppContext): void {
-  activeContext = context;
-}
+function readStoredApplicationContext(): AppContext | undefined {
+  if (activeContext) {
+    return activeContext;
+  }
 
-function requireActiveApplicationContext(): AppContext {
-  if (!activeContext) {
-    throw new Error("The application context has not been bootstrapped.");
+  const globalContext = (globalThis as Record<symbol, AppContext | undefined>)[
+    APPLICATION_CONTEXT_KEY
+  ];
+
+  if (globalContext) {
+    activeContext = globalContext;
   }
 
   return activeContext;
+}
+
+function setActiveApplicationContext(context: AppContext): void {
+  activeContext = context;
+  (globalThis as Record<symbol, AppContext>)[APPLICATION_CONTEXT_KEY] = context;
+}
+
+function requireActiveApplicationContext(): AppContext {
+  const context = readStoredApplicationContext();
+
+  if (!context) {
+    throw new Error("The application context has not been bootstrapped.");
+  }
+
+  return context;
 }
 
 function resolveApplicationCache(): CacheLike {

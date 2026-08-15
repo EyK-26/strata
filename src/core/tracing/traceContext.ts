@@ -1,11 +1,11 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { createAsyncContextStore } from "../runtime/asyncContextStore";
 
 type TraceContext = {
   traceId: string;
   spanId: string;
 };
 
-const traceContextStorage = new AsyncLocalStorage<TraceContext>();
+const traceContextStorage = createAsyncContextStore<TraceContext>("@getstrata/traceContext");
 
 function runWithTraceContext<T>(
   context: TraceContext,

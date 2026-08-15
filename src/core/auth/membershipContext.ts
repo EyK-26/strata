@@ -1,6 +1,6 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import OrganizationMemberRepository from "../../modules/organization/memberRepository";
 import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
+import { createAsyncContextStore } from "../runtime/asyncContextStore";
 import { isGlobalAdmin, resolveUserId } from "./accessControl";
 import { currentAuthUser } from "./authContext";
 
@@ -9,7 +9,9 @@ type MembershipContext = {
   rolesByOrganizationId: Map<number, OrganizationMemberRole>;
 };
 
-const membershipContext = new AsyncLocalStorage<MembershipContext>();
+const membershipContext = createAsyncContextStore<MembershipContext>(
+  "@getstrata/membershipContext",
+);
 const membershipRepository = new OrganizationMemberRepository();
 
 async function runWithMembershipContext<T>(

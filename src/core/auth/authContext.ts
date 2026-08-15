@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { createAsyncContextStore } from "../runtime/asyncContextStore";
 
 type AuthUser = {
   id: number | string;
@@ -7,7 +7,7 @@ type AuthUser = {
   tokenId?: number;
 };
 
-const authContext = new AsyncLocalStorage<AuthUser | null>();
+const authContext = createAsyncContextStore<AuthUser | null>("@getstrata/authContext");
 
 function runWithAuthUser<T>(user: AuthUser | null, callback: () => T | Promise<T>): T | Promise<T> {
   return authContext.run(user, callback);
