@@ -1,6 +1,6 @@
 /**
  * Laravel documentation sections mapped to Strata public APIs and test coverage.
- * Ecosystem entries are the intentional ~1% exclusions (Horizon, Nova, morph, etc.).
+ * Ecosystem tier is reserved for optional Laravel-package exclusions not shipped in Strata.
  */
 
 export type ParityTier = "core" | "ecosystem";
@@ -402,7 +402,6 @@ export const PARITY_CATALOG: ParityEntry[] = [
     tier: "core",
     notes: "verifyStripeWebhook via @getstrata/core/security/stripeWebhook subpath",
   },
-  // Ecosystem ~1% — documented exclusions, not counted in core score
   {
     id: "morph-relations",
     laravelSection: "Eloquent: Polymorphic Relations",
@@ -446,26 +445,29 @@ export const PARITY_CATALOG: ParityEntry[] = [
     laravelDocPath: "horizon",
     strataApis: [
       "collectQueueMetrics",
-      "AdminService.queueMetrics",
-      "AdminService.retryFailedJob",
-      "AdminService.deleteFailedJob",
+      "FailedJobService",
+      "FailedJobRepository",
+      "createFailedJobService",
     ],
-    testGlobs: ["unit/adminServiceMetrics.test.ts", "integration/webRoutes.integration.test.ts"],
-    tier: "ecosystem",
+    testGlobs: [
+      "unit/adminServiceMetrics.test.ts",
+      "unit/adminService.test.ts",
+      "integration/webRoutes.integration.test.ts",
+    ],
+    tier: "core",
     notes: "Horizon-lite admin queue monitor at /admin/queue with HTMX polling, retry, and delete",
   },
   {
     id: "nova",
     laravelSection: "Nova (admin panel)",
     laravelDocPath: "nova",
-    strataApis: [
-      "AdminResourceRegistry",
-      "AdminService.listResources",
-      "AdminService.paginateResource",
-      "AdminService.findResourceRecord",
+    strataApis: ["AdminResourceRegistry", "formatAdminValue"],
+    testGlobs: [
+      "unit/adminRegistry.test.ts",
+      "unit/adminService.test.ts",
+      "integration/webRoutes.integration.test.ts",
     ],
-    testGlobs: ["unit/adminRegistry.test.ts", "unit/adminService.test.ts"],
-    tier: "ecosystem",
+    tier: "core",
     notes: "WorkHub admin module with resource browser at /admin/resources",
   },
   {

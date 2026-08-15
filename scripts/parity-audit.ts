@@ -177,9 +177,11 @@ function renderMarkdown(entries: AuditedEntry[], score: number): string {
     `| Covered | ${covered} |`,
     `| Partial | ${partial} |`,
     `| Gaps | ${gaps} |`,
-    `| Ecosystem exclusions (1%) | ${ecosystem.length} |`,
+    ...(ecosystem.length > 0 ? [`| Ecosystem exclusions | ${ecosystem.length} |`] : []),
     "",
-    "Target: ≥99% core coverage. Ecosystem items are intentional Laravel-package exclusions.",
+    ecosystem.length > 0
+      ? "Target: ≥99% core coverage. Ecosystem items are optional Laravel-package exclusions."
+      : "Target: ≥99% core coverage across all documented Laravel sections.",
     "",
     "## Core matrix",
     "",
@@ -202,16 +204,18 @@ function renderMarkdown(entries: AuditedEntry[], score: number): string {
     );
   }
 
-  lines.push(
-    "",
-    "## Ecosystem exclusions (~1%)",
-    "",
-    "| Laravel section | Notes |",
-    "|-----------------|-------|",
-  );
+  if (ecosystem.length > 0) {
+    lines.push(
+      "",
+      "## Ecosystem exclusions",
+      "",
+      "| Laravel section | Notes |",
+      "|-----------------|-------|",
+    );
 
-  for (const entry of ecosystem) {
-    lines.push(`| ${entry.laravelSection} | ${entry.notes ?? "—"} |`);
+    for (const entry of ecosystem) {
+      lines.push(`| ${entry.laravelSection} | ${entry.notes ?? "—"} |`);
+    }
   }
 
   const gapEntries = core.filter((entry) => entry.status !== "covered");

@@ -454,12 +454,12 @@
     "id": "horizon",
     "title": "Queue dashboard ((queue dashboard)",
     "sectionSlug": "integrations",
-    "tier": "ecosystem",
+    "tier": "core",
     "strataApis": [
       "collectQueueMetrics",
-      "AdminService.queueMetrics",
-      "AdminService.retryFailedJob",
-      "AdminService.deleteFailedJob"
+      "FailedJobService",
+      "FailedJobRepository",
+      "createFailedJobService"
     ],
     "bootstrapApis": [],
     "notes": "Horizon-lite admin queue monitor at /admin/queue with HTMX polling, retry, and delete"
@@ -468,13 +468,8 @@
     "id": "nova",
     "title": "Admin resources ((admin panel)",
     "sectionSlug": "integrations",
-    "tier": "ecosystem",
-    "strataApis": [
-      "AdminResourceRegistry",
-      "AdminService.listResources",
-      "AdminService.paginateResource",
-      "AdminService.findResourceRecord"
-    ],
+    "tier": "core",
+    "strataApis": ["AdminResourceRegistry", "formatAdminValue"],
     "bootstrapApis": [],
     "notes": "WorkHub admin module with resource browser at /admin/resources"
   },

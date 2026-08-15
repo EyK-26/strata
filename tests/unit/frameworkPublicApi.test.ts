@@ -47,4 +47,11 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.installGracefulShutdownSignals).toBe("function");
     expect(typeof core.securedBindRouteModelByKey).toBe("function");
   });
+
+  test("exports admin resource registry and queue metrics helpers", () => {
+    expect(typeof core.AdminResourceRegistry).toBe("function");
+    expect(typeof core.formatAdminValue).toBe("function");
+    expect(typeof core.collectQueueMetrics).toBe("function");
+    expect(typeof core.FailedJobService).toBe("function");
+  });
 });

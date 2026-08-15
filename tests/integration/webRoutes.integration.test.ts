@@ -313,6 +313,18 @@ describe("web routes with server-htmx frontend", () => {
     expect(html).toContain("Pending jobs");
   });
 
+  test("GET /admin/resources renders resource browser", async () => {
+    const response = await fetch(`${baseUrl}/admin/resources`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Admin resources");
+    expect(html).toContain("Users");
+    expect(html).toContain("/admin/resources/users");
+  });
+
   test("GET /admin/audit renders paginated audit log", async () => {
     const response = await fetch(`${baseUrl}/admin/audit`, {
       headers: { cookie: adminSessionCookie },

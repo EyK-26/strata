@@ -308,6 +308,8 @@ export {
   ResilientQueue,
   runQueueJob,
 } from "../core/queue/publicQueue.ts";
+export type { QueueMetricsSnapshot } from "../core/queue/queueMetrics.ts";
+export { collectQueueMetrics } from "../core/queue/queueMetrics.ts";
 export type { ScheduledTask } from "../core/scheduler/schedule.ts";
 export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
 export { guestCanViewResource, isPublicReadsEnabled } from "../core/security/publicReads.ts";

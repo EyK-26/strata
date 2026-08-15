@@ -1,19 +1,18 @@
 # Laravel parity audit
 
-Generated: 2026-08-15T15:59:45.906Z
+Generated: 2026-08-15T16:39:22.049Z
 
 ## Score
 
 | Metric | Value |
 |--------|-------|
 | **Core parity score** | **100%** |
-| Core sections | 44 |
-| Covered | 44 |
+| Core sections | 46 |
+| Covered | 46 |
 | Partial | 0 |
 | Gaps | 0 |
-| Ecosystem exclusions (1%) | 2 |
 
-Target: ≥99% core coverage. Ecosystem items are intentional Laravel-package exclusions.
+Target: ≥99% core coverage across all documented Laravel sections.
 
 ## Core matrix
 
@@ -62,11 +61,6 @@ Target: ≥99% core coverage. Ecosystem items are intentional Laravel-package ex
 | ✅ covered | [Eloquent: Polymorphic Relations](https://laravel.com/docs/eloquent-relationships#polymorphic-relationships) | morphTo, morphMany, morphOne… | `unit/database/morphRelations.test.ts` |
 | ✅ covered | [Notifications](https://laravel.com/docs/notifications) | Notification, NotificationDispatcher, createNotificationDispatcher | `unit/notifications.test.ts` |
 | ✅ covered | [Mail: Markdown Templates](https://laravel.com/docs/mail#markdown-mailables) | renderMarkdownMail, buildMarkdownMailMessage, sendMarkdownMail… | `unit/markdownMail.test.ts` |
+| ✅ covered | [Horizon (queue dashboard)](https://laravel.com/docs/horizon) | collectQueueMetrics, FailedJobService, FailedJobRepository… | `unit/adminServiceMetrics.test.ts` |
+| ✅ covered | [Nova (admin panel)](https://laravel.com/docs/nova) | AdminResourceRegistry, formatAdminValue | `unit/adminRegistry.test.ts` |
 | ✅ covered | [Artisan Console](https://laravel.com/docs/artisan) | @getstrata/bootstrap:scheduleRunCommand | `unit/bootstrapSchedule.test.ts` |
-
-## Ecosystem exclusions (~1%)
-
-| Laravel section | Notes |
-|-----------------|-------|
-| Horizon (queue dashboard) | Horizon-lite admin queue monitor at /admin/queue with HTMX polling, retry, and delete |
-| Nova (admin panel) | WorkHub admin module with resource browser at /admin/resources |
