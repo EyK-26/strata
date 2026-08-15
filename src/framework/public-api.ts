@@ -33,6 +33,7 @@ export {
 export type { AbilityChecker } from "../core/auth/abilityChecker.ts";
 export type { AuthUser } from "../core/auth/authContext.ts";
 export { currentAuthUser, runWithAuthUser } from "../core/auth/authContext.ts";
+export { createMembershipMiddleware } from "../core/auth/membershipMiddleware.ts";
 export { Policy, PolicyGate } from "../core/auth/policy.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
 export { CACHE_TAGS } from "../core/cache/tags.ts";
@@ -160,6 +161,7 @@ export {
 } from "../core/facades/index.ts";
 export { createBodySizeLimitMiddleware } from "../core/http/bodySizeLimitMiddleware.ts";
 export { readBunRequestCookie, readRequestCookie } from "../core/http/cookies.ts";
+export { createCorsMiddleware } from "../core/http/corsMiddleware.ts";
 export { createCsrfMiddleware } from "../core/http/csrfMiddleware.ts";
 export { createCsrfProtection } from "../core/http/csrfProtection.ts";
 export {
@@ -175,6 +177,7 @@ export {
   etagFromResource,
   isEtagEnabled,
 } from "../core/http/etag.ts";
+export { createFlashMiddleware } from "../core/http/flashMiddleware.ts";
 export { FormRequest } from "../core/http/formRequest.ts";
 export {
   applyMiddlewareToRoutes,
@@ -187,6 +190,7 @@ export {
   noContentResponse,
   paginatedResponse,
   parsePaginationQuery,
+  requestIdMiddleware,
   securedBindRouteModel,
   securedBindRouteModelByKey,
   withErrorHandling,
@@ -196,6 +200,8 @@ export { createLoginThrottleMiddleware } from "../core/http/loginThrottleMiddlew
 export { createMemoryThrottleMiddleware } from "../core/http/memoryThrottleMiddleware.ts";
 export { createMetricsMiddleware, normalizeMetricPath } from "../core/http/metricsMiddleware.ts";
 export type { Middleware, RouteHandler } from "../core/http/middleware.ts";
+export { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware.ts";
+export { createRequireGlobalAdminMiddleware } from "../core/http/requireGlobalAdminMiddleware.ts";
 export { createRequireWebAuthMiddleware } from "../core/http/requireWebAuthMiddleware.ts";
 export {
   serializeDate,
@@ -211,6 +217,7 @@ export {
   registerShutdownHandler,
   runGracefulShutdown,
 } from "../core/lifecycle/gracefulShutdown.ts";
+export { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware.ts";
 export type { MailDriver, MailMessage } from "../core/mail/mailer.ts";
 export {
   buildSmtpPayload,
@@ -263,8 +270,15 @@ export {
 } from "../core/queue/publicQueue.ts";
 export type { ScheduledTask } from "../core/scheduler/schedule.ts";
 export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
+export { isPublicReadsEnabled } from "../core/security/publicReads.ts";
 export type { StorageDriver } from "../core/storage/storage.ts";
-export { LocalStorageDriver, StorageManager } from "../core/storage/storage.ts";
+export {
+  LocalStorageDriver,
+  resetDefaultStorage,
+  StorageManager,
+} from "../core/storage/storage.ts";
+export { createTenantMiddleware } from "../core/tenant/tenantMiddleware.ts";
+export { createTracingMiddleware } from "../core/tracing/tracingMiddleware.ts";
 export type { ValidationRule, ValidationSchema } from "../core/validation/rules.ts";
 export {
   emailRule,

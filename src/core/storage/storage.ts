@@ -137,10 +137,19 @@ function createStorageDriver(): StorageDriver {
   return new LocalStorageDriver();
 }
 
-const defaultStorage = new StorageManager(createStorageDriver());
+const defaultStorage = { current: null as StorageManager | null };
 
 function storage(): StorageManager {
-  return defaultStorage;
+  if (!defaultStorage.current) {
+    defaultStorage.current = new StorageManager(createStorageDriver());
+  }
+
+  return defaultStorage.current;
+}
+
+/** Test hook: drop the process-wide storage singleton (e.g. after changing STORAGE_PATH). */
+function resetDefaultStorage(): void {
+  defaultStorage.current = null;
 }
 
 export type { S3StorageConfig, StorageDriver };
@@ -148,6 +157,7 @@ export {
   createS3Client,
   createStorageDriver,
   LocalStorageDriver,
+  resetDefaultStorage,
   resolveS3Config,
   S3StorageDriver,
   StorageManager,

@@ -89,12 +89,15 @@ beforeAll(async () => {
   process.env.STORAGE_PATH = storageDirectory;
   await rm(join(process.cwd(), "storage"), { recursive: true, force: true });
 
-  const [{ freshDatabase }, { createAppDependencies }, { createRoutes }] = await Promise.all([
-    import("../../src/db/migrations/runner"),
-    import("../../src/bootstrap/dependencies"),
-    import("../../src/bootstrap/createRoutes"),
-  ]);
+  const [{ freshDatabase }, { createAppDependencies }, { createRoutes }, { resetDefaultStorage }] =
+    await Promise.all([
+      import("../../src/db/migrations/runner"),
+      import("../../src/bootstrap/dependencies"),
+      import("../../src/bootstrap/createRoutes"),
+      import("@getstrata/core/storage/storage"),
+    ]);
 
+  resetDefaultStorage();
   await freshDatabase({ seed: true });
 
   server = Bun.serve({

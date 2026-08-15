@@ -1,6 +1,5 @@
-import type { AuthManager } from "../core/auth/guard";
-import { createAuthMiddleware } from "../core/http/authMiddleware";
-import { type Middleware, requestIdMiddleware } from "../core/http/middleware";
+import { createAuthMiddleware, type Middleware, requestIdMiddleware } from "@getstrata/core";
+import type { AuthManager } from "@getstrata/core/auth/guard";
 import { CORE_AUTH_TOKEN } from "./config";
 import type { AppDependencies } from "./contracts";
 
