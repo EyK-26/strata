@@ -33,6 +33,8 @@ jobs:
           MEMBER_API_TOKEN: workhub-member-test-token
         run: |
           bun install --frozen-lockfile
+          bun run build:framework
+          bun run build:bootstrap
           scripts/with-host-env.sh sh -c "
             bun run cli migrate:fresh --seed &&
             bun test tests/unit tests/integration
