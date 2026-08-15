@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { etagFromResource } from "../../src/core/http/etag";
+import ScimService from "../../src/modules/scim/service";
 import { createMockCache } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
@@ -24,7 +25,7 @@ let ScimControllerClass: ScimControllerClass;
 
 beforeAll(async () => {
   mock.module("../../src/modules/scim/service", () => ({
-    default: class ScimService {},
+    default: ScimService,
     createScimService: () => scimServiceMock,
   }));
 
