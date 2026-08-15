@@ -36,6 +36,10 @@ class OrganizationController {
     return resolveService(this.dependencies, CORE_POLICY_GATE_TOKEN);
   }
 
+  private async flushOrganizationCache(): Promise<void> {
+    await this.dependencies.cache.tags(CACHE_TAGS.organizations, CACHE_TAGS.reports).flush();
+  }
+
   readonly index = withErrorHandling(async (request?: Request) => {
     const query = parseOrganizationListQuery(request);
     const cacheKey = buildRequestCacheKey("/organizations", request);
@@ -66,6 +70,7 @@ class OrganizationController {
     this.policyGate.authorize("organization", "create");
     const body = await parseCreateOrganizationBody(request);
     const organization = await this.service.create(body);
+    await this.flushOrganizationCache();
     return createdResponse(toOrganizationResource(organization));
   });
 
@@ -77,6 +82,7 @@ class OrganizationController {
       async (req: RouteRequest<OrganizationIdParams>, organization) => {
         const body = await parseUpdateOrganizationBody(req);
         const updated = await this.service.update(organization.id, body);
+        await this.flushOrganizationCache();
         return jsonResponse(toOrganizationResource(updated));
       },
     ),
@@ -89,6 +95,7 @@ class OrganizationController {
       { resource: "organization", action: "delete" },
       async (_request, organization) => {
         await this.service.delete(organization.id);
+        await this.flushOrganizationCache();
         return noContentResponse();
       },
     ),

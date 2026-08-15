@@ -17,10 +17,14 @@ interface S3StorageConfig {
 }
 
 class LocalStorageDriver implements StorageDriver {
-  constructor(private readonly rootDirectory: string) {}
+  constructor(private readonly rootDirectory?: string) {}
+
+  private resolveRootDirectory(): string {
+    return this.rootDirectory ?? process.env.STORAGE_PATH ?? "storage";
+  }
 
   private resolvePath(path: string): string {
-    return join(this.rootDirectory, path.replace(/^\/+/, ""));
+    return join(this.resolveRootDirectory(), path.replace(/^\/+/, ""));
   }
 
   async put(path: string, contents: string | Uint8Array): Promise<string> {
@@ -130,7 +134,7 @@ function createStorageDriver(): StorageDriver {
     return new S3StorageDriver(createS3Client());
   }
 
-  return new LocalStorageDriver(process.env.STORAGE_PATH ?? "storage");
+  return new LocalStorageDriver();
 }
 
 const defaultStorage = new StorageManager(createStorageDriver());

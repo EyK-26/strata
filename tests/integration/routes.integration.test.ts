@@ -1,4 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../../src/domain/auth";
 import { TEST_SCIM_BEARER_TOKEN } from "../../src/domain/scim";
 
@@ -22,6 +25,7 @@ interface PaginatedBody<T> {
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
+let storageDirectory = "";
 
 function api(pathname: string): string {
   return `${baseUrl}/api/v1${pathname}`;
@@ -81,6 +85,9 @@ beforeAll(async () => {
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.QUEUE_DRIVER = "sync";
   process.env.LOGIN_RATE_LIMIT_PER_WINDOW = "1000";
+  storageDirectory = await mkdtemp(join(tmpdir(), "strata-routes-integration-"));
+  process.env.STORAGE_PATH = storageDirectory;
+  await rm(join(process.cwd(), "storage"), { recursive: true, force: true });
 
   const [{ freshDatabase }, { createAppDependencies }, { createRoutes }] = await Promise.all([
     import("../../src/db/migrations/runner"),
@@ -98,8 +105,11 @@ beforeAll(async () => {
   baseUrl = server.url.toString().replace(/\/$/, "");
 });
 
-afterAll(() => {
+afterAll(async () => {
   server.stop(true);
+  if (storageDirectory) {
+    await rm(storageDirectory, { recursive: true, force: true });
+  }
 });
 
 describe("integration routes with postgres", () => {
