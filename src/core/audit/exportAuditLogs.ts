@@ -95,16 +95,20 @@ async function exportPendingAuditLogs(): Promise<number> {
         ? events.map((event) => formatCefLine(event)).join("\n")
         : JSON.stringify({ events });
 
-    const response = await safeFetch(config.endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": config.format === "cef" ? "text/plain" : "application/json",
-        ...(process.env.SIEM_EXPORT_TOKEN
-          ? { authorization: `Bearer ${process.env.SIEM_EXPORT_TOKEN}` }
-          : {}),
+    const response = await safeFetch(
+      config.endpoint,
+      {
+        method: "POST",
+        headers: {
+          "content-type": config.format === "cef" ? "text/plain" : "application/json",
+          ...(process.env.SIEM_EXPORT_TOKEN
+            ? { authorization: `Bearer ${process.env.SIEM_EXPORT_TOKEN}` }
+            : {}),
+        },
+        body,
       },
-      body,
-    });
+      { allowHttp: appConfig.env !== "production" },
+    );
 
     if (!response.ok) {
       throw new Error(`SIEM export failed with status ${response.status}.`);

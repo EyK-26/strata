@@ -9,10 +9,6 @@ import { guestCanViewResource } from "@getstrata/core/security/publicReads";
 import type { AttachmentWithScope } from "./service";
 
 class AttachmentPolicy extends Policy {
-  constructor() {
-    super();
-  }
-
   override create(user: AuthUser | null): boolean {
     return user !== null;
   }

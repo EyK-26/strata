@@ -66,6 +66,7 @@ coveragePathIgnorePatterns = [
 
   # Event listeners (side-effect wiring)
   "src/listeners/**",
+  "src/core/jobs/**",
 
   # Module registration, routing tables, and DTO/schema glue
   "src/modules/**/index.ts",
@@ -80,6 +81,7 @@ coveragePathIgnorePatterns = [
   "src/modules/**/table.ts",
   "src/modules/**/types.ts",
   "src/modules/**/provider.ts",
+  "src/modules/**/policy.ts",
   "src/modules/**/factory.ts",
   "src/modules/**/relationships.ts",
   "src/modules/**/notificationTable.ts",

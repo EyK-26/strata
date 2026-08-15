@@ -1,6 +1,6 @@
 # Laravel parity audit
 
-Generated: 2026-08-15T16:39:22.049Z
+Generated: 2026-08-15T16:50:26.179Z
 
 ## Score
 

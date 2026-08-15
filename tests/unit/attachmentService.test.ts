@@ -20,14 +20,6 @@ const storageGet = mock(
 );
 const storageDelete = mock(async (_path: string) => true);
 
-mock.module("../../src/core/storage/storage", () => ({
-  storage: () => ({
-    put: storagePut,
-    get: storageGet,
-    delete: storageDelete,
-  }),
-}));
-
 type AttachmentService = typeof import("../../src/modules/attachment/service").default;
 
 let AttachmentServiceClass: AttachmentService;
@@ -183,6 +175,13 @@ function withMembership<T>(
 }
 
 beforeAll(async () => {
+  mock.module("../../src/core/storage/storage", () => ({
+    storage: () => ({
+      put: storagePut,
+      get: storageGet,
+      delete: storageDelete,
+    }),
+  }));
   ({ default: AttachmentServiceClass } = await import("../../src/modules/attachment/service"));
 });
 

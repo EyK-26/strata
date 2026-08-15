@@ -93,3 +93,8 @@ for (const target of targets) {
   await writeFile(target, `${JSON.stringify(output, null, 2)}\n`, "utf8");
   console.log(`Wrote ${target} (${output.length} entries)`);
 }
+
+await Bun.spawn(["bunx", "biome", "format", "--write", ...targets], {
+  stdout: "inherit",
+  stderr: "inherit",
+}).exited;

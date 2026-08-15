@@ -357,7 +357,7 @@ Details: [docs/TESTING.md](docs/TESTING.md) (frontend modes, HTMX login, coverag
 | `bun run validate` | Typecheck, lint, OpenAPI validate, unit + integration tests |
 | `bun run validate:ci` | CI parity: above + OpenAPI drift check + scoped coverage gate |
 
-Git hooks (via Lefthook): **pre-commit** formats staged files; **pre-push** runs `validate:ci`.
+Git hooks (via Lefthook): **pre-commit** formats staged files; **pre-push** runs `validate:host` (migrate + full CI on host Postgres/Redis).
 
 Generated artifacts (`docs/openapi.json`, `sdk/typescript/client.ts`) are excluded from Biome. Regenerate them with the CLI instead of hand-editing.
 

@@ -10,12 +10,14 @@ const EXPECTED: Record<string, string> = {
   "@getstrata/core": "0.5.14",
   "@getstrata/bootstrap": "0.2.6",
   "@getstrata/cli": "0.1.0",
+  "@getstrata/starter": "0.1.0",
 };
 
 const PACKAGE_DIRS: Record<string, string> = {
   "@getstrata/core": "packages/strata-core/package.json",
   "@getstrata/bootstrap": "packages/strata-bootstrap/package.json",
   "@getstrata/cli": "packages/strata-cli/package.json",
+  "@getstrata/starter": "packages/strata-starter/package.json",
 };
 
 const mismatches: string[] = [];

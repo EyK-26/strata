@@ -13,10 +13,6 @@ interface CommentWithScope extends CommentRecord {
 }
 
 class CommentPolicy extends Policy {
-  constructor() {
-    super();
-  }
-
   override create(user: AuthUser | null): boolean {
     return user !== null;
   }

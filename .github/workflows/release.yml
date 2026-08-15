@@ -65,12 +65,39 @@ jobs:
     runs-on: ubuntu-latest
     needs: release
 
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bun_testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bun_testing"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
 
       - name: Set up Node.js for npm publish
         uses: actions/setup-node@v7
@@ -80,6 +107,21 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Validate release quality gate
+        env:
+          WORKHUB_SKIP_TEST_BOOTSTRAP: 1
+          CACHE_DRIVER: array
+          QUEUE_DRIVER: sync
+          FEATURE_SCIM: "true"
+          SCIM_BEARER_TOKEN: workhub-scim-test-token
+          ADMIN_API_TOKEN: workhub-admin-test-token
+          MEMBER_API_TOKEN: workhub-member-test-token
+        run: |
+          scripts/with-host-env.sh sh -c "
+            bun run cli migrate:fresh --seed &&
+            bun run validate:ci
+          "
 
       - name: Build framework packages
         run: |

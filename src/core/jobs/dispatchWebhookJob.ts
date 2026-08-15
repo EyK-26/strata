@@ -12,10 +12,6 @@ interface DispatchWebhookPayload {
 }
 
 class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
-  constructor() {
-    super();
-  }
-
   override readonly maxAttempts = 3;
   override readonly backoffMs = 2_000;
 
@@ -42,14 +38,18 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
     let errorMessage: string | null = null;
 
     try {
-      const response = await safeFetch(webhook.url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-workhub-signature": signature,
+      const response = await safeFetch(
+        webhook.url,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-workhub-signature": signature,
+          },
+          body,
         },
-        body,
-      });
+        { allowHttp: appConfig.env !== "production" },
+      );
       responseStatus = response.status;
 
       if (!response.ok) {

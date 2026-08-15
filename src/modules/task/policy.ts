@@ -13,10 +13,6 @@ function organizationIdForTask(task: TaskWithProjectRecord): number | null {
 }
 
 class TaskPolicy extends Policy {
-  constructor() {
-    super();
-  }
-
   override create(user: AuthUser | null): boolean {
     return user !== null;
   }

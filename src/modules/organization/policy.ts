@@ -9,10 +9,6 @@ import { guestCanViewResource } from "@getstrata/core/security/publicReads";
 import type { OrganizationRecord } from "./types";
 
 class OrganizationPolicy extends Policy {
-  constructor() {
-    super();
-  }
-
   override create(user: AuthUser | null): boolean {
     return user !== null;
   }
