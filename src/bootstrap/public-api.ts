@@ -39,6 +39,11 @@ export {
   ServiceContainer,
 } from "./contracts.ts";
 export { createWebRoutes, mergeWebRoutes } from "./createWebRoutes.ts";
+export {
+  type RouteModelAuthorization,
+  securedBindRouteModel,
+  securedBindRouteModelByKey,
+} from "./http/securedRouteModelBinding.ts";
 export { createHttpKernel, type HttpKernel, type MiddlewareGroupName } from "./httpKernel.ts";
 export { prefixRouteMap } from "./prefixRouteMap.ts";
 export { coreProviders } from "./providers/index.ts";

@@ -1,7 +1,7 @@
 import { resolveApplicationQueue } from "@getstrata/bootstrap/applicationRegistry";
 import DispatchWebhookJob from "@getstrata/core/jobs/dispatchWebhookJob";
 import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
-import { assertSafeOutboundUrl } from "@getstrata/core/security/safeUrl";
+import { assertSafeOutboundUrlResolved } from "@getstrata/core/security/safeUrl";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { appConfig } from "../../config/app";
 import type WebhookRepository from "./repository";
@@ -18,7 +18,10 @@ class WebhookService {
   constructor(private readonly repository: WebhookRepository) {}
 
   async create(input: CreateWebhookInput): Promise<WebhookRecord> {
-    assertSafeOutboundUrl(input.url, { allowHttp: appConfig.env !== "production" });
+    await assertSafeOutboundUrlResolved(input.url, {
+      allowHttp: appConfig.env !== "production",
+      resolveDns: appConfig.env === "production",
+    });
 
     return await this.repository.create({
       organization_id: input.organizationId ?? null,

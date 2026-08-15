@@ -64,6 +64,11 @@ export {
 } from "../core/auth/membershipService.ts";
 export { Policy, PolicyGate } from "../core/auth/policy.ts";
 export { createScimAuthMiddleware } from "../core/auth/scimAuthMiddleware.ts";
+export {
+  type CacheDriver,
+  type CreateCacheStoreOptions,
+  createCacheStore,
+} from "../core/cache/createCacheStore.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
 export { CACHE_TAGS } from "../core/cache/tags.ts";
 export type { DatabaseConnection } from "../core/database/baseRepository.ts";
