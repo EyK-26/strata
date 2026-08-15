@@ -1,9 +1,14 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { appConfig } from "../../src/config/app";
 import { createTestApp } from "../../src/testing/createTestApp";
+import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 
 describe("createTestApp", () => {
   const apps: Array<Awaited<ReturnType<typeof createTestApp>>> = [];
+
+  beforeAll(() => {
+    pinWorkhubIntegrationEnv();
+  });
 
   afterAll(() => {
     for (const app of apps) {
@@ -12,7 +17,9 @@ describe("createTestApp", () => {
   });
 
   test("starts a test server with WorkHub routes", async () => {
-    const app = await createTestApp({ fresh: true });
+    const app = await createTestApp({
+      fresh: process.env.WORKHUB_SKIP_TEST_BOOTSTRAP !== "1",
+    });
     apps.push(app);
 
     const response = await fetch(`${app.baseUrl}${appConfig.apiPrefix}/reports/summary`, {
