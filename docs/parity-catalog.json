@@ -1,0 +1,490 @@
+[
+  {
+    "id": "service-container",
+    "title": "Service Container",
+    "sectionSlug": "architecture",
+    "tier": "core",
+    "strataApis": ["ServiceContainer", "resolveService"],
+    "bootstrapApis": ["ServiceContainer", "resolveService"],
+    "notes": ""
+  },
+  {
+    "id": "service-providers",
+    "title": "Service Providers",
+    "sectionSlug": "architecture",
+    "tier": "core",
+    "strataApis": [],
+    "bootstrapApis": [
+      "ServiceProvider",
+      "runProviderPhase",
+      "collectProviders",
+      "createAppContext"
+    ],
+    "notes": ""
+  },
+  {
+    "id": "facades",
+    "title": "Facades",
+    "sectionSlug": "architecture",
+    "tier": "core",
+    "strataApis": [
+      "cache",
+      "queue",
+      "events",
+      "auth",
+      "config",
+      "log",
+      "mail",
+      "storage",
+      "policyGate"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "routing",
+    "title": "Routing",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": ["applyMiddlewareToRoutes", "withMiddleware", "composeMiddleware"],
+    "bootstrapApis": ["createHttpKernel", "createWebRoutes"],
+    "notes": ""
+  },
+  {
+    "id": "middleware",
+    "title": "Middleware",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": [
+      "createCsrfMiddleware",
+      "createSecurityHeadersMiddleware",
+      "createBodySizeLimitMiddleware",
+      "createAuthMiddleware",
+      "createAuthorizeMiddleware"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "csrf",
+    "title": "CSRF Protection",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": ["createCsrfMiddleware"],
+    "bootstrapApis": ["createCsrfProtection"],
+    "notes": ""
+  },
+  {
+    "id": "controllers",
+    "title": "Controllers",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": ["withErrorHandling", "jsonResponse", "RouteHandler"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "form-requests",
+    "title": "Form Requests",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": ["FormRequest", "WebFormRequest", "validateObject", "required", "emailRule"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "views",
+    "title": "Views",
+    "sectionSlug": "views",
+    "tier": "core",
+    "strataApis": ["EtaViewEngine", "htmlResponse", "resolveWebLayoutData"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "validation",
+    "title": "Validation",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": ["ValidationError", "validateObject", "minLength", "maxLength", "stringRule"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "errors",
+    "title": "Error Handling",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": ["NotFoundError", "ForbiddenError", "UnauthorizedError", "BadRequestError"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "database",
+    "title": "Database: Getting Started",
+    "sectionSlug": "database",
+    "tier": "core",
+    "strataApis": [
+      "bindDatabaseConnection",
+      "getActiveDatabaseConnection",
+      "runWithDatabaseConnection"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "query-builder",
+    "title": "Query Builder",
+    "sectionSlug": "database",
+    "tier": "core",
+    "strataApis": ["RepositoryQuery", "WhereBuilder", "BaseRepository"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "pagination",
+    "title": "Pagination",
+    "sectionSlug": "api",
+    "tier": "core",
+    "strataApis": ["paginatedResponse", "parsePaginationQuery", "toPaginatedResourceCollection"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "migrations",
+    "title": "Migrations",
+    "sectionSlug": "database",
+    "tier": "core",
+    "strataApis": [
+      "migrateDatabase",
+      "rollbackDatabase",
+      "freshDatabase",
+      "loadMigrationsFromDirectory",
+      "withMigrationLock"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "schema-blueprint",
+    "title": "Schema Builder",
+    "sectionSlug": "database",
+    "tier": "core",
+    "strataApis": ["Schema", "Blueprint", "defineTable", "createSchemaBuilder", "PostgresGrammar"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "seeders",
+    "title": "Database Seeding",
+    "sectionSlug": "database",
+    "tier": "core",
+    "strataApis": ["runSeedersFromDirectory", "loadSeedersFromDirectory"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "eloquent-model",
+    "title": "Getting Started",
+    "sectionSlug": "orm",
+    "tier": "core",
+    "strataApis": [
+      "Model",
+      "registerModelRepository",
+      "filterMassAssignable",
+      "hydrateValue",
+      "applyCasts"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "eloquent-relationships",
+    "title": "Relationships",
+    "sectionSlug": "orm",
+    "tier": "core",
+    "strataApis": ["hasMany", "hasOne", "belongsTo", "belongsToMany", "indexHasManyRelation"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "eloquent-soft-deletes",
+    "title": "Soft Deleting",
+    "sectionSlug": "orm",
+    "tier": "core",
+    "strataApis": ["Model"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "api-resources",
+    "title": "API Resources",
+    "sectionSlug": "api",
+    "tier": "core",
+    "strataApis": ["toResourceCollection", "serializeDate", "toPaginatedResourceCollection"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "factories",
+    "title": "Factories",
+    "sectionSlug": "database",
+    "tier": "core",
+    "strataApis": [],
+    "bootstrapApis": [],
+    "notes": "Exported via @getstrata/core/database/factory subpath"
+  },
+  {
+    "id": "authorization",
+    "title": "Authorization",
+    "sectionSlug": "auth",
+    "tier": "core",
+    "strataApis": ["Policy", "PolicyGate", "createAuthorizeMiddleware"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "authentication",
+    "title": "Authentication",
+    "sectionSlug": "auth",
+    "tier": "core",
+    "strataApis": ["createAuthMiddleware", "createRequireAuthMiddleware", "currentAuthUser"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "route-model-binding",
+    "title": "Route Model Binding",
+    "sectionSlug": "auth",
+    "tier": "core",
+    "strataApis": ["securedBindRouteModel", "securedBindRouteModelByKey"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "events",
+    "title": "Events",
+    "sectionSlug": "async",
+    "tier": "core",
+    "strataApis": ["EventBus", "events"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "queues",
+    "title": "Queues",
+    "sectionSlug": "async",
+    "tier": "core",
+    "strataApis": [
+      "Job",
+      "RedisQueue",
+      "QueueWorker",
+      "jobRegistry",
+      "createProductionQueue",
+      "SyncQueue"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "failed-jobs",
+    "title": "Queues: Dealing With Failed Jobs",
+    "sectionSlug": "async",
+    "tier": "core",
+    "strataApis": ["FailedJobService", "FailedJobRepository", "createFailedJobService"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "scheduler",
+    "title": "Task Scheduling",
+    "sectionSlug": "async",
+    "tier": "core",
+    "strataApis": ["Schedule", "appSchedule", "runDueScheduledTasks"],
+    "bootstrapApis": ["scheduleRunCommand"],
+    "notes": ""
+  },
+  {
+    "id": "cache",
+    "title": "Cache",
+    "sectionSlug": "cache-storage",
+    "tier": "core",
+    "strataApis": ["CacheRepository", "CACHE_TAGS"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "rate-limiting",
+    "title": "Rate Limiting",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": [
+      "createThrottleMiddleware",
+      "createMemoryThrottleMiddleware",
+      "createLoginThrottleMiddleware"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "file-storage",
+    "title": "File Storage",
+    "sectionSlug": "cache-storage",
+    "tier": "core",
+    "strataApis": ["StorageManager", "LocalStorageDriver", "storage"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "mail",
+    "title": "Mail",
+    "sectionSlug": "mail-notifications",
+    "tier": "core",
+    "strataApis": ["Mailer", "LogMailDriver", "mailer", "mail"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "transactions",
+    "title": "Database: Transactions",
+    "sectionSlug": "database",
+    "tier": "core",
+    "strataApis": ["runInTransaction"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "graceful-shutdown",
+    "title": "Deployment: Graceful Shutdown",
+    "sectionSlug": "observability",
+    "tier": "core",
+    "strataApis": [
+      "installGracefulShutdownSignals",
+      "registerShutdownHandler",
+      "runGracefulShutdown"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "metrics",
+    "title": "Observability",
+    "sectionSlug": "observability",
+    "tier": "core",
+    "strataApis": ["PrometheusRegistry", "prometheusRegistry", "createMetricsMiddleware"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "etag",
+    "title": "HTTP: Conditional Requests",
+    "sectionSlug": "routing-http",
+    "tier": "core",
+    "strataApis": ["assertIfMatch", "etagFromResource", "isEtagEnabled"],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "web-session",
+    "title": "Session",
+    "sectionSlug": "views",
+    "tier": "core",
+    "strataApis": [],
+    "bootstrapApis": ["CookieSessionStore", "createWebServer"],
+    "notes": ""
+  },
+  {
+    "id": "chunk-cursor",
+    "title": "Query Builder: Chunks / Cursors",
+    "sectionSlug": "database",
+    "tier": "core",
+    "strataApis": ["BaseRepository"],
+    "bootstrapApis": [],
+    "notes": "chunk() and cursorPaginate() on BaseRepository"
+  },
+  {
+    "id": "stripe-webhooks",
+    "title": "Billing Webhooks",
+    "sectionSlug": "integrations",
+    "tier": "core",
+    "strataApis": [],
+    "bootstrapApis": [],
+    "notes": "verifyStripeWebhook via @getstrata/core/security/stripeWebhook subpath"
+  },
+  {
+    "id": "morph-relations",
+    "title": "Polymorphic Relations",
+    "sectionSlug": "orm",
+    "tier": "core",
+    "strataApis": [
+      "morphTo",
+      "morphMany",
+      "morphOne",
+      "indexMorphManyRelation",
+      "indexMorphOneRelation",
+      "indexMorphToRelation"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "notifications",
+    "title": "Notifications",
+    "sectionSlug": "mail-notifications",
+    "tier": "core",
+    "strataApis": ["Notification", "NotificationDispatcher", "createNotificationDispatcher"],
+    "bootstrapApis": [],
+    "notes": "Mail and database channels; Slack/SMS remain app-level integrations"
+  },
+  {
+    "id": "mail-markdown",
+    "title": "Mail: Markdown Templates",
+    "sectionSlug": "mail-notifications",
+    "tier": "core",
+    "strataApis": [
+      "renderMarkdownMail",
+      "buildMarkdownMailMessage",
+      "sendMarkdownMail",
+      "markdownToHtml"
+    ],
+    "bootstrapApis": [],
+    "notes": ""
+  },
+  {
+    "id": "horizon",
+    "title": "Queue dashboard ((queue dashboard)",
+    "sectionSlug": "integrations",
+    "tier": "ecosystem",
+    "strataApis": [
+      "collectQueueMetrics",
+      "AdminService.queueMetrics",
+      "AdminService.retryFailedJob",
+      "AdminService.deleteFailedJob"
+    ],
+    "bootstrapApis": [],
+    "notes": "Horizon-lite admin queue monitor at /admin/queue with HTMX polling, retry, and delete"
+  },
+  {
+    "id": "nova",
+    "title": "Admin resources ((admin panel)",
+    "sectionSlug": "integrations",
+    "tier": "ecosystem",
+    "strataApis": [
+      "AdminResourceRegistry",
+      "AdminService.listResources",
+      "AdminService.paginateResource",
+      "AdminService.findResourceRecord"
+    ],
+    "bootstrapApis": [],
+    "notes": "WorkHub admin module with resource browser at /admin/resources"
+  },
+  {
+    "id": "cli",
+    "title": "Command line interface",
+    "sectionSlug": "getting-started",
+    "tier": "core",
+    "strataApis": [],
+    "bootstrapApis": ["scheduleRunCommand"],
+    "notes": "@getstrata/cli — migrate, queue:work, make:* generators"
+  }
+]

@@ -21,6 +21,7 @@
     "validate": "bun run check && bun run lint && bun run cli openapi:validate && bun run test:all",
     "validate:ci": "bun run check && bun run lint:ci && bun run check:module-imports && bun run verify:versions && bun run parity:audit && bun run cli openapi:validate && bun run cli openapi:check && bun run test:coverage",
     "parity:audit": "bun scripts/parity-audit.ts --write docs/PARITY-AUDIT.md",
+    "parity:export": "bun scripts/export-parity-catalog.ts",
     "verify:versions": "bun scripts/verify-package-versions.ts",
     "build:framework": "bun run --filter @getstrata/core build",
     "build:bootstrap": "bun run --filter @getstrata/bootstrap build",

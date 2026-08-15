@@ -468,4 +468,14 @@ export const PARITY_CATALOG: ParityEntry[] = [
     tier: "ecosystem",
     notes: "WorkHub admin module with resource browser at /admin/resources",
   },
+  {
+    id: "cli",
+    laravelSection: "Artisan Console",
+    laravelDocPath: "artisan",
+    strataApis: [],
+    bootstrapApis: ["scheduleRunCommand"],
+    testGlobs: ["unit/bootstrapSchedule.test.ts"],
+    tier: "core",
+    notes: "@getstrata/cli — migrate, queue:work, make:* generators",
+  },
 ];
