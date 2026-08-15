@@ -31,8 +31,15 @@ export {
   formatAdminValue,
 } from "../core/admin/index.ts";
 export type { AbilityChecker } from "../core/auth/abilityChecker.ts";
+export { isGlobalAdmin, resolveUserId } from "../core/auth/accessControl.ts";
 export type { AuthUser } from "../core/auth/authContext.ts";
 export { currentAuthUser, runWithAuthUser } from "../core/auth/authContext.ts";
+export {
+  currentOrganizationIds,
+  currentOrgRole,
+  hasMinimumOrgRole,
+  hasOrgMembership,
+} from "../core/auth/membershipContext.ts";
 export { createMembershipMiddleware } from "../core/auth/membershipMiddleware.ts";
 export { Policy, PolicyGate } from "../core/auth/policy.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
@@ -173,7 +180,9 @@ export {
   verifyCsrfToken,
 } from "../core/http/csrfToken.ts";
 export {
+  applyConditionalGet,
   assertIfMatch,
+  type EtagVersioned,
   etagFromResource,
   isEtagEnabled,
 } from "../core/http/etag.ts";
@@ -277,6 +286,7 @@ export {
   resetDefaultStorage,
   StorageManager,
 } from "../core/storage/storage.ts";
+export { currentTenant, currentTenantId, runWithTenant } from "../core/tenant/tenantContext.ts";
 export { createTenantMiddleware } from "../core/tenant/tenantMiddleware.ts";
 export { createTracingMiddleware } from "../core/tracing/tracingMiddleware.ts";
 export type { ValidationRule, ValidationSchema } from "../core/validation/rules.ts";

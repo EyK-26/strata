@@ -1,11 +1,11 @@
-import { jsonResponse } from "@getstrata/core/http";
 import {
   applyConditionalGet,
   assertIfMatch,
   type EtagVersioned,
   etagFromResource,
   isEtagEnabled,
-} from "@getstrata/core/http/etag";
+} from "@getstrata/core";
+import { jsonResponse } from "@getstrata/core/http";
 
 interface ScimResponseOptions {
   status?: number;

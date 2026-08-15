@@ -1,8 +1,8 @@
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { resolveService } from "@getstrata/bootstrap/contracts";
+import { currentTenantId } from "@getstrata/core";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { NotFoundError } from "@getstrata/core/errors/http";
-import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import db from "../../db/connection";
 import { SCIM_SCHEMAS } from "../../domain/scim";
 import OrganizationMemberRepository from "../organization/memberRepository";

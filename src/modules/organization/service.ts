@@ -1,11 +1,13 @@
-import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
-import { currentAuthUser } from "@getstrata/core/auth/authContext";
-import { currentOrganizationIds } from "@getstrata/core/auth/membershipContext";
+import {
+  currentAuthUser,
+  currentOrganizationIds,
+  currentTenantId,
+  isGlobalAdmin,
+} from "@getstrata/core";
 import { assertResourceInCurrentTenant } from "@getstrata/core/auth/membershipScope";
 import { resolveMembershipService } from "@getstrata/core/auth/membershipService";
 import type { QueryWhere } from "@getstrata/core/database/types";
 import { NotFoundError } from "@getstrata/core/errors/http";
-import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import type OrganizationRepository from "./repository";
 import type { OrganizationRecord } from "./types";
 
