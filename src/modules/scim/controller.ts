@@ -1,14 +1,18 @@
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { withErrorHandling } from "@getstrata/core/http";
 import { assertScimIfMatch, scimResponse } from "./scimResponse";
+import type ScimService from "./service";
 import type { ScimPatchOperation, ScimUserPayload } from "./service";
 import { createScimService } from "./service";
 
 class ScimController {
   private readonly service;
 
-  constructor(dependencies: AppDependencies) {
-    this.service = createScimService(dependencies);
+  constructor(
+    dependencies: AppDependencies,
+    service: ScimService = createScimService(dependencies),
+  ) {
+    this.service = service;
   }
 
   readonly serviceProviderConfig = withErrorHandling(async () => {

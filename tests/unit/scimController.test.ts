@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { etagFromResource } from "../../src/core/http/etag";
-import ScimService from "../../src/modules/scim/service";
+import ScimController from "../../src/modules/scim/controller";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
@@ -20,26 +20,11 @@ const scimServiceMock = {
   patchGroup: mock(async () => ({ id: "5", displayName: "Acme Updated" })),
 };
 
-type ScimControllerClass = typeof import("../../src/modules/scim/controller").default;
-let ScimControllerClass: ScimControllerClass;
-
-beforeAll(async () => {
-  mock.module("../../src/modules/scim/service", () => ({
-    default: ScimService,
-    createScimService: () => scimServiceMock,
-  }));
-
-  ({ default: ScimControllerClass } = await import("../../src/modules/scim/controller"));
-});
-
-afterAll(() => {
-  mock.restore();
-});
-
 describe("ScimController", () => {
-  function createController(): InstanceType<ScimControllerClass> {
-    return new ScimControllerClass(
+  function createController(): ScimController {
+    return new ScimController(
       createMockDependencies(new ServiceContainer(), createMockCache()),
+      scimServiceMock as never,
     );
   }
 

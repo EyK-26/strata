@@ -110,4 +110,37 @@ describe("createScimAuthMiddleware", () => {
     const body = (await response.json()) as { count: number };
     expect(body.count).toBeGreaterThanOrEqual(2);
   });
+
+  test("lists users through ScimService inside SCIM auth middleware", async () => {
+    process.env.SCIM_TENANT_TOKENS = "1:valid-token";
+
+    const { createScimAuthMiddleware } = await import("../../src/core/auth/scimAuthMiddleware");
+    const OrganizationMemberRepository = (
+      await import("../../src/modules/organization/memberRepository")
+    ).default;
+    const OrganizationRepository = (await import("../../src/modules/organization/repository"))
+      .default;
+    const ScimService = (await import("../../src/modules/scim/service")).default;
+    const UserRepository = (await import("../../src/modules/user/repository")).default;
+    const middleware = createScimAuthMiddleware();
+    const service = new ScimService(
+      new UserRepository(),
+      new OrganizationRepository(),
+      new OrganizationMemberRepository(),
+    );
+
+    const response = await middleware(
+      new Request("http://example.test/scim/v2/Users?count=10", {
+        headers: { authorization: "Bearer valid-token" },
+      }),
+      async () => {
+        const list = await service.listUsers(1, 10);
+        return Response.json(list);
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { totalResults: number };
+    expect(body.totalResults).toBeGreaterThanOrEqual(2);
+  });
 });
