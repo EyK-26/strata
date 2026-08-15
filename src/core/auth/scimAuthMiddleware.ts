@@ -1,7 +1,7 @@
-import { getDatabase } from "../../db/connection";
 import { bindDatabaseConnection } from "../database/bindConnection";
 import { resetBoundDatabaseConnection } from "../database/boundConnection";
 import { getActiveDatabaseConnection } from "../database/connectionContext";
+import { getDefaultDatabasePool } from "../database/defaultConnection";
 import type { Middleware } from "../http/middleware";
 import { resolveScimTenantFromToken } from "../security/scimTenantTokens";
 import { resolveTenant } from "../tenant/resolveTenant";
@@ -29,7 +29,7 @@ function createScimAuthMiddleware(): Middleware {
     }
 
     return await runWithTenantDatabase(tenant, async () => {
-      bindDatabaseConnection(getActiveDatabaseConnection(getDatabase()));
+      bindDatabaseConnection(getActiveDatabaseConnection(getDefaultDatabasePool()));
 
       try {
         return await next();

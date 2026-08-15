@@ -1,6 +1,10 @@
 import { databaseConfig } from "../../config/database";
-import { getActiveDatabaseConnection } from "../../core/database/connectionContext";
-import { createDatabaseConnection, type DatabaseConnection } from "./createConnection";
+import {
+  getDefaultDatabaseQuery,
+  registerDefaultDatabasePool,
+} from "../../core/database/defaultConnection";
+import type { DatabaseConnection } from "./createConnection";
+import { createDatabaseConnection } from "./createConnection";
 
 const connectionHolder: { connection: DatabaseConnection | null } = {
   connection: null,
@@ -9,9 +13,15 @@ const connectionHolder: { connection: DatabaseConnection | null } = {
 function getDatabase(): DatabaseConnection {
   if (!connectionHolder.connection) {
     connectionHolder.connection = createDatabaseConnection(databaseConfig);
+    registerDefaultDatabasePool(connectionHolder.connection);
   }
 
   return connectionHolder.connection;
+}
+
+function getDb(): DatabaseConnection {
+  getDatabase();
+  return getDefaultDatabaseQuery() as DatabaseConnection;
 }
 
 async function pingDatabase(connection: DatabaseConnection = getDatabase()): Promise<boolean> {
@@ -32,6 +42,7 @@ async function ensureDatabaseConnection(): Promise<DatabaseConnection> {
     .close()
     .catch(() => undefined);
   connectionHolder.connection = createDatabaseConnection(databaseConfig);
+  registerDefaultDatabasePool(connectionHolder.connection);
   return getDatabase();
 }
 
@@ -44,6 +55,7 @@ async function replaceDatabaseConnectionForTests(
 ): Promise<void> {
   const previous = connectionHolder.connection;
   connectionHolder.connection = connection;
+  registerDefaultDatabasePool(connection);
 
   if (previous && previous !== connection && typeof previous.close === "function") {
     await previous.close().catch(() => undefined);
@@ -52,28 +64,15 @@ async function replaceDatabaseConnectionForTests(
 
 function resetDatabaseConnectionForTests(connection: DatabaseConnection): void {
   connectionHolder.connection = connection;
-}
-
-const POOL_CONNECTION_METHODS = new Set(["begin", "close", "connect"]);
-
-function resolveDatabase(): DatabaseConnection {
-  return getActiveDatabaseConnection(getDatabase());
-}
-
-function resolveDatabaseForProperty(property: string | symbol): DatabaseConnection {
-  if (typeof property === "string" && POOL_CONNECTION_METHODS.has(property)) {
-    return getDatabase();
-  }
-
-  return resolveDatabase();
+  registerDefaultDatabasePool(connection);
 }
 
 const db = new Proxy(function database() {} as unknown as DatabaseConnection, {
   apply(_target, _thisArg, args) {
-    return (resolveDatabase() as unknown as (...args: unknown[]) => unknown)(...args);
+    return (getDb() as unknown as (...args: unknown[]) => unknown)(...args);
   },
   get(_target, property) {
-    const connection = resolveDatabaseForProperty(property);
+    const connection = getDb();
     const value = (connection as unknown as Record<string | symbol, unknown>)[property];
 
     return typeof value === "function" ? value.bind(connection) : value;

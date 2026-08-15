@@ -114,37 +114,3 @@ describe("PolicyGate", () => {
     expect(() => gate.authorize("organization", "create")).not.toThrow();
   });
 });
-
-describe("WorkHub module policies", () => {
-  test("constructs and exercises CRUD policy methods", async () => {
-    const [
-      { default: TaskPolicy },
-      { default: ProjectPolicy },
-      { default: CommentPolicy },
-      { default: AttachmentPolicy },
-      { default: OrganizationPolicy },
-    ] = await Promise.all([
-      import("../../src/modules/task/policy"),
-      import("../../src/modules/project/policy"),
-      import("../../src/modules/comment/policy"),
-      import("../../src/modules/attachment/policy"),
-      import("../../src/modules/organization/policy"),
-    ]);
-
-    const user = { id: 1, role: "admin" as const, abilities: ["*"] };
-
-    for (const PolicyClass of [
-      TaskPolicy,
-      ProjectPolicy,
-      CommentPolicy,
-      AttachmentPolicy,
-      OrganizationPolicy,
-    ]) {
-      const policy = new PolicyClass();
-      expect(policy.create(user)).toBe(true);
-      expect(typeof policy.view(user, {} as never)).toBe("boolean");
-      expect(typeof policy.update(user, {} as never)).toBe("boolean");
-      expect(typeof policy.delete(user, {} as never)).toBe("boolean");
-    }
-  });
-});

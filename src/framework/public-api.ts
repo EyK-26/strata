@@ -74,6 +74,11 @@ export {
   getActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "../core/database/connectionContext.ts";
+export {
+  getDefaultDatabasePool,
+  getDefaultDatabaseQuery,
+  registerDefaultDatabasePool,
+} from "../core/database/defaultConnection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";
 export {
   freshDatabase,
@@ -96,6 +101,7 @@ export {
   Model,
   registerModelRepository,
 } from "../core/database/model.ts";
+export { createDatabaseQueryProxy } from "../core/database/queryProxy.ts";
 export type {
   BelongsToManyRelation,
   BelongsToRelation,
@@ -121,6 +127,10 @@ export {
   morphOne,
   morphTo,
 } from "../core/database/relationships.ts";
+export {
+  repositoryConnection,
+  resolveRepositoryConnection,
+} from "../core/database/repositoryConnection.ts";
 export { RepositoryQuery } from "../core/database/repositoryQuery.ts";
 export type {
   BlueprintAction,
@@ -317,6 +327,7 @@ export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
 export { logSecurityEvent } from "../core/security/securityEvents.ts";
 export type { StorageDriver } from "../core/storage/storage.ts";
 export {
+  createStorageDriver,
   LocalStorageDriver,
   resetDefaultStorage,
   StorageManager,

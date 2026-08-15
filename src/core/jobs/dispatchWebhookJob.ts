@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { appConfig } from "../../config/app";
-import db from "../../db/connection";
+import { repositoryConnection as db } from "../database/repositoryConnection";
 import { Job } from "../queue";
 import { safeFetch } from "../security/safeFetch";
 import { assertSafeOutboundUrl } from "../security/safeUrl";

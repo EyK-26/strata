@@ -53,5 +53,7 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.formatAdminValue).toBe("function");
     expect(typeof core.collectQueueMetrics).toBe("function");
     expect(typeof core.FailedJobService).toBe("function");
+    expect(typeof core.createStorageDriver).toBe("function");
+    expect(typeof core.registerDefaultDatabasePool).toBe("function");
   });
 });

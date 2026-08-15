@@ -1,5 +1,5 @@
 import { appConfig } from "../../config/app";
-import db from "../../db/connection";
+import { repositoryConnection as db } from "../database/repositoryConnection";
 import { safeFetch } from "../security/safeFetch";
 import { assertSafeOutboundUrl } from "../security/safeUrl";
 import { runWithMigrationBypass } from "../tenant/databaseTenantContext";

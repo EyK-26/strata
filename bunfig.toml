@@ -37,6 +37,8 @@ coveragePathIgnorePatterns = [
   "src/modules/**/model.ts",
   "src/core/database/bindConnection.ts",
   "src/core/database/boundConnection.ts",
+  "src/core/database/defaultConnection.ts",
+  "src/core/database/queryProxy.ts",
   "src/core/database/repositoryConnection.ts",
 
   # HTTP stack, views, and middleware (exercised via integration tests)

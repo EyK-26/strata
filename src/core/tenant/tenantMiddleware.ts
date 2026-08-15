@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import db from "../../db/connection";
 import { isGlobalAdmin } from "../auth/accessControl";
 import { currentAuthUser } from "../auth/authContext";
+import { repositoryConnection as db } from "../database/repositoryConnection";
 import { ForbiddenError, HttpError } from "../errors/http";
 import { runWithMigrationBypass } from "./databaseTenantContext";
 import { resolveTenant } from "./resolveTenant";

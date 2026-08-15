@@ -1,5 +1,15 @@
-import { describe, expect, test } from "bun:test";
-import { assertSafeOutboundUrl, isBlockedHostname } from "../../src/core/security/safeUrl";
+import { afterEach, describe, expect, test } from "bun:test";
+import {
+  assertSafeOutboundUrl,
+  assertSafeOutboundUrlResolved,
+  isBlockedHostname,
+  resetDnsLookupForTests,
+  setDnsLookupForTests,
+} from "../../src/core/security/safeUrl";
+
+afterEach(() => {
+  resetDnsLookupForTests();
+});
 
 describe("assertSafeOutboundUrl", () => {
   test("accepts public https URLs", () => {
@@ -38,6 +48,41 @@ describe("assertSafeOutboundUrl", () => {
     expect(() => assertSafeOutboundUrl("https://172.16.0.2/hook")).toThrow(/blocked host/);
     expect(() => assertSafeOutboundUrl("https://0.0.0.0/hook")).toThrow(/blocked host/);
     expect(() => assertSafeOutboundUrl("https://[::1]/hook")).toThrow(/blocked host/);
+  });
+});
+
+describe("assertSafeOutboundUrlResolved", () => {
+  test("skips DNS lookup when resolveDns is false", async () => {
+    await expect(
+      assertSafeOutboundUrlResolved("https://example.com/hook", { resolveDns: false }),
+    ).resolves.toMatchObject({ hostname: "example.com" });
+  });
+
+  test("rejects hostnames that resolve to private addresses", async () => {
+    setDnsLookupForTests(async () => [{ address: "10.0.0.8", family: 4 }]);
+
+    await expect(
+      assertSafeOutboundUrlResolved("https://public.example.com/hook", {
+        allowHttp: true,
+        resolveDns: true,
+      }),
+    ).rejects.toThrow(/blocked host/);
+  });
+
+  test("accepts hostnames that resolve to public addresses", async () => {
+    setDnsLookupForTests(async () => [{ address: "8.8.8.8", family: 4 }]);
+
+    await expect(
+      assertSafeOutboundUrlResolved("https://public.example.com/hook", {
+        allowHttp: true,
+        resolveDns: true,
+      }),
+    ).resolves.toMatchObject({ hostname: "public.example.com" });
+  });
+
+  test("resetDnsLookupForTests restores the default resolver", () => {
+    setDnsLookupForTests(async () => []);
+    resetDnsLookupForTests();
   });
 });
 

@@ -1,4 +1,5 @@
-import { assertSafeOutboundUrl } from "./safeUrl.ts";
+import { appConfig } from "../../config/app.ts";
+import { assertSafeOutboundUrlResolved } from "./safeUrl.ts";
 
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 
@@ -6,6 +7,7 @@ interface SafeFetchOptions {
   timeoutMs?: number;
   maxRedirects?: number;
   allowHttp?: boolean;
+  resolveDns?: boolean;
 }
 
 async function safeFetch(
@@ -15,12 +17,13 @@ async function safeFetch(
 ): Promise<Response> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
   const maxRedirects = options.maxRedirects ?? 0;
-  const urlOptions = { allowHttp: options.allowHttp };
+  const resolveDns = options.resolveDns ?? appConfig.env === "production";
+  const urlOptions = { allowHttp: options.allowHttp, resolveDns };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    let currentUrl = assertSafeOutboundUrl(input, urlOptions).toString();
+    let currentUrl = (await assertSafeOutboundUrlResolved(input, urlOptions)).toString();
     let redirectCount = 0;
 
     while (true) {
@@ -37,9 +40,8 @@ async function safeFetch(
           return response;
         }
 
-        currentUrl = assertSafeOutboundUrl(
-          new URL(location, currentUrl).toString(),
-          urlOptions,
+        currentUrl = (
+          await assertSafeOutboundUrlResolved(new URL(location, currentUrl).toString(), urlOptions)
         ).toString();
         redirectCount += 1;
         continue;

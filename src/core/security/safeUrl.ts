@@ -1,4 +1,13 @@
+import { lookup as dnsLookupImpl } from "node:dns/promises";
 import { BadRequestError } from "../errors/http";
+
+type DnsLookupResult = { address: string; family: number };
+type DnsLookup = (
+  hostname: string,
+  options: { all: true; verbatim: true },
+) => Promise<DnsLookupResult[]>;
+
+let dnsLookup: DnsLookup = dnsLookupImpl;
 
 const BLOCKED_HOSTNAMES = new Set([
   "localhost",
@@ -96,4 +105,44 @@ function assertSafeOutboundUrl(rawUrl: string, options: { allowHttp?: boolean } 
   return parsed;
 }
 
-export { assertSafeOutboundUrl, isBlockedHostname };
+function isBlockedIpAddress(address: string): boolean {
+  return isBlockedHostname(address.trim().toLowerCase());
+}
+
+async function assertSafeOutboundUrlResolved(
+  rawUrl: string,
+  options: { allowHttp?: boolean; resolveDns?: boolean } = {},
+): Promise<URL> {
+  const parsed = assertSafeOutboundUrl(rawUrl, options);
+
+  if (options.resolveDns === false) {
+    return parsed;
+  }
+
+  const hostname = parsed.hostname.trim().toLowerCase();
+
+  const results = await dnsLookup(hostname, { all: true, verbatim: true });
+
+  if (results.some((result) => isBlockedIpAddress(result.address))) {
+    throw new BadRequestError("Webhook URL targets a blocked host.");
+  }
+
+  return parsed;
+}
+
+function setDnsLookupForTests(lookupFn: DnsLookup): void {
+  dnsLookup = lookupFn;
+}
+
+function resetDnsLookupForTests(): void {
+  dnsLookup = dnsLookupImpl;
+}
+
+export {
+  assertSafeOutboundUrl,
+  assertSafeOutboundUrlResolved,
+  isBlockedHostname,
+  isBlockedIpAddress,
+  resetDnsLookupForTests,
+  setDnsLookupForTests,
+};

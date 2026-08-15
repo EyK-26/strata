@@ -1,4 +1,4 @@
-import db from "../../db/connection";
+import { repositoryConnection as db } from "../database/repositoryConnection";
 import type { TenantContext } from "./tenantContext";
 
 async function resolveTenant(tenantId: number): Promise<TenantContext | null> {

@@ -1,9 +1,9 @@
-import { getDatabase } from "../../db/connection";
 import {
   getActiveDatabaseConnection,
   hasActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "../database/connectionContext";
+import { getDefaultDatabasePool } from "../database/defaultConnection";
 import { currentTenant, runWithTenant, type TenantContext } from "./tenantContext";
 
 type TransactionHandle = {
@@ -23,13 +23,13 @@ async function runWithTenantDatabase<T>(
   callback: () => T | Promise<T>,
 ): Promise<T> {
   if (hasActiveDatabaseConnection()) {
-    const activeConnection = getActiveDatabaseConnection(getDatabase());
+    const activeConnection = getActiveDatabaseConnection(getDefaultDatabasePool());
     await applyTenantContextToTransaction(activeConnection, tenant.id);
 
     return await runWithTenant(tenant, callback);
   }
 
-  return await getDatabase().begin(async (transaction) => {
+  return await getDefaultDatabasePool().begin!(async (transaction) => {
     await applyTenantContextToTransaction(transaction, tenant.id);
 
     return await runWithDatabaseConnection(transaction, async () => {

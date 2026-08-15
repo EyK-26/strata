@@ -41,6 +41,12 @@ type ExtendedQueryOptions<TEntity extends object> = QueryOptions<TEntity> & {
 
 interface DatabaseConnection {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
+  begin?<T>(callback: (transaction: DatabaseConnection) => Promise<T>): Promise<T>;
+  close?(): Promise<void>;
+}
+
+interface SqlDatabaseConnection extends DatabaseConnection {
+  (strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]>;
 }
 
 type CountRow = { count: number | string };
@@ -599,4 +605,4 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
 }
 
 export default BaseRepository;
-export type { DatabaseConnection };
+export type { DatabaseConnection, SqlDatabaseConnection };
