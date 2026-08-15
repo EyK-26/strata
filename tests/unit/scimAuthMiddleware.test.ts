@@ -88,4 +88,26 @@ describe("createScimAuthMiddleware", () => {
     expect(nextCalled).toBe(true);
     expect(response.status).toBe(200);
   });
+
+  test("scopes repository reads to the SCIM tenant transaction", async () => {
+    process.env.SCIM_TENANT_TOKENS = "1:valid-token";
+
+    const { createScimAuthMiddleware } = await import("../../src/core/auth/scimAuthMiddleware");
+    const UserRepository = (await import("../../src/modules/user/repository")).default;
+    const middleware = createScimAuthMiddleware();
+
+    const response = await middleware(
+      new Request("http://example.test/scim/v2/Users", {
+        headers: { authorization: "Bearer valid-token" },
+      }),
+      async () => {
+        const users = await new UserRepository().findAll({ where: { tenant_id: 1 } });
+        return Response.json({ count: users.length });
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { count: number };
+    expect(body.count).toBeGreaterThanOrEqual(2);
+  });
 });
