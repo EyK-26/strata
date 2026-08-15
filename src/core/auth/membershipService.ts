@@ -3,18 +3,23 @@ import type { OrganizationMemberRole } from "../../modules/organization/memberTy
 import { ForbiddenError } from "../errors/http";
 import { hasMinimumOrgRole, isGlobalAdmin, resolveUserId } from "./accessControl";
 import { type AuthUser, currentAuthUser } from "./authContext";
-import { membershipRepository } from "./membershipContext";
+import { membershipRepository as defaultMembershipRepository } from "./membershipContext";
+
+type MembershipRepositoryLike = Pick<
+  typeof defaultMembershipRepository,
+  "listForUser" | "findMembership" | "listForOrganization" | "addMember" | "removeMember"
+>;
 
 class MembershipService {
-  constructor() {}
+  constructor(private readonly members: MembershipRepositoryLike = defaultMembershipRepository) {}
 
   async listOrganizationIdsForUser(userId: number): Promise<number[]> {
-    const memberships = await membershipRepository.listForUser(userId);
+    const memberships = await this.members.listForUser(userId);
     return memberships.map((membership) => membership.organization_id);
   }
 
   async getOrgRole(userId: number, organizationId: number): Promise<OrganizationMemberRole | null> {
-    const membership = await membershipRepository.findMembership(userId, organizationId);
+    const membership = await this.members.findMembership(userId, organizationId);
     return membership?.role ?? null;
   }
 
@@ -57,7 +62,7 @@ class MembershipService {
   }
 
   async addOwnerOnOrganizationCreate(organizationId: number, userId: number): Promise<void> {
-    await membershipRepository.addMember({
+    await this.members.addMember({
       organizationId,
       userId,
       role: "owner",
@@ -65,15 +70,15 @@ class MembershipService {
   }
 
   listMembersForOrganization(organizationId: number) {
-    return membershipRepository.listForOrganization(organizationId);
+    return this.members.listForOrganization(organizationId);
   }
 
   addMember(input: { organizationId: number; userId: number; role?: OrganizationMemberRole }) {
-    return membershipRepository.addMember(input);
+    return this.members.addMember(input);
   }
 
   removeMember(organizationId: number, userId: number) {
-    return membershipRepository.removeMember(organizationId, userId);
+    return this.members.removeMember(organizationId, userId);
   }
 }
 
@@ -87,5 +92,6 @@ function resolveMembershipService(): MembershipService {
   return new MembershipService();
 }
 
+export type { MembershipRepositoryLike };
 export default MembershipService;
 export { resolveMembershipService };

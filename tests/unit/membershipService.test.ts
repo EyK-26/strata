@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
+import MembershipService, { resolveMembershipService } from "../../src/core/auth/membershipService";
 import { ForbiddenError } from "../../src/core/errors/http";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
@@ -62,50 +63,33 @@ const membershipRepository = {
   removeMember: mock(async () => true),
 };
 
-type MembershipServiceModule = typeof import("../../src/core/auth/membershipService");
-
-let MembershipService: MembershipServiceModule["default"];
-let resolveMembershipService: MembershipServiceModule["resolveMembershipService"];
-
-beforeAll(async () => {
-  const actual = await import("../../src/core/auth/membershipContext");
-  mock.module("../../src/core/auth/membershipContext", () => ({
-    ...actual,
-    membershipRepository,
-  }));
-
-  ({ default: MembershipService, resolveMembershipService } = await import(
-    "../../src/core/auth/membershipService"
-  ));
-});
-
-afterAll(() => {
-  mock.restore();
-});
+function createService(): MembershipService {
+  return new MembershipService(membershipRepository);
+}
 
 describe("MembershipService", () => {
   test("listOrganizationIdsForUser maps memberships to organization ids", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await expect(service.listOrganizationIdsForUser(2)).resolves.toEqual([5, 6]);
     await expect(service.listOrganizationIdsForUser(999)).resolves.toEqual([]);
   });
 
   test("getOrgRole returns membership roles or null", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await expect(service.getOrgRole(2, 5)).resolves.toBe("admin");
     await expect(service.getOrgRole(2, 99)).resolves.toBeNull();
   });
 
   test("requireOrgAccess requires authentication", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await expect(service.requireOrgAccess(5, "member", null)).rejects.toThrow(ForbiddenError);
   });
 
   test("requireOrgAccess grants global admins owner access", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await expect(service.requireOrgAccess(5, "owner", { id: 1, role: "admin" })).resolves.toBe(
       "owner",
@@ -113,7 +97,7 @@ describe("MembershipService", () => {
   });
 
   test("requireOrgAccess validates minimum organization roles", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await expect(service.requireOrgAccess(5, "member", { id: 2, role: "member" })).resolves.toBe(
       "admin",
@@ -129,7 +113,7 @@ describe("MembershipService", () => {
   });
 
   test("filterAccessibleOrganizationIds handles guests, admins, and members", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await expect(service.filterAccessibleOrganizationIds([5, 6, 7], null)).resolves.toEqual([]);
     await expect(
@@ -141,7 +125,7 @@ describe("MembershipService", () => {
   });
 
   test("delegates member management to the repository", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await expect(service.addOwnerOnOrganizationCreate(5, 2)).resolves.toBeUndefined();
     expect(membershipRepository.addMember).toHaveBeenCalledWith({
@@ -186,7 +170,7 @@ describe("MembershipService", () => {
 
 describe("MembershipService current auth user defaults", () => {
   test("requireOrgAccess uses currentAuthUser when user is omitted", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await runWithAuthUser({ id: 2, role: "member" }, async () => {
       await expect(service.requireOrgAccess(5)).resolves.toBe("admin");
@@ -195,7 +179,7 @@ describe("MembershipService current auth user defaults", () => {
   });
 
   test("filterAccessibleOrganizationIds uses currentAuthUser when user is omitted", async () => {
-    const service = new MembershipService();
+    const service = createService();
 
     await runWithAuthUser({ id: 2, role: "member" }, async () => {
       await expect(service.filterAccessibleOrganizationIds([5, 7])).resolves.toEqual([5]);
