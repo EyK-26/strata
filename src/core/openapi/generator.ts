@@ -1,5 +1,5 @@
-import type { RegisteredRoute } from "../../bootstrap/routeRegistry";
 import { appConfig } from "../../config/app";
+import type { RegisteredRoute } from "../openapi/registeredRoute";
 
 interface OpenApiSpec {
   openapi: string;

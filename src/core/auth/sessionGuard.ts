@@ -1,13 +1,13 @@
-import type { ServiceContainer } from "../../bootstrap/contracts";
 import { resolveAbilitiesForRole } from "../../domain/abilities";
 import { tokenServiceToken } from "../../modules/user/provider";
 import type TokenService from "../../modules/user/tokenService";
+import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
 import { readSessionUserId } from "./sessionCookie";
 
 class SessionGuard implements AuthGuard {
-  constructor(private readonly container: ServiceContainer) {}
+  constructor(private readonly container: ServiceContainerLike) {}
 
   async resolve(request: Request): Promise<AuthUser | null> {
     const userId = readSessionUserId(request);

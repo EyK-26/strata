@@ -1,7 +1,7 @@
-import type { ServiceContainer } from "../../bootstrap/contracts";
 import { tokenServiceToken } from "../../modules/user/provider";
 import type TokenService from "../../modules/user/tokenService";
 import { currentAuthUser } from "../auth/authContext";
+import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { resolveCsrfTokenForRequest } from "../http/csrfToken";
 import { pullFlash } from "../http/flashSession";
 import { currentRequestMeta } from "../http/requestMetaContext";
@@ -19,7 +19,7 @@ interface WebLayoutData {
 }
 
 async function resolveWebLayoutData(
-  container: ServiceContainer,
+  container: ServiceContainerLike,
   request?: Request,
 ): Promise<Record<string, unknown>> {
   const csrfToken = request ? resolveCsrfTokenForRequest(request) : "";

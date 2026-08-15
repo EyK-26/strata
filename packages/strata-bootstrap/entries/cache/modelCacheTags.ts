@@ -1,4 +1,4 @@
 export {
   cacheTagsForModelWrite,
   discoverModelTableNames,
-} from "../../bootstrap/cache/modelCacheTags.ts";
+} from "../../../../src/bootstrap/cache/modelCacheTags.ts";

@@ -1,7 +1,7 @@
-import type { ServiceContainer } from "../../bootstrap/contracts";
 import { ADMIN_ABILITIES, MEMBER_ABILITIES } from "../../domain/abilities";
 import { tokenServiceToken } from "../../modules/user/provider";
 import type TokenService from "../../modules/user/tokenService";
+import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { UnauthorizedError } from "../errors/http";
 import type { AuthUser } from "./authContext";
 import { currentAuthUser } from "./authContext";
@@ -62,7 +62,7 @@ class ApiTokenGuard implements AuthGuard {
 }
 
 class DatabaseTokenGuard implements AuthGuard {
-  constructor(private readonly container: ServiceContainer) {}
+  constructor(private readonly container: ServiceContainerLike) {}
 
   async resolve(request: Request): Promise<AuthUser | null> {
     const authorization = request.headers.get("authorization");

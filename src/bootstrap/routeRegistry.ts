@@ -1,8 +1,4 @@
-interface RegisteredRoute {
-  method: string;
-  path: string;
-  middleware: string[];
-}
+import type { RegisteredRoute } from "../core/openapi/registeredRoute";
 
 class RouteRegistry {
   private readonly routes: RegisteredRoute[] = [];
