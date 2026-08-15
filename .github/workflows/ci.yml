@@ -26,6 +26,10 @@ jobs:
           WORKHUB_SKIP_TEST_BOOTSTRAP: 1
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
+          FEATURE_SCIM: "true"
+          SCIM_BEARER_TOKEN: workhub-scim-test-token
+          ADMIN_API_TOKEN: workhub-admin-test-token
+          MEMBER_API_TOKEN: workhub-member-test-token
         run: |
           bun install --frozen-lockfile
           scripts/with-host-env.sh sh -c "
