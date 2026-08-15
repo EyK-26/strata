@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 
@@ -96,6 +96,7 @@ async function fetchCsrfFromPath(
 }
 
 beforeAll(async () => {
+  mock.restore();
   pinWorkhubIntegrationEnv();
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.QUEUE_DRIVER = "sync";

@@ -51,6 +51,8 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@getstrata/bootstrap": "workspace:*",
+    "@getstrata/core": "workspace:*",
     "eta": "^4.6.0"
   }
 }

@@ -5,6 +5,8 @@
     "": {
       "name": "bun",
       "dependencies": {
+        "@getstrata/bootstrap": "workspace:*",
+        "@getstrata/core": "workspace:*",
         "eta": "^4.6.0",
       },
       "devDependencies": {
@@ -16,9 +18,9 @@
     },
     "packages/strata-bootstrap": {
       "name": "@getstrata/bootstrap",
-      "version": "0.2.0",
+      "version": "0.2.6",
       "peerDependencies": {
-        "@getstrata/core": "^0.3.0",
+        "@getstrata/core": "^0.5.14",
         "typescript": "^5.9.0",
       },
     },
@@ -35,7 +37,10 @@
     },
     "packages/strata-core": {
       "name": "@getstrata/core",
-      "version": "0.5.0",
+      "version": "0.5.14",
+      "dependencies": {
+        "eta": "^4.6.0",
+      },
       "peerDependencies": {
         "typescript": "^5.9.0",
       },

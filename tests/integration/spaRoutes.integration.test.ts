@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -16,6 +16,7 @@ const previousFrontendMode = process.env.FRONTEND_MODE;
 const DIST_DIR = join(process.cwd(), "frontend/dist");
 
 beforeAll(async () => {
+  mock.restore();
   pinWorkhubIntegrationEnv();
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.QUEUE_DRIVER = "sync";

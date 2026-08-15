@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -83,6 +83,7 @@ async function getJson<T>(
 }
 
 beforeAll(async () => {
+  mock.restore();
   pinWorkhubIntegrationEnv();
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.QUEUE_DRIVER = "sync";

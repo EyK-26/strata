@@ -68,7 +68,9 @@ let MembershipService: MembershipServiceModule["default"];
 let resolveMembershipService: MembershipServiceModule["resolveMembershipService"];
 
 beforeAll(async () => {
+  const actual = await import("../../src/core/auth/membershipContext");
   mock.module("../../src/core/auth/membershipContext", () => ({
+    ...actual,
     membershipRepository,
   }));
 
