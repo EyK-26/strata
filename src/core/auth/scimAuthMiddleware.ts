@@ -1,3 +1,7 @@
+import { getDatabase } from "../../db/connection";
+import { bindDatabaseConnection } from "../database/bindConnection";
+import { resetBoundDatabaseConnection } from "../database/boundConnection";
+import { getActiveDatabaseConnection } from "../database/connectionContext";
 import type { Middleware } from "../http/middleware";
 import { resolveScimTenantFromToken } from "../security/scimTenantTokens";
 import { resolveTenant } from "../tenant/resolveTenant";
@@ -24,7 +28,15 @@ function createScimAuthMiddleware(): Middleware {
       return jsonScimError("SCIM tenant not found.", 401);
     }
 
-    return await runWithTenantDatabase(tenant, async () => await next());
+    return await runWithTenantDatabase(tenant, async () => {
+      bindDatabaseConnection(getActiveDatabaseConnection(getDatabase()));
+
+      try {
+        return await next();
+      } finally {
+        resetBoundDatabaseConnection();
+      }
+    });
   };
 }
 
