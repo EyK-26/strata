@@ -110,6 +110,8 @@ jobs:
 
       - name: Validate release quality gate
         env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bun_testing
+          REDIS_URL: redis://localhost:6379
           WORKHUB_SKIP_TEST_BOOTSTRAP: 1
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
