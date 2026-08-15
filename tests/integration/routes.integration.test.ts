@@ -575,8 +575,12 @@ describe("integration routes with postgres", () => {
   });
 
   test("POST /tasks/:id/attachments uploads a file and GET download returns bytes", async () => {
+    const payload = "attachment-bytes-check";
     const formData = new FormData();
-    formData.append("file", new File(["hello-attachment"], "notes.txt", { type: "text/plain" }));
+    formData.append(
+      "file",
+      new File([new TextEncoder().encode(payload)], "notes.txt", { type: "text/plain" }),
+    );
 
     const uploadResponse = await fetch(api("/tasks/1/attachments"), {
       method: "POST",
@@ -602,7 +606,7 @@ describe("integration routes with postgres", () => {
       headers: adminHeaders(),
     });
     expect(downloadResponse.status).toBe(200);
-    expect(await downloadResponse.text()).toBe("hello-attachment");
+    expect(await downloadResponse.text()).toBe("attachment-bytes-check");
   });
 
   test("DELETE /attachments/:id removes an uploaded file", async () => {

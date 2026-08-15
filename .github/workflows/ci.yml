@@ -24,6 +24,8 @@ jobs:
       - name: Install dependencies and run checks
         env:
           WORKHUB_SKIP_TEST_BOOTSTRAP: 1
+          CACHE_DRIVER: array
+          QUEUE_DRIVER: sync
         run: |
           bun install --frozen-lockfile
           scripts/with-host-env.sh sh -c "
