@@ -31,4 +31,11 @@ describe("@getstrata/core published bundle singletons", () => {
 
     expect(main.hasOrgMembership).toBe(subpath.hasOrgMembership);
   });
+
+  test("@getstrata/core workspace imports resolve through one tenantContext module", async () => {
+    const main = await import("@getstrata/core");
+    const subpath = await import("@getstrata/core/tenant/tenantContext");
+
+    expect(main.currentTenantId).toBe(subpath.currentTenantId);
+  });
 });
