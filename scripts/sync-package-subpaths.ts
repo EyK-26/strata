@@ -69,6 +69,25 @@ const CORE_SUBPATHS = [
   "view",
 ] as const;
 
+/** Subpaths that must re-export the main bundle so AsyncLocalStorage singletons stay shared. */
+const CORE_SHARED_FROM_INDEX = new Set<string>([
+  "auth/accessControl",
+  "auth/authContext",
+  "auth/guard",
+  "auth/membershipContext",
+  "auth/membershipScope",
+  "auth/membershipService",
+  "auth/policy",
+  "database",
+  "http",
+  "http/middleware",
+  "http/requestMetaContext",
+  "security/securityEvents",
+  "tenant/tenantContext",
+  "tenant/tenantMiddleware",
+  "tracing/traceContext",
+]);
+
 const BOOTSTRAP_SUBPATHS = [
   "applicationRegistry",
   "config",
@@ -141,6 +160,10 @@ async function writeEntryFiles(
   const entryFiles: string[] = [];
 
   for (const subpath of subpaths) {
+    if (srcLayer === "core" && CORE_SHARED_FROM_INDEX.has(subpath)) {
+      continue;
+    }
+
     const entryPath = join(entriesDir, `${subpath}.ts`);
     await mkdir(dirname(entryPath), { recursive: true });
 
@@ -181,8 +204,16 @@ async function updatePackageJson(
   packageJson.exports = exports;
 
   const relativeEntries = buildEntries.map((entry) => relative(packageDir, entry)).join(" ");
-  packageJson.scripts["build:subpaths"] =
-    `bun build index.ts ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta${packageDir.includes("bootstrap") ? " --external @getstrata/core" : ""}`;
+  packageJson.scripts["build:bundle"] =
+    `bun build index.ts --outdir dist --target bun --external bun --external eta${packageDir.includes("bootstrap") ? " --external @getstrata/core" : ""}`;
+  packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
+    ? "bun ../../scripts/write-core-shared-shims.ts"
+    : "true";
+  packageJson.scripts["build:subpaths"] = relativeEntries
+    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta${packageDir.includes("bootstrap") ? " --external @getstrata/core" : ""}`
+    : "true";
+  packageJson.scripts["build"] =
+    "bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";
 
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }

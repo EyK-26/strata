@@ -63,11 +63,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun run build:bundle && bun run build:types",
+    "build": "bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types",
     "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta --external @getstrata/core",
     "build:types": "tsc -p tsconfig.types.json",
     "prepublishOnly": "bun run build",
-    "build:subpaths": "bun build index.ts entries/applicationRegistry.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/httpKernel.ts entries/providers.ts entries/providers/view.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core"
+    "build:subpaths": "bun build entries/applicationRegistry.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/httpKernel.ts entries/providers.ts entries/providers/view.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core",
+    "build:shims": "true"
   },
   "publishConfig": {
     "access": "public"

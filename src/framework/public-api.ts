@@ -33,7 +33,15 @@ export {
 export type { AbilityChecker } from "../core/auth/abilityChecker.ts";
 export { isGlobalAdmin, resolveUserId } from "../core/auth/accessControl.ts";
 export type { AuthUser } from "../core/auth/authContext.ts";
-export { currentAuthUser, runWithAuthUser } from "../core/auth/authContext.ts";
+export { authContext, currentAuthUser, runWithAuthUser } from "../core/auth/authContext.ts";
+export type { AuthGuard } from "../core/auth/guard.ts";
+export {
+  ApiTokenGuard,
+  AuthManager,
+  CompositeGuard,
+  DatabaseTokenGuard,
+  GuestGuard,
+} from "../core/auth/guard.ts";
 export {
   currentOrganizationIds,
   currentOrgRole,
@@ -41,7 +49,21 @@ export {
   hasOrgMembership,
 } from "../core/auth/membershipContext.ts";
 export { createMembershipMiddleware } from "../core/auth/membershipMiddleware.ts";
+export {
+  appendOrganizationScope,
+  appendProjectScope,
+  assertOrganizationReadable,
+  assertResourceInCurrentTenant,
+  emptyPaginateResult,
+  resolveOrganizationScope,
+  scopedOrganizationIds,
+} from "../core/auth/membershipScope.ts";
+export {
+  default as MembershipService,
+  resolveMembershipService,
+} from "../core/auth/membershipService.ts";
 export { Policy, PolicyGate } from "../core/auth/policy.ts";
+export { createScimAuthMiddleware } from "../core/auth/scimAuthMiddleware.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
 export { CACHE_TAGS } from "../core/cache/tags.ts";
 export type { DatabaseConnection } from "../core/database/baseRepository.ts";
@@ -209,6 +231,8 @@ export { createLoginThrottleMiddleware } from "../core/http/loginThrottleMiddlew
 export { createMemoryThrottleMiddleware } from "../core/http/memoryThrottleMiddleware.ts";
 export { createMetricsMiddleware, normalizeMetricPath } from "../core/http/metricsMiddleware.ts";
 export type { Middleware, RouteHandler } from "../core/http/middleware.ts";
+export type { RequestMeta } from "../core/http/requestMetaContext.ts";
+export { currentRequestMeta, runWithRequestMeta } from "../core/http/requestMetaContext.ts";
 export { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware.ts";
 export { createRequireGlobalAdminMiddleware } from "../core/http/requireGlobalAdminMiddleware.ts";
 export { createRequireWebAuthMiddleware } from "../core/http/requireWebAuthMiddleware.ts";
@@ -218,6 +242,7 @@ export {
   toResourceCollection,
 } from "../core/http/resources.ts";
 export type { RouteRequest } from "../core/http/route.ts";
+export { createScimThrottleMiddleware } from "../core/http/scimThrottleMiddleware.ts";
 export { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware.ts";
 export { createThrottleMiddleware } from "../core/http/throttleMiddleware.ts";
 export { WebFormRequest } from "../core/http/webFormRequest.ts";
@@ -279,7 +304,9 @@ export {
 } from "../core/queue/publicQueue.ts";
 export type { ScheduledTask } from "../core/scheduler/schedule.ts";
 export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
-export { isPublicReadsEnabled } from "../core/security/publicReads.ts";
+export { guestCanViewResource, isPublicReadsEnabled } from "../core/security/publicReads.ts";
+export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
+export { logSecurityEvent } from "../core/security/securityEvents.ts";
 export type { StorageDriver } from "../core/storage/storage.ts";
 export {
   LocalStorageDriver,
@@ -287,7 +314,18 @@ export {
   StorageManager,
 } from "../core/storage/storage.ts";
 export { currentTenant, currentTenantId, runWithTenant } from "../core/tenant/tenantContext.ts";
-export { createTenantMiddleware } from "../core/tenant/tenantMiddleware.ts";
+export {
+  isInsideTenantDatabaseScope,
+  runWithTenantDatabase,
+} from "../core/tenant/tenantDatabaseScope.ts";
+export {
+  auditChecksum,
+  createTenantMiddleware,
+  DEFAULT_TENANT,
+  resolveUserTenantId,
+} from "../core/tenant/tenantMiddleware.ts";
+export type { TraceContext } from "../core/tracing/traceContext.ts";
+export { currentTraceId, runWithTraceContext } from "../core/tracing/traceContext.ts";
 export { createTracingMiddleware } from "../core/tracing/tracingMiddleware.ts";
 export type { ValidationRule, ValidationSchema } from "../core/validation/rules.ts";
 export {
