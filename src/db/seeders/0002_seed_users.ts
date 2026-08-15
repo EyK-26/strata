@@ -17,6 +17,7 @@ const seeder: Seeder = {
       ON CONFLICT (id) DO UPDATE SET
         password_hash = EXCLUDED.password_hash,
         email_lookup = EXCLUDED.email_lookup,
+        role = EXCLUDED.role,
         tenant_id = EXCLUDED.tenant_id
     `;
     await db`
