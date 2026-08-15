@@ -3,9 +3,9 @@ import { resolveService } from "@getstrata/bootstrap/contracts";
 import { currentTenantId } from "@getstrata/core";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { NotFoundError } from "@getstrata/core/errors/http";
-import db from "../../db/connection";
 import { SCIM_SCHEMAS } from "../../domain/scim";
 import OrganizationMemberRepository from "../organization/memberRepository";
+import OrganizationRepository from "../organization/repository";
 import { userRepositoryToken } from "../user/provider";
 import type UserRepository from "../user/repository";
 
@@ -25,6 +25,7 @@ interface ScimPatchOperation {
 class ScimService {
   constructor(
     private readonly users: UserRepository,
+    private readonly organizations: OrganizationRepository,
     private readonly members: OrganizationMemberRepository,
   ) {}
 
@@ -55,15 +56,7 @@ class ScimService {
       offset,
       where: { tenant_id: tenantId },
     });
-    const total = Number(
-      (
-        (await db`
-          SELECT COUNT(*)::int AS count
-          FROM users
-          WHERE tenant_id = ${tenantId}
-        `) as Array<{ count: number }>
-      )[0]?.count ?? records.length,
-    );
+    const total = await this.users.countForTenant(tenantId);
 
     return {
       schemas: [SCIM_SCHEMAS.listResponse],
@@ -158,23 +151,8 @@ class ScimService {
   async listGroups(startIndex = 1, count = 100) {
     const tenantId = currentTenantId();
     const offset = Math.max(startIndex - 1, 0);
-    const rows = (await db`
-      SELECT id, name, slug, updated_at
-      FROM organization
-      WHERE deleted_at IS NULL AND tenant_id = ${tenantId}
-      ORDER BY id
-      LIMIT ${count} OFFSET ${offset}
-    `) as Array<{ id: number; name: string; slug: string; updated_at: Date }>;
-    const total = Number(
-      (
-        (await db`
-          SELECT COUNT(*)::int AS count
-          FROM organization
-          WHERE deleted_at IS NULL AND tenant_id = ${tenantId}
-        `) as Array<{ count: number }>
-      )[0]?.count ?? rows.length,
-    );
-
+    const rows = await this.organizations.listForTenant({ limit: count, offset, tenantId });
+    const total = await this.organizations.countForTenant(tenantId);
     const resources = await Promise.all(rows.map((row) => this.toScimGroup(row)));
 
     return {
@@ -192,20 +170,7 @@ class ScimService {
   }
 
   async findOrganizationRecord(id: number) {
-    const tenantId = currentTenantId();
-    const rows = (await db`
-      SELECT id, name, slug, updated_at
-      FROM organization
-      WHERE id = ${id} AND deleted_at IS NULL AND tenant_id = ${tenantId}
-      LIMIT 1
-    `) as Array<{ id: number; name: string; slug: string; updated_at: Date }>;
-    const organization = rows[0];
-
-    if (!organization) {
-      throw new NotFoundError(`SCIM group ${id} not found.`);
-    }
-
-    return organization;
+    return await this.organizations.findForTenantOrThrow(id, currentTenantId());
   }
 
   async patchGroup(id: number, operations: ScimPatchOperation[]) {
@@ -286,6 +251,7 @@ class ScimService {
 function createScimService(dependencies: AppDependencies): ScimService {
   return new ScimService(
     resolveService(dependencies, userRepositoryToken),
+    new OrganizationRepository(),
     new OrganizationMemberRepository(),
   );
 }

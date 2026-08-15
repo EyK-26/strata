@@ -1,15 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { NotFoundError } from "../../src/core/errors/http";
 import { runWithTenant, type TenantContext } from "../../src/core/tenant/tenantContext";
+import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
 import { SCIM_SCHEMAS } from "../../src/domain/scim";
 import OrganizationMemberRepository from "../../src/modules/organization/memberRepository";
 import type {
   OrganizationMemberRecord,
   OrganizationMemberRole,
 } from "../../src/modules/organization/memberTypes";
+import OrganizationRepository from "../../src/modules/organization/repository";
+import type { OrganizationRecord } from "../../src/modules/organization/types";
 import ScimService from "../../src/modules/scim/service";
 import UserRepository from "../../src/modules/user/repository";
 import type { UserRecord } from "../../src/modules/user/types";
+import { defaultTestTenant } from "./testHelpers";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -34,18 +38,47 @@ class UserRepositoryMock {
     ...changes,
   });
   deleteById = async (id: number) => id === user.id;
+  countForTenant = async () => 1;
 
   constructor(overrides?: Partial<UserRepositoryMock>) {
     Object.assign(this, overrides);
   }
 }
 
+const organization: OrganizationRecord = {
+  id: 1,
+  tenant_id: 1,
+  name: "WorkHub",
+  slug: "workhub",
+  created_at: now,
+  updated_at: now,
+  deleted_at: null,
+};
+
+class OrganizationRepositoryMock {
+  listForTenant = async () => [organization];
+  countForTenant = async () => 1;
+  findForTenantOrThrow = async (id: number) => {
+    if (id !== organization.id) {
+      throw new NotFoundError(`SCIM group ${id} not found.`);
+    }
+
+    return organization;
+  };
+
+  constructor(overrides?: Partial<OrganizationRepositoryMock>) {
+    Object.assign(this, overrides);
+  }
+}
+
 function createMockedService(options?: {
   users?: Partial<UserRepositoryMock>;
+  organizations?: Partial<OrganizationRepositoryMock>;
   members?: Partial<OrganizationMemberRepositoryMock>;
 }) {
   return new ScimService(
     new UserRepositoryMock(options?.users) as unknown as UserRepository,
+    new OrganizationRepositoryMock(options?.organizations) as unknown as OrganizationRepository,
     new OrganizationMemberRepositoryMock(
       options?.members,
     ) as unknown as OrganizationMemberRepository,
@@ -105,9 +138,15 @@ describe("ScimService", () => {
   });
 
   test("lists users for the current tenant", async () => {
-    const service = new ScimService(new UserRepository(), new OrganizationMemberRepository());
+    const service = new ScimService(
+      new UserRepository(),
+      new OrganizationRepository(),
+      new OrganizationMemberRepository(),
+    );
 
-    const response = await runWithTenant(defaultTenant, async () => service.listUsers(1, 100));
+    const response = await runWithTenantDatabase(defaultTestTenant, async () =>
+      service.listUsers(1, 100),
+    );
 
     expect(response.schemas).toContain(SCIM_SCHEMAS.listResponse);
     expect(response.totalResults).toBeGreaterThan(0);
@@ -216,9 +255,13 @@ describe("ScimService", () => {
   });
 
   test("lists and gets SCIM groups", async () => {
-    const service = new ScimService(new UserRepository(), new OrganizationMemberRepository());
+    const service = new ScimService(
+      new UserRepository(),
+      new OrganizationRepository(),
+      new OrganizationMemberRepository(),
+    );
 
-    await runWithTenant(defaultTenant, async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
       const list = await service.listGroups(1, 100);
       expect(list.Resources.length).toBeGreaterThan(0);
 

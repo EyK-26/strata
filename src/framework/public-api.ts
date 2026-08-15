@@ -189,6 +189,7 @@ export {
   storage,
 } from "../core/facades/index.ts";
 export { createBodySizeLimitMiddleware } from "../core/http/bodySizeLimitMiddleware.ts";
+export { conditionalJsonResponse } from "../core/http/conditionalResponse.ts";
 export { readBunRequestCookie, readRequestCookie } from "../core/http/cookies.ts";
 export { createCorsMiddleware } from "../core/http/corsMiddleware.ts";
 export { createCsrfMiddleware } from "../core/http/csrfMiddleware.ts";
@@ -212,6 +213,8 @@ export { createFlashMiddleware } from "../core/http/flashMiddleware.ts";
 export { FormRequest } from "../core/http/formRequest.ts";
 export {
   applyMiddlewareToRoutes,
+  bindRouteModel,
+  buildRequestCacheKey,
   composeMiddleware,
   createAuthMiddleware,
   createAuthorizeMiddleware,
@@ -221,16 +224,19 @@ export {
   noContentResponse,
   paginatedResponse,
   parsePaginationQuery,
+  parsePositiveIntParam,
   requestIdMiddleware,
   securedBindRouteModel,
   securedBindRouteModelByKey,
   withErrorHandling,
   withMiddleware,
+  wrapRouteHandler,
 } from "../core/http/index.ts";
 export { createLoginThrottleMiddleware } from "../core/http/loginThrottleMiddleware.ts";
 export { createMemoryThrottleMiddleware } from "../core/http/memoryThrottleMiddleware.ts";
 export { createMetricsMiddleware, normalizeMetricPath } from "../core/http/metricsMiddleware.ts";
 export type { Middleware, RouteHandler } from "../core/http/middleware.ts";
+export { type ParsedUpload, parseMultipartUpload } from "../core/http/parseMultipartUpload.ts";
 export type { RequestMeta } from "../core/http/requestMetaContext.ts";
 export { currentRequestMeta, runWithRequestMeta } from "../core/http/requestMetaContext.ts";
 export { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware.ts";

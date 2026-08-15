@@ -83,6 +83,10 @@ class UserRepository extends BaseRepository<UserRecord, "id"> {
 
     return record ? this.decode(record as StoredUserRecord) : null;
   }
+
+  async countForTenant(tenantId = currentTenantId()): Promise<number> {
+    return await this.countWhere({ tenant_id: tenantId });
+  }
 }
 
 export default UserRepository;
