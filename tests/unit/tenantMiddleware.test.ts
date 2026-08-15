@@ -18,6 +18,24 @@ describe("createTenantMiddleware", () => {
     expect(response.headers.get("x-tenant-region")).toBeTruthy();
   });
 
+  test("defers SCIM routes to SCIM auth middleware for tenant scoping", async () => {
+    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+    let nextCalled = false;
+
+    const response = await middleware(
+      new Request("http://example.test/scim/v2/Users"),
+      async () => {
+        nextCalled = true;
+        return Response.json({ ok: true });
+      },
+    );
+
+    expect(nextCalled).toBe(true);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-tenant-id")).toBeNull();
+  });
+
   test("uses the authenticated user tenant and rejects mismatched headers", async () => {
     const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();

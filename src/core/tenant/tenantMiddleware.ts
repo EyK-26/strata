@@ -69,6 +69,12 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
 
 function createTenantMiddleware() {
   return async (request: Request, next: () => Promise<Response>) => {
+    const pathname = new URL(request.url).pathname;
+
+    if (pathname.startsWith("/scim/")) {
+      return await next();
+    }
+
     try {
       const tenant = await resolveTenantForRequest(request);
 
