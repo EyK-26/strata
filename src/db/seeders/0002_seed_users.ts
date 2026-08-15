@@ -43,7 +43,8 @@ const seeder: Seeder = {
       VALUES
         (1, 1, 'owner'),
         (1, 2, 'admin')
-      ON CONFLICT (organization_id, user_id) DO NOTHING
+      ON CONFLICT (organization_id, user_id) DO UPDATE SET
+        role = EXCLUDED.role
     `;
   },
 };
