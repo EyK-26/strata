@@ -5,6 +5,7 @@ import {
 } from "../../core/queue/createAppQueue";
 import { CORE_QUEUE_TOKEN, DEFAULT_QUEUE_DRIVER, REDIS_URL_CONFIG_KEY } from "../config";
 import type { ServiceProvider } from "../contracts";
+import { registerDefaultJobs } from "../queue/defaultJobs";
 
 const queueProvider: ServiceProvider = {
   name: "core.queue",
@@ -24,6 +25,7 @@ const queueProvider: ServiceProvider = {
         driver,
         config.get<string>(REDIS_URL_CONFIG_KEY) ?? process.env.REDIS_URL,
         failedJobs,
+        registerDefaultJobs,
       ),
     );
   },

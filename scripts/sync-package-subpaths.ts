@@ -97,6 +97,8 @@ const BOOTSTRAP_SUBPATHS = [
   "createWebRoutes",
   "http/securedRouteModelBinding",
   "httpKernel",
+  "membershipService",
+  "queue/defaultJobs",
   "providers",
   "providers/view",
 ] as const;

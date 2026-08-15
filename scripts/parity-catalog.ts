@@ -256,6 +256,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
     laravelSection: "Route Model Binding",
     laravelDocPath: "routing#route-model-binding",
     strataApis: ["securedBindRouteModel", "securedBindRouteModelByKey"],
+    bootstrapApis: ["securedBindRouteModel", "securedBindRouteModelByKey"],
     testGlobs: ["unit/securedRouteModelBinding.test.ts", "unit/securedRouteModelByKey.test.ts"],
     tier: "core",
   },
@@ -279,6 +280,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
       "createProductionQueue",
       "SyncQueue",
     ],
+    bootstrapApis: ["registerDefaultJobs"],
     testGlobs: [
       "unit/queue.test.ts",
       "unit/redisQueue.test.ts",

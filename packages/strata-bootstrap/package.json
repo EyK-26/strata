@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/bootstrap",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Strata application bootstrap — HttpKernel, DI, web session helpers",
   "type": "module",
   "license": "MIT",
@@ -50,6 +50,16 @@
       "import": "./dist/entries/httpKernel.js",
       "default": "./dist/entries/httpKernel.js"
     },
+    "./membershipService": {
+      "types": "./dist/bootstrap/membershipService.d.ts",
+      "import": "./dist/entries/membershipService.js",
+      "default": "./dist/entries/membershipService.js"
+    },
+    "./queue/defaultJobs": {
+      "types": "./dist/bootstrap/queue/defaultJobs.d.ts",
+      "import": "./dist/entries/queue/defaultJobs.js",
+      "default": "./dist/entries/queue/defaultJobs.js"
+    },
     "./providers": {
       "types": "./dist/bootstrap/providers/index.d.ts",
       "import": "./dist/entries/providers.js",
@@ -72,14 +82,14 @@
     "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta --external @getstrata/core",
     "build:types": "tsc -p tsconfig.types.json",
     "prepublishOnly": "bun run build",
-    "build:subpaths": "bun build entries/applicationRegistry.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/http/securedRouteModelBinding.ts entries/httpKernel.ts entries/providers.ts entries/providers/view.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core",
+    "build:subpaths": "bun build entries/applicationRegistry.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/http/securedRouteModelBinding.ts entries/httpKernel.ts entries/membershipService.ts entries/queue/defaultJobs.ts entries/providers.ts entries/providers/view.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core",
     "build:shims": "true"
   },
   "publishConfig": {
     "access": "public"
   },
   "peerDependencies": {
-    "@getstrata/core": "^0.5.16",
+    "@getstrata/core": "^0.5.17",
     "typescript": "^5.9.0"
   }
 }

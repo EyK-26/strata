@@ -1,6 +1,6 @@
 # Laravel parity audit
 
-Generated: 2026-08-15T19:12:19.699Z
+Generated: 2026-08-15T19:18:50.544Z
 
 ## Score
 
@@ -42,7 +42,7 @@ Target: ≥99% core coverage across all documented Laravel sections.
 | ✅ covered | [Eloquent: Factories](https://laravel.com/docs/eloquent-factories) | Exported via @getstrata/core/database/factory subpath | `unit/factory.test.ts` |
 | ✅ covered | [Authorization](https://laravel.com/docs/authorization) | Policy, PolicyGate, createAuthorizeMiddleware | `unit/policy.test.ts` |
 | ✅ covered | [Authentication](https://laravel.com/docs/authentication) | createAuthMiddleware, createRequireAuthMiddleware, currentAuthUser | `unit/authService.test.ts` |
-| ✅ covered | [Route Model Binding](https://laravel.com/docs/routing#route-model-binding) | securedBindRouteModel, securedBindRouteModelByKey | `unit/securedRouteModelBinding.test.ts` |
+| ✅ covered | [Route Model Binding](https://laravel.com/docs/routing#route-model-binding) | securedBindRouteModel, securedBindRouteModelByKey, @getstrata/bootstrap:securedBindRouteModel… | `unit/securedRouteModelBinding.test.ts` |
 | ✅ covered | [Events](https://laravel.com/docs/events) | EventBus, events | `unit/events.test.ts` |
 | ✅ covered | [Queues](https://laravel.com/docs/queues) | Job, RedisQueue, QueueWorker… | `unit/queue.test.ts` |
 | ✅ covered | [Queues: Dealing With Failed Jobs](https://laravel.com/docs/queues#dealing-with-failed-jobs) | FailedJobService, FailedJobRepository, createFailedJobService | `unit/failedJobService.test.ts` |

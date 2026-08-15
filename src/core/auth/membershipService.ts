@@ -1,4 +1,3 @@
-import { resolveApplicationDependencies } from "../../bootstrap/applicationRegistry";
 import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
 import { ForbiddenError } from "../errors/http";
 import { hasMinimumOrgRole, isGlobalAdmin, resolveUserId } from "./accessControl";
@@ -82,16 +81,6 @@ class MembershipService {
   }
 }
 
-function resolveMembershipService(): MembershipService {
-  const dependencies = resolveApplicationDependencies();
-
-  if (dependencies.container.has("core.membership")) {
-    return dependencies.container.resolve<MembershipService>("core.membership");
-  }
-
-  return new MembershipService();
-}
-
 export type { MembershipRepositoryLike };
 export default MembershipService;
-export { resolveMembershipService };
+export { resolveMembershipService } from "../../bootstrap/membershipService.ts";

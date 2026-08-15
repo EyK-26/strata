@@ -2,10 +2,19 @@
  * @getstrata/bootstrap — application shell for Strata sibling apps.
  */
 
-export { resolveApplicationQueue, setActiveApplicationContext } from "@getstrata/core";
 export { scheduleRunCommand } from "../cli/commands/scheduleRun.ts";
 export type { ScheduledTask } from "../core/scheduler/schedule.ts";
 export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
+export {
+  resolveApplicationAuth,
+  resolveApplicationCache,
+  resolveApplicationConfig,
+  resolveApplicationDependencies,
+  resolveApplicationLogger,
+  resolveApplicationPolicyGate,
+  resolveApplicationQueue,
+  setActiveApplicationContext,
+} from "./applicationRegistry.ts";
 export {
   APP_PORT_CONFIG_KEY,
   CORE_AUTH_TOKEN,
@@ -45,8 +54,10 @@ export {
   securedBindRouteModelByKey,
 } from "./http/securedRouteModelBinding.ts";
 export { createHttpKernel, type HttpKernel, type MiddlewareGroupName } from "./httpKernel.ts";
+export { resolveMembershipService } from "./membershipService.ts";
 export { prefixRouteMap } from "./prefixRouteMap.ts";
 export { coreProviders } from "./providers/index.ts";
+export { registerDefaultJobs } from "./queue/defaultJobs.ts";
 
 export {
   CookieSessionStore,

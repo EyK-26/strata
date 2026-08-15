@@ -7,8 +7,8 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 
 const EXPECTED: Record<string, string> = {
-  "@getstrata/core": "0.5.16",
-  "@getstrata/bootstrap": "0.2.8",
+  "@getstrata/core": "0.5.17",
+  "@getstrata/bootstrap": "0.2.9",
   "@getstrata/cli": "0.1.0",
   "@getstrata/starter": "0.1.0",
 };
