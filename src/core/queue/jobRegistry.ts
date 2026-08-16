@@ -3,8 +3,6 @@ import type { Job } from "./index";
 type JobFactory = () => Job;
 
 class JobRegistry {
-  constructor() {}
-
   private readonly factories = new Map<string, JobFactory>();
   private readonly instances = new WeakMap<Job, string>();
 
@@ -36,6 +34,20 @@ class JobRegistry {
   }
 }
 
-const jobRegistry = new JobRegistry();
+const JOB_REGISTRY_KEY = Symbol.for("@getstrata/jobRegistry");
+
+function readSharedJobRegistry(): JobRegistry {
+  const globalRegistry = (globalThis as Record<symbol, JobRegistry | undefined>)[JOB_REGISTRY_KEY];
+
+  if (globalRegistry) {
+    return globalRegistry;
+  }
+
+  const registry = new JobRegistry();
+  (globalThis as Record<symbol, JobRegistry>)[JOB_REGISTRY_KEY] = registry;
+  return registry;
+}
+
+const jobRegistry = readSharedJobRegistry();
 
 export { JobRegistry, jobRegistry };

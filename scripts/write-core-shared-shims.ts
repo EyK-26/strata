@@ -20,6 +20,7 @@ const CORE_SHARED_FROM_INDEX = [
   "tenant/tenantContext",
   "tenant/tenantMiddleware",
   "runtime/applicationRegistry",
+  "queue/jobRegistry",
   "tracing/traceContext",
 ] as const;
 

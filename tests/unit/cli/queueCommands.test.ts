@@ -148,15 +148,13 @@ describe("queueRetryCommand", () => {
 
     let runCalled = false;
 
+    const { jobRegistry } = await import("../../../src/core/queue/jobRegistry");
+    jobRegistry.register("test.retry", () => new RetryJob());
+
     mock.module("../../../src/core/queue/createAppQueue", () => ({
       createFailedJobService: () => ({
         retry: async () => failedJob,
       }),
-    }));
-    mock.module("../../../src/core/queue/jobRegistry", () => ({
-      jobRegistry: {
-        create: () => new RetryJob(),
-      },
     }));
     mock.module("../../../src/core/queue/jobRunner", () => ({
       runQueueJob: async () => {
@@ -188,11 +186,6 @@ describe("queueRetryCommand", () => {
           failed_at: new Date(),
         }),
       }),
-    }));
-    mock.module("../../../src/core/queue/jobRegistry", () => ({
-      jobRegistry: {
-        create: () => undefined,
-      },
     }));
 
     const { queueRetryCommand } = await import("../../../src/cli/commands/queueFailed");

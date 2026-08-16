@@ -89,6 +89,7 @@ const CORE_SHARED_FROM_INDEX = new Set<string>([
   "tenant/tenantContext",
   "tenant/tenantMiddleware",
   "runtime/applicationRegistry",
+  "queue/jobRegistry",
   "tracing/traceContext",
 ]);
 
