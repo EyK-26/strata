@@ -1,7 +1,11 @@
-import { describe, expect, test } from "bun:test";
-import { discoverModules } from "../../src/bootstrap/discoverModules";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { discoverModules, ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
 
 describe("discoverModules", () => {
+  beforeAll(async () => {
+    await ensureModulesLoaded();
+  });
+
   test("discovers WorkHub modules in route priority order", () => {
     const modules = discoverModules();
     const orders = modules.map((module) => module.order ?? 100);
