@@ -5,11 +5,11 @@ import {
   CORE_QUEUE_TOKEN,
 } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { createRoutes } from "@getstrata/bootstrap/createRoutes";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
-import { createRoutes } from "../../src/bootstrap/createRoutes";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { PolicyGate } from "@getstrata/core/auth/policy";
 import { appConfig } from "../../src/config/app";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { PolicyGate } from "../../src/core/auth/policy";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";

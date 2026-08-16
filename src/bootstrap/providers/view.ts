@@ -1,6 +1,6 @@
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { DEFAULT_VIEWS_DIRECTORY, EtaViewEngine, resolveWebLayoutData } from "@getstrata/core/view";
 import { isViewsEnabled } from "../../config/frontend";
-import { currentRequestMeta } from "../../core/http/requestMetaContext";
-import { DEFAULT_VIEWS_DIRECTORY, EtaViewEngine, resolveWebLayoutData } from "../../core/view";
 import type { ServiceProvider } from "../contracts";
 
 const CORE_VIEW_TOKEN = "core.view";

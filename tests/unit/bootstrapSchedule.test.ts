@@ -13,7 +13,7 @@ describe("bootstrap schedule", () => {
     let exportShouldFail = false;
     const previousSiemExport = process.env.FEATURE_SIEM_EXPORT;
 
-    mock.module("../../src/core/audit/exportAuditLogs", () => ({
+    mock.module("@getstrata/core/audit/exportAuditLogs", () => ({
       exportPendingAuditLogs: async () => {
         if (exportShouldFail) {
           throw new Error("export failed");
@@ -23,7 +23,7 @@ describe("bootstrap schedule", () => {
       },
     }));
 
-    mock.module("../../src/core/logging/logger", () => ({
+    mock.module("@getstrata/core/logging/logger", () => ({
       appLogger: {
         debug: (message: string) => {
           debugLogs.push(message);
@@ -38,9 +38,9 @@ describe("bootstrap schedule", () => {
     }));
 
     try {
-      await import("../../src/bootstrap/schedule");
+      await import("@getstrata/bootstrap/schedule");
 
-      const { appSchedule } = await import("../../src/core/scheduler/schedule");
+      const { appSchedule } = await import("@getstrata/core/scheduler/schedule");
       const tasks = appSchedule.dueTasks();
       const heartbeat = tasks.find((task) => task.name === "heartbeat");
       const auditExport = tasks.find((task) => task.name === "audit-export");

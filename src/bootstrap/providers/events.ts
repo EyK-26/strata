@@ -1,4 +1,4 @@
-import { eventBus } from "../../core/events";
+import { eventBus } from "@getstrata/core/events";
 import { CORE_EVENT_BUS_TOKEN } from "../config";
 import type { ServiceProvider } from "../contracts";
 

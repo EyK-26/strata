@@ -1,4 +1,4 @@
-import { PolicyGate } from "../../core/auth/policy";
+import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CORE_POLICY_GATE_TOKEN } from "../config";
 import type { ServiceProvider } from "../contracts";
 

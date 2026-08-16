@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { readRequestCookie } from "../../core/http/cookies.ts";
+import { readRequestCookie } from "@getstrata/core/http/cookies";
 
 export interface SessionUser {
   id: number;

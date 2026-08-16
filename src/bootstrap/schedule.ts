@@ -22,3 +22,5 @@ appSchedule.command("* * * * *", "audit-export", async () => {
     appLogger.error("Audit export failed.", { error: String(error) });
   }
 });
+
+export { appSchedule };

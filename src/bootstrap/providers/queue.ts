@@ -2,7 +2,7 @@ import {
   createAppQueue,
   createFailedJobService,
   FAILED_JOB_SERVICE_TOKEN,
-} from "../../core/queue/createAppQueue";
+} from "@getstrata/core/queue/createAppQueue";
 import { CORE_QUEUE_TOKEN, DEFAULT_QUEUE_DRIVER, REDIS_URL_CONFIG_KEY } from "../config";
 import type { ServiceProvider } from "../contracts";
 import { registerDefaultJobs } from "../queue/defaultJobs";

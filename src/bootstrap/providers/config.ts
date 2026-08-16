@@ -1,7 +1,7 @@
+import { validateEnv } from "@getstrata/core/config/envSchema";
 import { appConfig } from "../../config/app";
 import { authConfig } from "../../config/auth";
 import { queueConfig } from "../../config/queue";
-import { validateEnv } from "../../core/config/envSchema";
 import {
   APP_PORT_CONFIG_KEY,
   CACHE_DRIVER_CONFIG_KEY,

@@ -1,5 +1,5 @@
-import type { CacheDriver } from "../../core/cache/createCacheStore";
-import { createCacheStore } from "../../core/cache/createCacheStore";
+import type { CacheDriver } from "@getstrata/core/cache/createCacheStore";
+import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
 import CacheRepository from "../../core/cache/repository";
 import {
   CACHE_DRIVER_CONFIG_KEY,

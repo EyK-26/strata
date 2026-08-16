@@ -1,7 +1,7 @@
 export {
   type CsrfProtectionOptions,
   createCsrfProtection,
-} from "../../core/http/csrfProtection.ts";
+} from "@getstrata/core/http/csrfProtection";
 
 export interface ParsedForm {
   fields: Record<string, string>;

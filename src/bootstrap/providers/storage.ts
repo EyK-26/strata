@@ -1,4 +1,4 @@
-import { createStorageDriver, StorageManager } from "../../core/storage/storage";
+import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import type { ServiceProvider } from "../contracts";
 
 const storageProvider: ServiceProvider = {

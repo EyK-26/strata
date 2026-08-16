@@ -1,5 +1,5 @@
-export type { RouteModelAuthorization } from "../../core/http/securedRouteModelBinding.ts";
+export type { RouteModelAuthorization } from "@getstrata/core/http/securedRouteModelBinding";
 export {
   securedBindRouteModel,
   securedBindRouteModelByKey,
-} from "../../core/http/securedRouteModelBinding.ts";
+} from "@getstrata/core/http/securedRouteModelBinding";
