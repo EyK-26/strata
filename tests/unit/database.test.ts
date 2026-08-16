@@ -10,11 +10,10 @@ import {
   buildSoftDeleteByIdQuery,
   buildUpdateQuery,
   buildWhereClause,
-  defineTable,
-  hasMany,
-  indexHasManyRelation,
   quoteIdentifier,
-} from "@getstrata/core/database";
+} from "@getstrata/core/database/query";
+import { hasMany, indexHasManyRelation } from "@getstrata/core/database/relationships";
+import { defineTable } from "@getstrata/core/database/table";
 
 type Project = {
   id: number;

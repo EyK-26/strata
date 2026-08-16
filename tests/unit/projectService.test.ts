@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { membershipContext } from "@getstrata/core/auth/membershipContext";
-import type { DatabaseConnection } from "@getstrata/core/database";
+import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { NotFoundError } from "@getstrata/core/errors/http";
 import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import type OrganizationRepository from "../../src/modules/organization/repository";

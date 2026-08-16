@@ -4,11 +4,11 @@ import {
   buildCountQuery,
   buildJoinClause,
   buildSelectQuery,
-  defineTable,
   parseQualifiedColumn,
   resolveQualifiedColumn,
-} from "@getstrata/core/database";
-import { WhereBuilder } from "@getstrata/core/database/whereBuilder.ts";
+} from "@getstrata/core/database/query";
+import { defineTable } from "@getstrata/core/database/table";
+import { WhereBuilder } from "@getstrata/core/database/whereBuilder";
 
 type Article = {
   id: number;

@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  BaseRepository,
-  belongsTo,
-  type DatabaseConnection,
-  defineTable,
-  hasMany,
-} from "@getstrata/core/database";
+import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { belongsTo, hasMany } from "@getstrata/core/database/relationships";
+import { defineTable } from "@getstrata/core/database/table";
 import { NotFoundError } from "@getstrata/core/errors/http";
 import CommentRepository from "../../src/modules/comment/repository";
 import type { CommentRecord } from "../../src/modules/comment/types";

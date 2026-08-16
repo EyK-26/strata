@@ -9,13 +9,9 @@
  * Verified by: scripts/verify-core-shared-subpaths.ts
  */
 export const CORE_SHARED_SUBPATHS = [
-  "auth/accessControl",
   "auth/authContext",
   "auth/guard",
   "auth/membershipContext",
-  "auth/membershipScope",
-  "auth/membershipService",
-  "auth/policy",
   "database",
   "database/baseRepository",
   "database/bindConnection",
@@ -42,11 +38,16 @@ export type CoreSharedSubpath = (typeof CORE_SHARED_SUBPATHS)[number];
 
 export const CORE_SHARED_SUBPATH_SET = new Set<string>(CORE_SHARED_SUBPATHS);
 
-/** CLI flags for bun build so bundled subpaths resolve shared modules through npm exports. */
-export function coreSharedSubpathExternalFlags(): string {
+/** CLI flags for bun build so bundled subpaths resolve package imports through npm exports. */
+export function coreSubpathExternalFlags(subpaths: readonly string[]): string {
   const flags = ["--external @getstrata/core"];
-  for (const subpath of CORE_SHARED_SUBPATHS) {
+  for (const subpath of subpaths) {
     flags.push(`--external @getstrata/core/${subpath}`);
   }
   return flags.join(" ");
+}
+
+/** @deprecated Use coreSubpathExternalFlags(CORE_SUBPATHS) from sync-package-subpaths. */
+export function coreSharedSubpathExternalFlags(): string {
+  return coreSubpathExternalFlags(CORE_SHARED_SUBPATHS);
 }

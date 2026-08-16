@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  BaseRepository,
-  belongsTo,
-  type DatabaseConnection,
-  defineTable,
-  hasMany,
-} from "@getstrata/core/database";
+import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { belongsTo, hasMany } from "@getstrata/core/database/relationships";
+import { defineTable } from "@getstrata/core/database/table";
 
 type Squad = { id: number; label: string };
 type Member = { id: number; name: string; squad_id: number };

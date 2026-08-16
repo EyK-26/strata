@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BaseRepository } from "@getstrata/core/database/baseRepository.ts";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import * as core from "../../src/framework/public-api.ts";
 
 describe("@getstrata/core public API", () => {

@@ -49,7 +49,7 @@ bun run verify:shared-subpaths  # after build: confirm singleton shims
 
 ## Subpath imports
 
-`@getstrata/core` publishes **139+ subpaths** (for example `@getstrata/core/http/authMiddleware`,
+`@getstrata/core` publishes **143+ subpaths** (for example `@getstrata/core/http/authMiddleware`,
 `@getstrata/core/database/migrations`). Prefer subpaths over the root import in apps, bootstrap, and tests.
 
 Some subpaths **re-export the main bundle** so singleton state stays shared (database pool binding,

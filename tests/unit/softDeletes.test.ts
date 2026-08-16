@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  BaseRepository,
-  buildSelectQuery,
-  type DatabaseConnection,
-  defineTable,
-} from "@getstrata/core/database";
+import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { buildSelectQuery } from "@getstrata/core/database/query";
+import { defineTable } from "@getstrata/core/database/table";
 import { eventBus } from "@getstrata/core/events";
 
 type SoftRecord = {

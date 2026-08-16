@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  BaseRepository,
-  type DatabaseConnection,
-  defineTable,
-  RepositoryQuery,
-} from "@getstrata/core/database";
+import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { RepositoryQuery } from "@getstrata/core/database/repositoryQuery";
+import { defineTable } from "@getstrata/core/database/table";
 
 type Post = {
   id: number;

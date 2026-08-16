@@ -5,7 +5,7 @@ import {
   parseOptionalBooleanQueryParam,
   parseOptionalEnumQueryParam,
   parseOptionalPositiveIntQueryParam,
-} from "@getstrata/core/http";
+} from "@getstrata/core/http/validation";
 import {
   parseOrganizationIdParams,
   parseOrganizationListQuery,

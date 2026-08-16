@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { DatabaseConnection } from "@getstrata/core/database";
+import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { restoreDefaultDatabaseConnection } from "./testHelpers";
 
 describe("ensureDatabaseConnection", () => {

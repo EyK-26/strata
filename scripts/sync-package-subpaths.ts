@@ -6,7 +6,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import { CORE_SHARED_SUBPATH_SET, coreSharedSubpathExternalFlags } from "./core-shared-subpaths.ts";
+import { CORE_SHARED_SUBPATH_SET, coreSubpathExternalFlags } from "./core-shared-subpaths.ts";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -59,12 +59,14 @@ const CORE_SUBPATHS = [
   "database/query",
   "database/relationships",
   "database/repositoryConnection",
+  "database/repositoryQuery",
   "database/seeders",
   "database/seeders/types",
   "database/schema",
   "database/table",
   "database/transaction",
   "database/types",
+  "database/whereBuilder",
   "errors/http",
   "events",
   "facades",
@@ -105,6 +107,7 @@ const CORE_SUBPATHS = [
   "http/webErrorResponse",
   "http/webFormRequest",
   "http/throttleMiddleware",
+  "http/validation",
   "jobs/dispatchWebhookJob",
   "jobs/invalidateCacheTagsJob",
   "lifecycle/gracefulShutdown",
@@ -330,7 +333,7 @@ async function updatePackageJson(
     ? "bun ../../scripts/write-core-shared-shims.ts"
     : "true";
   const coreExternal = packageDir.includes("strata-core")
-    ? ` ${coreSharedSubpathExternalFlags()}`
+    ? ` ${coreSubpathExternalFlags(CORE_SUBPATHS)}`
     : "";
   const bootstrapExternal = packageDir.includes("bootstrap") ? " --external @getstrata/core" : "";
   packageJson.scripts["build:subpaths"] = relativeEntries
