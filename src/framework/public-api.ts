@@ -3,16 +3,6 @@
  * Import from `@getstrata/core` (workspace) or `src/framework/public-api`.
  */
 
-export {
-  resolveApplicationAuth,
-  resolveApplicationCache,
-  resolveApplicationConfig,
-  resolveApplicationDependencies,
-  resolveApplicationLogger,
-  resolveApplicationPolicyGate,
-  resolveApplicationQueue,
-  setActiveApplicationContext,
-} from "../bootstrap/applicationRegistry.ts";
 export type { ServiceProvider } from "../bootstrap/contracts.ts";
 export {
   ConfigStore,
@@ -326,6 +316,16 @@ export {
 } from "../core/queue/publicQueue.ts";
 export type { QueueMetricsSnapshot } from "../core/queue/queueMetrics.ts";
 export { collectQueueMetrics } from "../core/queue/queueMetrics.ts";
+export {
+  resolveApplicationAuth,
+  resolveApplicationCache,
+  resolveApplicationConfig,
+  resolveApplicationDependencies,
+  resolveApplicationLogger,
+  resolveApplicationPolicyGate,
+  resolveApplicationQueue,
+  setActiveApplicationContext,
+} from "../core/runtime/applicationRegistry.ts";
 export type { ScheduledTask } from "../core/scheduler/schedule.ts";
 export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
 export { guestCanViewResource, isPublicReadsEnabled } from "../core/security/publicReads.ts";

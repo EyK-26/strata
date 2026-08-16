@@ -55,6 +55,7 @@ const CORE_SUBPATHS = [
   "queue/queueMetrics",
   "queue/publicQueue",
   "queue/types",
+  "runtime/applicationRegistry",
   "security/oauthState",
   "security/publicReads",
   "security/safeUrl",
@@ -86,6 +87,7 @@ const CORE_SHARED_FROM_INDEX = new Set<string>([
   "security/securityEvents",
   "tenant/tenantContext",
   "tenant/tenantMiddleware",
+  "runtime/applicationRegistry",
   "tracing/traceContext",
 ]);
 

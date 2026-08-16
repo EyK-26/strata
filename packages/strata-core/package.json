@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "0.5.20",
+  "version": "0.5.21",
   "description": "Strata — Laravel-inspired Bun framework public API",
   "type": "module",
   "license": "MIT",
@@ -239,6 +239,11 @@
       "types": "./dist/core/queue/types.d.ts",
       "import": "./dist/entries/queue/types.js",
       "default": "./dist/entries/queue/types.js"
+    },
+    "./runtime/applicationRegistry": {
+      "types": "./dist/core/runtime/applicationRegistry.d.ts",
+      "import": "./dist/entries/runtime/applicationRegistry.js",
+      "default": "./dist/entries/runtime/applicationRegistry.js"
     },
     "./security/oauthState": {
       "types": "./dist/core/security/oauthState.d.ts",

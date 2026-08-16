@@ -1,3 +1,5 @@
+import { eventBus } from "../events";
+import { mailer } from "../mail/mailer";
 import {
   resolveApplicationAuth,
   resolveApplicationCache,
@@ -5,9 +7,7 @@ import {
   resolveApplicationLogger,
   resolveApplicationPolicyGate,
   resolveApplicationQueue,
-} from "../../bootstrap/applicationRegistry";
-import { eventBus } from "../events";
-import { mailer } from "../mail/mailer";
+} from "../runtime/applicationRegistry";
 import { storage } from "../storage/storage";
 
 function cache() {
