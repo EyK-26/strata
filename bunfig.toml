@@ -32,6 +32,8 @@ coveragePathIgnorePatterns = [
   "src/core/runtime/applicationRegistry.ts",
   "src/core/queue/jobRegistry.ts",
   "src/core/contracts/applicationContext.ts",
+  "src/core/contracts/container.ts",
+  "src/core/contracts/di.ts",
   "src/core/contracts/serviceTokens.ts",
   "src/core/tracing/**",
 

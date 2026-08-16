@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "0.5.25",
+  "version": "0.5.26",
   "description": "Strata — Laravel-inspired Bun framework public API",
   "type": "module",
   "license": "MIT",
@@ -99,6 +99,16 @@
       "types": "./dist/core/contracts/serviceTokens.d.ts",
       "import": "./dist/entries/contracts/serviceTokens.js",
       "default": "./dist/entries/contracts/serviceTokens.js"
+    },
+    "./contracts/container": {
+      "types": "./dist/core/contracts/container.d.ts",
+      "import": "./dist/entries/contracts/container.js",
+      "default": "./dist/entries/contracts/container.js"
+    },
+    "./contracts/di": {
+      "types": "./dist/core/contracts/di.d.ts",
+      "import": "./dist/entries/contracts/di.js",
+      "default": "./dist/entries/contracts/di.js"
     },
     "./crypto/fieldEncryption": {
       "types": "./dist/core/crypto/fieldEncryption.d.ts",
@@ -327,7 +337,7 @@
     "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta",
     "build:types": "tsc -p tsconfig.types.json",
     "prepublishOnly": "bun run build && bun ../../scripts/prepare-core-package-publish.ts",
-    "build:subpaths": "bun build entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/sessionCookie.ts entries/auth/tokenHash.ts entries/cache/tags.ts entries/cache/createCacheStore.ts entries/contracts/serviceTokens.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database/factory.ts entries/database/seeders.ts entries/database/types.ts entries/errors/http.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/parseFormBody.ts entries/http/resources.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/lifecycle/gracefulShutdown.ts entries/metrics/prometheus.ts entries/pagination.ts entries/queue/createAppQueue.ts entries/queue/failedJobService.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/types.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeUrl.ts entries/security/stripeWebhook.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta",
+    "build:subpaths": "bun build entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/sessionCookie.ts entries/auth/tokenHash.ts entries/cache/tags.ts entries/cache/createCacheStore.ts entries/contracts/serviceTokens.ts entries/contracts/container.ts entries/contracts/di.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database/factory.ts entries/database/seeders.ts entries/database/types.ts entries/errors/http.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/parseFormBody.ts entries/http/resources.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/lifecycle/gracefulShutdown.ts entries/metrics/prometheus.ts entries/pagination.ts entries/queue/createAppQueue.ts entries/queue/failedJobService.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/types.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeUrl.ts entries/security/stripeWebhook.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta",
     "build:shims": "bun ../../scripts/write-core-shared-shims.ts"
   },
   "publishConfig": {

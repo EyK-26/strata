@@ -3,12 +3,6 @@
  * Import from `@getstrata/core` (workspace) or `src/framework/public-api`.
  */
 
-export type { ServiceProvider } from "../bootstrap/contracts.ts";
-export {
-  ConfigStore,
-  resolveService,
-  ServiceContainer,
-} from "../bootstrap/contracts.ts";
 export type {
   AdminColumn,
   AdminColumnType,
@@ -61,6 +55,9 @@ export {
 } from "../core/cache/createCacheStore.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
 export { CACHE_TAGS } from "../core/cache/tags.ts";
+export { ConfigStore, ServiceContainer } from "../core/contracts/container.ts";
+export type { ServiceProvider } from "../core/contracts/di.ts";
+export { resolveService } from "../core/contracts/di.ts";
 export type { DatabaseConnection } from "../core/database/baseRepository.ts";
 export { default as BaseRepository } from "../core/database/baseRepository.ts";
 export { bindDatabaseConnection } from "../core/database/bindConnection.ts";

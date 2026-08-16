@@ -1,4 +1,4 @@
-import { createWebServer } from "@getstrata/bootstrap";
+import { createWebServer } from "@getstrata/bootstrap/web/server";
 import "./preload.ts";
 import { migrate } from "../db/migrate.ts";
 import { Router } from "../lib/router.ts";
