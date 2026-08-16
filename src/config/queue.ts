@@ -1,4 +1,4 @@
-import { DEFAULT_QUEUE_DRIVER } from "../bootstrap/config";
+import { DEFAULT_QUEUE_DRIVER } from "../bootstrap/config.ts";
 
 interface QueueConfig {
   driver: "sync" | "async" | "redis";

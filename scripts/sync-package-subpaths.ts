@@ -95,6 +95,7 @@ const CORE_SHARED_FROM_INDEX = new Set<string>([
 
 const BOOTSTRAP_SUBPATHS = [
   "applicationRegistry",
+  "cache/modelCacheTags",
   "config",
   "context",
   "contracts",
@@ -105,6 +106,11 @@ const BOOTSTRAP_SUBPATHS = [
   "queue/defaultJobs",
   "providers",
   "providers/view",
+  "web/forms",
+  "web/routing",
+  "web/server",
+  "web/session",
+  "web/slug",
 ] as const;
 
 function resolveCoreTypesPath(subpath: string): string {
