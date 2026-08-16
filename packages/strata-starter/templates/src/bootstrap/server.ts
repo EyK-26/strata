@@ -1,23 +1,10 @@
-import { createWebServer } from "@getstrata/bootstrap/web/server";
 import "./preload.ts";
-import { migrate } from "../db/migrate.ts";
-import { Router } from "../lib/router.ts";
-import { registerRoutes } from "../routes.ts";
-import { loadConfig } from "./config.ts";
+import { bootstrapApp, createAppServer } from "./createApp.ts";
 import { closeDatabase, pingDatabase } from "./database.ts";
 
-const config = loadConfig();
+const { routes, context, config } = await bootstrapApp();
 
-await migrate();
-
-const router = new Router();
-registerRoutes(router);
-
-const server = createWebServer({
-  port: config.port,
-  publicDir: "./public",
-  handle: (request) => router.handle(request),
-});
+const server = createAppServer(routes, config.port, context.dependencies);
 
 console.log(`${config.appUrl} (port ${server.port})`);
 

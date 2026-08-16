@@ -1,23 +1,26 @@
+import { createRouteKernel } from "@getstrata/bootstrap/web/routing";
 import { withErrorHandling } from "@getstrata/core";
+import type { AppDependencies, AppRouteMap } from "@getstrata/core/contracts/di";
 import { pingDatabase } from "./bootstrap/database.ts";
-import type { Router } from "./lib/router.ts";
 import { plainText, renderPage } from "./lib/view.ts";
 
-export function registerRoutes(router: Router) {
-  router.get("/", async () =>
-    renderPage("home.eta", {
-      layout: {
-        title: "Home",
-        description: "A new Strata application",
-      },
-    }),
-  );
+export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
+  const kernel = createRouteKernel(dependencies);
 
-  router.get(
-    "/health",
-    withErrorHandling(async () => {
-      const dbOk = await pingDatabase();
-      return plainText(dbOk ? "ok" : "degraded");
-    }),
-  );
+  return {
+    "/": kernel.wrapWeb(async () =>
+      renderPage("home.eta", {
+        layout: {
+          title: "Home",
+          description: "A new Strata application",
+        },
+      }),
+    ),
+    "/health": kernel.wrapWeb(
+      withErrorHandling(async () => {
+        const dbOk = await pingDatabase();
+        return plainText(dbOk ? "ok" : "degraded");
+      }),
+    ),
+  };
 }
