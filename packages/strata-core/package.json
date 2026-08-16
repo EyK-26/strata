@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "0.5.34",
+  "version": "0.5.35",
   "description": "Strata — Laravel-inspired Bun framework public API",
   "type": "module",
   "license": "MIT",
@@ -85,6 +85,11 @@
       "import": "./dist/entries/auth/tokenHash.js",
       "default": "./dist/entries/auth/tokenHash.js"
     },
+    "./audit/exportAuditLogs": {
+      "types": "./dist/core/audit/exportAuditLogs.d.ts",
+      "import": "./dist/entries/audit/exportAuditLogs.js",
+      "default": "./dist/entries/audit/exportAuditLogs.js"
+    },
     "./cache/tags": {
       "types": "./dist/core/cache/tags.d.ts",
       "import": "./dist/entries/cache/tags.js",
@@ -149,6 +154,11 @@
       "types": "./dist/core/errors/http.d.ts",
       "import": "./dist/entries/errors/http.js",
       "default": "./dist/entries/errors/http.js"
+    },
+    "./events": {
+      "types": "./dist/core/events/index.d.ts",
+      "import": "./dist/entries/events.js",
+      "default": "./dist/entries/events.js"
     },
     "./http": {
       "types": "./dist/core/http/index.d.ts",
@@ -215,10 +225,20 @@
       "import": "./dist/entries/jobs/dispatchWebhookJob.js",
       "default": "./dist/entries/jobs/dispatchWebhookJob.js"
     },
+    "./jobs/invalidateCacheTagsJob": {
+      "types": "./dist/core/jobs/invalidateCacheTagsJob.d.ts",
+      "import": "./dist/entries/jobs/invalidateCacheTagsJob.js",
+      "default": "./dist/entries/jobs/invalidateCacheTagsJob.js"
+    },
     "./lifecycle/gracefulShutdown": {
       "types": "./dist/core/lifecycle/gracefulShutdown.d.ts",
       "import": "./dist/entries/lifecycle/gracefulShutdown.js",
       "default": "./dist/entries/lifecycle/gracefulShutdown.js"
+    },
+    "./logging/logger": {
+      "types": "./dist/core/logging/logger.d.ts",
+      "import": "./dist/entries/logging/logger.js",
+      "default": "./dist/entries/logging/logger.js"
     },
     "./metrics/prometheus": {
       "types": "./dist/core/metrics/prometheus.d.ts",
@@ -234,6 +254,11 @@
       "types": "./dist/core/pagination/index.d.ts",
       "import": "./dist/entries/pagination.js",
       "default": "./dist/entries/pagination.js"
+    },
+    "./queue": {
+      "types": "./dist/core/queue/index.d.ts",
+      "import": "./dist/entries/queue.js",
+      "default": "./dist/entries/queue.js"
     },
     "./queue/createAppQueue": {
       "types": "./dist/core/queue/createAppQueue.d.ts",
@@ -357,7 +382,7 @@
     "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta",
     "build:types": "tsc -p tsconfig.types.json",
     "prepublishOnly": "bun run build && bun ../../scripts/prepare-core-package-publish.ts",
-    "build:subpaths": "bun build entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/sessionCookie.ts entries/auth/tokenHash.ts entries/cache/tags.ts entries/cache/createCacheStore.ts entries/config/envSchema.ts entries/contracts/serviceTokens.ts entries/contracts/container.ts entries/contracts/di.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database/factory.ts entries/database/seeders.ts entries/database/types.ts entries/errors/http.ts entries/http/bodySizeLimitMiddleware.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/parseFormBody.ts entries/http/resources.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/lifecycle/gracefulShutdown.ts entries/metrics/prometheus.ts entries/openapi/registeredRoute.ts entries/pagination.ts entries/queue/createAppQueue.ts entries/queue/failedJobService.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/types.ts entries/scheduler/schedule.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeUrl.ts entries/security/stripeWebhook.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta",
+    "build:subpaths": "bun build entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/sessionCookie.ts entries/auth/tokenHash.ts entries/audit/exportAuditLogs.ts entries/cache/tags.ts entries/cache/createCacheStore.ts entries/config/envSchema.ts entries/contracts/serviceTokens.ts entries/contracts/container.ts entries/contracts/di.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database/factory.ts entries/database/seeders.ts entries/database/types.ts entries/errors/http.ts entries/http/bodySizeLimitMiddleware.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/parseFormBody.ts entries/http/resources.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/jobs/invalidateCacheTagsJob.ts entries/lifecycle/gracefulShutdown.ts entries/logging/logger.ts entries/metrics/prometheus.ts entries/openapi/registeredRoute.ts entries/pagination.ts entries/queue.ts entries/queue/createAppQueue.ts entries/queue/failedJobService.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/types.ts entries/scheduler/schedule.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeUrl.ts entries/security/stripeWebhook.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta",
     "build:shims": "bun ../../scripts/write-core-shared-shims.ts"
   },
   "publishConfig": {

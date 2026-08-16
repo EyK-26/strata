@@ -24,6 +24,7 @@ const CORE_SUBPATHS = [
   "auth/policy",
   "auth/sessionCookie",
   "auth/tokenHash",
+  "audit/exportAuditLogs",
   "cache/tags",
   "cache/createCacheStore",
   "config/envSchema",
@@ -37,6 +38,7 @@ const CORE_SUBPATHS = [
   "database/seeders",
   "database/types",
   "errors/http",
+  "events",
   "http",
   "http/bodySizeLimitMiddleware",
   "http/contentNegotiation",
@@ -50,10 +52,13 @@ const CORE_SUBPATHS = [
   "http/webErrorResponse",
   "http/webFormRequest",
   "jobs/dispatchWebhookJob",
+  "jobs/invalidateCacheTagsJob",
   "lifecycle/gracefulShutdown",
+  "logging/logger",
   "metrics/prometheus",
   "openapi/registeredRoute",
   "pagination",
+  "queue",
   "queue/createAppQueue",
   "queue/failedJobService",
   "queue/jobRegistry",
@@ -88,6 +93,7 @@ const CORE_SHARED_FROM_INDEX = new Set<string>([
   "auth/membershipService",
   "auth/policy",
   "database",
+  "events",
   "http",
   "http/middleware",
   "http/requestMetaContext",
@@ -108,11 +114,15 @@ const BOOTSTRAP_SUBPATHS = [
   "context",
   "contracts",
   "createWebRoutes",
+  "createSpaRoutes",
   "dependencies",
   "discoverModules",
+  "health",
   "http/securedRouteModelBinding",
   "httpKernel",
+  "listeners/invalidateCacheOnModelWrite",
   "membershipService",
+  "metricsRoutes",
   "queue/defaultJobs",
   "providers",
   "providers/view",
@@ -126,7 +136,7 @@ const BOOTSTRAP_SUBPATHS = [
 ] as const;
 
 function resolveCoreTypesPath(subpath: string): string {
-  const indexModules = new Set(["database", "http", "view", "pagination"]);
+  const indexModules = new Set(["database", "events", "http", "queue", "view", "pagination"]);
 
   if (indexModules.has(subpath)) {
     return `./dist/core/${subpath}/index.d.ts`;

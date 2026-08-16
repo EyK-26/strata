@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { createSpaRoutes, SPA_DIST_DIRECTORY } from "../../src/bootstrap/createSpaRoutes";
+import { createSpaRoutes, SPA_DIST_DIRECTORY } from "@getstrata/bootstrap/createSpaRoutes";
 import { createMockDependencies } from "./testHelpers";
 
 const DIST_DIR = join(process.cwd(), "frontend/dist");

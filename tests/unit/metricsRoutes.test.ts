@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createMetricsRoutes } from "../../src/bootstrap/metricsRoutes";
+import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import { prometheusRegistry } from "../../src/core/metrics/prometheus";
 
 describe("createMetricsRoutes", () => {

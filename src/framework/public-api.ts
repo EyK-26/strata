@@ -178,7 +178,9 @@ export {
   UnprocessableEntityError,
   ValidationError,
 } from "../core/errors/http.ts";
-export { EventBus } from "../core/events/eventBus.ts";
+export type { EventListener } from "../core/events/eventBus.ts";
+export { EventBus, eventBus } from "../core/events/eventBus.ts";
+export { modelEventName } from "../core/events/index.ts";
 export {
   auth,
   cache,
