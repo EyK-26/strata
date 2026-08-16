@@ -1,8 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { createHttpKernel } from "../../src/bootstrap/httpKernel";
-import { CORE_VIEW_TOKEN } from "../../src/bootstrap/providers/view";
+import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
+import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { attachmentServiceToken } from "../../src/modules/attachment/provider";
 import type { AttachmentRecord } from "../../src/modules/attachment/types";

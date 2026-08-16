@@ -38,6 +38,7 @@ const CORE_SUBPATHS = [
   "database/types",
   "errors/http",
   "http",
+  "http/bodySizeLimitMiddleware",
   "http/contentNegotiation",
   "http/csrfToken",
   "http/etag",

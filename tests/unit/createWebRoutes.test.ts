@@ -8,9 +8,9 @@ import {
 } from "@getstrata/bootstrap/config";
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { createWebRoutes, mergeWebRoutes } from "@getstrata/bootstrap/createWebRoutes";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createWebRoutes, mergeWebRoutes } from "../../src/bootstrap/createWebRoutes";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";
 import CacheRepository from "../../src/core/cache/repository";

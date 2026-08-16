@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { createHttpKernel } from "../../src/bootstrap/httpKernel";
+import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { Policy, PolicyGate } from "../../src/core/auth/policy";
 import CacheRepository from "../../src/core/cache/repository";

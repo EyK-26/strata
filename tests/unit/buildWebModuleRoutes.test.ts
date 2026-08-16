@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
 import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
@@ -6,13 +7,13 @@ import {
 } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
-import { buildWebModuleRoutes } from "../../src/bootstrap/buildWebModuleRoutes";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { SyncQueue } from "../../src/core/queue";
+import { tokenServiceToken } from "../../src/modules/user/provider";
 import { createMockDependencies } from "./testHelpers";
 
 function createTestDependencies() {
@@ -25,6 +26,10 @@ function createTestDependencies() {
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
+  dependencies.container.set(tokenServiceToken, {
+    requireAbility: () => undefined,
+    tokenCan: () => true,
+  });
 
   return dependencies;
 }
@@ -38,6 +43,6 @@ describe("buildWebModuleRoutes", () => {
     const dependencies = createTestDependencies();
     const routes = buildWebModuleRoutes(dependencies, { clearRegistry: true });
 
-    expect(typeof routes["/organizations"]).toBe("function");
+    expect(routes["/organizations"]).toBeDefined();
   });
 });

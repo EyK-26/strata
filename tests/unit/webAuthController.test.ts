@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { CORE_VIEW_TOKEN } from "../../src/bootstrap/providers/view";
+import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { authServiceToken, tokenServiceToken } from "../../src/modules/user/provider";
 import WebAuthController from "../../src/modules/user/webAuthController";
 import { createMockCache, createMockDependencies } from "./testHelpers";

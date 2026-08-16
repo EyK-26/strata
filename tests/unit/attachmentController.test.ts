@@ -5,7 +5,7 @@ import {
   ConfigStore,
   ServiceContainer,
 } from "@getstrata/bootstrap/contracts";
-import { createHttpKernel } from "../../src/bootstrap/httpKernel";
+import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { membershipContext } from "../../src/core/auth/membershipContext";
 import { PolicyGate } from "../../src/core/auth/policy";

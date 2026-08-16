@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import { RedisClient } from "bun";
-import { registerDefaultJobs } from "../../src/bootstrap/queue/defaultJobs";
 import { Job } from "../../src/core/queue";
 import { createFailedJobService } from "../../src/core/queue/createAppQueue";
 import { jobRegistry } from "../../src/core/queue/jobRegistry";

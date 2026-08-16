@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
@@ -6,7 +7,6 @@ import {
 } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
-import { buildModuleRoutes } from "../../src/bootstrap/buildModuleRoutes";
 import { appConfig } from "../../src/config/app";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";
