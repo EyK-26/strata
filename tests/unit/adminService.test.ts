@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
-import { AdminResourceRegistry } from "@getstrata/core";
+import { AdminResourceRegistry } from "@getstrata/core/admin/registry";
 import { Job } from "@getstrata/core/queue";
 import AdminService from "../../src/modules/admin/service";
 

@@ -1,4 +1,4 @@
-import { defineTable } from "@getstrata/core/database";
+import { defineTable } from "@getstrata/core/database/table";
 import { TASK_TABLE } from "../../domain/workhub";
 import type { TaskRecord } from "./types";
 

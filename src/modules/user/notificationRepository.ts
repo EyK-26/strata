@@ -1,4 +1,4 @@
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { notificationTable } from "./notificationTable";
 import type { NotificationRecord } from "./notificationTypes";
 

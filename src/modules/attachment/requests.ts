@@ -1,4 +1,4 @@
-import { parsePositiveIntParam } from "@getstrata/core/http";
+import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 
 type AttachmentIdParams = { id: string };
 type TaskAttachmentParams = { id: string };

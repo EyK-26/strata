@@ -6,7 +6,11 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import { CORE_SHARED_SUBPATH_SET, coreSubpathExternalFlags } from "./core-shared-subpaths.ts";
+import {
+  bootstrapSubpathExternalFlags,
+  CORE_SHARED_SUBPATH_SET,
+  coreSubpathExternalFlags,
+} from "./core-shared-subpaths.ts";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -335,7 +339,9 @@ async function updatePackageJson(
   const coreExternal = packageDir.includes("strata-core")
     ? ` ${coreSubpathExternalFlags(CORE_SUBPATHS)}`
     : "";
-  const bootstrapExternal = packageDir.includes("bootstrap") ? " --external @getstrata/core" : "";
+  const bootstrapExternal = packageDir.includes("bootstrap")
+    ? ` ${bootstrapSubpathExternalFlags(BOOTSTRAP_SUBPATHS, CORE_SUBPATHS)}`
+    : "";
   packageJson.scripts["build:subpaths"] = relativeEntries
     ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta${coreExternal}${bootstrapExternal}`
     : "true";

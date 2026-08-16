@@ -1,4 +1,4 @@
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { auditLogTable } from "./table";
 import type { AuditLogRecord } from "./types";
 

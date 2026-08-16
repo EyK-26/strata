@@ -47,6 +47,20 @@ export function coreSubpathExternalFlags(subpaths: readonly string[]): string {
   return flags.join(" ");
 }
 
+export function bootstrapSubpathExternalFlags(
+  bootstrapSubpaths: readonly string[],
+  coreSubpaths: readonly string[],
+): string {
+  const flags = ["--external @getstrata/core", "--external @getstrata/bootstrap"];
+  for (const subpath of bootstrapSubpaths) {
+    flags.push(`--external @getstrata/bootstrap/${subpath}`);
+  }
+  for (const subpath of coreSubpaths) {
+    flags.push(`--external @getstrata/core/${subpath}`);
+  }
+  return flags.join(" ");
+}
+
 /** @deprecated Use coreSubpathExternalFlags(CORE_SUBPATHS) from sync-package-subpaths. */
 export function coreSharedSubpathExternalFlags(): string {
   return coreSubpathExternalFlags(CORE_SHARED_SUBPATHS);

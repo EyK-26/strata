@@ -1,4 +1,4 @@
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { attachmentTable } from "./table";
 import type { AttachmentRecord } from "./types";
 

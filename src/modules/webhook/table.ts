@@ -1,4 +1,4 @@
-import { defineTable } from "@getstrata/core/database";
+import { defineTable } from "@getstrata/core/database/table";
 import type { WebhookRecord } from "./types";
 
 const webhookTable = defineTable<WebhookRecord, "id">({

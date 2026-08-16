@@ -1,4 +1,4 @@
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { NotFoundError } from "@getstrata/core/errors/http";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { organizationTable } from "./table";

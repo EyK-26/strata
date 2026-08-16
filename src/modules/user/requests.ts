@@ -1,4 +1,5 @@
-import { FormRequest, parsePositiveIntParam } from "@getstrata/core/http";
+import { FormRequest } from "@getstrata/core/http/formRequest";
+import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import {
   maxLength,
   minLength,

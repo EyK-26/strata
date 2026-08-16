@@ -1,4 +1,4 @@
-import { conditionalJsonResponse } from "@getstrata/core/http";
+import { conditionalJsonResponse } from "@getstrata/core/http/conditionalResponse";
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import type { AppDependencies, AppModule, AppRouteMap, CachedJson } from "./contracts";
 import { createHttpKernel } from "./httpKernel";

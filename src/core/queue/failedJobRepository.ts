@@ -1,4 +1,4 @@
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { failedJobTable } from "./failedJobTable";
 import type { FailedJobRecord } from "./types";
 

@@ -1,4 +1,4 @@
-import { belongsTo } from "@getstrata/core/database";
+import { belongsTo } from "@getstrata/core/database/relationships";
 import type { OrganizationRecord } from "../organization/types";
 import type { ProjectRecord } from "./types";
 

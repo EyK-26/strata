@@ -1,4 +1,4 @@
-import { defineTable } from "@getstrata/core/database";
+import { defineTable } from "@getstrata/core/database/table";
 import type { AuditLogRecord } from "./types";
 
 const auditLogTable = defineTable<AuditLogRecord, "id">({

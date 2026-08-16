@@ -1,4 +1,4 @@
-import { defineTable } from "@getstrata/core/database";
+import { defineTable } from "@getstrata/core/database/table";
 import type { ApiTokenRecord } from "./types";
 
 const apiTokenTable = defineTable<ApiTokenRecord, "id">({

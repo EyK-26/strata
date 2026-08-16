@@ -1,4 +1,4 @@
-import { defineTable } from "@getstrata/core/database";
+import { defineTable } from "@getstrata/core/database/table";
 import { COMMENT_TABLE } from "../../domain/workhub";
 import type { CommentRecord } from "./types";
 

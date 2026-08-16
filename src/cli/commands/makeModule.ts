@@ -50,7 +50,7 @@ export type { ${moduleName}Record };
     ],
     [
       "table.ts",
-      `import { defineTable } from "@getstrata/core/database";
+      `import { defineTable } from "@getstrata/core/database/table";
 import type { ${moduleName}Record } from "./types";
 
 const ${moduleIdentifier}Table = defineTable<${moduleName}Record, "id">({
@@ -65,7 +65,7 @@ export { ${moduleIdentifier}Table };
     ],
     [
       "repository.ts",
-      `import { BaseRepository } from "@getstrata/core/database";
+      `import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { ${moduleIdentifier}Table } from "./table";
 import type { ${moduleName}Record } from "./types";
 
@@ -178,11 +178,8 @@ export {
     ],
     [
       "requests.ts",
-      `import {
-  parseJsonBody,
-  parsePaginationQuery,
-  parsePositiveIntParam,
-} from "@getstrata/core/http";
+      `import { parseJsonBody, parsePositiveIntParam } from "@getstrata/core/http/validation";
+import { parsePaginationQuery } from "@getstrata/core/http/pagination";
 import {
   maxLength,
   minLength,
@@ -260,10 +257,7 @@ export type {
     ],
     [
       "resources.ts",
-      `import {
-  toPaginatedResourceCollection,
-  toResourceCollection,
-} from "@getstrata/core/http";
+      `import { toPaginatedResourceCollection, toResourceCollection } from "@getstrata/core/http/resources";
 import type { PaginationMeta } from "@getstrata/core/pagination";
 import type { ${moduleName}Record } from "./types";
 
@@ -304,16 +298,11 @@ export type { ${moduleName}Resource };
       "controller.ts",
       `import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import {
-  bindRouteModel,
-  buildRequestCacheKey,
-  createdResponse,
-  jsonResponse,
-  noContentResponse,
-  securedBindRouteModel,
-  type RouteRequest,
-  withErrorHandling,
-} from "@getstrata/core/http";
+import { bindRouteModel } from "@getstrata/core/http/routeModelBinding";
+import { buildRequestCacheKey } from "@getstrata/core/http/validation";
+import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
+import type { RouteRequest } from "@getstrata/core/http/route";
+import { createdResponse, jsonResponse, noContentResponse, withErrorHandling } from "@getstrata/core/http";
 import ${moduleName}Service from "./service";
 import { ${moduleIdentifier}ServiceToken } from "./provider";
 import {

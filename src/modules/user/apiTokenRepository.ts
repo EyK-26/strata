@@ -1,4 +1,4 @@
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import db from "../../db/connection";
 import { apiTokenTable } from "./apiTokenTable";
 import type { ApiTokenRecord } from "./types";

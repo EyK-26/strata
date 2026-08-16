@@ -1,14 +1,12 @@
-import {
-  type AdminResourceRegistry,
-  formatAdminValue,
-  jobRegistry,
-  runQueueJob,
-} from "@getstrata/core";
+import { formatAdminValue } from "@getstrata/core/admin/formatValue";
+import type { AdminResourceRegistry } from "@getstrata/core/admin/registry";
 import { NotFoundError } from "@getstrata/core/errors/http";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 import type { PaginatedResult } from "@getstrata/core/pagination";
 import { createFailedJobService } from "@getstrata/core/queue/createAppQueue";
 import type FailedJobService from "@getstrata/core/queue/failedJobService";
+import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { runQueueJob } from "@getstrata/core/queue/jobRunner";
 import { collectQueueMetrics, type QueueMetricsSnapshot } from "@getstrata/core/queue/queueMetrics";
 import type { FailedJobRecord } from "@getstrata/core/queue/types";
 import { featureFlags } from "../../config/features";

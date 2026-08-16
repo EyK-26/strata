@@ -1,9 +1,9 @@
-import type { AuthUser } from "@getstrata/core";
+import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
+import type { AuthUser } from "@getstrata/core/auth/authContext";
 import {
   hasMinimumOrgRole as hasMinimumOrgRoleInContext,
   hasOrgMembership,
-  isGlobalAdmin,
-} from "@getstrata/core";
+} from "@getstrata/core/auth/membershipContext";
 import { Policy } from "@getstrata/core/auth/policy";
 import { guestCanViewResource } from "@getstrata/core/security/publicReads";
 import type { OrganizationRecord } from "./types";

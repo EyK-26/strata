@@ -2,14 +2,14 @@ import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import {
-  buildRequestCacheKey,
   createdResponse,
   jsonResponse,
   noContentResponse,
-  type RouteRequest,
-  securedBindRouteModel,
   withErrorHandling,
 } from "@getstrata/core/http";
+import type { RouteRequest } from "@getstrata/core/http/route";
+import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
+import { buildRequestCacheKey } from "@getstrata/core/http/validation";
 import { commentServiceToken } from "./provider";
 import {
   type CommentIdParams,

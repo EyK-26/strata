@@ -1,8 +1,8 @@
-import { currentTenantId } from "@getstrata/core";
 import { hashPassword } from "@getstrata/core/auth/password";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { NotFoundError } from "@getstrata/core/errors/http";
+import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { SCIM_SCHEMAS } from "../../domain/scim";
 import OrganizationMemberRepository from "../organization/memberRepository";
 import OrganizationRepository from "../organization/repository";

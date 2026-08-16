@@ -5,9 +5,9 @@ import {
   emptyPaginateResult,
   scopedOrganizationIds,
 } from "@getstrata/core/auth/membershipScope";
-import { runInTransaction } from "@getstrata/core/database";
+import { runInTransaction } from "@getstrata/core/database/transaction";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "@getstrata/core/errors/http";
-import type { ParsedUpload } from "@getstrata/core/http";
+import type { ParsedUpload } from "@getstrata/core/http/parseMultipartUpload";
 import type { StorageManager } from "@getstrata/core/storage/storage";
 import type OrganizationRepository from "../organization/repository";
 import type ProjectRepository from "../project/repository";

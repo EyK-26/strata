@@ -1,4 +1,5 @@
-import { BaseRepository, defineTable } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineTable } from "@getstrata/core/database/table";
 import type { QueryWhere } from "@getstrata/core/database/types";
 import type { OAuthIdentityRecord } from "./types";
 

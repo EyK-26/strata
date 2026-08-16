@@ -1,4 +1,4 @@
-import { AdminResourceRegistry } from "@getstrata/core";
+import { AdminResourceRegistry } from "@getstrata/core/admin/registry";
 import OrganizationRepository from "../organization/repository";
 import ProjectRepository from "../project/repository";
 import TaskRepository from "../task/repository";

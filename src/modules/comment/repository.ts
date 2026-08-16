@@ -1,4 +1,4 @@
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import type { QueryWhere } from "@getstrata/core/database/types";
 import { commentTable } from "./table";
 import type { CommentRecord } from "./types";

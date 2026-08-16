@@ -1,4 +1,4 @@
-import { belongsTo } from "@getstrata/core/database";
+import { belongsTo } from "@getstrata/core/database/relationships";
 import type { TaskRecord } from "../task/types";
 import type { CommentRecord } from "./types";
 

@@ -1,4 +1,4 @@
-import { defineTable } from "@getstrata/core/database";
+import { defineTable } from "@getstrata/core/database/table";
 import { PROJECT_TABLE } from "../../domain/workhub";
 import type { ProjectRecord } from "./types";
 

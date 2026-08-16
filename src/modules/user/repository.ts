@@ -4,7 +4,7 @@ import {
   revealEmail,
 } from "@getstrata/core/crypto/fieldEncryption";
 import { revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import type { QueryWhere } from "@getstrata/core/database/types";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { userTable } from "./table";

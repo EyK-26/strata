@@ -1,4 +1,4 @@
-import { BaseRepository } from "@getstrata/core/database";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import type { QueryWhere } from "@getstrata/core/database/types";
 import OrganizationRepository from "../organization/repository";
 import { projectBelongsToOrganization } from "./relationships";

@@ -1,4 +1,4 @@
-import { Model, registerModelRepository } from "@getstrata/core";
+import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import UserRepository from "./repository";
 import type { UserRecord } from "./types";
 

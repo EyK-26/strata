@@ -5,7 +5,7 @@ import {
   emptyPaginateResult,
   scopedOrganizationIds,
 } from "@getstrata/core/auth/membershipScope";
-import { runInTransaction } from "@getstrata/core/database";
+import { runInTransaction } from "@getstrata/core/database/transaction";
 import { BadRequestError, NotFoundError } from "@getstrata/core/errors/http";
 import type { PaginatedResult } from "@getstrata/core/pagination";
 import type { TaskStatus } from "../../domain/workhub";

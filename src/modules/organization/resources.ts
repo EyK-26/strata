@@ -2,7 +2,7 @@ import {
   serializeDate,
   toPaginatedResourceCollection,
   toResourceCollection,
-} from "@getstrata/core/http";
+} from "@getstrata/core/http/resources";
 import type { PaginationMeta } from "@getstrata/core/pagination";
 import type { OrganizationRecord } from "./types";
 
