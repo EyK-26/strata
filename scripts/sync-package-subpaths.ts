@@ -26,6 +26,7 @@ const CORE_SUBPATHS = [
   "auth/tokenHash",
   "cache/tags",
   "cache/createCacheStore",
+  "contracts/serviceTokens",
   "crypto/fieldEncryption",
   "crypto/mfaSecret",
   "database",

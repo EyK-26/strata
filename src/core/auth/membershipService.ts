@@ -83,4 +83,4 @@ class MembershipService {
 
 export type { MembershipRepositoryLike };
 export default MembershipService;
-export { resolveMembershipService } from "../../bootstrap/membershipService.ts";
+export { resolveMembershipService } from "./resolveMembershipService.ts";

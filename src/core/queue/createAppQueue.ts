@@ -22,8 +22,6 @@ function createAppQueue(
   });
 }
 
-export { registerDefaultJobs } from "../../bootstrap/queue/defaultJobs.ts";
-
 export {
   createAppQueue,
   createFailedJobService,

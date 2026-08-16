@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { registerDefaultJobs } from "../../src/bootstrap/queue/defaultJobs";
 import { Job } from "../../src/core/queue";
-import { createFailedJobService, registerDefaultJobs } from "../../src/core/queue/createAppQueue";
+import { createFailedJobService } from "../../src/core/queue/createAppQueue";
 import { jobRegistry } from "../../src/core/queue/jobRegistry";
 import { runQueueJob } from "../../src/core/queue/jobRunner";
 

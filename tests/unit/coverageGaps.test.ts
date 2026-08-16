@@ -220,7 +220,7 @@ describe("coverage gap helpers", () => {
     expect(registry.create("missing.job")).toBeUndefined();
 
     const { jobRegistry } = await import("../../src/core/queue/jobRegistry");
-    const { registerDefaultJobs } = await import("../../src/core/queue/createAppQueue");
+    const { registerDefaultJobs } = await import("../../src/bootstrap/queue/defaultJobs");
     registerDefaultJobs();
     expect(jobRegistry.create("webhook.dispatch")).toBeInstanceOf(DispatchWebhookJob);
 

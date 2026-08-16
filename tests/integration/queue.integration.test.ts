@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { RedisClient } from "bun";
+import { registerDefaultJobs } from "../../src/bootstrap/queue/defaultJobs";
 import { Job } from "../../src/core/queue";
-import { createFailedJobService, registerDefaultJobs } from "../../src/core/queue/createAppQueue";
+import { createFailedJobService } from "../../src/core/queue/createAppQueue";
 import { jobRegistry } from "../../src/core/queue/jobRegistry";
 import { type QueueJobEnvelope, runQueueJob } from "../../src/core/queue/jobRunner";
 import { QUEUE_LIST_KEY, RedisQueue } from "../../src/core/queue/redisQueue";
