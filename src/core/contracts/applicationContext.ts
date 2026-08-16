@@ -20,7 +20,7 @@ interface ApplicationContext {
 function getRequiredDependency<K extends keyof ApplicationDependenciesLike>(
   dependencies: Partial<ApplicationDependenciesLike>,
   key: K,
-): NonNullable<ApplicationDependenciesLike[K]> {
+): ApplicationDependenciesLike[K] {
   const dependency = dependencies[key];
 
   if (dependency === undefined) {
