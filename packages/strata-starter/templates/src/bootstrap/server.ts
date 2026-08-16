@@ -5,7 +5,7 @@ import { closeDatabase, pingDatabase } from "./database.ts";
 
 await ensureModulesLoaded();
 
-const { routes, context, config } = await bootstrapApp();
+const { routes, config } = await bootstrapApp();
 
 const server = createAppServer(routes, config.port);
 
