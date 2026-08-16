@@ -1,4 +1,4 @@
-import { DEFAULT_QUEUE_DRIVER } from "../bootstrap/config.ts";
+import { DEFAULT_QUEUE_DRIVER } from "@getstrata/bootstrap/config";
 
 interface QueueConfig {
   driver: "sync" | "async" | "redis";

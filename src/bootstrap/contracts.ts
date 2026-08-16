@@ -3,7 +3,7 @@ export {
   type ConfigStoreLike,
   ServiceContainer,
   type ServiceContainerLike,
-} from "../core/contracts/container.ts";
+} from "@getstrata/core/contracts/container";
 export type {
   AppContext,
   AppDependencies,
@@ -13,19 +13,19 @@ export type {
   ProviderContext,
   ServiceFactory,
   ServiceProvider,
-} from "../core/contracts/di.ts";
+} from "@getstrata/core/contracts/di";
 export {
   assertAppDependenciesComplete,
   getRequiredDependency,
   resolveService,
-} from "../core/contracts/di.ts";
+} from "@getstrata/core/contracts/di";
 
 import type {
   AppDependencies,
   AppRouteMap,
   CachedJson,
   ServiceProvider,
-} from "../core/contracts/di.ts";
+} from "@getstrata/core/contracts/di";
 import type { HttpKernel } from "./httpKernel.ts";
 
 interface ModuleRouteContext {

@@ -16,6 +16,8 @@ export {
   resolveApplicationQueue,
   setActiveApplicationContext,
 } from "./applicationRegistry.ts";
+export type { BuildModuleRoutesOptions } from "./buildModuleRoutes.ts";
+export { buildModuleRoutes } from "./buildModuleRoutes.ts";
 export { cacheTagsForModelWrite, discoverModelTableNames } from "./cache/modelCacheTags.ts";
 export {
   APP_PORT_CONFIG_KEY,

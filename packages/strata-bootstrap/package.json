@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/bootstrap",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "description": "Strata application bootstrap — HttpKernel, DI, web session helpers",
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,11 @@
       "types": "./dist/bootstrap/applicationRegistry.d.ts",
       "import": "./dist/entries/applicationRegistry.js",
       "default": "./dist/entries/applicationRegistry.js"
+    },
+    "./buildModuleRoutes": {
+      "types": "./dist/bootstrap/buildModuleRoutes.d.ts",
+      "import": "./dist/entries/buildModuleRoutes.js",
+      "default": "./dist/entries/buildModuleRoutes.js"
     },
     "./cache/modelCacheTags": {
       "types": "./dist/bootstrap/cache/modelCacheTags.d.ts",
@@ -130,16 +135,16 @@
   "scripts": {
     "build": "bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types",
     "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta --external @getstrata/core",
-    "build:types": "tsc -p tsconfig.types.json",
+    "build:types": "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts",
     "prepublishOnly": "bun run build",
-    "build:subpaths": "bun build entries/applicationRegistry.ts entries/cache/modelCacheTags.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/dependencies.ts entries/discoverModules.ts entries/http/securedRouteModelBinding.ts entries/httpKernel.ts entries/membershipService.ts entries/queue/defaultJobs.ts entries/providers.ts entries/providers/view.ts entries/routeRegistry.ts entries/secretsGuard.ts entries/web/forms.ts entries/web/routing.ts entries/web/server.ts entries/web/session.ts entries/web/slug.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core",
+    "build:subpaths": "bun build entries/applicationRegistry.ts entries/buildModuleRoutes.ts entries/cache/modelCacheTags.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/dependencies.ts entries/discoverModules.ts entries/http/securedRouteModelBinding.ts entries/httpKernel.ts entries/membershipService.ts entries/queue/defaultJobs.ts entries/providers.ts entries/providers/view.ts entries/routeRegistry.ts entries/secretsGuard.ts entries/web/forms.ts entries/web/routing.ts entries/web/server.ts entries/web/session.ts entries/web/slug.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core",
     "build:shims": "true"
   },
   "publishConfig": {
     "access": "public"
   },
   "peerDependencies": {
-    "@getstrata/core": "^0.5.30",
+    "@getstrata/core": "^0.5.31",
     "typescript": "^5.9.0"
   }
 }

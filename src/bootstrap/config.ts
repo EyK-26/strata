@@ -13,7 +13,7 @@ export {
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
   CORE_TOKEN_SERVICE_TOKEN,
-} from "../core/contracts/serviceTokens.ts";
+} from "@getstrata/core/contracts/serviceTokens.ts";
 
 const AUTH_DEV_HEADERS_CONFIG_KEY = "auth.allowDevHeaders";
 

@@ -40,6 +40,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
       "discoverModules",
       "configureModulesDirectory",
       "ensureModulesLoaded",
+      "buildModuleRoutes",
     ],
     testGlobs: ["unit/providers.test.ts", "unit/discoverModules.test.ts"],
     tier: "core",

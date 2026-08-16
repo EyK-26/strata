@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const BOOTSTRAP_DIST = join(process.cwd(), "packages/strata-bootstrap/dist");
@@ -55,5 +56,19 @@ describe("@getstrata/bootstrap published subpaths", () => {
     expect(typeof discover.configureModulesDirectory).toBe("function");
     expect(typeof discover.ensureModulesLoaded).toBe("function");
     expect(typeof discover.discoverModules).toBe("function");
+  });
+
+  test("buildModuleRoutes exports module route builder", async () => {
+    const routes = await import(join(BOOTSTRAP_DIST, "entries/buildModuleRoutes.js"));
+
+    expect(typeof routes.buildModuleRoutes).toBe("function");
+  });
+
+  test("contracts types re-export @getstrata/core without duplicating container classes", async () => {
+    const contractsTypes = await readFile(join(BOOTSTRAP_DIST, "bootstrap/contracts.d.ts"), "utf8");
+
+    expect(contractsTypes).toContain("@getstrata/core/contracts/container");
+    expect(contractsTypes).toContain("@getstrata/core/contracts/di");
+    await expect(access(join(BOOTSTRAP_DIST, "core"))).rejects.toThrow();
   });
 });

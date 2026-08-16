@@ -1,6 +1,6 @@
+import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { createRouteKernel } from "@getstrata/bootstrap/web/routing";
 import { withErrorHandling } from "@getstrata/core";
-import type { AppDependencies, AppRouteMap } from "@getstrata/core/contracts/di";
 import { pingDatabase } from "./bootstrap/database.ts";
 import { plainText, renderPage } from "./lib/view.ts";
 

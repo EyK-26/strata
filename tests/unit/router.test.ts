@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
@@ -6,6 +6,7 @@ import {
 } from "../../src/bootstrap/config";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { createRoutes } from "../../src/bootstrap/createRoutes";
+import { ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
 import { appConfig } from "../../src/config/app";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";
@@ -65,6 +66,10 @@ function createTestDependencies() {
 }
 
 describe("routes", () => {
+  beforeAll(async () => {
+    await ensureModulesLoaded();
+  });
+
   test("caches the report summary response", async () => {
     const { dependencies, calls, summary } = createTestDependencies();
     const routes = createRoutes(dependencies);

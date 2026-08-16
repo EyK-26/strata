@@ -8,4 +8,4 @@ export {
   resolveApplicationPolicyGate,
   resolveApplicationQueue,
   setActiveApplicationContext,
-} from "../core/runtime/applicationRegistry.ts";
+} from "@getstrata/core/runtime/applicationRegistry.ts";

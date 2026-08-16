@@ -97,6 +97,7 @@ const CORE_SHARED_FROM_INDEX = new Set<string>([
 
 const BOOTSTRAP_SUBPATHS = [
   "applicationRegistry",
+  "buildModuleRoutes",
   "cache/modelCacheTags",
   "config",
   "context",
@@ -232,6 +233,9 @@ async function updatePackageJson(
   packageJson.scripts["build:subpaths"] = relativeEntries
     ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta${packageDir.includes("bootstrap") ? " --external @getstrata/core" : ""}`
     : "true";
+  packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
+    ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"
+    : "tsc -p tsconfig.types.json";
   packageJson.scripts["build"] =
     "bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";
 
