@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createAppContext } from "../../bootstrap/context";
 import { createRoutes } from "../../bootstrap/createRoutes";
-import { routeRegistry } from "../../bootstrap/routeRegistry";
 import { appConfig } from "../../config/app";
 import { generateOpenApiSpec, renderTypeScriptSdk } from "../../core/openapi/generator";
 

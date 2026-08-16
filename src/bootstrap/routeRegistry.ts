@@ -16,7 +16,23 @@ class RouteRegistry {
   }
 }
 
-const routeRegistry = new RouteRegistry();
+const ROUTE_REGISTRY_KEY = Symbol.for("@getstrata/routeRegistry");
+
+function readSharedRouteRegistry(): RouteRegistry {
+  const globalRegistry = (globalThis as Record<symbol, RouteRegistry | undefined>)[
+    ROUTE_REGISTRY_KEY
+  ];
+
+  if (globalRegistry) {
+    return globalRegistry;
+  }
+
+  const registry = new RouteRegistry();
+  (globalThis as Record<symbol, RouteRegistry>)[ROUTE_REGISTRY_KEY] = registry;
+  return registry;
+}
+
+const routeRegistry = readSharedRouteRegistry();
 
 export type { RegisteredRoute };
 export { RouteRegistry, routeRegistry };

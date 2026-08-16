@@ -5,9 +5,11 @@ import type { AppContext } from "../contracts/di";
 import { getRequiredDependency } from "../contracts/di";
 import {
   CORE_AUTH_TOKEN,
+  CORE_EVENT_BUS_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
 } from "../contracts/serviceTokens";
+import type { EventBus } from "../events";
 import { appLogger, type Logger } from "../logging/logger";
 import type { Queue } from "../queue";
 
@@ -54,6 +56,10 @@ function resolveApplicationQueue(): Queue {
   return requireActiveApplicationContext().container.resolve<Queue>(CORE_QUEUE_TOKEN);
 }
 
+function resolveApplicationEventBus(): EventBus {
+  return requireActiveApplicationContext().container.resolve<EventBus>(CORE_EVENT_BUS_TOKEN);
+}
+
 function resolveApplicationAuth(): AuthManager {
   return requireActiveApplicationContext().container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 }
@@ -79,6 +85,7 @@ export {
   resolveApplicationCache,
   resolveApplicationConfig,
   resolveApplicationDependencies,
+  resolveApplicationEventBus,
   resolveApplicationLogger,
   resolveApplicationPolicyGate,
   resolveApplicationQueue,

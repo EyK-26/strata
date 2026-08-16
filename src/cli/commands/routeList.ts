@@ -1,6 +1,6 @@
+import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createAppContext } from "../../bootstrap/context";
 import { createRoutes } from "../../bootstrap/createRoutes";
-import { routeRegistry } from "../../bootstrap/routeRegistry";
 
 function routeListCommand(): void {
   const { dependencies } = createAppContext();

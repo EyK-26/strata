@@ -1,6 +1,6 @@
+import { createAppDependencies } from "@getstrata/bootstrap/dependencies";
 import type { AppRouteMap } from "../bootstrap/contracts";
 import { createRoutes } from "../bootstrap/createRoutes";
-import { createAppDependencies } from "../bootstrap/dependencies";
 import { freshDatabase } from "../db/migrations/runner";
 
 interface CreateTestAppOptions {

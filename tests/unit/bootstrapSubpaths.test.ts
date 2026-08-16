@@ -24,4 +24,28 @@ describe("@getstrata/bootstrap published subpaths", () => {
     expect(typeof tags.cacheTagsForModelWrite).toBe("function");
     expect(typeof tags.discoverModelTableNames).toBe("function");
   });
+
+  test("routeRegistry exports shared singleton", async () => {
+    const first = await import(join(BOOTSTRAP_DIST, "entries/routeRegistry.js"));
+    const second = await import(join(BOOTSTRAP_DIST, "entries/routeRegistry.js"));
+
+    first.routeRegistry.register({ method: "GET", path: "/loop-17", middleware: [] });
+    const paths = second.routeRegistry.list().map((route: { path: string }) => route.path);
+    expect(paths).toContain("/loop-17");
+    expect(first.routeRegistry).toBe(second.routeRegistry);
+    second.routeRegistry.clear();
+  });
+
+  test("dependencies exports createAppDependencies", async () => {
+    const dependencies = await import(join(BOOTSTRAP_DIST, "entries/dependencies.js"));
+
+    expect(typeof dependencies.createAppDependencies).toBe("function");
+    expect(typeof dependencies.createAppContext).toBe("function");
+  });
+
+  test("secretsGuard exports assertProductionSecrets", async () => {
+    const secretsGuard = await import(join(BOOTSTRAP_DIST, "entries/secretsGuard.js"));
+
+    expect(typeof secretsGuard.assertProductionSecrets).toBe("function");
+  });
 });

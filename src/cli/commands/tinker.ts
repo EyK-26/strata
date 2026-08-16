@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { createAppDependencies } from "../../bootstrap/dependencies";
+import { createAppDependencies } from "@getstrata/bootstrap/dependencies";
 import { mailer } from "../../core/mail/mailer";
 import { storage } from "../../core/storage/storage";
 import { commentRepositoryToken } from "../../modules/comment/provider";

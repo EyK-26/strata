@@ -4,6 +4,7 @@ import {
   resolveApplicationAuth,
   resolveApplicationCache,
   resolveApplicationConfig,
+  resolveApplicationEventBus,
   resolveApplicationLogger,
   resolveApplicationPolicyGate,
   resolveApplicationQueue,
@@ -27,7 +28,11 @@ function queue() {
 }
 
 function events() {
-  return eventBus;
+  try {
+    return resolveApplicationEventBus();
+  } catch {
+    return eventBus;
+  }
 }
 
 function config<T>(key: string): T | undefined {

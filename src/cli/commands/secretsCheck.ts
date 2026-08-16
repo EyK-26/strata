@@ -1,4 +1,4 @@
-import { assertProductionSecrets } from "../../bootstrap/secretsGuard";
+import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 
 function secretsCheckCommand(): void {
   assertProductionSecrets({

@@ -10,6 +10,7 @@ export {
   resolveApplicationCache,
   resolveApplicationConfig,
   resolveApplicationDependencies,
+  resolveApplicationEventBus,
   resolveApplicationLogger,
   resolveApplicationPolicyGate,
   resolveApplicationQueue,
@@ -21,6 +22,7 @@ export {
   CORE_AUTH_TOKEN,
   CORE_CACHE_TOKEN,
   CORE_CONFIG_TOKEN,
+  CORE_EVENT_BUS_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
   CORE_TOKEN_SERVICE_TOKEN,
@@ -49,6 +51,7 @@ export {
   ServiceContainer,
 } from "./contracts.ts";
 export { createWebRoutes, mergeWebRoutes } from "./createWebRoutes.ts";
+export { createAppDependencies } from "./dependencies.ts";
 export {
   type RouteModelAuthorization,
   securedBindRouteModel,
@@ -59,6 +62,8 @@ export { resolveMembershipService } from "./membershipService.ts";
 export { prefixRouteMap } from "./prefixRouteMap.ts";
 export { coreProviders } from "./providers/index.ts";
 export { registerDefaultJobs } from "./queue/defaultJobs.ts";
+export { RouteRegistry, routeRegistry } from "./routeRegistry.ts";
+export { assertProductionSecrets } from "./secretsGuard.ts";
 
 export {
   CookieSessionStore,

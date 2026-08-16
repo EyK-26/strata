@@ -3,6 +3,7 @@ export {
   resolveApplicationCache,
   resolveApplicationConfig,
   resolveApplicationDependencies,
+  resolveApplicationEventBus,
   resolveApplicationLogger,
   resolveApplicationPolicyGate,
   resolveApplicationQueue,
