@@ -1,6 +1,12 @@
 import { appContext } from "./context";
+import type { AppRouteMap } from "./contracts";
 import { createRoutes } from "./createRoutes";
 
-const routes = createRoutes(appContext.dependencies);
+let cachedRoutes: AppRouteMap | undefined;
 
-export { routes };
+function buildRoutes(): AppRouteMap {
+  cachedRoutes ??= createRoutes(appContext.dependencies);
+  return cachedRoutes;
+}
+
+export { buildRoutes };

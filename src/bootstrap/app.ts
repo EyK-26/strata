@@ -6,7 +6,7 @@ import {
 import { closeDatabase } from "../db/connection";
 import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
 import { appContext } from "./context";
-import { routes } from "./routes";
+import { buildRoutes } from "./routes";
 
 class App {
   private server?: ReturnType<typeof Bun.serve>;
@@ -20,7 +20,7 @@ class App {
 
     this.server = Bun.serve({
       port,
-      routes,
+      routes: buildRoutes(),
       maxRequestBodySize: resolveMaxBodyBytes(),
     });
 
