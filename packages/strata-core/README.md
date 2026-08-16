@@ -14,17 +14,16 @@ Set `DATABASE_URL` before importing (connection is created lazily on first query
 ```typescript
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:5432/myapp";
 
-import {
-  AdminResourceRegistry,
-  BaseRepository,
-  EtaViewEngine,
-  FormRequest,
-  Policy,
-  formatAdminValue,
-  mailer,
-  storage,
-  withErrorHandling,
-} from "@getstrata/core";
+import { AdminResourceRegistry } from "@getstrata/core/admin/registry";
+import { formatAdminValue } from "@getstrata/core/admin/formatValue";
+import { Policy } from "@getstrata/core/auth/policy";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { mail } from "@getstrata/core/facades";
+import { FormRequest } from "@getstrata/core/http/formRequest";
+import { withErrorHandling } from "@getstrata/core/http/response";
+import { mailer } from "@getstrata/core/mail/mailer";
+import { storage } from "@getstrata/core/facades";
+import { EtaViewEngine } from "@getstrata/core/view";
 ```
 
 **Dependency:** `eta` is bundled as a direct dependency of `@getstrata/core`. Apps do not need to list it separately. The database driver is your app's choice. WorkHub and getstrata use **Bun's built-in `Bun.sql`** client; bind it with `bindDatabaseConnection()`.
@@ -49,7 +48,7 @@ bun run verify:shared-subpaths  # after build: confirm singleton shims
 
 ## Subpath imports
 
-`@getstrata/core` publishes **143+ subpaths** (for example `@getstrata/core/http/authMiddleware`,
+`@getstrata/core` publishes **144+ subpaths** (for example `@getstrata/core/http/authMiddleware`,
 `@getstrata/core/database/migrations`). Prefer subpaths over the root import in apps, bootstrap, and tests.
 
 Some subpaths **re-export the main bundle** so singleton state stays shared (database pool binding,
@@ -59,10 +58,12 @@ Some subpaths **re-export the main bundle** so singleton state stays shared (dat
 
 When adding a subpath that owns process-wide state or base classes used with `instanceof`, append it to
 `CORE_SHARED_SUBPATHS`, run `bun scripts/sync-package-subpaths.ts`, and rebuild. Non-shared subpath
-bundles are built with generated `--external @getstrata/core/*` flags (all 143+ subpaths) so framework
+bundles are built with generated `--external @getstrata/core/*` flags (all 144+ subpaths) so framework
 source can import shared modules via package self-imports (`scripts/codemod-core-self-imports.ts`).
 Bootstrap subpath builds externalize all `@getstrata/bootstrap/*` and `@getstrata/core/*` entries.
 `scripts/verify-no-root-imports.ts` blocks root `@getstrata/core` imports in application source.
+`scripts/verify-no-shared-barrel-imports.ts` blocks `@getstrata/core/database` and
+`@getstrata/core/http` barrel imports in application source.
 `scripts/audit-public-api-surface.ts` reports root exports with no in-repo root import usage.
 `scripts/verify-bundled-subpaths.ts` ensures entries like `http/webFormRequest` do not inline
 `ValidationError`.

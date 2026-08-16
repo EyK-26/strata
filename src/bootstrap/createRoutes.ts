@@ -1,5 +1,5 @@
-import { jsonResponse } from "@getstrata/core/http";
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
+import { jsonResponse } from "@getstrata/core/http/response";
 import { htmlResponse } from "@getstrata/core/view";
 import index from "../../index.html";
 import { appConfig } from "../config/app";

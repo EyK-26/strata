@@ -1,4 +1,4 @@
-import { jsonResponse } from "@getstrata/core/http";
+import { jsonResponse } from "@getstrata/core/http/response";
 import { RedisClient } from "bun";
 import { ensureDatabaseConnection, pingDatabase } from "../db/connection";
 import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "./config";

@@ -1,5 +1,5 @@
 import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { withErrorHandling } from "@getstrata/core/http";
+import { withErrorHandling } from "@getstrata/core/http/response";
 import { pingDatabase } from "../../bootstrap/database.ts";
 import { plainText, renderPage } from "../../lib/view.ts";
 

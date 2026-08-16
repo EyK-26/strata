@@ -101,6 +101,7 @@ const CORE_SUBPATHS = [
   "http/requireGlobalAdminMiddleware",
   "http/requireWebAuthMiddleware",
   "http/resources",
+  "http/response",
   "http/route",
   "http/routeMiddleware",
   "http/routeModelBinding",

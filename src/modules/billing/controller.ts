@@ -1,7 +1,7 @@
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { BadRequestError, UnauthorizedError } from "@getstrata/core/errors/http";
-import { jsonResponse, withErrorHandling } from "@getstrata/core/http";
+import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import db from "../../db/connection";

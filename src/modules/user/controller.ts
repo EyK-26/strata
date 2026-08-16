@@ -8,7 +8,7 @@ import {
   jsonResponse,
   noContentResponse,
   withErrorHandling,
-} from "@getstrata/core/http";
+} from "@getstrata/core/http/response";
 import {
   clearOAuthStateCookie,
   createOAuthStateCookie,

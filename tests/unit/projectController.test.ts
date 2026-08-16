@@ -3,8 +3,8 @@ import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/co
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
-import { jsonResponse } from "@getstrata/core/http";
 import { etagFromResource } from "@getstrata/core/http/etag";
+import { jsonResponse } from "@getstrata/core/http/response";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import ProjectController from "../../src/modules/project/controller";
 import ProjectPolicy from "../../src/modules/project/policy";

@@ -1,6 +1,6 @@
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { createdResponse, jsonResponse, withErrorHandling } from "@getstrata/core/http";
+import { createdResponse, jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { webhookServiceToken } from "./provider";
 import type WebhookService from "./service";
 

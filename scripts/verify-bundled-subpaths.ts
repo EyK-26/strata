@@ -14,6 +14,7 @@ const MUST_EXTERNALIZE_ERRORS = [
   "auth/membershipService",
   "auth/policy",
   "database/errors",
+  "http/response",
   "database/model",
   "http/authorizeMiddleware",
   "http/bodySizeLimitMiddleware",

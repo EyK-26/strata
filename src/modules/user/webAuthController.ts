@@ -2,7 +2,7 @@ import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { clearSessionCookie, createSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { withErrorHandling } from "@getstrata/core/http";
+import { withErrorHandling } from "@getstrata/core/http/response";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
 import type AuthService from "./authService";

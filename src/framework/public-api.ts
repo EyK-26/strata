@@ -224,17 +224,13 @@ export {
   composeMiddleware,
   createAuthMiddleware,
   createAuthorizeMiddleware,
-  createdResponse,
   createRequireAuthMiddleware,
-  jsonResponse,
-  noContentResponse,
   paginatedResponse,
   parsePaginationQuery,
   parsePositiveIntParam,
   requestIdMiddleware,
   securedBindRouteModel,
   securedBindRouteModelByKey,
-  withErrorHandling,
   withMiddleware,
   wrapRouteHandler,
 } from "../core/http/index.ts";
@@ -253,6 +249,12 @@ export {
   toPaginatedResourceCollection,
   toResourceCollection,
 } from "../core/http/resources.ts";
+export {
+  createdResponse,
+  jsonResponse,
+  noContentResponse,
+  withErrorHandling,
+} from "../core/http/response.ts";
 export type { RouteRequest } from "../core/http/route.ts";
 export { createScimThrottleMiddleware } from "../core/http/scimThrottleMiddleware.ts";
 export { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware.ts";

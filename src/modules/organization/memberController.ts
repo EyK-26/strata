@@ -5,7 +5,7 @@ import {
   jsonResponse,
   noContentResponse,
   withErrorHandling,
-} from "@getstrata/core/http";
+} from "@getstrata/core/http/response";
 
 class OrganizationMemberController {
   constructor(dependencies: AppDependencies) {

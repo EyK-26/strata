@@ -1,5 +1,5 @@
 import type { AppDependencies } from "@getstrata/core/contracts/di";
-import { withErrorHandling } from "@getstrata/core/http";
+import { withErrorHandling } from "@getstrata/core/http/response";
 import { assertScimIfMatch, scimResponse } from "./scimResponse";
 import type ScimService from "./service";
 import type { ScimPatchOperation, ScimUserPayload } from "./service";

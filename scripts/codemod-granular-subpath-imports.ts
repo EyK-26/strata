@@ -10,6 +10,8 @@ const TARGET_DIRS = [
   join(ROOT, "tests/unit"),
   join(ROOT, "tests/integration"),
   join(ROOT, "packages/strata-starter/templates/src"),
+  join(ROOT, "..", "getstrata", "src"),
+  join(ROOT, "..", "getstrata", "content"),
 ];
 
 const SYMBOL_TARGETS: Record<string, string> = {
@@ -125,6 +127,11 @@ const SYMBOL_TARGETS: Record<string, string> = {
   toResourceCollection: "http/resources",
   securedBindRouteModel: "http/securedRouteModelBinding",
   securedBindRouteModelByKey: "http/securedRouteModelBinding",
+  createdResponse: "http/response",
+  errorResponse: "http/response",
+  jsonResponse: "http/response",
+  noContentResponse: "http/response",
+  withErrorHandling: "http/response",
   bindRouteModel: "http/routeModelBinding",
   BadRequestError: "errors/http",
   ConflictError: "errors/http",

@@ -302,7 +302,7 @@ import { bindRouteModel } from "@getstrata/core/http/routeModelBinding";
 import { buildRequestCacheKey } from "@getstrata/core/http/validation";
 import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
 import type { RouteRequest } from "@getstrata/core/http/route";
-import { createdResponse, jsonResponse, noContentResponse, withErrorHandling } from "@getstrata/core/http";
+import { createdResponse, jsonResponse, noContentResponse, withErrorHandling } from "@getstrata/core/http/response";
 import ${moduleName}Service from "./service";
 import { ${moduleIdentifier}ServiceToken } from "./provider";
 import {
@@ -511,7 +511,7 @@ export type { ${moduleName}Record } from "./types";
       `import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
-import { withErrorHandling } from "@getstrata/core/http";
+import { withErrorHandling } from "@getstrata/core/http/response";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
 import { ${moduleIdentifier}ServiceToken } from "./provider";

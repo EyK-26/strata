@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { jsonResponse } from "@getstrata/core/http";
+import { jsonResponse } from "@getstrata/core/http/response";
 import { isSpaEnabled } from "../config/frontend";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 

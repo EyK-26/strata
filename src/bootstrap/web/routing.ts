@@ -1,5 +1,5 @@
-import { withErrorHandling } from "@getstrata/core/http";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
+import { withErrorHandling } from "@getstrata/core/http/response";
 import type { RouteRequest } from "@getstrata/core/http/route";
 import type { AppDependencies } from "../contracts.ts";
 import { securedBindRouteModelByKey } from "../http/securedRouteModelBinding.ts";

@@ -8,7 +8,7 @@ import {
   jsonResponse,
   noContentResponse,
   withErrorHandling,
-} from "@getstrata/core/http";
+} from "@getstrata/core/http/response";
 import type { RouteRequest } from "@getstrata/core/http/route";
 import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
 import { buildRequestCacheKey } from "@getstrata/core/http/validation";

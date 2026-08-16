@@ -1,6 +1,6 @@
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { jsonResponse, withErrorHandling } from "@getstrata/core/http";
+import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { auditServiceToken } from "./provider";
 import type AuditService from "./service";
 
