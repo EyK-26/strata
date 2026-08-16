@@ -74,7 +74,13 @@ function resolveApplicationDependencies() {
   return requireActiveApplicationContext().dependencies;
 }
 
+function resetApplicationContextForTests(): void {
+  activeContext = undefined;
+  delete (globalThis as Record<symbol, ApplicationContext | undefined>)[APPLICATION_CONTEXT_KEY];
+}
+
 export {
+  resetApplicationContextForTests,
   resolveApplicationAuth,
   resolveApplicationCache,
   resolveApplicationConfig,

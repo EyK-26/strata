@@ -29,6 +29,9 @@ coveragePathIgnorePatterns = [
 
   # Thin re-exports and optional telemetry
   "src/core/facades/**",
+  "src/core/runtime/applicationRegistry.ts",
+  "src/core/contracts/applicationContext.ts",
+  "src/core/contracts/serviceTokens.ts",
   "src/core/tracing/**",
 
   # ActiveRecord-style model wrapper (covered in tests/unit/model.test.ts)

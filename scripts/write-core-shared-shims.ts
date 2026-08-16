@@ -19,6 +19,7 @@ const CORE_SHARED_FROM_INDEX = [
   "security/securityEvents",
   "tenant/tenantContext",
   "tenant/tenantMiddleware",
+  "runtime/applicationRegistry",
   "tracing/traceContext",
 ] as const;
 
