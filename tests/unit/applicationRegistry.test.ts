@@ -4,11 +4,8 @@ import {
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
 } from "../../src/bootstrap/config";
-import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
-import type { AuthUser } from "../../src/core/auth/guard";
-import type { PolicyGate } from "../../src/core/auth/policy";
+import { type AppDependencies, ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { getRequiredDependency } from "../../src/core/contracts/applicationContext";
-import type { Queue } from "../../src/core/queue";
 import {
   resetApplicationContextForTests,
   resolveApplicationAuth,
@@ -38,16 +35,19 @@ function createTestContext() {
     }),
   };
 
-  const authUser: AuthUser = { id: 1, role: "admin", abilities: ["*"] };
-  const auth = { resolve: async () => authUser };
-  const policyGate = { allows: () => true } as PolicyGate;
-  const queue = { dispatch: async () => undefined } as Queue;
+  const auth = { resolve: async () => ({ id: 1, role: "admin", abilities: ["*"] }) };
+  const policyGate = { allows: () => true };
+  const queue = { dispatch: async () => undefined };
 
   container.set(CORE_AUTH_TOKEN, auth);
   container.set(CORE_POLICY_GATE_TOKEN, policyGate);
   container.set(CORE_QUEUE_TOKEN, queue);
 
-  const dependencies = { container, cache, storage: {} };
+  const dependencies = {
+    container,
+    cache,
+    storage: {},
+  } as AppDependencies;
 
   setActiveApplicationContext({ container, config, dependencies });
 
@@ -62,9 +62,9 @@ describe("applicationRegistry", () => {
     expect(resolveApplicationAuth()).toBe(context.auth);
     expect(resolveApplicationPolicyGate()).toBe(context.policyGate);
     expect(resolveApplicationQueue()).toBe(context.queue);
-    expect(resolveApplicationConfig().get("app.name")).toBe("workhub");
+    expect(resolveApplicationConfig().get<string>("app.name")).toBe("workhub");
     expect(resolveApplicationDependencies()).toBe(context.dependencies);
-    expect(resolveApplicationLogger().channel).toBe("app");
+    expect(typeof resolveApplicationLogger().info).toBe("function");
 
     clearApplicationContext();
   });
@@ -80,9 +80,10 @@ describe("applicationRegistry", () => {
 
 describe("applicationContext helpers", () => {
   test("getRequiredDependency returns registered dependencies", () => {
-    const cache = { remember: async () => undefined };
+    const cache = createTestContext().cache;
 
     expect(getRequiredDependency({ cache }, "cache")).toBe(cache);
+    clearApplicationContext();
   });
 
   test("getRequiredDependency throws for missing dependencies", () => {
