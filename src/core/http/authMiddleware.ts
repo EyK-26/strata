@@ -1,5 +1,5 @@
-import { type AuthUser, authContext, runWithAuthUser } from "../auth/authContext";
-import type { AuthManager } from "../auth/guard";
+import { type AuthUser, authContext, runWithAuthUser } from "@getstrata/core/auth/authContext";
+import type { AuthManager } from "@getstrata/core/auth/guard";
 
 function createAuthMiddleware(auth: AuthManager) {
   return async (request: Request, next: () => Promise<Response>) => {

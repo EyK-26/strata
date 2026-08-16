@@ -6,7 +6,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import { CORE_SHARED_SUBPATH_SET } from "./core-shared-subpaths.ts";
+import { CORE_SHARED_SUBPATH_SET, coreSharedSubpathExternalFlags } from "./core-shared-subpaths.ts";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -327,7 +327,9 @@ async function updatePackageJson(
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
     ? "bun ../../scripts/write-core-shared-shims.ts"
     : "true";
-  const coreExternal = packageDir.includes("strata-core") ? " --external @getstrata/core" : "";
+  const coreExternal = packageDir.includes("strata-core")
+    ? ` ${coreSharedSubpathExternalFlags()}`
+    : "";
   const bootstrapExternal = packageDir.includes("bootstrap") ? " --external @getstrata/core" : "";
   packageJson.scripts["build:subpaths"] = relativeEntries
     ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta${coreExternal}${bootstrapExternal}`

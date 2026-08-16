@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { isGlobalAdmin } from "../auth/accessControl";
-import { currentAuthUser } from "../auth/authContext";
-import { repositoryConnection as db } from "../database/repositoryConnection";
-import { ForbiddenError, HttpError } from "../errors/http";
+import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
+import { ForbiddenError, HttpError } from "@getstrata/core/errors/http";
 import { runWithMigrationBypass } from "./databaseTenantContext";
 import { resolveTenant } from "./resolveTenant";
 import type { TenantContext } from "./tenantContext";

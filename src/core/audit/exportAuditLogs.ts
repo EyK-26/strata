@@ -1,5 +1,5 @@
+import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { appConfig } from "../../config/app";
-import { repositoryConnection as db } from "../database/repositoryConnection";
 import { safeFetch } from "../security/safeFetch";
 import { assertSafeOutboundUrl } from "../security/safeUrl";
 import { runWithMigrationBypass } from "../tenant/databaseTenantContext";

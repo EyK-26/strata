@@ -1,4 +1,4 @@
-import { ForbiddenError, ValidationError } from "../errors/http";
+import { ForbiddenError, ValidationError } from "@getstrata/core/errors/http";
 import { requestPrefersJson } from "./contentNegotiation";
 import { parseFormBody } from "./parseFormBody";
 import { parseJsonBody } from "./validation";

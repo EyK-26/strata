@@ -41,3 +41,12 @@ export const CORE_SHARED_SUBPATHS = [
 export type CoreSharedSubpath = (typeof CORE_SHARED_SUBPATHS)[number];
 
 export const CORE_SHARED_SUBPATH_SET = new Set<string>(CORE_SHARED_SUBPATHS);
+
+/** CLI flags for bun build so bundled subpaths resolve shared modules through npm exports. */
+export function coreSharedSubpathExternalFlags(): string {
+  const flags = ["--external @getstrata/core"];
+  for (const subpath of CORE_SHARED_SUBPATHS) {
+    flags.push(`--external @getstrata/core/${subpath}`);
+  }
+  return flags.join(" ");
+}

@@ -1,4 +1,4 @@
-import { ValidationError } from "../errors/http";
+import { ValidationError } from "@getstrata/core/errors/http";
 
 type ValidationRule = (
   field: string,

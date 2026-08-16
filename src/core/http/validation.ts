@@ -1,6 +1,6 @@
-import { currentAuthUser } from "../auth/authContext";
-import { BadRequestError } from "../errors/http";
-import { currentTenantId } from "../tenant/tenantContext";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { BadRequestError } from "@getstrata/core/errors/http";
+import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 
 function buildRequestCacheKey(fallbackPath: string, request?: Request): string {
   if (!request) {

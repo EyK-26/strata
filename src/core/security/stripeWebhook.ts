@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { UnauthorizedError } from "../errors/http";
+import { UnauthorizedError } from "@getstrata/core/errors/http";
 
 function verifyStripeWebhookSignature(
   rawBody: string,

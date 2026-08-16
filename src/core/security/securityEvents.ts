@@ -1,5 +1,5 @@
-import { currentAuthUser } from "../auth/authContext";
-import { currentRequestMeta } from "../http/requestMetaContext";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 
 interface SecurityEventDetails {
   [key: string]: unknown;

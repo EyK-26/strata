@@ -1,5 +1,5 @@
 import { lookup as dnsLookupImpl } from "node:dns/promises";
-import { BadRequestError } from "../errors/http";
+import { BadRequestError } from "@getstrata/core/errors/http";
 
 type DnsLookupResult = { address: string; family: number };
 type DnsLookup = (

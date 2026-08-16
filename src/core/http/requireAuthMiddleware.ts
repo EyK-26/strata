@@ -1,5 +1,5 @@
-import type { AuthManager } from "../auth/guard";
-import { UnauthorizedError } from "../errors/http";
+import type { AuthManager } from "@getstrata/core/auth/guard";
+import { UnauthorizedError } from "@getstrata/core/errors/http";
 import type { Middleware } from "./middleware";
 
 function createRequireAuthMiddleware(auth: AuthManager): Middleware {

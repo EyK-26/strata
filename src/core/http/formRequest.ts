@@ -1,4 +1,4 @@
-import { ForbiddenError } from "../errors/http";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import { parseJsonBody } from "./validation";
 
 abstract class FormRequest<TOutput> {

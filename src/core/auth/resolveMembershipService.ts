@@ -1,4 +1,4 @@
-import { resolveApplicationDependencies } from "../runtime/applicationRegistry";
+import { resolveApplicationDependencies } from "@getstrata/core/runtime/applicationRegistry";
 import MembershipService from "./membershipService";
 
 function resolveMembershipService(): MembershipService {

@@ -1,10 +1,10 @@
-import { currentAuthUser } from "../auth/authContext";
-import type { Policy } from "../auth/policy";
-import { BadRequestError } from "../errors/http";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import type { Policy } from "@getstrata/core/auth/policy";
+import { BadRequestError } from "@getstrata/core/errors/http";
 import {
   resolveApplicationAuth,
   resolveApplicationPolicyGate,
-} from "../runtime/applicationRegistry";
+} from "@getstrata/core/runtime/applicationRegistry";
 import {
   applyConditionalGet,
   assertIfMatch,

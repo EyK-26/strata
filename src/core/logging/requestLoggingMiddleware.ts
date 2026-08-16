@@ -1,5 +1,5 @@
-import type { Middleware } from "../http/middleware";
-import { runWithRequestMeta } from "../http/requestMetaContext";
+import type { Middleware } from "@getstrata/core/http/middleware";
+import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { appLogger } from "./logger";
 
 function createRequestLoggingMiddleware(): Middleware {

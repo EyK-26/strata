@@ -1,4 +1,4 @@
-import { defineTable } from "../database";
+import { defineTable } from "@getstrata/core/database";
 import type { FailedJobRecord } from "./types";
 
 const failedJobTable = defineTable<FailedJobRecord, "id">({

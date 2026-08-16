@@ -1,5 +1,5 @@
+import { PreconditionFailedError } from "@getstrata/core/errors/http";
 import { nonCryptographicDigest } from "../crypto/nonCryptographicHash.ts";
-import { PreconditionFailedError } from "../errors/http";
 
 interface EtagVersioned {
   id?: number | string;

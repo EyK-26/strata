@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
+import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { appConfig } from "../../config/app";
-import { repositoryConnection as db } from "../database/repositoryConnection";
 import { Job } from "../queue";
 import { safeFetch } from "../security/safeFetch";
 import { assertSafeOutboundUrl } from "../security/safeUrl";

@@ -1,4 +1,4 @@
-import { NotFoundError } from "../errors/http.ts";
+import { NotFoundError } from "@getstrata/core/errors/http";
 import type BaseRepository from "./baseRepository.ts";
 import { resolveSoftDeleteColumn } from "./query.ts";
 import type {

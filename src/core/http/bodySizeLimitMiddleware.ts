@@ -1,4 +1,4 @@
-import { PayloadTooLargeError } from "../errors/http";
+import { PayloadTooLargeError } from "@getstrata/core/errors/http";
 import type { Middleware } from "./middleware";
 
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;

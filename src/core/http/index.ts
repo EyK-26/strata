@@ -1,5 +1,5 @@
+import { HttpError } from "@getstrata/core/errors/http";
 import { mapDatabaseError } from "../database/errors";
-import { HttpError } from "../errors/http";
 import { webErrorResponse } from "./webErrorResponse";
 
 export {
@@ -13,7 +13,7 @@ export {
   UnauthorizedError,
   UnprocessableEntityError,
   ValidationError,
-} from "../errors/http";
+} from "@getstrata/core/errors/http";
 export type { PaginatedResult, PaginationMeta } from "../pagination";
 export { createAuthMiddleware } from "./authMiddleware";
 export { createAuthorizeMiddleware } from "./authorizeMiddleware";

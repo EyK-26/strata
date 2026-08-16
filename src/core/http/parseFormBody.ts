@@ -1,4 +1,4 @@
-import { BadRequestError } from "../errors/http";
+import { BadRequestError } from "@getstrata/core/errors/http";
 
 interface FormDataLike {
   entries(): Iterable<[string, unknown]>;

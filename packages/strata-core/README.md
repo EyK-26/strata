@@ -59,8 +59,10 @@ Some subpaths **re-export the main bundle** so singleton state stays shared (dat
 
 When adding a subpath that owns process-wide state or base classes used with `instanceof`, append it to
 `CORE_SHARED_SUBPATHS`, run `bun scripts/sync-package-subpaths.ts`, and rebuild. Non-shared subpath
-bundles are built with `--external @getstrata/core` so explicit package imports resolve through the
-same entry graph at runtime.
+bundles are built with generated `--external @getstrata/core/*` flags so framework source can import
+shared modules via package self-imports (`scripts/codemod-core-self-imports.ts`).
+`scripts/verify-bundled-subpaths.ts` ensures entries like `http/webFormRequest` do not inline
+`ValidationError`.
 
 ```typescript
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";

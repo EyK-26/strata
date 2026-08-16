@@ -1,10 +1,10 @@
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { tokenServiceToken } from "../../modules/user/provider";
 import type TokenService from "../../modules/user/tokenService";
-import { currentAuthUser } from "../auth/authContext";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { resolveCsrfTokenForRequest } from "../http/csrfToken";
 import { pullFlash } from "../http/flashSession";
-import { currentRequestMeta } from "../http/requestMetaContext";
 
 interface WebLayoutAuthUser {
   id: number;

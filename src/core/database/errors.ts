@@ -3,7 +3,7 @@ import {
   ConflictError,
   HttpError,
   UnprocessableEntityError,
-} from "../errors/http";
+} from "@getstrata/core/errors/http";
 
 interface PostgresErrorLike {
   code?: string;

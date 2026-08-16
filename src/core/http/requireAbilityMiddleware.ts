@@ -1,6 +1,6 @@
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import type { AbilityChecker } from "../auth/abilityChecker";
-import { currentAuthUser } from "../auth/authContext";
-import { ForbiddenError } from "../errors/http";
 import type { Middleware } from "./middleware";
 
 function createRequireAbilityMiddleware(abilityChecker: AbilityChecker) {

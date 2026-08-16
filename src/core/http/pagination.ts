@@ -1,4 +1,4 @@
-import { BadRequestError } from "../errors/http";
+import { BadRequestError } from "@getstrata/core/errors/http";
 import { buildPaginationMeta, type PaginatedResult, type PaginationMeta } from "../pagination";
 import { getQueryParams } from "./validation";
 

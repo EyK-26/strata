@@ -1,6 +1,6 @@
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { currentTenant, rateLimitMultiplierForPlan } from "@getstrata/core/tenant/tenantContext";
 import { RedisClient } from "bun";
-import { currentAuthUser } from "../auth/authContext";
-import { currentTenant, rateLimitMultiplierForPlan } from "../tenant/tenantContext";
 import type { Middleware } from "./middleware";
 
 interface ThrottleOptions {

@@ -1,7 +1,7 @@
-import { currentAuthUser } from "../auth/authContext";
-import type { AuthManager } from "../auth/guard";
-import type { Policy, PolicyGate } from "../auth/policy";
-import { ForbiddenError } from "../errors/http";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import type { AuthManager } from "@getstrata/core/auth/guard";
+import type { Policy, PolicyGate } from "@getstrata/core/auth/policy";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import type { Middleware } from "./middleware";
 
 function createAuthorizeMiddleware(

@@ -1,4 +1,4 @@
-import { repositoryConnection as db } from "../database/repositoryConnection";
+import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import type { TenantContext } from "./tenantContext";
 
 async function resolveTenant(tenantId: number): Promise<TenantContext | null> {

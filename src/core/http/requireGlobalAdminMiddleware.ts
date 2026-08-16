@@ -1,7 +1,7 @@
-import { isGlobalAdmin } from "../auth/accessControl";
-import { currentAuthUser } from "../auth/authContext";
-import { ForbiddenError } from "../errors/http";
-import { logSecurityEvent } from "../security/securityEvents";
+import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { ForbiddenError } from "@getstrata/core/errors/http";
+import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import type { Middleware } from "./middleware";
 
 function createRequireGlobalAdminMiddleware(): Middleware {

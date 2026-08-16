@@ -1,5 +1,4 @@
-import { eventBus } from "../events";
-import { mailer } from "../mail/mailer";
+import { eventBus } from "@getstrata/core/events";
 import {
   resolveApplicationAuth,
   resolveApplicationCache,
@@ -8,7 +7,8 @@ import {
   resolveApplicationLogger,
   resolveApplicationPolicyGate,
   resolveApplicationQueue,
-} from "../runtime/applicationRegistry";
+} from "@getstrata/core/runtime/applicationRegistry";
+import { mailer } from "../mail/mailer";
 import { storage } from "../storage/storage";
 
 function cache() {

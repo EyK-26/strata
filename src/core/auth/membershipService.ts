@@ -1,5 +1,5 @@
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
-import { ForbiddenError } from "../errors/http";
 import { hasMinimumOrgRole, isGlobalAdmin, resolveUserId } from "./accessControl";
 import { type AuthUser, currentAuthUser } from "./authContext";
 import { membershipRepository as defaultMembershipRepository } from "./membershipContext";

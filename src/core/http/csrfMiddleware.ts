@@ -1,4 +1,4 @@
-import { ForbiddenError } from "../errors/http";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import { readSubmittedCsrfTokenFromBody, resolveCsrfToken, verifyCsrfToken } from "./csrfToken";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";

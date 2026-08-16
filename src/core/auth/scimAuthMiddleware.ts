@@ -1,8 +1,8 @@
-import { bindDatabaseConnection } from "../database/bindConnection";
-import { resetBoundDatabaseConnection } from "../database/boundConnection";
+import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
+import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
+import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
+import type { Middleware } from "@getstrata/core/http/middleware";
 import { getActiveDatabaseConnection } from "../database/connectionContext";
-import { getDefaultDatabasePool } from "../database/defaultConnection";
-import type { Middleware } from "../http/middleware";
 import { resolveScimTenantFromToken } from "../security/scimTenantTokens";
 import { resolveTenant } from "../tenant/resolveTenant";
 import { runWithTenantDatabase } from "../tenant/tenantDatabaseScope";

@@ -1,4 +1,4 @@
-import type { Middleware } from "../http/middleware";
+import type { Middleware } from "@getstrata/core/http/middleware";
 import { createSpan, exportOtelSpan } from "./otel";
 import { runWithTraceContext } from "./traceContext";
 

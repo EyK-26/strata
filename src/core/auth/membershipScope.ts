@@ -1,5 +1,5 @@
-import { NotFoundError } from "../errors/http";
-import { currentTenantId } from "../tenant/tenantContext";
+import { NotFoundError } from "@getstrata/core/errors/http";
+import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { isGlobalAdmin } from "./accessControl";
 import { currentAuthUser } from "./authContext";
 import { currentOrganizationIds } from "./membershipContext";

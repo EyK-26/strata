@@ -1,9 +1,9 @@
+import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import {
   getActiveDatabaseConnection,
   hasActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "../database/connectionContext";
-import { getDefaultDatabasePool } from "../database/defaultConnection";
 import { currentTenant, runWithTenant, type TenantContext } from "./tenantContext";
 
 type TransactionHandle = {

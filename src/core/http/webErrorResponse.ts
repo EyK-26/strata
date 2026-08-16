@@ -1,6 +1,6 @@
+import { HttpError, UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { isViewsEnabled } from "../../config/frontend";
 import { mapDatabaseError } from "../database/errors";
-import { HttpError, UnauthorizedError, ValidationError } from "../errors/http";
 import { htmlResponse } from "../view";
 import { requestPrefersJson } from "./contentNegotiation";
 
