@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import CacheRepository from "../../src/core/cache/repository";
+import { CacheRepository } from "@getstrata/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { CACHE_TAGS } from "../../src/core/cache/tags";

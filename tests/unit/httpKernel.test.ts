@@ -7,8 +7,8 @@ import {
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
+import { CacheRepository } from "@getstrata/core/cache/repository";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { ForbiddenError } from "../../src/core/errors/http";

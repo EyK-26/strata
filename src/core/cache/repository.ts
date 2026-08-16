@@ -45,4 +45,5 @@ class CacheRepository {
   }
 }
 
+export { CacheRepository };
 export default CacheRepository;

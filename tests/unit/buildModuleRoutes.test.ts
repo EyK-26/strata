@@ -7,10 +7,10 @@ import {
 } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import { CacheRepository } from "@getstrata/core/cache/repository";
 import { appConfig } from "../../src/config/app";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";
-import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { SyncQueue } from "../../src/core/queue";

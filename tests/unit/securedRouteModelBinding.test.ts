@@ -5,10 +5,10 @@ import {
   ConfigStore,
   ServiceContainer,
 } from "@getstrata/bootstrap/contracts";
+import { CacheRepository } from "@getstrata/core/cache/repository";
 import type { AuthUser } from "../../src/core/auth/authContext";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { Policy, PolicyGate } from "../../src/core/auth/policy";
-import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";
 import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { ForbiddenError, NotFoundError, PreconditionFailedError } from "../../src/core/errors/http";

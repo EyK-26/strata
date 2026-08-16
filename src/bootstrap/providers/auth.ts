@@ -5,8 +5,8 @@ import {
   DatabaseTokenGuard,
   GuestGuard,
 } from "@getstrata/core/auth/guard";
+import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import { authConfig } from "../../config/auth";
-import { SessionGuard } from "../../core/auth/sessionGuard";
 import { CORE_AUTH_TOKEN } from "../config";
 import type { ServiceProvider } from "../contracts";
 
