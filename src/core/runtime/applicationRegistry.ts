@@ -1,8 +1,8 @@
 import type { CacheLike } from "../../types/services";
 import type { AuthManager } from "../auth/guard";
 import type { PolicyGate } from "../auth/policy";
-import type { ApplicationContext } from "../contracts/applicationContext";
-import { getRequiredDependency } from "../contracts/applicationContext";
+import type { AppContext } from "../contracts/di";
+import { getRequiredDependency } from "../contracts/di";
 import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
@@ -13,14 +13,14 @@ import type { Queue } from "../queue";
 
 const APPLICATION_CONTEXT_KEY = Symbol.for("@getstrata/applicationContext");
 
-let activeContext: ApplicationContext | undefined;
+let activeContext: AppContext | undefined;
 
-function readStoredApplicationContext(): ApplicationContext | undefined {
+function readStoredApplicationContext(): AppContext | undefined {
   if (activeContext) {
     return activeContext;
   }
 
-  const globalContext = (globalThis as Record<symbol, ApplicationContext | undefined>)[
+  const globalContext = (globalThis as Record<symbol, AppContext | undefined>)[
     APPLICATION_CONTEXT_KEY
   ];
 
@@ -31,12 +31,12 @@ function readStoredApplicationContext(): ApplicationContext | undefined {
   return activeContext;
 }
 
-function setActiveApplicationContext(context: ApplicationContext): void {
+function setActiveApplicationContext(context: AppContext): void {
   activeContext = context;
-  (globalThis as Record<symbol, ApplicationContext>)[APPLICATION_CONTEXT_KEY] = context;
+  (globalThis as Record<symbol, AppContext>)[APPLICATION_CONTEXT_KEY] = context;
 }
 
-function requireActiveApplicationContext(): ApplicationContext {
+function requireActiveApplicationContext(): AppContext {
   const context = readStoredApplicationContext();
 
   if (!context) {

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import { Policy, PolicyGate } from "../../src/core/auth/policy";
 import { securedBindRouteModelByKey } from "../../src/core/http/securedRouteModelBinding";
+import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 
 class PublicForumPolicy extends Policy {
   override view() {

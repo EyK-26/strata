@@ -1,10 +1,10 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
-import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";
 import { etagFromResource, jsonResponse } from "../../src/core/http";
+import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 import CommentController from "../../src/modules/comment/controller";
 import CommentPolicy from "../../src/modules/comment/policy";
 import { commentServiceToken } from "../../src/modules/comment/provider";

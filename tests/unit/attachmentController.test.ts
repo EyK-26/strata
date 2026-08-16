@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
 import { type AppDependencies, ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { createHttpKernel } from "../../src/bootstrap/httpKernel";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { membershipContext } from "../../src/core/auth/membershipContext";
 import { PolicyGate } from "../../src/core/auth/policy";
+import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 import AttachmentController, {
   createAttachmentRoutes,
 } from "../../src/modules/attachment/controller";

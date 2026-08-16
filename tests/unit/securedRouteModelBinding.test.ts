@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
 import { type AppDependencies, ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import type { AuthUser } from "../../src/core/auth/authContext";
@@ -11,6 +10,7 @@ import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
 import { ForbiddenError, NotFoundError, PreconditionFailedError } from "../../src/core/errors/http";
 import { etagFromResource } from "../../src/core/http/etag";
 import { securedBindRouteModel } from "../../src/core/http/securedRouteModelBinding";
+import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 import { createStorageDriver, StorageManager } from "../../src/core/storage/storage";
 
 interface WidgetRecord {

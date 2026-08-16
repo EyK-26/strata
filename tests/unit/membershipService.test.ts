@@ -1,9 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
-import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import MembershipService, { resolveMembershipService } from "../../src/core/auth/membershipService";
 import { ForbiddenError } from "../../src/core/errors/http";
+import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const membershipRepository = {

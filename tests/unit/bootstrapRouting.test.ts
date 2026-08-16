@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Policy, PolicyGate } from "@getstrata/core";
-import { setActiveApplicationContext } from "../../src/bootstrap/applicationRegistry";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
 import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { toRouteRequest, wrapSecuredRouteModelByKey } from "../../src/bootstrap/web/routing.ts";
+import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 
 class PublicForumPolicy extends Policy {
   override view() {
