@@ -1,6 +1,6 @@
 # Laravel parity audit
 
-Generated: 2026-08-16T10:32:36.581Z
+Generated: 2026-08-16T10:45:28.971Z
 
 ## Score
 
@@ -47,7 +47,7 @@ Target: ≥99% core coverage across all documented Laravel sections.
 | ✅ covered | [Queues](https://laravel.com/docs/queues) | Job, RedisQueue, QueueWorker… | `unit/queue.test.ts` |
 | ✅ covered | [Queues: Dealing With Failed Jobs](https://laravel.com/docs/queues#dealing-with-failed-jobs) | FailedJobService, FailedJobRepository, createFailedJobService | `unit/failedJobService.test.ts` |
 | ✅ covered | [Task Scheduling](https://laravel.com/docs/scheduling) | Schedule, appSchedule, runDueScheduledTasks… | `unit/schedule.test.ts` |
-| ✅ covered | [Cache](https://laravel.com/docs/cache) | CacheRepository, CACHE_TAGS, cacheTagsForModelWrite… | `unit/cacheRepository.test.ts` |
+| ✅ covered | [Cache](https://laravel.com/docs/cache) | CacheRepository, CACHE_TAGS, @getstrata/bootstrap:cacheTagsForModelWrite… | `unit/cacheRepository.test.ts` |
 | ✅ covered | [Rate Limiting](https://laravel.com/docs/routing#rate-limiting) | createThrottleMiddleware, createMemoryThrottleMiddleware, createLoginThrottleMiddleware | `unit/throttleMiddleware.test.ts` |
 | ✅ covered | [File Storage](https://laravel.com/docs/filesystem) | StorageManager, LocalStorageDriver, storage | `unit/storage.test.ts` |
 | ✅ covered | [Mail](https://laravel.com/docs/mail) | Mailer, LogMailDriver, mailer… | `unit/mailer.test.ts` |

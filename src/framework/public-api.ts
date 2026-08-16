@@ -59,7 +59,6 @@ export {
   type CreateCacheStoreOptions,
   createCacheStore,
 } from "../core/cache/createCacheStore.ts";
-export { cacheTagsForModelWrite, discoverModelTableNames } from "../core/cache/modelCacheTags.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
 export { CACHE_TAGS } from "../core/cache/tags.ts";
 export type { DatabaseConnection } from "../core/database/baseRepository.ts";

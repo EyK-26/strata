@@ -309,12 +309,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
     id: "cache",
     laravelSection: "Cache",
     laravelDocPath: "cache",
-    strataApis: [
-      "CacheRepository",
-      "CACHE_TAGS",
-      "cacheTagsForModelWrite",
-      "discoverModelTableNames",
-    ],
+    strataApis: ["CacheRepository", "CACHE_TAGS"],
     bootstrapApis: ["cacheTagsForModelWrite", "discoverModelTableNames"],
     testGlobs: ["unit/cacheRepository.test.ts", "unit/modelCacheTags.test.ts"],
     tier: "core",
