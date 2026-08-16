@@ -5,7 +5,7 @@ import {
   isBlockedHostname,
   resetDnsLookupForTests,
   setDnsLookupForTests,
-} from "../../src/core/security/safeUrl";
+} from "@getstrata/core/security/safeUrl";
 
 afterEach(() => {
   resetDnsLookupForTests();

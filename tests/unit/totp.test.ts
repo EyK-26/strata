@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generateTotp, verifyTotp } from "../../src/core/security/totp";
+import { generateTotp, verifyTotp } from "@getstrata/core/security/totp";
 
 describe("totp", () => {
   const secret = "JBSWY3DPEHPK3PXP";

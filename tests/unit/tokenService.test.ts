@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hashApiToken } from "../../src/core/auth/tokenHash";
+import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
 import UserRepository from "../../src/modules/user/repository";
 import TokenService, {

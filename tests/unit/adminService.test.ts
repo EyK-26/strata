@@ -66,7 +66,7 @@ describe("AdminService", () => {
       })),
     };
 
-    const { jobRegistry } = await import("../../src/core/queue/jobRegistry");
+    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
     jobRegistry.register("echo.job", () => new EchoJob());
 
     const service = new AdminService(failedJobs as never);

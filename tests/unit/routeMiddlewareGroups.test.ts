@@ -8,8 +8,8 @@ import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
+import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
-import { createAuthorizeMiddleware } from "../../src/core/http/authorizeMiddleware";
 
 class ProjectPolicy extends Policy {
   override delete(user: { role?: string } | null): boolean {

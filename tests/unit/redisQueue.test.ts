@@ -1,14 +1,14 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { Job } from "@getstrata/core/queue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
-import { RedisClient } from "bun";
 import {
   QUEUE_HIGH_KEY,
   QUEUE_LIST_KEY,
   QUEUE_LOW_KEY,
   queueKeyForPriority,
   RedisQueue,
-} from "../../src/core/queue/redisQueue";
+} from "@getstrata/core/queue/redisQueue";
+import { RedisClient } from "bun";
 
 afterAll(() => {
   // no mocks

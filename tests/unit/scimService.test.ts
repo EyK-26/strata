@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { NotFoundError } from "@getstrata/core/errors/http";
-import { runWithTenant, type TenantContext } from "../../src/core/tenant/tenantContext";
-import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
+import { runWithTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { SCIM_SCHEMAS } from "../../src/domain/scim";
 import OrganizationMemberRepository from "../../src/modules/organization/memberRepository";
 import type {

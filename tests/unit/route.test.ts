@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getRouteParams, type RouteRequest } from "../../src/core/http/route";
+import { getRouteParams, type RouteRequest } from "@getstrata/core/http/route";
 
 describe("getRouteParams", () => {
   test("returns typed route params from the request", () => {

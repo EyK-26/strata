@@ -7,7 +7,7 @@ import {
   protectEmail,
   resolveEncryptionKey,
   revealEmail,
-} from "../../src/core/crypto/fieldEncryption";
+} from "@getstrata/core/crypto/fieldEncryption";
 
 const previousEncryptionKey = process.env.KMS_ENCRYPTION_KEY;
 const previousFeatureFlag = process.env.FEATURE_FIELD_ENCRYPTION;

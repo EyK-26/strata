@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
-import { collectQueueMetrics } from "../../src/core/queue/queueMetrics";
+import { collectQueueMetrics } from "@getstrata/core/queue/queueMetrics";
 
 describe("prometheusRegistry.getHttpRequestSummary", () => {
   test("summarizes request counts by status and path", () => {

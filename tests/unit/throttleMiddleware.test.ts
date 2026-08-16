@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { resolveThrottleIdentity } from "../../src/core/http/throttleMiddleware";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { resolveThrottleIdentity } from "@getstrata/core/http/throttleMiddleware";
 
 describe("resolveThrottleIdentity", () => {
   test("prefers token id for bearer-authenticated requests", () => {

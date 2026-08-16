@@ -5,6 +5,7 @@ import {
   ConfigStore,
   ServiceContainer,
 } from "@getstrata/bootstrap/contracts";
+import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
@@ -19,7 +20,6 @@ import { etagFromResource } from "@getstrata/core/http/etag";
 import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
-import type { AuthUser } from "../../src/core/auth/authContext";
 
 interface WidgetRecord {
   id: number;

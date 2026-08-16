@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { resolveWebLayoutData } from "../../src/core/view/webLayoutData";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { resolveWebLayoutData } from "@getstrata/core/view/webLayoutData";
 import { tokenServiceToken } from "../../src/modules/user/provider";
 
 describe("resolveWebLayoutData", () => {

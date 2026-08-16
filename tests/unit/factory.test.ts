@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Factory } from "../../src/core/database/factory";
+import { Factory } from "@getstrata/core/database/factory";
 import { userFactory } from "../../src/modules/user/factory";
 
 class WidgetFactory extends Factory<{ id: number; name: string }> {

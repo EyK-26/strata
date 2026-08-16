@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BadRequestError } from "@getstrata/core/errors/http";
-import { formDataToRecord, parseFormBody } from "../../src/core/http/parseFormBody";
+import { formDataToRecord, parseFormBody } from "@getstrata/core/http/parseFormBody";
 
 describe("parseFormBody", () => {
   test("rejects requests without a form content type", async () => {

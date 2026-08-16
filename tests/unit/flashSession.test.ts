@@ -4,7 +4,7 @@ import {
   flashResponse,
   pullFlash,
   withFlashClear,
-} from "../../src/core/http/flashSession";
+} from "@getstrata/core/http/flashSession";
 
 describe("flashSession", () => {
   test("stores and reads a flash message from cookies", () => {

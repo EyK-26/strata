@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { requestPrefersJson } from "../../src/core/http/contentNegotiation";
+import { requestPrefersJson } from "@getstrata/core/http/contentNegotiation";
 
 describe("requestPrefersJson", () => {
   test("treats API paths as JSON by default", () => {

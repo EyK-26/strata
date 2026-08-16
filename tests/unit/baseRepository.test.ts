@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { NotFoundError } from "@getstrata/core/errors/http";
 import {
   BaseRepository,
   type DatabaseConnection,
   defineTable,
   hasMany,
-} from "../../src/core/database";
+} from "@getstrata/core/database";
+import { NotFoundError } from "@getstrata/core/errors/http";
 
 type CrewMember = {
   id: number;

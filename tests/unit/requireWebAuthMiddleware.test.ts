@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
-import { createRequireWebAuthMiddleware } from "../../src/core/http/requireWebAuthMiddleware";
+import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
 
 describe("createRequireWebAuthMiddleware", () => {
   test("allows authenticated requests through", async () => {

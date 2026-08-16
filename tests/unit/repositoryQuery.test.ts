@@ -5,7 +5,7 @@ import {
   type DatabaseConnection,
   defineTable,
   hasMany,
-} from "../../src/core/database";
+} from "@getstrata/core/database";
 
 type Squad = { id: number; label: string };
 type Member = { id: number; name: string; squad_id: number };

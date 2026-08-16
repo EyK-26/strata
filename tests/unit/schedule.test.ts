@@ -4,7 +4,7 @@ describe("Schedule", () => {
   test("returns every-minute tasks", async () => {
     mock.restore();
 
-    const { Schedule } = await import("../../src/core/scheduler/schedule");
+    const { Schedule } = await import("@getstrata/core/scheduler/schedule");
     const schedule = new Schedule();
     schedule.command("* * * * *", "heartbeat", () => undefined);
 

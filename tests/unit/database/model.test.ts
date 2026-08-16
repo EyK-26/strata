@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import BaseRepository from "../../../src/core/database/baseRepository";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import {
   filterMassAssignable,
   hydrateValue,
   Model,
   registerModelRepository,
-} from "../../../src/core/database/model";
-import { belongsTo, hasMany } from "../../../src/core/database/relationships";
-import { defineTable } from "../../../src/core/database/table";
-import { NotFoundError } from "../../../src/core/errors/http";
+} from "@getstrata/core/database/model";
+import { belongsTo, hasMany } from "@getstrata/core/database/relationships";
+import { defineTable } from "@getstrata/core/database/table";
+import { NotFoundError } from "@getstrata/core/errors/http";
 
 interface Article {
   id: number;

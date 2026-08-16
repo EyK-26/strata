@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { sanitizeUploadFileName } from "@getstrata/core/http/parseMultipartUpload";
 import { isAllowedMimeType, resolveMaxUploadBytes } from "../../src/config/uploads";
-import { sanitizeUploadFileName } from "../../src/core/http/parseMultipartUpload";
 
 describe("upload helpers", () => {
   test("sanitizeUploadFileName strips path segments and unsafe characters", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
-import { verifyStripeWebhookSignature } from "../../src/core/security/stripeWebhook";
+import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 
 describe("verifyStripeWebhookSignature", () => {
   test("accepts a valid Stripe signature", () => {

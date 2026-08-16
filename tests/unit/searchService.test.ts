@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import CommentRepository from "../../src/modules/comment/repository";
 import SearchService from "../../src/modules/search/service";
 import TaskRepository from "../../src/modules/task/repository";

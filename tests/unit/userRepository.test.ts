@@ -3,7 +3,7 @@ import { CORE_QUEUE_TOKEN } from "@getstrata/bootstrap/config";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { SyncQueue } from "@getstrata/core/queue";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
-import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import UserRepository from "../../src/modules/user/repository";
 import { createMockCache, createMockDependencies, defaultTestTenant } from "./testHelpers";
 

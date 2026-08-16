@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+  isPostgresError,
+  mapDatabaseError,
+  withDatabaseErrorHandling,
+} from "@getstrata/core/database/errors";
+import {
   BadRequestError,
   ConflictError,
   HttpError,
   UnprocessableEntityError,
 } from "@getstrata/core/errors/http";
-import {
-  isPostgresError,
-  mapDatabaseError,
-  withDatabaseErrorHandling,
-} from "../../src/core/database/errors";
 
 describe("isPostgresError", () => {
   test("detects postgres-like error objects", () => {

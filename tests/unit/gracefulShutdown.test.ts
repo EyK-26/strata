@@ -4,7 +4,7 @@ import {
   registerShutdownHandler,
   resetGracefulShutdownForTests,
   runGracefulShutdown,
-} from "../../src/core/lifecycle/gracefulShutdown";
+} from "@getstrata/core/lifecycle/gracefulShutdown";
 
 afterEach(() => {
   resetGracefulShutdownForTests();

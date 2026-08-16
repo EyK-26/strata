@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
-import { DEFAULT_TENANT } from "../../src/core/tenant/tenantMiddleware";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
+import { DEFAULT_TENANT } from "@getstrata/core/tenant/tenantMiddleware";
 import AuditLogRepository from "../../src/modules/audit/repository";
 import AuditService from "../../src/modules/audit/service";
 

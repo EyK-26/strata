@@ -26,7 +26,7 @@ describe("mfaSecret", () => {
     delete process.env.KMS_ENCRYPTION_KEY;
     delete process.env.FEATURE_FIELD_ENCRYPTION;
 
-    const { protectMfaSecret, revealMfaSecret } = await import("../../src/core/crypto/mfaSecret");
+    const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
 
     expect(protectMfaSecret("JBSWY3DPEHPK3PXP")).toBe("JBSWY3DPEHPK3PXP");
     expect(revealMfaSecret("JBSWY3DPEHPK3PXP")).toBe("JBSWY3DPEHPK3PXP");
@@ -38,7 +38,7 @@ describe("mfaSecret", () => {
     process.env.KMS_ENCRYPTION_KEY = "c".repeat(64);
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
 
-    const { protectMfaSecret, revealMfaSecret } = await import("../../src/core/crypto/mfaSecret");
+    const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
     const protectedSecret = protectMfaSecret("JBSWY3DPEHPK3PXP");
 
     expect(protectedSecret.startsWith("enc:v1:")).toBe(true);
@@ -49,7 +49,7 @@ describe("mfaSecret", () => {
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
     delete process.env.KMS_ENCRYPTION_KEY;
 
-    const { protectMfaSecret, revealMfaSecret } = await import("../../src/core/crypto/mfaSecret");
+    const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
 
     expect(protectMfaSecret("plain-secret")).toBe("plain-secret");
     expect(revealMfaSecret("plain-secret")).toBe("plain-secret");
@@ -59,7 +59,7 @@ describe("mfaSecret", () => {
     process.env.KMS_ENCRYPTION_KEY = "d".repeat(64);
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
 
-    const { revealMfaSecret } = await import("../../src/core/crypto/mfaSecret");
+    const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
 
     expect(revealMfaSecret("legacy-plain-secret")).toBe("legacy-plain-secret");
   });

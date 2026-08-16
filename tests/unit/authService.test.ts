@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { MockOAuthProvider } from "../../src/core/auth/oauth/providers";
-import { hashPassword, verifyPassword } from "../../src/core/auth/password";
-import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
+import { MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
+import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
 import AuthService from "../../src/modules/user/authService";
 import OAuthIdentityRepository from "../../src/modules/user/oauthIdentityRepository";

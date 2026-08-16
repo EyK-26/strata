@@ -2,8 +2,8 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import {
   resetGracefulShutdownForTests,
   runGracefulShutdown,
-} from "../../../src/core/lifecycle/gracefulShutdown";
-import { Job } from "../../../src/core/queue";
+} from "@getstrata/core/lifecycle/gracefulShutdown";
+import { Job } from "@getstrata/core/queue";
 import { captureConsole } from "./helpers";
 
 afterEach(async () => {
@@ -37,7 +37,7 @@ describe("queueWorkCommand", () => {
     let workerStarted = false;
     let workerStopped = false;
 
-    mock.module("../../../src/core/queue/createAppQueue", () => ({
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
       createFailedJobService: () => ({}),
       createQueueWorker: () => ({
         run: async () => {
@@ -80,7 +80,7 @@ describe("queueWorkCommand", () => {
 
 describe("queueFailedCommand", () => {
   test("prints a message when there are no failed jobs", async () => {
-    mock.module("../../../src/core/queue/createAppQueue", () => ({
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
       createFailedJobService: () => ({
         listRecent: async () => [],
       }),
@@ -99,7 +99,7 @@ describe("queueFailedCommand", () => {
   });
 
   test("lists recent failed jobs", async () => {
-    mock.module("../../../src/core/queue/createAppQueue", () => ({
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
       createFailedJobService: () => ({
         listRecent: async () => [
           {
@@ -148,15 +148,15 @@ describe("queueRetryCommand", () => {
 
     let runCalled = false;
 
-    const { jobRegistry } = await import("../../../src/core/queue/jobRegistry");
+    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
     jobRegistry.register("test.retry", () => new RetryJob());
 
-    mock.module("../../../src/core/queue/createAppQueue", () => ({
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
       createFailedJobService: () => ({
         retry: async () => failedJob,
       }),
     }));
-    mock.module("../../../src/core/queue/jobRunner", () => ({
+    mock.module("@getstrata/core/queue/jobRunner", () => ({
       runQueueJob: async () => {
         runCalled = true;
       },
@@ -176,7 +176,7 @@ describe("queueRetryCommand", () => {
   });
 
   test("rejects unknown job names", async () => {
-    mock.module("../../../src/core/queue/createAppQueue", () => ({
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
       createFailedJobService: () => ({
         retry: async () => ({
           id: 1,
@@ -196,7 +196,7 @@ describe("queueRetryCommand", () => {
 
 describe("queueFlushFailedCommand", () => {
   test("reports how many failed jobs were removed", async () => {
-    mock.module("../../../src/core/queue/createAppQueue", () => ({
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
       createFailedJobService: () => ({
         flush: async () => 2,
       }),

@@ -4,7 +4,7 @@ import {
   createSessionCookie,
   readSessionUserId,
   SESSION_TTL_SECONDS,
-} from "../../src/core/auth/sessionCookie";
+} from "@getstrata/core/auth/sessionCookie";
 
 describe("sessionCookie", () => {
   const originalAppEnv = process.env.APP_ENV;

@@ -26,7 +26,7 @@ describe("EtaViewEngine", () => {
   });
 
   test("renders templates from the configured views directory", async () => {
-    const { EtaViewEngine } = await import("../../src/core/view/etaViewEngine");
+    const { EtaViewEngine } = await import("@getstrata/core/view/etaViewEngine");
     const engine = new EtaViewEngine(viewsDirectory);
 
     const html = await engine.render(

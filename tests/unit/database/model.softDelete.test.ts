@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import BaseRepository from "../../../src/core/database/baseRepository";
-import { Model, registerModelRepository } from "../../../src/core/database/model";
-import { defineTable } from "../../../src/core/database/table";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { defineTable } from "@getstrata/core/database/table";
 
 interface SoftArticle {
   id: number;

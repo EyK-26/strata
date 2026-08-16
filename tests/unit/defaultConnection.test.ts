@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { SqlDatabaseConnection } from "../../src/core/database/baseRepository";
+import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   getDefaultDatabasePool,
   getDefaultDatabaseQuery,
   registerDefaultDatabasePool,
-} from "../../src/core/database/defaultConnection";
+} from "@getstrata/core/database/defaultConnection";
 import { getDatabase } from "../../src/db/connection";
 
 describe("default database connection registry", () => {

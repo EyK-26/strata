@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { runWithTenant } from "../../src/core/tenant/tenantContext";
+import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import db from "../../src/db/connection";
 import BillingController from "../../src/modules/billing/controller";
 import { billingServiceToken } from "../../src/modules/billing/provider";

@@ -5,8 +5,8 @@ import { join } from "node:path";
 import {
   loadSeedersFromDirectory,
   runSeedersFromDirectory,
-} from "../../src/core/database/seeders/runner.ts";
-import type { SeederDatabase } from "../../src/core/database/seeders/types.ts";
+} from "@getstrata/core/database/seeders/runner.ts";
+import type { SeederDatabase } from "@getstrata/core/database/seeders/types.ts";
 
 const tempDirs: string[] = [];
 

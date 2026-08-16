@@ -15,7 +15,7 @@ import {
   readRequiredEnum,
   readRequiredPositiveInt,
   readRequiredString,
-} from "../../src/core/http/validation";
+} from "@getstrata/core/http/validation";
 
 describe("getQueryParams", () => {
   test("returns empty params when request is omitted", () => {

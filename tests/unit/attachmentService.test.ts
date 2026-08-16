@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { membershipContext } from "@getstrata/core/auth/membershipContext";
+import type { DatabaseConnection } from "@getstrata/core/database";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "@getstrata/core/errors/http";
-import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { membershipContext } from "../../src/core/auth/membershipContext";
-import type { DatabaseConnection } from "../../src/core/database";
-import { runWithTenant } from "../../src/core/tenant/tenantContext";
+import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import type AttachmentRepository from "../../src/modules/attachment/repository";
 import type { AttachmentRecord } from "../../src/modules/attachment/types";
 import type OrganizationRepository from "../../src/modules/organization/repository";
@@ -175,7 +175,7 @@ function withMembership<T>(
 }
 
 beforeAll(async () => {
-  mock.module("../../src/core/storage/storage", () => ({
+  mock.module("@getstrata/core/storage/storage", () => ({
     storage: () => ({
       put: storagePut,
       get: storageGet,

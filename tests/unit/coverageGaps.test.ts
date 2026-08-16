@@ -1,34 +1,34 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { membershipContext } from "@getstrata/core/auth/membershipContext";
+import { assertOrganizationReadable } from "@getstrata/core/auth/membershipScope";
 import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
-import { EventBus } from "@getstrata/core/events";
-import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
-import { FailedJobService } from "@getstrata/core/queue/failedJobService";
-import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
-import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { membershipContext } from "../../src/core/auth/membershipContext";
-import { assertOrganizationReadable } from "../../src/core/auth/membershipScope";
 import {
   clearSessionCookie,
   createSessionCookie,
   readSessionUserId,
-} from "../../src/core/auth/sessionCookie";
-import { hashApiToken } from "../../src/core/auth/tokenHash";
+} from "@getstrata/core/auth/sessionCookie";
+import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import {
   isFieldEncryptionEnabled,
   normalizeEmail,
   protectEmail,
   resolveEncryptionKey,
-} from "../../src/core/crypto/fieldEncryption";
-import { Factory } from "../../src/core/database/factory";
-import { buildWhereClause } from "../../src/core/database/query";
+} from "@getstrata/core/crypto/fieldEncryption";
+import { Factory } from "@getstrata/core/database/factory";
+import { buildWhereClause } from "@getstrata/core/database/query";
+import { EventBus } from "@getstrata/core/events";
+import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
+import { FailedJobService } from "@getstrata/core/queue/failedJobService";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 import {
   clearOAuthStateCookie,
   createOAuthStateCookie,
   verifyOAuthState,
-} from "../../src/core/security/oauthState";
-import { assertSafeOutboundUrl, isBlockedHostname } from "../../src/core/security/safeUrl";
-import { parseScimTenantTokens } from "../../src/core/security/scimTenantTokens";
-import { verifyStripeWebhookSignature } from "../../src/core/security/stripeWebhook";
+} from "@getstrata/core/security/oauthState";
+import { assertSafeOutboundUrl, isBlockedHostname } from "@getstrata/core/security/safeUrl";
+import { parseScimTenantTokens } from "@getstrata/core/security/scimTenantTokens";
+import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 import {
   emailRule,
   enumRule,
@@ -38,7 +38,7 @@ import {
   pattern,
   positiveIntegerRule,
   stringRule,
-} from "../../src/core/validation/rules";
+} from "@getstrata/core/validation/rules";
 import AttachmentPolicy from "../../src/modules/attachment/policy";
 import BillingService from "../../src/modules/billing/service";
 import CommentPolicy from "../../src/modules/comment/policy";
@@ -219,7 +219,7 @@ describe("coverage gap helpers", () => {
     expect(registry.names()).toEqual(["demo.job"]);
     expect(registry.create("missing.job")).toBeUndefined();
 
-    const { jobRegistry } = await import("../../src/core/queue/jobRegistry");
+    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
     const { registerDefaultJobs } = await import("../../src/bootstrap/queue/defaultJobs");
     registerDefaultJobs();
     expect(jobRegistry.create("webhook.dispatch")).toBeInstanceOf(DispatchWebhookJob);
@@ -349,7 +349,7 @@ describe("coverage gap helpers", () => {
   });
 
   test("covers remaining security, queue, and module policy branches", async () => {
-    const { eventBus } = await import("../../src/core/events/eventBus");
+    const { eventBus } = await import("@getstrata/core/events/eventBus");
     let singletonCount = 0;
     const unsubscribe = eventBus.listen("singleton.event", () => {
       singletonCount += 1;

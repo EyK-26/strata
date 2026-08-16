@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { GitHubOAuthProvider, MockOAuthProvider } from "../../src/core/auth/oauth/providers";
+import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
 
 const originalFetch = globalThis.fetch;
 

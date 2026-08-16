@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import type { DatabaseConnection } from "../../src/core/database/baseRepository";
+import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
-} from "../../src/core/database/boundConnection";
-import { resolveRepositoryConnection } from "../../src/core/database/repositoryConnection";
+} from "@getstrata/core/database/boundConnection";
+import { resolveRepositoryConnection } from "@getstrata/core/database/repositoryConnection";
 
 describe("bindDatabaseConnection", () => {
   test("routes repository queries through the bound connection", async () => {

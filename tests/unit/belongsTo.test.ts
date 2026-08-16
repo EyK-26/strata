@@ -5,7 +5,7 @@ import {
   defineTable,
   hasMany,
   indexBelongsToRelation,
-} from "../../src/core/database";
+} from "@getstrata/core/database";
 
 type Squad = {
   id: number;

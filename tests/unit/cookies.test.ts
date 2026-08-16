@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readBunRequestCookie, readRequestCookie } from "../../src/core/http/cookies";
+import { readBunRequestCookie, readRequestCookie } from "@getstrata/core/http/cookies";
 
 describe("readRequestCookie", () => {
   test("reads from cookie header", () => {

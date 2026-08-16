@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { hashApiToken, resolveTokenPepper } from "../../src/core/auth/tokenHash";
+import { hashApiToken, resolveTokenPepper } from "@getstrata/core/auth/tokenHash";
 import { TEST_ADMIN_API_TOKEN } from "../../src/domain/auth";
 
 describe("hashApiToken", () => {

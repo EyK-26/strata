@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { createRequireAbilityMiddleware } from "../../src/core/http/requireAbilityMiddleware";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbilityMiddleware";
 import TokenService from "../../src/modules/user/tokenService";
 
 describe("createRequireAbilityMiddleware", () => {

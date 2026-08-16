@@ -1,9 +1,9 @@
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
+import type { DatabaseConnection as CoreDatabaseConnection } from "@getstrata/core/database/baseRepository.ts";
+import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection.ts";
+import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection.ts";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { SQL } from "bun";
-import type { DatabaseConnection as CoreDatabaseConnection } from "../../src/core/database/baseRepository.ts";
-import { bindDatabaseConnection } from "../../src/core/database/bindConnection.ts";
-import { resetBoundDatabaseConnection } from "../../src/core/database/boundConnection.ts";
 import type { DatabaseConnection } from "../../src/db/connection";
 import type { CacheLike } from "../../src/types/services";
 

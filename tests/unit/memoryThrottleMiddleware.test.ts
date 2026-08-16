@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createMemoryThrottleMiddleware } from "../../src/core/http/memoryThrottleMiddleware";
+import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
 
 describe("createMemoryThrottleMiddleware", () => {
   test("allows requests until the attempt limit is exceeded", async () => {

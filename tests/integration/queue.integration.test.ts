@@ -4,8 +4,8 @@ import { Job } from "@getstrata/core/queue";
 import { createFailedJobService } from "@getstrata/core/queue/createAppQueue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { type QueueJobEnvelope, runQueueJob } from "@getstrata/core/queue/jobRunner";
+import { QUEUE_LIST_KEY, RedisQueue } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
-import { QUEUE_LIST_KEY, RedisQueue } from "../../src/core/queue/redisQueue";
 
 interface EchoPayload {
   message: string;

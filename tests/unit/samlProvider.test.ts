@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { SamlProvider } from "../../src/core/auth/oauth/samlProvider";
+import { SamlProvider } from "@getstrata/core/auth/oauth/samlProvider";
 
 describe("SamlProvider", () => {
   test("builds an authorization url with encoded state", () => {

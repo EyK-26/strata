@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import {
   exportPendingAuditLogs,
   resolveAuditExportConfig,
-} from "../../src/core/audit/exportAuditLogs";
+} from "@getstrata/core/audit/exportAuditLogs";
 import { runWithMigrationBypass } from "../../src/core/tenant/databaseTenantContext";
 import db from "../../src/db/connection";
 import { clearPendingAuditLogs } from "./testHelpers";

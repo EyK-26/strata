@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { OidcProvider } from "../../src/core/auth/oauth/oidcProvider";
+import { OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
 
 const originalFetch = globalThis.fetch;
 

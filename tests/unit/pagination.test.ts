@@ -3,7 +3,7 @@ import {
   buildPaginationMeta,
   paginatedResponse,
   parsePaginationQuery,
-} from "../../src/core/http/pagination";
+} from "@getstrata/core/http/pagination";
 
 describe("parsePaginationQuery", () => {
   test("defaults page and per_page when query params are omitted", () => {

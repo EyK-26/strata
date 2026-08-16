@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { currentTenant, currentTenantId } from "../../src/core/tenant/tenantContext";
+import { currentTenant, currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import {
   isInsideTenantDatabaseScope,
   runWithTenantDatabase,
-} from "../../src/core/tenant/tenantDatabaseScope";
+} from "@getstrata/core/tenant/tenantDatabaseScope";
 import { defaultTestTenant } from "./testHelpers";
 
 describe("runWithTenantDatabase", () => {
@@ -22,7 +22,7 @@ describe("runWithTenantDatabase", () => {
 
   test("reuses the active connection instead of opening nested transactions", async () => {
     const { hasActiveDatabaseConnection } = await import(
-      "../../src/core/database/connectionContext"
+      "@getstrata/core/database/connectionContext"
     );
 
     await runWithTenantDatabase(defaultTestTenant, async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BadRequestError, ForbiddenError } from "@getstrata/core/errors/http";
-import { FormRequest, QueryFormRequest } from "../../src/core/http/formRequest";
+import { FormRequest, QueryFormRequest } from "@getstrata/core/http/formRequest";
 
 class CreateWidgetRequest extends FormRequest<{ name: string }> {
   constructor(private readonly allowed: boolean = true) {

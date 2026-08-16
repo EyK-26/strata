@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { buildRequestCacheKey } from "../../src/core/http/validation";
-import { runWithTenant } from "../../src/core/tenant/tenantContext";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { buildRequestCacheKey } from "@getstrata/core/http/validation";
+import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
 
 describe("buildRequestCacheKey", () => {
   test("includes auth and tenant scopes in cache keys", () => {

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { runWithAuthUser } from "../../src/core/auth/authContext";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 
 describe("createTenantMiddleware", () => {
   test("resolves tenant from header for anonymous requests", async () => {
-    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();
 
     const response = await middleware(
@@ -19,7 +19,7 @@ describe("createTenantMiddleware", () => {
   });
 
   test("defers SCIM routes to SCIM auth middleware for tenant scoping", async () => {
-    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();
     let nextCalled = false;
 
@@ -37,7 +37,7 @@ describe("createTenantMiddleware", () => {
   });
 
   test("uses the authenticated user tenant and rejects mismatched headers", async () => {
-    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: 2, role: "member" }, async () => {
@@ -56,7 +56,7 @@ describe("createTenantMiddleware", () => {
   });
 
   test("allows global admins to override tenant via header", async () => {
-    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: 1, role: "admin" }, async () => {
@@ -73,7 +73,7 @@ describe("createTenantMiddleware", () => {
   });
 
   test("falls back to default tenant for invalid user ids", async () => {
-    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: "invalid", role: "member" }, async () => {
@@ -87,7 +87,7 @@ describe("createTenantMiddleware", () => {
   });
 
   test("auditChecksum returns a stable sha256 digest", async () => {
-    const { auditChecksum } = await import("../../src/core/tenant/tenantMiddleware");
+    const { auditChecksum } = await import("@getstrata/core/tenant/tenantMiddleware");
 
     expect(auditChecksum({ action: "login" })).toMatch(/^[a-f0-9]{64}$/);
     expect(auditChecksum({ action: "login" })).toBe(auditChecksum({ action: "login" }));
@@ -95,7 +95,7 @@ describe("createTenantMiddleware", () => {
 
   test("resolveUserTenantId returns the user tenant or default", async () => {
     const { resolveUserTenantId, DEFAULT_TENANT } = await import(
-      "../../src/core/tenant/tenantMiddleware"
+      "@getstrata/core/tenant/tenantMiddleware"
     );
 
     await expect(resolveUserTenantId(1)).resolves.toBe(1);
@@ -103,7 +103,7 @@ describe("createTenantMiddleware", () => {
   });
 
   test("maps forbidden errors to json responses", async () => {
-    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: 2, role: "member" }, async () => {
@@ -124,7 +124,7 @@ describe("createTenantMiddleware", () => {
 
 describe("tenant middleware error propagation", () => {
   test("rethrows non-http errors from downstream handlers", async () => {
-    const { createTenantMiddleware } = await import("../../src/core/tenant/tenantMiddleware");
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();
 
     await expect(

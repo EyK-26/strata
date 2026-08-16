@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   parseScimTenantTokens,
   resolveScimTenantFromToken,
-} from "../../src/core/security/scimTenantTokens";
+} from "@getstrata/core/security/scimTenantTokens";
 import { TEST_SCIM_BEARER_TOKEN } from "../../src/domain/scim";
 
 describe("scimTenantTokens", () => {

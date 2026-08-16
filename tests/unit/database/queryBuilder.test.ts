@@ -7,8 +7,8 @@ import {
   defineTable,
   parseQualifiedColumn,
   resolveQualifiedColumn,
-} from "../../../src/core/database";
-import { WhereBuilder } from "../../../src/core/database/whereBuilder.ts";
+} from "@getstrata/core/database";
+import { WhereBuilder } from "@getstrata/core/database/whereBuilder.ts";
 
 type Article = {
   id: number;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { PayloadTooLargeError } from "@getstrata/core/errors/http";
-import { createBodySizeLimitMiddleware } from "../../src/core/http/bodySizeLimitMiddleware";
+import { createBodySizeLimitMiddleware } from "@getstrata/core/http/bodySizeLimitMiddleware";
 
 describe("bodySizeLimitMiddleware", () => {
   test("rejects requests above the configured limit", async () => {

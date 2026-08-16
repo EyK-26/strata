@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { createCsrfMiddleware } from "../../src/core/http/csrfMiddleware";
+import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import {
   createCsrfTokenCookie,
   resolveCsrfToken,
   verifyCsrfToken,
-} from "../../src/core/http/csrfToken";
+} from "@getstrata/core/http/csrfToken";
 
 describe("csrfToken", () => {
   test("creates and verifies a csrf token", () => {

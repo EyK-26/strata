@@ -3,7 +3,7 @@ import {
   clearOAuthStateCookie,
   createOAuthStateCookie,
   verifyOAuthState,
-} from "../../src/core/security/oauthState";
+} from "@getstrata/core/security/oauthState";
 
 describe("oauth state", () => {
   test("creates and verifies a signed oauth state cookie", () => {

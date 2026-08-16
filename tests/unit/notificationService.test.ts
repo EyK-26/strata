@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import NotificationRepository from "../../src/modules/user/notificationRepository";
 import NotificationService from "../../src/modules/user/notificationService";
 import { defaultTestTenant } from "./testHelpers";

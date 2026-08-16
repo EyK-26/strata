@@ -14,7 +14,7 @@ import {
   hasMany,
   indexHasManyRelation,
   quoteIdentifier,
-} from "../../src/core/database";
+} from "@getstrata/core/database";
 
 type Project = {
   id: number;

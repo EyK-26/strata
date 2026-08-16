@@ -7,9 +7,9 @@ import {
 } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { membershipContext } from "@getstrata/core/auth/membershipContext";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
-import { membershipContext } from "../../src/core/auth/membershipContext";
 import AttachmentController, {
   createAttachmentRoutes,
 } from "../../src/modules/attachment/controller";

@@ -4,7 +4,7 @@ import {
   type DatabaseConnection,
   defineTable,
   RepositoryQuery,
-} from "../../../src/core/database";
+} from "@getstrata/core/database";
 
 type Post = {
   id: number;

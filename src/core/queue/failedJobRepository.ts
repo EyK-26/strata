@@ -8,4 +8,5 @@ class FailedJobRepository extends BaseRepository<FailedJobRecord, "id"> {
   }
 }
 
+export { FailedJobRepository };
 export default FailedJobRepository;

@@ -8,8 +8,8 @@ import {
   loadMigrationsFromDirectory,
   migrateDatabase,
   rollbackDatabase,
-} from "../../src/core/database/migrations/runner";
-import type { Migration, MigrationDatabase } from "../../src/core/database/migrations/types";
+} from "@getstrata/core/database/migrations/runner";
+import type { Migration, MigrationDatabase } from "@getstrata/core/database/migrations/types";
 
 function createMemoryDb() {
   const applied: { name: string; batch: number }[] = [];

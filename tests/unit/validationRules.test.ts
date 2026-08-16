@@ -14,7 +14,7 @@ import {
   required,
   stringRule,
   validateObject,
-} from "../../src/core/validation/rules";
+} from "@getstrata/core/validation/rules";
 
 describe("validateObject", () => {
   test("returns validated values for a matching payload", () => {

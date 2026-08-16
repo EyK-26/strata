@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "0.5.41",
+  "version": "0.5.42",
   "description": "Strata — Laravel-inspired Bun framework public API",
   "type": "module",
   "license": "MIT",
@@ -155,15 +155,65 @@
       "import": "./dist/entries/database.js",
       "default": "./dist/entries/database.js"
     },
+    "./database/baseRepository": {
+      "types": "./dist/core/database/baseRepository.d.ts",
+      "import": "./dist/entries/database/baseRepository.js",
+      "default": "./dist/entries/database/baseRepository.js"
+    },
+    "./database/bindConnection": {
+      "types": "./dist/core/database/bindConnection.d.ts",
+      "import": "./dist/entries/database/bindConnection.js",
+      "default": "./dist/entries/database/bindConnection.js"
+    },
+    "./database/boundConnection": {
+      "types": "./dist/core/database/boundConnection.d.ts",
+      "import": "./dist/entries/database/boundConnection.js",
+      "default": "./dist/entries/database/boundConnection.js"
+    },
+    "./database/connection": {
+      "types": "./dist/core/database/connection.d.ts",
+      "import": "./dist/entries/database/connection.js",
+      "default": "./dist/entries/database/connection.js"
+    },
+    "./database/errors": {
+      "types": "./dist/core/database/errors.d.ts",
+      "import": "./dist/entries/database/errors.js",
+      "default": "./dist/entries/database/errors.js"
+    },
     "./database/factory": {
       "types": "./dist/core/database/factory.d.ts",
       "import": "./dist/entries/database/factory.js",
       "default": "./dist/entries/database/factory.js"
     },
+    "./database/model": {
+      "types": "./dist/core/database/model.d.ts",
+      "import": "./dist/entries/database/model.js",
+      "default": "./dist/entries/database/model.js"
+    },
+    "./database/query": {
+      "types": "./dist/core/database/query.d.ts",
+      "import": "./dist/entries/database/query.js",
+      "default": "./dist/entries/database/query.js"
+    },
+    "./database/relationships": {
+      "types": "./dist/core/database/relationships.d.ts",
+      "import": "./dist/entries/database/relationships.js",
+      "default": "./dist/entries/database/relationships.js"
+    },
     "./database/seeders": {
       "types": "./dist/core/database/seeders/runner.d.ts",
       "import": "./dist/entries/database/seeders.js",
       "default": "./dist/entries/database/seeders.js"
+    },
+    "./database/table": {
+      "types": "./dist/core/database/table.d.ts",
+      "import": "./dist/entries/database/table.js",
+      "default": "./dist/entries/database/table.js"
+    },
+    "./database/transaction": {
+      "types": "./dist/core/database/transaction.d.ts",
+      "import": "./dist/entries/database/transaction.js",
+      "default": "./dist/entries/database/transaction.js"
     },
     "./database/types": {
       "types": "./dist/core/database/types.d.ts",
@@ -184,6 +234,16 @@
       "types": "./dist/core/http/index.d.ts",
       "import": "./dist/entries/http.js",
       "default": "./dist/entries/http.js"
+    },
+    "./http/authMiddleware": {
+      "types": "./dist/core/http/authMiddleware.d.ts",
+      "import": "./dist/entries/http/authMiddleware.js",
+      "default": "./dist/entries/http/authMiddleware.js"
+    },
+    "./http/authorizeMiddleware": {
+      "types": "./dist/core/http/authorizeMiddleware.d.ts",
+      "import": "./dist/entries/http/authorizeMiddleware.js",
+      "default": "./dist/entries/http/authorizeMiddleware.js"
     },
     "./http/bodySizeLimitMiddleware": {
       "types": "./dist/core/http/bodySizeLimitMiddleware.d.ts",
@@ -225,10 +285,20 @@
       "import": "./dist/entries/http/middleware.js",
       "default": "./dist/entries/http/middleware.js"
     },
+    "./http/metricsMiddleware": {
+      "types": "./dist/core/http/metricsMiddleware.d.ts",
+      "import": "./dist/entries/http/metricsMiddleware.js",
+      "default": "./dist/entries/http/metricsMiddleware.js"
+    },
     "./http/parseFormBody": {
       "types": "./dist/core/http/parseFormBody.d.ts",
       "import": "./dist/entries/http/parseFormBody.js",
       "default": "./dist/entries/http/parseFormBody.js"
+    },
+    "./http/parseMultipartUpload": {
+      "types": "./dist/core/http/parseMultipartUpload.d.ts",
+      "import": "./dist/entries/http/parseMultipartUpload.js",
+      "default": "./dist/entries/http/parseMultipartUpload.js"
     },
     "./http/resources": {
       "types": "./dist/core/http/resources.d.ts",
@@ -300,6 +370,11 @@
       "import": "./dist/entries/queue/createAppQueue.js",
       "default": "./dist/entries/queue/createAppQueue.js"
     },
+    "./queue/failedJobRepository": {
+      "types": "./dist/core/queue/failedJobRepository.d.ts",
+      "import": "./dist/entries/queue/failedJobRepository.js",
+      "default": "./dist/entries/queue/failedJobRepository.js"
+    },
     "./queue/failedJobService": {
       "types": "./dist/core/queue/failedJobService.d.ts",
       "import": "./dist/entries/queue/failedJobService.js",
@@ -324,6 +399,11 @@
       "types": "./dist/core/queue/publicQueue.d.ts",
       "import": "./dist/entries/queue/publicQueue.js",
       "default": "./dist/entries/queue/publicQueue.js"
+    },
+    "./queue/redisQueue": {
+      "types": "./dist/core/queue/redisQueue.d.ts",
+      "import": "./dist/entries/queue/redisQueue.js",
+      "default": "./dist/entries/queue/redisQueue.js"
     },
     "./queue/types": {
       "types": "./dist/core/queue/types.d.ts",
@@ -355,6 +435,11 @@
       "import": "./dist/entries/security/safeUrl.js",
       "default": "./dist/entries/security/safeUrl.js"
     },
+    "./security/scimTenantTokens": {
+      "types": "./dist/core/security/scimTenantTokens.d.ts",
+      "import": "./dist/entries/security/scimTenantTokens.js",
+      "default": "./dist/entries/security/scimTenantTokens.js"
+    },
     "./security/securityEvents": {
       "types": "./dist/core/security/securityEvents.d.ts",
       "import": "./dist/entries/security/securityEvents.js",
@@ -384,6 +469,11 @@
       "types": "./dist/core/tenant/tenantContext.d.ts",
       "import": "./dist/entries/tenant/tenantContext.js",
       "default": "./dist/entries/tenant/tenantContext.js"
+    },
+    "./tenant/tenantDatabaseScope": {
+      "types": "./dist/core/tenant/tenantDatabaseScope.d.ts",
+      "import": "./dist/entries/tenant/tenantDatabaseScope.js",
+      "default": "./dist/entries/tenant/tenantDatabaseScope.js"
     },
     "./tenant/tenantMiddleware": {
       "types": "./dist/core/tenant/tenantMiddleware.d.ts",
@@ -417,7 +507,7 @@
     "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta",
     "build:types": "tsc -p tsconfig.types.json",
     "prepublishOnly": "bun run build && bun ../../scripts/prepare-core-package-publish.ts",
-    "build:subpaths": "bun build entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/sessionCookie.ts entries/auth/sessionGuard.ts entries/auth/tokenHash.ts entries/audit/exportAuditLogs.ts entries/cache/tags.ts entries/cache/createCacheStore.ts entries/cache/repository.ts entries/cache/simpleCache.ts entries/cache/simpleCacheStore.ts entries/config/envSchema.ts entries/contracts/serviceTokens.ts entries/contracts/container.ts entries/contracts/di.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database/factory.ts entries/database/seeders.ts entries/database/types.ts entries/errors/http.ts entries/http/bodySizeLimitMiddleware.ts entries/http/cookies.ts entries/http/csrfProtection.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/parseFormBody.ts entries/http/resources.ts entries/http/securedRouteModelBinding.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/jobs/invalidateCacheTagsJob.ts entries/lifecycle/gracefulShutdown.ts entries/logging/logger.ts entries/metrics/prometheus.ts entries/openapi/registeredRoute.ts entries/pagination.ts entries/queue.ts entries/queue/createAppQueue.ts entries/queue/failedJobService.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/types.ts entries/scheduler/schedule.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeUrl.ts entries/security/stripeWebhook.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta",
+    "build:subpaths": "bun build entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/sessionCookie.ts entries/auth/sessionGuard.ts entries/auth/tokenHash.ts entries/audit/exportAuditLogs.ts entries/cache/tags.ts entries/cache/createCacheStore.ts entries/cache/repository.ts entries/cache/simpleCache.ts entries/cache/simpleCacheStore.ts entries/config/envSchema.ts entries/contracts/serviceTokens.ts entries/contracts/container.ts entries/contracts/di.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database/baseRepository.ts entries/database/bindConnection.ts entries/database/boundConnection.ts entries/database/connection.ts entries/database/errors.ts entries/database/factory.ts entries/database/model.ts entries/database/query.ts entries/database/relationships.ts entries/database/seeders.ts entries/database/table.ts entries/database/transaction.ts entries/database/types.ts entries/errors/http.ts entries/http/authMiddleware.ts entries/http/authorizeMiddleware.ts entries/http/bodySizeLimitMiddleware.ts entries/http/cookies.ts entries/http/csrfProtection.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/metricsMiddleware.ts entries/http/parseFormBody.ts entries/http/parseMultipartUpload.ts entries/http/resources.ts entries/http/securedRouteModelBinding.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/jobs/invalidateCacheTagsJob.ts entries/lifecycle/gracefulShutdown.ts entries/logging/logger.ts entries/metrics/prometheus.ts entries/openapi/registeredRoute.ts entries/pagination.ts entries/queue.ts entries/queue/createAppQueue.ts entries/queue/failedJobRepository.ts entries/queue/failedJobService.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/redisQueue.ts entries/queue/types.ts entries/scheduler/schedule.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeUrl.ts entries/security/scimTenantTokens.ts entries/security/stripeWebhook.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/tenant/tenantDatabaseScope.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta",
     "build:shims": "bun ../../scripts/write-core-shared-shims.ts"
   },
   "publishConfig": {

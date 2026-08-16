@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseQueueJobEnvelope } from "../../src/core/queue/redisQueue";
+import { parseQueueJobEnvelope } from "@getstrata/core/queue/redisQueue";
 
 describe("parseQueueJobEnvelope", () => {
   test("returns null for malformed JSON", () => {

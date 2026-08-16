@@ -5,7 +5,7 @@ import {
   UnauthorizedError,
   ValidationError,
 } from "@getstrata/core/errors/http";
-import { normalizeFieldErrors, webErrorResponse } from "../../src/core/http/webErrorResponse";
+import { normalizeFieldErrors, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
 
 describe("normalizeFieldErrors", () => {
   test("returns an empty object for invalid details", () => {

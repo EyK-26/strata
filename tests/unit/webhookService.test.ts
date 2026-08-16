@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { runWithTenant } from "../../src/core/tenant/tenantContext";
+import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import type { WebhookRecord } from "../../src/modules/webhook/types";
 
 const dispatched: Array<{ webhookId: number; event: string; payload: Record<string, unknown> }> =
@@ -61,7 +61,7 @@ beforeAll(async () => {
     }),
   }));
 
-  mock.module("../../src/core/queue/createAppQueue", () => ({
+  mock.module("@getstrata/core/queue/createAppQueue", () => ({
     createTrackedJob: (_name: string, job: unknown) => job,
   }));
 

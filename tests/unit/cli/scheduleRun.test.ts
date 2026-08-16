@@ -7,7 +7,7 @@ afterEach(() => {
 
 describe("scheduleRunCommand", () => {
   test("prints a message when no tasks are due", async () => {
-    mock.module("../../../src/core/scheduler/schedule", () => ({
+    mock.module("@getstrata/core/scheduler/schedule", () => ({
       appSchedule: {
         dueTasks: () => [],
       },
@@ -29,7 +29,7 @@ describe("scheduleRunCommand", () => {
   test("runs due scheduled tasks", async () => {
     let ran = false;
 
-    mock.module("../../../src/core/scheduler/schedule", () => ({
+    mock.module("@getstrata/core/scheduler/schedule", () => ({
       appSchedule: {
         dueTasks: () => [
           {

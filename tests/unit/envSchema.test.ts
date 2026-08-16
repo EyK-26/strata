@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defineEnvSchema, validateEnv } from "../../src/core/config/envSchema";
+import { defineEnvSchema, validateEnv } from "@getstrata/core/config/envSchema";
 
 describe("validateEnv", () => {
   test("accepts a valid environment map", () => {

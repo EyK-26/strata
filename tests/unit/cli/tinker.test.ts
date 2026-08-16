@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
+import type { StorageManager } from "@getstrata/core/storage/storage";
 import { REPOSITORY_TOKENS } from "../../../src/cli/commands/tinker";
 import type { Mailer } from "../../../src/core/mail/mailer";
-import type { StorageManager } from "../../../src/core/storage/storage";
 
 afterAll(() => {
   mock.restore();

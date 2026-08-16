@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { belongsTo, hasMany } from "@getstrata/core/database/relationships";
+import { defineTable } from "@getstrata/core/database/table";
 import { NotFoundError } from "@getstrata/core/errors/http";
-import BaseRepository from "../../src/core/database/baseRepository";
-import { Model, registerModelRepository } from "../../src/core/database/model";
-import { belongsTo, hasMany } from "../../src/core/database/relationships";
-import { defineTable } from "../../src/core/database/table";
 
 interface Widget {
   id: number;

@@ -4,7 +4,7 @@ import {
   hasOne,
   indexBelongsToManyRelation,
   indexHasOneRelation,
-} from "../../../src/core/database/relationships";
+} from "@getstrata/core/database/relationships";
 
 describe("hasOne indexing", () => {
   test("returns the first child per parent", () => {

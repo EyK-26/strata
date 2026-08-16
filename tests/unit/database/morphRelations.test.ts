@@ -6,12 +6,12 @@ import {
   morphMany,
   morphOne,
   morphTo,
-} from "../../../src/core/database";
+} from "@getstrata/core/database";
 import {
   indexMorphManyRelation,
   indexMorphOneRelation,
   indexMorphToRelation,
-} from "../../../src/core/database/relationships";
+} from "@getstrata/core/database/relationships";
 
 type Thread = { id: number; title: string };
 type Episode = { id: number; title: string };

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createCsrfProtection } from "../../src/core/http/csrfProtection";
+import { createCsrfProtection } from "@getstrata/core/http/csrfProtection";
 
 describe("createCsrfProtection", () => {
   test("generates and verifies tokens with Bun.CSRF", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { normalizeMetricPath } from "@getstrata/core/http/metricsMiddleware";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
-import { normalizeMetricPath } from "../../src/core/http/metricsMiddleware";
 
 describe("prometheusRegistry", () => {
   test("renders counter metrics", () => {

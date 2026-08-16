@@ -604,5 +604,6 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 }
 
+export { BaseRepository };
 export default BaseRepository;
 export type { DatabaseConnection, SqlDatabaseConnection };

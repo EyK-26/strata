@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { DatabaseConnection } from "../../src/core/database/baseRepository.ts";
-import { bindDatabaseConnection } from "../../src/core/database/bindConnection.ts";
-import { resetBoundDatabaseConnection } from "../../src/core/database/boundConnection.ts";
-import { createDatabaseConnection } from "../../src/core/database/connection.ts";
-import { runInTransaction } from "../../src/core/database/transaction.ts";
+import type { DatabaseConnection } from "@getstrata/core/database/baseRepository.ts";
+import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection.ts";
+import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection.ts";
+import { createDatabaseConnection } from "@getstrata/core/database/connection.ts";
+import { runInTransaction } from "@getstrata/core/database/transaction.ts";
 
 type TransactionCapableConnection = DatabaseConnection & {
   begin<TValue>(

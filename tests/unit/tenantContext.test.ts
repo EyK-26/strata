@@ -4,7 +4,7 @@ import {
   currentTenantId,
   rateLimitMultiplierForPlan,
   runWithTenant,
-} from "../../src/core/tenant/tenantContext";
+} from "@getstrata/core/tenant/tenantContext";
 
 describe("tenantContext", () => {
   test("returns default tenant id outside tenant scope", () => {

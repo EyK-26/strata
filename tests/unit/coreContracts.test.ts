@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { ConfigStore, ServiceContainer } from "../../src/core/contracts/container.ts";
+import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
 import {
   assertAppDependenciesComplete,
   resolveService,
   type ServiceProvider,
-} from "../../src/core/contracts/di.ts";
+} from "@getstrata/core/contracts/di";
 
 describe("@getstrata/core contracts", () => {
   test("ServiceContainer resolves singleton and transient bindings", () => {
