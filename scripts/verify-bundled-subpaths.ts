@@ -7,11 +7,27 @@ import { CORE_SHARED_SUBPATH_SET } from "./core-shared-subpaths.ts";
 
 const ENTRIES_DIR = join(import.meta.dir, "../packages/strata-core/dist/entries");
 
-/** Bundled entries that must externalize errors/http instead of inlining it. */
+/** Bundled entries that import @getstrata/core/errors/http and must not inline it. */
 const MUST_EXTERNALIZE_ERRORS = [
-  "http/webFormRequest",
-  "http/webErrorResponse",
+  "database/errors",
+  "database/model",
+  "http/authorizeMiddleware",
+  "http/bodySizeLimitMiddleware",
+  "http/csrfMiddleware",
+  "http/etag",
   "http/formRequest",
+  "http/pagination",
+  "http/parseFormBody",
+  "http/parseMultipartUpload",
+  "http/requireAbilityMiddleware",
+  "http/requireAuthMiddleware",
+  "http/requireGlobalAdminMiddleware",
+  "http/requireWebAuthMiddleware",
+  "http/securedRouteModelBinding",
+  "http/webErrorResponse",
+  "http/webFormRequest",
+  "security/safeUrl",
+  "security/stripeWebhook",
   "validation/rules",
 ];
 
@@ -32,9 +48,9 @@ for (const subpath of MUST_EXTERNALIZE_ERRORS) {
     continue;
   }
 
-  if (source.includes("class ValidationError")) {
+  if (source.includes("class ValidationError") || source.includes("class HttpError")) {
     errors.push(
-      `dist/entries/${subpath}.js inlines ValidationError; use @getstrata/core/errors/http self-imports`,
+      `dist/entries/${subpath}.js inlines HttpError classes; use @getstrata/core/errors/http self-imports`,
     );
   }
 }
