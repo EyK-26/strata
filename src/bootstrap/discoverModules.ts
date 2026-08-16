@@ -32,10 +32,24 @@ async function loadDiscoveredModules(): Promise<AppModule[]> {
     .sort((left, right) => (left.order ?? 100) - (right.order ?? 100));
 }
 
-const appModules = await loadDiscoveredModules();
+let appModules: AppModule[] = [];
+let modulesReady: Promise<AppModule[]> | undefined;
+
+async function ensureModulesLoaded(): Promise<AppModule[]> {
+  if (appModules.length > 0) {
+    return appModules;
+  }
+
+  modulesReady ??= loadDiscoveredModules().then((modules) => {
+    appModules = modules;
+    return modules;
+  });
+
+  return modulesReady;
+}
 
 function discoverModules(): AppModule[] {
   return appModules;
 }
 
-export { appModules, discoverModules };
+export { appModules, discoverModules, ensureModulesLoaded };

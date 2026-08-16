@@ -1,73 +1,57 @@
-import { helpCommand } from "./commands/help";
-import { makeFactoryCommand } from "./commands/makeFactory";
-import { makeJobCommand } from "./commands/makeJob";
-import { makeListenerCommand } from "./commands/makeListener";
-import { makeMigrationCommand } from "./commands/makeMigration";
-import { makeModuleCommand } from "./commands/makeModule";
-import { makePolicyCommand } from "./commands/makePolicy";
-import { makeRequestCommand } from "./commands/makeRequest";
-import { migrateCommand } from "./commands/migrate";
-import { migrateFreshCommand } from "./commands/migrateFresh";
-import { migrateStatusCommand } from "./commands/migrateStatus";
-import { newCommand } from "./commands/new";
-import { openapiCheckCommand } from "./commands/openapiCheck";
-import { openapiGenerateCommand } from "./commands/openapiGenerate";
-import { openapiValidateCommand } from "./commands/openapiValidate";
-import {
-  queueFailedCommand,
-  queueFlushFailedCommand,
-  queueRetryCommand,
-} from "./commands/queueFailed";
-import { queueWorkCommand } from "./commands/queueWork";
-import { rollbackCommand } from "./commands/rollback";
-import { routeListCommand } from "./commands/routeList";
-import { scheduleRunCommand } from "./commands/scheduleRun";
-import { sdkGenerateCommand } from "./commands/sdkGenerate";
-import { secretsCheckCommand } from "./commands/secretsCheck";
-import { seedCommand } from "./commands/seed";
-import { tinkerCommand } from "./commands/tinker";
+import { ensureModulesLoaded } from "../bootstrap/discoverModules.ts";
 
-const [command = "help", ...args] = process.argv.slice(2);
-
-const commands: Record<string, (...commandArgs: string[]) => Promise<void> | void> = {
-  help: () => helpCommand(),
-  new: (...commandArgs: string[]) => newCommand(...commandArgs),
-  migrate: () => migrateCommand(),
-  "migrate:status": () => migrateStatusCommand(),
-  "migrate:fresh": (...commandArgs: string[]) => migrateFreshCommand(...commandArgs),
-  rollback: () => rollbackCommand(),
-  seed: () => seedCommand(),
-  "make:migration": (name?: string) => makeMigrationCommand(name),
-  "make:module": (...commandArgs: string[]) => makeModuleCommand(...commandArgs),
-  "make:policy": (moduleName?: string) => makePolicyCommand(moduleName),
-  "make:job": (jobName?: string) => makeJobCommand(jobName),
-  "make:listener": (...commandArgs: string[]) =>
-    makeListenerCommand(commandArgs[0], commandArgs[1]),
-  "make:request": (moduleName?: string) => makeRequestCommand(moduleName),
-  "make:factory": (name?: string) => makeFactoryCommand(name),
-  "queue:work": () => queueWorkCommand(),
-  "queue:failed": () => queueFailedCommand(),
-  "queue:retry": (id?: string) => queueRetryCommand(id),
-  "queue:flush-failed": () => queueFlushFailedCommand(),
-  "route:list": () => routeListCommand(),
-  "openapi:generate": () => openapiGenerateCommand(),
-  "openapi:validate": () => openapiValidateCommand(),
-  "openapi:check": () => openapiCheckCommand(),
-  "sdk:generate": () => sdkGenerateCommand(),
-  "schedule:run": () => scheduleRunCommand(),
-  "secrets:check": () => secretsCheckCommand(),
-  tinker: () => tinkerCommand(),
+const commandLoaders: Record<string, () => Promise<(...args: string[]) => Promise<void> | void>> = {
+  help: async () => (await import("../cli/commands/help.ts")).helpCommand,
+  new: async () => (await import("../cli/commands/new.ts")).newCommand,
+  migrate: async () => (await import("../cli/commands/migrate.ts")).migrateCommand,
+  "migrate:status": async () =>
+    (await import("../cli/commands/migrateStatus.ts")).migrateStatusCommand,
+  "migrate:fresh": async () =>
+    (await import("../cli/commands/migrateFresh.ts")).migrateFreshCommand,
+  rollback: async () => (await import("../cli/commands/rollback.ts")).rollbackCommand,
+  seed: async () => (await import("../cli/commands/seed.ts")).seedCommand,
+  "make:migration": async () =>
+    (await import("../cli/commands/makeMigration.ts")).makeMigrationCommand,
+  "make:module": async () => (await import("../cli/commands/makeModule.ts")).makeModuleCommand,
+  "make:policy": async () => (await import("../cli/commands/makePolicy.ts")).makePolicyCommand,
+  "make:job": async () => (await import("../cli/commands/makeJob.ts")).makeJobCommand,
+  "make:listener": async () =>
+    (await import("../cli/commands/makeListener.ts")).makeListenerCommand,
+  "make:request": async () => (await import("../cli/commands/makeRequest.ts")).makeRequestCommand,
+  "make:factory": async () => (await import("../cli/commands/makeFactory.ts")).makeFactoryCommand,
+  "queue:work": async () => (await import("../cli/commands/queueWork.ts")).queueWorkCommand,
+  "queue:failed": async () => (await import("../cli/commands/queueFailed.ts")).queueFailedCommand,
+  "queue:retry": async () => (await import("../cli/commands/queueFailed.ts")).queueRetryCommand,
+  "queue:flush-failed": async () =>
+    (await import("../cli/commands/queueFailed.ts")).queueFlushFailedCommand,
+  "route:list": async () => (await import("../cli/commands/routeList.ts")).routeListCommand,
+  "openapi:generate": async () =>
+    (await import("../cli/commands/openapiGenerate.ts")).openapiGenerateCommand,
+  "openapi:validate": async () =>
+    (await import("../cli/commands/openapiValidate.ts")).openapiValidateCommand,
+  "openapi:check": async () =>
+    (await import("../cli/commands/openapiCheck.ts")).openapiCheckCommand,
+  "sdk:generate": async () => (await import("../cli/commands/sdkGenerate.ts")).sdkGenerateCommand,
+  "schedule:run": async () => (await import("../cli/commands/scheduleRun.ts")).scheduleRunCommand,
+  "secrets:check": async () =>
+    (await import("../cli/commands/secretsCheck.ts")).secretsCheckCommand,
+  tinker: async () => (await import("../cli/commands/tinker.ts")).tinkerCommand,
 };
 
-const handler = commands[command];
+await ensureModulesLoaded();
 
-if (!handler) {
+const [command = "help", ...args] = process.argv.slice(2);
+const loadHandler = commandLoaders[command];
+
+if (!loadHandler) {
+  const { helpCommand } = await import("../cli/commands/help.ts");
   console.error(`Unknown command: ${command}`);
   helpCommand();
   process.exit(1);
 }
 
 try {
+  const handler = await loadHandler();
   await handler(...args);
 } catch (error) {
   console.error(error);

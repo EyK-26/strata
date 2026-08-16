@@ -1,9 +1,9 @@
-import { resolveApplicationCache, resolveApplicationQueue } from "@getstrata/core";
 import { type EventBus, eventBus, modelEventName } from "../../core/events";
 import InvalidateCacheTagsJob from "../../core/jobs/invalidateCacheTagsJob";
 import type { Queue } from "../../core/queue";
 import { createTrackedJob } from "../../core/queue/createAppQueue";
 import type { CacheLike } from "../../types/services";
+import { resolveApplicationCache, resolveApplicationQueue } from "../applicationRegistry";
 import { cacheTagsForModelWrite, discoverModelTableNames } from "../cache/modelCacheTags";
 
 const MODEL_WRITE_ACTIONS = ["created", "updated", "deleted", "restored", "force-deleted"] as const;

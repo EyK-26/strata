@@ -1,4 +1,4 @@
-import { setActiveApplicationContext } from "@getstrata/core";
+import { setActiveApplicationContext } from "./applicationRegistry.ts";
 import {
   type AppContext,
   type AppModule,

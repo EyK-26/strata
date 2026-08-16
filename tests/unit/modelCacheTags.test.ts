@@ -1,9 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
 import {
   cacheTagsForModelWrite,
   discoverModelTableNames,
 } from "../../src/core/cache/modelCacheTags";
 import { CACHE_TAGS } from "../../src/core/cache/tags";
+
+beforeAll(async () => {
+  await ensureModulesLoaded();
+});
 
 describe("cacheTagsForModelWrite", () => {
   test("maps organization writes to organization and report tags", () => {

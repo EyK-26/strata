@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import {
   APP_PORT_CONFIG_KEY,
   CACHE_MAX_ENTRIES_CONFIG_KEY,
@@ -7,6 +7,7 @@ import {
 } from "../../src/bootstrap/config";
 import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
 import { createAppContext } from "../../src/bootstrap/dependencies";
+import { ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
 import { commentServiceToken } from "../../src/modules/comment/provider";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
 import { projectServiceToken } from "../../src/modules/project/provider";
@@ -45,6 +46,10 @@ describe("config store", () => {
 });
 
 describe("app providers", () => {
+  beforeAll(async () => {
+    await ensureModulesLoaded();
+  });
+
   test("build the app context from config and core providers", () => {
     const previousPort = process.env.PORT;
     const previousTtl = process.env.CACHE_TTL_MS;

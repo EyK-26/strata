@@ -1,7 +1,7 @@
-import { appModules } from "../modules";
+import { discoverModules } from "../discoverModules";
 
 function cacheTagsForModelWrite(tableName: string, action: string): string[] {
-  const module = appModules.find((entry) => entry.tableName === tableName);
+  const module = discoverModules().find((entry) => entry.tableName === tableName);
   const baseTags = module?.cacheTags ?? [`${tableName}s`];
   const isDelete = action === "deleted" || action === "force-deleted";
   const extraTags = isDelete ? (module?.cacheDeleteExtraTags ?? []) : [];
@@ -10,7 +10,7 @@ function cacheTagsForModelWrite(tableName: string, action: string): string[] {
 }
 
 function discoverModelTableNames(): string[] {
-  return appModules
+  return discoverModules()
     .map((module) => module.tableName)
     .filter((tableName): tableName is string => tableName !== undefined);
 }

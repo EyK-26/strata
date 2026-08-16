@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAppContext } from "../../../src/bootstrap/context";
 import { createRoutes } from "../../../src/bootstrap/createRoutes";
+import { ensureModulesLoaded } from "../../../src/bootstrap/discoverModules";
 import { routeRegistry } from "../../../src/bootstrap/routeRegistry";
 import { openapiCheckCommand } from "../../../src/cli/commands/openapiCheck";
 import { openapiValidateCommand } from "../../../src/cli/commands/openapiValidate";
@@ -12,6 +13,10 @@ import { captureConsole, mockProcessExit } from "./helpers";
 
 const tempDirectories: string[] = [];
 const originalCwd = process.cwd();
+
+beforeAll(async () => {
+  await ensureModulesLoaded();
+});
 
 afterEach(async () => {
   process.chdir(originalCwd);
