@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createAsyncContextStore } from "../../src/core/runtime/asyncContextStore";
+import { createAsyncContextStore } from "@getstrata/core/runtime/asyncContextStore";
 
 describe("createAsyncContextStore", () => {
   test("reuses the same AsyncLocalStorage instance for a key", () => {

@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { Blueprint } from "../../../../src/core/database/schema/blueprint";
-import { UnsupportedSchemaFeatureError } from "../../../../src/core/database/schema/errors";
-import { compileBlueprint } from "../../../../src/core/database/schema/grammars/compileStatements";
+import {
+  Blueprint,
+  compileBlueprint,
+  UnsupportedSchemaFeatureError,
+} from "@getstrata/core/database/schema";
 
 function buildSampleBlueprint(): Blueprint {
   const blueprint = new Blueprint("posts", "create");

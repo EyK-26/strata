@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe("createScimAuthMiddleware", () => {
   test("rejects requests without bearer tokens", async () => {
-    const { createScimAuthMiddleware } = await import("../../src/core/auth/scimAuthMiddleware");
+    const { createScimAuthMiddleware } = await import("@getstrata/core/auth/scimAuthMiddleware");
     const middleware = createScimAuthMiddleware();
 
     const response = await middleware(new Request("http://example.test/scim/Users"), async () =>
@@ -33,7 +33,7 @@ describe("createScimAuthMiddleware", () => {
   });
 
   test("rejects invalid bearer tokens", async () => {
-    const { createScimAuthMiddleware } = await import("../../src/core/auth/scimAuthMiddleware");
+    const { createScimAuthMiddleware } = await import("@getstrata/core/auth/scimAuthMiddleware");
     const middleware = createScimAuthMiddleware();
 
     const response = await middleware(
@@ -52,7 +52,7 @@ describe("createScimAuthMiddleware", () => {
   test("rejects tokens mapped to missing tenants", async () => {
     process.env.SCIM_TENANT_TOKENS = "999:missing-tenant-token";
 
-    const { createScimAuthMiddleware } = await import("../../src/core/auth/scimAuthMiddleware");
+    const { createScimAuthMiddleware } = await import("@getstrata/core/auth/scimAuthMiddleware");
     const middleware = createScimAuthMiddleware();
 
     const response = await middleware(
@@ -71,7 +71,7 @@ describe("createScimAuthMiddleware", () => {
   test("runs the next handler within tenant scope for valid tokens", async () => {
     process.env.SCIM_TENANT_TOKENS = "1:valid-token";
 
-    const { createScimAuthMiddleware } = await import("../../src/core/auth/scimAuthMiddleware");
+    const { createScimAuthMiddleware } = await import("@getstrata/core/auth/scimAuthMiddleware");
     const middleware = createScimAuthMiddleware();
     let nextCalled = false;
 
@@ -92,7 +92,7 @@ describe("createScimAuthMiddleware", () => {
   test("scopes repository reads to the SCIM tenant transaction", async () => {
     process.env.SCIM_TENANT_TOKENS = "1:valid-token";
 
-    const { createScimAuthMiddleware } = await import("../../src/core/auth/scimAuthMiddleware");
+    const { createScimAuthMiddleware } = await import("@getstrata/core/auth/scimAuthMiddleware");
     const UserRepository = (await import("../../src/modules/user/repository")).default;
     const middleware = createScimAuthMiddleware();
 
@@ -114,7 +114,7 @@ describe("createScimAuthMiddleware", () => {
   test("lists users through ScimService inside SCIM auth middleware", async () => {
     process.env.SCIM_TENANT_TOKENS = "1:valid-token";
 
-    const { createScimAuthMiddleware } = await import("../../src/core/auth/scimAuthMiddleware");
+    const { createScimAuthMiddleware } = await import("@getstrata/core/auth/scimAuthMiddleware");
     const OrganizationMemberRepository = (
       await import("../../src/modules/organization/memberRepository")
     ).default;

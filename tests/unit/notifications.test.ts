@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { LogMailDriver, Mailer } from "../../src/core/mail/mailer";
+import { LogMailDriver, Mailer } from "@getstrata/core/mail/mailer";
 import {
   createNotificationDispatcher,
   type DatabaseNotificationStore,
   type Notifiable,
   Notification,
-} from "../../src/core/notifications";
+} from "@getstrata/core/notifications";
 
 class TestUser implements Notifiable {
   constructor(

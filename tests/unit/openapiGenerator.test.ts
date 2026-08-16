@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generateOpenApiSpec, renderTypeScriptSdk } from "../../src/core/openapi/generator";
+import { generateOpenApiSpec, renderTypeScriptSdk } from "@getstrata/core/openapi/generator";
 
 describe("generateOpenApiSpec", () => {
   test("maps registered routes into an OpenAPI document", () => {

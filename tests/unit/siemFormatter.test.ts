@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatCefLine, formatSiemAuditEvent } from "../../src/core/audit/siemFormatter";
+import { formatCefLine, formatSiemAuditEvent } from "@getstrata/core/audit/siemFormatter";
 
 describe("siemFormatter", () => {
   test("formats audit events for SIEM ingestion", () => {

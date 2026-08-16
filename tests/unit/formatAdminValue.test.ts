@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatAdminValue } from "../../src/core/admin/formatValue";
+import { formatAdminValue } from "@getstrata/core/admin/formatValue";
 
 describe("formatAdminValue", () => {
   test("formats nullish values as empty strings", () => {

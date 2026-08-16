@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { Mailer } from "../../src/core/mail/mailer";
+import { Mailer } from "@getstrata/core/mail/mailer";
 import {
   markdownToHtml,
   renderMarkdownMail,
   stripMarkdown,
   wrapMarkdownMailLayout,
-} from "../../src/core/mail/markdownMail";
-import { buildMarkdownMailMessage, sendMarkdownMail } from "../../src/core/mail/markdownMailable";
+} from "@getstrata/core/mail/markdownMail";
+import { buildMarkdownMailMessage, sendMarkdownMail } from "@getstrata/core/mail/markdownMailable";
 
 describe("markdown mail", () => {
   test("markdownToHtml converts headings and links", () => {

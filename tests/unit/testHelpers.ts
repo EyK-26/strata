@@ -114,7 +114,7 @@ function mockFetch(implementation: (...args: never[]) => unknown): typeof fetch 
 }
 
 async function clearPendingAuditLogs(): Promise<void> {
-  const { runWithMigrationBypass } = await import("../../src/core/tenant/databaseTenantContext");
+  const { runWithMigrationBypass } = await import("@getstrata/core/tenant/databaseTenantContext");
   const db = (await import("../../src/db/connection")).default;
 
   await runWithMigrationBypass(async () => {

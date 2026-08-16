@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AdminResourceRegistry } from "../../src/core/admin/registry";
+import { AdminResourceRegistry } from "@getstrata/core/admin/registry";
 
 const usersResource = {
   name: "users",

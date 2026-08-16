@@ -4,7 +4,7 @@ import {
   Mailer,
   resolveSmtpConfig,
   SmtpMailDriver,
-} from "../../src/core/mail/mailer";
+} from "@getstrata/core/mail/mailer";
 
 describe("Mailer", () => {
   test("log driver records outgoing messages", async () => {
@@ -123,7 +123,7 @@ describe("Mailer", () => {
   });
 
   test("buildSmtpPayload emits multipart alternative when html is present", async () => {
-    const { buildSmtpPayload } = await import("../../src/core/mail/mailer");
+    const { buildSmtpPayload } = await import("@getstrata/core/mail/mailer");
 
     const payload = buildSmtpPayload("noreply@example.test", {
       to: "user@example.test",

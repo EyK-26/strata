@@ -3,7 +3,7 @@ import {
   exportPendingAuditLogs,
   resolveAuditExportConfig,
 } from "@getstrata/core/audit/exportAuditLogs";
-import { runWithMigrationBypass } from "../../src/core/tenant/databaseTenantContext";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import db from "../../src/db/connection";
 import { clearPendingAuditLogs } from "./testHelpers";
 

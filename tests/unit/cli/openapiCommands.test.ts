@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
 import { createAppContext } from "../../../src/bootstrap/context";
 import { createRoutes } from "../../../src/bootstrap/createRoutes";
 import { openapiCheckCommand } from "../../../src/cli/commands/openapiCheck";
 import { openapiValidateCommand } from "../../../src/cli/commands/openapiValidate";
-import { generateOpenApiSpec, renderOpenApiDocument } from "../../../src/core/openapi/generator";
 import { captureConsole, mockProcessExit } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -102,7 +102,7 @@ describe("openapi CLI validation failures", () => {
   let invalidOpenapiCheckCommand: typeof openapiCheckCommand;
 
   beforeAll(async () => {
-    mock.module("../../../src/core/openapi/validate", () => ({
+    mock.module("@getstrata/core/openapi/validate", () => ({
       validateOpenApiSpec: () => ["Missing bearerAuth security scheme."],
     }));
 

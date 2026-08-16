@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { timingSafeCompareString } from "../../src/core/security/timingSafeCompare";
+import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
 
 describe("timingSafeCompareString", () => {
   test("returns true for equal strings", () => {

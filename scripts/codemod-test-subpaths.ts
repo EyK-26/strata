@@ -21,10 +21,14 @@ const SUBPATHS = new Set([
   "auth/oauth/types",
   "auth/password",
   "auth/policy",
+  "auth/scimAuthMiddleware",
   "auth/sessionCookie",
   "auth/sessionGuard",
   "auth/tokenHash",
   "audit/exportAuditLogs",
+  "audit/siemFormatter",
+  "admin/formatValue",
+  "admin/registry",
   "cache/tags",
   "cache/createCacheStore",
   "cache/repository",
@@ -47,6 +51,7 @@ const SUBPATHS = new Set([
   "database/query",
   "database/relationships",
   "database/seeders",
+  "database/schema",
   "database/table",
   "database/transaction",
   "errors/http",
@@ -74,8 +79,14 @@ const SUBPATHS = new Set([
   "jobs/invalidateCacheTagsJob",
   "lifecycle/gracefulShutdown",
   "logging/logger",
+  "mail/mailer",
+  "mail/markdownMail",
+  "mail/markdownMailable",
   "metrics/prometheus",
+  "notifications",
+  "openapi/generator",
   "openapi/registeredRoute",
+  "openapi/validate",
   "pagination",
   "queue",
   "queue/createAppQueue",
@@ -88,17 +99,21 @@ const SUBPATHS = new Set([
   "queue/redisQueue",
   "queue/types",
   "runtime/applicationRegistry",
+  "runtime/asyncContextStore",
   "scheduler/schedule",
   "security/oauthState",
   "security/publicReads",
+  "security/safeFetch",
   "security/safeUrl",
   "security/scimTenantTokens",
   "security/stripeWebhook",
+  "security/timingSafeCompare",
   "security/tokenExpiry",
   "security/totp",
   "storage/storage",
   "tenant/tenantContext",
   "tenant/tenantDatabaseScope",
+  "tenant/databaseTenantContext",
   "tenant/tenantMiddleware",
   "tracing/traceContext",
   "validation/rules",
@@ -135,9 +150,11 @@ function rewrite(content: string): string {
       const mapped =
         normalized === "database/seeders/runner"
           ? "database/seeders"
-          : normalized === "view/webLayoutData"
-            ? "view"
-            : normalized;
+          : normalized.startsWith("database/schema/")
+            ? "database/schema"
+            : normalized === "view/webLayoutData"
+              ? "view"
+              : normalized;
       if (SUBPATHS.has(mapped)) {
         return `@getstrata/core/${mapped}`;
       }

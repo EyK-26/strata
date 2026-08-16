@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "0.5.42",
+  "version": "0.5.43",
   "description": "Strata — Laravel-inspired Bun framework public API",
   "type": "module",
   "license": "MIT",
@@ -75,6 +75,11 @@
       "import": "./dist/entries/auth/policy.js",
       "default": "./dist/entries/auth/policy.js"
     },
+    "./auth/scimAuthMiddleware": {
+      "types": "./dist/core/auth/scimAuthMiddleware.d.ts",
+      "import": "./dist/entries/auth/scimAuthMiddleware.js",
+      "default": "./dist/entries/auth/scimAuthMiddleware.js"
+    },
     "./auth/sessionCookie": {
       "types": "./dist/core/auth/sessionCookie.d.ts",
       "import": "./dist/entries/auth/sessionCookie.js",
@@ -94,6 +99,21 @@
       "types": "./dist/core/audit/exportAuditLogs.d.ts",
       "import": "./dist/entries/audit/exportAuditLogs.js",
       "default": "./dist/entries/audit/exportAuditLogs.js"
+    },
+    "./audit/siemFormatter": {
+      "types": "./dist/core/audit/siemFormatter.d.ts",
+      "import": "./dist/entries/audit/siemFormatter.js",
+      "default": "./dist/entries/audit/siemFormatter.js"
+    },
+    "./admin/formatValue": {
+      "types": "./dist/core/admin/formatValue.d.ts",
+      "import": "./dist/entries/admin/formatValue.js",
+      "default": "./dist/entries/admin/formatValue.js"
+    },
+    "./admin/registry": {
+      "types": "./dist/core/admin/registry.d.ts",
+      "import": "./dist/entries/admin/registry.js",
+      "default": "./dist/entries/admin/registry.js"
     },
     "./cache/tags": {
       "types": "./dist/core/cache/tags.d.ts",
@@ -204,6 +224,11 @@
       "types": "./dist/core/database/seeders/runner.d.ts",
       "import": "./dist/entries/database/seeders.js",
       "default": "./dist/entries/database/seeders.js"
+    },
+    "./database/schema": {
+      "types": "./dist/core/database/schema/index.d.ts",
+      "import": "./dist/entries/database/schema.js",
+      "default": "./dist/entries/database/schema.js"
     },
     "./database/table": {
       "types": "./dist/core/database/table.d.ts",
@@ -345,15 +370,45 @@
       "import": "./dist/entries/logging/logger.js",
       "default": "./dist/entries/logging/logger.js"
     },
+    "./mail/mailer": {
+      "types": "./dist/core/mail/mailer.d.ts",
+      "import": "./dist/entries/mail/mailer.js",
+      "default": "./dist/entries/mail/mailer.js"
+    },
+    "./mail/markdownMail": {
+      "types": "./dist/core/mail/markdownMail.d.ts",
+      "import": "./dist/entries/mail/markdownMail.js",
+      "default": "./dist/entries/mail/markdownMail.js"
+    },
+    "./mail/markdownMailable": {
+      "types": "./dist/core/mail/markdownMailable.d.ts",
+      "import": "./dist/entries/mail/markdownMailable.js",
+      "default": "./dist/entries/mail/markdownMailable.js"
+    },
     "./metrics/prometheus": {
       "types": "./dist/core/metrics/prometheus.d.ts",
       "import": "./dist/entries/metrics/prometheus.js",
       "default": "./dist/entries/metrics/prometheus.js"
     },
+    "./notifications": {
+      "types": "./dist/core/notifications/index.d.ts",
+      "import": "./dist/entries/notifications.js",
+      "default": "./dist/entries/notifications.js"
+    },
+    "./openapi/generator": {
+      "types": "./dist/core/openapi/generator.d.ts",
+      "import": "./dist/entries/openapi/generator.js",
+      "default": "./dist/entries/openapi/generator.js"
+    },
     "./openapi/registeredRoute": {
       "types": "./dist/core/openapi/registeredRoute.d.ts",
       "import": "./dist/entries/openapi/registeredRoute.js",
       "default": "./dist/entries/openapi/registeredRoute.js"
+    },
+    "./openapi/validate": {
+      "types": "./dist/core/openapi/validate.d.ts",
+      "import": "./dist/entries/openapi/validate.js",
+      "default": "./dist/entries/openapi/validate.js"
     },
     "./pagination": {
       "types": "./dist/core/pagination/index.d.ts",
@@ -415,6 +470,11 @@
       "import": "./dist/entries/runtime/applicationRegistry.js",
       "default": "./dist/entries/runtime/applicationRegistry.js"
     },
+    "./runtime/asyncContextStore": {
+      "types": "./dist/core/runtime/asyncContextStore.d.ts",
+      "import": "./dist/entries/runtime/asyncContextStore.js",
+      "default": "./dist/entries/runtime/asyncContextStore.js"
+    },
     "./scheduler/schedule": {
       "types": "./dist/core/scheduler/schedule.d.ts",
       "import": "./dist/entries/scheduler/schedule.js",
@@ -429,6 +489,11 @@
       "types": "./dist/core/security/publicReads.d.ts",
       "import": "./dist/entries/security/publicReads.js",
       "default": "./dist/entries/security/publicReads.js"
+    },
+    "./security/safeFetch": {
+      "types": "./dist/core/security/safeFetch.d.ts",
+      "import": "./dist/entries/security/safeFetch.js",
+      "default": "./dist/entries/security/safeFetch.js"
     },
     "./security/safeUrl": {
       "types": "./dist/core/security/safeUrl.d.ts",
@@ -449,6 +514,11 @@
       "types": "./dist/core/security/stripeWebhook.d.ts",
       "import": "./dist/entries/security/stripeWebhook.js",
       "default": "./dist/entries/security/stripeWebhook.js"
+    },
+    "./security/timingSafeCompare": {
+      "types": "./dist/core/security/timingSafeCompare.d.ts",
+      "import": "./dist/entries/security/timingSafeCompare.js",
+      "default": "./dist/entries/security/timingSafeCompare.js"
     },
     "./security/tokenExpiry": {
       "types": "./dist/core/security/tokenExpiry.d.ts",
@@ -474,6 +544,11 @@
       "types": "./dist/core/tenant/tenantDatabaseScope.d.ts",
       "import": "./dist/entries/tenant/tenantDatabaseScope.js",
       "default": "./dist/entries/tenant/tenantDatabaseScope.js"
+    },
+    "./tenant/databaseTenantContext": {
+      "types": "./dist/core/tenant/databaseTenantContext.d.ts",
+      "import": "./dist/entries/tenant/databaseTenantContext.js",
+      "default": "./dist/entries/tenant/databaseTenantContext.js"
     },
     "./tenant/tenantMiddleware": {
       "types": "./dist/core/tenant/tenantMiddleware.d.ts",
@@ -507,7 +582,7 @@
     "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta",
     "build:types": "tsc -p tsconfig.types.json",
     "prepublishOnly": "bun run build && bun ../../scripts/prepare-core-package-publish.ts",
-    "build:subpaths": "bun build entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/sessionCookie.ts entries/auth/sessionGuard.ts entries/auth/tokenHash.ts entries/audit/exportAuditLogs.ts entries/cache/tags.ts entries/cache/createCacheStore.ts entries/cache/repository.ts entries/cache/simpleCache.ts entries/cache/simpleCacheStore.ts entries/config/envSchema.ts entries/contracts/serviceTokens.ts entries/contracts/container.ts entries/contracts/di.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database/baseRepository.ts entries/database/bindConnection.ts entries/database/boundConnection.ts entries/database/connection.ts entries/database/errors.ts entries/database/factory.ts entries/database/model.ts entries/database/query.ts entries/database/relationships.ts entries/database/seeders.ts entries/database/table.ts entries/database/transaction.ts entries/database/types.ts entries/errors/http.ts entries/http/authMiddleware.ts entries/http/authorizeMiddleware.ts entries/http/bodySizeLimitMiddleware.ts entries/http/cookies.ts entries/http/csrfProtection.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/metricsMiddleware.ts entries/http/parseFormBody.ts entries/http/parseMultipartUpload.ts entries/http/resources.ts entries/http/securedRouteModelBinding.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/jobs/invalidateCacheTagsJob.ts entries/lifecycle/gracefulShutdown.ts entries/logging/logger.ts entries/metrics/prometheus.ts entries/openapi/registeredRoute.ts entries/pagination.ts entries/queue.ts entries/queue/createAppQueue.ts entries/queue/failedJobRepository.ts entries/queue/failedJobService.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/redisQueue.ts entries/queue/types.ts entries/scheduler/schedule.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeUrl.ts entries/security/scimTenantTokens.ts entries/security/stripeWebhook.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/tenant/tenantDatabaseScope.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta",
+    "build:subpaths": "bun build entries/auth/oauth/oidcProvider.ts entries/auth/oauth/providers.ts entries/auth/oauth/samlProvider.ts entries/auth/oauth/types.ts entries/auth/password.ts entries/auth/scimAuthMiddleware.ts entries/auth/sessionCookie.ts entries/auth/sessionGuard.ts entries/auth/tokenHash.ts entries/audit/exportAuditLogs.ts entries/audit/siemFormatter.ts entries/admin/formatValue.ts entries/admin/registry.ts entries/cache/tags.ts entries/cache/createCacheStore.ts entries/cache/repository.ts entries/cache/simpleCache.ts entries/cache/simpleCacheStore.ts entries/config/envSchema.ts entries/contracts/serviceTokens.ts entries/contracts/container.ts entries/contracts/di.ts entries/crypto/fieldEncryption.ts entries/crypto/mfaSecret.ts entries/database/baseRepository.ts entries/database/bindConnection.ts entries/database/boundConnection.ts entries/database/connection.ts entries/database/errors.ts entries/database/factory.ts entries/database/model.ts entries/database/query.ts entries/database/relationships.ts entries/database/seeders.ts entries/database/schema.ts entries/database/table.ts entries/database/transaction.ts entries/database/types.ts entries/errors/http.ts entries/http/authMiddleware.ts entries/http/authorizeMiddleware.ts entries/http/bodySizeLimitMiddleware.ts entries/http/cookies.ts entries/http/csrfProtection.ts entries/http/contentNegotiation.ts entries/http/csrfToken.ts entries/http/etag.ts entries/http/flashSession.ts entries/http/metricsMiddleware.ts entries/http/parseFormBody.ts entries/http/parseMultipartUpload.ts entries/http/resources.ts entries/http/securedRouteModelBinding.ts entries/http/webErrorResponse.ts entries/http/webFormRequest.ts entries/jobs/dispatchWebhookJob.ts entries/jobs/invalidateCacheTagsJob.ts entries/lifecycle/gracefulShutdown.ts entries/logging/logger.ts entries/mail/mailer.ts entries/mail/markdownMail.ts entries/mail/markdownMailable.ts entries/metrics/prometheus.ts entries/notifications.ts entries/openapi/generator.ts entries/openapi/registeredRoute.ts entries/openapi/validate.ts entries/pagination.ts entries/queue.ts entries/queue/createAppQueue.ts entries/queue/failedJobRepository.ts entries/queue/failedJobService.ts entries/queue/jobRunner.ts entries/queue/queueMetrics.ts entries/queue/publicQueue.ts entries/queue/redisQueue.ts entries/queue/types.ts entries/runtime/asyncContextStore.ts entries/scheduler/schedule.ts entries/security/oauthState.ts entries/security/publicReads.ts entries/security/safeFetch.ts entries/security/safeUrl.ts entries/security/scimTenantTokens.ts entries/security/stripeWebhook.ts entries/security/timingSafeCompare.ts entries/security/tokenExpiry.ts entries/security/totp.ts entries/storage/storage.ts entries/tenant/tenantDatabaseScope.ts entries/tenant/databaseTenantContext.ts entries/validation/rules.ts entries/view.ts --outdir dist --root . --target bun --external bun --external eta",
     "build:shims": "bun ../../scripts/write-core-shared-shims.ts"
   },
   "publishConfig": {
