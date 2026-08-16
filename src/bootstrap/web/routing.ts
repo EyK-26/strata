@@ -1,5 +1,6 @@
-import type { RouteHandler, RouteRequest } from "@getstrata/core";
-import { withErrorHandling } from "@getstrata/core";
+import { withErrorHandling } from "@getstrata/core/http";
+import type { RouteHandler } from "@getstrata/core/http/middleware";
+import type { RouteRequest } from "@getstrata/core/http/route";
 import type { AppDependencies } from "../contracts.ts";
 import { securedBindRouteModelByKey } from "../http/securedRouteModelBinding.ts";
 import type { HttpKernel } from "../httpKernel.ts";

@@ -1,9 +1,7 @@
-import {
-  createScimAuthMiddleware,
-  createScimThrottleMiddleware,
-  type RouteHandler,
-  withMiddleware,
-} from "@getstrata/core";
+import { createScimAuthMiddleware } from "@getstrata/core/auth/scimAuthMiddleware";
+import type { RouteHandler } from "@getstrata/core/http/middleware";
+import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
+import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
 import ScimController from "../modules/scim/controller";
 import type { AppDependencies } from "./contracts";
 

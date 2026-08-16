@@ -11,9 +11,11 @@ const ROOT = join(import.meta.dir, "..");
 
 const CORE_SUBPATHS = [
   "auth/accessControl",
+  "auth/abilityChecker",
   "auth/authContext",
   "auth/guard",
   "auth/membershipContext",
+  "auth/membershipMiddleware",
   "auth/membershipScope",
   "auth/membershipService",
   "auth/oauth/oidcProvider",
@@ -48,10 +50,13 @@ const CORE_SUBPATHS = [
   "database/connection",
   "database/errors",
   "database/factory",
+  "database/migrations",
+  "database/migrations/types",
   "database/model",
   "database/query",
   "database/relationships",
   "database/seeders",
+  "database/seeders/types",
   "database/schema",
   "database/table",
   "database/transaction",
@@ -63,24 +68,42 @@ const CORE_SUBPATHS = [
   "http/authorizeMiddleware",
   "http/bodySizeLimitMiddleware",
   "http/cookies",
-  "http/csrfProtection",
   "http/contentNegotiation",
+  "http/conditionalResponse",
+  "http/corsMiddleware",
+  "http/csrfMiddleware",
+  "http/csrfProtection",
   "http/csrfToken",
   "http/etag",
   "http/flashSession",
+  "http/flashMiddleware",
+  "http/formRequest",
   "http/middleware",
   "http/metricsMiddleware",
+  "http/loginThrottleMiddleware",
+  "http/memoryThrottleMiddleware",
   "http/parseFormBody",
   "http/parseMultipartUpload",
+  "http/requireAbilityMiddleware",
+  "http/requireAuthMiddleware",
+  "http/requireGlobalAdminMiddleware",
+  "http/requireWebAuthMiddleware",
   "http/resources",
+  "http/route",
+  "http/routeMiddleware",
+  "http/routeModelBinding",
+  "http/scimThrottleMiddleware",
+  "http/securityHeadersMiddleware",
   "http/securedRouteModelBinding",
   "http/requestMetaContext",
   "http/webErrorResponse",
   "http/webFormRequest",
+  "http/throttleMiddleware",
   "jobs/dispatchWebhookJob",
   "jobs/invalidateCacheTagsJob",
   "lifecycle/gracefulShutdown",
   "logging/logger",
+  "logging/requestLoggingMiddleware",
   "mail/mailer",
   "mail/markdownMail",
   "mail/markdownMailable",
@@ -119,6 +142,7 @@ const CORE_SUBPATHS = [
   "tenant/databaseTenantContext",
   "tenant/tenantMiddleware",
   "tracing/traceContext",
+  "tracing/tracingMiddleware",
   "validation/rules",
   "view",
 ] as const;
@@ -197,6 +221,18 @@ function resolveCoreTypesPath(subpath: string): string {
     return "./dist/core/database/seeders/runner.d.ts";
   }
 
+  if (subpath === "database/migrations") {
+    return "./dist/core/database/migrations/runner.d.ts";
+  }
+
+  if (subpath === "database/migrations/types") {
+    return "./dist/core/database/migrations/types.d.ts";
+  }
+
+  if (subpath === "database/seeders/types") {
+    return "./dist/core/database/seeders/types.d.ts";
+  }
+
   return `./dist/core/${subpath}.d.ts`;
 }
 
@@ -270,7 +306,9 @@ async function writeEntryFiles(
       ? `${subpath}/index`
       : subpath === "database/seeders"
         ? "database/seeders/runner"
-        : subpath;
+        : subpath === "database/migrations"
+          ? "database/migrations/runner"
+          : subpath;
 
     const srcPrefix = srcLayer === "core" ? "core" : "bootstrap";
     const sourceFile = join(ROOT, "src", srcPrefix, `${sourcePath}.ts`);
