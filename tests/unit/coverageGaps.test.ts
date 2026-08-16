@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
+import { EventBus } from "@getstrata/core/events";
+import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
+import { FailedJobService } from "@getstrata/core/queue/failedJobService";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import { membershipContext } from "../../src/core/auth/membershipContext";
 import { assertOrganizationReadable } from "../../src/core/auth/membershipScope";
-import { Policy, PolicyGate } from "../../src/core/auth/policy";
 import {
   clearSessionCookie,
   createSessionCookie,
@@ -17,10 +21,6 @@ import {
 } from "../../src/core/crypto/fieldEncryption";
 import { Factory } from "../../src/core/database/factory";
 import { buildWhereClause } from "../../src/core/database/query";
-import { EventBus } from "../../src/core/events/eventBus";
-import DispatchWebhookJob from "../../src/core/jobs/dispatchWebhookJob";
-import FailedJobService from "../../src/core/queue/failedJobService";
-import { JobRegistry } from "../../src/core/queue/jobRegistry";
 import {
   clearOAuthStateCookie,
   createOAuthStateCookie,

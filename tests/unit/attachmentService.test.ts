@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { ForbiddenError, NotFoundError, UnauthorizedError } from "@getstrata/core/errors/http";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import { membershipContext } from "../../src/core/auth/membershipContext";
 import type { DatabaseConnection } from "../../src/core/database";
-import { ForbiddenError, NotFoundError, UnauthorizedError } from "../../src/core/errors/http";
 import { runWithTenant } from "../../src/core/tenant/tenantContext";
 import type AttachmentRepository from "../../src/modules/attachment/repository";
 import type { AttachmentRecord } from "../../src/modules/attachment/types";

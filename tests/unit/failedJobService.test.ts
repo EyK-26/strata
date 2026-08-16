@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import FailedJobService from "../../src/core/queue/failedJobService";
-import type { FailedJobRecord } from "../../src/core/queue/types";
+import { FailedJobService } from "@getstrata/core/queue/failedJobService";
+import type { FailedJobRecord } from "@getstrata/core/queue/types";
 
 function createRepositoryStub(initial: FailedJobRecord[] = []) {
   const records = [...initial];

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BadRequestError, ValidationError } from "../../src/core/errors/http";
+import { BadRequestError, ValidationError } from "@getstrata/core/errors/http";
 import {
   parseCreateApiTokenBody,
   parseLoginBody,

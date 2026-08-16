@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
 import { AdminResourceRegistry } from "@getstrata/core";
-import { Job } from "../../src/core/queue";
+import { Job } from "@getstrata/core/queue";
 import AdminService from "../../src/modules/admin/service";
 
 class EchoJob extends Job<{ marker: string }> {

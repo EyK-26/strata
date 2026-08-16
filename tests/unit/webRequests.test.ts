@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ValidationError } from "../../src/core/errors/http";
+import { ValidationError } from "@getstrata/core/errors/http";
 import { parseWebLoginBody } from "../../src/modules/user/webRequests";
 
 describe("webRequests", () => {

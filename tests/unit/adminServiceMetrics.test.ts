@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { prometheusRegistry } from "../../src/core/metrics/prometheus";
+import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 import AdminService from "../../src/modules/admin/service";
 
 describe("AdminService queue and HTTP metrics", () => {

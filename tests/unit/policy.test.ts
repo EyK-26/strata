@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { Policy, PolicyGate } from "../../src/core/auth/policy";
+import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 
 class DefaultPolicy extends Policy {}
 
-import { ForbiddenError } from "../../src/core/errors/http";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 
 class OrganizationRecord {
   constructor(

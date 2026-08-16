@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { PolicyGate } from "@getstrata/core/auth/policy";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { PolicyGate } from "../../src/core/auth/policy";
 import OrganizationPolicy from "../../src/modules/organization/policy";
 import type { OrganizationRecord } from "../../src/modules/organization/types";
 

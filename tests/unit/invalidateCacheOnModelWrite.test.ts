@@ -2,11 +2,11 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { registerInvalidateCacheOnModelWriteListeners } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
 import { CacheRepository } from "@getstrata/core/cache/repository";
+import { SimpleCache } from "@getstrata/core/cache/simpleCache";
+import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
+import { CACHE_TAGS } from "@getstrata/core/cache/tags";
+import { EventBus } from "@getstrata/core/events";
 import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTagsJob";
-import SimpleCache from "../../src/core/cache/simpleCache";
-import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
-import { CACHE_TAGS } from "../../src/core/cache/tags";
-import { EventBus } from "../../src/core/events/eventBus";
 
 beforeAll(async () => {
   await ensureModulesLoaded();

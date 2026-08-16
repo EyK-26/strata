@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PreconditionFailedError } from "../../src/core/errors/http";
+import { PreconditionFailedError } from "@getstrata/core/errors/http";
 import {
   applyConditionalGet,
   assertIfMatch,
@@ -7,7 +7,7 @@ import {
   etagFromResource,
   ifMatchSatisfied,
   ifNoneMatchSatisfied,
-} from "../../src/core/http/etag";
+} from "@getstrata/core/http/etag";
 
 describe("etagFromResource", () => {
   test("uses updated_at when present", () => {

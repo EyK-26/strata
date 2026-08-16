@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { BadRequestError } from "../../src/core/errors/http";
+import { BadRequestError } from "@getstrata/core/errors/http";
 import { DEFAULT_FETCH_TIMEOUT_MS, safeFetch } from "../../src/core/security/safeFetch";
 
 const originalFetch = globalThis.fetch;

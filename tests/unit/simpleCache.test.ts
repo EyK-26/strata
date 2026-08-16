@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import SimpleCache from "../../src/core/cache/simpleCache";
+import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 
 describe("SimpleCache", () => {
   test("deduplicates inflight requests for the same key", async () => {

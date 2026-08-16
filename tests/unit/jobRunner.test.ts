@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { Job } from "../../src/core/queue";
+import { Job } from "@getstrata/core/queue";
+import { FailedJobService } from "@getstrata/core/queue/failedJobService";
+import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { runQueueJob } from "@getstrata/core/queue/jobRunner";
 import FailedJobRepository from "../../src/core/queue/failedJobRepository";
-import FailedJobService from "../../src/core/queue/failedJobService";
-import { jobRegistry } from "../../src/core/queue/jobRegistry";
-import { runQueueJob } from "../../src/core/queue/jobRunner";
 
 class FailingJob extends Job<{ marker: string }> {
   override readonly maxAttempts = 1;

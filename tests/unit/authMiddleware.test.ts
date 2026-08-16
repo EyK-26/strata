@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ApiTokenGuard, AuthManager, GuestGuard } from "../../src/core/auth/guard";
+import { ApiTokenGuard, AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { createAuthMiddleware } from "../../src/core/http/authMiddleware";
-import { composeMiddleware } from "../../src/core/http/middleware";
 
 describe("GuestGuard", () => {
   test("resolves users from development auth headers", async () => {

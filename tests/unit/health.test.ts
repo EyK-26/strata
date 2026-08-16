@@ -3,8 +3,8 @@ import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "@getstrata/bootstrap/co
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
 import { CacheRepository } from "@getstrata/core/cache/repository";
-import SimpleCache from "../../src/core/cache/simpleCache";
-import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
+import { SimpleCache } from "@getstrata/core/cache/simpleCache";
+import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { createMockDependencies } from "./testHelpers";
 
 describe("createHealthRoutes", () => {

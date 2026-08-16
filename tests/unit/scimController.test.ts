@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { etagFromResource } from "../../src/core/http/etag";
+import { etagFromResource } from "@getstrata/core/http/etag";
 import ScimController from "../../src/modules/scim/controller";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
+import { Job } from "@getstrata/core/queue";
+import { createFailedJobService } from "@getstrata/core/queue/createAppQueue";
+import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { type QueueJobEnvelope, runQueueJob } from "@getstrata/core/queue/jobRunner";
 import { RedisClient } from "bun";
-import { Job } from "../../src/core/queue";
-import { createFailedJobService } from "../../src/core/queue/createAppQueue";
-import { jobRegistry } from "../../src/core/queue/jobRegistry";
-import { type QueueJobEnvelope, runQueueJob } from "../../src/core/queue/jobRunner";
 import { QUEUE_LIST_KEY, RedisQueue } from "../../src/core/queue/redisQueue";
 
 interface EchoPayload {

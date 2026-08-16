@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Policy, PolicyGate } from "../../src/core/auth/policy";
-import { ForbiddenError } from "../../src/core/errors/http";
+import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 
 class LearnPolicy extends Policy {
   viewPremiumEpisode(user: { id: number } | null, record: { learn_subscriber: boolean } | null) {

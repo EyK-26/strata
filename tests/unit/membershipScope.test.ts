@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { NotFoundError } from "@getstrata/core/errors/http";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import { membershipContext } from "../../src/core/auth/membershipContext";
 import {
@@ -10,7 +11,6 @@ import {
   resolveOrganizationScope,
   scopedOrganizationIds,
 } from "../../src/core/auth/membershipScope";
-import { NotFoundError } from "../../src/core/errors/http";
 import { runWithTenant } from "../../src/core/tenant/tenantContext";
 
 function withMembership(

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NotFoundError } from "../../src/core/errors/http";
+import { NotFoundError } from "@getstrata/core/errors/http";
 import { bindRouteModel } from "../../src/core/http/routeModelBinding";
 
 type OrganizationParams = { id: string };

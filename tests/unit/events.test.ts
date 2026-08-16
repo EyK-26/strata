@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { EventBus, eventBus } from "../../src/core/events/eventBus";
+import { EventBus, eventBus } from "@getstrata/core/events";
 
 describe("EventBus", () => {
   test("dispatches events to registered listeners in registration order", async () => {

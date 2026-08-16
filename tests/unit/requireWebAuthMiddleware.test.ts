@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { UnauthorizedError } from "../../src/core/errors/http";
-import { composeMiddleware } from "../../src/core/http/middleware";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { UnauthorizedError } from "@getstrata/core/errors/http";
+import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { createRequireWebAuthMiddleware } from "../../src/core/http/requireWebAuthMiddleware";
 
 describe("createRequireWebAuthMiddleware", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { composeMiddleware } from "../../src/core/http/middleware";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { createRequireAuthMiddleware } from "../../src/core/http/requireAuthMiddleware";
 
 describe("createRequireAuthMiddleware", () => {

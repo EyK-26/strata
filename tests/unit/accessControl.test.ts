@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import {
   hasMinimumOrgRole,
   isGlobalAdmin,
@@ -7,7 +8,6 @@ import {
   resolveUserId,
 } from "../../src/core/auth/accessControl";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { ForbiddenError } from "../../src/core/errors/http";
 
 describe("accessControl", () => {
   test("isGlobalAdmin detects admin role", () => {

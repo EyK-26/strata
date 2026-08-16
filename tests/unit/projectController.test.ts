@@ -1,10 +1,10 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { PolicyGate } from "../../src/core/auth/policy";
-import { etagFromResource, jsonResponse } from "../../src/core/http";
-import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { PolicyGate } from "@getstrata/core/auth/policy";
+import { etagFromResource, jsonResponse } from "@getstrata/core/http";
+import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import ProjectController from "../../src/modules/project/controller";
 import ProjectPolicy from "../../src/modules/project/policy";
 import { projectServiceToken } from "../../src/modules/project/provider";

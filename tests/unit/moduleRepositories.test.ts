@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { NotFoundError } from "@getstrata/core/errors/http";
 import {
   BaseRepository,
   belongsTo,
@@ -6,7 +7,6 @@ import {
   defineTable,
   hasMany,
 } from "../../src/core/database";
-import { NotFoundError } from "../../src/core/errors/http";
 import CommentRepository from "../../src/modules/comment/repository";
 import type { CommentRecord } from "../../src/modules/comment/types";
 import OrganizationRepository from "../../src/modules/organization/repository";

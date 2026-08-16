@@ -3,7 +3,7 @@ import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { attachmentServiceToken } from "../../src/modules/attachment/provider";
 import type { AttachmentRecord } from "../../src/modules/attachment/types";
 import AttachmentWebController, {

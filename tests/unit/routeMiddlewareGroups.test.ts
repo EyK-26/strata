@@ -3,13 +3,13 @@ import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/co
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { Policy, PolicyGate } from "../../src/core/auth/policy";
-import SimpleCache from "../../src/core/cache/simpleCache";
-import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
+import { SimpleCache } from "@getstrata/core/cache/simpleCache";
+import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
+import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { createAuthorizeMiddleware } from "../../src/core/http/authorizeMiddleware";
-import { composeMiddleware } from "../../src/core/http/middleware";
 
 class ProjectPolicy extends Policy {
   override delete(user: { role?: string } | null): boolean {

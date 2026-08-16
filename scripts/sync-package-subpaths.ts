@@ -29,6 +29,8 @@ const CORE_SUBPATHS = [
   "cache/tags",
   "cache/createCacheStore",
   "cache/repository",
+  "cache/simpleCache",
+  "cache/simpleCacheStore",
   "config/envSchema",
   "contracts/serviceTokens",
   "contracts/container",

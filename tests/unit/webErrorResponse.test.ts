@@ -4,7 +4,7 @@ import {
   HttpError,
   UnauthorizedError,
   ValidationError,
-} from "../../src/core/errors/http";
+} from "@getstrata/core/errors/http";
 import { normalizeFieldErrors, webErrorResponse } from "../../src/core/http/webErrorResponse";
 
 describe("normalizeFieldErrors", () => {

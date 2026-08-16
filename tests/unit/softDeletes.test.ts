@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { eventBus } from "@getstrata/core/events";
 import {
   BaseRepository,
   buildSelectQuery,
   type DatabaseConnection,
   defineTable,
 } from "../../src/core/database";
-import { eventBus } from "../../src/core/events";
 
 type SoftRecord = {
   id: number;

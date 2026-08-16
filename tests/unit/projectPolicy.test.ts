@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { PolicyGate } from "@getstrata/core/auth/policy";
 import { membershipContext } from "../../src/core/auth/membershipContext";
-import { PolicyGate } from "../../src/core/auth/policy";
 import ProjectPolicy from "../../src/modules/project/policy";
 import type { ProjectRecord } from "../../src/modules/project/types";
 

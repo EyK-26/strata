@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { CacheRepository } from "@getstrata/core/cache/repository";
-import SimpleCache from "../../src/core/cache/simpleCache";
-import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
-import { CACHE_TAGS } from "../../src/core/cache/tags";
+import { SimpleCache } from "@getstrata/core/cache/simpleCache";
+import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
+import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 
 describe("CacheRepository", () => {
   test("remember stores and returns cached values", async () => {

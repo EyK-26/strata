@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ForbiddenError } from "../../src/core/errors/http";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createCsrfMiddleware } from "../../src/core/http/csrfMiddleware";
 import {
   createCsrfTokenCookie,

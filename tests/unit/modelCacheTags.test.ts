@@ -4,7 +4,7 @@ import {
   discoverModelTableNames,
 } from "@getstrata/bootstrap/cache/modelCacheTags";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
-import { CACHE_TAGS } from "../../src/core/cache/tags";
+import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 
 beforeAll(async () => {
   await ensureModulesLoaded();

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createCacheStore } from "../../src/core/cache/createCacheStore";
+import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
 
 describe("createCacheStore", () => {
   test("creates an array-backed cache store by default", async () => {

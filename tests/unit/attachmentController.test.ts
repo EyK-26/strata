@@ -6,10 +6,10 @@ import {
   ServiceContainer,
 } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { PolicyGate } from "@getstrata/core/auth/policy";
+import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { membershipContext } from "../../src/core/auth/membershipContext";
-import { PolicyGate } from "../../src/core/auth/policy";
-import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 import AttachmentController, {
   createAttachmentRoutes,
 } from "../../src/modules/attachment/controller";

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ApiTokenGuard, AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import { UnauthorizedError } from "../../src/core/errors/http";
+import { ApiTokenGuard, AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { UnauthorizedError } from "@getstrata/core/errors/http";
 
 describe("AuthManager", () => {
   test("GuestGuard always resolves null without dev headers", async () => {

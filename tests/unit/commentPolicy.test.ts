@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { PolicyGate } from "@getstrata/core/auth/policy";
 import { membershipContext } from "../../src/core/auth/membershipContext";
-import { PolicyGate } from "../../src/core/auth/policy";
 import CommentPolicy from "../../src/modules/comment/policy";
 import type { CommentRecord } from "../../src/modules/comment/types";
 

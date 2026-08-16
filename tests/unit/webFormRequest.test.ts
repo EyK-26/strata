@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BadRequestError, ForbiddenError, ValidationError } from "../../src/core/errors/http";
+import { BadRequestError, ForbiddenError, ValidationError } from "@getstrata/core/errors/http";
 import { WebFormRequest } from "../../src/core/http/webFormRequest";
 
 class CreateWidgetRequest extends WebFormRequest<{ name: string }> {

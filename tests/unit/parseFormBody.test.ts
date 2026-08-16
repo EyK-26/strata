@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BadRequestError } from "../../src/core/errors/http";
+import { BadRequestError } from "@getstrata/core/errors/http";
 import { formDataToRecord, parseFormBody } from "../../src/core/http/parseFormBody";
 
 describe("parseFormBody", () => {

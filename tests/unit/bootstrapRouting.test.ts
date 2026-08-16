@@ -3,7 +3,7 @@ import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/co
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { toRouteRequest, wrapSecuredRouteModelByKey } from "@getstrata/bootstrap/web/routing";
 import { Policy, PolicyGate } from "@getstrata/core";
-import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
+import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 
 class PublicForumPolicy extends Policy {
   override view() {

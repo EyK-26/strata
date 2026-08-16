@@ -8,7 +8,7 @@ import {
   resolveS3Config,
   S3StorageDriver,
   StorageManager,
-} from "../../src/core/storage/storage";
+} from "@getstrata/core/storage/storage";
 
 describe("storage", () => {
   test("writes, reads, and deletes files", async () => {

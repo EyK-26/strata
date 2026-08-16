@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PayloadTooLargeError } from "../../src/core/errors/http";
+import { PayloadTooLargeError } from "@getstrata/core/errors/http";
 import { createBodySizeLimitMiddleware } from "../../src/core/http/bodySizeLimitMiddleware";
 
 describe("bodySizeLimitMiddleware", () => {

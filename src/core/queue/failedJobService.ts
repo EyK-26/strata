@@ -56,4 +56,5 @@ class FailedJobService {
   }
 }
 
+export { FailedJobService };
 export default FailedJobService;

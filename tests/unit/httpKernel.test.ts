@@ -7,11 +7,11 @@ import {
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { CacheRepository } from "@getstrata/core/cache/repository";
-import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
-import SimpleCache from "../../src/core/cache/simpleCache";
-import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
-import { ForbiddenError } from "../../src/core/errors/http";
+import { SimpleCache } from "@getstrata/core/cache/simpleCache";
+import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import { tokenServiceToken } from "../../src/modules/user/provider";
 
 import { createMockDependencies } from "./testHelpers";

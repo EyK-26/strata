@@ -229,4 +229,5 @@ class SimpleCache {
   }
 }
 
+export { SimpleCache };
 export default SimpleCache;

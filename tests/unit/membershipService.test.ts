@@ -1,9 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { ForbiddenError } from "@getstrata/core/errors/http";
+import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import MembershipService, { resolveMembershipService } from "../../src/core/auth/membershipService";
-import { ForbiddenError } from "../../src/core/errors/http";
-import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const membershipRepository = {

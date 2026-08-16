@@ -44,4 +44,5 @@ class SimpleCacheStore implements CacheStore {
   }
 }
 
+export { SimpleCacheStore };
 export default SimpleCacheStore;

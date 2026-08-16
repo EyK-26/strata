@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
+import { Job } from "@getstrata/core/queue";
+import { FailedJobService } from "@getstrata/core/queue/failedJobService";
+import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { RedisClient } from "bun";
-import { Job } from "../../src/core/queue";
 import FailedJobRepository from "../../src/core/queue/failedJobRepository";
-import FailedJobService from "../../src/core/queue/failedJobService";
-import { jobRegistry } from "../../src/core/queue/jobRegistry";
 import { QUEUE_HIGH_KEY, QueueWorker } from "../../src/core/queue/redisQueue";
 
 afterAll(() => {

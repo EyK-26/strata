@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { Job } from "@getstrata/core/queue";
+import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { RedisClient } from "bun";
-import { Job } from "../../src/core/queue";
-import { jobRegistry } from "../../src/core/queue/jobRegistry";
 import {
   QUEUE_HIGH_KEY,
   QUEUE_LIST_KEY,

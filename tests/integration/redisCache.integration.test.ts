@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
 import { CacheRepository } from "@getstrata/core/cache/repository";
-import { createCacheStore } from "../../src/core/cache/createCacheStore";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
 

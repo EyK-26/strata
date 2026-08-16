@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AsyncQueue, Job, SyncQueue } from "../../src/core/queue";
+import { AsyncQueue, Job, SyncQueue } from "@getstrata/core/queue";
 
 interface EchoPayload {
   message: string;

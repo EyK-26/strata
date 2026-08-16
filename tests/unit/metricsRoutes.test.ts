@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
-import { prometheusRegistry } from "../../src/core/metrics/prometheus";
+import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 
 describe("createMetricsRoutes", () => {
   test("returns prometheus metrics with the expected content type", async () => {

@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { CORE_QUEUE_TOKEN } from "@getstrata/bootstrap/config";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { SyncQueue } from "../../src/core/queue/index";
-import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
+import { SyncQueue } from "@getstrata/core/queue";
+import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
 import UserRepository from "../../src/modules/user/repository";
 import { createMockCache, createMockDependencies, defaultTestTenant } from "./testHelpers";

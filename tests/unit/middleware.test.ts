@@ -3,7 +3,7 @@ import {
   composeMiddleware,
   requestIdMiddleware,
   wrapRouteHandler,
-} from "../../src/core/http/middleware";
+} from "@getstrata/core/http/middleware";
 
 describe("composeMiddleware", () => {
   test("runs middleware in order and passes control to the handler", async () => {

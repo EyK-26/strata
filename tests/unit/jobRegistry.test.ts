@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Job } from "../../src/core/queue";
-import { JobRegistry, jobRegistry } from "../../src/core/queue/jobRegistry";
+import { Job } from "@getstrata/core/queue";
+import { JobRegistry, jobRegistry } from "@getstrata/core/queue/jobRegistry";
 
 class SampleJob extends Job<{ marker: string }> {
   override async handle(): Promise<void> {

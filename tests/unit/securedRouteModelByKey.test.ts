@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
+import { securedBindRouteModelByKey } from "@getstrata/core/http/securedRouteModelBinding";
+import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
-import { Policy, PolicyGate } from "../../src/core/auth/policy";
-import { securedBindRouteModelByKey } from "../../src/core/http/securedRouteModelBinding";
-import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 
 class PublicForumPolicy extends Policy {
   override view() {
