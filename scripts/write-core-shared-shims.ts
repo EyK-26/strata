@@ -3,36 +3,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-
-const CORE_SHARED_FROM_INDEX = [
-  "auth/accessControl",
-  "auth/authContext",
-  "auth/guard",
-  "auth/membershipContext",
-  "auth/membershipScope",
-  "auth/membershipService",
-  "auth/policy",
-  "database",
-  "database/baseRepository",
-  "database/bindConnection",
-  "database/boundConnection",
-  "database/connection",
-  "database/defaultConnection",
-  "database/repositoryConnection",
-  "database/transaction",
-  "errors/http",
-  "events",
-  "http",
-  "http/middleware",
-  "http/requestMetaContext",
-  "notifications",
-  "security/securityEvents",
-  "tenant/tenantContext",
-  "tenant/tenantMiddleware",
-  "runtime/applicationRegistry",
-  "queue/jobRegistry",
-  "tracing/traceContext",
-] as const;
+import { CORE_SHARED_SUBPATHS } from "./core-shared-subpaths.ts";
 
 const packageDir = join(import.meta.dir, "../packages/strata-core");
 
@@ -41,10 +12,10 @@ function sharedShimImportPath(subpath: string): string {
   return `${"../".repeat(depth)}index.js`;
 }
 
-for (const subpath of CORE_SHARED_FROM_INDEX) {
+for (const subpath of CORE_SHARED_SUBPATHS) {
   const outputPath = join(packageDir, "dist/entries", `${subpath}.js`);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `export * from "${sharedShimImportPath(subpath)}";\n`, "utf8");
 }
 
-console.log(`Wrote ${CORE_SHARED_FROM_INDEX.length} shared @getstrata/core subpath shims.`);
+console.log(`Wrote ${CORE_SHARED_SUBPATHS.length} shared @getstrata/core subpath shims.`);

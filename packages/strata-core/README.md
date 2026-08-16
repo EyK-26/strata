@@ -44,6 +44,29 @@ Exports for admin dashboards and queue recovery:
 ```bash
 bun run build:framework
 bun run verify:framework   # build + public API tests
+bun run verify:shared-subpaths  # after build: confirm singleton shims
+```
+
+## Subpath imports
+
+`@getstrata/core` publishes **139+ subpaths** (for example `@getstrata/core/http/authMiddleware`,
+`@getstrata/core/database/migrations`). Prefer subpaths over the root import in apps, bootstrap, and tests.
+
+Some subpaths **re-export the main bundle** so singleton state stays shared (database pool binding,
+`AsyncLocalStorage` auth/tenant context, global registries, `HttpError` / `Notification` classes for
+`instanceof`). The canonical list lives in `scripts/core-shared-subpaths.ts` and is verified by
+`scripts/verify-core-shared-subpaths.ts` after each framework build.
+
+When adding a subpath that owns process-wide state or base classes used with `instanceof`, append it to
+`CORE_SHARED_SUBPATHS`, run `bun scripts/sync-package-subpaths.ts`, and rebuild. Non-shared subpath
+bundles are built with `--external @getstrata/core` so explicit package imports resolve through the
+same entry graph at runtime.
+
+```typescript
+import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
+import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
+import { ValidationError } from "@getstrata/core/errors/http";
+import type { Migration } from "@getstrata/core/database/migrations/types";
 ```
 
 ## Publish to npm

@@ -6,6 +6,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
+import { CORE_SHARED_SUBPATH_SET } from "./core-shared-subpaths.ts";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -151,37 +152,6 @@ const CORE_SUBPATHS = [
   "view",
 ] as const;
 
-/** Subpaths that must re-export the main bundle so AsyncLocalStorage singletons stay shared. */
-const CORE_SHARED_FROM_INDEX = new Set<string>([
-  "auth/accessControl",
-  "auth/authContext",
-  "auth/guard",
-  "auth/membershipContext",
-  "auth/membershipScope",
-  "auth/membershipService",
-  "auth/policy",
-  "database",
-  "database/baseRepository",
-  "database/bindConnection",
-  "database/boundConnection",
-  "database/connection",
-  "database/defaultConnection",
-  "database/repositoryConnection",
-  "database/transaction",
-  "errors/http",
-  "events",
-  "http",
-  "http/middleware",
-  "http/requestMetaContext",
-  "notifications",
-  "security/securityEvents",
-  "tenant/tenantContext",
-  "tenant/tenantMiddleware",
-  "runtime/applicationRegistry",
-  "queue/jobRegistry",
-  "tracing/traceContext",
-]);
-
 const BOOTSTRAP_SUBPATHS = [
   "applicationRegistry",
   "buildModuleRoutes",
@@ -296,7 +266,7 @@ async function writeEntryFiles(
   const entryFiles: string[] = [];
 
   for (const subpath of subpaths) {
-    if (srcLayer === "core" && CORE_SHARED_FROM_INDEX.has(subpath)) {
+    if (srcLayer === "core" && CORE_SHARED_SUBPATH_SET.has(subpath)) {
       continue;
     }
 
@@ -357,8 +327,10 @@ async function updatePackageJson(
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
     ? "bun ../../scripts/write-core-shared-shims.ts"
     : "true";
+  const coreExternal = packageDir.includes("strata-core") ? " --external @getstrata/core" : "";
+  const bootstrapExternal = packageDir.includes("bootstrap") ? " --external @getstrata/core" : "";
   packageJson.scripts["build:subpaths"] = relativeEntries
-    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta${packageDir.includes("bootstrap") ? " --external @getstrata/core" : ""}`
+    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta${coreExternal}${bootstrapExternal}`
     : "true";
   packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
     ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"

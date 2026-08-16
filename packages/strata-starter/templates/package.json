@@ -11,8 +11,8 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@getstrata/bootstrap": "^0.2.40",
-    "@getstrata/core": "^0.5.48"
+    "@getstrata/bootstrap": "^0.2.41",
+    "@getstrata/core": "^0.5.49"
   },
   "devDependencies": {
     "@types/bun": "latest",
