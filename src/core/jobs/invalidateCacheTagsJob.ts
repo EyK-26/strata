@@ -15,5 +15,6 @@ class InvalidateCacheTagsJob extends Job<InvalidateCacheTagsPayload> {
   }
 }
 
+export { InvalidateCacheTagsJob };
 export default InvalidateCacheTagsJob;
 export type { InvalidateCacheTagsPayload };

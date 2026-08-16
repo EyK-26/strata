@@ -1,5 +1,5 @@
 import { type EventBus, eventBus, modelEventName } from "@getstrata/core/events";
-import InvalidateCacheTagsJob from "@getstrata/core/jobs/invalidateCacheTagsJob";
+import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTagsJob";
 import type { Queue } from "@getstrata/core/queue";
 import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
 import type { CacheLike } from "../../types/services";

@@ -1,5 +1,5 @@
-import DispatchWebhookJob from "@getstrata/core/jobs/dispatchWebhookJob";
-import InvalidateCacheTagsJob from "@getstrata/core/jobs/invalidateCacheTagsJob";
+import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
+import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTagsJob";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { resolveApplicationCache } from "@getstrata/core/runtime/applicationRegistry";
 

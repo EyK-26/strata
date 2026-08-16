@@ -1,5 +1,5 @@
 import { resolveApplicationQueue } from "@getstrata/bootstrap/applicationRegistry";
-import DispatchWebhookJob from "@getstrata/core/jobs/dispatchWebhookJob";
+import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
 import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
 import { assertSafeOutboundUrlResolved } from "@getstrata/core/security/safeUrl";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";

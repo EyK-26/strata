@@ -84,5 +84,6 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
   }
 }
 
+export { DispatchWebhookJob };
 export default DispatchWebhookJob;
 export type { DispatchWebhookPayload };
