@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/bootstrap",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "Strata application bootstrap — HttpKernel, DI, web session helpers",
   "type": "module",
   "license": "MIT",
@@ -119,7 +119,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@getstrata/core": "^0.5.26",
+    "@getstrata/core": "^0.5.27",
     "typescript": "^5.9.0"
   }
 }
