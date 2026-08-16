@@ -203,7 +203,15 @@ async function writeEntryFiles(
     const entryPath = join(entriesDir, `${subpath}.ts`);
     await mkdir(dirname(entryPath), { recursive: true });
 
-    const indexModules = new Set(["database", "http", "view", "providers", "pagination"]);
+    const indexModules = new Set([
+      "database",
+      "events",
+      "http",
+      "queue",
+      "view",
+      "providers",
+      "pagination",
+    ]);
 
     const sourcePath = indexModules.has(subpath)
       ? `${subpath}/index`

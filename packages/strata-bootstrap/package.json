@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/bootstrap",
-  "version": "0.2.27",
+  "version": "0.2.28",
   "description": "Strata application bootstrap — HttpKernel, DI, web session helpers",
   "type": "module",
   "license": "MIT",
