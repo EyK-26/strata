@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import MembershipService, { resolveMembershipService } from "../../src/core/auth/membershipService";
 import { ForbiddenError } from "../../src/core/errors/http";

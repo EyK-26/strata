@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import {
   cacheTagsForModelWrite,
   discoverModelTableNames,
 } from "../../src/bootstrap/cache/modelCacheTags";
-import { ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
 import { CACHE_TAGS } from "../../src/core/cache/tags";
 
 beforeAll(async () => {

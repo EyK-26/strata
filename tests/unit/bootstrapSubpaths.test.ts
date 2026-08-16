@@ -64,6 +64,12 @@ describe("@getstrata/bootstrap published subpaths", () => {
     expect(typeof routes.buildModuleRoutes).toBe("function");
   });
 
+  test("buildWebModuleRoutes exports web module route builder", async () => {
+    const routes = await import(join(BOOTSTRAP_DIST, "entries/buildWebModuleRoutes.js"));
+
+    expect(typeof routes.buildWebModuleRoutes).toBe("function");
+  });
+
   test("contracts types re-export @getstrata/core without duplicating container classes", async () => {
     const contractsTypes = await readFile(join(BOOTSTRAP_DIST, "bootstrap/contracts.d.ts"), "utf8");
 

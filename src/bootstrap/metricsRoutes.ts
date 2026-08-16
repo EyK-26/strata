@@ -1,4 +1,4 @@
-import { prometheusRegistry } from "../core/metrics/prometheus";
+import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 
 function createMetricsRoutes() {
   return {

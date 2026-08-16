@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { ServiceContainer } from "../../src/bootstrap/contracts";
+import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import WebhookController from "../../src/modules/webhook/controller";
 import { webhookServiceToken } from "../../src/modules/webhook/provider";
 import { createMockCache, createMockDependencies } from "./testHelpers";

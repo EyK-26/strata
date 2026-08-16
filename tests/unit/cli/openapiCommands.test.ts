@@ -2,10 +2,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bu
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createAppContext } from "../../../src/bootstrap/context";
 import { createRoutes } from "../../../src/bootstrap/createRoutes";
-import { ensureModulesLoaded } from "../../../src/bootstrap/discoverModules";
-import { routeRegistry } from "../../../src/bootstrap/routeRegistry";
 import { openapiCheckCommand } from "../../../src/cli/commands/openapiCheck";
 import { openapiValidateCommand } from "../../../src/cli/commands/openapiValidate";
 import { generateOpenApiSpec, renderOpenApiDocument } from "../../../src/core/openapi/generator";

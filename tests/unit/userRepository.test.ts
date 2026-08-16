@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { CORE_QUEUE_TOKEN } from "../../src/bootstrap/config";
-import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import { CORE_QUEUE_TOKEN } from "@getstrata/bootstrap/config";
+import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { SyncQueue } from "../../src/core/queue/index";
 import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";

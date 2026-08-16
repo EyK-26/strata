@@ -2,9 +2,9 @@
  * @getstrata/bootstrap — application shell for Strata sibling apps.
  */
 
+export type { ScheduledTask } from "@getstrata/core/scheduler/schedule";
+export { appSchedule, runDueScheduledTasks, Schedule } from "@getstrata/core/scheduler/schedule";
 export { scheduleRunCommand } from "../cli/commands/scheduleRun.ts";
-export type { ScheduledTask } from "../core/scheduler/schedule.ts";
-export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
 export {
   resolveApplicationAuth,
   resolveApplicationCache,
@@ -18,6 +18,8 @@ export {
 } from "./applicationRegistry.ts";
 export type { BuildModuleRoutesOptions } from "./buildModuleRoutes.ts";
 export { buildModuleRoutes } from "./buildModuleRoutes.ts";
+export type { BuildWebModuleRoutesOptions } from "./buildWebModuleRoutes.ts";
+export { buildWebModuleRoutes } from "./buildWebModuleRoutes.ts";
 export { cacheTagsForModelWrite, discoverModelTableNames } from "./cache/modelCacheTags.ts";
 export {
   APP_PORT_CONFIG_KEY,

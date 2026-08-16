@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
-import { type AppDependencies, ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import {
+  type AppDependencies,
+  ConfigStore,
+  ServiceContainer,
+} from "@getstrata/bootstrap/contracts";
 import type { AuthUser } from "../../src/core/auth/authContext";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { Policy, PolicyGate } from "../../src/core/auth/policy";

@@ -1,1 +1,1 @@
-export { resolveMembershipService } from "../core/auth/resolveMembershipService.ts";
+export { resolveMembershipService } from "@getstrata/core/auth/membershipService";

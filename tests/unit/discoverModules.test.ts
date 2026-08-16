@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { discoverModules, ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
+import { discoverModules, ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 
 describe("discoverModules", () => {
   beforeAll(async () => {

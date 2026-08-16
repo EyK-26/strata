@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
-import { ServiceContainer } from "../../src/bootstrap/contracts";
+import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "../../src/core/auth/authContext";
 import { Policy, PolicyGate } from "../../src/core/auth/policy";
 import { securedBindRouteModelByKey } from "../../src/core/http/securedRouteModelBinding";

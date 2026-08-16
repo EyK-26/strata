@@ -1,10 +1,13 @@
 import "./preload.ts";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { bootstrapApp, createAppServer } from "./createApp.ts";
 import { closeDatabase, pingDatabase } from "./database.ts";
 
+await ensureModulesLoaded();
+
 const { routes, context, config } = await bootstrapApp();
 
-const server = createAppServer(routes, config.port, context.dependencies);
+const server = createAppServer(routes, config.port);
 
 console.log(`${config.appUrl} (port ${server.port})`);
 

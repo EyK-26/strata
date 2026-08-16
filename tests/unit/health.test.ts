@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "../../src/bootstrap/config";
-import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "@getstrata/bootstrap/config";
+import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHealthRoutes } from "../../src/bootstrap/health";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";

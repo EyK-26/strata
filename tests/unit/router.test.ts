@@ -3,10 +3,10 @@ import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
-} from "../../src/bootstrap/config";
-import { ServiceContainer } from "../../src/bootstrap/contracts";
+} from "@getstrata/bootstrap/config";
+import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { createRoutes } from "../../src/bootstrap/createRoutes";
-import { ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
 import { appConfig } from "../../src/config/app";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import { PolicyGate } from "../../src/core/auth/policy";

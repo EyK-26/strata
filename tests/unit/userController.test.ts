@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-import { CORE_AUTH_TOKEN } from "../../src/bootstrap/config";
-import { ServiceContainer } from "../../src/bootstrap/contracts";
+import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
+import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createOAuthStateCookie } from "../../src/core/security/oauthState";
 import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
 import {

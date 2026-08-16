@@ -1,4 +1,4 @@
-import { defineEnvSchema, type EnvSchema } from "../core/config/envSchema";
+import { defineEnvSchema, type EnvSchema } from "@getstrata/core/config/envSchema";
 import {
   CACHE_MAX_ENTRIES_CONFIG_KEY,
   CACHE_TTL_MS_CONFIG_KEY,

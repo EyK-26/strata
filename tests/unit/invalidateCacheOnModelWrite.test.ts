@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { registerInvalidateCacheOnModelWriteListeners } from "../../src/bootstrap/listeners/invalidateCacheOnModelWrite";
 import CacheRepository from "../../src/core/cache/repository";
 import SimpleCache from "../../src/core/cache/simpleCache";

@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { ServiceContainer } from "../../src/bootstrap/contracts";
+import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import AdminController from "../../src/modules/admin/controller";
 import { adminServiceToken } from "../../src/modules/admin/provider";
 import { createMockCache, createMockDependencies } from "./testHelpers";

@@ -1,5 +1,5 @@
+import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { SQL } from "bun";
-import type { AppDependencies } from "../../src/bootstrap/contracts";
 import type { DatabaseConnection as CoreDatabaseConnection } from "../../src/core/database/baseRepository.ts";
 import { bindDatabaseConnection } from "../../src/core/database/bindConnection.ts";
 import { resetBoundDatabaseConnection } from "../../src/core/database/boundConnection.ts";

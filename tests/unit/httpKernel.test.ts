@@ -3,9 +3,9 @@ import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
   REDIS_URL_CONFIG_KEY,
-} from "../../src/bootstrap/config";
-import type { AppDependencies } from "../../src/bootstrap/contracts";
-import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+} from "@getstrata/bootstrap/config";
+import type { AppDependencies } from "@getstrata/bootstrap/contracts";
+import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "../../src/bootstrap/httpKernel";
 import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
 import CacheRepository from "../../src/core/cache/repository";

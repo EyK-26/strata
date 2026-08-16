@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { assertProductionSecrets } from "../../src/bootstrap/secretsGuard";
+import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import { TEST_ADMIN_API_TOKEN } from "../../src/domain/auth";
 
 describe("assertProductionSecrets", () => {

@@ -1,5 +1,5 @@
+import { jsonResponse } from "@getstrata/core/http";
 import { RedisClient } from "bun";
-import { jsonResponse } from "../core/http";
 import { ensureDatabaseConnection, pingDatabase } from "../db/connection";
 import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "./config";
 import type { AppDependencies, ConfigStore } from "./contracts";

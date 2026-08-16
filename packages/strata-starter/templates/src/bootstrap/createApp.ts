@@ -1,9 +1,4 @@
-import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { runProviderPhase } from "@getstrata/bootstrap/context";
-import { createRouteKernel } from "@getstrata/bootstrap/web/routing";
-import { createWebServer } from "@getstrata/bootstrap/web/server";
-import { applyMiddlewareToRoutes, createAuthMiddleware } from "@getstrata/core";
-import { ServiceContainer } from "@getstrata/core/contracts/container";
 import {
   type AppContext,
   type AppDependencies,
@@ -12,7 +7,9 @@ import {
   type ConfigStore,
   type MutableAppDependencies,
   type ProviderContext,
-} from "@getstrata/core/contracts/di";
+  ServiceContainer,
+} from "@getstrata/bootstrap/contracts";
+import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { migrate } from "../db/migrate.ts";
 import { buildRoutes } from "../routes.ts";
@@ -85,20 +82,11 @@ export async function bootstrapApp(options: BootstrapOptions = {}): Promise<Boot
   return { context, routes, config: appConfig };
 }
 
-export function createAppServer(routes: AppRouteMap, port = 0, dependencies?: AppDependencies) {
-  const kernel = dependencies ? createRouteKernel(dependencies) : null;
-  const wrappedRoutes =
-    kernel && dependencies
-      ? (applyMiddlewareToRoutes(routes, [
-          createAuthMiddleware(dependencies.container.resolve(CORE_AUTH_TOKEN)),
-          ...kernel.group("web"),
-        ]) as AppRouteMap)
-      : routes;
-
+export function createAppServer(routes: AppRouteMap, port = 0) {
   return createWebServer({
     port,
     publicDir: "./public",
-    routes: wrappedRoutes,
+    routes,
   });
 }
 

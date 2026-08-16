@@ -4,10 +4,10 @@ import {
   CACHE_MAX_ENTRIES_CONFIG_KEY,
   CACHE_TTL_MS_CONFIG_KEY,
   CORE_CACHE_TOKEN,
-} from "../../src/bootstrap/config";
-import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
-import { createAppContext } from "../../src/bootstrap/dependencies";
-import { ensureModulesLoaded } from "../../src/bootstrap/discoverModules";
+} from "@getstrata/bootstrap/config";
+import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { createAppContext } from "@getstrata/bootstrap/dependencies";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { commentServiceToken } from "../../src/modules/comment/provider";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
 import { projectServiceToken } from "../../src/modules/project/provider";

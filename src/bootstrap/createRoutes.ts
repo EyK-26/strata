@@ -1,10 +1,10 @@
+import { jsonResponse } from "@getstrata/core/http";
+import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
+import { htmlResponse } from "@getstrata/core/view";
 import index from "../../index.html";
 import { appConfig } from "../config/app";
 import { isFeatureEnabled } from "../config/features";
 import { isSpaEnabled, isViewsEnabled } from "../config/frontend";
-import { jsonResponse } from "../core/http";
-import { applyMiddlewareToRoutes } from "../core/http/middleware";
-import { htmlResponse } from "../core/view";
 import { buildModuleRoutes, registerOpenApiRouteMap } from "./buildModuleRoutes";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 import { mergeSpaRoutes } from "./createSpaRoutes";

@@ -1,4 +1,4 @@
-import type { RegisteredRoute } from "../core/openapi/registeredRoute";
+import type { RegisteredRoute } from "@getstrata/core/openapi/registeredRoute";
 
 class RouteRegistry {
   private readonly routes: RegisteredRoute[] = [];

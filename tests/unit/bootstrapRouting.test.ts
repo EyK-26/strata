@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { Policy, PolicyGate } from "@getstrata/core";
-import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "../../src/bootstrap/config";
-import { ServiceContainer } from "../../src/bootstrap/contracts";
 import { toRouteRequest, wrapSecuredRouteModelByKey } from "../../src/bootstrap/web/routing.ts";
 import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 

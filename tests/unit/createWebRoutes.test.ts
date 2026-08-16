@@ -1,15 +1,51 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AppRouteMap } from "../../src/bootstrap/contracts";
+import {
+  CORE_AUTH_TOKEN,
+  CORE_POLICY_GATE_TOKEN,
+  CORE_QUEUE_TOKEN,
+} from "@getstrata/bootstrap/config";
+import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
+import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createWebRoutes, mergeWebRoutes } from "../../src/bootstrap/createWebRoutes";
-import { createAppDependencies } from "../../src/bootstrap/dependencies";
-import { routeRegistry } from "../../src/bootstrap/routeRegistry";
+import { AuthManager, GuestGuard } from "../../src/core/auth/guard";
+import { PolicyGate } from "../../src/core/auth/policy";
+import CacheRepository from "../../src/core/cache/repository";
+import SimpleCache from "../../src/core/cache/simpleCache";
+import SimpleCacheStore from "../../src/core/cache/simpleCacheStore";
+import { SyncQueue } from "../../src/core/queue";
+import { tokenServiceToken } from "../../src/modules/user/provider";
+import { createMockDependencies } from "./testHelpers";
 
 const PUBLIC_ASSETS_DIR = join(process.cwd(), "public/assets");
 
+function createTestDependencies(): AppDependencies {
+  const container = new ServiceContainer();
+  const dependencies = createMockDependencies(
+    container,
+    new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+  );
+
+  dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+  dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
+  dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
+  dependencies.container.set(tokenServiceToken, {
+    requireAbility: () => undefined,
+    tokenCan: () => true,
+  });
+
+  return dependencies;
+}
+
 describe("createWebRoutes", () => {
   const previousFrontendMode = process.env.FRONTEND_MODE;
+
+  beforeAll(async () => {
+    await ensureModulesLoaded();
+  });
 
   beforeEach(async () => {
     routeRegistry.clear();
@@ -28,7 +64,7 @@ describe("createWebRoutes", () => {
   });
 
   test("registers a root redirect and module web routes", async () => {
-    const routes = createWebRoutes(createAppDependencies());
+    const routes = createWebRoutes(createTestDependencies());
 
     expect(routes["/"]).toBeDefined();
     const response = await routes["/"](new Request("http://localhost/"));
@@ -42,7 +78,7 @@ describe("createWebRoutes", () => {
   test("serves static assets from public/", async () => {
     await writeFile(join(PUBLIC_ASSETS_DIR, "coverage-test.css"), "body { color: black; }");
 
-    const routes = createWebRoutes(createAppDependencies());
+    const routes = createWebRoutes(createTestDependencies());
     const handler = routes["/assets/*"];
     expect(handler).toBeDefined();
     if (!handler) {
@@ -55,7 +91,7 @@ describe("createWebRoutes", () => {
   });
 
   test("returns 404 HTML for missing assets", async () => {
-    const routes = createWebRoutes(createAppDependencies());
+    const routes = createWebRoutes(createTestDependencies());
     const handler = routes["/assets/*"];
     expect(handler).toBeDefined();
     if (!handler) {
@@ -70,6 +106,10 @@ describe("createWebRoutes", () => {
 
 describe("mergeWebRoutes", () => {
   const previousFrontendMode = process.env.FRONTEND_MODE;
+
+  beforeAll(async () => {
+    await ensureModulesLoaded();
+  });
 
   afterEach(() => {
     if (previousFrontendMode === undefined) {
@@ -87,7 +127,7 @@ describe("mergeWebRoutes", () => {
       },
     };
 
-    expect(mergeWebRoutes(createAppDependencies(), apiRoutes)).toBe(apiRoutes);
+    expect(mergeWebRoutes(createTestDependencies(), apiRoutes)).toBe(apiRoutes);
   });
 
   test("merges web routes ahead of api routes when views are enabled", () => {
@@ -98,7 +138,7 @@ describe("mergeWebRoutes", () => {
       },
     };
 
-    const merged = mergeWebRoutes(createAppDependencies(), apiRoutes);
+    const merged = mergeWebRoutes(createTestDependencies(), apiRoutes);
 
     expect(merged["/"]).toBeDefined();
     expect(merged["/health"]).toBeDefined();

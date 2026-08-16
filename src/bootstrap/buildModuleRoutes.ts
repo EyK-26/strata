@@ -1,5 +1,5 @@
-import { conditionalJsonResponse } from "../core/http/conditionalResponse";
-import { applyMiddlewareToRoutes } from "../core/http/middleware";
+import { conditionalJsonResponse } from "@getstrata/core/http";
+import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import type { AppDependencies, AppModule, AppRouteMap, CachedJson } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { discoverModules } from "./modules";

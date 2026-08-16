@@ -1,6 +1,6 @@
 import { join } from "node:path";
+import { jsonResponse } from "@getstrata/core/http";
 import { isSpaEnabled } from "../config/frontend";
-import { jsonResponse } from "../core/http";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 
 const SPA_DIST_DIRECTORY = join(process.cwd(), "frontend/dist");

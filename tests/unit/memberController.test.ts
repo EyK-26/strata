@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, mock, test } from "bun:test";
-import { ConfigStore, ServiceContainer } from "../../src/bootstrap/contracts";
+import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { setActiveApplicationContext } from "../../src/core/runtime/applicationRegistry";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
