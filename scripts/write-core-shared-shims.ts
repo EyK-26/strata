@@ -19,6 +19,7 @@ const CORE_SHARED_FROM_INDEX = [
   "database/connection",
   "database/defaultConnection",
   "database/repositoryConnection",
+  "database/transaction",
   "errors/http",
   "events",
   "http",
