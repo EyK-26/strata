@@ -161,6 +161,7 @@ const CORE_SHARED_FROM_INDEX = new Set<string>([
   "auth/membershipService",
   "auth/policy",
   "database",
+  "database/baseRepository",
   "database/bindConnection",
   "database/boundConnection",
   "database/connection",

@@ -13,6 +13,7 @@ const CORE_SHARED_FROM_INDEX = [
   "auth/membershipService",
   "auth/policy",
   "database",
+  "database/baseRepository",
   "database/bindConnection",
   "database/boundConnection",
   "database/connection",
