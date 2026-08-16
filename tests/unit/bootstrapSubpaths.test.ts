@@ -48,4 +48,12 @@ describe("@getstrata/bootstrap published subpaths", () => {
 
     expect(typeof secretsGuard.assertProductionSecrets).toBe("function");
   });
+
+  test("discoverModules exports discovery helpers", async () => {
+    const discover = await import(join(BOOTSTRAP_DIST, "entries/discoverModules.js"));
+
+    expect(typeof discover.configureModulesDirectory).toBe("function");
+    expect(typeof discover.ensureModulesLoaded).toBe("function");
+    expect(typeof discover.discoverModules).toBe("function");
+  });
 });

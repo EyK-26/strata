@@ -1,5 +1,5 @@
+import { createAppContext } from "@getstrata/bootstrap/context";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createAppContext } from "../../bootstrap/context";
 import { createRoutes } from "../../bootstrap/createRoutes";
 import { generateOpenApiSpec } from "../../core/openapi/generator";
 import { validateOpenApiSpec } from "../../core/openapi/validate";

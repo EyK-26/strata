@@ -9,11 +9,11 @@ import {
   ServiceContainer,
   type ServiceProvider,
 } from "./contracts";
-import { appModules } from "./modules";
+import { discoverModules } from "./modules";
 import { coreProviders } from "./providers";
 import { assertProductionSecrets } from "./secretsGuard";
 
-function collectProviders(modules: AppModule[] = appModules): ServiceProvider[] {
+function collectProviders(modules: AppModule[] = discoverModules()): ServiceProvider[] {
   return [...coreProviders, ...modules.flatMap((module) => module.providers ?? [])];
 }
 

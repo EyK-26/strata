@@ -12,7 +12,7 @@ import { mergeWebRoutes } from "./createWebRoutes";
 import { createHealthRoutes } from "./health";
 import { createHttpKernel } from "./httpKernel";
 import { createMetricsRoutes } from "./metricsRoutes";
-import { appModules } from "./modules";
+import { discoverModules } from "./modules";
 import { prefixRouteMap } from "./prefixRouteMap";
 import { routeRegistry } from "./routeRegistry";
 import { createScimRoutes } from "./scimRoutes";
@@ -66,7 +66,7 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
 
   const moduleRoutes: Record<string, unknown> = {};
 
-  for (const module of appModules) {
+  for (const module of discoverModules()) {
     if (!module.routes) {
       continue;
     }

@@ -4,7 +4,7 @@ import { applyMiddlewareToRoutes } from "../core/http/middleware";
 import { htmlResponse } from "../core/view";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
-import { appModules } from "./modules";
+import { discoverModules } from "./modules";
 import { routeRegistry } from "./routeRegistry";
 
 function registerRoute(method: string, path: string, middleware: string[]): void {
@@ -44,7 +44,7 @@ function createWebRoutes(dependencies: AppDependencies): AppRouteMap {
 
   registerRoute("GET", "/", ["global", "web"]);
 
-  for (const module of appModules) {
+  for (const module of discoverModules()) {
     if (!module.webRoutes) {
       continue;
     }

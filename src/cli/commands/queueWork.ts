@@ -1,5 +1,5 @@
-import { createAppContext } from "../../bootstrap/context";
-import { registerDefaultJobs } from "../../bootstrap/queue/defaultJobs";
+import { createAppContext } from "@getstrata/bootstrap/context";
+import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import {
   installGracefulShutdownSignals,
   registerShutdownHandler,

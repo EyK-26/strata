@@ -103,6 +103,7 @@ const BOOTSTRAP_SUBPATHS = [
   "contracts",
   "createWebRoutes",
   "dependencies",
+  "discoverModules",
   "http/securedRouteModelBinding",
   "httpKernel",
   "membershipService",

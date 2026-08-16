@@ -1,5 +1,5 @@
+import type { AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { createAppDependencies } from "@getstrata/bootstrap/dependencies";
-import type { AppRouteMap } from "../bootstrap/contracts";
 import { createRoutes } from "../bootstrap/createRoutes";
 import { freshDatabase } from "../db/migrations/runner";
 

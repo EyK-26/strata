@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createAppContext } from "@getstrata/bootstrap/context";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createAppContext } from "../../bootstrap/context";
 import { createRoutes } from "../../bootstrap/createRoutes";
 import { generateOpenApiSpec, renderOpenApiDocument } from "../../core/openapi/generator";
 import { validateOpenApiSpec } from "../../core/openapi/validate";

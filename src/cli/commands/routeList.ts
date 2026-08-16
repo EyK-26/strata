@@ -1,5 +1,5 @@
+import { createAppContext } from "@getstrata/bootstrap/context";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createAppContext } from "../../bootstrap/context";
 import { createRoutes } from "../../bootstrap/createRoutes";
 
 function routeListCommand(): void {

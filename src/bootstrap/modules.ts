@@ -1,1 +1,5 @@
-export { appModules, discoverModules, ensureModulesLoaded } from "./discoverModules";
+export {
+  configureModulesDirectory,
+  discoverModules,
+  ensureModulesLoaded,
+} from "./discoverModules";

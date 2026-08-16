@@ -52,6 +52,12 @@ export {
 } from "./contracts.ts";
 export { createWebRoutes, mergeWebRoutes } from "./createWebRoutes.ts";
 export { createAppDependencies } from "./dependencies.ts";
+export type { DiscoverModulesOptions } from "./discoverModules.ts";
+export {
+  configureModulesDirectory,
+  discoverModules,
+  ensureModulesLoaded,
+} from "./discoverModules.ts";
 export {
   type RouteModelAuthorization,
   securedBindRouteModel,

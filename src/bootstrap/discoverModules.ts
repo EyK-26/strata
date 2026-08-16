@@ -3,8 +3,52 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AppModule } from "./contracts";
 
-async function loadDiscoveredModules(): Promise<AppModule[]> {
-  const modulesDirectory = join(import.meta.dir, "../modules");
+interface DiscoverModulesOptions {
+  modulesDir?: string;
+}
+
+const DISCOVER_MODULES_STATE_KEY = Symbol.for("@getstrata/discoverModulesState");
+
+interface DiscoverModulesState {
+  configuredModulesDir?: string;
+  appModules: AppModule[];
+  modulesReady?: Promise<AppModule[]>;
+}
+
+function readDiscoverModulesState(): DiscoverModulesState {
+  const existing = (globalThis as Record<symbol, DiscoverModulesState | undefined>)[
+    DISCOVER_MODULES_STATE_KEY
+  ];
+
+  if (existing) {
+    return existing;
+  }
+
+  const state: DiscoverModulesState = { appModules: [] };
+  (globalThis as Record<symbol, DiscoverModulesState>)[DISCOVER_MODULES_STATE_KEY] = state;
+  return state;
+}
+
+function configureModulesDirectory(modulesDir: string): void {
+  readDiscoverModulesState().configuredModulesDir = modulesDir;
+}
+
+function resolveModulesDirectory(options?: DiscoverModulesOptions): string {
+  const state = readDiscoverModulesState();
+
+  if (options?.modulesDir) {
+    return options.modulesDir;
+  }
+
+  if (state.configuredModulesDir) {
+    return state.configuredModulesDir;
+  }
+
+  return join(import.meta.dir, "../modules");
+}
+
+async function loadDiscoveredModules(options?: DiscoverModulesOptions): Promise<AppModule[]> {
+  const modulesDirectory = resolveModulesDirectory(options);
 
   let moduleNames: string[];
   try {
@@ -32,24 +76,24 @@ async function loadDiscoveredModules(): Promise<AppModule[]> {
     .sort((left, right) => (left.order ?? 100) - (right.order ?? 100));
 }
 
-let appModules: AppModule[] = [];
-let modulesReady: Promise<AppModule[]> | undefined;
+async function ensureModulesLoaded(options?: DiscoverModulesOptions): Promise<AppModule[]> {
+  const state = readDiscoverModulesState();
 
-async function ensureModulesLoaded(): Promise<AppModule[]> {
-  if (appModules.length > 0) {
-    return appModules;
+  if (state.appModules.length > 0) {
+    return state.appModules;
   }
 
-  modulesReady ??= loadDiscoveredModules().then((modules) => {
-    appModules = modules;
-    return modules;
+  state.modulesReady ??= loadDiscoveredModules(options).then((modules) => {
+    state.appModules.splice(0, state.appModules.length, ...modules);
+    return state.appModules;
   });
 
-  return modulesReady;
+  return state.modulesReady;
 }
 
 function discoverModules(): AppModule[] {
-  return appModules;
+  return readDiscoverModulesState().appModules;
 }
 
-export { appModules, discoverModules, ensureModulesLoaded };
+export type { DiscoverModulesOptions };
+export { configureModulesDirectory, discoverModules, ensureModulesLoaded };

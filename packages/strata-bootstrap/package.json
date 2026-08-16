@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/bootstrap",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "description": "Strata application bootstrap — HttpKernel, DI, web session helpers",
   "type": "module",
   "license": "MIT",
@@ -49,6 +49,11 @@
       "types": "./dist/bootstrap/dependencies.d.ts",
       "import": "./dist/entries/dependencies.js",
       "default": "./dist/entries/dependencies.js"
+    },
+    "./discoverModules": {
+      "types": "./dist/bootstrap/discoverModules.d.ts",
+      "import": "./dist/entries/discoverModules.js",
+      "default": "./dist/entries/discoverModules.js"
     },
     "./http/securedRouteModelBinding": {
       "types": "./dist/bootstrap/http/securedRouteModelBinding.d.ts",
@@ -127,14 +132,14 @@
     "build:bundle": "bun build index.ts --outdir dist --target bun --external bun --external eta --external @getstrata/core",
     "build:types": "tsc -p tsconfig.types.json",
     "prepublishOnly": "bun run build",
-    "build:subpaths": "bun build entries/applicationRegistry.ts entries/cache/modelCacheTags.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/dependencies.ts entries/http/securedRouteModelBinding.ts entries/httpKernel.ts entries/membershipService.ts entries/queue/defaultJobs.ts entries/providers.ts entries/providers/view.ts entries/routeRegistry.ts entries/secretsGuard.ts entries/web/forms.ts entries/web/routing.ts entries/web/server.ts entries/web/session.ts entries/web/slug.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core",
+    "build:subpaths": "bun build entries/applicationRegistry.ts entries/cache/modelCacheTags.ts entries/config.ts entries/context.ts entries/contracts.ts entries/createWebRoutes.ts entries/dependencies.ts entries/discoverModules.ts entries/http/securedRouteModelBinding.ts entries/httpKernel.ts entries/membershipService.ts entries/queue/defaultJobs.ts entries/providers.ts entries/providers/view.ts entries/routeRegistry.ts entries/secretsGuard.ts entries/web/forms.ts entries/web/routing.ts entries/web/server.ts entries/web/session.ts entries/web/slug.ts --outdir dist --root . --target bun --external bun --external eta --external @getstrata/core",
     "build:shims": "true"
   },
   "publishConfig": {
     "access": "public"
   },
   "peerDependencies": {
-    "@getstrata/core": "^0.5.29",
+    "@getstrata/core": "^0.5.30",
     "typescript": "^5.9.0"
   }
 }

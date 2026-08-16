@@ -1,4 +1,11 @@
-import { ensureModulesLoaded } from "../bootstrap/discoverModules.ts";
+import { join } from "node:path";
+import {
+  configureModulesDirectory,
+  ensureModulesLoaded,
+} from "@getstrata/bootstrap/discoverModules";
+
+configureModulesDirectory(join(import.meta.dir, "../modules"));
+await ensureModulesLoaded();
 
 const commandLoaders: Record<string, () => Promise<(...args: string[]) => Promise<void> | void>> = {
   help: async () => (await import("../cli/commands/help.ts")).helpCommand,
@@ -37,8 +44,6 @@ const commandLoaders: Record<string, () => Promise<(...args: string[]) => Promis
     (await import("../cli/commands/secretsCheck.ts")).secretsCheckCommand,
   tinker: async () => (await import("../cli/commands/tinker.ts")).tinkerCommand,
 };
-
-await ensureModulesLoaded();
 
 const [command = "help", ...args] = process.argv.slice(2);
 const loadHandler = commandLoaders[command];
