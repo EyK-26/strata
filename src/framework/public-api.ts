@@ -172,7 +172,9 @@ export {
   BadRequestError,
   ConflictError,
   ForbiddenError,
+  HttpError,
   NotFoundError,
+  PayloadTooLargeError,
   PreconditionFailedError,
   UnauthorizedError,
   UnprocessableEntityError,
@@ -337,7 +339,13 @@ export {
   resetDefaultStorage,
   StorageManager,
 } from "../core/storage/storage.ts";
-export { currentTenant, currentTenantId, runWithTenant } from "../core/tenant/tenantContext.ts";
+export type { TenantContext } from "../core/tenant/tenantContext.ts";
+export {
+  currentTenant,
+  currentTenantId,
+  rateLimitMultiplierForPlan,
+  runWithTenant,
+} from "../core/tenant/tenantContext.ts";
 export {
   isInsideTenantDatabaseScope,
   runWithTenantDatabase,
