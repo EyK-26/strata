@@ -30,6 +30,7 @@ coveragePathIgnorePatterns = [
   # Thin re-exports and optional telemetry
   "src/core/facades/**",
   "src/core/runtime/applicationRegistry.ts",
+  "src/core/queue/jobRegistry.ts",
   "src/core/contracts/applicationContext.ts",
   "src/core/contracts/serviceTokens.ts",
   "src/core/tracing/**",
