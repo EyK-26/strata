@@ -72,6 +72,7 @@ describe("@getstrata/core contracts", () => {
     const config = new ConfigStore();
     provider.register?.({ container, config, dependencies: { container } });
 
-    expect(config.get("demo")).toBe(true);
+    expect(config.has("demo")).toBe(true);
+    expect(config.require<boolean>("demo")).toBe(true);
   });
 });
