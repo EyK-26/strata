@@ -1,4 +1,4 @@
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import WebhookRepository from "./repository";
 import WebhookService from "./service";
 

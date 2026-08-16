@@ -1,6 +1,6 @@
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import { resolveService } from "@getstrata/bootstrap/contracts";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import { withErrorHandling } from "@getstrata/core/http";
 import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import type { ViewEngine } from "@getstrata/core/view";

@@ -1,8 +1,8 @@
 import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/bootstrap/config";
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
 import { OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
 import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
 import { SamlProvider } from "@getstrata/core/auth/oauth/samlProvider";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { isFeatureEnabled } from "../../config/features";
 import ApiTokenRepository from "./apiTokenRepository";
 import AuthService from "./authService";

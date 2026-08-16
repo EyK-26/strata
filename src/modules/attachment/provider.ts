@@ -1,5 +1,5 @@
 import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
-import { getRequiredDependency, type ServiceProvider } from "@getstrata/bootstrap/contracts";
+import { getRequiredDependency, type ServiceProvider } from "@getstrata/core/contracts/di";
 import type OrganizationRepository from "../organization/repository";
 import type ProjectRepository from "../project/repository";
 import type TaskRepository from "../task/repository";

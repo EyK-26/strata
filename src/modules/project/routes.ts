@@ -1,5 +1,5 @@
-import type { AppDependencies, CachedJson } from "@getstrata/bootstrap/contracts";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
 import ProjectController from "./controller";
 

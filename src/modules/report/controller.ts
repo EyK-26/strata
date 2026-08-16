@@ -1,6 +1,6 @@
-import type { AppDependencies, CachedJson } from "@getstrata/bootstrap/contracts";
-import { resolveService } from "@getstrata/bootstrap/contracts";
 import { CACHE_TAGS } from "@getstrata/core/cache/tags";
+import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import { buildRequestCacheKey, jsonResponse, withErrorHandling } from "@getstrata/core/http";
 import { reportServiceToken } from "./provider";
 import { parseOrganizationReportParams } from "./requests";

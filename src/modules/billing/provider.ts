@@ -1,4 +1,4 @@
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import BillingService from "./service";
 
 const billingServiceToken = "billing.service";

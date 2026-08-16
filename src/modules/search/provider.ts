@@ -1,4 +1,4 @@
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import type CommentRepository from "../comment/repository";
 import type TaskRepository from "../task/repository";
 import SearchService from "./service";

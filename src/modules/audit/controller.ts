@@ -1,5 +1,5 @@
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import { resolveService } from "@getstrata/bootstrap/contracts";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http";
 import { auditServiceToken } from "./provider";
 import type AuditService from "./service";

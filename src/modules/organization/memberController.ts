@@ -1,5 +1,5 @@
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { resolveMembershipService } from "@getstrata/core/auth/membershipService";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
 import {
   createdResponse,
   jsonResponse,

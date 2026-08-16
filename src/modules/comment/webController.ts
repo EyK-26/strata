@@ -1,7 +1,7 @@
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import { resolveService } from "@getstrata/bootstrap/contracts";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import { ValidationError } from "@getstrata/core/errors/http";
 import { withErrorHandling } from "@getstrata/core/http";
 import { requestPrefersJson } from "@getstrata/core/http/contentNegotiation";

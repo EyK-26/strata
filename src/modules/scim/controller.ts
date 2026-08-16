@@ -1,4 +1,4 @@
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { withErrorHandling } from "@getstrata/core/http";
 import { assertScimIfMatch, scimResponse } from "./scimResponse";
 import type ScimService from "./service";

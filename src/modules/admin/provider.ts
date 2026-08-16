@@ -1,4 +1,4 @@
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/queue/createAppQueue";
 import type FailedJobService from "@getstrata/core/queue/failedJobService";
 import AdminService from "./service";

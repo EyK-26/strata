@@ -1,5 +1,5 @@
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import { resolveService } from "@getstrata/bootstrap/contracts";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import { createdResponse, jsonResponse, withErrorHandling } from "@getstrata/core/http";
 import { webhookServiceToken } from "./provider";
 import type WebhookService from "./service";

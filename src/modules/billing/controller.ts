@@ -1,5 +1,5 @@
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import { resolveService } from "@getstrata/bootstrap/contracts";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import { BadRequestError, UnauthorizedError } from "@getstrata/core/errors/http";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";

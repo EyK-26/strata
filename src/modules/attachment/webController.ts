@@ -1,8 +1,8 @@
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import { resolveService } from "@getstrata/bootstrap/contracts";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { CACHE_TAGS } from "@getstrata/core/cache/tags";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import { parseMultipartUpload, type RouteRequest, withErrorHandling } from "@getstrata/core/http";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
 import type { ViewEngine } from "@getstrata/core/view";

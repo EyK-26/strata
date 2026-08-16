@@ -50,7 +50,7 @@ export type { ${moduleName}Record };
     ],
     [
       "table.ts",
-      `import { defineTable } from "../../core/database";
+      `import { defineTable } from "@getstrata/core/database";
 import type { ${moduleName}Record } from "./types";
 
 const ${moduleIdentifier}Table = defineTable<${moduleName}Record, "id">({
@@ -65,7 +65,7 @@ export { ${moduleIdentifier}Table };
     ],
     [
       "repository.ts",
-      `import { BaseRepository } from "../../core/database";
+      `import { BaseRepository } from "@getstrata/core/database";
 import { ${moduleIdentifier}Table } from "./table";
 import type { ${moduleName}Record } from "./types";
 
@@ -82,7 +82,7 @@ export default ${moduleName}Repository;
       "service.ts",
       `import ${moduleName}Repository from "./repository";
 import type { ${moduleName}Record } from "./types";
-import type { PaginatedResult } from "../../core/pagination";
+import type { PaginatedResult } from "@getstrata/core/pagination";
 
 class ${moduleName}Service {
   constructor(private readonly repository: ${moduleName}Repository) {}
@@ -116,8 +116,8 @@ export default ${moduleName}Service;
     ],
     [
       "policy.ts",
-      `import type { AuthUser } from "../../core/auth/authContext";
-import { Policy } from "../../core/auth/policy";
+      `import type { AuthUser } from "@getstrata/core/auth/authContext";
+import { Policy } from "@getstrata/core/auth/policy";
 import type { ${moduleName}Record } from "./types";
 
 class ${moduleName}Policy extends Policy {
@@ -139,8 +139,8 @@ export default ${moduleName}Policy;
     ],
     [
       "provider.ts",
-      `import type { ServiceProvider } from "../../bootstrap/contracts";
-import { CORE_POLICY_GATE_TOKEN } from "../../bootstrap/config";
+      `import type { ServiceProvider } from "@getstrata/core/contracts/di";
+import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import ${moduleName}Repository from "./repository";
 import ${moduleName}Service from "./service";
 import ${moduleName}Policy from "./policy";
@@ -182,14 +182,14 @@ export {
   parseJsonBody,
   parsePaginationQuery,
   parsePositiveIntParam,
-} from "../../core/http";
+} from "@getstrata/core/http";
 import {
   maxLength,
   minLength,
   required,
   stringRule,
   validateObject,
-} from "../../core/validation/rules";
+} from "@getstrata/core/validation/rules";
 
 type ${moduleName}IdParams = { id: string };
 
@@ -263,8 +263,8 @@ export type {
       `import {
   toPaginatedResourceCollection,
   toResourceCollection,
-} from "../../core/http";
-import type { PaginationMeta } from "../../core/pagination";
+} from "@getstrata/core/http";
+import type { PaginationMeta } from "@getstrata/core/pagination";
 import type { ${moduleName}Record } from "./types";
 
 interface ${moduleName}Resource {
@@ -302,8 +302,8 @@ export type { ${moduleName}Resource };
     ],
     [
       "controller.ts",
-      `import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
-import { resolveService } from "../../bootstrap/contracts";
+      `import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import {
   bindRouteModel,
   buildRequestCacheKey,
@@ -313,7 +313,7 @@ import {
   securedBindRouteModel,
   type RouteRequest,
   withErrorHandling,
-} from "../../core/http";
+} from "@getstrata/core/http";
 import ${moduleName}Service from "./service";
 import { ${moduleIdentifier}ServiceToken } from "./provider";
 import {
@@ -401,9 +401,9 @@ export default ${moduleName}Controller;
     ],
     [
       "routes.ts",
-      `import type { HttpKernel } from "../../bootstrap/httpKernel";
-import type { AppDependencies, CachedJson } from "../../bootstrap/contracts";
-import type { RouteHandler } from "../../core/http/middleware";
+      `import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
+import type { RouteHandler } from "@getstrata/core/http/middleware";
 import ${moduleName}Controller from "./controller";
 
 function create${moduleName}Routes(
@@ -440,7 +440,7 @@ export { create${moduleName}Routes };
     ],
     [
       "index.ts",
-      `import { type AppModule } from "../../bootstrap/contracts";
+      `import { type AppModule } from "@getstrata/bootstrap/contracts";
 import ${moduleName}Controller from "./controller";
 import ${moduleIdentifier}Provider, {
   ${moduleIdentifier}RepositoryToken,
@@ -519,12 +519,12 @@ export type { ${moduleName}Record } from "./types";
 
     await Bun.write(
       join(directory, "webController.ts"),
-      `import type { AppDependencies } from "../../bootstrap/contracts";
-import { resolveService } from "../../bootstrap/contracts";
-import { CORE_VIEW_TOKEN } from "../../bootstrap/providers/view";
-import { withErrorHandling } from "../../core/http";
-import type { ViewEngine } from "../../core/view";
-import { htmlResponse } from "../../core/view";
+      `import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
+import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { withErrorHandling } from "@getstrata/core/http";
+import type { ViewEngine } from "@getstrata/core/view";
+import { htmlResponse } from "@getstrata/core/view";
 import { ${moduleIdentifier}ServiceToken } from "./provider";
 import { parse${moduleName}ListQuery } from "./requests";
 import type ${moduleName}Service from "./service";
@@ -560,9 +560,9 @@ export default ${moduleName}WebController;
 
     await Bun.write(
       join(directory, "webRoutes.ts"),
-      `import type { AppDependencies } from "../../bootstrap/contracts";
-import type { HttpKernel } from "../../bootstrap/httpKernel";
-import type { RouteHandler } from "../../core/http/middleware";
+      `import type { AppDependencies } from "@getstrata/core/contracts/di";
+import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import type { RouteHandler } from "@getstrata/core/http/middleware";
 import ${moduleName}WebController from "./webController";
 
 function create${moduleName}WebRoutes(dependencies: AppDependencies, kernel: HttpKernel) {

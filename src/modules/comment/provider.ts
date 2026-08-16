@@ -1,5 +1,5 @@
 import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { projectRepositoryToken } from "../project/provider";
 import CommentPolicy from "./policy";
 import CommentRepository from "./repository";

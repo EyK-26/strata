@@ -1,7 +1,7 @@
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import { resolveService } from "@getstrata/bootstrap/contracts";
 import type { AuthManager } from "@getstrata/core/auth/guard";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import {
   createdResponse,
