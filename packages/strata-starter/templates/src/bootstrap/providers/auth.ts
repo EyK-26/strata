@@ -1,6 +1,6 @@
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
-import type { AuthUser } from "@getstrata/core";
-import { currentAuthUser } from "@getstrata/core";
+import type { AuthUser } from "@getstrata/core/auth/authContext";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 
 class StarterAuthManager {

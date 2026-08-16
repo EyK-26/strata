@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { EtaViewEngine, htmlResponse } from "@getstrata/core";
+import { EtaViewEngine, htmlResponse } from "@getstrata/core/view";
 
 const engine = new EtaViewEngine(join(import.meta.dir, "../../views"));
 

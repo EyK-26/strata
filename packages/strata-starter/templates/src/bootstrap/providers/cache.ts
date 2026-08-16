@@ -1,6 +1,6 @@
 import { CORE_CACHE_TOKEN } from "@getstrata/bootstrap/config";
-import { CacheRepository } from "@getstrata/core";
 import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
+import { CacheRepository } from "@getstrata/core/cache/repository";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 
 const cacheProvider: ServiceProvider = {
