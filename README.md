@@ -6,14 +6,30 @@ The publishable framework surface lives in `@getstrata/core` (`packages/strata-c
 
 Pinned versions:
 
-- Bun `1.3.14`
+- Bun `1.4.0` (see [Bun 1.4 upgrade notes](https://bun.sh/blog/bun-v1.4))
 - PostgreSQL `18.4`
 - Adminer `5.4.2`
+- TypeScript `5.9` via `tsc` for typechecking and declaration emit (the experimental native TypeScript compiler is not used yet; see below)
 
 The database source of truth is:
 
 - `src/db/migrations`
 - `src/db/seeders`
+
+### Bun 1.4
+
+We run CI and Docker on **Bun 1.4.0**. Notable changes from 1.3:
+
+- Node.js compatibility target is **26.3.0** (rebuild native addons if you use any).
+- Default lockfile format is **v2**; run `bun install` after upgrading Bun.
+- `Temporal` is enabled by default; set `BUN_JSC_useTemporal=0` only if you hit legacy date assumptions.
+- `Bun.TOML` is stricter (duplicate keys, invalid UTF-8, oversized integers fail).
+
+getstrata dogfoods **`Bun.markdown.html()`** instead of the `marked` npm package (HTML is still sanitized with `sanitize-html`).
+
+### TypeScript
+
+Typechecking and `.d.ts` emit use **`tsc` 5.9**. Bun's built-in transpiler handles runtime TS execution. We do **not** use the experimental native TypeScript compiler (`@typescript/native-preview` / TypeScript 7 `tsgo`) yet: its programmatic API is not ready, and swapping the publish pipeline would be a large breaking change with little benefit until TS 7 ships as stable `tsc`.
 
 ## Start
 
