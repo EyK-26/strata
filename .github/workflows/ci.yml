@@ -22,7 +22,7 @@ jobs:
       - name: Start services
         run: docker compose up -d postgres redis --wait
 
-      - name: Run tests with default concurrency
+      - name: Run Bun 1.4 parallel unit tests
         env:
           WORKHUB_SKIP_TEST_BOOTSTRAP: 1
           PORT: "3000"
@@ -37,11 +37,7 @@ jobs:
           bun dedupe
           bun run build:framework
           bun run build:bootstrap
-          scripts/with-host-env.sh sh -c "
-            bun run cli migrate:fresh --seed &&
-            bun test --parallel --isolate tests/unit &&
-            bun test tests/integration
-          "
+          bun run test:parallel
 
   test:
     runs-on: ubuntu-latest

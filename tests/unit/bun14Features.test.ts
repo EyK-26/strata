@@ -36,6 +36,7 @@ describe("Bun 1.4 dependency tooling scripts", () => {
     expect(pkg.scripts["deps:audit"]).toBe("bun audit");
     expect(pkg.scripts["deps:audit-fix"]).toBe("bun audit fix");
     expect(pkg.scripts["test:parallel"]).toContain("--parallel");
+    expect(pkg.scripts["test:parallel"]).toContain("bun14Features.test.ts");
   });
 });
 

@@ -40,7 +40,7 @@
     "integration": "bun test ./tests/integration/routes.integration.test.ts ./tests/integration/webRoutes.integration.test.ts ./tests/integration/spaRoutes.integration.test.ts ./tests/integration/redisCache.integration.test.ts ./tests/integration/queue.integration.test.ts",
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
     "test:coverage": "CACHE_DRIVER=array QUEUE_DRIVER=sync bun test --coverage --max-concurrency=1 tests/unit tests/integration",
-    "test:parallel": "CACHE_DRIVER=array QUEUE_DRIVER=sync bun test --parallel --isolate tests/unit tests/integration",
+    "test:parallel": "CACHE_DRIVER=array QUEUE_DRIVER=sync bun test --parallel --isolate tests/unit/imageTransform.test.ts tests/unit/osCron.test.ts tests/unit/runShell.test.ts tests/unit/webViewSmoke.test.ts tests/unit/bun14Features.test.ts",
     "deps:dedupe": "bun dedupe",
     "deps:audit": "bun audit",
     "deps:audit-fix": "bun audit fix",

@@ -27,11 +27,28 @@ describe("imageTransform", () => {
     expect(parseThumbnailWidth("320")).toBe(320);
   });
 
-  test("resizeImageContents returns jpeg bytes for png input by default", async () => {
+  test("resizeImageContents returns png bytes for png input", async () => {
     const source = decodeBase64(PNG_BASE64);
     const result = await resizeImageContents(source, 64, "image/png");
 
     expect(result.contentType).toBe("image/png");
+    expect(result.body.byteLength).toBeGreaterThan(0);
+  });
+
+  test("resizeImageContents returns webp bytes for webp input", async () => {
+    const source = decodeBase64(PNG_BASE64);
+    const webpSource = await new Bun.Image(source).webp().bytes();
+    const result = await resizeImageContents(webpSource, 64, "image/webp");
+
+    expect(result.contentType).toBe("image/webp");
+    expect(result.body.byteLength).toBeGreaterThan(0);
+  });
+
+  test("resizeImageContents returns jpeg bytes for other image types", async () => {
+    const source = decodeBase64(PNG_BASE64);
+    const result = await resizeImageContents(source, 64, "image/jpeg");
+
+    expect(result.contentType).toBe("image/jpeg");
     expect(result.body.byteLength).toBeGreaterThan(0);
   });
 });
