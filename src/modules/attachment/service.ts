@@ -6,8 +6,14 @@ import {
   scopedOrganizationIds,
 } from "@getstrata/core/auth/membershipScope";
 import { runInTransaction } from "@getstrata/core/database/transaction";
-import { ForbiddenError, NotFoundError, UnauthorizedError } from "@getstrata/core/errors/http";
+import {
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+} from "@getstrata/core/errors/http";
 import type { ParsedUpload } from "@getstrata/core/http/parseMultipartUpload";
+import { isImageMimeType, resizeImageContents } from "@getstrata/core/media/imageTransform";
 import type { StorageManager } from "@getstrata/core/storage/storage";
 import type OrganizationRepository from "../organization/repository";
 import type ProjectRepository from "../project/repository";
@@ -137,6 +143,21 @@ class AttachmentService {
     }
 
     return { attachment, contents };
+  }
+
+  async readThumbnail(
+    id: number,
+    width: number,
+  ): Promise<{ body: Uint8Array; contentType: string; attachment: AttachmentWithScope }> {
+    const { attachment, contents } = await this.readContents(id);
+
+    if (!isImageMimeType(attachment.mime_type)) {
+      throw new BadRequestError("Thumbnails are only available for image attachments.");
+    }
+
+    const { body, contentType } = await resizeImageContents(contents, width, attachment.mime_type);
+
+    return { attachment, body, contentType };
   }
 
   async delete(id: number): Promise<void> {

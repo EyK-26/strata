@@ -40,6 +40,11 @@ const commandLoaders: Record<string, () => Promise<(...args: string[]) => Promis
     (await import("../cli/commands/openapiCheck.ts")).openapiCheckCommand,
   "sdk:generate": async () => (await import("../cli/commands/sdkGenerate.ts")).sdkGenerateCommand,
   "schedule:run": async () => (await import("../cli/commands/scheduleRun.ts")).scheduleRunCommand,
+  "schedule:install": async () =>
+    (await import("../cli/commands/scheduleInstall.ts")).scheduleInstallCommand,
+  "schedule:uninstall": async () =>
+    (await import("../cli/commands/scheduleUninstall.ts")).scheduleUninstallCommand,
+  shell: async () => (await import("../cli/commands/shell.ts")).shellCommand,
   "secrets:check": async () =>
     (await import("../cli/commands/secretsCheck.ts")).secretsCheckCommand,
   tinker: async () => (await import("../cli/commands/tinker.ts")).tinkerCommand,

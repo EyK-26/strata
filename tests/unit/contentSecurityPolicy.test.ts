@@ -4,6 +4,7 @@ import {
   serverHtmxContentSecurityPolicy,
   strictApiContentSecurityPolicy,
 } from "../../src/config/contentSecurityPolicy";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("resolveContentSecurityPolicy", () => {
   const previousMode = process.env.FRONTEND_MODE;
@@ -12,7 +13,7 @@ describe("resolveContentSecurityPolicy", () => {
     if (previousMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {
-      process.env.FRONTEND_MODE = previousMode;
+      restoreEnvVar("FRONTEND_MODE", previousMode);
     }
   });
 

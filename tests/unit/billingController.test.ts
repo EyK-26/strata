@@ -6,6 +6,7 @@ import db from "../../src/db/connection";
 import BillingController from "../../src/modules/billing/controller";
 import { billingServiceToken } from "../../src/modules/billing/provider";
 import BillingService from "../../src/modules/billing/service";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
 function stripeSignature(rawBody: string, secret: string): string {
@@ -69,7 +70,7 @@ describe("BillingController", () => {
         error: "Stripe webhook secret is not configured.",
       });
     } finally {
-      process.env.STRIPE_WEBHOOK_SECRET = previousSecret;
+      restoreEnvVar("STRIPE_WEBHOOK_SECRET", previousSecret);
     }
   });
 

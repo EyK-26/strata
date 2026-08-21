@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 afterAll(() => {
   mock.restore();
@@ -75,7 +76,7 @@ describe("bootstrap schedule", () => {
       if (previousSiemExport === undefined) {
         delete process.env.FEATURE_SIEM_EXPORT;
       } else {
-        process.env.FEATURE_SIEM_EXPORT = previousSiemExport;
+        restoreEnvVar("FEATURE_SIEM_EXPORT", previousSiemExport);
       }
     }
   });

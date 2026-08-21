@@ -18,6 +18,7 @@ import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { SyncQueue } from "@getstrata/core/queue";
 import { tokenServiceToken } from "../../src/modules/user/provider";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockDependencies } from "./testHelpers";
 
 const PUBLIC_ASSETS_DIR = join(process.cwd(), "public/assets");
@@ -57,7 +58,7 @@ describe("createWebRoutes", () => {
     if (previousFrontendMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {
-      process.env.FRONTEND_MODE = previousFrontendMode;
+      restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
     }
 
     await rm(join(PUBLIC_ASSETS_DIR, "coverage-test.css"), { force: true });
@@ -115,7 +116,7 @@ describe("mergeWebRoutes", () => {
     if (previousFrontendMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {
-      process.env.FRONTEND_MODE = previousFrontendMode;
+      restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
     }
   });
 

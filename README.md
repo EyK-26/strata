@@ -27,6 +27,19 @@ We run CI and Docker on **Bun 1.4.0**. Notable changes from 1.3:
 
 getstrata dogfoods **`Bun.markdown.html()`** instead of the `marked` npm package (HTML is still sanitized with `sanitize-html`).
 
+Built-in adoption in Strata / WorkHub:
+
+| Bun 1.4 API | Usage |
+|-------------|--------|
+| `Bun.markdown` | getstrata docs rendering |
+| `Bun.Image` | `GET /attachments/:id/thumbnail?w=` via `@getstrata/core/media/imageTransform` |
+| `Bun.cron()` | `schedule:install` / `schedule:uninstall` CLI; optional `SCHEDULER_DRIVER=in-process-cron` |
+| `Bun.Terminal` | `shell` CLI via `@getstrata/core/terminal/runShell` |
+| `Bun.WebView` | `scripts/smoke-webview.ts` + CI smoke step |
+| `bun test --parallel` | CI `test-parallel` job (`--isolate`) |
+| `bun dedupe` / `bun audit` | `deps:dedupe`, `deps:audit`, `deps:audit-fix` scripts; CI runs dedupe after install |
+| `bun prune --production` | Docker release stage |
+
 ### TypeScript
 
 Typechecking and `.d.ts` emit use **`tsc` 5.9**. Bun's built-in transpiler handles runtime TS execution. We do **not** use the experimental native TypeScript compiler (`@typescript/native-preview` / TypeScript 7 `tsgo`) yet: its programmatic API is not ready, and swapping the publish pipeline would be a large breaking change with little benefit until TS 7 ships as stable `tsc`.

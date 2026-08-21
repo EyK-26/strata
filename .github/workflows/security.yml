@@ -38,5 +38,7 @@ jobs:
       - name: Dependency audit and secret scan
         run: |
           bun install --frozen-lockfile
+          bun dedupe
           bun audit
+          echo "Run 'bun run deps:audit-fix' locally to auto-upgrade vulnerable dependencies."
           sh scripts/security-scan.sh

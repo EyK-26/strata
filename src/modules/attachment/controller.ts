@@ -13,6 +13,7 @@ import {
 import type { RouteRequest } from "@getstrata/core/http/route";
 import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
 import { buildRequestCacheKey } from "@getstrata/core/http/validation";
+import { parseThumbnailWidth } from "@getstrata/core/media/imageTransform";
 import { attachmentServiceToken } from "./provider";
 import { parseTaskAttachmentParams } from "./requests";
 import { toAttachmentPaginatedResourceCollection, toAttachmentResource } from "./resources";
@@ -84,6 +85,25 @@ class AttachmentController {
     ),
   );
 
+  readonly thumbnail = withErrorHandling(
+    securedBindRouteModel(
+      "id",
+      (id) => this.service.findByIdOrThrow(id),
+      { resource: "attachment", action: "view" },
+      async (request, attachment) => {
+        const width = parseThumbnailWidth(new URL(request.url).searchParams.get("w"));
+        const { body, contentType } = await this.service.readThumbnail(attachment.id, width);
+
+        return new Response(body, {
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": "private, max-age=3600",
+          },
+        });
+      },
+    ),
+  );
+
   readonly destroy = withErrorHandling(
     securedBindRouteModel(
       "id",
@@ -115,6 +135,9 @@ function createAttachmentRoutes(
     },
     "/attachments/:id/download": kernel.wrapPublicRead(
       controller.download as unknown as RouteHandler,
+    ),
+    "/attachments/:id/thumbnail": kernel.wrapPublicRead(
+      controller.thumbnail as unknown as RouteHandler,
     ),
     "/tasks/:id/attachments": {
       GET: kernel.wrapPublicRead(controller.byTask as unknown as RouteHandler),

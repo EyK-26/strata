@@ -6,6 +6,7 @@ import {
 import { closeDatabase } from "../db/connection";
 import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
 import { appContext } from "./context";
+import { startInProcessCronIfEnabled, stopInProcessCron } from "./inProcessCron";
 import { buildRoutes } from "./routes";
 
 class App {
@@ -30,6 +31,10 @@ class App {
     registerShutdownHandler("database", async () => {
       await closeDatabase();
     });
+    registerShutdownHandler("in-process-cron", async () => {
+      stopInProcessCron();
+    });
+    startInProcessCronIfEnabled();
     installGracefulShutdownSignals();
 
     console.log(`Listening on ${this.server.url}`);

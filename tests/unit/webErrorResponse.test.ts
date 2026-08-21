@@ -6,6 +6,7 @@ import {
   ValidationError,
 } from "@getstrata/core/errors/http";
 import { normalizeFieldErrors, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("normalizeFieldErrors", () => {
   test("returns an empty object for invalid details", () => {
@@ -36,7 +37,7 @@ describe("webErrorResponse", () => {
     if (previousFrontendMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {
-      process.env.FRONTEND_MODE = previousFrontendMode;
+      restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
     }
   });
 

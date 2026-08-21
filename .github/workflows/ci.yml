@@ -34,11 +34,12 @@ jobs:
           MEMBER_API_TOKEN: workhub-member-test-token
         run: |
           bun install --frozen-lockfile
+          bun dedupe
           bun run build:framework
           bun run build:bootstrap
           scripts/with-host-env.sh sh -c "
             bun run cli migrate:fresh --seed &&
-            bun test tests/unit tests/integration
+            bun test --parallel --isolate tests/unit tests/integration
           "
 
   test:
@@ -68,6 +69,7 @@ jobs:
           MEMBER_API_TOKEN: workhub-member-test-token
         run: |
           bun install --frozen-lockfile
+          bun dedupe
           scripts/with-host-env.sh sh -c "
             bun run cli migrate:fresh --seed &&
             bun run validate:ci &&
@@ -93,4 +95,6 @@ jobs:
       - name: Run smoke tests
         env:
           BASE_URL: http://localhost:3000
-        run: bun run smoke
+        run: |
+          bun run smoke
+          bun run deps:audit || true

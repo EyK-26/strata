@@ -9,6 +9,7 @@ import {
   S3StorageDriver,
   StorageManager,
 } from "@getstrata/core/storage/storage";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("storage", () => {
   test("writes, reads, and deletes files", async () => {
@@ -83,7 +84,7 @@ describe("storage", () => {
       if (previous === undefined) {
         delete process.env.STORAGE_DRIVER;
       } else {
-        process.env.STORAGE_DRIVER = previous;
+        restoreEnvVar("STORAGE_DRIVER", previous);
       }
     }
   });

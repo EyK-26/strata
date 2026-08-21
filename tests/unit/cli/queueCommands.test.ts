@@ -4,6 +4,7 @@ import {
   runGracefulShutdown,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { Job } from "@getstrata/core/queue";
+import { restoreEnvVar } from "../../helpers/restoreEnv";
 import { captureConsole } from "./helpers";
 
 afterEach(async () => {
@@ -25,7 +26,7 @@ describe("queueWorkCommand", () => {
       if (previousRedisUrl === undefined) {
         delete process.env.REDIS_URL;
       } else {
-        process.env.REDIS_URL = previousRedisUrl;
+        restoreEnvVar("REDIS_URL", previousRedisUrl);
       }
     }
   });
@@ -63,7 +64,7 @@ describe("queueWorkCommand", () => {
       if (previousRedisUrl === undefined) {
         delete process.env.REDIS_URL;
       } else {
-        process.env.REDIS_URL = previousRedisUrl;
+        restoreEnvVar("REDIS_URL", previousRedisUrl);
       }
     }
 

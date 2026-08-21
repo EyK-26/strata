@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { sanitizeUploadFileName } from "@getstrata/core/http/parseMultipartUpload";
 import { isAllowedMimeType, resolveMaxUploadBytes } from "../../src/config/uploads";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("upload helpers", () => {
   test("sanitizeUploadFileName strips path segments and unsafe characters", () => {
@@ -18,7 +19,7 @@ describe("upload helpers", () => {
     if (previous === undefined) {
       delete process.env.MAX_UPLOAD_BYTES;
     } else {
-      process.env.MAX_UPLOAD_BYTES = previous;
+      restoreEnvVar("MAX_UPLOAD_BYTES", previous);
     }
   });
 

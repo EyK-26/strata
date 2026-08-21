@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 import { collectQueueMetrics } from "@getstrata/core/queue/queueMetrics";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("prometheusRegistry.getHttpRequestSummary", () => {
   test("summarizes request counts by status and path", () => {
@@ -53,7 +54,7 @@ describe("collectQueueMetrics", () => {
       if (previousDriver === undefined) {
         delete process.env.QUEUE_DRIVER;
       } else {
-        process.env.QUEUE_DRIVER = previousDriver;
+        restoreEnvVar("QUEUE_DRIVER", previousDriver);
       }
     }
   });

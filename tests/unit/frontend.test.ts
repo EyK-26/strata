@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { isSpaEnabled, isViewsEnabled, readFrontendMode } from "../../src/config/frontend";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("frontend mode", () => {
   const previousMode = process.env.FRONTEND_MODE;
@@ -8,7 +9,7 @@ describe("frontend mode", () => {
     if (previousMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {
-      process.env.FRONTEND_MODE = previousMode;
+      restoreEnvVar("FRONTEND_MODE", previousMode);
     }
   });
 

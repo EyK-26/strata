@@ -4,6 +4,7 @@ import {
   PRODUCTION_LOGIN_RATE_LIMIT,
   resolveLoginRateLimit,
 } from "../../src/config/rateLimit";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("resolveLoginRateLimit", () => {
   const previousEnv = process.env.APP_ENV;
@@ -14,19 +15,19 @@ describe("resolveLoginRateLimit", () => {
     if (previousEnv === undefined) {
       delete process.env.APP_ENV;
     } else {
-      process.env.APP_ENV = previousEnv;
+      restoreEnvVar("APP_ENV", previousEnv);
     }
 
     if (previousMax === undefined) {
       delete process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
     } else {
-      process.env.LOGIN_RATE_LIMIT_PER_WINDOW = previousMax;
+      restoreEnvVar("LOGIN_RATE_LIMIT_PER_WINDOW", previousMax);
     }
 
     if (previousWindow === undefined) {
       delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
     } else {
-      process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS = previousWindow;
+      restoreEnvVar("LOGIN_RATE_LIMIT_WINDOW_SECONDS", previousWindow);
     }
   });
 

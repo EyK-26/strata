@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("EtaViewEngine", () => {
   let viewsDirectory = "";
@@ -19,7 +20,7 @@ describe("EtaViewEngine", () => {
     if (previousFrontendMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {
-      process.env.FRONTEND_MODE = previousFrontendMode;
+      restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
     }
 
     await rm(viewsDirectory, { recursive: true, force: true });

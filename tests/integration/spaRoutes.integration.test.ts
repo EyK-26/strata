@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 
@@ -50,7 +50,7 @@ afterAll(() => {
   if (previousFrontendMode === undefined) {
     delete process.env.FRONTEND_MODE;
   } else {
-    process.env.FRONTEND_MODE = previousFrontendMode;
+    restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
   }
 });
 

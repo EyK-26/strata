@@ -369,6 +369,43 @@ describe("AttachmentService", () => {
     });
   });
 
+  test("readThumbnail resizes image attachments", async () => {
+    const png = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      ),
+      (char) => char.charCodeAt(0),
+    );
+    storageGet.mockImplementationOnce(async () => png);
+
+    const imageAttachment = { ...attachment, mime_type: "image/png", original_name: "dot.png" };
+    const service = createService({
+      attachmentRepository: {
+        findByIdOrThrow: async () => imageAttachment,
+      },
+    });
+
+    await runWithTenant({ id: 1, slug: "acme", plan: "free", region: "eu" }, async () => {
+      await withMembership([5], async () => {
+        const result = await service.readThumbnail(imageAttachment.id, 64);
+        expect(result.contentType).toBe("image/png");
+        expect(result.body.byteLength).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  test("readThumbnail rejects non-image attachments", async () => {
+    const service = createService();
+
+    await runWithTenant({ id: 1, slug: "acme", plan: "free", region: "eu" }, async () => {
+      await withMembership([5], async () => {
+        await expect(service.readThumbnail(attachment.id, 64)).rejects.toThrow(
+          "Thumbnails are only available for image attachments.",
+        );
+      });
+    });
+  });
+
   test("readContents rejects missing storage objects", async () => {
     storageGet.mockImplementationOnce(async () => null);
     const service = createService();

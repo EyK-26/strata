@@ -1,4 +1,5 @@
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const previousEncryptionKey = process.env.KMS_ENCRYPTION_KEY;
 const previousFeatureFlag = process.env.FEATURE_FIELD_ENCRYPTION;
@@ -7,13 +8,13 @@ afterEach(() => {
   if (previousEncryptionKey === undefined) {
     delete process.env.KMS_ENCRYPTION_KEY;
   } else {
-    process.env.KMS_ENCRYPTION_KEY = previousEncryptionKey;
+    restoreEnvVar("KMS_ENCRYPTION_KEY", previousEncryptionKey);
   }
 
   if (previousFeatureFlag === undefined) {
     delete process.env.FEATURE_FIELD_ENCRYPTION;
   } else {
-    process.env.FEATURE_FIELD_ENCRYPTION = previousFeatureFlag;
+    restoreEnvVar("FEATURE_FIELD_ENCRYPTION", previousFeatureFlag);
   }
 });
 

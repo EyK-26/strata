@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 
@@ -126,13 +126,13 @@ afterAll(() => {
   if (previousFrontendMode === undefined) {
     delete process.env.FRONTEND_MODE;
   } else {
-    process.env.FRONTEND_MODE = previousFrontendMode;
+    restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
   }
 
   if (previousLoginRateLimit === undefined) {
     delete process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
   } else {
-    process.env.LOGIN_RATE_LIMIT_PER_WINDOW = previousLoginRateLimit;
+    restoreEnvVar("LOGIN_RATE_LIMIT_PER_WINDOW", previousLoginRateLimit);
   }
 });
 

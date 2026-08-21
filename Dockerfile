@@ -7,11 +7,22 @@ COPY packages/strata-core/package.json packages/strata-core/
 COPY packages/strata-bootstrap/package.json packages/strata-bootstrap/
 COPY packages/strata-cli/package.json packages/strata-cli/
 COPY packages/strata-starter/package.json packages/strata-starter/
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile && bun dedupe
 
-FROM base AS release
+FROM base AS build
 COPY --from=install /app/node_modules ./node_modules
 COPY . .
+RUN bun run build:framework && bun run build:bootstrap
+ENV NODE_ENV=production
+RUN bun prune --production
+
+FROM base AS release
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/bun.lock ./bun.lock
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/src ./src
+COPY --from=build /app/bunfig.toml ./bunfig.toml
 ENV NODE_ENV=production
 USER bun
 EXPOSE 3000

@@ -188,6 +188,37 @@ describe("AttachmentController", () => {
     expect(await response.text()).toBe("hello");
   });
 
+  test("thumbnail returns resized image bytes", async () => {
+    process.env.FEATURE_PUBLIC_READS = "true";
+
+    const png = new Uint8Array([137, 80, 78, 71]);
+    const findByIdOrThrow = mock(async () => ({
+      ...attachment,
+      mime_type: "image/png",
+    }));
+    const readThumbnail = mock(async () => ({
+      attachment,
+      body: png,
+      contentType: "image/png",
+    }));
+    const controller = createController({ findByIdOrThrow, readThumbnail });
+
+    const response = await withMembership(() =>
+      controller.thumbnail({
+        params: { id: "1" },
+        url: "http://localhost/attachments/1/thumbnail?w=128",
+        headers: new Headers({
+          "x-authenticated-user-id": "2",
+          "x-authenticated-user-role": "member",
+        }),
+      } as never),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/png");
+    expect(readThumbnail).toHaveBeenCalledWith(1, 128);
+  });
+
   test("destroy deletes attachments and returns no content", async () => {
     process.env.FEATURE_PUBLIC_READS = "true";
 
@@ -223,6 +254,7 @@ describe("AttachmentController", () => {
 
     expect(routes["/attachments/:id"]).toBeDefined();
     expect(routes["/attachments/:id/download"]).toBeDefined();
+    expect(routes["/attachments/:id/thumbnail"]).toBeDefined();
     expect(routes["/tasks/:id/attachments"]).toBeDefined();
   });
 });

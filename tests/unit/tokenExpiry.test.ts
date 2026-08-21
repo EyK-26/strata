@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("resolveDefaultTokenExpiryDays", () => {
   const previous = process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS;
@@ -8,7 +9,7 @@ describe("resolveDefaultTokenExpiryDays", () => {
     if (previous === undefined) {
       delete process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS;
     } else {
-      process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = previous;
+      restoreEnvVar("API_TOKEN_DEFAULT_EXPIRY_DAYS", previous);
     }
   });
 
