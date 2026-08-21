@@ -39,7 +39,7 @@
     "unit": "bun test tests/unit",
     "integration": "bun test ./tests/integration/routes.integration.test.ts ./tests/integration/webRoutes.integration.test.ts ./tests/integration/spaRoutes.integration.test.ts ./tests/integration/redisCache.integration.test.ts ./tests/integration/queue.integration.test.ts",
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
-    "test:coverage": "CACHE_DRIVER=array QUEUE_DRIVER=sync bun test --coverage --max-concurrency=1 tests/unit tests/integration",
+    "test:coverage": "CACHE_DRIVER=array QUEUE_DRIVER=sync bun test --coverage --coverage-reporter=text --max-concurrency=1 tests/unit tests/integration",
     "test:parallel": "scripts/test-parallel.sh",
     "deps:dedupe": "bun dedupe",
     "deps:audit": "bun audit",

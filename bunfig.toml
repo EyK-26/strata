@@ -1,6 +1,5 @@
 [test]
 preload = ["./tests/globalSetup.ts"]
-coverage = true
 coveragePath = ["src"]
 coverageThreshold = { lines = 1.0, functions = 1.0, statements = 1.0 }
 

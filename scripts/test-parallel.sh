@@ -1,7 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-export BUNFIG="${BUNFIG:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/bunfig.parallel.toml}"
 export CACHE_DRIVER="${CACHE_DRIVER:-array}"
 export QUEUE_DRIVER="${QUEUE_DRIVER:-sync}"
 
