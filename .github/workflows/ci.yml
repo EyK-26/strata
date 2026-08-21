@@ -25,6 +25,7 @@ jobs:
       - name: Run tests with default concurrency
         env:
           WORKHUB_SKIP_TEST_BOOTSTRAP: 1
+          PORT: "3000"
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
           FEATURE_SCIM: "true"
@@ -58,6 +59,7 @@ jobs:
       - name: Install dependencies and run checks
         env:
           WORKHUB_SKIP_TEST_BOOTSTRAP: 1
+          PORT: "3000"
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
           FEATURE_SCIM: "true"

@@ -13,6 +13,7 @@ import { organizationServiceToken } from "../../src/modules/organization/provide
 import { projectServiceToken } from "../../src/modules/project/provider";
 import { reportServiceToken } from "../../src/modules/report/provider";
 import { taskServiceToken } from "../../src/modules/task/provider";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("service container", () => {
   test("memoizes singleton services and creates transient bindings", () => {
@@ -72,9 +73,9 @@ describe("app providers", () => {
       expect(context.dependencies.container.resolve(commentServiceToken)).toBeDefined();
       expect(context.dependencies.container.resolve(reportServiceToken)).toBeDefined();
     } finally {
-      process.env.PORT = previousPort;
-      process.env.CACHE_TTL_MS = previousTtl;
-      process.env.CACHE_MAX_ENTRIES = previousMaxEntries;
+      restoreEnvVar("PORT", previousPort);
+      restoreEnvVar("CACHE_TTL_MS", previousTtl);
+      restoreEnvVar("CACHE_MAX_ENTRIES", previousMaxEntries);
     }
   });
 });
