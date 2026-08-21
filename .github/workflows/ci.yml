@@ -39,7 +39,8 @@ jobs:
           bun run build:bootstrap
           scripts/with-host-env.sh sh -c "
             bun run cli migrate:fresh --seed &&
-            bun test --parallel --isolate tests/unit tests/integration
+            bun test --parallel --isolate tests/unit &&
+            bun test tests/integration
           "
 
   test:
