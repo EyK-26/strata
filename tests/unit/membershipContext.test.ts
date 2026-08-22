@@ -3,7 +3,14 @@ import {
   isGlobalAdmin,
   hasMinimumOrgRole as rankOrgRole,
 } from "@getstrata/core/auth/accessControl";
-import { hasMinimumOrgRole, membershipContext } from "@getstrata/core/auth/membershipContext";
+import {
+  configureMembershipLookup,
+  hasMinimumOrgRole,
+  membershipContext,
+  resetMembershipLookupForTests,
+  resolveMembershipLookup,
+} from "@getstrata/core/auth/membershipContext";
+import OrganizationMemberRepository from "../../src/modules/organization/memberRepository";
 
 describe("membershipContext", () => {
   test("isGlobalAdmin recognizes platform admins", () => {
@@ -29,5 +36,23 @@ describe("membershipContext", () => {
   test("accessControl ranks org roles consistently", () => {
     expect(rankOrgRole("owner", "admin")).toBe(true);
     expect(rankOrgRole("member", "admin")).toBe(false);
+  });
+
+  test("unconfigured membership lookup is read-only until WorkHub registers an adapter", async () => {
+    resetMembershipLookupForTests();
+
+    try {
+      const lookup = resolveMembershipLookup();
+
+      await expect(lookup.listForUser(1)).resolves.toEqual([]);
+      await expect(lookup.findMembership(1, 1)).resolves.toBeNull();
+      await expect(lookup.listForOrganization(1)).resolves.toEqual([]);
+      await expect(lookup.addMember({ organizationId: 1, userId: 1 })).rejects.toThrow(
+        /configureMembershipLookup/,
+      );
+      await expect(lookup.removeMember(1, 1)).rejects.toThrow(/configureMembershipLookup/);
+    } finally {
+      configureMembershipLookup(new OrganizationMemberRepository());
+    }
   });
 });

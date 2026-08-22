@@ -40,6 +40,10 @@ function resolveMembershipLookup(): MembershipLookup {
   return membershipRepository;
 }
 
+function resetMembershipLookupForTests(): void {
+  membershipRepository = uninitializedMembershipLookup;
+}
+
 async function runWithMembershipContext<T>(
   callback: () => T | Promise<T>,
 ): Promise<T | Promise<T>> {
@@ -97,6 +101,7 @@ export {
   hasOrgMembership,
   membershipContext,
   membershipRepository,
+  resetMembershipLookupForTests,
   resolveMembershipLookup,
   runWithMembershipContext,
 };
