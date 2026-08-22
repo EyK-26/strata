@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("createMemoryThrottleMiddleware", () => {
   test("allows requests until the attempt limit is exceeded", async () => {
@@ -35,28 +36,35 @@ describe("createMemoryThrottleMiddleware", () => {
   });
 
   test("keys requests by forwarded ip, authorization header, or unknown", async () => {
-    const middleware = createMemoryThrottleMiddleware({
-      maxAttempts: 1,
-      decaySeconds: 60,
-      keyPrefix: "test-throttle-c:",
-    });
-    const next = async () => Response.json({ ok: true });
+    const previous = process.env.TRUST_FORWARDED_FOR;
+    process.env.TRUST_FORWARDED_FOR = "true";
 
-    const forwardedRequest = new Request("https://example.test/api/v1/ip", {
-      headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
-    });
-    const authRequest = new Request("https://example.test/api/v1/ip", {
-      headers: { authorization: "Bearer secret-token-value" },
-    });
-    const unknownRequest = new Request("https://example.test/api/v1/ip");
+    try {
+      const middleware = createMemoryThrottleMiddleware({
+        maxAttempts: 1,
+        decaySeconds: 60,
+        keyPrefix: "test-throttle-c:",
+      });
+      const next = async () => Response.json({ ok: true });
 
-    expect((await middleware(forwardedRequest, next)).status).toBe(200);
-    expect((await middleware(authRequest, next)).status).toBe(200);
-    expect((await middleware(unknownRequest, next)).status).toBe(200);
+      const forwardedRequest = new Request("https://example.test/api/v1/ip", {
+        headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
+      });
+      const authRequest = new Request("https://example.test/api/v1/ip", {
+        headers: { authorization: "Bearer secret-token-value" },
+      });
+      const unknownRequest = new Request("https://example.test/api/v1/ip");
 
-    expect((await middleware(forwardedRequest, next)).status).toBe(429);
-    expect((await middleware(authRequest, next)).status).toBe(429);
-    expect((await middleware(unknownRequest, next)).status).toBe(429);
+      expect((await middleware(forwardedRequest, next)).status).toBe(200);
+      expect((await middleware(authRequest, next)).status).toBe(200);
+      expect((await middleware(unknownRequest, next)).status).toBe(200);
+
+      expect((await middleware(forwardedRequest, next)).status).toBe(429);
+      expect((await middleware(authRequest, next)).status).toBe(429);
+      expect((await middleware(unknownRequest, next)).status).toBe(429);
+    } finally {
+      restoreEnvVar("TRUST_FORWARDED_FOR", previous);
+    }
   });
 
   test("uses the default key prefix when none is provided", async () => {

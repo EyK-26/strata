@@ -1,4 +1,5 @@
 import { RedisClient } from "bun";
+import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 
 interface LoginThrottleOptions {
@@ -9,7 +10,7 @@ interface LoginThrottleOptions {
 }
 
 function resolveLoginIdentity(request: Request): string {
-  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  return readClientIp(request) ?? "unknown";
 }
 
 async function resolveLoginEmail(request: Request): Promise<string> {

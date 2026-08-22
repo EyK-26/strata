@@ -183,7 +183,7 @@ WorkHub domain routes are served under **`/api/v1`** by default (`API_PREFIX`). 
 
 - `GET /health`
 - `GET /ready`
-- `GET /metrics`: Prometheus text metrics
+- `GET /metrics`: Prometheus text metrics (open locally; production requires `METRICS_TOKEN`)
 
 ### Model-aware authorization
 

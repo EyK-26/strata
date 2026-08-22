@@ -24,6 +24,8 @@ This document covers deploying WorkHub to staging and production.
 | `FEATURE_*` | No | Feature flags (`FEATURE_WEBHOOKS`, `FEATURE_AUDIT_LOG`, `FEATURE_ETAG`, etc.) |
 | `FRONTEND_MODE` | No | `api` (default), `server-htmx`, or `spa-react` |
 | `SESSION_SECRET` | Prod (server-htmx) | Signs encrypted session cookies; required when `FRONTEND_MODE=server-htmx` in production |
+| `TRUST_FORWARDED_FOR` | No | Set `true` only behind a trusted proxy; otherwise `X-Forwarded-For` is ignored |
+| `METRICS_TOKEN` | Prod | Bearer token for `GET /metrics`. Production returns 404 when unset |
 | `OIDC_*` / `SAML_LOGIN_URL` | No | Enterprise SSO when enabled |
 | `SCIM_BEARER_TOKEN` | Prod | SCIM provisioning bearer token (rotate from default) |
 | `KMS_ENCRYPTION_KEY` | Prod | 32-byte hex/base64 key for email field encryption |
@@ -82,7 +84,7 @@ docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3001 (admin/admin — change in production)
-- App metrics: `GET /metrics`
+- App metrics: `GET /metrics` (set `METRICS_TOKEN` and scrape with `Authorization: Bearer <token>`)
 
 Alert rules live in `infra/prometheus/alerts.yml`.
 
@@ -182,7 +184,7 @@ See also `scripts/load/k6-smoke.js` for a lighter health-only check.
 |----------|---------|
 | `GET /health` | Liveness |
 | `GET /ready` | Readiness (database + redis) |
-| `GET /metrics` | Prometheus scrape target |
+| `GET /metrics` | Prometheus scrape target (Bearer `METRICS_TOKEN` in production) |
 
 ## Load testing
 

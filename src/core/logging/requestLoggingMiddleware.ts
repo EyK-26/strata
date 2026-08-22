@@ -1,14 +1,13 @@
 import type { Middleware } from "@getstrata/core/http/middleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { readClientIp } from "../http/clientIp";
 import { appLogger } from "./logger";
 
 function createRequestLoggingMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     return await runWithRequestMeta(
       {
-        ipAddress:
-          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-          request.headers.get("x-real-ip"),
+        ipAddress: readClientIp(request),
         userAgent: request.headers.get("user-agent"),
         request,
       },

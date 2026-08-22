@@ -1,3 +1,4 @@
+import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 
 interface MemoryThrottleOptions {
@@ -14,9 +15,7 @@ function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Middlew
   return async (request: Request, next: () => Promise<Response>) => {
     const path = new URL(request.url).pathname;
     const identity =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("authorization")?.slice(0, 32) ??
-      "unknown";
+      readClientIp(request) ?? request.headers.get("authorization")?.slice(0, 32) ?? "unknown";
     const key = `${prefix}${identity}:${path}`;
     const now = Date.now();
     const existing = buckets.get(key);

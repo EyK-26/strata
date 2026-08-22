@@ -1,6 +1,7 @@
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { currentTenant, rateLimitMultiplierForPlan } from "@getstrata/core/tenant/tenantContext";
 import { RedisClient } from "bun";
+import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 
 interface ThrottleOptions {
@@ -21,7 +22,7 @@ function resolveThrottleIdentity(request: Request): string {
     return `user:${user.id}`;
   }
 
-  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  return readClientIp(request) ?? "unknown";
 }
 
 function createThrottleMiddleware(options: ThrottleOptions): Middleware {
