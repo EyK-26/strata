@@ -295,7 +295,7 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for SCIM/billing extension poin
 
 ### Scheduler, storage, and mail
 
-- `bun run cli schedule:run`: run due scheduled tasks (`src/bootstrap/schedule.ts`); exported as `scheduleRunCommand` from `@getstrata/bootstrap` and `runDueScheduledTasks` from `@getstrata/core`
+- `bun run cli schedule:run`: run due scheduled tasks (`src/bootstrap/schedule.ts`); `runDueScheduledTasks` lives in `@getstrata/core`. The WorkHub CLI command is not part of the `@getstrata/bootstrap` public API.
 - Local file storage via `storage()` (`STORAGE_PATH`, default `storage/`)
 - Log mail driver via `mail()` for development notifications
 

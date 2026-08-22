@@ -301,7 +301,7 @@
     "sectionSlug": "async",
     "tier": "core",
     "strataApis": ["Schedule", "appSchedule", "runDueScheduledTasks"],
-    "bootstrapApis": ["scheduleRunCommand"],
+    "bootstrapApis": [],
     "notes": ""
   },
   {
@@ -479,7 +479,7 @@
     "sectionSlug": "getting-started",
     "tier": "core",
     "strataApis": [],
-    "bootstrapApis": ["scheduleRunCommand"],
-    "notes": "@getstrata/cli — migrate, queue:work, make:* generators"
+    "bootstrapApis": [],
+    "notes": "WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API"
   }
 ]

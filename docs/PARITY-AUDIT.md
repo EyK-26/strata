@@ -1,6 +1,6 @@
 # Laravel parity audit
 
-Generated: 2026-08-16T13:20:49.641Z
+Generated: 2026-08-22T13:31:30.966Z
 
 ## Score
 
@@ -46,7 +46,7 @@ Target: ≥99% core coverage across all documented Laravel sections.
 | ✅ covered | [Events](https://laravel.com/docs/events) | EventBus, events | `unit/events.test.ts` |
 | ✅ covered | [Queues](https://laravel.com/docs/queues) | Job, RedisQueue, QueueWorker… | `unit/queue.test.ts` |
 | ✅ covered | [Queues: Dealing With Failed Jobs](https://laravel.com/docs/queues#dealing-with-failed-jobs) | FailedJobService, FailedJobRepository, createFailedJobService | `unit/failedJobService.test.ts` |
-| ✅ covered | [Task Scheduling](https://laravel.com/docs/scheduling) | Schedule, appSchedule, runDueScheduledTasks… | `unit/schedule.test.ts` |
+| ✅ covered | [Task Scheduling](https://laravel.com/docs/scheduling) | Schedule, appSchedule, runDueScheduledTasks | `unit/schedule.test.ts` |
 | ✅ covered | [Cache](https://laravel.com/docs/cache) | CacheRepository, CACHE_TAGS, @getstrata/bootstrap:cacheTagsForModelWrite… | `unit/cacheRepository.test.ts` |
 | ✅ covered | [Rate Limiting](https://laravel.com/docs/routing#rate-limiting) | createThrottleMiddleware, createMemoryThrottleMiddleware, createLoginThrottleMiddleware | `unit/throttleMiddleware.test.ts` |
 | ✅ covered | [File Storage](https://laravel.com/docs/filesystem) | StorageManager, LocalStorageDriver, storage | `unit/storage.test.ts` |
@@ -63,4 +63,4 @@ Target: ≥99% core coverage across all documented Laravel sections.
 | ✅ covered | [Mail: Markdown Templates](https://laravel.com/docs/mail#markdown-mailables) | renderMarkdownMail, buildMarkdownMailMessage, sendMarkdownMail… | `unit/markdownMail.test.ts` |
 | ✅ covered | [Horizon (queue dashboard)](https://laravel.com/docs/horizon) | collectQueueMetrics, FailedJobService, FailedJobRepository… | `unit/adminServiceMetrics.test.ts` |
 | ✅ covered | [Nova (admin panel)](https://laravel.com/docs/nova) | AdminResourceRegistry, formatAdminValue | `unit/adminRegistry.test.ts` |
-| ✅ covered | [Artisan Console](https://laravel.com/docs/artisan) | @getstrata/bootstrap:scheduleRunCommand | `unit/bootstrapSchedule.test.ts` |
+| ✅ covered | [Artisan Console](https://laravel.com/docs/artisan) | WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API | `unit/bootstrapSchedule.test.ts` |

@@ -19,8 +19,11 @@
     "packages/strata-bootstrap": {
       "name": "@getstrata/bootstrap",
       "version": "0.2.47",
+      "dependencies": {
+        "@getstrata/core": "^0.5.56",
+      },
       "peerDependencies": {
-        "@getstrata/core": "^0.5.14",
+        "@getstrata/core": "^0.5.56",
         "typescript": "^5.9.0",
       },
     },

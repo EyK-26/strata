@@ -4,7 +4,6 @@
 
 export type { ScheduledTask } from "@getstrata/core/scheduler/schedule";
 export { appSchedule, runDueScheduledTasks, Schedule } from "@getstrata/core/scheduler/schedule";
-export { scheduleRunCommand } from "../cli/commands/scheduleRun.ts";
 export {
   resolveApplicationAuth,
   resolveApplicationCache,

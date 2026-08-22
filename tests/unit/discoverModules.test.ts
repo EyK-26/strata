@@ -1,5 +1,11 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { discoverModules, ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import { join } from "node:path";
+import {
+  configureModulesDirectory,
+  discoverModules,
+  ensureModulesLoaded,
+  resetDiscoverModulesForTests,
+} from "@getstrata/bootstrap/discoverModules";
 
 describe("discoverModules", () => {
   beforeAll(async () => {
@@ -33,5 +39,20 @@ describe("discoverModules", () => {
 
     expect(modules.every((module) => module.name.length > 0)).toBe(true);
     expect(modules.some((module) => module.routes !== undefined)).toBe(true);
+  });
+
+  test("requires an explicit modules directory", async () => {
+    resetDiscoverModulesForTests();
+
+    try {
+      await ensureModulesLoaded();
+      throw new Error("expected configureModulesDirectory to be required");
+    } catch (error) {
+      expect((error as Error).message).toMatch(/configureModulesDirectory/);
+    } finally {
+      resetDiscoverModulesForTests();
+      configureModulesDirectory(join(import.meta.dir, "../../src/modules"));
+      await ensureModulesLoaded();
+    }
   });
 });

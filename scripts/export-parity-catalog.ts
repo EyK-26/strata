@@ -77,8 +77,8 @@ const cliEntry = {
   sectionSlug: "getting-started",
   tier: "core" as const,
   strataApis: [],
-  bootstrapApis: ["scheduleRunCommand"],
-  notes: "@getstrata/cli — migrate, queue:work, make:* generators",
+  bootstrapApis: [],
+  notes: "WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API",
 };
 
 const output = [...exported.filter((e) => e.id !== "cli"), cliEntry];

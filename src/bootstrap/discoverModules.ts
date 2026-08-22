@@ -44,7 +44,9 @@ function resolveModulesDirectory(options?: DiscoverModulesOptions): string {
     return state.configuredModulesDir;
   }
 
-  return join(import.meta.dir, "../modules");
+  throw new Error(
+    "configureModulesDirectory() must be called before discovering modules. WorkHub and the starter do this from preload.",
+  );
 }
 
 async function loadDiscoveredModules(options?: DiscoverModulesOptions): Promise<AppModule[]> {
@@ -95,5 +97,17 @@ function discoverModules(): AppModule[] {
   return readDiscoverModulesState().appModules;
 }
 
+function resetDiscoverModulesForTests(): void {
+  const state = readDiscoverModulesState();
+  state.configuredModulesDir = undefined;
+  state.appModules.length = 0;
+  state.modulesReady = undefined;
+}
+
 export type { DiscoverModulesOptions };
-export { configureModulesDirectory, discoverModules, ensureModulesLoaded };
+export {
+  configureModulesDirectory,
+  discoverModules,
+  ensureModulesLoaded,
+  resetDiscoverModulesForTests,
+};
