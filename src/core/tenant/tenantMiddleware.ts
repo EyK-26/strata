@@ -3,6 +3,7 @@ import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { ForbiddenError, HttpError } from "@getstrata/core/errors/http";
+import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
 import { runWithMigrationBypass } from "./databaseTenantContext";
 import { resolveTenant } from "./resolveTenant";
 import type { TenantContext } from "./tenantContext";
@@ -62,8 +63,11 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
     }
   }
 
+  // Guests still need a tenant for login/register. Honor x-tenant-id only when
+  // public reads are on so production cannot probe tenants via that header.
+  const headerTenantId = Number.isInteger(parsedHeader) && parsedHeader > 0 ? parsedHeader : null;
   const tenantId =
-    Number.isInteger(parsedHeader) && parsedHeader > 0 ? parsedHeader : DEFAULT_TENANT.id;
+    isPublicReadsEnabled() && headerTenantId !== null ? headerTenantId : DEFAULT_TENANT.id;
   return (await resolveTenant(tenantId)) ?? DEFAULT_TENANT;
 }
 

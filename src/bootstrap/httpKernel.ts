@@ -51,6 +51,7 @@ class HttpKernel {
       createMetricsMiddleware(),
       createRequestLoggingMiddleware(),
       requestIdMiddleware,
+      // Auth and membership are global (token/org lookup) and must run before tenant RLS.
       createAuthMiddleware(auth),
       createMembershipMiddleware(),
       createTenantMiddleware(),

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("createTenantMiddleware", () => {
   test("resolves tenant from header for anonymous requests", async () => {
@@ -16,6 +17,30 @@ describe("createTenantMiddleware", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("x-tenant-id")).toBe("1");
     expect(response.headers.get("x-tenant-region")).toBeTruthy();
+  });
+
+  test("ignores anonymous x-tenant-id when public reads are disabled", async () => {
+    const previous = process.env.FEATURE_PUBLIC_READS;
+    process.env.FEATURE_PUBLIC_READS = "false";
+
+    try {
+      const { createTenantMiddleware, DEFAULT_TENANT } = await import(
+        "@getstrata/core/tenant/tenantMiddleware"
+      );
+      const middleware = createTenantMiddleware();
+
+      const response = await middleware(
+        new Request("http://example.test/tasks", {
+          headers: { "x-tenant-id": "999" },
+        }),
+        async () => Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+    } finally {
+      restoreEnvVar("FEATURE_PUBLIC_READS", previous);
+    }
   });
 
   test("defers SCIM routes to SCIM auth middleware for tenant scoping", async () => {

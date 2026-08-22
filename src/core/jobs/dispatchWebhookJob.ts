@@ -4,9 +4,12 @@ import { appConfig } from "../../config/app";
 import { Job } from "../queue";
 import { safeFetch } from "../security/safeFetch";
 import { assertSafeOutboundUrl } from "../security/safeUrl";
+import { resolveTenant } from "../tenant/resolveTenant";
+import { runWithTenantDatabase } from "../tenant/tenantDatabaseScope";
 
 interface DispatchWebhookPayload {
   webhookId: number;
+  tenantId: number;
   event: string;
   payload: Record<string, unknown>;
 }
@@ -16,6 +19,21 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
   override readonly backoffMs = 2_000;
 
   override async handle(payload: DispatchWebhookPayload): Promise<void> {
+    const tenant = (await resolveTenant(payload.tenantId)) ?? {
+      id: payload.tenantId,
+      slug: "job",
+      plan: "free" as const,
+      region: "eu" as const,
+    };
+
+    const failure = await runWithTenantDatabase(tenant, async () => await this.deliver(payload));
+
+    if (failure) {
+      throw failure;
+    }
+  }
+
+  private async deliver(payload: DispatchWebhookPayload): Promise<Error | undefined> {
     const rows = (await db`
       SELECT id, url, secret
       FROM webhook
@@ -69,7 +87,7 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
         )
       `;
 
-      throw error instanceof Error ? error : new Error(errorMessage);
+      return error instanceof Error ? error : new Error(errorMessage);
     }
 
     await db`

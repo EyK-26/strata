@@ -157,6 +157,7 @@ The same codebase scales from hobby projects to enterprise deployments. Enable o
 Feature flags (`FEATURE_*`) disable optional modules without removing code. See `.env.example`.
 
 - Production checklist: [docs/PRODUCTION.md](docs/PRODUCTION.md) (`bun run cli secrets:check`)
+- Tenancy and RLS: [docs/TENANCY.md](docs/TENANCY.md)
 - Enterprise integrations (SCIM, billing, SIEM, OAuth): [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 - Framework packaging & npm: [docs/PACKAGING.md](docs/PACKAGING.md)
 - Coverage policy: [docs/COVERAGE.md](docs/COVERAGE.md)

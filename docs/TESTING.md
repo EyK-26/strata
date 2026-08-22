@@ -67,7 +67,7 @@ await runWithTenantDatabase(tenant, async () => {
 });
 ```
 
-HTTP middleware (`createTenantMiddleware`, SCIM auth) uses the same helper so production and tests share one code path.
+HTTP middleware (`createTenantMiddleware`, SCIM auth) uses the same helper so production and tests share one code path. Background jobs that touch RLS tables must do the same — see [TENANCY.md](./TENANCY.md).
 
 For migration/seed/bootstrap queries that must read across tenants, use `runWithMigrationBypass()` from `src/core/tenant/databaseTenantContext.ts`.
 

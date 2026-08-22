@@ -50,6 +50,7 @@ class WebhookService {
 
       await queue.dispatch(job, {
         webhookId: webhook.id,
+        tenantId: webhook.tenant_id,
         event,
         payload,
       });

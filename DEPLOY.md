@@ -115,7 +115,9 @@ bun run cli sdk:generate       # writes generated TypeScript SDK
 
 ## Multi-tenancy
 
-Pass `x-tenant-id` on API requests to scope organizations to a tenant. Default tenant id is `1`.
+Authenticated users are scoped to their account tenant. Global admins may pass `x-tenant-id` to act as another tenant. Guests use tenant `1`; they can switch via `x-tenant-id` only when `FEATURE_PUBLIC_READS=true`.
+
+See [docs/TENANCY.md](docs/TENANCY.md) for RLS tables and the auth-global `api_token` / `organization_member` decision.
 
 Plan-based rate limits apply automatically (`free` 1×, `pro` 2×, `enterprise` 4×).
 

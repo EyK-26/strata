@@ -2,8 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import type { WebhookRecord } from "../../src/modules/webhook/types";
 
-const dispatched: Array<{ webhookId: number; event: string; payload: Record<string, unknown> }> =
-  [];
+const dispatched: Array<{
+  webhookId: number;
+  tenantId: number;
+  event: string;
+  payload: Record<string, unknown>;
+}> = [];
 
 let WebhookService: typeof import("../../src/modules/webhook/service").default;
 
@@ -54,7 +58,12 @@ beforeAll(async () => {
     resolveApplicationQueue: () => ({
       dispatch: async (
         _job: unknown,
-        payload: { webhookId: number; event: string; payload: Record<string, unknown> },
+        payload: {
+          webhookId: number;
+          tenantId: number;
+          event: string;
+          payload: Record<string, unknown>;
+        },
       ) => {
         dispatched.push(payload);
       },
@@ -126,8 +135,8 @@ describe("WebhookService", () => {
     await service.dispatch("task.created", { id: 99 });
 
     expect(dispatched).toEqual([
-      { webhookId: 1, event: "task.created", payload: { id: 99 } },
-      { webhookId: 2, event: "task.created", payload: { id: 99 } },
+      { webhookId: 1, tenantId: 1, event: "task.created", payload: { id: 99 } },
+      { webhookId: 2, tenantId: 1, event: "task.created", payload: { id: 99 } },
     ]);
   });
 });

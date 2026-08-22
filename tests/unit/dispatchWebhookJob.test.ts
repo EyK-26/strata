@@ -22,6 +22,7 @@ describe("DispatchWebhookJob", () => {
     await expect(
       job.handle({
         webhookId: 999_999,
+        tenantId: 1,
         event: "task.created",
         payload: { id: 1 },
       }),
@@ -51,6 +52,7 @@ describe("DispatchWebhookJob", () => {
 
     await job.handle({
       webhookId: inserted[0]!.id,
+      tenantId: 1,
       event: "task.created",
       payload: { id: 42 },
     });
@@ -91,6 +93,7 @@ describe("DispatchWebhookJob", () => {
     await expect(
       job.handle({
         webhookId: inserted[0]!.id,
+        tenantId: 1,
         event: "task.updated",
         payload: { id: 7 },
       }),
@@ -130,6 +133,7 @@ describe("DispatchWebhookJob", () => {
     await expect(
       job.handle({
         webhookId: inserted[0]!.id,
+        tenantId: 1,
         event: "task.deleted",
         payload: { id: 3 },
       }),
@@ -166,6 +170,7 @@ describe("DispatchWebhookJob", () => {
     await expect(
       job.handle({
         webhookId: inserted[0]!.id,
+        tenantId: 1,
         event: "task.created",
         payload: {},
       }),
