@@ -1,47 +1,73 @@
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+import { appSchedule } from "@getstrata/bootstrap/schedule";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import db from "../../src/db/connection";
 import { restoreEnvVar } from "../helpers/restoreEnv";
+import { clearPendingAuditLogs } from "./testHelpers";
 
-afterAll(() => {
-  mock.restore();
+const originalFetch = globalThis.fetch;
+
+function captureConsole(): {
+  logs: string[];
+  errors: string[];
+  restore: () => void;
+} {
+  const logs: string[] = [];
+  const errors: string[] = [];
+  const originalLog = console.log;
+  const originalError = console.error;
+
+  console.log = (...args: unknown[]) => {
+    logs.push(args.map(String).join(" "));
+  };
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map(String).join(" "));
+  };
+
+  return {
+    logs,
+    errors,
+    restore: () => {
+      console.log = originalLog;
+      console.error = originalError;
+    },
+  };
+}
+
+async function insertPendingAuditLogs(count: number): Promise<void> {
+  await runWithMigrationBypass(async () => {
+    for (let index = 0; index < count; index += 1) {
+      await db`
+        INSERT INTO audit_log (user_id, action, subject_type, subject_id, payload, tenant_id, created_at)
+        VALUES (
+          1,
+          'task.created',
+          'task',
+          ${10 + index},
+          ${JSON.stringify({ title: `Schedule export ${index}` })}::jsonb,
+          1,
+          NOW()
+        )
+      `;
+    }
+  });
+}
+
+afterEach(async () => {
+  globalThis.fetch = originalFetch;
+  delete process.env.SIEM_EXPORT_URL;
+  delete process.env.SIEM_EXPORT_FORMAT;
+  delete process.env.SIEM_EXPORT_BATCH_SIZE;
+  delete process.env.SIEM_EXPORT_TOKEN;
+  await clearPendingAuditLogs();
 });
 
 describe("bootstrap schedule", () => {
   test("registers heartbeat and audit-export tasks", async () => {
-    const debugLogs: string[] = [];
-    const infoLogs: string[] = [];
-    const errorLogs: Array<{ message: string; context?: unknown }> = [];
-    let exportedCount = 0;
-    let exportShouldFail = false;
     const previousSiemExport = process.env.FEATURE_SIEM_EXPORT;
-
-    mock.module("@getstrata/core/audit/exportAuditLogs", () => ({
-      exportPendingAuditLogs: async () => {
-        if (exportShouldFail) {
-          throw new Error("export failed");
-        }
-
-        return exportedCount;
-      },
-    }));
-
-    mock.module("@getstrata/core/logging/logger", () => ({
-      appLogger: {
-        debug: (message: string) => {
-          debugLogs.push(message);
-        },
-        info: (message: string) => {
-          infoLogs.push(message);
-        },
-        error: (message: string, context?: unknown) => {
-          errorLogs.push({ message, context });
-        },
-      },
-    }));
+    const output = captureConsole();
 
     try {
-      await import("@getstrata/bootstrap/schedule");
-
-      const { appSchedule } = await import("@getstrata/core/scheduler/schedule");
       const tasks = appSchedule.dueTasks();
       const heartbeat = tasks.find((task) => task.name === "heartbeat");
       const auditExport = tasks.find((task) => task.name === "audit-export");
@@ -50,34 +76,38 @@ describe("bootstrap schedule", () => {
       expect(auditExport).toBeDefined();
 
       await heartbeat?.run();
-      expect(debugLogs).toContain("Scheduler heartbeat");
+      expect(output.logs.some((line) => line.includes("Scheduler heartbeat"))).toBe(true);
 
       process.env.FEATURE_SIEM_EXPORT = "false";
       await auditExport?.run();
-      expect(infoLogs.some((line) => line.includes("Exported"))).toBe(false);
+      expect(output.logs.some((line) => line.includes("Exported"))).toBe(false);
 
       process.env.FEATURE_SIEM_EXPORT = "true";
-      exportedCount = 3;
-      await auditExport?.run();
-      expect(infoLogs.some((line) => line.includes("Exported 3 audit log entries"))).toBe(true);
+      process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-schedule";
+      await insertPendingAuditLogs(3);
 
-      exportedCount = 0;
-      await auditExport?.run();
-      expect(infoLogs.filter((line) => line.includes("Exported 0 audit log entries"))).toHaveLength(
-        0,
-      );
+      globalThis.fetch = mock(() =>
+        Promise.resolve(new Response("accepted", { status: 200 })),
+      ) as unknown as typeof fetch;
 
-      exportShouldFail = true;
       await auditExport?.run();
-      expect(errorLogs.some((entry) => entry.message === "Audit export failed.")).toBe(true);
+      expect(output.logs.some((line) => line.includes("Exported 3 audit log entries"))).toBe(true);
+
+      await auditExport?.run();
+      expect(
+        output.logs.filter((line) => line.includes("Exported 0 audit log entries")),
+      ).toHaveLength(0);
+
+      await insertPendingAuditLogs(1);
+      globalThis.fetch = mock(() =>
+        Promise.resolve(new Response("fail", { status: 503 })),
+      ) as unknown as typeof fetch;
+
+      await auditExport?.run();
+      expect(output.errors.some((line) => line.includes("Audit export failed."))).toBe(true);
     } finally {
-      mock.restore();
-
-      if (previousSiemExport === undefined) {
-        delete process.env.FEATURE_SIEM_EXPORT;
-      } else {
-        restoreEnvVar("FEATURE_SIEM_EXPORT", previousSiemExport);
-      }
+      output.restore();
+      restoreEnvVar("FEATURE_SIEM_EXPORT", previousSiemExport);
     }
   });
 });
