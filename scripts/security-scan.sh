@@ -21,6 +21,7 @@ if rg -n \
   --glob '!scripts/load/**' \
   --glob '!tests/**' \
   --glob '!src/domain/**' \
+  --glob '!src/bootstrap/secretsGuard.ts' \
   --glob '!src/db/seeders/**' \
   --glob '!docs/**' \
   --glob '!DEPLOY.md' \

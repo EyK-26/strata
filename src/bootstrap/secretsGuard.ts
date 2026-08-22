@@ -1,3 +1,4 @@
+/** Deny-list of WorkHub local test tokens. Not defaults for production. */
 const DEFAULT_ADMIN_API_TOKEN = "workhub-admin-test-token";
 const DEFAULT_MEMBER_API_TOKEN = "workhub-member-test-token";
 const DEFAULT_SCIM_BEARER_TOKEN = "workhub-scim-test-token";
