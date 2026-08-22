@@ -8,6 +8,7 @@ import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
 import { appContext } from "./context";
 import { startInProcessCronIfEnabled, stopInProcessCron } from "./inProcessCron";
 import { buildRoutes } from "./routes";
+import { assertProductionSecrets } from "./secretsGuard";
 
 class App {
   private server?: ReturnType<typeof Bun.serve>;
@@ -16,6 +17,8 @@ class App {
     if (this.server) {
       return;
     }
+
+    assertProductionSecrets();
 
     const port = this.resolvePort();
 

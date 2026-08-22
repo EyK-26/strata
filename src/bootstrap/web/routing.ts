@@ -55,22 +55,22 @@ export function wrapSecuredRouteModelByKey<
   return async (request) => bound(toRouteRequest<TParams>(request));
 }
 
-/** Converts kernel login throttle 429 JSON into an HTML response for web forms. */
+/** Web group (CSRF + flash + HTML errors) plus login throttle. Do not wrap with wrapWeb again. */
 export function wrapWebLogin(
   kernel: HttpKernel,
   handler: RouteHandler,
   onThrottled: (request: Request) => Response | Promise<Response>,
 ): RouteHandler {
-  return wrapWebThrottle(kernel, "login", handler, onThrottled);
+  return kernel.wrapWeb(wrapWebThrottle(kernel, "login", handler, onThrottled));
 }
 
-/** Converts kernel register throttle 429 JSON into an HTML response for web forms. */
+/** Web group (CSRF + flash + HTML errors) plus register throttle. Do not wrap with wrapWeb again. */
 export function wrapWebRegister(
   kernel: HttpKernel,
   handler: RouteHandler,
   onThrottled: (request: Request) => Response | Promise<Response>,
 ): RouteHandler {
-  return wrapWebThrottle(kernel, "register", handler, onThrottled);
+  return kernel.wrapWeb(wrapWebThrottle(kernel, "register", handler, onThrottled));
 }
 
 function wrapWebThrottle(

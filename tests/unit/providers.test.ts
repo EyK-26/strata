@@ -51,6 +51,17 @@ describe("app providers", () => {
     await ensureModulesLoaded();
   });
 
+  test("does not run WorkHub production secret gates", () => {
+    const previous = process.env.APP_ENV;
+    process.env.APP_ENV = "production";
+
+    try {
+      expect(() => createAppContext()).not.toThrow();
+    } finally {
+      restoreEnvVar("APP_ENV", previous);
+    }
+  });
+
   test("build the app context from config and core providers", () => {
     const previousPort = process.env.PORT;
     const previousTtl = process.env.CACHE_TTL_MS;

@@ -29,7 +29,7 @@ Copy `.env.example` to `.env`. The scaffold is an API app without a `tenant` tab
 | `METRICS_TOKEN` | unset | Required in production to expose `GET /metrics` |
 | `FEATURE_PUBLIC_READS` | unset | Set `false` in production |
 
-`assertProductionSecrets()` is WorkHub-oriented (API tokens, Stripe, SCIM). Starter apps do not call it; add it if you enable those features.
+`createAppContext()` does not call `assertProductionSecrets()`. That helper is WorkHub-oriented (API tokens, Stripe, SCIM). Starter apps do not call it; add it if you enable those features.
 
 ## Publish
 

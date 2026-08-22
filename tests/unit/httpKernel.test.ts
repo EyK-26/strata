@@ -7,6 +7,7 @@ import {
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
+import { wrapWebLogin } from "@getstrata/bootstrap/web/routing";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
@@ -65,9 +66,33 @@ describe("HttpKernel", () => {
       expect(getResponse.status).toBe(200);
       expect(getResponse.headers.get("set-cookie")).toContain("workhub_csrf=");
 
-      await expect(
-        handler(new Request("http://example.test/organizations", { method: "POST" })),
-      ).rejects.toThrow(ForbiddenError);
+      const postResponse = await handler(
+        new Request("http://example.test/organizations", { method: "POST" }),
+      );
+      expect(postResponse.status).toBe(403);
+      expect(await postResponse.text()).toContain("Invalid or missing CSRF token.");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
+  test("wrapWebLogin applies the web group so CSRF failures become HTML 403", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = wrapWebLogin(
+        kernel,
+        async () => new Response("ok"),
+        async () => new Response("slow", { status: 429 }),
+      );
+
+      const postResponse = await handler(
+        new Request("http://example.test/login", { method: "POST" }),
+      );
+      expect(postResponse.status).toBe(403);
+      expect(await postResponse.text()).toContain("Invalid or missing CSRF token.");
     } finally {
       restoreEnvVar("FRONTEND_MODE", previous);
     }

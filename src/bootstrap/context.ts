@@ -11,7 +11,6 @@ import {
 } from "./contracts";
 import { discoverModules } from "./modules";
 import { coreProviders } from "./providers";
-import { assertProductionSecrets } from "./secretsGuard";
 
 function collectProviders(modules: AppModule[] = discoverModules()): ServiceProvider[] {
   return [...coreProviders, ...modules.flatMap((module) => module.providers ?? [])];
@@ -28,8 +27,6 @@ function runProviderPhase(
 }
 
 function createAppContext(): AppContext {
-  assertProductionSecrets();
-
   const container = new ServiceContainer();
   const config = new ConfigStore();
   const dependencies: MutableAppDependencies = {

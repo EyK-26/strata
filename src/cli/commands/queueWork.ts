@@ -1,5 +1,6 @@
 import { createAppContext } from "@getstrata/bootstrap/context";
 import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
+import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import {
   installGracefulShutdownSignals,
   registerShutdownHandler,
@@ -14,6 +15,7 @@ async function queueWorkCommand(): Promise<void> {
     throw new Error("queue:work requires REDIS_URL to be set.");
   }
 
+  assertProductionSecrets();
   createAppContext();
   registerDefaultJobs();
 

@@ -17,6 +17,7 @@ import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbil
 import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMiddleware";
 import { createRequireGlobalAdminMiddleware } from "@getstrata/core/http/requireGlobalAdminMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
+import { withErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { createSecurityHeadersMiddleware } from "@getstrata/core/http/securityHeadersMiddleware";
 import { createThrottleMiddleware } from "@getstrata/core/http/throttleMiddleware";
@@ -116,7 +117,7 @@ class HttpKernel {
   }
 
   wrapWeb(handler: RouteHandler): RouteHandler {
-    return this.wrap("web", handler);
+    return withErrorHandling(this.wrap("web", handler));
   }
 
   wrapWebPublicRead(handler: RouteHandler): RouteHandler {
@@ -130,7 +131,7 @@ class HttpKernel {
   wrapWebAuthenticated(handler: RouteHandler): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
-    return this.wrap("web", withMiddleware(createRequireWebAuthMiddleware(auth))(handler));
+    return this.wrapWeb(withMiddleware(createRequireWebAuthMiddleware(auth))(handler));
   }
 
   wrapWebAbility(ability: string, handler: RouteHandler): RouteHandler {
@@ -140,14 +141,14 @@ class HttpKernel {
     const requireAbility = createRequireAbilityMiddleware(abilityChecker);
     const middleware = [createRequireWebAuthMiddleware(auth), requireAbility(ability)];
 
-    return this.wrap("web", withMiddleware(...middleware)(handler));
+    return this.wrapWeb(withMiddleware(...middleware)(handler));
   }
 
   wrapWebGlobalAdmin(handler: RouteHandler): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
     const middleware = [createRequireWebAuthMiddleware(auth), createRequireGlobalAdminMiddleware()];
 
-    return this.wrap("web", withMiddleware(...middleware)(handler));
+    return this.wrapWeb(withMiddleware(...middleware)(handler));
   }
 
   wrapAuthenticated(handler: RouteHandler): RouteHandler {

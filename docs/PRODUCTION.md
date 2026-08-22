@@ -1,6 +1,6 @@
 # Production readiness
 
-WorkHub blocks `APP_ENV=production` startup when unsafe defaults are detected (`src/bootstrap/secretsGuard.ts`). Use this checklist before going live.
+WorkHub blocks `APP_ENV=production` HTTP and queue workers when unsafe defaults are detected (`assertProductionSecrets` from `App.serve()` and `queue:work`). `createAppContext()` does not run that gate so sibling apps can boot without WorkHub tokens. Use this checklist before going live.
 
 ## Quick validation
 

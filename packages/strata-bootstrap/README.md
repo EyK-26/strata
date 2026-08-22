@@ -28,7 +28,9 @@ import {
 import { createHttpKernel, createAppContext, coreProviders } from "@getstrata/bootstrap";
 ```
 
-`assertProductionSecrets` (`@getstrata/bootstrap/secretsGuard`) is env-only. It still rejects the well-known WorkHub test tokens.
+`createAppContext()` does not call `assertProductionSecrets`. WorkHub calls that from `App.serve()` / `queue:work`. Sibling apps should call it only if they want those WorkHub production gates (API tokens, Stripe, SCIM, CORS).
+
+`wrapWeb` applies the web group (CSRF + flash) and `withErrorHandling`, so CSRF `ForbiddenError` becomes an HTML 403 in `FRONTEND_MODE=server-htmx`. `wrapWebLogin` / `wrapWebRegister` include that web group plus throttle — do not wrap them with `wrapWeb` again.
 
 These subpaths remain WorkHub-oriented and are not a generic starter API: `@getstrata/bootstrap/createRoutes` (includes SCIM), `@getstrata/bootstrap/schedule`, and `@getstrata/bootstrap/createWebRoutes` (redirects `/` to `/organizations`).
 
