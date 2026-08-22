@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { hasMany } from "@getstrata/core/database/relationships";
 import { ValidationError } from "@getstrata/core/errors/http";
 import { cache } from "@getstrata/core/facades";
+import { readClientIp, trustForwardedFor } from "@getstrata/core/http/clientIp";
 import { createdResponse, jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
+import { isTenancyEnabled, readTenancyDriver } from "@getstrata/core/tenant/tenancyConfig";
 
 describe("published subpath surface", () => {
   test("http/response exports JSON helpers", () => {
@@ -22,5 +24,16 @@ describe("published subpath surface", () => {
 
   test("facades exports cache helper", () => {
     expect(typeof cache).toBe("function");
+  });
+
+  test("http/clientIp exports forwarded-for helpers", () => {
+    expect(typeof readClientIp).toBe("function");
+    expect(typeof trustForwardedFor).toBe("function");
+    expect(trustForwardedFor({})).toBe(false);
+  });
+
+  test("tenant/tenancyConfig exports the optional RLS driver", () => {
+    expect(readTenancyDriver({})).toBe("rls");
+    expect(isTenancyEnabled({ TENANCY_DRIVER: "none" })).toBe(false);
   });
 });

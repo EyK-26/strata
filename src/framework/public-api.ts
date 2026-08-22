@@ -196,6 +196,7 @@ export {
   storage,
 } from "../core/facades/index.ts";
 export { createBodySizeLimitMiddleware } from "../core/http/bodySizeLimitMiddleware.ts";
+export { readClientIp, trustForwardedFor } from "../core/http/clientIp.ts";
 export { conditionalJsonResponse } from "../core/http/conditionalResponse.ts";
 export { readBunRequestCookie, readRequestCookie } from "../core/http/cookies.ts";
 export { createCorsMiddleware } from "../core/http/corsMiddleware.ts";
@@ -342,6 +343,8 @@ export {
   resetDefaultStorage,
   StorageManager,
 } from "../core/storage/storage.ts";
+export type { TenancyDriver } from "../core/tenant/tenancyConfig.ts";
+export { isTenancyEnabled, readTenancyDriver } from "../core/tenant/tenancyConfig.ts";
 export type { TenantContext } from "../core/tenant/tenantContext.ts";
 export {
   currentTenant,
