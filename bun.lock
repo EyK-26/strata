@@ -37,7 +37,7 @@
     },
     "packages/strata-core": {
       "name": "@getstrata/core",
-      "version": "0.5.55",
+      "version": "0.5.56",
       "dependencies": {
         "eta": "^4.6.0",
       },
