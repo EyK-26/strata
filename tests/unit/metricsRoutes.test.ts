@@ -3,7 +3,7 @@ import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
-function metricsRequest(headers?: HeadersInit): Request {
+function metricsRequest(headers?: Record<string, string>): Request {
   return new Request("http://localhost/metrics", { headers });
 }
 

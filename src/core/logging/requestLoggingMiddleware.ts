@@ -7,7 +7,7 @@ function createRequestLoggingMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     return await runWithRequestMeta(
       {
-        ipAddress: readClientIp(request),
+        ipAddress: readClientIp(request) ?? null,
         userAgent: request.headers.get("user-agent"),
         request,
       },

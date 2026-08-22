@@ -1,11 +1,11 @@
 type OrganizationMemberRole = "owner" | "admin" | "member";
 
 interface MembershipRecord {
-  id?: number;
+  id: number;
   organization_id: number;
-  user_id?: number;
+  user_id: number;
   role: OrganizationMemberRole;
-  created_at?: Date;
+  created_at: Date;
 }
 
 interface MembershipLookup {
@@ -16,7 +16,7 @@ interface MembershipLookup {
     organizationId: number;
     userId: number;
     role?: OrganizationMemberRole;
-  }): Promise<unknown>;
+  }): Promise<MembershipRecord>;
   removeMember(organizationId: number, userId: number): Promise<unknown>;
 }
 
