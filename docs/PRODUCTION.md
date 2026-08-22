@@ -44,8 +44,9 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md) for wiring details.
 ## Recommended (not enforced by startup guard)
 
 - `REDIS_URL` for cache, queue, and rate limiting
-- `TRUST_FORWARDED_FOR=true` only when a trusted reverse proxy sets `X-Forwarded-For` / `X-Real-IP`
+- `TRUST_FORWARDED_FOR=true` only when a trusted reverse proxy sets `X-Forwarded-For` / `X-Real-IP` (`@getstrata/core/http/clientIp`)
 - `METRICS_TOKEN` to authorize `GET /metrics` (production hides the endpoint unless this is set)
+- `TENANCY_DRIVER=none` for apps without a `tenant` table (`@getstrata/core/tenant/tenancyConfig`; WorkHub keeps the default `rls`)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` for tracing
 - Off-site database backups — see [DR.md](./DR.md)
 

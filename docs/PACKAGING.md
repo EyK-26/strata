@@ -30,7 +30,7 @@ The barrel file is `src/framework/public-api.ts`. The workspace package `package
 | Local build | `bun run build:framework` | Builds `packages/strata-core/dist/` |
 | Smoke verify | `bun run verify:framework` | Build + public API unit test |
 | CI | `validate:ci` | Includes `verify:framework` on every push |
-| npm publish | Push git tag `v*` | `.github/workflows/release.yml` → `npm publish --workspace @getstrata/core` |
+| npm publish | Push git tag `v*` | `.github/workflows/release.yml` publishes core, bootstrap, cli, and starter |
 
 ## npm publish setup (`@getstrata/core`)
 

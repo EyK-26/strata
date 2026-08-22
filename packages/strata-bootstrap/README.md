@@ -28,4 +28,8 @@ import {
 import { createHttpKernel, createAppContext, coreProviders } from "@getstrata/bootstrap";
 ```
 
+`assertProductionSecrets` (`@getstrata/bootstrap/secretsGuard`) is env-only. It still rejects the well-known WorkHub test tokens.
+
+These subpaths remain WorkHub-oriented and are not a generic starter API: `@getstrata/bootstrap/createRoutes` (includes SCIM), `@getstrata/bootstrap/schedule`, and `@getstrata/bootstrap/createWebRoutes` (redirects `/` to `/organizations`).
+
 See the [strata](https://github.com/EyK-26/strata) monorepo reference app for full module patterns.
