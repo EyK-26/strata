@@ -4,19 +4,24 @@
 
 ## Public API
 
-Application modules should import from the stable surface:
+Application modules should import **subpaths**. The root `@getstrata/core` barrel exists for publish/verify, but CI rejects it in app source (`scripts/verify-no-root-imports.ts`, `scripts/verify-no-shared-barrel-imports.ts`).
 
 ```typescript
-import {
-  BaseRepository,
-  CacheRepository,
-  FormRequest,
-  Policy,
-  securedBindRouteModel,
-} from "@getstrata/core";
+import { Policy } from "@getstrata/core/auth/policy";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { FormRequest } from "@getstrata/core/http/formRequest";
 ```
 
 The barrel file is `src/framework/public-api.ts`. The workspace package `packages/strata-core` re-exports it.
+
+## Published packages
+
+| Package | Version | Role |
+|---------|---------|------|
+| `@getstrata/core` | 0.5.56 | Framework runtime and HTTP/database/auth primitives |
+| `@getstrata/bootstrap` | 0.2.47 | HttpKernel, providers, web session helpers |
+| `@getstrata/cli` | 0.1.0 | `strata` CLI (`migrate`, `queue:work`, `make:*`) |
+| `@getstrata/starter` | 0.1.0 | `bun create strata` app scaffold |
 
 ## What runs today
 
@@ -36,8 +41,8 @@ Publishing uses the **`@getstrata` npm organization**. Before your first release
 3. Tag a release:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.5.56
+git push origin v0.5.56
 ```
 
 The release workflow builds the package, pushes the Docker image to GHCR, and publishes to npm.

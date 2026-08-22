@@ -2,7 +2,16 @@
 
 **Docker-first** Bun + PostgreSQL + Redis reference application built on **Strata**, a modular TypeScript framework for web apps, with the WorkHub domain (organizations → projects → tasks → comments, attachments, reports, and optional enterprise modules).
 
-The publishable framework surface lives in `@getstrata/core` (`packages/strata-core`). Application code is under `src/modules/`.
+Published packages (import **subpaths**, not the root barrel):
+
+| Package | Role |
+|---------|------|
+| `@getstrata/core` | Framework (`packages/strata-core`) |
+| `@getstrata/bootstrap` | HttpKernel, DI, web helpers |
+| `@getstrata/cli` | `strata` CLI |
+| `@getstrata/starter` | `bun create strata` |
+
+Application code is under `src/modules/`. CI blocks root `@getstrata/core` imports (`scripts/verify-no-root-imports.ts`).
 
 Pinned versions:
 
@@ -95,7 +104,7 @@ See [docs/TESTING.md](docs/TESTING.md) and `.env.host.example`.
 
 The app boots through **service providers** and **auto-discovered modules** under `src/modules/`. Each module can register DI bindings, policies, and HTTP routes.
 
-Import stable framework types from `@getstrata/core` where possible. See [docs/PACKAGING.md](docs/PACKAGING.md). Build locally with `bun run verify:framework`.
+Import stable framework types from `@getstrata/core/<subpath>` (see [docs/PACKAGING.md](docs/PACKAGING.md)). Build locally with `bun run verify:framework`.
 
 ### HttpKernel (middleware)
 
@@ -299,7 +308,7 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for SCIM/billing extension poin
 import {
   installGracefulShutdownSignals,
   registerShutdownHandler,
-} from "@getstrata/core";
+} from "@getstrata/core/lifecycle/gracefulShutdown";
 
 installGracefulShutdownSignals();
 registerShutdownHandler("http-server", () => server.stop());

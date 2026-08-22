@@ -73,7 +73,7 @@ For migration/seed/bootstrap queries that must read across tenants, use `runWith
 
 For HTMX integration tests, set `FRONTEND_MODE=server-htmx`.
 
-CI runs `migrate:fresh --seed` before the test suite and sets `WORKHUB_SKIP_TEST_BOOTSTRAP=1` so the Bun preload does not reset the database a second time. Local `bun test` without a prior migrate uses `tests/globalSetup.ts` to seed once at startup.
+CI runs `migrate:fresh --seed` before the test suite and sets `WORKHUB_SKIP_TEST_BOOTSTRAP=1` so the Bun preload does not reset the database a second time. Local `bun test` without a prior migrate uses `tests/globalSetup.ts` to seed once at startup. That reset refuses `APP_ENV=production` and non-test `DATABASE_URL` values unless `WORKHUB_ALLOW_TEST_DB_RESET=1`.
 
 Coverage exclusions and rationale: [COVERAGE.md](./COVERAGE.md).
 

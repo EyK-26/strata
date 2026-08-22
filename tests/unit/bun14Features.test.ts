@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { startInProcessCronIfEnabled, stopInProcessCron } from "../../src/bootstrap/inProcessCron";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -40,6 +40,10 @@ describe("Bun 1.4 dependency tooling scripts", () => {
 });
 
 describe("schedule install commands", () => {
+  afterEach(() => {
+    mock.restore();
+  });
+
   test("scheduleInstallCommand registers an OS cron job", async () => {
     const install = mock(async () => undefined);
     mock.module("@getstrata/core/scheduler/osCron", () => ({
