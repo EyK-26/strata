@@ -18,10 +18,10 @@ The barrel file is `src/framework/public-api.ts`. The workspace package `package
 
 | Package | Version | Role |
 |---------|---------|------|
-| `@getstrata/core` | 0.5.57 | Framework runtime and HTTP/database/auth primitives |
-| `@getstrata/bootstrap` | 0.2.48 | HttpKernel, providers, web session helpers |
+| `@getstrata/core` | 0.5.58 | Framework runtime and HTTP/database/auth primitives |
+| `@getstrata/bootstrap` | 0.2.49 | HttpKernel, providers, web session helpers |
 | `@getstrata/cli` | 0.1.0 | `strata` CLI (`migrate`, `queue:work`, `make:*`) |
-| `@getstrata/starter` | 0.1.1 | `bun create strata` app scaffold |
+| `@getstrata/starter` | 0.1.2 | `bun create strata` app scaffold |
 
 ## What runs today
 
@@ -41,8 +41,8 @@ Publishing uses the **`@getstrata` npm organization**. Before your first release
 3. Tag a release:
 
 ```bash
-git tag v0.5.57
-git push origin v0.5.57
+git tag v0.5.58
+git push origin v0.5.58
 ```
 
 The release workflow builds the package, pushes the Docker image to GHCR, and publishes to npm.

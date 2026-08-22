@@ -18,9 +18,9 @@
     },
     "packages/strata-bootstrap": {
       "name": "@getstrata/bootstrap",
-      "version": "0.2.48",
+      "version": "0.2.49",
       "peerDependencies": {
-        "@getstrata/core": "^0.5.57",
+        "@getstrata/core": "^0.5.58",
         "typescript": "^5.9.0",
       },
     },
@@ -37,7 +37,7 @@
     },
     "packages/strata-core": {
       "name": "@getstrata/core",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "dependencies": {
         "eta": "^4.6.0",
       },
@@ -47,7 +47,7 @@
     },
     "packages/strata-starter": {
       "name": "@getstrata/starter",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "bin": {
         "create-strata": "./dist/cli.js",
       },
