@@ -32,9 +32,11 @@ function tokensMatch(left: string, right: string): boolean {
 function createCsrfTokenCookie(): { token: string; cookie: string } {
   const token = Bun.CSRF.generate(resolveCsrfSecret(), { expiresIn: CSRF_TTL_MS });
 
+  const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
+
   return {
     token,
-    cookie: `${CSRF_COOKIE}=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=${Math.floor(CSRF_TTL_MS / 1000)}`,
+    cookie: `${CSRF_COOKIE}=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=${Math.floor(CSRF_TTL_MS / 1000)}${secure}`,
   };
 }
 

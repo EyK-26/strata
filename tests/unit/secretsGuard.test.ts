@@ -99,6 +99,46 @@ describe("assertProductionSecrets", () => {
     ).toThrow(/API_TOKEN_DEFAULT_EXPIRY_DAYS/);
   });
 
+  test("blocks missing SESSION_SECRET when server-htmx is enabled in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        ADMIN_API_TOKEN: "rotated-admin-token",
+        MEMBER_API_TOKEN: "rotated-member-token",
+        SCIM_BEARER_TOKEN: "rotated-scim-token",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_PUBLIC_READS: "false",
+        CORS_ALLOWED_ORIGINS: "https://app.example.com",
+        OAUTH_STATE_SECRET: "rotated-oauth-state-secret",
+        TOKEN_HASH_PEPPER: "rotated-token-pepper",
+        API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
+        FRONTEND_MODE: "server-htmx",
+      }),
+    ).toThrow(/SESSION_SECRET/);
+  });
+
+  test("allows production API mode without SESSION_SECRET", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        ADMIN_API_TOKEN: "rotated-admin-token",
+        MEMBER_API_TOKEN: "rotated-member-token",
+        SCIM_BEARER_TOKEN: "rotated-scim-token",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_PUBLIC_READS: "false",
+        CORS_ALLOWED_ORIGINS: "https://app.example.com",
+        OAUTH_STATE_SECRET: "rotated-oauth-state-secret",
+        TOKEN_HASH_PEPPER: "rotated-token-pepper",
+        API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
+        FRONTEND_MODE: "api",
+      }),
+    ).not.toThrow();
+  });
+
   test("blocks public reads in production", () => {
     expect(() =>
       assertProductionSecrets({

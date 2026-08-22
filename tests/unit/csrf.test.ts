@@ -6,6 +6,7 @@ import {
   resolveCsrfToken,
   verifyCsrfToken,
 } from "@getstrata/core/http/csrfToken";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("csrfToken", () => {
   test("creates and verifies a csrf token", () => {
@@ -25,6 +26,17 @@ describe("csrfToken", () => {
     });
 
     expect(resolveCsrfToken(request).token).toBe(created.token);
+  });
+
+  test("marks the CSRF cookie Secure in production", () => {
+    const previous = process.env.APP_ENV;
+    process.env.APP_ENV = "production";
+
+    try {
+      expect(createCsrfTokenCookie().cookie).toContain("; Secure");
+    } finally {
+      restoreEnvVar("APP_ENV", previous);
+    }
   });
 });
 

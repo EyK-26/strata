@@ -26,6 +26,7 @@ Fix every error until the command prints `Production secret checks passed`.
 | `OAUTH_STATE_SECRET` | OAuth CSRF protection |
 | `CORS_ALLOWED_ORIGINS` | Explicit origins (no `*`) |
 | `FEATURE_PUBLIC_READS=false` | Authenticated reads only |
+| `SESSION_SECRET` | Required when `FRONTEND_MODE=server-htmx` |
 
 ## Enterprise modules (when enabled)
 
@@ -42,7 +43,6 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md) for wiring details.
 
 ## Recommended (not enforced by startup guard)
 
-- `SESSION_SECRET` when using `FRONTEND_MODE=server-htmx`
 - `REDIS_URL` for cache, queue, and rate limiting
 - `OTEL_EXPORTER_OTLP_ENDPOINT` for tracing
 - Off-site database backups — see [DR.md](./DR.md)

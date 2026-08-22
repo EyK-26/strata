@@ -84,6 +84,14 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
       "Production startup blocked: set API_TOKEN_DEFAULT_EXPIRY_DAYS to enforce token rotation.",
     );
   }
+
+  const frontendMode = (env.FRONTEND_MODE ?? "api").trim();
+
+  if (frontendMode === "server-htmx" && !env.SESSION_SECRET?.trim()) {
+    throw new Error(
+      "Production startup blocked: set SESSION_SECRET when FRONTEND_MODE=server-htmx.",
+    );
+  }
 }
 
 export { assertProductionSecrets };
