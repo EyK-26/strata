@@ -26,6 +26,8 @@ import { storage } from "@getstrata/core/facades";
 import { EtaViewEngine } from "@getstrata/core/view";
 ```
 
+`.eta` files are **HTML + Eta tags** (`<% %>`, `<%= %>`, `<%~ include() %>`), not Pug. Class/attribute shorthand such as `section.section` or `a href=` fails at render time with the template name.
+
 **Dependency:** `eta` is bundled as a direct dependency of `@getstrata/core`. Apps do not need to list it separately. The database driver is your app's choice. WorkHub and getstrata use **Bun's built-in `Bun.sql`** client; bind it with `bindDatabaseConnection()`.
 
 `orderBy` accepts explicit `{ column, direction }` objects or column shorthand such as `{ published_at: "desc" }`.

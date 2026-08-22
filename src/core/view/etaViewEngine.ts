@@ -1,5 +1,6 @@
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { Eta } from "eta";
+import { assertEtaHtmlSource } from "./assertEtaHtmlSource";
 import type { ViewEngine } from "./viewEngine";
 
 const DEFAULT_VIEWS_DIRECTORY = join(process.cwd(), "resources/views");
@@ -11,6 +12,10 @@ interface RenderOptions {
 
 type LayoutDataResolver = () => Promise<Record<string, unknown>>;
 
+/**
+ * Renders `.eta` files as HTML + Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`).
+ * Pug class/attribute shorthand is rejected at render time.
+ */
 class EtaViewEngine implements ViewEngine {
   private readonly eta: Eta;
   private readonly resolveLayoutData?: LayoutDataResolver;
@@ -24,6 +29,13 @@ class EtaViewEngine implements ViewEngine {
       autoTrim: false,
     });
     this.resolveLayoutData = resolveLayoutData;
+
+    const readFile = this.eta.readFile?.bind(this.eta);
+    this.eta.readFile = (path: string) => {
+      const source = readFile ? readFile(path) : "";
+      assertEtaHtmlSource(relative(viewsDirectory, path) || path, source);
+      return source;
+    };
   }
 
   async render(
