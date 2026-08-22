@@ -43,6 +43,25 @@ describe("createTenantMiddleware", () => {
     }
   });
 
+  test("skips tenant database scoping when TENANCY_DRIVER=none", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "none";
+
+    try {
+      const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
+      const middleware = createTenantMiddleware();
+
+      const response = await middleware(new Request("http://example.test/notes"), async () =>
+        Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
+    } finally {
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
+  });
+
   test("defers SCIM routes to SCIM auth middleware for tenant scoping", async () => {
     const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();

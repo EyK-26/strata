@@ -6,7 +6,8 @@ import { ForbiddenError, HttpError } from "@getstrata/core/errors/http";
 import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
 import { runWithMigrationBypass } from "./databaseTenantContext";
 import { resolveTenant } from "./resolveTenant";
-import type { TenantContext } from "./tenantContext";
+import { isTenancyEnabled } from "./tenancyConfig";
+import { runWithTenant, type TenantContext } from "./tenantContext";
 import { runWithTenantDatabase } from "./tenantDatabaseScope";
 
 const DEFAULT_TENANT: TenantContext = {
@@ -17,6 +18,10 @@ const DEFAULT_TENANT: TenantContext = {
 };
 
 async function resolveUserTenantId(userId: number): Promise<number> {
+  if (!isTenancyEnabled()) {
+    return DEFAULT_TENANT.id;
+  }
+
   return await runWithMigrationBypass(async () => {
     const rows = (await db`
       SELECT tenant_id
@@ -77,6 +82,10 @@ function createTenantMiddleware() {
 
     if (pathname.startsWith("/scim/")) {
       return await next();
+    }
+
+    if (!isTenancyEnabled()) {
+      return await runWithTenant(DEFAULT_TENANT, next);
     }
 
     try {

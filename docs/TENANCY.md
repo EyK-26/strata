@@ -1,6 +1,8 @@
 # Tenancy and row-level security
 
-WorkHub scopes tenant data with Postgres RLS. HTTP requests and background jobs must set `app.tenant_id` on the connection that runs queries (`runWithTenantDatabase()`). Migrations and seeds use `runWithMigrationBypass()`.
+WorkHub scopes tenant data with Postgres RLS (`TENANCY_DRIVER=rls`, the default). Set `TENANCY_DRIVER=none` for apps that do not have a `tenant` table (the starter template). In that mode, tenant middleware is ALS-only and does not run `SET LOCAL` or query `tenant`.
+
+HTTP requests and background jobs must set `app.tenant_id` on the connection that runs queries (`runWithTenantDatabase()`) when RLS is enabled. Migrations and seeds use `runWithMigrationBypass()`.
 
 ## Tables with `tenant_isolation`
 

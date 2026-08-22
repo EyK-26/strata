@@ -12,7 +12,7 @@ bunx @getstrata/starter my-app
 ## What you get
 
 - Bun + TypeScript app using `@getstrata/core` and `@getstrata/bootstrap`
-- Postgres via Docker Compose
+- Postgres via Docker Compose (no WorkHub `tenant` table; leave `TENANCY_DRIVER` unset or set `none`)
 - Eta templates, simple router, health check
 - `db:migrate` and `db:fresh` scripts
 

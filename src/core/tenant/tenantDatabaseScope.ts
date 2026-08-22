@@ -4,6 +4,7 @@ import {
   hasActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "../database/connectionContext";
+import { isTenancyEnabled } from "./tenancyConfig";
 import { currentTenant, runWithTenant, type TenantContext } from "./tenantContext";
 
 type TransactionHandle = {
@@ -22,6 +23,10 @@ async function runWithTenantDatabase<T>(
   tenant: TenantContext,
   callback: () => T | Promise<T>,
 ): Promise<T> {
+  if (!isTenancyEnabled()) {
+    return await runWithTenant(tenant, callback);
+  }
+
   if (hasActiveDatabaseConnection()) {
     const activeConnection = getActiveDatabaseConnection(getDefaultDatabasePool());
     await applyTenantContextToTransaction(activeConnection, tenant.id);
