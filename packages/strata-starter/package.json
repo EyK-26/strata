@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/starter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scaffold a new Strata app — bun create strata",
   "type": "module",
   "license": "MIT",
