@@ -1,4 +1,3 @@
-import { TEST_SCIM_BEARER_TOKEN } from "../../domain/scim";
 import { timingSafeCompareString } from "./timingSafeCompare";
 
 function parseScimTenantTokens(raw: string | undefined): Map<number, string> {
@@ -35,7 +34,7 @@ function resolveScimTenantFromToken(token: string): number | null {
     }
   }
 
-  const fallbackToken = process.env.SCIM_BEARER_TOKEN ?? TEST_SCIM_BEARER_TOKEN;
+  const fallbackToken = process.env.SCIM_BEARER_TOKEN ?? "";
 
   if (timingSafeCompareString(token, fallbackToken)) {
     return 1;

@@ -1,5 +1,7 @@
 import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import { configureMembershipLookup } from "@getstrata/core/auth/membershipContext";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
+import OrganizationMemberRepository from "./memberRepository";
 import OrganizationPolicy from "./policy";
 import OrganizationRepository from "./repository";
 import OrganizationService from "./service";
@@ -11,6 +13,7 @@ const organizationPolicyToken = "organization.policy";
 const organizationProvider: ServiceProvider = {
   name: "organization.provider",
   register({ container }) {
+    configureMembershipLookup(new OrganizationMemberRepository());
     container.singleton(organizationRepositoryToken, () => new OrganizationRepository());
     container.singleton(organizationPolicyToken, () => new OrganizationPolicy());
   },

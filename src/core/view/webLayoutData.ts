@@ -1,8 +1,8 @@
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { tokenServiceToken } from "../../modules/user/provider";
-import type TokenService from "../../modules/user/tokenService";
+import type { AuthUserDirectory } from "../contracts/authUserDirectory";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
+import { CORE_TOKEN_SERVICE_TOKEN } from "../contracts/serviceTokens";
 import { resolveCsrfTokenForRequest } from "../http/csrfToken";
 import { pullFlash } from "../http/flashSession";
 
@@ -36,7 +36,7 @@ async function resolveWebLayoutData(
     return { authUser: null, csrfToken, flash };
   }
 
-  if (!container.has(tokenServiceToken)) {
+  if (!container.has(CORE_TOKEN_SERVICE_TOKEN)) {
     return {
       authUser: {
         id: userId,
@@ -48,7 +48,7 @@ async function resolveWebLayoutData(
     };
   }
 
-  const tokenService = container.resolve<TokenService>(tokenServiceToken);
+  const tokenService = container.resolve<AuthUserDirectory>(CORE_TOKEN_SERVICE_TOKEN);
 
   try {
     const user = await tokenService.findByIdOrThrow(userId);

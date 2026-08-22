@@ -1,5 +1,4 @@
-import OrganizationMemberRepository from "../../modules/organization/memberRepository";
-import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
+import type { MembershipLookup, OrganizationMemberRole } from "../contracts/membership";
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
 import { isGlobalAdmin, resolveUserId } from "./accessControl";
 import { currentAuthUser } from "./authContext";
@@ -12,7 +11,34 @@ type MembershipContext = {
 const membershipContext = createAsyncContextStore<MembershipContext>(
   "@getstrata/membershipContext",
 );
-const membershipRepository = new OrganizationMemberRepository();
+
+const uninitializedMembershipLookup: MembershipLookup = {
+  async listForUser() {
+    return [];
+  },
+  async findMembership() {
+    return null;
+  },
+  async listForOrganization() {
+    return [];
+  },
+  async addMember() {
+    throw new Error("configureMembershipLookup() must be called before mutating memberships.");
+  },
+  async removeMember() {
+    throw new Error("configureMembershipLookup() must be called before mutating memberships.");
+  },
+};
+
+let membershipRepository: MembershipLookup = uninitializedMembershipLookup;
+
+function configureMembershipLookup(lookup: MembershipLookup): void {
+  membershipRepository = lookup;
+}
+
+function resolveMembershipLookup(): MembershipLookup {
+  return membershipRepository;
+}
 
 async function runWithMembershipContext<T>(
   callback: () => T | Promise<T>,
@@ -64,11 +90,13 @@ function hasMinimumOrgRole(organizationId: number, minimum: OrganizationMemberRo
 
 export type { MembershipContext };
 export {
+  configureMembershipLookup,
   currentOrganizationIds,
   currentOrgRole,
   hasMinimumOrgRole,
   hasOrgMembership,
   membershipContext,
   membershipRepository,
+  resolveMembershipLookup,
   runWithMembershipContext,
 };

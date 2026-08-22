@@ -27,6 +27,7 @@ export {
   GuestGuard,
 } from "../core/auth/guard.ts";
 export {
+  configureMembershipLookup,
   currentOrganizationIds,
   currentOrgRole,
   hasMinimumOrgRole,

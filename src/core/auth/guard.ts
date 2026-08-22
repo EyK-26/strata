@@ -1,17 +1,19 @@
 import { UnauthorizedError } from "@getstrata/core/errors/http";
-import { ADMIN_ABILITIES, MEMBER_ABILITIES } from "../../domain/abilities";
-import { tokenServiceToken } from "../../modules/user/provider";
-import type TokenService from "../../modules/user/tokenService";
+import type { AuthUserDirectory } from "../contracts/authUserDirectory";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
+import { CORE_TOKEN_SERVICE_TOKEN } from "../contracts/serviceTokens";
+import { abilityCatalog } from "./abilityCatalog";
 import type { AuthUser } from "./authContext";
 import { currentAuthUser } from "./authContext";
 
 function devHeaderAbilities(role: string | null): string[] {
+  const catalog = abilityCatalog();
+
   if (role === "admin") {
-    return [...ADMIN_ABILITIES];
+    return [...catalog.admin];
   }
 
-  return [...MEMBER_ABILITIES];
+  return [...catalog.member];
 }
 
 interface AuthGuard {
@@ -77,11 +79,11 @@ class DatabaseTokenGuard implements AuthGuard {
       return null;
     }
 
-    if (!this.container.has(tokenServiceToken)) {
+    if (!this.container.has(CORE_TOKEN_SERVICE_TOKEN)) {
       return null;
     }
 
-    const tokenService = this.container.resolve<TokenService>(tokenServiceToken);
+    const tokenService = this.container.resolve<AuthUserDirectory>(CORE_TOKEN_SERVICE_TOKEN);
     return await tokenService.resolveUserFromToken(token);
   }
 }

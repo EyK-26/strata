@@ -1,5 +1,5 @@
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import type { OrganizationMemberRole } from "../../modules/organization/memberTypes";
+import type { OrganizationMemberRole } from "../contracts/membership";
 import { type AuthUser, currentAuthUser } from "./authContext";
 
 const ROLE_RANK: Record<OrganizationMemberRole, number> = {
