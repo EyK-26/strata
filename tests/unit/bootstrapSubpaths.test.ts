@@ -44,10 +44,13 @@ describe("@getstrata/bootstrap published subpaths", () => {
     expect(typeof dependencies.createAppContext).toBe("function");
   });
 
-  test("secretsGuard exports assertProductionSecrets", async () => {
+  test("secretsGuard exports assertProductionSecrets without WorkHub domain or config", async () => {
     const secretsGuard = await import(join(BOOTSTRAP_DIST, "entries/secretsGuard.js"));
+    const source = await readFile(join(BOOTSTRAP_DIST, "entries/secretsGuard.js"), "utf8");
 
     expect(typeof secretsGuard.assertProductionSecrets).toBe("function");
+    expect(source).not.toContain("src/domain");
+    expect(source).not.toContain("src/config");
   });
 
   test("discoverModules exports discovery helpers", async () => {

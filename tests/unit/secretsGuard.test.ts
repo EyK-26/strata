@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
-import { TEST_ADMIN_API_TOKEN } from "../../src/domain/auth";
+
+const TEST_ADMIN_API_TOKEN = "workhub-admin-test-token";
 
 describe("assertProductionSecrets", () => {
   test("allows default tokens outside production", () => {

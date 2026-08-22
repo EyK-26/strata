@@ -1,23 +1,30 @@
-import { appConfig } from "../config/app";
-import { isFeatureEnabled } from "../config/features";
-import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../domain/auth";
-import { DEFAULT_SCIM_BEARER_TOKEN, TEST_SCIM_BEARER_TOKEN } from "../domain/scim";
+const DEFAULT_ADMIN_API_TOKEN = "workhub-admin-test-token";
+const DEFAULT_MEMBER_API_TOKEN = "workhub-member-test-token";
+const DEFAULT_SCIM_BEARER_TOKEN = "workhub-scim-test-token";
 
-const DEFAULT_TOKENS = new Set([TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN]);
-const DEFAULT_SCIM_TOKENS = new Set([TEST_SCIM_BEARER_TOKEN, DEFAULT_SCIM_BEARER_TOKEN]);
+const DEFAULT_TOKENS = new Set([DEFAULT_ADMIN_API_TOKEN, DEFAULT_MEMBER_API_TOKEN]);
+const DEFAULT_SCIM_TOKENS = new Set([DEFAULT_SCIM_BEARER_TOKEN]);
+
+function isEnabled(value: string | undefined, defaultEnabled: boolean): boolean {
+  if (value === undefined) {
+    return defaultEnabled;
+  }
+
+  return defaultEnabled ? value !== "false" : value === "true";
+}
 
 function assertProductionSecrets(env: Record<string, string | undefined> = process.env): void {
-  const appEnv = env.APP_ENV ?? appConfig.env;
+  const appEnv = env.APP_ENV ?? "local";
 
   if (appEnv !== "production") {
     return;
   }
 
-  const adminToken = env.ADMIN_API_TOKEN ?? TEST_ADMIN_API_TOKEN;
-  const memberToken = env.MEMBER_API_TOKEN ?? TEST_MEMBER_API_TOKEN;
+  const adminToken = env.ADMIN_API_TOKEN ?? DEFAULT_ADMIN_API_TOKEN;
+  const memberToken = env.MEMBER_API_TOKEN ?? DEFAULT_MEMBER_API_TOKEN;
   const scimToken = env.SCIM_BEARER_TOKEN ?? DEFAULT_SCIM_BEARER_TOKEN;
-  const encryptionEnabled = env.FEATURE_FIELD_ENCRYPTION !== "false";
-  const devHeadersEnabled = (env.AUTH_DEV_HEADERS ?? "true") !== "false";
+  const encryptionEnabled = isEnabled(env.FEATURE_FIELD_ENCRYPTION, true);
+  const devHeadersEnabled = isEnabled(env.AUTH_DEV_HEADERS, true);
 
   if (devHeadersEnabled) {
     throw new Error(
@@ -43,13 +50,11 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
     );
   }
 
-  if (!env.SIEM_EXPORT_URL?.trim() && isFeatureEnabled("siemExport")) {
+  if (!env.SIEM_EXPORT_URL?.trim() && isEnabled(env.FEATURE_SIEM_EXPORT, true)) {
     console.warn("[secrets] SIEM_EXPORT_URL is not configured; audit logs remain database-only.");
   }
 
-  const billingEnabled = (env.FEATURE_BILLING ?? "true") !== "false";
-
-  if (billingEnabled && !env.STRIPE_WEBHOOK_SECRET?.trim()) {
+  if (isEnabled(env.FEATURE_BILLING, true) && !env.STRIPE_WEBHOOK_SECRET?.trim()) {
     throw new Error(
       "Production startup blocked: set STRIPE_WEBHOOK_SECRET when billing webhooks are enabled.",
     );
@@ -63,7 +68,7 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
     );
   }
 
-  if ((env.FEATURE_PUBLIC_READS ?? "true") !== "false") {
+  if (isEnabled(env.FEATURE_PUBLIC_READS, true)) {
     throw new Error(
       "Production startup blocked: set FEATURE_PUBLIC_READS=false for authenticated-only reads.",
     );
