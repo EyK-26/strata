@@ -116,7 +116,7 @@ class HttpKernel {
   }
 
   wrapWeb(handler: RouteHandler): RouteHandler {
-    return handler;
+    return this.wrap("web", handler);
   }
 
   wrapWebPublicRead(handler: RouteHandler): RouteHandler {

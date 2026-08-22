@@ -13,6 +13,7 @@ import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { tokenServiceToken } from "../../src/modules/user/provider";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 import { createMockDependencies } from "./testHelpers";
 
@@ -50,6 +51,26 @@ describe("HttpKernel", () => {
     const kernel = createHttpKernel(createKernelDependencies(config));
 
     expect(kernel.group("api")).toHaveLength(1);
+  });
+
+  test("wrapWeb applies the web middleware group when views are enabled", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapWeb(async () => new Response("ok"));
+
+      const getResponse = await handler(new Request("http://example.test/organizations"));
+      expect(getResponse.status).toBe(200);
+      expect(getResponse.headers.get("set-cookie")).toContain("workhub_csrf=");
+
+      await expect(
+        handler(new Request("http://example.test/organizations", { method: "POST" })),
+      ).rejects.toThrow(ForbiddenError);
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
   });
 
   test("wrapAuthenticated applies require-auth middleware", async () => {
