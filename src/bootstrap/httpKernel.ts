@@ -130,7 +130,7 @@ class HttpKernel {
   wrapWebAuthenticated(handler: RouteHandler): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
-    return withMiddleware(createRequireWebAuthMiddleware(auth))(handler);
+    return this.wrap("web", withMiddleware(createRequireWebAuthMiddleware(auth))(handler));
   }
 
   wrapWebAbility(ability: string, handler: RouteHandler): RouteHandler {
@@ -140,14 +140,14 @@ class HttpKernel {
     const requireAbility = createRequireAbilityMiddleware(abilityChecker);
     const middleware = [createRequireWebAuthMiddleware(auth), requireAbility(ability)];
 
-    return withMiddleware(...middleware)(handler);
+    return this.wrap("web", withMiddleware(...middleware)(handler));
   }
 
   wrapWebGlobalAdmin(handler: RouteHandler): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
     const middleware = [createRequireWebAuthMiddleware(auth), createRequireGlobalAdminMiddleware()];
 
-    return withMiddleware(...middleware)(handler);
+    return this.wrap("web", withMiddleware(...middleware)(handler));
   }
 
   wrapAuthenticated(handler: RouteHandler): RouteHandler {

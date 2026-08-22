@@ -22,7 +22,7 @@ function buildWebModuleRoutes(
   }
 
   const kernel = createHttpKernel(dependencies);
-  const middleware = [...kernel.globalMiddleware(), ...kernel.group("web")];
+  const middleware = kernel.globalMiddleware();
   const moduleRoutes: Record<string, unknown> = { ...seedRoutes };
 
   for (const module of modules) {

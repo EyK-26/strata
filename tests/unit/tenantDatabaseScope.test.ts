@@ -4,6 +4,7 @@ import {
   isInsideTenantDatabaseScope,
   runWithTenantDatabase,
 } from "@getstrata/core/tenant/tenantDatabaseScope";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 import { defaultTestTenant } from "./testHelpers";
 
 describe("runWithTenantDatabase", () => {
@@ -38,5 +39,18 @@ describe("runWithTenantDatabase", () => {
     });
 
     expect(isInsideTenantDatabaseScope()).toBe(false);
+  });
+
+  test("skips SET LOCAL when TENANCY_DRIVER=none", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "none";
+
+    try {
+      await runWithTenantDatabase(defaultTestTenant, async () => {
+        expect(currentTenant()).toEqual(defaultTestTenant);
+      });
+    } finally {
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
   });
 });

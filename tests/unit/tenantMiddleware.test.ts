@@ -137,6 +137,21 @@ describe("createTenantMiddleware", () => {
     expect(auditChecksum({ action: "login" })).toBe(auditChecksum({ action: "login" }));
   });
 
+  test("resolveUserTenantId skips the users table when TENANCY_DRIVER=none", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "none";
+
+    try {
+      const { resolveUserTenantId, DEFAULT_TENANT } = await import(
+        "@getstrata/core/tenant/tenantMiddleware"
+      );
+
+      await expect(resolveUserTenantId(1)).resolves.toBe(DEFAULT_TENANT.id);
+    } finally {
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
+  });
+
   test("resolveUserTenantId returns the user tenant or default", async () => {
     const { resolveUserTenantId, DEFAULT_TENANT } = await import(
       "@getstrata/core/tenant/tenantMiddleware"
