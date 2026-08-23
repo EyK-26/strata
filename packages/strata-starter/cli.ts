@@ -83,8 +83,8 @@ function main() {
   console.log("  cp .env.example .env");
   console.log("  docker compose up -d");
   console.log("  bun install");
-  console.log("  bun run db:migrate");
-  console.log("  bun run dev\n");
+  console.log("  strata migrate");
+  console.log("  strata dev\n");
 }
 
 main();

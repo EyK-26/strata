@@ -6,6 +6,7 @@
       "name": "bun",
       "dependencies": {
         "@getstrata/bootstrap": "workspace:*",
+        "@getstrata/cli": "workspace:*",
         "@getstrata/core": "workspace:*",
         "eta": "^4.6.0",
       },
@@ -26,13 +27,9 @@
     },
     "packages/strata-cli": {
       "name": "@getstrata/cli",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
-        "strata": "./dist/cli.js",
-      },
-      "peerDependencies": {
-        "@getstrata/core": "^0.5.0",
-        "typescript": "^5.9.0",
+        "strata": "./cli.ts",
       },
     },
     "packages/strata-core": {

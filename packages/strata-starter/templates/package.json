@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --preload ./src/bootstrap/preload.ts --watch src/bootstrap/server.ts",
-    "start": "bun --preload ./src/bootstrap/preload.ts src/bootstrap/server.ts",
-    "db:migrate": "bun --preload ./src/bootstrap/preload.ts src/db/migrate.ts",
-    "db:fresh": "bun --preload ./src/bootstrap/preload.ts src/db/fresh.ts",
+    "dev": "strata dev",
+    "start": "strata start",
+    "db:migrate": "strata migrate",
+    "db:fresh": "strata migrate:fresh",
     "check": "tsc --noEmit"
   },
   "dependencies": {
     "@getstrata/bootstrap": "^0.2.49",
+    "@getstrata/cli": "^0.2.0",
     "@getstrata/core": "^0.5.58"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 {
   "name": "@getstrata/cli",
-  "version": "0.1.0",
-  "description": "Strata CLI — migrate, queue:work, make:* scaffolding",
+  "version": "0.2.0",
+  "description": "Strata CLI — framework commands for Bun apps (dev, start, migrate, run)",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -10,28 +10,25 @@
     "directory": "packages/strata-cli"
   },
   "bin": {
-    "strata": "./dist/cli.js"
+    "strata": "./cli.ts"
   },
   "exports": {
     ".": {
-      "import": "./dist/cli.js",
-      "default": "./dist/cli.js"
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   },
   "files": [
-    "dist",
+    "cli.ts",
+    "src",
     "README.md"
   ],
   "scripts": {
-    "build": "bun build cli.ts --outdir dist --target bun --external bun --external eta --external @getstrata/core",
+    "build": "bun build cli.ts --outdir dist --target bun --external bun",
     "prepublishOnly": "bun run build"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "peerDependencies": {
-    "@getstrata/core": "^0.5.0",
-    "typescript": "^5.9.0"
   },
   "engines": {
     "bun": ">=1.1.0"

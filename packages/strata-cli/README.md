@@ -1,11 +1,31 @@
 # @getstrata/cli
 
-Strata framework CLI for migrations, queue workers, and code generation.
+Framework CLI for Strata apps. Bun stays the runtime, installer, and test runner. `strata` owns app lifecycle and framework commands.
 
 ```bash
-bunx @getstrata/cli migrate
-bunx @getstrata/cli queue:work
-bunx @getstrata/cli make:migration create_users_table
+strata dev
+strata start
+strata migrate
+strata run src/scripts/backfill.ts
 ```
 
-Run from your application root (where `src/db/migrations` and environment variables are configured).
+## How it finds your app
+
+From the current working directory, `strata` loads `strata.config.ts` if present, then falls back to conventions:
+
+| Setting | Convention |
+| --- | --- |
+| `preload` | `src/bootstrap/preload.ts` or `src/bootstrap/preloadModules.ts` |
+| `server` | `src/bootstrap/server.ts` |
+| `modulesDirectory` | `src/modules` |
+| `commands` | `src/cli/register.ts` |
+| `migrate` | `src/db/migrate.ts` |
+| `fresh` | `src/db/fresh.ts` |
+
+`src/cli/register.ts` can export `commands` or `registerCommands()` to add app-specific commands such as WorkHub's `make:*`, `queue:work`, and `openapi:*`.
+
+`strata run <file>` executes a file with the app preload. It is not an alias for `bun run <package.json script>`.
+
+## WorkHub
+
+In this monorepo, `bun run cli <command>` is an alias for `strata <command>`.
