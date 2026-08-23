@@ -51,7 +51,7 @@ describe("createSpaRoutes", () => {
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
-      error: "SPA build not found. Run `cd frontend && bun install && bun run build`.",
+      error: "SPA build not found. Run `bun run build:frontend`.",
     });
   });
 

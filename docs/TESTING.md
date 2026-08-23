@@ -108,8 +108,8 @@ bun run dev
 ```bash
 cd frontend
 bun install
-bun run dev    # Vite dev server (proxy to API in production build)
-bun run test   # Component tests (Vitest)
+bun run dev    # Bun HTML/HMR server (proxies /api to the WorkHub API)
+bun run test   # bun test
 ```
 
 Build for production: `bun run build:frontend` from the repo root.

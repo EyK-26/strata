@@ -152,7 +152,7 @@ When `FRONTEND_MODE=server-htmx`, the app serves Eta templates and HTML forms in
 3. Restart the API — static assets are served from `/app/*`
 4. SPA auth uses `POST /api/v1/auth/login` and stores the bearer token in `localStorage`
 
-Dev workflow: `cd frontend && bun run dev` (Vite proxies `/api` to the Bun server).
+Dev workflow: `cd frontend && bun run dev` (Bun HTML server with HMR; proxies `/api` to the WorkHub API).
 
 ## Multi-instance deployment
 

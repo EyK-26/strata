@@ -118,7 +118,7 @@ async function newCommand(...args: string[]): Promise<void> {
 
   if (template === "spa-react") {
     console.log("SPA mode enabled:");
-    console.log("- frontend/ (Vite + React scaffold with sample CRUD pages)");
+    console.log("- frontend/ (Bun + React scaffold with sample CRUD pages)");
     console.log("- Dev: cd frontend && bun install && bun run dev");
     console.log("- Prod: cd frontend && bun run build, then serve /app/* from dist");
     console.log("\nRestart the API app after changing FRONTEND_MODE.");

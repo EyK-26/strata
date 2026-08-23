@@ -10,7 +10,8 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
-    "strict": true
+    "strict": true,
+    "types": ["bun"]
   },
-  "include": ["src"]
+  "include": ["src", "build.ts", "dev-server.ts", "bun-env.d.ts"]
 }

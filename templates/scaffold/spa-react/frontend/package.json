@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "bun --hot dev-server.ts",
+    "build": "bun run build.ts",
+    "preview": "bun run build.ts && bun dev-server.ts --preview"
   },
   "dependencies": {
     "react": "^19.1.1",
@@ -13,10 +13,9 @@
     "react-router-dom": "^7.8.0"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.0",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
-    "@vitejs/plugin-react": "^4.7.0",
-    "typescript": "^5.9.2",
-    "vite": "^7.1.2"
+    "typescript": "^5.9.2"
   }
 }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -93,6 +94,10 @@ describe("newCommand", () => {
         true,
       );
       expect(output.logs.some((line) => line.includes("SPA mode enabled:"))).toBe(true);
+      expect(output.logs.some((line) => line.includes("Bun + React"))).toBe(true);
+      expect(existsSync(join(process.cwd(), "frontend/build.ts"))).toBe(true);
+      expect(existsSync(join(process.cwd(), "frontend/dev-server.ts"))).toBe(true);
+      expect(existsSync(join(process.cwd(), "frontend/vite.config.ts"))).toBe(false);
     });
   });
 

@@ -124,7 +124,7 @@ Choose how the app is initialized:
 |------|-----|--------------|
 | **API-only** (default) | `FRONTEND_MODE=api` | JSON API under `/api/v1`, static landing at `/` |
 | **Server + HTMX** | `FRONTEND_MODE=server-htmx` | Eta templates (HTML + `<% %>`, not Pug), cookie sessions, HTMX partials, `/login` |
-| **SPA (React)** | `FRONTEND_MODE=spa-react` | Vite + React app served from `/app/*` |
+| **SPA (React)** | `FRONTEND_MODE=spa-react` | Bun + React app served from `/app/*` |
 
 Switch modes in an existing project:
 
