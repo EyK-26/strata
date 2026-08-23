@@ -63,14 +63,14 @@ docker compose up -d --wait
 
 Startup automatically runs:
 
-- `bun run cli migrate`
-- `bun run cli seed`
-- `bun run start`
+- `strata migrate`
+- `strata seed`
+- `strata start`
 
 After schema changes, rebuild from migrations:
 
 ```bash
-docker compose exec app bun run cli migrate:fresh --seed
+docker compose exec app strata migrate:fresh --seed
 docker compose restart app
 ```
 
@@ -95,7 +95,7 @@ Manual env (equivalent to `dev:host`):
 ```bash
 DATABASE_URL=postgresql://postgres:postgres@localhost:54329/bun_testing_test \
 REDIS_URL=redis://localhost:6379 \
-bun run cli migrate:fresh --seed && bun run dev
+strata migrate:fresh --seed && strata dev
 ```
 
 See [docs/TESTING.md](docs/TESTING.md) and `.env.host.example`.
@@ -129,15 +129,15 @@ Choose how the app is initialized:
 Switch modes in an existing project:
 
 ```bash
-bun run cli new --frontend=server-htmx
-bun run cli new --frontend=spa-react
-bun run cli new --frontend=api
+strata new --frontend=server-htmx
+strata new --frontend=spa-react
+strata new --frontend=api
 ```
 
 Server mode adds a parallel **`web` middleware group** with cookie sessions (`SessionGuard`), HTML form validation (`WebFormRequest`), and optional `webRoutes()` on modules. Generate web scaffolding with:
 
 ```bash
-bun run cli make:module widget --with-web
+strata make:module widget --with-web
 ```
 
 SPA dev workflow:
@@ -165,7 +165,7 @@ The same codebase scales from hobby projects to enterprise deployments. Enable o
 
 Feature flags (`FEATURE_*`) disable optional modules without removing code. See `.env.example`.
 
-- Production checklist: [docs/PRODUCTION.md](docs/PRODUCTION.md) (`bun run cli secrets:check`)
+- Production checklist: [docs/PRODUCTION.md](docs/PRODUCTION.md) (`strata secrets:check`)
 - Tenancy and RLS: [docs/TENANCY.md](docs/TENANCY.md)
 - Enterprise integrations (SCIM, billing, SIEM, OAuth): [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 - Framework packaging & npm: [docs/PACKAGING.md](docs/PACKAGING.md)
@@ -218,7 +218,7 @@ Sign in as `admin@workhub.test` / `password` to access these routes. Core export
 - Model lifecycle events dispatched from repositories
 - Queue drivers: `sync`, `async`, or `redis` (`QUEUE_DRIVER`)
 - Failed job recording with retry/backoff (`queue:failed`, `queue:retry`, `queue:flush-failed`)
-- Run a Redis worker: `bun run cli queue:work` (requires `REDIS_URL`)
+- Run a Redis worker: `strata queue:work` (requires `REDIS_URL`)
 
 ### Auth and API tokens
 
@@ -257,9 +257,9 @@ Model writes automatically append audit log entries and dispatch signed webhook 
 ### OpenAPI and SDK generation
 
 ```bash
-bun run cli route:list
-bun run cli openapi:generate   # writes docs/openapi.json from registered routes
-bun run cli sdk:generate       # writes sdk/typescript/client.ts
+strata route:list
+strata openapi:generate   # writes docs/openapi.json from registered routes
+strata sdk:generate       # writes sdk/typescript/client.ts
 ```
 
 ### Facades
@@ -273,13 +273,13 @@ import { cache, auth, policyGate, queue, events, config, log, storage, mail } fr
 ### Generators
 
 ```bash
-bun run cli make:module invoice   # full CRUD scaffold (provider, policy, routes, validation)
-bun run cli make:migration create_invoice
-bun run cli make:policy invoice
-bun run cli make:job sendInvoice
-bun run cli make:listener invalidateCache organization.created
-bun run cli make:request user
-bun run cli make:factory user
+strata make:module invoice   # full CRUD scaffold (provider, policy, routes, validation)
+strata make:migration create_invoice
+strata make:policy invoice
+strata make:job sendInvoice
+strata make:listener invalidateCache organization.created
+strata make:request user
+strata make:factory user
 ```
 
 Generated modules include HttpKernel-aware routes, FormRequest-style body parsing via `validateObject`, and policy hooks for update/delete.
@@ -295,7 +295,7 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for SCIM/billing extension poin
 
 ### Scheduler, storage, and mail
 
-- `bun run cli schedule:run`: run due scheduled tasks (`src/bootstrap/schedule.ts`); `runDueScheduledTasks` lives in `@getstrata/core`. The WorkHub CLI command is not part of the `@getstrata/bootstrap` public API.
+- `strata schedule:run`: run due scheduled tasks (`src/bootstrap/schedule.ts`); `runDueScheduledTasks` lives in `@getstrata/core`. The WorkHub CLI command is not part of the `@getstrata/bootstrap` public API.
 - Local file storage via `storage()` (`STORAGE_PATH`, default `storage/`)
 - Log mail driver via `mail()` for development notifications
 
@@ -416,53 +416,57 @@ bun run check
 bun run lint
 bun run lint:fix
 bun run format
-bun run cli help
-bun run cli route:list
-bun run cli openapi:generate
-bun run cli sdk:generate
-bun run cli queue:work
-bun run cli schedule:run
+strata help
+strata route:list
+strata openapi:generate
+strata sdk:generate
+strata queue:work
+strata schedule:run
 ```
 
 ## CLI
 
+Framework commands use the `strata` binary from `@getstrata/cli`. Bun stays the runtime, installer, and test runner (`bun install`, `bun test`, `bun run validate`). `bun run cli` is an alias for `strata`.
+
+`strata run <file>` executes a file with the app preload. It is not an alias for `bun run <package.json script>`.
+
 Show commands:
 
 ```bash
-bun run cli help
-bun run cli tinker
+strata help
+strata tinker
 ```
 
 Database:
 
 ```bash
-bun run cli migrate
-bun run cli migrate:status
-bun run cli migrate:fresh --seed
-bun run cli rollback
-bun run cli seed
+strata migrate
+strata migrate:status
+strata migrate:fresh --seed
+strata rollback
+strata seed
 ```
 
 Scaffolding:
 
 ```bash
-bun run cli make:migration create_users
-bun run cli make:module user
-bun run cli make:request user
-bun run cli make:factory user
+strata make:migration create_users
+strata make:module user
+strata make:request user
+strata make:factory user
 ```
 
 Queue and ops:
 
 ```bash
-bun run cli queue:work
-bun run cli queue:failed
-bun run cli queue:retry <id>
-bun run cli queue:flush-failed
-bun run cli route:list
-bun run cli openapi:generate
-bun run cli sdk:generate
-bun run cli schedule:run
+strata queue:work
+strata queue:failed
+strata queue:retry <id>
+strata queue:flush-failed
+strata route:list
+strata openapi:generate
+strata sdk:generate
+strata schedule:run
 ```
 
 In Docker Compose a dedicated `worker` service runs the queue worker alongside the app.
@@ -546,4 +550,4 @@ docker compose down -v --remove-orphans
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …
 
-Protected mutations require authentication and matching token abilities. Reports exclude soft-deleted records. Full route list: `bun run cli route:list` or [docs/openapi.json](docs/openapi.json).
+Protected mutations require authentication and matching token abilities. Reports exclude soft-deleted records. Full route list: `strata route:list` or [docs/openapi.json](docs/openapi.json).

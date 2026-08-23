@@ -27,8 +27,8 @@ Equivalent step-by-step:
 ```bash
 docker compose exec app bun run check      # TypeScript
 docker compose exec app bun run lint:ci    # Biome lint + format check
-docker compose exec app bun run cli openapi:validate
-docker compose exec app bun run cli openapi:check  # Committed OpenAPI drift
+docker compose exec app strata openapi:validate
+docker compose exec app strata openapi:check  # Committed OpenAPI drift
 docker compose exec app bun run test:coverage    # Scoped 100% coverage gate
 ```
 
@@ -44,7 +44,7 @@ Manual install: `bunx lefthook install`
 ## Adding a module
 
 ```bash
-docker compose exec app bun run cli make:module invoice
+docker compose exec app strata make:module invoice
 ```
 
 Generated modules use `wrapAbility` for mutations. Gate optional features with `isFeatureEnabled()` in `index.ts`. Enforce org scope in services via `membershipScope` helpers.
@@ -52,8 +52,8 @@ Generated modules use `wrapAbility` for mutations. Gate optional features with `
 ## Migrations and seeds
 
 ```bash
-docker compose exec app bun run cli make:migration add_example
-docker compose exec app bun run cli migrate:fresh --seed
+docker compose exec app strata make:migration add_example
+docker compose exec app strata migrate:fresh --seed
 ```
 
 ## OpenAPI
@@ -61,8 +61,8 @@ docker compose exec app bun run cli migrate:fresh --seed
 Regenerate when routes change:
 
 ```bash
-docker compose exec app bun run cli openapi:generate
-docker compose exec app bun run cli sdk:generate
+docker compose exec app strata openapi:generate
+docker compose exec app strata sdk:generate
 ```
 
 CI fails if `docs/openapi.json` drifts — commit regenerated files.

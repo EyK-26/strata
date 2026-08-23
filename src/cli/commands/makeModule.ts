@@ -574,7 +574,7 @@ export { create${moduleName}WebRoutes };
     console.log(`Created web view scaffold in: resources/views/${pluralSlug}/`);
   }
   console.log(`Module will be auto-discovered from src/modules/${moduleSlug}/`);
-  console.log(`Next: bun run cli make:migration create_${moduleSlug} && bun run cli migrate`);
+  console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
 }
 
 export { makeModuleCommand };

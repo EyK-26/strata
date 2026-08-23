@@ -14,7 +14,7 @@ bunx @getstrata/starter my-app
 - Bun + TypeScript app using `@getstrata/core` and `@getstrata/bootstrap`
 - Postgres via Docker Compose (no WorkHub `tenant` table; set `TENANCY_DRIVER=none`)
 - Eta templates, simple router, health check
-- `db:migrate` and `db:fresh` scripts
+- `strata migrate` / `strata migrate:fresh` and `strata dev` via `@getstrata/cli`
 
 ## Environment
 

@@ -23,7 +23,8 @@
       "@getstrata/core": ["./packages/strata-core/index.ts"],
       "@getstrata/core/*": ["./src/core/*"],
       "@getstrata/bootstrap": ["./packages/strata-bootstrap/index.ts"],
-      "@getstrata/bootstrap/*": ["./src/bootstrap/*"]
+      "@getstrata/bootstrap/*": ["./src/bootstrap/*"],
+      "@getstrata/cli": ["./packages/strata-cli/src/index.ts"]
     }
   },
   "include": ["src", "tests", "scripts"],

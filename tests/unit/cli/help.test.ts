@@ -14,6 +14,9 @@ describe("helpCommand", () => {
 
     expect(output.logs).toHaveLength(1);
     expect(output.logs[0]).toContain("Available commands:");
+    expect(output.logs[0]).toContain("dev");
+    expect(output.logs[0]).toContain("start");
+    expect(output.logs[0]).toContain("run <file>");
     expect(output.logs[0]).toContain("route:list");
     expect(output.logs[0]).toContain("openapi:check");
     expect(output.logs[0]).toContain("migrate:status");

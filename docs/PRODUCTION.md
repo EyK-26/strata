@@ -8,7 +8,7 @@ Simulate production checks against your current shell environment (or `.env`):
 
 ```bash
 # Must pass with production-like env — expect failures until vars are rotated
-APP_ENV=production bun run cli secrets:check
+APP_ENV=production strata secrets:check
 ```
 
 Fix every error until the command prints `Production secret checks passed`.
