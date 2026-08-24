@@ -3,7 +3,9 @@ import {
   clearSessionCookie,
   createSessionCookie,
   readSessionUserId,
+  SESSION_COOKIE,
   SESSION_TTL_SECONDS,
+  sessionCookieName,
 } from "@getstrata/core/auth/sessionCookie";
 
 describe("sessionCookie", () => {
@@ -11,6 +13,7 @@ describe("sessionCookie", () => {
   const originalSessionSecret = process.env.SESSION_SECRET;
   const originalOAuthStateSecret = process.env.OAUTH_STATE_SECRET;
   const originalAdminApiToken = process.env.ADMIN_API_TOKEN;
+  const originalSessionCookieName = process.env.SESSION_COOKIE_NAME;
 
   afterEach(() => {
     if (originalAppEnv === undefined) {
@@ -35,6 +38,12 @@ describe("sessionCookie", () => {
       delete process.env.ADMIN_API_TOKEN;
     } else {
       process.env.ADMIN_API_TOKEN = originalAdminApiToken;
+    }
+
+    if (originalSessionCookieName === undefined) {
+      delete process.env.SESSION_COOKIE_NAME;
+    } else {
+      process.env.SESSION_COOKIE_NAME = originalSessionCookieName;
     }
   });
 
@@ -158,5 +167,43 @@ describe("sessionCookie", () => {
         }),
       ),
     ).toBeNull();
+  });
+
+  test("defaults to the WorkHub session cookie name", () => {
+    delete process.env.SESSION_COOKIE_NAME;
+
+    expect(SESSION_COOKIE).toBe("workhub_session");
+    expect(sessionCookieName()).toBe("workhub_session");
+    expect(createSessionCookie(1)).toContain("workhub_session=");
+    expect(clearSessionCookie()).toContain("workhub_session=");
+  });
+
+  test("overrides the HMAC session cookie name from SESSION_COOKIE_NAME", () => {
+    process.env.SESSION_COOKIE_NAME = "strata_session";
+
+    expect(sessionCookieName()).toBe("strata_session");
+
+    const cookie = createSessionCookie(11);
+    expect(cookie).toContain("strata_session=");
+    expect(cookie).not.toContain("workhub_session=");
+
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: { cookie: cookie.split(";")[0] ?? "" },
+        }),
+      ),
+    ).toBe(11);
+
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: { cookie: "workhub_session=11.1.deadbeef" },
+        }),
+      ),
+    ).toBeNull();
+
+    process.env.SESSION_COOKIE_NAME = "   ";
+    expect(sessionCookieName()).toBe("workhub_session");
   });
 });

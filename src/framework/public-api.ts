@@ -375,11 +375,21 @@ export {
   validateObject,
 } from "../core/validation/rules.ts";
 export {
+  configureWebLayoutData,
   DEFAULT_VIEWS_DIRECTORY,
   EtaViewEngine,
   htmlResponse,
   isHtmxRequest,
+  notFoundHtmlResponse,
+  redirectResponse,
   resolveWebLayoutData,
+  textResponse,
+  xmlResponse,
 } from "../core/view/index.ts";
 export type { ViewEngine } from "../core/view/viewEngine.ts";
-export type { WebLayoutAuthUser, WebLayoutData } from "../core/view/webLayoutData.ts";
+export type {
+  WebLayoutAuthUser,
+  WebLayoutData,
+  WebLayoutDataOptions,
+  WebLayoutUserKey,
+} from "../core/view/webLayoutData.ts";

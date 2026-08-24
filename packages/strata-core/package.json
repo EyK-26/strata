@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "0.5.58",
+  "version": "0.5.59",
   "description": "Strata — Laravel-inspired Bun framework public API",
   "type": "module",
   "license": "MIT",
@@ -306,7 +306,7 @@
       "default": "./dist/entries/events.js"
     },
     "./facades": {
-      "types": "./dist/core/facades.d.ts",
+      "types": "./dist/core/facades/index.d.ts",
       "import": "./dist/entries/facades.js",
       "default": "./dist/entries/facades.js"
     },
@@ -765,7 +765,8 @@
   "types": "./dist/framework/public-api.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types",

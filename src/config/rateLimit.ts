@@ -27,13 +27,34 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Math.trunc(parsed);
 }
 
+function parseWindowSeconds(
+  secondsValue: string | undefined,
+  msValue: string | undefined,
+  fallback: number,
+): number {
+  if (secondsValue !== undefined && secondsValue.trim() !== "") {
+    return parsePositiveInt(secondsValue, fallback);
+  }
+
+  if (msValue !== undefined && msValue.trim() !== "") {
+    const parsedMs = Number(msValue);
+
+    if (Number.isFinite(parsedMs) && parsedMs > 0) {
+      return Math.max(1, Math.trunc(parsedMs / 1000));
+    }
+  }
+
+  return fallback;
+}
+
 function resolveLoginRateLimit(): LoginRateLimitConfig {
   const defaults = isLocalAppEnv() ? LOCAL_LOGIN_RATE_LIMIT : PRODUCTION_LOGIN_RATE_LIMIT;
 
   return {
     maxAttempts: parsePositiveInt(process.env.LOGIN_RATE_LIMIT_PER_WINDOW, defaults.maxAttempts),
-    decaySeconds: parsePositiveInt(
+    decaySeconds: parseWindowSeconds(
       process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+      process.env.LOGIN_RATE_LIMIT_WINDOW_MS,
       defaults.decaySeconds,
     ),
   };
@@ -46,10 +67,9 @@ function resolveRegisterRateLimit(): LoginRateLimitConfig {
 
   return {
     maxAttempts: parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_WINDOW, defaults.maxAttempts),
-    decaySeconds: parsePositiveInt(
-      (process.env.REGISTER_RATE_LIMIT_WINDOW_SECONDS ?? process.env.REGISTER_RATE_LIMIT_WINDOW_MS)
-        ? String(Number(process.env.REGISTER_RATE_LIMIT_WINDOW_MS) / 1000)
-        : undefined,
+    decaySeconds: parseWindowSeconds(
+      process.env.REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+      process.env.REGISTER_RATE_LIMIT_WINDOW_MS,
       defaults.decaySeconds,
     ),
   };

@@ -10,31 +10,20 @@ describe("resolveLoginRateLimit", () => {
   const previousEnv = process.env.APP_ENV;
   const previousMax = process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
   const previousWindow = process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
+  const previousWindowMs = process.env.LOGIN_RATE_LIMIT_WINDOW_MS;
 
   afterEach(() => {
-    if (previousEnv === undefined) {
-      delete process.env.APP_ENV;
-    } else {
-      restoreEnvVar("APP_ENV", previousEnv);
-    }
-
-    if (previousMax === undefined) {
-      delete process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
-    } else {
-      restoreEnvVar("LOGIN_RATE_LIMIT_PER_WINDOW", previousMax);
-    }
-
-    if (previousWindow === undefined) {
-      delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
-    } else {
-      restoreEnvVar("LOGIN_RATE_LIMIT_WINDOW_SECONDS", previousWindow);
-    }
+    restoreEnvVar("APP_ENV", previousEnv);
+    restoreEnvVar("LOGIN_RATE_LIMIT_PER_WINDOW", previousMax);
+    restoreEnvVar("LOGIN_RATE_LIMIT_WINDOW_SECONDS", previousWindow);
+    restoreEnvVar("LOGIN_RATE_LIMIT_WINDOW_MS", previousWindowMs);
   });
 
   test("uses relaxed defaults in local env", () => {
     process.env.APP_ENV = "local";
     delete process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
     delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
+    delete process.env.LOGIN_RATE_LIMIT_WINDOW_MS;
 
     expect(resolveLoginRateLimit()).toEqual(LOCAL_LOGIN_RATE_LIMIT);
   });
@@ -43,6 +32,7 @@ describe("resolveLoginRateLimit", () => {
     process.env.APP_ENV = "production";
     delete process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
     delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
+    delete process.env.LOGIN_RATE_LIMIT_WINDOW_MS;
 
     expect(resolveLoginRateLimit()).toEqual(PRODUCTION_LOGIN_RATE_LIMIT);
   });
@@ -55,6 +45,17 @@ describe("resolveLoginRateLimit", () => {
     expect(resolveLoginRateLimit()).toEqual({
       maxAttempts: 7,
       decaySeconds: 120,
+    });
+  });
+
+  test("accepts deprecated LOGIN_RATE_LIMIT_WINDOW_MS as an alias", () => {
+    process.env.APP_ENV = "local";
+    delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
+    process.env.LOGIN_RATE_LIMIT_WINDOW_MS = "45000";
+
+    expect(resolveLoginRateLimit()).toEqual({
+      maxAttempts: LOCAL_LOGIN_RATE_LIMIT.maxAttempts,
+      decaySeconds: 45,
     });
   });
 });

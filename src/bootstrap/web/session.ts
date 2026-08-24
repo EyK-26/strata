@@ -1,4 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { AuthUser } from "@getstrata/core/auth/authContext";
+import { type AuthGuard, AuthManager } from "@getstrata/core/auth/guard";
+import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
+import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { readRequestCookie } from "@getstrata/core/http/cookies";
 
 export interface SessionUser {
@@ -23,9 +27,42 @@ type SqlClient = {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
 };
 
+type SqlSource = SqlClient | (() => SqlClient);
+
+function isSqlClient(value: SqlSource): value is SqlClient {
+  return typeof (value as SqlClient).unsafe === "function";
+}
+
+function resolveSql(source: SqlSource): SqlClient {
+  if (isSqlClient(source)) {
+    return source;
+  }
+
+  return source();
+}
+
+function defaultSessionSql(): SqlClient {
+  const bound = getBoundDatabaseConnection();
+
+  if (bound) {
+    return bound;
+  }
+
+  return getDefaultDatabasePool();
+}
+
+export type MapSessionUser = (user: SessionUser) => AuthUser;
+
+function defaultMapSessionUser(user: SessionUser): AuthUser {
+  return {
+    id: user.id,
+    role: user.is_admin ? "admin" : "member",
+  };
+}
+
 export class CookieSessionStore {
   constructor(
-    private readonly sql: SqlClient,
+    private readonly sqlSource: SqlSource,
     private readonly secret: string,
     private readonly cookieName = "strata_session",
     private readonly maxAgeSeconds = 60 * 60 * 24 * 14,
@@ -50,10 +87,14 @@ export class CookieSessionStore {
     return header.includes("Secure") ? header : `${header}; Secure`;
   }
 
+  private sql(): SqlClient {
+    return resolveSql(this.sqlSource);
+  }
+
   async create(user: SessionUser): Promise<string> {
     const id = randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + this.maxAgeSeconds * 1000);
-    await this.sql.unsafe(`INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)`, [
+    await this.sql().unsafe(`INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)`, [
       id,
       user.id,
       expires,
@@ -62,7 +103,7 @@ export class CookieSessionStore {
   }
 
   async destroy(sessionId: string): Promise<void> {
-    await this.sql.unsafe(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
+    await this.sql().unsafe(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
   }
 
   async read(request: Request): Promise<SessionUser | null> {
@@ -75,7 +116,7 @@ export class CookieSessionStore {
       return null;
     }
 
-    const rows = (await this.sql.unsafe(
+    const rows = (await this.sql().unsafe(
       `SELECT s.id, s.user_id, s.expires_at, u.name, u.email, u.learn_subscriber,
               COALESCE(u.is_admin, false) AS is_admin
        FROM sessions s
@@ -100,3 +141,46 @@ export class CookieSessionStore {
     return createHash("sha256").update(`${value}.${this.secret}`).digest("hex").slice(0, 32);
   }
 }
+
+export class CookieSessionGuard implements AuthGuard {
+  constructor(
+    private readonly store: CookieSessionStore,
+    private readonly mapUser: MapSessionUser = defaultMapSessionUser,
+  ) {}
+
+  async resolve(request: Request): Promise<AuthUser | null> {
+    const user = await this.store.read(request);
+
+    if (!user) {
+      return null;
+    }
+
+    return this.mapUser(user);
+  }
+}
+
+export interface CreateCookieSessionAuthManagerOptions {
+  store?: CookieSessionStore;
+  sql?: SqlSource;
+  secret?: string;
+  cookieName?: string;
+  maxAgeSeconds?: number;
+  mapUser?: MapSessionUser;
+}
+
+function createCookieSessionAuthManager(
+  options: CreateCookieSessionAuthManagerOptions = {},
+): AuthManager {
+  const store =
+    options.store ??
+    new CookieSessionStore(
+      options.sql ?? defaultSessionSql,
+      options.secret ?? process.env.SESSION_SECRET?.trim() ?? "",
+      options.cookieName,
+      options.maxAgeSeconds,
+    );
+
+  return new AuthManager(new CookieSessionGuard(store, options.mapUser ?? defaultMapSessionUser));
+}
+
+export { createCookieSessionAuthManager, defaultMapSessionUser, defaultSessionSql };

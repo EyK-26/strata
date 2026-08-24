@@ -140,6 +140,34 @@ describe("assertProductionSecrets", () => {
     ).not.toThrow();
   });
 
+  test("allows a production HTMX sibling app without WorkHub tokens", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        FRONTEND_MODE: "server-htmx",
+        AUTH_DEV_HEADERS: "false",
+        DATABASE_URL: "postgres://localhost/getstrata",
+        SESSION_SECRET: "a".repeat(32),
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_SCIM: "false",
+        FEATURE_OAUTH: "false",
+        FEATURE_PUBLIC_READS: "false",
+      }),
+    ).not.toThrow();
+  });
+
+  test("blocks a production HTMX sibling app without SESSION_SECRET", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        FRONTEND_MODE: "server-htmx",
+        AUTH_DEV_HEADERS: "false",
+        DATABASE_URL: "postgres://localhost/getstrata",
+      }),
+    ).toThrow(/SESSION_SECRET/);
+  });
+
   test("blocks public reads in production", () => {
     expect(() =>
       assertProductionSecrets({

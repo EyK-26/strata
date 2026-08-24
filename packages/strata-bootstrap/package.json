@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/bootstrap",
-  "version": "0.2.49",
+  "version": "0.2.50",
   "description": "Strata application bootstrap — HttpKernel, DI, web session helpers",
   "type": "module",
   "license": "MIT",
@@ -116,7 +116,7 @@
       "default": "./dist/entries/providers.js"
     },
     "./providers/view": {
-      "types": "./dist/bootstrap/providers/view/index.d.ts",
+      "types": "./dist/bootstrap/providers/view.d.ts",
       "import": "./dist/entries/providers/view.js",
       "default": "./dist/entries/providers/view.js"
     },
@@ -165,7 +165,8 @@
   "types": "./dist/bootstrap/public-api.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types",
@@ -179,7 +180,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@getstrata/core": "^0.5.58",
+    "@getstrata/core": "^0.5.59",
     "typescript": "^5.9.0"
   }
 }

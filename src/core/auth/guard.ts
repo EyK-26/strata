@@ -1,7 +1,6 @@
 import { UnauthorizedError } from "@getstrata/core/errors/http";
-import type { AuthUserDirectory } from "../contracts/authUserDirectory";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { CORE_TOKEN_SERVICE_TOKEN } from "../contracts/serviceTokens";
+import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { abilityCatalog } from "./abilityCatalog";
 import type { AuthUser } from "./authContext";
 import { currentAuthUser } from "./authContext";
@@ -79,11 +78,12 @@ class DatabaseTokenGuard implements AuthGuard {
       return null;
     }
 
-    if (!this.container.has(CORE_TOKEN_SERVICE_TOKEN)) {
+    const tokenService = resolveAuthUserDirectory(this.container);
+
+    if (!tokenService || typeof tokenService.resolveUserFromToken !== "function") {
       return null;
     }
 
-    const tokenService = this.container.resolve<AuthUserDirectory>(CORE_TOKEN_SERVICE_TOKEN);
     return await tokenService.resolveUserFromToken(token);
   }
 }

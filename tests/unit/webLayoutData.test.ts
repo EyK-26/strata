@@ -1,10 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
-import { resolveWebLayoutData } from "@getstrata/core/view/webLayoutData";
+import {
+  resetWebLayoutDataConfigForTests,
+  resolveWebLayoutData,
+} from "@getstrata/core/view/webLayoutData";
 import { tokenServiceToken } from "../../src/modules/user/provider";
 
 describe("resolveWebLayoutData", () => {
+  afterEach(() => {
+    resetWebLayoutDataConfigForTests();
+  });
   test("returns null auth user when there is no session", async () => {
     const container = {
       has: () => false,

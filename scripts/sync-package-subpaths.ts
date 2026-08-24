@@ -203,6 +203,7 @@ function resolveCoreTypesPath(subpath: string): string {
     "database",
     "database/schema",
     "events",
+    "facades",
     "http",
     "notifications",
     "queue",
@@ -236,10 +237,6 @@ function resolveCoreTypesPath(subpath: string): string {
 function resolveBootstrapTypesPath(subpath: string): string {
   if (subpath === "providers") {
     return "./dist/bootstrap/providers/index.d.ts";
-  }
-
-  if (subpath === "providers/view") {
-    return "./dist/bootstrap/providers/view/index.d.ts";
   }
 
   return `./dist/bootstrap/${subpath}.d.ts`;

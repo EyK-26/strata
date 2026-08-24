@@ -15,18 +15,22 @@ Fix every error until the command prints `Production secret checks passed`.
 
 ## Required for all production deployments
 
-| Variable | Why |
-|----------|-----|
-| `APP_ENV=production` | Enables production guards |
-| `APP_DEBUG=false` | Disables verbose errors |
-| `AUTH_DEV_HEADERS=false` | Disables `x-user-id` dev auth |
-| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Rotated away from WorkHub test defaults |
-| `TOKEN_HASH_PEPPER` | Pepper for API token hashing |
-| `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Enforces token rotation |
-| `OAUTH_STATE_SECRET` | OAuth CSRF protection |
-| `CORS_ALLOWED_ORIGINS` | Explicit origins (no `*`) |
-| `FEATURE_PUBLIC_READS=false` | Authenticated reads only |
-| `SESSION_SECRET` | Required when `FRONTEND_MODE=server-htmx` |
+| Variable | When |
+|----------|------|
+| `APP_ENV=production` | Always |
+| `APP_DEBUG=false` | Always (recommended) |
+| `AUTH_DEV_HEADERS=false` | Always in production |
+| `SESSION_SECRET` (32+ chars) | `FRONTEND_MODE=server-htmx` |
+| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Token auth enabled (`ADMIN_API_TOKEN` / `MEMBER_API_TOKEN` / `FEATURE_API_TOKENS=true`) — rotate away from WorkHub test defaults |
+| `TOKEN_HASH_PEPPER` | Token auth enabled |
+| `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Token auth enabled |
+| `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled (`FEATURE_OAUTH`, `FEATURE_SAML`, or provider env) |
+| `CORS_ALLOWED_ORIGINS` | Token-auth WorkHub apps, or when `CORS_ALLOWED_ORIGINS` is set (no `*`) |
+| `FEATURE_PUBLIC_READS=false` | WorkHub / token-auth apps, or when `FEATURE_PUBLIC_READS=true` is set |
+
+A production HTMX sibling app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need WorkHub API tokens, SCIM, OAuth, or CORS when those features are off.
+
+WorkHub’s current production env (rotated `ADMIN_API_TOKEN` / `MEMBER_API_TOKEN` / `SCIM_BEARER_TOKEN`, explicit CORS, pepper, expiry, public reads off) still passes. See [SIBLING-HTMX.md](./SIBLING-HTMX.md).
 
 ## Enterprise modules (when enabled)
 

@@ -1,7 +1,7 @@
-import type { AbilityChecker } from "@getstrata/core/auth/abilityChecker";
 import type { AuthManager } from "@getstrata/core/auth/guard";
 import { createMembershipMiddleware } from "@getstrata/core/auth/membershipMiddleware";
 import type { Policy, PolicyGate } from "@getstrata/core/auth/policy";
+import { resolveAbilityChecker } from "@getstrata/core/contracts/serviceTokens";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
 import { createBodySizeLimitMiddleware } from "@getstrata/core/http/bodySizeLimitMiddleware";
@@ -31,7 +31,6 @@ import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
   CORE_POLICY_GATE_TOKEN,
-  CORE_TOKEN_SERVICE_TOKEN,
   REDIS_URL_CONFIG_KEY,
 } from "./config";
 import type { AppDependencies, ConfigStore } from "./contracts";
@@ -136,8 +135,7 @@ class HttpKernel {
 
   wrapWebAbility(ability: string, handler: RouteHandler): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
-    const abilityChecker =
-      this.dependencies.container.resolve<AbilityChecker>(CORE_TOKEN_SERVICE_TOKEN);
+    const abilityChecker = resolveAbilityChecker(this.dependencies.container);
     const requireAbility = createRequireAbilityMiddleware(abilityChecker);
     const middleware = [createRequireWebAuthMiddleware(auth), requireAbility(ability)];
 
@@ -170,8 +168,7 @@ class HttpKernel {
   }
 
   wrapAbility(ability: string, handler: RouteHandler): RouteHandler {
-    const abilityChecker =
-      this.dependencies.container.resolve<AbilityChecker>(CORE_TOKEN_SERVICE_TOKEN);
+    const abilityChecker = resolveAbilityChecker(this.dependencies.container);
     const requireAbility = createRequireAbilityMiddleware(abilityChecker);
     const middleware = [...this.group("authenticated"), requireAbility(ability)];
 

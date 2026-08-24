@@ -12,5 +12,11 @@ export {
   wrapWebRegister,
 } from "./routing.ts";
 export { convertAppRoutesToBunRoutes, createWebServer, type WebServerOptions } from "./server.ts";
-export { CookieSessionStore, type SessionUser } from "./session.ts";
+export {
+  CookieSessionGuard,
+  CookieSessionStore,
+  createCookieSessionAuthManager,
+  type MapSessionUser,
+  type SessionUser,
+} from "./session.ts";
 export { slugify } from "./slug.ts";
