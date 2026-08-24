@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import {
+  CSRF_COOKIE,
   createCsrfTokenCookie,
+  csrfCookieName,
   resolveCsrfToken,
   verifyCsrfToken,
 } from "@getstrata/core/http/csrfToken";
@@ -36,6 +38,38 @@ describe("csrfToken", () => {
       expect(createCsrfTokenCookie().cookie).toContain("; Secure");
     } finally {
       restoreEnvVar("APP_ENV", previous);
+    }
+  });
+
+  test("defaults to the WorkHub CSRF cookie name", () => {
+    const previous = process.env.CSRF_COOKIE_NAME;
+    delete process.env.CSRF_COOKIE_NAME;
+
+    try {
+      expect(CSRF_COOKIE).toBe("workhub_csrf");
+      expect(csrfCookieName()).toBe("workhub_csrf");
+      expect(createCsrfTokenCookie().cookie).toContain("workhub_csrf=");
+    } finally {
+      restoreEnvVar("CSRF_COOKIE_NAME", previous);
+    }
+  });
+
+  test("overrides the CSRF cookie name from CSRF_COOKIE_NAME", () => {
+    const previous = process.env.CSRF_COOKIE_NAME;
+    process.env.CSRF_COOKIE_NAME = "strata_csrf";
+
+    try {
+      expect(csrfCookieName()).toBe("strata_csrf");
+      const created = createCsrfTokenCookie();
+      expect(created.cookie).toContain("strata_csrf=");
+      expect(created.cookie).not.toContain("workhub_csrf=");
+
+      const request = new Request("http://example.test/", {
+        headers: { cookie: created.cookie.split(";")[0] ?? "" },
+      });
+      expect(verifyCsrfToken(request, created.token)).toBe(true);
+    } finally {
+      restoreEnvVar("CSRF_COOKIE_NAME", previous);
     }
   });
 });

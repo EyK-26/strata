@@ -1,4 +1,8 @@
-import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/bootstrap/config";
+import {
+  CORE_ABILITY_CHECKER_TOKEN,
+  CORE_AUTH_USER_DIRECTORY_TOKEN,
+  CORE_TOKEN_SERVICE_TOKEN,
+} from "@getstrata/bootstrap/config";
 import { OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
 import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
 import { SamlProvider } from "@getstrata/core/auth/oauth/samlProvider";
@@ -34,6 +38,12 @@ const userProvider: ServiceProvider = {
       const tokens = container.resolve<ApiTokenRepository>(apiTokenRepositoryToken);
       return new TokenService(users, tokens);
     });
+    container.singleton(CORE_ABILITY_CHECKER_TOKEN, (appContainer) =>
+      appContainer.resolve(tokenServiceToken),
+    );
+    container.singleton(CORE_AUTH_USER_DIRECTORY_TOKEN, (appContainer) =>
+      appContainer.resolve(tokenServiceToken),
+    );
 
     container.singleton(
       notificationServiceToken,

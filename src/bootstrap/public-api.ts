@@ -22,7 +22,9 @@ export { buildWebModuleRoutes } from "./buildWebModuleRoutes.ts";
 export { cacheTagsForModelWrite, discoverModelTableNames } from "./cache/modelCacheTags.ts";
 export {
   APP_PORT_CONFIG_KEY,
+  CORE_ABILITY_CHECKER_TOKEN,
   CORE_AUTH_TOKEN,
+  CORE_AUTH_USER_DIRECTORY_TOKEN,
   CORE_CACHE_TOKEN,
   CORE_CONFIG_TOKEN,
   CORE_EVENT_BUS_TOKEN,
@@ -61,6 +63,8 @@ export {
   discoverModules,
   ensureModulesLoaded,
 } from "./discoverModules.ts";
+export type { CreateHealthRoutesOptions } from "./health.ts";
+export { checkDatabase, checkRedis, createHealthRoutes, pingDatabase } from "./health.ts";
 export {
   type RouteModelAuthorization,
   securedBindRouteModel,
@@ -75,10 +79,13 @@ export { RouteRegistry, routeRegistry } from "./routeRegistry.ts";
 export { assertProductionSecrets } from "./secretsGuard.ts";
 
 export {
+  CookieSessionGuard,
   CookieSessionStore,
+  createCookieSessionAuthManager,
   createCsrfProtection,
   createRouteKernel,
   createWebServer,
+  type MapSessionUser,
   type ParsedForm,
   parseFormBody,
   routeParams,

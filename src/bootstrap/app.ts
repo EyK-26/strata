@@ -3,7 +3,7 @@ import {
   installGracefulShutdownSignals,
   registerShutdownHandler,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
-import { closeDatabase } from "../db/connection";
+import { closeDatabase, ensureDatabaseConnection } from "../db/connection";
 import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
 import { appContext } from "./context";
 import { startInProcessCronIfEnabled, stopInProcessCron } from "./inProcessCron";
@@ -19,6 +19,7 @@ class App {
     }
 
     assertProductionSecrets();
+    void ensureDatabaseConnection();
 
     const port = this.resolvePort();
 

@@ -5,6 +5,10 @@ import { currentRequestMeta } from "./requestMetaContext";
 const CSRF_COOKIE = "workhub_csrf";
 const CSRF_TTL_MS = 60 * 60 * 1000;
 
+function csrfCookieName(): string {
+  return process.env.CSRF_COOKIE_NAME?.trim() || CSRF_COOKIE;
+}
+
 function resolveCsrfSecret(): string {
   return (
     process.env.SESSION_SECRET?.trim() ||
@@ -36,12 +40,12 @@ function createCsrfTokenCookie(): { token: string; cookie: string } {
 
   return {
     token,
-    cookie: `${CSRF_COOKIE}=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=${Math.floor(CSRF_TTL_MS / 1000)}${secure}`,
+    cookie: `${csrfCookieName()}=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=${Math.floor(CSRF_TTL_MS / 1000)}${secure}`,
   };
 }
 
 function resolveCsrfToken(request: Request): { token: string; cookie?: string } {
-  const cookieValue = readRequestCookie(request, CSRF_COOKIE);
+  const cookieValue = readRequestCookie(request, csrfCookieName());
 
   if (cookieValue && Bun.CSRF.verify(cookieValue, csrfVerifyOptions())) {
     return { token: cookieValue };
@@ -95,7 +99,7 @@ function verifyCsrfToken(request: Request, submittedToken: string | null): boole
     return false;
   }
 
-  const cookieValue = readRequestCookie(request, CSRF_COOKIE);
+  const cookieValue = readRequestCookie(request, csrfCookieName());
 
   if (!cookieValue) {
     return false;
@@ -121,6 +125,7 @@ function resolveCsrfTokenForRequest(request: Request): string {
 export {
   CSRF_COOKIE,
   createCsrfTokenCookie,
+  csrfCookieName,
   readSubmittedCsrfToken,
   readSubmittedCsrfTokenFromBody,
   resolveCsrfToken,

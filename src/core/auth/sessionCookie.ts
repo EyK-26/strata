@@ -3,6 +3,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 const SESSION_COOKIE = "workhub_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
+function sessionCookieName(): string {
+  return process.env.SESSION_COOKIE_NAME?.trim() || SESSION_COOKIE;
+}
+
 function resolveSessionSecret(): string {
   return (
     process.env.SESSION_SECRET?.trim() ||
@@ -38,7 +42,7 @@ function readCookieValue(request: Request, cookieName: string): string | null {
 }
 
 function readSessionUserId(request: Request): number | null {
-  const cookieValue = readCookieValue(request, SESSION_COOKIE);
+  const cookieValue = readCookieValue(request, sessionCookieName());
 
   if (!cookieValue) {
     return null;
@@ -87,13 +91,13 @@ function createSessionCookie(userId: number): string {
   const value = signSession(userId, issuedAt);
   const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
 
-  return `${SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secure}`;
+  return `${sessionCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secure}`;
 }
 
 function clearSessionCookie(): string {
   const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
 
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+  return `${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 export {
@@ -102,4 +106,5 @@ export {
   readSessionUserId,
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
+  sessionCookieName,
 };

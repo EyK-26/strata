@@ -1,6 +1,5 @@
-import type { AuthUserDirectory } from "../contracts/authUserDirectory";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { CORE_TOKEN_SERVICE_TOKEN } from "../contracts/serviceTokens";
+import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { resolveAbilitiesForRole } from "./abilityCatalog";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
@@ -16,11 +15,11 @@ class SessionGuard implements AuthGuard {
       return null;
     }
 
-    if (!this.container.has(CORE_TOKEN_SERVICE_TOKEN)) {
+    const tokenService = resolveAuthUserDirectory(this.container);
+
+    if (!tokenService) {
       return null;
     }
-
-    const tokenService = this.container.resolve<AuthUserDirectory>(CORE_TOKEN_SERVICE_TOKEN);
 
     try {
       const user = await tokenService.findByIdOrThrow(userId);

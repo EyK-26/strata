@@ -5,7 +5,7 @@ Stable **Strata** framework surface for application modules.
 **Source:** `src/framework/public-api.ts` (monorepo)  
 **Repository:** [EyK-26/strata](https://github.com/EyK-26/strata), directory `packages/strata-core`
 
-WorkHub is the reference application built on Strata; import the framework from this package in your own modules.
+WorkHub is the reference application built on Strata; import the framework from this package in your own modules. Sibling HTMX apps (Eta, cookie sessions, no API tokens) should follow [docs/SIBLING-HTMX.md](../../docs/SIBLING-HTMX.md).
 
 ## Usage
 
@@ -82,7 +82,7 @@ import type { Migration } from "@getstrata/core/database/migrations/types";
 Package name: **`@getstrata/core`** (npm org [`@getstrata`](https://www.npmjs.com/org/getstrata)).
 
 1. Add `NPM_TOKEN` to GitHub repository secrets.
-2. Tag a release: `git tag v0.5.58 && git push origin v0.5.58`
+2. Tag a release: `git tag v0.5.60 && git push origin v0.5.60`
 3. [Release workflow](../../.github/workflows/release.yml) builds and runs `npm publish --access public`.
 
 Previously published as `@eyk-workhub/framework@0.1.0`, deprecated in favor of this package.

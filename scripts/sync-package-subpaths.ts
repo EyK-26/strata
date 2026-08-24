@@ -203,6 +203,7 @@ function resolveCoreTypesPath(subpath: string): string {
     "database",
     "database/schema",
     "events",
+    "facades",
     "http",
     "notifications",
     "queue",
