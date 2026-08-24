@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
+import {
+  createMemoryThrottleMiddleware,
+  resetMemoryThrottleForTests,
+} from "@getstrata/core/http/memoryThrottleMiddleware";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("createMemoryThrottleMiddleware", () => {
@@ -79,5 +82,41 @@ describe("createMemoryThrottleMiddleware", () => {
 
     expect((await middleware(request, next)).status).toBe(200);
     expect((await middleware(request, next)).status).toBe(429);
+  });
+
+  test("isolates buckets per middleware instance", async () => {
+    const first = createMemoryThrottleMiddleware({
+      maxAttempts: 1,
+      decaySeconds: 60,
+      keyPrefix: "test-throttle-isolated:",
+    });
+    const second = createMemoryThrottleMiddleware({
+      maxAttempts: 1,
+      decaySeconds: 60,
+      keyPrefix: "test-throttle-isolated:",
+    });
+    const next = async () => Response.json({ ok: true });
+    const request = new Request("https://example.test/api/v1/isolated");
+
+    expect((await first(request, next)).status).toBe(200);
+    expect((await first(request, next)).status).toBe(429);
+    expect((await second(request, next)).status).toBe(200);
+  });
+
+  test("resetMemoryThrottleForTests clears buckets on existing middleware", async () => {
+    const middleware = createMemoryThrottleMiddleware({
+      maxAttempts: 1,
+      decaySeconds: 60,
+      keyPrefix: "test-throttle-reset:",
+    });
+    const next = async () => Response.json({ ok: true });
+    const request = new Request("https://example.test/api/v1/reset-seams");
+
+    expect((await middleware(request, next)).status).toBe(200);
+    expect((await middleware(request, next)).status).toBe(429);
+
+    resetMemoryThrottleForTests();
+
+    expect((await middleware(request, next)).status).toBe(200);
   });
 });

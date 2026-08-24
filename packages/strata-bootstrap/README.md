@@ -30,7 +30,7 @@ import { createHttpKernel, createAppContext, coreProviders } from "@getstrata/bo
 
 `createAppContext()` does not call `assertProductionSecrets`. WorkHub calls that from `App.serve()` / `queue:work`. Sibling HTMX apps can call it in production without WorkHub API tokens when feature flags are off — see [SIBLING-HTMX.md](../../docs/SIBLING-HTMX.md).
 
-Sibling HTMX apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstrap/web/session` instead of HMAC `SessionGuard`. `CookieSessionStore` reads optional `is_admin` from the user row for `wrapWebGlobalAdmin`. Pass `mapUser` to map `is_admin` / `learn_subscriber` onto `AuthUser.role`.
+Sibling HTMX apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstrap/web/session` instead of HMAC `SessionGuard`. Use `signIn` / `signOut` (or the redirect helpers) instead of calling `CookieSessionStore` from controllers. Pass `mapUser` to map roles in the app. Pass `loadSessionUser` when the default `learn_subscriber` / `is_admin` SELECT does not match your schema.
 
 `wrapWeb` applies the web group (CSRF + flash) and `withErrorHandling`, so CSRF `ForbiddenError` becomes an HTML 403 in `FRONTEND_MODE=server-htmx`. `wrapWebLogin` / `wrapWebRegister` include that web group plus throttle — do not wrap them with `wrapWeb` again.
 

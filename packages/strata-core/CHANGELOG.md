@@ -1,5 +1,12 @@
 # @getstrata/core changelog
 
+## 0.5.60
+
+- `@getstrata/core/database/boundConnection` publishes `getBoundDatabaseConnection` and `resetBoundDatabaseConnection` on the JS entry (not only the types file). Tests can reset the bound pool after `closeDatabase()` without a postinstall patch.
+- `bindBunSql` / `createBunSqlPool` on `@getstrata/core/database/bunSql` create a Bun `SQL` pool and register it as the bound connection plus default pool.
+- `xmlResponse` accepts `{ contentType }`. `rssResponse` sends `application/rss+xml`.
+- Memory throttle buckets are per middleware instance. `resetMemoryThrottleForTests()` clears every instance map so nested HTTP tests do not leak.
+
 ## 0.5.59
 
 Sibling HTMX apps can consume published packages without WorkHub-only glue.

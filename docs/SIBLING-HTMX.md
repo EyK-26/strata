@@ -15,9 +15,10 @@ Sibling HTMX apps should bind `CookieSessionStore` + the published adapter:
 ```typescript
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { createCookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
-import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
+import { bindBunSql, createBunSqlPool } from "@getstrata/core/database/bunSql";
 
-bindDatabaseConnection(sql);
+const sql = createBunSqlPool({ url: process.env.DATABASE_URL ?? "" });
+bindBunSql(sql);
 
 container.set(
   CORE_AUTH_TOKEN,
@@ -32,7 +33,27 @@ container.set(
 );
 ```
 
-Omit `sql` so the store reads the client from `bindDatabaseConnection()` / the default pool on every call. Tests can reset the pool without a local auth facade.
+`createCookieSessionAuthManager` returns a `CookieSessionAuthManager` with `signIn` / `signOut` and `signInRedirect` / `signOutRedirect`. Controllers should not talk to `CookieSessionStore` for cookie headers.
+
+Omit `sql` so the store reads the client from `bindDatabaseConnection()` / the default pool on every call. Tests can call `resetBoundDatabaseConnection()` after `closeDatabase()` without a local auth facade.
+
+The default session SELECT still reads `learn_subscriber` / `is_admin` from `users`. Pass `loadSessionUser` to keep that query in the app:
+
+```typescript
+createCookieSessionAuthManager({
+  secret: process.env.SESSION_SECRET ?? "",
+  loadSessionUser: async (sql, sessionId) => {
+    const rows = await sql.unsafe(
+      `SELECT s.user_id AS id, u.name, u.email
+       FROM sessions s JOIN users u ON u.id = s.user_id
+       WHERE s.id = $1 AND s.expires_at > NOW()`,
+      [sessionId],
+    );
+    return rows[0] ?? null;
+  },
+  mapUser: (user) => ({ id: user.id, role: "member" }),
+});
+```
 
 Cookie names:
 
@@ -76,9 +97,13 @@ Apps that do not have orgs should not call `configureMembershipLookup`.
 
 ## Bound-pool health
 
-`checkDatabase()` / `createHealthRoutes()` ping the client already registered with `bindDatabaseConnection()` (then `registerDefaultDatabasePool`). They do not open WorkHub’s private `connectionHolder`.
+`checkDatabase()` / `createHealthRoutes()` ping the client already registered with `bindDatabaseConnection()` (then `registerDefaultDatabasePool`). They do not open WorkHub’s private `connectionHolder`. `bindBunSql(sql)` does both registrations. `@getstrata/core/database/boundConnection` exports `getBoundDatabaseConnection` and `resetBoundDatabaseConnection` from the published JS entry.
 
 `GET /health` stays `{ status: "ok" }` unless you pass `{ pingOnHealth: true }`. `GET /ready` always checks the database (and Redis when `REDIS_URL` is set). Extra JSON fields are merged via `{ extra }`.
+
+## RSS and throttle test seams
+
+Podcast RSS can use `rssResponse(body)` or `xmlResponse(body, { contentType: "application/rss+xml" })`. Nested HTTP tests that share a kernel should call `resetMemoryThrottleForTests()` so in-memory throttle buckets do not leak.
 
 ## Feature-gated `assertProductionSecrets`
 

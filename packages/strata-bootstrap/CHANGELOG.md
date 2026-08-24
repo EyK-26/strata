@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.51
+
+- `createCookieSessionAuthManager` returns `CookieSessionAuthManager` (`signIn`, `signOut`, `signInRedirect`, `signOutRedirect`). Controllers no longer need a local cookie helper.
+- Pass `loadSessionUser` to replace the default `users.learn_subscriber` / `users.is_admin` session query. Keep `mapUser` in the app.
+
 ## 0.2.50
 
 - `createCookieSessionAuthManager` / `CookieSessionGuard` turn `CookieSessionStore` into an `AuthGuard` / `AuthManager` for `CORE_AUTH_TOKEN`. Supply a `mapUser` mapper; WorkHub abilities are not baked in. Omit `sql` to read the client from `bindDatabaseConnection()` on every call.

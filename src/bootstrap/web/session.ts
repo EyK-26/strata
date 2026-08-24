@@ -29,6 +29,8 @@ type SqlClient = {
 
 type SqlSource = SqlClient | (() => SqlClient);
 
+export type LoadSessionUser = (sql: SqlClient, sessionId: string) => Promise<SessionUser | null>;
+
 function isSqlClient(value: SqlSource): value is SqlClient {
   return typeof (value as SqlClient).unsafe === "function";
 }
@@ -60,12 +62,48 @@ function defaultMapSessionUser(user: SessionUser): AuthUser {
   };
 }
 
+async function defaultLoadSessionUser(
+  sql: SqlClient,
+  sessionId: string,
+): Promise<SessionUser | null> {
+  const rows = (await sql.unsafe(
+    `SELECT s.id, s.user_id, s.expires_at, u.name, u.email, u.learn_subscriber,
+            COALESCE(u.is_admin, false) AS is_admin
+     FROM sessions s
+     INNER JOIN users u ON u.id = s.user_id
+     WHERE s.id = $1 AND s.expires_at > NOW()`,
+    [sessionId],
+  )) as SessionRow[];
+
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    id: row.user_id,
+    name: row.name,
+    email: row.email,
+    learn_subscriber: row.learn_subscriber,
+    is_admin: row.is_admin,
+  };
+}
+
+function redirectWithCookie(location: string, setCookie: string, status: number): Response {
+  return new Response(null, {
+    status,
+    headers: {
+      Location: location,
+      "Set-Cookie": setCookie,
+    },
+  });
+}
+
 export class CookieSessionStore {
   constructor(
     private readonly sqlSource: SqlSource,
     private readonly secret: string,
     private readonly cookieName = "strata_session",
     private readonly maxAgeSeconds = 60 * 60 * 24 * 14,
+    private readonly loadSessionUser: LoadSessionUser = defaultLoadSessionUser,
   ) {}
 
   cookieHeader(_user: SessionUser, sessionId: string): string {
@@ -77,6 +115,19 @@ export class CookieSessionStore {
 
   clearCookieHeader(): string {
     return this.withSecureFlag(`${this.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  }
+
+  sessionIdFromRequest(request: Request): string | null {
+    const cookie = readRequestCookie(request, this.cookieName);
+    const raw = cookie ?? null;
+    if (!raw) return null;
+
+    const [sessionId, signature] = raw.split(".");
+    if (!sessionId || !signature || signature !== this.sign(sessionId)) {
+      return null;
+    }
+
+    return sessionId;
   }
 
   private withSecureFlag(header: string): string {
@@ -107,34 +158,10 @@ export class CookieSessionStore {
   }
 
   async read(request: Request): Promise<SessionUser | null> {
-    const cookie = readRequestCookie(request, this.cookieName);
-    const raw = cookie ?? null;
-    if (!raw) return null;
+    const sessionId = this.sessionIdFromRequest(request);
+    if (!sessionId) return null;
 
-    const [sessionId, signature] = raw.split(".");
-    if (!sessionId || !signature || signature !== this.sign(sessionId)) {
-      return null;
-    }
-
-    const rows = (await this.sql().unsafe(
-      `SELECT s.id, s.user_id, s.expires_at, u.name, u.email, u.learn_subscriber,
-              COALESCE(u.is_admin, false) AS is_admin
-       FROM sessions s
-       INNER JOIN users u ON u.id = s.user_id
-       WHERE s.id = $1 AND s.expires_at > NOW()`,
-      [sessionId],
-    )) as SessionRow[];
-
-    const row = rows[0];
-    if (!row) return null;
-
-    return {
-      id: row.user_id,
-      name: row.name,
-      email: row.email,
-      learn_subscriber: row.learn_subscriber,
-      is_admin: row.is_admin,
-    };
+    return this.loadSessionUser(this.sql(), sessionId);
   }
 
   private sign(value: string): string {
@@ -159,6 +186,39 @@ export class CookieSessionGuard implements AuthGuard {
   }
 }
 
+export class CookieSessionAuthManager extends AuthManager {
+  constructor(
+    readonly store: CookieSessionStore,
+    mapUser: MapSessionUser = defaultMapSessionUser,
+  ) {
+    super(new CookieSessionGuard(store, mapUser));
+  }
+
+  async signIn(user: SessionUser): Promise<{ sessionId: string; setCookie: string }> {
+    const sessionId = await this.store.create(user);
+    return { sessionId, setCookie: this.store.cookieHeader(user, sessionId) };
+  }
+
+  async signOut(request: Request): Promise<{ setCookie: string }> {
+    const sessionId = this.store.sessionIdFromRequest(request);
+    if (sessionId) {
+      await this.store.destroy(sessionId);
+    }
+
+    return { setCookie: this.store.clearCookieHeader() };
+  }
+
+  async signInRedirect(user: SessionUser, location: string, status = 302): Promise<Response> {
+    const { setCookie } = await this.signIn(user);
+    return redirectWithCookie(location, setCookie, status);
+  }
+
+  async signOutRedirect(request: Request, location: string, status = 302): Promise<Response> {
+    const { setCookie } = await this.signOut(request);
+    return redirectWithCookie(location, setCookie, status);
+  }
+}
+
 export interface CreateCookieSessionAuthManagerOptions {
   store?: CookieSessionStore;
   sql?: SqlSource;
@@ -166,11 +226,12 @@ export interface CreateCookieSessionAuthManagerOptions {
   cookieName?: string;
   maxAgeSeconds?: number;
   mapUser?: MapSessionUser;
+  loadSessionUser?: LoadSessionUser;
 }
 
 function createCookieSessionAuthManager(
   options: CreateCookieSessionAuthManagerOptions = {},
-): AuthManager {
+): CookieSessionAuthManager {
   const store =
     options.store ??
     new CookieSessionStore(
@@ -178,9 +239,10 @@ function createCookieSessionAuthManager(
       options.secret ?? process.env.SESSION_SECRET?.trim() ?? "",
       options.cookieName,
       options.maxAgeSeconds,
+      options.loadSessionUser,
     );
 
-  return new AuthManager(new CookieSessionGuard(store, options.mapUser ?? defaultMapSessionUser));
+  return new CookieSessionAuthManager(store, options.mapUser ?? defaultMapSessionUser);
 }
 
 export { createCookieSessionAuthManager, defaultMapSessionUser, defaultSessionSql };

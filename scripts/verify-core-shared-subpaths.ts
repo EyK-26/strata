@@ -14,6 +14,21 @@ const IMPORT_PATTERN =
 
 const sharedSubpathSet = new Set<string>(CORE_SHARED_SUBPATHS);
 
+/** Runtime names that must exist on the published JS entry even without a sibling checkout. */
+const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
+  "database/boundConnection": [
+    "bindDatabaseConnection",
+    "getBoundDatabaseConnection",
+    "resetBoundDatabaseConnection",
+  ],
+  "database/bindConnection": [
+    "bindDatabaseConnection",
+    "getBoundDatabaseConnection",
+    "resetBoundDatabaseConnection",
+  ],
+  "database/bunSql": ["bindBunSql", "createBunSqlPool"],
+};
+
 function parseImportNames(specifier: string): string[] {
   return specifier
     .split(",")
@@ -103,19 +118,36 @@ for (const subpath of CORE_SHARED_SUBPATHS) {
     );
   }
 
-  const required = requiredExports.get(subpath);
-  if (!required) {
+  const required = new Set<string>([
+    ...(requiredExports.get(subpath) ?? []),
+    ...(REQUIRED_SHARED_RUNTIME_EXPORTS[subpath] ?? []),
+  ]);
+  if (required.size === 0) {
     continue;
   }
 
   const shimModule = await import(shimPath);
   for (const exportName of required) {
-    if (!(exportName in shimModule)) {
+    if (!(exportName in shimModule) || typeof shimModule[exportName] !== "function") {
       errors.push(
         `Shared subpath @getstrata/core/${subpath} missing runtime export "${exportName}"`,
       );
     }
   }
+}
+
+const barrelPath = join(ROOT, "packages/strata-core/dist/index.js");
+try {
+  const barrel = await import(barrelPath);
+  for (const exportName of REQUIRED_SHARED_RUNTIME_EXPORTS["database/boundConnection"] ?? []) {
+    if (!(exportName in barrel) || typeof barrel[exportName] !== "function") {
+      errors.push(`@getstrata/core dist/index.js missing runtime export "${exportName}"`);
+    }
+  }
+} catch (error) {
+  errors.push(
+    `Unable to import packages/strata-core/dist/index.js: ${error instanceof Error ? error.message : String(error)}`,
+  );
 }
 
 if (errors.length > 0) {

@@ -4,6 +4,7 @@ export {
   isHtmxRequest,
   notFoundHtmlResponse,
   redirectResponse,
+  rssResponse,
   textResponse,
   xmlResponse,
 } from "./htmlResponse";

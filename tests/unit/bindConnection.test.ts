@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
+  getBoundDatabaseConnection,
   resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
+} from "@getstrata/core/database/bindConnection";
 import { resolveRepositoryConnection } from "@getstrata/core/database/repositoryConnection";
 
 describe("bindDatabaseConnection", () => {
@@ -17,6 +18,7 @@ describe("bindDatabaseConnection", () => {
     };
 
     bindDatabaseConnection(bound);
+    expect(getBoundDatabaseConnection()).toBe(bound);
     await resolveRepositoryConnection().unsafe("SELECT 1");
 
     expect(calls).toEqual(["SELECT 1"]);
@@ -30,6 +32,7 @@ describe("bindDatabaseConnection", () => {
       },
     });
     resetBoundDatabaseConnection();
+    expect(getBoundDatabaseConnection()).toBeNull();
     expect(resolveRepositoryConnection()).not.toBeNull();
   });
 });

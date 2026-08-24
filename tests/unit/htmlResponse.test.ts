@@ -4,6 +4,7 @@ import {
   isHtmxRequest,
   notFoundHtmlResponse,
   redirectResponse,
+  rssResponse,
   textResponse,
   xmlResponse,
 } from "@getstrata/core/view";
@@ -43,5 +44,22 @@ describe("html response helpers", () => {
     const xml = xmlResponse("<feed />");
     expect(xml.headers.get("content-type")).toBe("application/xml; charset=utf-8");
     expect(await xml.text()).toBe("<feed />");
+  });
+
+  test("xmlResponse accepts a contentType override and rssResponse uses RSS", async () => {
+    const custom = xmlResponse("<rss />", { contentType: "application/rss+xml" });
+    expect(custom.headers.get("content-type")).toBe("application/rss+xml; charset=utf-8");
+
+    const alreadyHasCharset = xmlResponse("<rss />", {
+      contentType: "application/rss+xml; charset=utf-8",
+    });
+    expect(alreadyHasCharset.headers.get("content-type")).toBe(
+      "application/rss+xml; charset=utf-8",
+    );
+
+    const rss = rssResponse("<rss />", { status: 200 });
+    expect(rss.status).toBe(200);
+    expect(rss.headers.get("content-type")).toBe("application/rss+xml; charset=utf-8");
+    expect(await rss.text()).toBe("<rss />");
   });
 });
