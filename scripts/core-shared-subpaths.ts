@@ -16,6 +16,7 @@ export const CORE_SHARED_SUBPATHS = [
   "database/baseRepository",
   "database/bindConnection",
   "database/boundConnection",
+  "database/bunSql",
   "database/connection",
   "database/defaultConnection",
   "database/repositoryConnection",

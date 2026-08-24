@@ -61,7 +61,12 @@ export type { ServiceProvider } from "../core/contracts/di.ts";
 export { resolveService } from "../core/contracts/di.ts";
 export type { DatabaseConnection } from "../core/database/baseRepository.ts";
 export { default as BaseRepository } from "../core/database/baseRepository.ts";
-export { bindDatabaseConnection } from "../core/database/bindConnection.ts";
+export {
+  bindDatabaseConnection,
+  getBoundDatabaseConnection,
+  resetBoundDatabaseConnection,
+} from "../core/database/bindConnection.ts";
+export { bindBunSql, createBunSqlPool } from "../core/database/bunSql.ts";
 export { createDatabaseConnection } from "../core/database/connection.ts";
 export {
   getActiveDatabaseConnection,
@@ -237,7 +242,10 @@ export {
   wrapRouteHandler,
 } from "../core/http/index.ts";
 export { createLoginThrottleMiddleware } from "../core/http/loginThrottleMiddleware.ts";
-export { createMemoryThrottleMiddleware } from "../core/http/memoryThrottleMiddleware.ts";
+export {
+  createMemoryThrottleMiddleware,
+  resetMemoryThrottleForTests,
+} from "../core/http/memoryThrottleMiddleware.ts";
 export { createMetricsMiddleware, normalizeMetricPath } from "../core/http/metricsMiddleware.ts";
 export type { Middleware, RouteHandler } from "../core/http/middleware.ts";
 export { type ParsedUpload, parseMultipartUpload } from "../core/http/parseMultipartUpload.ts";
@@ -383,6 +391,7 @@ export {
   notFoundHtmlResponse,
   redirectResponse,
   resolveWebLayoutData,
+  rssResponse,
   textResponse,
   xmlResponse,
 } from "../core/view/index.ts";

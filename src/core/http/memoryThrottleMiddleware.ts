@@ -7,10 +7,14 @@ interface MemoryThrottleOptions {
   keyPrefix?: string;
 }
 
-const buckets = new Map<string, { count: number; resetAt: number }>();
+type ThrottleBucket = { count: number; resetAt: number };
+
+const throttleBucketRegistries = new Set<Map<string, ThrottleBucket>>();
 
 function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Middleware {
   const prefix = options.keyPrefix ?? "workhub:memory-throttle:";
+  const buckets = new Map<string, ThrottleBucket>();
+  throttleBucketRegistries.add(buckets);
 
   return async (request: Request, next: () => Promise<Response>) => {
     const path = new URL(request.url).pathname;
@@ -43,5 +47,11 @@ function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Middlew
   };
 }
 
+function resetMemoryThrottleForTests(): void {
+  for (const buckets of throttleBucketRegistries) {
+    buckets.clear();
+  }
+}
+
 export type { MemoryThrottleOptions };
-export { createMemoryThrottleMiddleware };
+export { createMemoryThrottleMiddleware, resetMemoryThrottleForTests };

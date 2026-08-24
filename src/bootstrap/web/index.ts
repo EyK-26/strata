@@ -13,9 +13,11 @@ export {
 } from "./routing.ts";
 export { convertAppRoutesToBunRoutes, createWebServer, type WebServerOptions } from "./server.ts";
 export {
+  CookieSessionAuthManager,
   CookieSessionGuard,
   CookieSessionStore,
   createCookieSessionAuthManager,
+  type LoadSessionUser,
   type MapSessionUser,
   type SessionUser,
 } from "./session.ts";

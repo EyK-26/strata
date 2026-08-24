@@ -79,12 +79,14 @@ export { RouteRegistry, routeRegistry } from "./routeRegistry.ts";
 export { assertProductionSecrets } from "./secretsGuard.ts";
 
 export {
+  CookieSessionAuthManager,
   CookieSessionGuard,
   CookieSessionStore,
   createCookieSessionAuthManager,
   createCsrfProtection,
   createRouteKernel,
   createWebServer,
+  type LoadSessionUser,
   type MapSessionUser,
   type ParsedForm,
   parseFormBody,

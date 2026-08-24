@@ -55,6 +55,12 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.FailedJobService).toBe("function");
     expect(typeof core.createStorageDriver).toBe("function");
     expect(typeof core.registerDefaultDatabasePool).toBe("function");
+    expect(typeof core.getBoundDatabaseConnection).toBe("function");
+    expect(typeof core.resetBoundDatabaseConnection).toBe("function");
+    expect(typeof core.bindBunSql).toBe("function");
+    expect(typeof core.createBunSqlPool).toBe("function");
+    expect(typeof core.rssResponse).toBe("function");
+    expect(typeof core.resetMemoryThrottleForTests).toBe("function");
     expect(typeof core.createCacheStore).toBe("function");
   });
 });
