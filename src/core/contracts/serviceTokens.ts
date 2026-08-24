@@ -35,17 +35,7 @@ function resolveAbilityChecker(container: ServiceContainerLike): AbilityChecker 
     return container.resolve<AbilityChecker>(CORE_ABILITY_CHECKER_TOKEN);
   }
 
-  if (container.has(CORE_TOKEN_SERVICE_TOKEN)) {
-    const tokenService = container.resolve<unknown>(CORE_TOKEN_SERVICE_TOKEN);
-
-    if (isAbilityChecker(tokenService)) {
-      return tokenService;
-    }
-  }
-
-  throw new Error(
-    `Ability checker is not registered. Bind ${CORE_ABILITY_CHECKER_TOKEN} (or a tokenCan/requireAbility service at ${CORE_TOKEN_SERVICE_TOKEN}).`,
-  );
+  return container.resolve<AbilityChecker>(CORE_TOKEN_SERVICE_TOKEN);
 }
 
 function resolveAuthUserDirectory(container: ServiceContainerLike): AuthUserDirectory | null {
