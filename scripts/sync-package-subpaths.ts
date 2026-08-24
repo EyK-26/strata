@@ -239,10 +239,6 @@ function resolveBootstrapTypesPath(subpath: string): string {
     return "./dist/bootstrap/providers/index.d.ts";
   }
 
-  if (subpath === "providers/view") {
-    return "./dist/bootstrap/providers/view/index.d.ts";
-  }
-
   return `./dist/bootstrap/${subpath}.d.ts`;
 }
 

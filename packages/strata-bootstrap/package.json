@@ -116,7 +116,7 @@
       "default": "./dist/entries/providers.js"
     },
     "./providers/view": {
-      "types": "./dist/bootstrap/providers/view/index.d.ts",
+      "types": "./dist/bootstrap/providers/view.d.ts",
       "import": "./dist/entries/providers/view.js",
       "default": "./dist/entries/providers/view.js"
     },
