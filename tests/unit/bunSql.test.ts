@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type {
-  DatabaseConnection,
-  SqlDatabaseConnection,
-} from "@getstrata/core/database/baseRepository";
+import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   getBoundDatabaseConnection,
   resetBoundDatabaseConnection,
@@ -41,12 +38,12 @@ describe("bun SQL helpers", () => {
 
   test("bindBunSql registers the client as the bound connection and default pool", async () => {
     const calls: string[] = [];
-    const sql: DatabaseConnection = {
+    const sql = Object.assign(async () => [] as unknown[], {
       async unsafe<T>(query: string) {
         calls.push(query);
         return [] as T[];
       },
-    };
+    }) as SqlDatabaseConnection;
 
     expect(bindBunSql(sql)).toBe(sql);
     expect(getBoundDatabaseConnection()).toBe(sql);
