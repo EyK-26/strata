@@ -4,6 +4,7 @@ import {
   parseWebCreateApiTokenBody,
   parseWebDeleteAccountBody,
   parseWebLoginBody,
+  parseWebRegisterBody,
 } from "../../src/modules/user/webRequests";
 
 describe("webRequests", () => {
@@ -42,6 +43,32 @@ describe("webRequests", () => {
     });
 
     await expect(parseWebLoginBody(request)).rejects.toThrow(ValidationError);
+  });
+
+  test("parseWebRegisterBody accepts a confirmed password", async () => {
+    const request = new Request("http://example.test/register", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: "name=Ada+Lovelace&email=ada%40workhub.test&password=password123&password_confirmation=password123",
+    });
+
+    await expect(parseWebRegisterBody(request)).resolves.toEqual({
+      name: "Ada Lovelace",
+      email: "ada@workhub.test",
+      password: "password123",
+    });
+  });
+
+  test("parseWebRegisterBody rejects a password confirmation mismatch", async () => {
+    await expect(
+      parseWebRegisterBody(
+        new Request("http://example.test/register", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "name=Ada&email=ada%40workhub.test&password=password123&password_confirmation=nope",
+        }),
+      ),
+    ).rejects.toThrow(ValidationError);
   });
 
   test("parseWebCreateApiTokenBody accepts an optional expiry", async () => {

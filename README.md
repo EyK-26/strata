@@ -123,7 +123,7 @@ Choose how the app is initialized:
 | Mode | Env | What you get |
 |------|-----|--------------|
 | **API-only** (default) | `FRONTEND_MODE=api` | JSON API under `/api/v1`, static landing at `/` |
-| **Server + HTMX** | `FRONTEND_MODE=server-htmx` | Eta templates (HTML + `<% %>`, not Pug), cookie sessions, HTMX partials, `/login` |
+| **Server + HTMX** | `FRONTEND_MODE=server-htmx` | Eta templates (HTML + `<% %>`, not Pug), cookie sessions, HTMX partials, `/login`, `/register` |
 | **SPA (React)** | `FRONTEND_MODE=spa-react` | Bun + React app served from `/app/*` |
 
 Switch modes in an existing project:
@@ -554,7 +554,7 @@ docker compose down -v --remove-orphans
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
 - Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
-- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, OAuth routes, token CRUD, `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
+- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, OAuth routes, token CRUD, `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register`, `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …
 

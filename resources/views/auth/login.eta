@@ -49,6 +49,9 @@
 <% } %>
 
 <p class="hint"><a href="/forgot-password">Forgot your password?</a></p>
+<% if (it.registrationEnabled) { %>
+<p class="hint"><a href="/register">Create an account</a></p>
+<% } %>
 
 <form method="post" action="/email/verification-notification" class="stack-form">
   <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />

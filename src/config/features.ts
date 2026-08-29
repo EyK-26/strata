@@ -10,6 +10,7 @@ interface FeatureFlags {
   publicReads: boolean;
   emailVerification: boolean;
   mfa: boolean;
+  registration: boolean;
 }
 
 function readFeatureFlags(): FeatureFlags {
@@ -25,6 +26,7 @@ function readFeatureFlags(): FeatureFlags {
     publicReads: (process.env.FEATURE_PUBLIC_READS ?? "true") !== "false",
     emailVerification: (process.env.FEATURE_EMAIL_VERIFICATION ?? "false") === "true",
     mfa: (process.env.FEATURE_MFA ?? "false") === "true",
+    registration: (process.env.FEATURE_REGISTRATION ?? "true") !== "false",
   };
 }
 

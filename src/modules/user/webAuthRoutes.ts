@@ -1,12 +1,26 @@
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import { wrapWebRegister } from "@getstrata/bootstrap/web/routing";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
+import { isFeatureEnabled } from "../../config/features";
 import WebAuthController from "./webAuthController";
 
 function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
   const controller = new WebAuthController(dependencies);
 
   return {
+    ...(isFeatureEnabled("registration")
+      ? {
+          "/register": {
+            GET: kernel.wrapWeb(controller.showRegister as unknown as RouteHandler),
+            POST: wrapWebRegister(
+              kernel,
+              controller.register as unknown as RouteHandler,
+              controller.registerThrottled as unknown as RouteHandler,
+            ),
+          },
+        }
+      : {}),
     "/login": {
       GET: kernel.wrapWeb(controller.showLogin as unknown as RouteHandler),
       POST: kernel.wrapWeb(kernel.wrapLogin(controller.login as unknown as RouteHandler)),

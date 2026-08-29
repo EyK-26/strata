@@ -49,6 +49,61 @@ describe("password auth", () => {
     });
   });
 
+  test("registerWithPassword creates a member without an API token", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const tokens = new TokenService(users, new ApiTokenRepository());
+      const authService = new AuthService(users, tokens, new OAuthIdentityRepository());
+      const email = `register-${Date.now()}@workhub.test`;
+
+      const user = await authService.registerWithPassword("Ada Lovelace", email, "password123");
+      const tokenList = await tokens.listTokensForUser(user.id);
+
+      expect(user.email).toBe(email);
+      expect(user.role).toBe("member");
+      expect(user.email_verified_at).toBeInstanceOf(Date);
+      expect(tokenList).toHaveLength(0);
+      await expect(authService.authenticatePassword(email, "password123")).resolves.toMatchObject({
+        id: user.id,
+      });
+    });
+  });
+
+  test("registerWithPassword rejects a duplicate email", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const authService = new AuthService(
+        new UserRepository(),
+        new TokenService(new UserRepository(), new ApiTokenRepository()),
+        new OAuthIdentityRepository(),
+      );
+
+      await expect(
+        authService.registerWithPassword("Admin", "admin@workhub.test", "password123"),
+      ).rejects.toThrow("An account with this email already exists.");
+    });
+  });
+
+  test("registerWithPassword leaves email unverified when verification is required", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+
+    try {
+      await runWithTenantDatabase(defaultTestTenant, async () => {
+        const authService = new AuthService(
+          new UserRepository(),
+          new TokenService(new UserRepository(), new ApiTokenRepository()),
+          new OAuthIdentityRepository(),
+        );
+        const email = `unverified-${Date.now()}@workhub.test`;
+        const user = await authService.registerWithPassword("Unverified", email, "password123");
+
+        expect(user.email_verified_at).toBeNull();
+      });
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
   test("markEmailVerified stamps email_verified_at", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {
       const users = new UserRepository();

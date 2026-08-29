@@ -197,6 +197,29 @@ class AuthService {
     return updated;
   }
 
+  async registerWithPassword(name: string, email: string, password: string): Promise<UserRecord> {
+    if (await this.users.findByEmail(email)) {
+      throw new ValidationError("An account with this email already exists.", {
+        email: ["An account with this email already exists."],
+      });
+    }
+
+    const user = await this.users.create({
+      name: name.trim(),
+      email: email.trim(),
+      role: "member",
+      tenant_id: currentTenantId(),
+      password_hash: await hashPassword(password),
+      email_verified_at: isFeatureEnabled("emailVerification") ? null : new Date(),
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    logSecurityEvent("auth_register_success", { user_id: user.id });
+
+    return user;
+  }
+
   async authenticateOAuth(
     providerName: string,
     code: string,

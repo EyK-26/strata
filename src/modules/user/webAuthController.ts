@@ -2,7 +2,7 @@ import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { clearSessionCookie, createSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { UnauthorizedError } from "@getstrata/core/errors/http";
+import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";
@@ -13,6 +13,7 @@ import {
 } from "@getstrata/core/security/oauthState";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
+import { isFeatureEnabled } from "../../config/features";
 import type AuthService from "./authService";
 import type PasswordResetService from "./passwordResetService";
 import { authServiceToken, passwordResetServiceToken, userRepositoryToken } from "./provider";
@@ -20,6 +21,7 @@ import type UserRepository from "./repository";
 import {
   parseWebForgotPasswordBody,
   parseWebLoginBody,
+  parseWebRegisterBody,
   parseWebResetPasswordBody,
 } from "./webRequests";
 
@@ -50,6 +52,22 @@ class WebAuthController {
         errors: {},
         old: {},
         providers: this.authService.listOAuthProviders(),
+        registrationEnabled: isFeatureEnabled("registration"),
+        ...extras,
+      }),
+      { status },
+    );
+  }
+
+  private async renderRegister(
+    extras: Record<string, unknown> = {},
+    status = 200,
+  ): Promise<Response> {
+    return htmlResponse(
+      await this.view.render("auth/register", {
+        title: "Create account",
+        errors: {},
+        old: {},
         ...extras,
       }),
       { status },
@@ -62,6 +80,58 @@ class WebAuthController {
     return await this.renderLogin({
       redirect: redirect ?? "/organizations",
     });
+  });
+
+  readonly showRegister = withErrorHandling(async () => {
+    return await this.renderRegister();
+  });
+
+  readonly registerThrottled = withErrorHandling(async () => {
+    return await this.renderRegister(
+      { errors: { email: ["Too many registration attempts. Try again shortly."] } },
+      429,
+    );
+  });
+
+  readonly register = withErrorHandling(async (request: Request) => {
+    const body = await parseWebRegisterBody(request);
+
+    try {
+      const user = await this.authService.registerWithPassword(
+        body.name,
+        body.email,
+        body.password,
+      );
+
+      if (isFeatureEnabled("emailVerification")) {
+        await this.passwordResets.sendEmailVerification(user);
+
+        return flashResponse(Response.redirect("/login", 302), {
+          level: "success",
+          message: "Account created. Check your email to verify before signing in.",
+        });
+      }
+
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: "/organizations",
+          "Set-Cookie": createSessionCookie(user.id),
+        },
+      });
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return await this.renderRegister(
+          {
+            errors: error.details ?? { email: [error.message] },
+            old: { name: body.name, email: body.email },
+          },
+          422,
+        );
+      }
+
+      throw error;
+    }
   });
 
   readonly login = withErrorHandling(async (request: Request) => {

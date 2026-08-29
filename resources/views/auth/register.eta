@@ -1,0 +1,42 @@
+<section class="page-header">
+  <h1>Create account</h1>
+  <p class="hint">Self-serve signup creates a member account on the current tenant.</p>
+</section>
+
+<% if (Object.keys(it.errors ?? {}).length > 0) { %>
+<div class="form-errors" role="alert">
+  <% for (const [field, messages] of Object.entries(it.errors)) { %>
+    <% for (const message of Array.isArray(messages) ? messages : [messages]) { %>
+      <p><strong><%= field %></strong>: <%= message %></p>
+    <% } %>
+  <% } %>
+</div>
+<% } %>
+
+<form method="post" action="/register" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+
+  <label>
+    Name
+    <input type="text" name="name" value="<%= it.old?.name ?? '' %>" required maxlength="120" />
+  </label>
+
+  <label>
+    Email
+    <input type="email" name="email" value="<%= it.old?.email ?? '' %>" required />
+  </label>
+
+  <label>
+    Password
+    <input type="password" name="password" required minlength="8" />
+  </label>
+
+  <label>
+    Confirm password
+    <input type="password" name="password_confirmation" required minlength="8" />
+  </label>
+
+  <button type="submit">Create account</button>
+</form>
+
+<p class="hint"><a href="/login">Already have an account? Sign in</a></p>

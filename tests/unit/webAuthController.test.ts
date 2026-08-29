@@ -1,13 +1,18 @@
 import { describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
-import { authServiceToken, tokenServiceToken } from "../../src/modules/user/provider";
+import {
+  authServiceToken,
+  passwordResetServiceToken,
+  tokenServiceToken,
+} from "../../src/modules/user/provider";
 import WebAuthController from "../../src/modules/user/webAuthController";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
 function createController(services: {
   authService?: Record<string, unknown>;
   tokens?: Record<string, unknown>;
+  passwordResets?: Record<string, unknown>;
   view?: Record<string, unknown>;
 }): WebAuthController {
   const container = new ServiceContainer();
@@ -16,11 +21,20 @@ function createController(services: {
     loginWithPassword: mock(async () => ({ plainTextToken: "session-token" })),
     listOAuthProviders: mock(() => []),
     authenticateOAuth: mock(async () => ({ id: 4, email: "oauth@workhub.test", role: "member" })),
+    registerWithPassword: mock(async () => ({
+      id: 9,
+      email: "new@workhub.test",
+      role: "member",
+    })),
     buildOAuthAuthorizationUrl: mock(
       (_name: string, state: string, redirectUri?: string) =>
         `https://mock.oauth/authorize?state=${state}${redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
     ),
     ...services.authService,
+  });
+  container.set(passwordResetServiceToken, {
+    sendEmailVerification: mock(async () => undefined),
+    ...services.passwordResets,
   });
   container.set(tokenServiceToken, {
     resolveUserFromToken: mock(async () => ({ id: 1, role: "member" })),
@@ -211,6 +225,93 @@ describe("WebAuthController", () => {
     expect(response.status).toBe(422);
     expect(response.headers.get("Set-Cookie")).toBeNull();
     expect(await response.text()).toContain("Invalid OAuth state.");
+  });
+
+  test("showRegister renders the registration page", async () => {
+    const controller = createController({});
+    const response = await controller.showRegister();
+    const body = JSON.parse(await response.text()) as { title: string };
+
+    expect(response.status).toBe(200);
+    expect(body.title).toBe("Create account");
+  });
+
+  test("register sets a session cookie when email verification is off", async () => {
+    const controller = createController({});
+    const response = await controller.register(
+      new Request("http://example.test/register", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "name=Ada&email=new%40workhub.test&password=password123&password_confirmation=password123",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/organizations");
+    expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
+  });
+
+  test("register redirects to login when email verification is required", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+    const sendEmailVerification = mock(async () => undefined);
+
+    try {
+      const controller = createController({
+        passwordResets: { sendEmailVerification },
+      });
+      const response = await controller.register(
+        new Request("http://example.test/register", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "name=Ada&email=new%40workhub.test&password=password123&password_confirmation=password123",
+        }),
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe("/login");
+      expect(response.headers.get("Set-Cookie")).not.toContain("workhub_session=");
+      expect(sendEmailVerification).toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.FEATURE_EMAIL_VERIFICATION;
+      } else {
+        process.env.FEATURE_EMAIL_VERIFICATION = previous;
+      }
+    }
+  });
+
+  test("register re-renders duplicate email errors", async () => {
+    const { ValidationError } = await import("@getstrata/core/errors/http");
+    const controller = createController({
+      authService: {
+        registerWithPassword: mock(async () => {
+          throw new ValidationError("An account with this email already exists.", {
+            email: ["An account with this email already exists."],
+          });
+        }),
+      },
+    });
+
+    const response = await controller.register(
+      new Request("http://example.test/register", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "name=Ada&email=admin%40workhub.test&password=password123&password_confirmation=password123",
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(await response.text()).toContain("already exists");
+  });
+
+  test("registerThrottled returns a 429 register form", async () => {
+    const controller = createController({});
+    const response = await controller.registerThrottled();
+
+    expect(response.status).toBe(429);
+    expect(await response.text()).toContain("Too many registration attempts");
   });
 
   test("logout clears the session cookie and redirects to login", async () => {

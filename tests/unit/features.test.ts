@@ -32,5 +32,15 @@ describe("feature flags", () => {
     expect(typeof featureFlags.oauthLogin).toBe("boolean");
     expect(typeof featureFlags.scim).toBe("boolean");
     expect(typeof featureFlags.siemExport).toBe("boolean");
+    expect(typeof featureFlags.registration).toBe("boolean");
+  });
+
+  test("registration defaults on and can be disabled", () => {
+    delete process.env.FEATURE_REGISTRATION;
+    expect(isFeatureEnabled("registration")).toBe(true);
+
+    process.env.FEATURE_REGISTRATION = "false";
+    expect(isFeatureEnabled("registration")).toBe(false);
+    delete process.env.FEATURE_REGISTRATION;
   });
 });

@@ -1,6 +1,7 @@
 import { ValidationError } from "@getstrata/core/errors/http";
 import { WebFormRequest } from "@getstrata/core/http/webFormRequest";
 import {
+  confirmed,
   emailRule,
   integerRange,
   integerRule,
@@ -17,6 +18,12 @@ interface WebLoginBody {
   password: string;
   redirect?: string;
   mfaCode?: string;
+}
+
+interface WebRegisterBody {
+  name: string;
+  email: string;
+  password: string;
 }
 
 interface WebForgotPasswordBody {
@@ -58,6 +65,12 @@ const webLoginRules = {
   mfa_code: [stringRule()],
 };
 
+const webRegisterRules = {
+  name: [required(), stringRule(), minLength(1), maxLength(120)],
+  email: [required(), stringRule(), emailRule()],
+  password: [required(), stringRule(), minLength(8), maxLength(128), confirmed("password")],
+};
+
 const webForgotPasswordRules = {
   email: [required(), stringRule(), emailRule()],
 };
@@ -90,6 +103,18 @@ const webDeleteAccountRules = {
   password: [required(), stringRule()],
   confirm: [required(), stringRule()],
 };
+
+class WebRegisterRequest extends WebFormRequest<WebRegisterBody> {
+  protected parse(payload: unknown): WebRegisterBody {
+    const validated = validateObject(payload, webRegisterRules);
+
+    return {
+      name: String(validated.name).trim(),
+      email: String(validated.email).trim(),
+      password: String(validated.password),
+    };
+  }
+}
 
 class WebLoginRequest extends WebFormRequest<WebLoginBody> {
   protected parse(payload: unknown): WebLoginBody {
@@ -179,6 +204,7 @@ class WebDeleteAccountRequest extends WebFormRequest<WebDeleteAccountBody> {
   }
 }
 
+const webRegisterRequest = new WebRegisterRequest();
 const webLoginRequest = new WebLoginRequest();
 const webForgotPasswordRequest = new WebForgotPasswordRequest();
 const webResetPasswordRequest = new WebResetPasswordRequest();
@@ -187,6 +213,10 @@ const webDisableMfaRequest = new WebDisableMfaRequest();
 const webChangePasswordRequest = new WebChangePasswordRequest();
 const webCreateApiTokenRequest = new WebCreateApiTokenRequest();
 const webDeleteAccountRequest = new WebDeleteAccountRequest();
+
+async function parseWebRegisterBody(request: Request): Promise<WebRegisterBody> {
+  return await webRegisterRequest.validate(request);
+}
 
 async function parseWebLoginBody(request: Request): Promise<WebLoginBody> {
   return await webLoginRequest.validate(request);
@@ -228,6 +258,7 @@ export type {
   WebDisableMfaBody,
   WebForgotPasswordBody,
   WebLoginBody,
+  WebRegisterBody,
   WebResetPasswordBody,
 };
 export {
@@ -238,5 +269,6 @@ export {
   parseWebDisableMfaBody,
   parseWebForgotPasswordBody,
   parseWebLoginBody,
+  parseWebRegisterBody,
   parseWebResetPasswordBody,
 };

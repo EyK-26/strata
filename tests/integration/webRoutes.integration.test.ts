@@ -244,6 +244,65 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.headers.get("location")).toBe("/organizations");
   });
 
+  test("GET /register and POST /register create a session without an API token", async () => {
+    const page = await fetch(`${baseUrl}/register`);
+    expect(page.status).toBe(200);
+    const pageHtml = await page.text();
+    expect(pageHtml).toContain("Create account");
+    expect(pageHtml).toContain('action="/register"');
+
+    const loginPage = await fetch(`${baseUrl}/login`);
+    expect(await loginPage.text()).toContain('href="/register"');
+
+    const csrf = await fetchCsrfFromPath("/register");
+    const email = `html-register-${Date.now()}@workhub.test`;
+    const response = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: csrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "HTML Register",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/organizations");
+    expect(response.headers.get("set-cookie")).toContain("workhub_session=");
+
+    const session = mergeCookieHeader("", response);
+    const organizations = await fetch(`${baseUrl}/organizations`, {
+      headers: { cookie: session },
+    });
+    expect(organizations.status).toBe(200);
+    expect(await organizations.text()).toContain(email);
+
+    const duplicate = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: csrf.cookies,
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        name: "HTML Register",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(duplicate.status).toBe(422);
+    expect(await duplicate.text()).toContain("already exists");
+  });
+
   test("GET /login lists the mock OAuth provider", async () => {
     const response = await fetch(`${baseUrl}/login`);
 
