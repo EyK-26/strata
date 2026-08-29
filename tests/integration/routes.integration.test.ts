@@ -992,7 +992,72 @@ describe("integration routes with postgres", () => {
     expect(memberResponse.status).toBe(404);
   });
 
-  test("DELETE /users/me returns 401 without credentials", async () => {
+  test("PATCH /users/me updates a disposable user without touching admin", async () => {
+    const email = `json-profile-${Date.now()}@workhub.test`;
+    const registerResponse = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Json Profile User",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(registerResponse.status).toBe(201);
+    const registered = (await registerResponse.json()) as { token: string; user: { id: number } };
+    expect(registered.token).toBeTruthy();
+
+    const updated = await fetch(api("/users/me"), {
+      method: "PATCH",
+      headers: {
+        authorization: `Bearer ${registered.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Renamed Json User",
+        email,
+      }),
+    });
+    expect(updated.status).toBe(200);
+    const body = (await updated.json()) as {
+      user: { name: string; email: string };
+      email_changed: boolean;
+    };
+    expect(body.user.name).toBe("Renamed Json User");
+    expect(body.user.email).toBe(email);
+    expect(body.email_changed).toBe(false);
+
+    const taken = await fetch(api("/users/me"), {
+      method: "PATCH",
+      headers: {
+        authorization: `Bearer ${registered.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Renamed Json User",
+        email: "admin@workhub.test",
+      }),
+    });
+    expect(taken.status).toBe(422);
+    const errors = (await taken.json()) as { error: string };
+    expect(errors.error).toContain("already exists");
+
+    const admin = await fetch(api("/auth/me"), {
+      headers: adminHeaders(),
+    });
+    expect(admin.status).toBe(200);
+    expect(((await admin.json()) as { email: string }).email).toBe("admin@workhub.test");
+  });
+
+  test("PATCH and DELETE /users/me return 401 without credentials", async () => {
+    const patch = await fetch(api("/users/me"), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Nope", email: "nope@workhub.test" }),
+    });
+    expect(patch.status).toBe(401);
+
     const response = await fetch(api("/users/me"), {
       method: "DELETE",
     });

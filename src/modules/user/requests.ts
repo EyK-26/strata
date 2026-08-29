@@ -43,6 +43,11 @@ interface ResetPasswordBodyDto {
   password: string;
 }
 
+interface UpdateProfileBodyDto {
+  name: string;
+  email: string;
+}
+
 interface CreateApiTokenBodyDto {
   name: string;
   abilities?: string[];
@@ -141,6 +146,22 @@ class ResetPasswordRequest extends FormRequest<ResetPasswordBodyDto> {
 
 const resetPasswordRequest = new ResetPasswordRequest();
 
+class UpdateProfileRequest extends FormRequest<UpdateProfileBodyDto> {
+  protected parse(payload: unknown): UpdateProfileBodyDto {
+    const validated = validateObject(payload, {
+      name: [required(), stringRule(), minLength(1), maxLength(120)],
+      email: [required(), stringRule(), emailRule()],
+    });
+
+    return {
+      name: String(validated.name).trim(),
+      email: String(validated.email).trim(),
+    };
+  }
+}
+
+const updateProfileRequest = new UpdateProfileRequest();
+
 function parseTokenIdParams(params: TokenIdParams): { id: number } {
   return {
     id: parsePositiveIntParam(params.id, "token id"),
@@ -186,6 +207,10 @@ async function parseResetPasswordBody(request: Request): Promise<ResetPasswordBo
   return await resetPasswordRequest.validate(request);
 }
 
+async function parseUpdateProfileBody(request: Request): Promise<UpdateProfileBodyDto> {
+  return await updateProfileRequest.validate(request);
+}
+
 export type {
   CreateApiTokenBodyDto,
   ForgotPasswordBodyDto,
@@ -196,6 +221,7 @@ export type {
   RegisterBodyDto,
   ResetPasswordBodyDto,
   TokenIdParams,
+  UpdateProfileBodyDto,
 };
 export {
   parseCreateApiTokenBody,
@@ -206,4 +232,5 @@ export {
   parseRegisterBody,
   parseResetPasswordBody,
   parseTokenIdParams,
+  parseUpdateProfileBody,
 };

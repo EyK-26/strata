@@ -464,6 +464,124 @@ describe("AuthController", () => {
     expect(await response.json()).toEqual({ error: "Unable to resolve authenticated user." });
   });
 
+  test("updateProfile returns the updated user without sending verification", async () => {
+    const sendEmailVerification = mock(async () => undefined);
+    const updateProfile = mock(async () => ({
+      user: { ...user, name: "Ada Admin" },
+      emailChanged: false,
+    }));
+    const controller = createController({
+      authService: { updateProfile },
+      passwordResets: { sendEmailVerification },
+    });
+
+    const response = await controller.updateProfile(
+      new Request("http://example.test/users/me", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Ada Admin",
+          email: "admin@workhub.test",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      user: {
+        id: 1,
+        name: "Ada Admin",
+        email: "admin@workhub.test",
+        role: "admin",
+      },
+      email_changed: false,
+    });
+    expect(updateProfile).toHaveBeenCalledWith(1, "Ada Admin", "admin@workhub.test");
+    expect(sendEmailVerification).not.toHaveBeenCalled();
+  });
+
+  test("updateProfile skips verification mail when the email changes and the flag is off", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "false";
+    const sendEmailVerification = mock(async () => undefined);
+    const nextUser = { ...user, email: "ada-off@workhub.test" };
+    const updateProfile = mock(async () => ({
+      user: nextUser,
+      emailChanged: true,
+    }));
+
+    try {
+      const controller = createController({
+        authService: { updateProfile },
+        passwordResets: { sendEmailVerification },
+      });
+
+      const response = await controller.updateProfile(
+        new Request("http://example.test/users/me", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: "Admin User",
+            email: "ada-off@workhub.test",
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(((await response.json()) as { email_changed: boolean }).email_changed).toBe(true);
+      expect(sendEmailVerification).not.toHaveBeenCalled();
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
+  test("updateProfile sends verification when the email changes and the flag is on", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+    const sendEmailVerification = mock(async () => undefined);
+    const nextUser = {
+      ...user,
+      email: "ada-admin@workhub.test",
+      email_verified_at: null,
+    };
+    const updateProfile = mock(async () => ({
+      user: nextUser,
+      emailChanged: true,
+    }));
+
+    try {
+      const controller = createController({
+        authService: { updateProfile },
+        passwordResets: { sendEmailVerification },
+      });
+
+      const response = await controller.updateProfile(
+        new Request("http://example.test/users/me", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: "Admin User",
+            email: "ada-admin@workhub.test",
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        user: {
+          id: 1,
+          name: "Admin User",
+          email: "ada-admin@workhub.test",
+          role: "admin",
+        },
+        email_changed: true,
+      });
+      expect(sendEmailVerification).toHaveBeenCalledWith(nextUser);
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
   test("me returns the authenticated user resource", async () => {
     const controller = createController({});
 

@@ -213,6 +213,10 @@ export class WorkHubClient {
     return await this.request("/tasks/{id}/comments", { ...init, method: "POST" });
   }
 
+  async patchUsersMe(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me", { ...init, method: "PATCH" });
+  }
+
   async deleteUsersMe(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me", { ...init, method: "DELETE" });
   }

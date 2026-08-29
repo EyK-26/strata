@@ -39,6 +39,7 @@ import {
   parseRegisterBody,
   parseResetPasswordBody,
   parseTokenIdParams,
+  parseUpdateProfileBody,
   type TokenIdParams,
 } from "./requests";
 import { toNotificationResource, toUserResource } from "./resources";
@@ -218,6 +219,21 @@ class AuthController {
     const userId = await this.requireUserId(request);
     const record = await this.tokens.findByIdOrThrow(userId);
     return jsonResponse(toUserResource(record));
+  });
+
+  readonly updateProfile = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const body = await parseUpdateProfileBody(request);
+    const result = await this.authService.updateProfile(userId, body.name, body.email);
+
+    if (result.emailChanged && isFeatureEnabled("emailVerification")) {
+      await this.passwordResets.sendEmailVerification(result.user);
+    }
+
+    return jsonResponse({
+      user: toUserResource(result.user),
+      email_changed: result.emailChanged,
+    });
   });
 
   readonly exportMe = withErrorHandling(async (request: Request) => {

@@ -40,6 +40,7 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
       GET: kernel.wrapAuthenticated(controller.exportMe as unknown as RouteHandler),
     },
     "/users/me": {
+      PATCH: kernel.wrapAuthenticated(controller.updateProfile as unknown as RouteHandler),
       DELETE: kernel.wrapAuthenticated(controller.deleteMe as unknown as RouteHandler),
     },
     "/auth/tokens": {
