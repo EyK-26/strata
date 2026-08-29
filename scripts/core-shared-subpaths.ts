@@ -24,6 +24,7 @@ export const CORE_SHARED_SUBPATHS = [
   "errors/http",
   "events",
   "http",
+  "http/contentSecurityPolicy",
   "http/middleware",
   "http/requestMetaContext",
   "notifications",

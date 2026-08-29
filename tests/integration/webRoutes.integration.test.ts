@@ -153,12 +153,28 @@ describe("web routes with server-htmx frontend", () => {
     const csp = response.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("style-src 'self'");
     expect(csp).toContain("https://unpkg.com");
+    expect(csp).toContain("frame-src https://www.youtube.com");
+    expect(csp).toMatch(/'nonce-[^']+'/);
+    expect(csp).not.toContain("'unsafe-inline'");
 
     const html = await response.text();
     expect(html).toContain("Acme Labs");
-    expect(html).toContain('includeIndicatorStyles":false');
+    expect(html).toContain("inlineStyleNonce");
+    expect(html).not.toContain('includeIndicatorStyles":false');
     expect(html).toContain('href="/login"');
     expect(html).not.toContain('action="/logout"');
+  });
+
+  test("GET a missing public HTML route returns a styled 404", async () => {
+    const response = await fetch(`${baseUrl}/forum/nope/nope`);
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    const html = await response.text();
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain("/assets/app.css");
+    expect(html).toContain("Not Found");
+    expect(html).toContain("site-header");
   });
 
   test("GET /organizations shows sign out for signed-in session", async () => {

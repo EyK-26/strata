@@ -2,6 +2,7 @@ import type { AuthManager } from "@getstrata/core/auth/guard";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
+import { loginRedirectLocation } from "./safeInternalPath";
 
 function createRequireWebAuthMiddleware(auth: AuthManager): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
@@ -15,9 +16,7 @@ function createRequireWebAuthMiddleware(auth: AuthManager): Middleware {
       throw new UnauthorizedError();
     }
 
-    const redirectTarget = encodeURIComponent(new URL(request.url).pathname);
-
-    return Response.redirect(`/login?redirect=${redirectTarget}`, 302);
+    return Response.redirect(loginRedirectLocation(request), 302);
   };
 }
 

@@ -37,7 +37,12 @@ export function toRouteRequest<TParams extends Record<string, string>>(
   return request as RouteRequest<TParams>;
 }
 
-/** Laravel-style secured route-model binding for string keys (slugs, UUIDs). */
+/**
+ * Laravel-style secured route-model binding for string keys (slugs, UUIDs).
+ * Public HTML show pages should look up the model in the controller instead.
+ * If this wrapper is still used on HTML, a missing model becomes a styled 404
+ * and GET ETags are skipped for HTML / composite objects unless `etag: true`.
+ */
 export function wrapSecuredRouteModelByKey<
   TParams extends Record<string, string>,
   TModel,
@@ -45,7 +50,11 @@ export function wrapSecuredRouteModelByKey<
 >(
   param: TParam,
   resolver: (key: string, request: RouteRequest<TParams>) => Promise<TModel>,
-  authorization: { resource: string; action: "view" | "create" | "update" | "delete" },
+  authorization: {
+    resource: string;
+    action: "view" | "create" | "update" | "delete";
+    etag?: boolean;
+  },
   handler: (request: RouteRequest<TParams>, model: TModel) => Response | Promise<Response>,
 ): RouteHandler {
   const bound = withErrorHandling(

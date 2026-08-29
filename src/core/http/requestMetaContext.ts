@@ -6,6 +6,7 @@ type RequestMeta = {
   request?: Request;
   flash?: { level: string; message: string } | null;
   csrfToken?: string;
+  cspNonce?: string;
 };
 
 const requestMetaContext = createAsyncContextStore<RequestMeta>("@getstrata/requestMetaContext");

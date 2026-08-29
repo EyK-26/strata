@@ -1,8 +1,9 @@
 import { HttpError, UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { isViewsEnabled } from "../../config/frontend";
 import { mapDatabaseError } from "../database/errors";
-import { htmlResponse } from "../view";
+import { htmlErrorResponse } from "../view/webErrorView";
 import { requestPrefersJson } from "./contentNegotiation";
+import { loginRedirectLocation } from "./safeInternalPath";
 
 type FieldErrors = Record<string, string[]>;
 
@@ -27,7 +28,31 @@ function normalizeFieldErrors(details: unknown): FieldErrors {
   return errors;
 }
 
-function webErrorResponse(error: unknown, request?: Request): Response | null {
+function errorPageTitle(status: number, message: string): string {
+  if (status === 404) {
+    return "Not Found";
+  }
+
+  if (status === 403) {
+    return "Forbidden";
+  }
+
+  if (status >= 500) {
+    return "Server Error";
+  }
+
+  return message;
+}
+
+function publicErrorMessage(status: number, message: string): string {
+  if (status >= 500 && process.env.NODE_ENV === "production") {
+    return "Something went wrong.";
+  }
+
+  return message;
+}
+
+async function webErrorResponse(error: unknown, request?: Request): Promise<Response | null> {
   if (!request || !isViewsEnabled() || requestPrefersJson(request)) {
     return null;
   }
@@ -35,25 +60,18 @@ function webErrorResponse(error: unknown, request?: Request): Response | null {
   const mappedError = error instanceof HttpError ? error : mapDatabaseError(error);
 
   if (mappedError instanceof UnauthorizedError) {
-    const redirectTarget = encodeURIComponent(new URL(request.url).pathname);
-
-    return Response.redirect(`/login?redirect=${redirectTarget}`, 302);
+    return Response.redirect(loginRedirectLocation(request), 302);
   }
 
-  if (mappedError instanceof ValidationError) {
-    const errors = normalizeFieldErrors(mappedError.details);
-    const fieldSummary = Object.entries(errors)
-      .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`))
-      .join("\n");
+  const errors =
+    mappedError instanceof ValidationError ? normalizeFieldErrors(mappedError.details) : undefined;
 
-    return htmlResponse(
-      `<section class="page-header"><h1>Validation failed</h1><pre>${fieldSummary || mappedError.message}</pre><p><a href="javascript:history.back()">Go back</a></p></section>`,
-      { status: mappedError.status },
-    );
-  }
-
-  return htmlResponse(`<section class="page-header"><h1>${mappedError.message}</h1></section>`, {
+  return htmlErrorResponse({
     status: mappedError.status,
+    title: errorPageTitle(mappedError.status, mappedError.message),
+    message: publicErrorMessage(mappedError.status, mappedError.message),
+    errors,
+    request,
   });
 }
 

@@ -106,6 +106,7 @@ async function resolveWebLayoutData(
     [userKey]: user,
     csrfToken,
     flash,
+    cspNonce: currentRequestMeta().cspNonce ?? "",
     ...extra,
   };
 }

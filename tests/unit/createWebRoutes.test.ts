@@ -101,7 +101,10 @@ describe("createWebRoutes", () => {
 
     const response = await handler(new Request("http://localhost/assets/missing.css"));
     expect(response.status).toBe(404);
-    expect(await response.text()).toBe("Not Found");
+    const html = await response.text();
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain('href="/assets/app.css"');
+    expect(html).toContain("Not Found");
   });
 });
 

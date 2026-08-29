@@ -144,6 +144,27 @@ describe("EtaViewEngine", () => {
     ).rejects.toThrow(/HTML/);
   });
 
+  test("passes Request into resolveLayoutData", async () => {
+    const { EtaViewEngine } = await import("@getstrata/core/view/etaViewEngine");
+    const seen: Request[] = [];
+    const engine = new EtaViewEngine(viewsDirectory, async (request) => {
+      if (request) {
+        seen.push(request);
+      }
+      return { currentUser: { email: "member@example.test" } };
+    });
+    const request = new Request("http://example.test/learn");
+
+    const html = await engine.render(
+      "hello",
+      { title: "Hi", message: "there" },
+      { layout: false, request },
+    );
+
+    expect(seen[0]).toBe(request);
+    expect(html).toContain("<h1>Hi</h1>");
+  });
+
   test("does not treat JavaScript inside script blocks as Pug", async () => {
     const { EtaViewEngine } = await import("@getstrata/core/view/etaViewEngine");
     const engine = new EtaViewEngine(viewsDirectory);

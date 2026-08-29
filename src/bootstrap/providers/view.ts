@@ -1,5 +1,11 @@
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { DEFAULT_VIEWS_DIRECTORY, EtaViewEngine, resolveWebLayoutData } from "@getstrata/core/view";
+import {
+  configureWebErrorView,
+  DEFAULT_VIEWS_DIRECTORY,
+  EtaViewEngine,
+  errorTemplateName,
+  resolveWebLayoutData,
+} from "@getstrata/core/view";
 import { isViewsEnabled } from "../../config/frontend";
 import type { ServiceProvider } from "../contracts";
 
@@ -16,12 +22,18 @@ const viewProvider: ServiceProvider = {
 
     const viewsDirectory = process.env.VIEW_DIRECTORY?.trim() || DEFAULT_VIEWS_DIRECTORY;
     config.set(VIEW_DIRECTORY_CONFIG_KEY, viewsDirectory);
-    container.set(
-      CORE_VIEW_TOKEN,
-      new EtaViewEngine(viewsDirectory, () =>
-        resolveWebLayoutData(container, currentRequestMeta().request),
-      ),
+    const engine = new EtaViewEngine(viewsDirectory, (request) =>
+      resolveWebLayoutData(container, request ?? currentRequestMeta().request),
     );
+    container.set(CORE_VIEW_TOKEN, engine);
+    configureWebErrorView({
+      render: async (input) =>
+        engine.render(errorTemplateName(input.status), {
+          title: input.title,
+          message: input.message,
+          errors: input.errors,
+        }),
+    });
   },
 };
 

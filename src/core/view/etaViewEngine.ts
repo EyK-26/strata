@@ -1,4 +1,5 @@
 import { join, relative } from "node:path";
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { Eta } from "eta";
 import { assertEtaHtmlSource } from "./assertEtaHtmlSource";
 import type { ViewEngine } from "./viewEngine";
@@ -8,9 +9,10 @@ const DEFAULT_LAYOUT = "layouts/app.eta";
 
 interface RenderOptions {
   layout?: string | false;
+  request?: Request;
 }
 
-type LayoutDataResolver = () => Promise<Record<string, unknown>>;
+type LayoutDataResolver = (request?: Request) => Promise<Record<string, unknown>>;
 
 /**
  * Renders `.eta` files as HTML + Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`).
@@ -44,7 +46,8 @@ class EtaViewEngine implements ViewEngine {
     options: RenderOptions = {},
   ): Promise<string> {
     const template = name.endsWith(".eta") ? name : `${name}.eta`;
-    const layoutData = this.resolveLayoutData ? await this.resolveLayoutData() : {};
+    const request = options.request ?? currentRequestMeta().request;
+    const layoutData = this.resolveLayoutData ? await this.resolveLayoutData(request) : {};
     const mergedData = { ...layoutData, ...data };
     const body = await this.eta.renderAsync(template, mergedData);
     const layout = options.layout ?? DEFAULT_LAYOUT;
@@ -62,5 +65,5 @@ class EtaViewEngine implements ViewEngine {
   }
 }
 
-export type { RenderOptions };
+export type { LayoutDataResolver, RenderOptions };
 export { DEFAULT_LAYOUT, DEFAULT_VIEWS_DIRECTORY, EtaViewEngine };

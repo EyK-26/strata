@@ -37,7 +37,7 @@ function withErrorHandling<TArgs extends unknown[]>(
       return await handler(...args);
     } catch (error) {
       const request = args.find((arg): arg is Request => arg instanceof Request);
-      const webResponse = webErrorResponse(error, request);
+      const webResponse = await webErrorResponse(error, request);
 
       if (webResponse) {
         return webResponse;

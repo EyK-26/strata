@@ -1,5 +1,15 @@
 # @getstrata/core changelog
 
+## 0.5.61
+
+HTMX HTML kernel gaps that sibling apps could not work around without weakening CSP or duplicating the framework.
+
+- `createSecurityHeadersMiddleware({ csp | htmlCsp | directives })` and `configureContentSecurityPolicy()` extend the HTMX baseline. Defaults now allow YouTube/Vimeo embeds, `https:` media, `data:`/`https:` images, the HTMX 2.0.4 indicator style hash, and a per-request nonce on `script-src`/`style-src`. API JSON stays `default-src 'none'`. Do not add `'unsafe-inline'` to `script-src`.
+- `configureWebErrorView` / `notFoundHtmlResponse()` render styled HTML 404/403/500 (app `errors/*.eta` or kernel chrome with `/assets/app.css`). Production 5xx messages do not leak stacks.
+- `EtaViewEngine` passes `Request` into `resolveLayoutData`. `configureWebLayoutData({ loadUser })` receives that request as the second argument. Layout data includes `cspNonce`.
+- `securedBindRouteModelByKey` treats a null model as `NotFoundError`. GET ETags are skipped for HTML and composite objects unless `etag: true`.
+- Login redirects keep `pathname + search` after a same-origin safe-path check (`/forum?page=2` → `/login?redirect=%2Fforum%3Fpage%3D2`).
+
 ## 0.5.60
 
 - `@getstrata/core/database/boundConnection` publishes `getBoundDatabaseConnection` and `resetBoundDatabaseConnection` on the JS entry (not only the types file). Tests can reset the bound pool after `closeDatabase()` without a postinstall patch.

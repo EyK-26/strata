@@ -1,3 +1,5 @@
+import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { notFoundHtmlResponse } from "@getstrata/core/view";
 import type { BunRequest } from "bun";
 import type { AppRouteMap } from "../contracts.ts";
 
@@ -11,10 +13,23 @@ export interface WebServerOptions {
 
 type BunRouteHandler = (request: BunRequest) => Response | Promise<Response>;
 
+async function missingHtmlResponse(): Promise<Response> {
+  return notFoundHtmlResponse();
+}
+
 function wrapRouteHandler(handler: (request: Request) => unknown): BunRouteHandler {
   return async (request) => {
-    const response = await handler(request);
-    return (response as Response | null | undefined) ?? new Response("Not Found", { status: 404 });
+    return await runWithRequestMeta(
+      {
+        ...currentRequestMeta(),
+        request,
+        userAgent: request.headers.get("user-agent"),
+      },
+      async () => {
+        const response = await handler(request);
+        return (response as Response | null | undefined) ?? (await missingHtmlResponse());
+      },
+    );
   };
 }
 
@@ -59,22 +74,31 @@ export function createWebServer(options: WebServerOptions) {
     port: options.port,
     ...(bunRoutes ? { routes: bunRoutes } : {}),
     async fetch(request) {
-      await options.onRequest?.(request);
+      return await runWithRequestMeta(
+        {
+          ...currentRequestMeta(),
+          request,
+          userAgent: request.headers.get("user-agent"),
+        },
+        async () => {
+          await options.onRequest?.(request);
 
-      const url = new URL(request.url);
-      if (url.pathname.startsWith("/assets/")) {
-        const file = Bun.file(`${publicDir}${url.pathname}`);
-        if (await file.exists()) {
-          return new Response(file);
-        }
-      }
+          const url = new URL(request.url);
+          if (url.pathname.startsWith("/assets/")) {
+            const file = Bun.file(`${publicDir}${url.pathname}`);
+            if (await file.exists()) {
+              return new Response(file);
+            }
+          }
 
-      if (options.handle) {
-        const response = await options.handle(request);
-        return response ?? new Response("Not Found", { status: 404 });
-      }
+          if (options.handle) {
+            const response = await options.handle(request);
+            return response ?? (await missingHtmlResponse());
+          }
 
-      return new Response("Not Found", { status: 404 });
+          return await missingHtmlResponse();
+        },
+      );
     },
   });
 }

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { htmlResponse } from "@getstrata/core/view";
+import { notFoundHtmlResponse } from "@getstrata/core/view";
 import { isViewsEnabled } from "../config/frontend";
 import { buildWebModuleRoutes } from "./buildWebModuleRoutes";
 import type { AppDependencies, AppRouteMap } from "./contracts";
@@ -27,7 +27,7 @@ function createWebRoutes(dependencies: AppDependencies): AppRouteMap {
     const file = Bun.file(join(process.cwd(), "public", relativePath));
 
     if (!(await file.exists())) {
-      return htmlResponse("Not Found", { status: 404 });
+      return notFoundHtmlResponse();
     }
 
     return new Response(file);

@@ -62,5 +62,8 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.rssResponse).toBe("function");
     expect(typeof core.resetMemoryThrottleForTests).toBe("function");
     expect(typeof core.createCacheStore).toBe("function");
+    expect(typeof core.configureContentSecurityPolicy).toBe("function");
+    expect(typeof core.configureWebErrorView).toBe("function");
+    expect(typeof core.loginRedirectLocation).toBe("function");
   });
 });
