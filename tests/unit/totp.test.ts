@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { generateTotp, verifyTotp } from "@getstrata/core/security/totp";
+import {
+  buildOtpauthUrl,
+  generateTotp,
+  generateTotpSecret,
+  verifyTotp,
+} from "@getstrata/core/security/totp";
 
 describe("totp", () => {
   const secret = "JBSWY3DPEHPK3PXP";
@@ -23,5 +28,24 @@ describe("totp", () => {
 
   test("rejects invalid base32 secrets", () => {
     expect(() => generateTotp("!!!!", 1)).toThrow("Invalid base32 character in MFA secret.");
+  });
+
+  test("generateTotpSecret produces a verifiable secret", () => {
+    const generated = generateTotpSecret();
+    expect(generated).toMatch(/^[A-Z2-7]+$/u);
+    const timestep = Math.floor(Date.now() / 30_000);
+    expect(verifyTotp(generated, generateTotp(generated, timestep))).toBe(true);
+  });
+
+  test("buildOtpauthUrl encodes issuer and account", () => {
+    const url = buildOtpauthUrl({
+      secret: "JBSWY3DPEHPK3PXP",
+      account: "admin@workhub.test",
+      issuer: "WorkHub",
+    });
+
+    expect(url.startsWith("otpauth://totp/")).toBe(true);
+    expect(url).toContain("secret=JBSWY3DPEHPK3PXP");
+    expect(url).toContain("issuer=WorkHub");
   });
 });

@@ -3,6 +3,7 @@ import AuthController from "./controller";
 import userProvider, { tokenServiceToken, userRepositoryToken } from "./provider";
 import { createAuthRoutes } from "./routes";
 import { userTable } from "./table";
+import { createWebAccountRoutes } from "./webAccountController";
 import { createWebAuthRoutes } from "./webAuthRoutes";
 import { createWebNotificationRoutes } from "./webNotificationController";
 
@@ -18,6 +19,7 @@ const userModule: AppModule = {
     return {
       ...createWebAuthRoutes(dependencies, kernel),
       ...createWebNotificationRoutes(dependencies, kernel),
+      ...createWebAccountRoutes(dependencies, kernel),
     };
   },
 };

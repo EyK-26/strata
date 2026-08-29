@@ -541,6 +541,89 @@ describe("web routes with server-htmx frontend", () => {
     expect(html).toContain("admin@workhub.test");
   });
 
+  test("GET /reports and /account are available to a signed-in session", async () => {
+    const reports = await fetch(`${baseUrl}/reports`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    const account = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    const orgReport = await fetch(`${baseUrl}/reports/organizations/1`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(reports.status).toBe(200);
+    expect(await reports.text()).toContain("Reports");
+    expect(account.status).toBe(200);
+    const accountHtml = await account.text();
+    expect(accountHtml).toContain("admin@workhub.test");
+    expect(accountHtml).toContain("Two-factor authentication");
+    expect(orgReport.status).toBe(200);
+    expect(await orgReport.text()).toContain("Acme Labs");
+  });
+
+  test("POST /account/mfa generates an authenticator secret", async () => {
+    const csrf = await fetchCsrfFromPath("/account", adminSessionCookie);
+    const response = await fetch(`${baseUrl}/account/mfa`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: csrf.token }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("mfa-secret");
+  });
+
+  test("admin can delete a newly created organization from HTML", async () => {
+    const csrf = await fetchCsrfFromPath("/organizations", adminSessionCookie);
+    const slug = `delete-org-${Date.now()}`;
+
+    const createResponse = await fetch(`${baseUrl}/organizations`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        name: "Delete Me Org",
+        slug,
+        _token: csrf.token,
+      }),
+    });
+
+    expect(createResponse.status).toBe(302);
+
+    const list = await fetch(`${baseUrl}/organizations?per_page=100`, {
+      headers: { cookie: mergeCookieHeader(csrf.cookies, createResponse) },
+    });
+    const listHtml = await list.text();
+    const createdId = listHtml.match(
+      new RegExp(
+        `href="/organizations/(\\d+)"[^>]*>\\d+</a>\\s*</td>\\s*<td>Delete Me Org</td>\\s*<td>${slug}</td>`,
+      ),
+    )?.[1];
+
+    expect(createdId).toBeTruthy();
+
+    const deleteCsrf = await fetchCsrfFromPath(`/organizations/${createdId}`, adminSessionCookie);
+    const deleteResponse = await fetch(`${baseUrl}/organizations/${createdId}/delete`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: deleteCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: deleteCsrf.token }),
+    });
+
+    expect(deleteResponse.status).toBe(302);
+    expect(deleteResponse.headers.get("location")).toBe("/organizations");
+  });
+
   test("POST /logout clears the session cookie", async () => {
     const csrf = await fetchCsrfFromPath("/organizations", adminSessionCookie);
     const response = await fetch(`${baseUrl}/logout`, {

@@ -9,6 +9,8 @@ Laravel URL signing, Bun-native markdown mail, and session-auth cleanup.
 - `ExportAuditLogsJob` (`@getstrata/core/jobs/exportAuditLogsJob`) wraps SIEM export so the scheduler can dispatch a real job.
 - `DispatchWebhookJob` reads `APP_ENV` and `WEBHOOK_SIGNATURE_HEADER` instead of WorkHub `appConfig`.
 - `createRequireWebAuthMiddleware` runs the handler inside `runWithAuthUser` so `currentAuthUser()` works on HTMX session routes.
+- `generateTotpSecret()` / `buildOtpauthUrl()` on `@getstrata/core/security/totp`.
+- `createRequireAbilityMiddleware` rethrows `ForbiddenError` for HTML views so HTMX routes render a styled 403 instead of JSON.
 
 ## 0.5.61
 

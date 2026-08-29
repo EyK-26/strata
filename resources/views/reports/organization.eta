@@ -1,0 +1,43 @@
+<section class="page-header">
+  <h1><%= it.report.organization.name %></h1>
+  <p class="hint">Organization report for <code><%= it.report.organization.slug %></code></p>
+</section>
+
+<dl class="detail-list">
+  <div>
+    <dt>Projects</dt>
+    <dd><%= it.report.project_count %></dd>
+  </div>
+  <div>
+    <dt>Tasks</dt>
+    <dd><%= it.report.task_count %></dd>
+  </div>
+  <div>
+    <dt>Comments</dt>
+    <dd><%= it.report.comment_count %></dd>
+  </div>
+</dl>
+
+<section class="card">
+  <h2>Projects by status</h2>
+  <ul>
+    <% for (const [status, count] of Object.entries(it.report.projects_by_status ?? {})) { %>
+    <li><%= status %>: <%= count %></li>
+    <% } %>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Tasks by status</h2>
+  <ul>
+    <% for (const [status, count] of Object.entries(it.report.tasks_by_status ?? {})) { %>
+    <li><%= status %>: <%= count %></li>
+    <% } %>
+  </ul>
+</section>
+
+<p>
+  <a href="/reports">← All reports</a>
+  ·
+  <a href="/organizations/<%= it.report.organization.id %>">View organization</a>
+</p>

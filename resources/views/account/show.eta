@@ -1,0 +1,81 @@
+<section class="page-header">
+  <h1>Account</h1>
+  <p class="hint">Profile, email verification, and two-factor authentication for the signed-in session.</p>
+</section>
+
+<dl class="detail-list">
+  <div>
+    <dt>Name</dt>
+    <dd><%= it.user.name %></dd>
+  </div>
+  <div>
+    <dt>Email</dt>
+    <dd><%= it.user.email %></dd>
+  </div>
+  <div>
+    <dt>Role</dt>
+    <dd><%= it.user.role %></dd>
+  </div>
+  <div>
+    <dt>Email verified</dt>
+    <dd><%= it.user.email_verified_at ? "Yes" : "No" %></dd>
+  </div>
+  <div>
+    <dt>MFA</dt>
+    <dd><%= it.mfaEnabled ? "Enabled" : "Off" %></dd>
+  </div>
+</dl>
+
+<% if (!it.user.email_verified_at) { %>
+<form method="post" action="/account/email/verification-notification" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+  <button type="submit">Resend verification email</button>
+</form>
+<% } %>
+
+<% if (Object.keys(it.errors ?? {}).length > 0) { %>
+<div class="form-errors" role="alert">
+  <% for (const [field, messages] of Object.entries(it.errors)) { %>
+    <% for (const message of messages) { %>
+    <p><strong><%= field %></strong>: <%= message %></p>
+    <% } %>
+  <% } %>
+</div>
+<% } %>
+
+<section class="card">
+  <h2>Two-factor authentication</h2>
+  <% if (!it.mfaFeatureEnabled) { %>
+  <p class="hint">MFA is off for this environment (<code>FEATURE_MFA=false</code>). You can still generate a secret here; login only asks for a code when the flag is on.</p>
+  <% } %>
+
+  <% if (it.mfaEnabled) { %>
+  <form method="post" action="/account/mfa/disable" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Current password
+      <input type="password" name="password" required />
+    </label>
+    <button type="submit" class="danger-button">Turn off MFA</button>
+  </form>
+  <% } else { %>
+  <form method="post" action="/account/mfa" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <button type="submit">Generate authenticator secret</button>
+  </form>
+
+  <% if (it.pendingSecret) { %>
+  <p class="hint">Scan this otpauth URL or type the secret into an authenticator app, then confirm with a 6-digit code.</p>
+  <p><code class="mfa-secret"><%= it.pendingSecret %></code></p>
+  <p class="hint"><code><%= it.otpauthUrl %></code></p>
+  <form method="post" action="/account/mfa/confirm" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      MFA code
+      <input type="text" name="mfa_code" inputmode="numeric" autocomplete="one-time-code" required />
+    </label>
+    <button type="submit">Confirm MFA</button>
+  </form>
+  <% } %>
+  <% } %>
+</section>

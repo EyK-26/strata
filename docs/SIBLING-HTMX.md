@@ -98,6 +98,10 @@ Layouts receive `{ currentUser, csrfToken, flash, cspNonce }`. Put `nonce="<%= i
 
 Use `temporarySignedUrl()` / `hasValidSignature()` from `@getstrata/core/http/signedUrl` for attachment downloads, password reset, and email verification. HMAC uses `SIGNED_URL_SECRET` or `SESSION_SECRET`. Markdown mail goes through `Bun.markdown.html()` plus `sanitizeMailHtml`.
 
+TOTP helpers live on `@getstrata/core/security/totp`: `generateTotpSecret()`, `buildOtpauthUrl()`, `generateTotp()`, `verifyTotp()`. WorkHub’s `/account` page dogfoods setup/confirm/disable. Login only enforces MFA when `FEATURE_MFA=true`.
+
+`createRequireAbilityMiddleware` still returns JSON `{ error }` for API clients. When `FRONTEND_MODE=server-htmx` and the request prefers HTML, it rethrows `ForbiddenError` so `wrapWeb` can render the styled 403 page.
+
 Public HTML show pages should look up the model in the controller. `wrapSecuredRouteModelByKey` is safe on HTML if someone still uses it: a missing slug is a styled 404, and GET ETags are skipped for HTML / composite objects unless you pass `etag: true`.
 
 ## Content-Security-Policy

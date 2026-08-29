@@ -33,6 +33,18 @@
 
 <%~ include('../organizations/_members', it) %>
 
+<form method="post" action="/organizations/<%= it.organization.id %>/delete" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+  <button
+    type="submit"
+    class="danger-button"
+    hx-delete="/organizations/<%= it.organization.id %>"
+    hx-confirm="Delete this organization?"
+  >
+    Delete organization
+  </button>
+</form>
+
 <p><a href="/organizations">← Back to organizations</a></p>
 
 <section

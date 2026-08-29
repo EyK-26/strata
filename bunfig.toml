@@ -84,6 +84,7 @@ coveragePathIgnorePatterns = [
   "src/modules/**/webAuthRoutes.ts",
   "src/modules/**/webAuthController.ts",
   "src/modules/**/webNotificationController.ts",
+  "src/modules/**/webAccountController.ts",
   "src/modules/**/resources.ts",
   "src/modules/**/requests.ts",
   "src/modules/**/table.ts",

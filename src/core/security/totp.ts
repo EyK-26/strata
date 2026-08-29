@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 
 function decodeBase32(input: string): Buffer {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -22,6 +22,42 @@ function decodeBase32(input: string): Buffer {
   }
 
   return Buffer.from(bytes);
+}
+
+function encodeBase32(bytes: Uint8Array): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+
+  for (const byte of bytes) {
+    bits += byte.toString(2).padStart(8, "0");
+  }
+
+  let output = "";
+
+  for (let index = 0; index < bits.length; index += 5) {
+    const chunk = bits.slice(index, index + 5).padEnd(5, "0");
+    output += alphabet[Number.parseInt(chunk, 2)] ?? "";
+  }
+
+  return output;
+}
+
+function generateTotpSecret(byteLength = 20): string {
+  return encodeBase32(randomBytes(byteLength));
+}
+
+function buildOtpauthUrl(options: { secret: string; account: string; issuer?: string }): string {
+  const issuer = options.issuer?.trim() || process.env.APP_NAME?.trim() || "WorkHub";
+  const label = `${issuer}:${options.account}`;
+  const params = new URLSearchParams({
+    secret: options.secret,
+    issuer,
+    algorithm: "SHA1",
+    digits: "6",
+    period: "30",
+  });
+
+  return `otpauth://totp/${encodeURIComponent(label)}?${params.toString()}`;
 }
 
 function generateTotp(secret: string, counter: number, digits = 6): string {
@@ -60,4 +96,4 @@ function verifyTotp(secret: string, token: string, window = 1): boolean {
   return false;
 }
 
-export { generateTotp, verifyTotp };
+export { buildOtpauthUrl, generateTotp, generateTotpSecret, verifyTotp };

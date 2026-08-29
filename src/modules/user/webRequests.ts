@@ -25,6 +25,14 @@ interface WebResetPasswordBody {
   password: string;
 }
 
+interface WebConfirmMfaBody {
+  mfaCode: string;
+}
+
+interface WebDisableMfaBody {
+  password: string;
+}
+
 const webLoginRules = {
   email: [required(), stringRule(), emailRule()],
   password: [required(), stringRule()],
@@ -40,6 +48,14 @@ const webResetPasswordRules = {
   email: [required(), stringRule(), emailRule()],
   token: [required(), stringRule()],
   password: [required(), stringRule(), minLength(8), maxLength(128)],
+};
+
+const webConfirmMfaRules = {
+  mfa_code: [required(), stringRule(), minLength(6), maxLength(6)],
+};
+
+const webDisableMfaRules = {
+  password: [required(), stringRule()],
 };
 
 class WebLoginRequest extends WebFormRequest<WebLoginBody> {
@@ -75,9 +91,27 @@ class WebResetPasswordRequest extends WebFormRequest<WebResetPasswordBody> {
   }
 }
 
+class WebConfirmMfaRequest extends WebFormRequest<WebConfirmMfaBody> {
+  protected parse(payload: unknown): WebConfirmMfaBody {
+    const validated = validateObject(payload, webConfirmMfaRules);
+
+    return { mfaCode: String(validated.mfa_code) };
+  }
+}
+
+class WebDisableMfaRequest extends WebFormRequest<WebDisableMfaBody> {
+  protected parse(payload: unknown): WebDisableMfaBody {
+    const validated = validateObject(payload, webDisableMfaRules);
+
+    return { password: String(validated.password) };
+  }
+}
+
 const webLoginRequest = new WebLoginRequest();
 const webForgotPasswordRequest = new WebForgotPasswordRequest();
 const webResetPasswordRequest = new WebResetPasswordRequest();
+const webConfirmMfaRequest = new WebConfirmMfaRequest();
+const webDisableMfaRequest = new WebDisableMfaRequest();
 
 async function parseWebLoginBody(request: Request): Promise<WebLoginBody> {
   return await webLoginRequest.validate(request);
@@ -91,5 +125,25 @@ async function parseWebResetPasswordBody(request: Request): Promise<WebResetPass
   return await webResetPasswordRequest.validate(request);
 }
 
-export type { WebForgotPasswordBody, WebLoginBody, WebResetPasswordBody };
-export { parseWebForgotPasswordBody, parseWebLoginBody, parseWebResetPasswordBody };
+async function parseWebConfirmMfaBody(request: Request): Promise<WebConfirmMfaBody> {
+  return await webConfirmMfaRequest.validate(request);
+}
+
+async function parseWebDisableMfaBody(request: Request): Promise<WebDisableMfaBody> {
+  return await webDisableMfaRequest.validate(request);
+}
+
+export type {
+  WebConfirmMfaBody,
+  WebDisableMfaBody,
+  WebForgotPasswordBody,
+  WebLoginBody,
+  WebResetPasswordBody,
+};
+export {
+  parseWebConfirmMfaBody,
+  parseWebDisableMfaBody,
+  parseWebForgotPasswordBody,
+  parseWebLoginBody,
+  parseWebResetPasswordBody,
+};

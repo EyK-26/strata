@@ -1,10 +1,10 @@
 import type { OAuthProvider } from "@getstrata/core/auth/oauth/types";
 import { verifyPassword } from "@getstrata/core/auth/password";
-import { revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
-import { UnauthorizedError } from "@getstrata/core/errors/http";
+import { protectMfaSecret, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
-import { verifyTotp } from "@getstrata/core/security/totp";
+import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core/security/totp";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { isFeatureEnabled } from "../../config/features";
 import { resolveAbilitiesForRole } from "../../domain/abilities";
@@ -91,6 +91,66 @@ class AuthService {
       email_verified_at: new Date(),
       updated_at: new Date(),
     });
+  }
+
+  async beginMfaSetup(userId: number): Promise<{ secret: string; otpauthUrl: string }> {
+    const user = await this.users.findByIdOrThrow(userId);
+
+    if (user.mfa_enabled) {
+      throw new ValidationError("MFA is already enabled.", {
+        mfa: ["MFA is already enabled."],
+      });
+    }
+
+    const secret = generateTotpSecret();
+    await this.users.updateByIdOrThrow(userId, {
+      mfa_secret: protectMfaSecret(secret),
+      mfa_enabled: false,
+      updated_at: new Date(),
+    });
+
+    return {
+      secret,
+      otpauthUrl: buildOtpauthUrl({ secret, account: user.email }),
+    };
+  }
+
+  async confirmMfaSetup(userId: number, code: string): Promise<UserRecord> {
+    const user = await this.users.findByIdOrThrow(userId);
+    const secret = revealMfaSecret(user.mfa_secret);
+
+    if (!secret || !verifyTotp(secret, code)) {
+      logSecurityEvent("auth_mfa_failed", { reason: "invalid_setup_code", user_id: user.id });
+      throw new ValidationError("Invalid MFA code.", {
+        mfa_code: ["Invalid MFA code."],
+      });
+    }
+
+    const updated = await this.users.updateByIdOrThrow(userId, {
+      mfa_enabled: true,
+      updated_at: new Date(),
+    });
+    logSecurityEvent("auth_mfa_enabled", { user_id: user.id });
+
+    return updated;
+  }
+
+  async disableMfa(userId: number, password: string): Promise<UserRecord> {
+    const user = await this.users.findByIdOrThrow(userId);
+
+    if (!user.password_hash || !(await verifyPassword(password, user.password_hash))) {
+      logSecurityEvent("auth_mfa_failed", { reason: "invalid_password", user_id: user.id });
+      throw new UnauthorizedError("Invalid credentials.");
+    }
+
+    const updated = await this.users.updateByIdOrThrow(userId, {
+      mfa_enabled: false,
+      mfa_secret: null,
+      updated_at: new Date(),
+    });
+    logSecurityEvent("auth_mfa_disabled", { user_id: user.id });
+
+    return updated;
   }
 
   async loginWithOAuth(providerName: string, code: string): Promise<CreatedApiToken> {

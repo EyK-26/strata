@@ -1,5 +1,6 @@
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { resolveMembershipService } from "@getstrata/core/auth/membershipService";
+import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { ValidationError } from "@getstrata/core/errors/http";
@@ -252,6 +253,19 @@ class OrganizationWebController {
       });
     },
   );
+
+  readonly destroy = withErrorHandling(async (request: Request & { params: { id: string } }) => {
+    const id = Number.parseInt(String(request.params.id), 10);
+
+    await this.service.findByIdOrThrow(id);
+    await this.service.delete(id);
+    await this.dependencies.cache.tags(CACHE_TAGS.organizations, CACHE_TAGS.reports).flush();
+
+    return flashResponse(Response.redirect("/organizations", 302), {
+      level: "success",
+      message: "Organization deleted.",
+    });
+  });
 }
 
 export default OrganizationWebController;

@@ -25,6 +25,7 @@
         <a href="/projects">Projects</a>
         <a href="/tasks">Tasks</a>
         <a href="/search">Search</a>
+        <a href="/reports">Reports</a>
         <a href="/billing">Billing</a>
         <a href="/webhooks">Webhooks</a>
         <a href="/admin">Admin</a>
@@ -36,7 +37,7 @@
           hx-trigger="load, every 30s"
           hx-swap="innerHTML"
         ></div>
-        <span class="nav-user"><%= it.authUser.email %></span>
+        <a href="/account" class="nav-user"><%= it.authUser.email %></a>
         <form method="post" action="/logout" class="nav-logout">
           <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
           <button type="submit">Sign out</button>

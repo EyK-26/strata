@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
+import { generateTotp } from "@getstrata/core/security/totp";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
 import AuthService from "../../src/modules/user/authService";
 import OAuthIdentityRepository from "../../src/modules/user/oauthIdentityRepository";
 import UserRepository from "../../src/modules/user/repository";
 import TokenService from "../../src/modules/user/tokenService";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 import { defaultTestTenant } from "./testHelpers";
 
 describe("password auth", () => {
@@ -60,6 +62,49 @@ describe("password auth", () => {
       const verified = await authService.markEmailVerified(1);
 
       expect(verified.email_verified_at).toBeInstanceOf(Date);
+    });
+  });
+
+  test("MFA setup, login, and disable round-trip", async () => {
+    const previousMfa = process.env.FEATURE_MFA;
+    process.env.FEATURE_MFA = "true";
+
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const authService = new AuthService(
+        users,
+        new TokenService(users, new ApiTokenRepository()),
+        new OAuthIdentityRepository(),
+      );
+
+      try {
+        const setup = await authService.beginMfaSetup(1);
+        expect(setup.secret.length).toBeGreaterThan(10);
+        expect(setup.otpauthUrl).toContain("otpauth://totp/");
+
+        const code = generateTotp(setup.secret, Math.floor(Date.now() / 30_000));
+        const enabled = await authService.confirmMfaSetup(1, code);
+        expect(enabled.mfa_enabled).toBe(true);
+
+        await expect(
+          authService.authenticatePassword("admin@workhub.test", "password"),
+        ).rejects.toThrow("Invalid MFA code.");
+
+        const withCode = await authService.authenticatePassword("admin@workhub.test", "password", {
+          mfaCode: generateTotp(setup.secret, Math.floor(Date.now() / 30_000)),
+        });
+        expect(withCode.id).toBe(1);
+
+        const disabled = await authService.disableMfa(1, "password");
+        expect(disabled.mfa_enabled).toBe(false);
+      } finally {
+        await users.updateByIdOrThrow(1, {
+          mfa_enabled: false,
+          mfa_secret: null,
+          email_verified_at: new Date(),
+        });
+        restoreEnvVar("FEATURE_MFA", previousMfa);
+      }
     });
   });
 });

@@ -213,6 +213,8 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/notifications` | Session inbox (nav bell polls every 30s) |
 | `/billing` | Current tenant subscription |
 | `/webhooks` | Outbound webhook admin (global admin) |
+| `/reports`, `/reports/organizations/:id` | Tenant summary and per-organization reports |
+| `/account` | Session profile, email verification, TOTP MFA setup |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |
 
 Sign in as `admin@workhub.test` / `password` to access these routes. Core exports: `AdminResourceRegistry`, `formatAdminValue`, `FailedJobService.delete()`, `runQueueJob`, `temporarySignedUrl`.
@@ -550,7 +552,7 @@ docker compose down -v --remove-orphans
 - `GET/PATCH /users/me/notifications`, `PATCH /users/me/notifications/:id/read`
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
-- Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
+- Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
 - Auth: `GET /auth/me`, `POST /auth/login`, OAuth routes, token CRUD, `GET /auth/export`, `DELETE /auth/me`
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …
