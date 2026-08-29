@@ -1,6 +1,6 @@
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { htmlResponse } from "@getstrata/core/view";
+import { notFoundHtmlResponse } from "@getstrata/core/view";
 import index from "../../index.html";
 import { appConfig } from "../config/app";
 import { isFeatureEnabled } from "../config/features";
@@ -51,7 +51,7 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
     "/*": async () => {
       registerRoute("GET", "/*", []);
       if (isViewsEnabled()) {
-        return htmlResponse("Not Found", { status: 404 });
+        return notFoundHtmlResponse();
       }
 
       if (isSpaEnabled()) {

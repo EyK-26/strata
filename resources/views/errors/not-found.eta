@@ -1,0 +1,4 @@
+<section class="page-header">
+  <h1><%= it.title ?? "Not Found" %></h1>
+  <p><%= it.message ?? "The page you requested was not found." %></p>
+</section>

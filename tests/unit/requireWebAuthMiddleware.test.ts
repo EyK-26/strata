@@ -45,12 +45,12 @@ describe("createRequireWebAuthMiddleware", () => {
     );
 
     const response = await handler(
-      new Request("http://example.test/projects/1", {
+      new Request("http://example.test/forum?page=2", {
         headers: { accept: "text/html" },
       }),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("/login?redirect=%2Fprojects%2F1");
+    expect(response.headers.get("location")).toBe("/login?redirect=%2Fforum%3Fpage%3D2");
   });
 });

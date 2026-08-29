@@ -1,6 +1,6 @@
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import type { Policy } from "@getstrata/core/auth/policy";
-import { BadRequestError } from "@getstrata/core/errors/http";
+import { BadRequestError, NotFoundError } from "@getstrata/core/errors/http";
 import {
   resolveApplicationAuth,
   resolveApplicationPolicyGate,
@@ -19,10 +19,51 @@ interface RouteModelAuthorization {
   resource: string;
   action: keyof Policy;
   requireIfMatch?: boolean;
+  /** Opt in (`true`) or out (`false`) of GET ETags. HTML and composites are off by default. */
+  etag?: boolean;
 }
 
 function isMutatingPolicyAction(action: keyof Policy): boolean {
   return action === "update" || action === "delete";
+}
+
+function modelHasIdentity(model: unknown): boolean {
+  return (
+    !!model &&
+    typeof model === "object" &&
+    "id" in model &&
+    (model as { id?: unknown }).id !== undefined &&
+    (model as { id?: unknown }).id !== null
+  );
+}
+
+function shouldApplyViewEtag(
+  response: Response,
+  model: unknown,
+  authorization: RouteModelAuthorization,
+): boolean {
+  if (authorization.etag === false) {
+    return false;
+  }
+
+  if (authorization.etag === true) {
+    return true;
+  }
+
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (contentType.includes("text/html")) {
+    return false;
+  }
+
+  return modelHasIdentity(model);
+}
+
+function requireResolvedModel<TModel>(model: TModel | null | undefined): TModel {
+  if (model == null) {
+    throw new NotFoundError();
+  }
+
+  return model;
 }
 
 function securedBindRouteModel<
@@ -37,7 +78,7 @@ function securedBindRouteModel<
 ): (request: RouteRequest<TParams>) => Promise<Response> {
   return async (request: RouteRequest<TParams>) => {
     const id = parsePositiveIntParam(String(request.params[param]), String(param));
-    const model = await resolver(id, request);
+    const model = requireResolvedModel(await resolver(id, request));
     const gate = resolveApplicationPolicyGate();
     const auth = resolveApplicationAuth();
     const user = currentAuthUser() ?? (await auth.resolve(request));
@@ -52,7 +93,11 @@ function securedBindRouteModel<
 
     const response = await handler(request, model);
 
-    if (isEtagEnabled() && authorization.action === "view") {
+    if (
+      isEtagEnabled() &&
+      authorization.action === "view" &&
+      shouldApplyViewEtag(response, model, authorization)
+    ) {
       return applyConditionalGet(request, response, etagFromResource(model as EtagVersioned));
     }
 
@@ -76,7 +121,7 @@ function securedBindRouteModelByKey<
       throw new BadRequestError(`Missing route parameter "${String(param)}".`);
     }
 
-    const model = await resolver(key, request);
+    const model = requireResolvedModel(await resolver(key, request));
     const gate = resolveApplicationPolicyGate();
     const auth = resolveApplicationAuth();
     const user = currentAuthUser() ?? (await auth.resolve(request));
@@ -91,7 +136,11 @@ function securedBindRouteModelByKey<
 
     const response = await handler(request, model);
 
-    if (isEtagEnabled() && authorization.action === "view") {
+    if (
+      isEtagEnabled() &&
+      authorization.action === "view" &&
+      shouldApplyViewEtag(response, model, authorization)
+    ) {
       return applyConditionalGet(request, response, etagFromResource(model as EtagVersioned));
     }
 

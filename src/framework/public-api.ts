@@ -203,6 +203,19 @@ export {
 export { createBodySizeLimitMiddleware } from "../core/http/bodySizeLimitMiddleware.ts";
 export { readClientIp, trustForwardedFor } from "../core/http/clientIp.ts";
 export { conditionalJsonResponse } from "../core/http/conditionalResponse.ts";
+export type {
+  ContentSecurityPolicyDirectives,
+  ContentSecurityPolicyOptions,
+} from "../core/http/contentSecurityPolicy.ts";
+export {
+  configureContentSecurityPolicy,
+  generateCspNonce,
+  resolveContentSecurityPolicy,
+  resolveHtmlContentSecurityPolicy,
+  serverHtmxContentSecurityPolicy,
+  spaContentSecurityPolicy,
+  strictApiContentSecurityPolicy,
+} from "../core/http/contentSecurityPolicy.ts";
 export { readBunRequestCookie, readRequestCookie } from "../core/http/cookies.ts";
 export { createCorsMiddleware } from "../core/http/corsMiddleware.ts";
 export { createCsrfMiddleware } from "../core/http/csrfMiddleware.ts";
@@ -266,6 +279,11 @@ export {
   withErrorHandling,
 } from "../core/http/response.ts";
 export type { RouteRequest } from "../core/http/route.ts";
+export {
+  loginRedirectLocation,
+  safeInternalRedirectPath,
+  sanitizeInternalPath,
+} from "../core/http/safeInternalPath.ts";
 export { createScimThrottleMiddleware } from "../core/http/scimThrottleMiddleware.ts";
 export { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware.ts";
 export { createThrottleMiddleware } from "../core/http/throttleMiddleware.ts";
@@ -383,13 +401,17 @@ export {
   validateObject,
 } from "../core/validation/rules.ts";
 export {
+  configureWebErrorView,
   configureWebLayoutData,
   DEFAULT_VIEWS_DIRECTORY,
   EtaViewEngine,
+  errorTemplateName,
+  htmlErrorResponse,
   htmlResponse,
   isHtmxRequest,
   notFoundHtmlResponse,
   redirectResponse,
+  renderKernelErrorChrome,
   resolveWebLayoutData,
   rssResponse,
   textResponse,

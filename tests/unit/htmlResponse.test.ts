@@ -31,9 +31,13 @@ describe("html response helpers", () => {
   });
 
   test("notFoundHtmlResponse returns HTML 404", async () => {
-    const response = notFoundHtmlResponse();
+    const response = await notFoundHtmlResponse();
     expect(response.status).toBe(404);
-    expect(await response.text()).toBe("Not Found");
+    expect(response.headers.get("content-type")).toContain("text/html");
+    const html = await response.text();
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain('href="/assets/app.css"');
+    expect(html).toContain("Not Found");
   });
 
   test("textResponse and xmlResponse set content types", async () => {

@@ -77,19 +77,36 @@ Cookie names:
 
 WorkHub’s `TokenService` is bound to all three.
 
-`resolveWebLayoutData` does not assume WorkHub’s directory. Configure sibling templates with:
+`resolveWebLayoutData` does not assume WorkHub’s directory. `EtaViewEngine` passes the current `Request` (from `render(..., { request })` or request ALS) into the layout-data resolver. Configure sibling templates with:
 
 ```typescript
 import { configureWebLayoutData } from "@getstrata/core/view";
 
 configureWebLayoutData({
   userKey: "currentUser",
-  loadUser: async () => {
+  loadUser: async (_container, request) => {
+    if (!request) {
+      return null;
+    }
     const user = await sessionStore.read(request);
     return user ? { ...user, role: user.is_admin ? "admin" : "member" } : null;
   },
 });
 ```
+
+Layouts receive `{ currentUser, csrfToken, flash, cspNonce }`. Put `nonce="<%= it.cspNonce %>"` on inline CSRF helpers and set HTMX `inlineStyleNonce` so indicator CSS works without `'unsafe-inline'` on `script-src`.
+
+Public HTML show pages should look up the model in the controller. `wrapSecuredRouteModelByKey` is safe on HTML if someone still uses it: a missing slug is a styled 404, and GET ETags are skipped for HTML / composite objects unless you pass `etag: true`.
+
+## Content-Security-Policy
+
+`createSecurityHeadersMiddleware({ directives })` or `configureContentSecurityPolicy({ directives })` **extends** the HTMX baseline (YouTube/Vimeo `frame-src`, `media-src 'self' https:`, `img-src 'self' data: https:`, HTMX indicator style hash + per-request nonce). JSON/API responses stay `default-src 'none'`. Do not add `'unsafe-inline'` to `script-src`.
+
+## HTML errors
+
+`configureWebErrorView` / WorkHub’s view provider render `errors/not-found.eta`, `errors/forbidden.eta`, and `errors/error.eta` through the same Eta layout as success pages. Unknown `createWebServer` routes use that chrome (or a styled kernel fallback with `/assets/app.css`). Status codes stay 404/403/500; production 5xx messages do not leak stacks.
+
+`wrapWebAuthenticated` login redirects keep `pathname + search` after a same-origin safe-path check (`/forum?page=2` → `/login?redirect=%2Fforum%3Fpage%3D2`).
 
 Apps that do not have orgs should not call `configureMembershipLookup`.
 

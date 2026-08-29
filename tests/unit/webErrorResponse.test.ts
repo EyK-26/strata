@@ -6,6 +6,7 @@ import {
   ValidationError,
 } from "@getstrata/core/errors/http";
 import { normalizeFieldErrors, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
+import { resetWebErrorViewForTests } from "@getstrata/core/view/webErrorView";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("normalizeFieldErrors", () => {
@@ -34,6 +35,8 @@ describe("webErrorResponse", () => {
   const previousFrontendMode = process.env.FRONTEND_MODE;
 
   afterEach(() => {
+    resetWebErrorViewForTests();
+
     if (previousFrontendMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {
@@ -41,41 +44,41 @@ describe("webErrorResponse", () => {
     }
   });
 
-  test("returns null when request is missing", () => {
-    expect(webErrorResponse(new BadRequestError("Bad Request"))).toBeNull();
+  test("returns null when request is missing", async () => {
+    expect(await webErrorResponse(new BadRequestError("Bad Request"))).toBeNull();
   });
 
-  test("returns null when views are disabled", () => {
+  test("returns null when views are disabled", async () => {
     delete process.env.FRONTEND_MODE;
 
     const request = new Request("http://example.test/widgets", {
       headers: { accept: "text/html" },
     });
 
-    expect(webErrorResponse(new BadRequestError("Bad Request"), request)).toBeNull();
+    expect(await webErrorResponse(new BadRequestError("Bad Request"), request)).toBeNull();
   });
 
-  test("returns null when the client prefers JSON", () => {
+  test("returns null when the client prefers JSON", async () => {
     process.env.FRONTEND_MODE = "server-htmx";
 
     const request = new Request("http://example.test/api/v1/widgets", {
       headers: { accept: "application/json" },
     });
 
-    expect(webErrorResponse(new BadRequestError("Bad Request"), request)).toBeNull();
+    expect(await webErrorResponse(new BadRequestError("Bad Request"), request)).toBeNull();
   });
 
   test("redirects unauthorized errors to login", async () => {
     process.env.FRONTEND_MODE = "server-htmx";
 
-    const request = new Request("http://example.test/widgets/new", {
+    const request = new Request("http://example.test/widgets/new?tab=info", {
       headers: { accept: "text/html" },
     });
 
-    const response = webErrorResponse(new UnauthorizedError(), request);
+    const response = await webErrorResponse(new UnauthorizedError(), request);
 
     expect(response?.status).toBe(302);
-    expect(response?.headers.get("location")).toBe("/login?redirect=%2Fwidgets%2Fnew");
+    expect(response?.headers.get("location")).toBe("/login?redirect=%2Fwidgets%2Fnew%3Ftab%3Dinfo");
   });
 
   test("renders validation errors with field summaries", async () => {
@@ -90,10 +93,12 @@ describe("webErrorResponse", () => {
       slug: "already taken",
     });
 
-    const response = webErrorResponse(error, request);
+    const response = await webErrorResponse(error, request);
     const html = await response?.text();
 
     expect(response?.status).toBe(422);
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain('href="/assets/app.css"');
     expect(html).toContain("Validation failed");
     expect(html).toContain("name: is required");
     expect(html).toContain("slug: already taken");
@@ -108,7 +113,7 @@ describe("webErrorResponse", () => {
     });
     const error = new ValidationError("Validation failed", null);
 
-    const response = webErrorResponse(error, request);
+    const response = await webErrorResponse(error, request);
     const html = await response?.text();
 
     expect(html).toContain("Validation failed");
@@ -121,10 +126,12 @@ describe("webErrorResponse", () => {
       headers: { accept: "text/html" },
     });
 
-    const response = webErrorResponse(new BadRequestError("Invalid widget"), request);
+    const response = await webErrorResponse(new BadRequestError("Invalid widget"), request);
     const html = await response?.text();
 
     expect(response?.status).toBe(400);
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain('href="/assets/app.css"');
     expect(html).toContain("Invalid widget");
   });
 
@@ -135,7 +142,7 @@ describe("webErrorResponse", () => {
       headers: { accept: "text/html" },
     });
 
-    const response = webErrorResponse(new Error("connection refused"), request);
+    const response = await webErrorResponse(new Error("connection refused"), request);
     const html = await response?.text();
 
     expect(response?.status).toBe(400);
@@ -150,7 +157,7 @@ describe("webErrorResponse", () => {
     });
     const error = new HttpError(418, "I am a teapot");
 
-    const response = webErrorResponse(error, request);
+    const response = await webErrorResponse(error, request);
     const html = await response?.text();
 
     expect(response?.status).toBe(418);

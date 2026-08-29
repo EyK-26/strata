@@ -25,10 +25,6 @@ function redirectResponse(location: string, status = 302): Response {
   });
 }
 
-function notFoundHtmlResponse(body = "Not Found"): Response {
-  return htmlResponse(body, { status: 404 });
-}
-
 function textResponse(body: string, init: { status?: number } = {}): Response {
   return new Response(body, {
     status: init.status ?? 200,
@@ -51,12 +47,4 @@ function rssResponse(body: string, init: { status?: number } = {}): Response {
   return xmlResponse(body, { ...init, contentType: "application/rss+xml" });
 }
 
-export {
-  htmlResponse,
-  isHtmxRequest,
-  notFoundHtmlResponse,
-  redirectResponse,
-  rssResponse,
-  textResponse,
-  xmlResponse,
-};
+export { htmlResponse, isHtmxRequest, redirectResponse, rssResponse, textResponse, xmlResponse };
