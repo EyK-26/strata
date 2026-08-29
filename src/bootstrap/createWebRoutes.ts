@@ -1,6 +1,6 @@
 import { join } from "node:path";
+import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
-import { isViewsEnabled } from "../config/frontend";
 import { buildWebModuleRoutes } from "./buildWebModuleRoutes";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 import { routeRegistry } from "./routeRegistry";

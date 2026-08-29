@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.68
+
+- Published core no longer imports WorkHub `src/config`. Frontend mode, queue retries, CORS, and upload limits read env (`FRONTEND_MODE`, `QUEUE_*`, `CORS_ALLOWED_ORIGINS`, `MAX_UPLOAD_BYTES`).
+- `@getstrata/core/runtime/frontendMode` exports `readFrontendMode` / `isViewsEnabled` / `isSpaEnabled`.
+
 ## 0.5.67
 
 - OpenAPI title, server URLs, and generated SDK class name come from `APP_NAME` / `APP_URL` / `API_PREFIX` / `APP_SDK_CLASS` instead of importing WorkHub `src/config/app`.

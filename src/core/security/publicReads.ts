@@ -1,7 +1,5 @@
-import { isFeatureEnabled } from "../../config/features";
-
 function isPublicReadsEnabled(): boolean {
-  return isFeatureEnabled("publicReads");
+  return (process.env.FEATURE_PUBLIC_READS ?? "true") !== "false";
 }
 
 function guestCanViewResource(): boolean {

@@ -1,6 +1,6 @@
-import { queueConfig } from "../../config/queue";
 import type FailedJobService from "./failedJobService";
 import { jobRegistry } from "./jobRegistry";
+import { queueConfig } from "./queueConfig";
 
 interface QueueJobEnvelope {
   name: string;

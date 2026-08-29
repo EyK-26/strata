@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.55
+
+- HttpKernel and route builders read `isViewsEnabled` / `isSpaEnabled` from `@getstrata/core/runtime/frontendMode` instead of WorkHub `src/config/frontend`.
+
 ## 0.2.54
 
 - `HttpKernel.wrapSigned()` applies `createValidateSignatureMiddleware` so HTMX routes can require a valid signed URL.

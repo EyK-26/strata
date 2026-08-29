@@ -70,6 +70,10 @@ Cookie names:
 | Webhook HMAC header | `x-workhub-signature` | `WEBHOOK_SIGNATURE_HEADER` |
 | OpenAPI title / SDK class | `WorkHub API` / `WorkHubClient` | `APP_NAME` / `APP_SDK_CLASS` |
 | App URL / API prefix / env | `http://localhost:3000` / `/api/v1` / `local` | `APP_URL` / `API_PREFIX` / `APP_ENV` |
+| Frontend mode | `api` | `FRONTEND_MODE` (`server-htmx` / `spa-react`) via `@getstrata/core/runtime/frontendMode` |
+| Queue driver / retries | `sync` / 3 / 1000ms | `QUEUE_DRIVER` / `QUEUE_MAX_ATTEMPTS` / `QUEUE_BACKOFF_MS` |
+| CORS origins | `*` | `CORS_ALLOWED_ORIGINS` |
+| Upload size / MIME allowlist | 5MB / common docs+images | `MAX_UPLOAD_BYTES` |
 | `CookieSessionStore` | `strata_session` | constructor `cookieName` |
 
 `kernel.wrapWebAuthenticated` / `wrapWebGlobalAdmin` work with this `AuthManager`. Do not bake WorkHub’s ability catalog into the cookie-session path.

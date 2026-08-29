@@ -1,4 +1,5 @@
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import {
   configureWebErrorView,
   DEFAULT_VIEWS_DIRECTORY,
@@ -6,7 +7,6 @@ import {
   errorTemplateName,
   resolveWebLayoutData,
 } from "@getstrata/core/view";
-import { isViewsEnabled } from "../../config/frontend";
 import type { ServiceProvider } from "../contracts";
 
 const CORE_VIEW_TOKEN = "core.view";

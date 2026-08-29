@@ -1,7 +1,7 @@
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { isViewsEnabled } from "../../config/frontend";
 import type { AbilityChecker } from "../auth/abilityChecker";
+import { isViewsEnabled } from "../runtime/frontendMode";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
 

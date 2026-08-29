@@ -23,10 +23,10 @@ import { createSecurityHeadersMiddleware } from "@getstrata/core/http/securityHe
 import { createValidateSignatureMiddleware } from "@getstrata/core/http/signedUrl";
 import { createThrottleMiddleware } from "@getstrata/core/http/throttleMiddleware";
 import { createRequestLoggingMiddleware } from "@getstrata/core/logging/requestLoggingMiddleware";
+import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { createTracingMiddleware } from "@getstrata/core/tracing/tracingMiddleware";
-import { isViewsEnabled } from "../config/frontend";
 import { resolveLoginRateLimit, resolveRegisterRateLimit } from "../config/rateLimit";
 import {
   CORE_AUTH_TOKEN,

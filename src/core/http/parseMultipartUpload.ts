@@ -1,5 +1,5 @@
 import { BadRequestError, PayloadTooLargeError } from "@getstrata/core/errors/http";
-import { isAllowedMimeType, resolveMaxUploadBytes } from "../../config/uploads";
+import { isAllowedMimeType, resolveMaxUploadBytes } from "./uploads";
 
 function normalizeMimeType(mimeType: string): string {
   return mimeType.split(";")[0]?.trim().toLowerCase() || "application/octet-stream";

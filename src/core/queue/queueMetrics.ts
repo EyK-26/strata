@@ -1,6 +1,6 @@
 import { RedisClient } from "bun";
-import { queueConfig } from "../../config/queue";
 import { createFailedJobService } from "./createAppQueue";
+import { queueConfig } from "./queueConfig";
 import { QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY } from "./redisQueue";
 
 interface QueueDepthMetrics {
