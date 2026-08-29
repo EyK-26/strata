@@ -505,6 +505,45 @@ describe("web routes with server-htmx frontend", () => {
     expect(await duplicate.text()).toContain("already exists");
   });
 
+  test("POST /register succeeds when an existing webhook URL is blocked", async () => {
+    await runWithMigrationBypass(async () => {
+      await getDatabase()`
+        INSERT INTO webhook (organization_id, tenant_id, url, secret, events, active, created_at)
+        VALUES (
+          NULL,
+          1,
+          ${"http://127.0.0.1/html-hook"},
+          ${"whsec_blocked_html_register"},
+          ${["*"]},
+          TRUE,
+          NOW()
+        )
+      `;
+    });
+
+    const csrf = await fetchCsrfFromPath("/register");
+    const email = `html-blocked-hook-${Date.now()}@workhub.test`;
+    const response = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: csrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "Blocked Hook Register",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location") ?? "").toMatch(/^\/organizations\/\d+$/);
+    expect(response.headers.get("set-cookie")).toContain("workhub_session=");
+  });
+
   test("POST /register with email verification starts a session on the verify notice", async () => {
     const previous = process.env.FEATURE_EMAIL_VERIFICATION;
     process.env.FEATURE_EMAIL_VERIFICATION = "true";

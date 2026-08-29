@@ -150,7 +150,7 @@ describe("DispatchWebhookJob", () => {
     expect(deliveries[0]?.error).toBe("network-down");
   });
 
-  test("rejects unsafe webhook urls", async () => {
+  test("records unsafe webhook urls without failing the job", async () => {
     const inserted = (await db`
       INSERT INTO webhook (organization_id, tenant_id, url, secret, events, active, created_at)
       VALUES (
@@ -174,6 +174,17 @@ describe("DispatchWebhookJob", () => {
         event: "task.created",
         payload: {},
       }),
-    ).rejects.toThrow(/blocked host/);
+    ).resolves.toBeUndefined();
+
+    const deliveries = (await db`
+      SELECT response_status, error
+      FROM webhook_delivery
+      WHERE webhook_id = ${inserted[0]!.id}
+      ORDER BY id DESC
+      LIMIT 1
+    `) as Array<{ response_status: number | null; error: string | null }>;
+
+    expect(deliveries[0]?.response_status).toBeNull();
+    expect(deliveries[0]?.error).toMatch(/blocked host/);
   });
 });

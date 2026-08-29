@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import { getDatabase } from "../../src/db/connection";
 import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../../src/domain/auth";
 import { TEST_SCIM_BEARER_TOKEN } from "../../src/domain/scim";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
@@ -151,6 +153,40 @@ describe("integration routes with postgres", () => {
   test("GET /auth/me returns 401 without credentials", async () => {
     const response = await fetch(api("/auth/me"));
     expect(response.status).toBe(401);
+  });
+
+  test("POST /auth/register succeeds when an existing webhook URL is blocked", async () => {
+    await runWithMigrationBypass(async () => {
+      await getDatabase()`
+        INSERT INTO webhook (organization_id, tenant_id, url, secret, events, active, created_at)
+        VALUES (
+          NULL,
+          1,
+          ${"http://127.0.0.1/hook"},
+          ${"whsec_blocked_register"},
+          ${["*"]},
+          TRUE,
+          NOW()
+        )
+      `;
+    });
+
+    const email = `blocked-hook-${Date.now()}@workhub.test`;
+    const response = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Blocked Hook User",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { token: string; user: { email: string } };
+    expect(body.token).toBeTruthy();
+    expect(body.user.email).toBe(email);
   });
 
   test("POST /auth/tokens creates a revocable bearer token", async () => {

@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
+import { BadRequestError } from "@getstrata/core/errors/http";
 import { Job } from "@getstrata/core/queue";
 import { webhookSignatureHeader } from "@getstrata/core/runtime/appKeyPrefix";
 import { safeFetch } from "@getstrata/core/security/safeFetch";
@@ -53,12 +54,11 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
     const allowHttp = (process.env.APP_ENV ?? "local") !== "production";
     const signatureHeader = webhookSignatureHeader();
 
-    assertSafeOutboundUrl(webhook.url, { allowHttp });
-
     let responseStatus: number | null = null;
     let errorMessage: string | null = null;
 
     try {
+      assertSafeOutboundUrl(webhook.url, { allowHttp });
       const response = await safeFetch(
         webhook.url,
         {
@@ -89,6 +89,10 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
           ${errorMessage}
         )
       `;
+
+      if (error instanceof BadRequestError) {
+        return;
+      }
 
       return error instanceof Error ? error : new Error(errorMessage);
     }

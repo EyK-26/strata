@@ -21,7 +21,7 @@ After `bun run cli migrate:fresh --seed` (or integration test setup), these acco
 
 ## Bearer tokens (API / SPA)
 
-1. `POST /api/v1/auth/login` with `{ "email", "password" }`, or `POST /api/v1/auth/register` with `{ "name", "email", "password", "password_confirmation" }` (register also creates `{name}'s workspace` with slug `personal-{userId}`).
+1. `POST /api/v1/auth/login` with `{ "email", "password" }`, or `POST /api/v1/auth/register` with `{ "name", "email", "password", "password_confirmation" }` (register also creates `{name}'s workspace` with slug `personal-{userId}`; a blocked existing webhook URL does not fail that write).
 2. Use the returned token as `Authorization: Bearer <token>`.
 
 Forgot / reset (JSON): `POST /api/v1/auth/forgot-password` with `{ "email" }`, then `POST /api/v1/auth/reset-password` with `{ "email", "token", "password", "password_confirmation" }`. Resend verify: `POST /api/v1/auth/email/verification-notification` with `{ "email" }`. Profile: `PATCH /api/v1/users/me` with `{ "name", "email" }` (Fortify UpdateProfileInformation; email change + `FEATURE_EMAIL_VERIFICATION=true` clears verification and sends a new link). JSON MFA: `POST /api/v1/users/me/mfa` (secret + otpauth URL), `POST /api/v1/users/me/mfa/confirm` `{ "mfa_code" }` (returns recovery codes), `POST /api/v1/users/me/mfa/recovery-codes` `{ "password" }`, `DELETE /api/v1/users/me/mfa` `{ "password" }`. HTML notice: `GET /email/verify` (`FEATURE_EMAIL_VERIFICATION=true`; Laravel `verified` sends unverified sessions there).

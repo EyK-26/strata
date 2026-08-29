@@ -252,7 +252,7 @@ Set `AUTH_DEV_HEADERS=false` in production and rely on bearer tokens only.
 Password and OAuth login:
 
 - `POST /api/v1/auth/login`: `{ "email": "...", "password": "..." }` returns a bearer token (seeded users use password `password`)
-- `POST /api/v1/auth/register`: `{ "name", "email", "password", "password_confirmation" }` creates a member, a personal workspace (`{name}'s workspace`, slug `personal-{userId}`), and returns a bearer token (`FEATURE_REGISTRATION`, default on). When `FEATURE_EMAIL_VERIFICATION=true` the response is `{ user }` only and a verify email is sent (the workspace still exists so it is ready after verify).
+- `POST /api/v1/auth/register`: `{ "name", "email", "password", "password_confirmation" }` creates a member, a personal workspace (`{name}'s workspace`, slug `personal-{userId}`), and returns a bearer token (`FEATURE_REGISTRATION`, default on). When `FEATURE_EMAIL_VERIFICATION=true` the response is `{ user }` only and a verify email is sent (the workspace still exists so it is ready after verify). Register and organization creates still succeed when an existing webhook URL is blocked (`http://127.0.0.1/…`); the delivery is recorded and the write is not failed.
 - `POST /api/v1/auth/forgot-password`: `{ "email" }` always returns a generic success message (does not leak whether the account exists)
 - `POST /api/v1/auth/reset-password`: `{ "email", "token", "password", "password_confirmation" }` updates the password from the emailed token
 - `POST /api/v1/auth/email/verification-notification`: `{ "email" }` always returns a generic success message (does not leak whether the account exists or still needs verification)
@@ -266,7 +266,7 @@ Password and OAuth login:
 - `GET/POST /api/v1/webhooks`: register outbound webhook endpoints (`webhooks:read`, `webhooks:write`). Lifecycle: `POST /api/v1/webhooks/:id/deactivate`, `POST /api/v1/webhooks/:id/activate`, `DELETE /api/v1/webhooks/:id`, `POST /api/v1/webhooks/deliveries/:id/retry`
 - `GET /api/v1/search?q=registry`: PostgreSQL full-text search across tasks and comments, plus organization/project name matches
 
-Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC).
+Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC). Blocked or invalid webhook URLs are recorded as failed deliveries and do not fail the originating request (`DispatchWebhookJob` swallows `BadRequestError` from `assertSafeOutboundUrl`; the listener also swallows dispatch failures).
 
 ### OpenAPI and SDK generation
 

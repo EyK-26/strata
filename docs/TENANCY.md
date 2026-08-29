@@ -34,4 +34,4 @@ Authenticated non-admin users are always pinned to their account tenant. Global 
 
 Jobs that touch RLS tables must call `runWithTenantDatabase()` with an explicit tenant from the job payload. Do not rely on a leftover pooled `app.bypass_rls` or `app.tenant_id` from a previous request.
 
-`DispatchWebhookJob` requires `tenantId` and scopes the webhook lookup and delivery insert to that tenant.
+`DispatchWebhookJob` requires `tenantId` and scopes the webhook lookup and delivery insert to that tenant. Blocked outbound URLs (`assertSafeOutboundUrl`) are recorded on `webhook_delivery` and do not fail the job or the originating model write (register / org create).
