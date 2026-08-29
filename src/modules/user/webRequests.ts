@@ -33,6 +33,11 @@ interface WebDisableMfaBody {
   password: string;
 }
 
+interface WebChangePasswordBody {
+  currentPassword: string;
+  password: string;
+}
+
 const webLoginRules = {
   email: [required(), stringRule(), emailRule()],
   password: [required(), stringRule()],
@@ -56,6 +61,11 @@ const webConfirmMfaRules = {
 
 const webDisableMfaRules = {
   password: [required(), stringRule()],
+};
+
+const webChangePasswordRules = {
+  current_password: [required(), stringRule()],
+  password: [required(), stringRule(), minLength(8), maxLength(128)],
 };
 
 class WebLoginRequest extends WebFormRequest<WebLoginBody> {
@@ -107,11 +117,23 @@ class WebDisableMfaRequest extends WebFormRequest<WebDisableMfaBody> {
   }
 }
 
+class WebChangePasswordRequest extends WebFormRequest<WebChangePasswordBody> {
+  protected parse(payload: unknown): WebChangePasswordBody {
+    const validated = validateObject(payload, webChangePasswordRules);
+
+    return {
+      currentPassword: String(validated.current_password),
+      password: String(validated.password),
+    };
+  }
+}
+
 const webLoginRequest = new WebLoginRequest();
 const webForgotPasswordRequest = new WebForgotPasswordRequest();
 const webResetPasswordRequest = new WebResetPasswordRequest();
 const webConfirmMfaRequest = new WebConfirmMfaRequest();
 const webDisableMfaRequest = new WebDisableMfaRequest();
+const webChangePasswordRequest = new WebChangePasswordRequest();
 
 async function parseWebLoginBody(request: Request): Promise<WebLoginBody> {
   return await webLoginRequest.validate(request);
@@ -133,7 +155,12 @@ async function parseWebDisableMfaBody(request: Request): Promise<WebDisableMfaBo
   return await webDisableMfaRequest.validate(request);
 }
 
+async function parseWebChangePasswordBody(request: Request): Promise<WebChangePasswordBody> {
+  return await webChangePasswordRequest.validate(request);
+}
+
 export type {
+  WebChangePasswordBody,
   WebConfirmMfaBody,
   WebDisableMfaBody,
   WebForgotPasswordBody,
@@ -141,6 +168,7 @@ export type {
   WebResetPasswordBody,
 };
 export {
+  parseWebChangePasswordBody,
   parseWebConfirmMfaBody,
   parseWebDisableMfaBody,
   parseWebForgotPasswordBody,

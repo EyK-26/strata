@@ -562,6 +562,26 @@ describe("web routes with server-htmx frontend", () => {
     expect(await orgReport.text()).toContain("Acme Labs");
   });
 
+  test("POST /account/password rejects a wrong current password", async () => {
+    const csrf = await fetchCsrfFromPath("/account", adminSessionCookie);
+    const response = await fetch(`${baseUrl}/account/password`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        current_password: "not-the-password",
+        password: "brand-new-pass",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("Invalid credentials.");
+  });
+
   test("POST /account/mfa generates an authenticator secret", async () => {
     const csrf = await fetchCsrfFromPath("/account", adminSessionCookie);
     const response = await fetch(`${baseUrl}/account/mfa`, {

@@ -1,5 +1,5 @@
 import type { OAuthProvider } from "@getstrata/core/auth/oauth/types";
-import { verifyPassword } from "@getstrata/core/auth/password";
+import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
 import { protectMfaSecret, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
@@ -149,6 +149,36 @@ class AuthService {
       updated_at: new Date(),
     });
     logSecurityEvent("auth_mfa_disabled", { user_id: user.id });
+
+    return updated;
+  }
+
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    nextPassword: string,
+  ): Promise<UserRecord> {
+    const user = await this.users.findByIdOrThrow(userId);
+
+    if (!user.password_hash || !(await verifyPassword(currentPassword, user.password_hash))) {
+      logSecurityEvent("auth_password_change_failed", {
+        reason: "invalid_password",
+        user_id: user.id,
+      });
+      throw new UnauthorizedError("Invalid credentials.");
+    }
+
+    if (currentPassword === nextPassword) {
+      throw new ValidationError("Choose a different password.", {
+        password: ["Choose a different password."],
+      });
+    }
+
+    const updated = await this.users.updateByIdOrThrow(userId, {
+      password_hash: await hashPassword(nextPassword),
+      updated_at: new Date(),
+    });
+    logSecurityEvent("auth_password_changed", { user_id: user.id });
 
     return updated;
   }

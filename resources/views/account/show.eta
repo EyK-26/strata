@@ -44,6 +44,22 @@
 <% } %>
 
 <section class="card">
+  <h2>Change password</h2>
+  <form method="post" action="/account/password" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Current password
+      <input type="password" name="current_password" required />
+    </label>
+    <label>
+      New password
+      <input type="password" name="password" minlength="8" required />
+    </label>
+    <button type="submit">Update password</button>
+  </form>
+</section>
+
+<section class="card">
   <h2>Two-factor authentication</h2>
   <% if (!it.mfaFeatureEnabled) { %>
   <p class="hint">MFA is off for this environment (<code>FEATURE_MFA=false</code>). You can still generate a secret here; login only asks for a code when the flag is on.</p>

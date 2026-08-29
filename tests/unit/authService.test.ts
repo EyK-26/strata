@@ -65,6 +65,35 @@ describe("password auth", () => {
     });
   });
 
+  test("changePassword updates a hash and rejects the old password", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const authService = new AuthService(
+        users,
+        new TokenService(users, new ApiTokenRepository()),
+        new OAuthIdentityRepository(),
+      );
+
+      try {
+        await authService.changePassword(2, "password", "new-member-pass");
+        await expect(
+          authService.authenticatePassword("member@workhub.test", "password"),
+        ).rejects.toThrow("Invalid credentials.");
+        const user = await authService.authenticatePassword(
+          "member@workhub.test",
+          "new-member-pass",
+        );
+        expect(user.id).toBe(2);
+      } finally {
+        await authService.changePassword(2, "new-member-pass", "password").catch(async () => {
+          await users.updateByIdOrThrow(2, {
+            password_hash: await hashPassword("password"),
+          });
+        });
+      }
+    });
+  });
+
   test("MFA setup, login, and disable round-trip", async () => {
     const previousMfa = process.env.FEATURE_MFA;
     process.env.FEATURE_MFA = "true";

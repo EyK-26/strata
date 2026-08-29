@@ -3,6 +3,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 const FLASH_COOKIE = "workhub_flash";
 const FLASH_TTL_MS = 60 * 1000;
 
+function flashCookieName(): string {
+  return process.env.FLASH_COOKIE_NAME?.trim() || FLASH_COOKIE;
+}
+
 type FlashLevel = "success" | "error" | "info";
 
 interface FlashMessage {
@@ -36,7 +40,7 @@ function readFlashCookie(request: Request): string | null {
   for (const part of cookieHeader.split(";")) {
     const [name, ...rest] = part.trim().split("=");
 
-    if (name === FLASH_COOKIE) {
+    if (name === flashCookieName()) {
       return decodeURIComponent(rest.join("="));
     }
   }
@@ -104,11 +108,11 @@ function createFlashCookie(message: FlashMessage): string {
   const issuedAt = Date.now();
   const value = signFlashPayload(payload, issuedAt);
 
-  return `${FLASH_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=60`;
+  return `${flashCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=60`;
 }
 
 function clearFlashCookie(): string {
-  return `${FLASH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${flashCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
 function pullFlash(request: Request): FlashMessage | null {
@@ -144,4 +148,12 @@ function withFlashClear(response: Response): Response {
 }
 
 export type { FlashLevel, FlashMessage };
-export { clearFlashCookie, createFlashCookie, flashResponse, pullFlash, withFlashClear };
+export {
+  clearFlashCookie,
+  createFlashCookie,
+  FLASH_COOKIE,
+  flashCookieName,
+  flashResponse,
+  pullFlash,
+  withFlashClear,
+};

@@ -61,6 +61,7 @@ Cookie names:
 |--------|---------|----------|
 | HMAC session (`SessionGuard`) | `workhub_session` | `SESSION_COOKIE_NAME` |
 | CSRF | `workhub_csrf` | `CSRF_COOKIE_NAME` |
+| Flash | `workhub_flash` | `FLASH_COOKIE_NAME` |
 | `CookieSessionStore` | `strata_session` | constructor `cookieName` |
 
 `kernel.wrapWebAuthenticated` / `wrapWebGlobalAdmin` work with this `AuthManager`. Do not bake WorkHub’s ability catalog into the cookie-session path.

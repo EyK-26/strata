@@ -16,7 +16,11 @@ import type PasswordResetService from "./passwordResetService";
 import { authServiceToken, passwordResetServiceToken, userRepositoryToken } from "./provider";
 import type UserRepository from "./repository";
 import type { UserRecord } from "./types";
-import { parseWebConfirmMfaBody, parseWebDisableMfaBody } from "./webRequests";
+import {
+  parseWebChangePasswordBody,
+  parseWebConfirmMfaBody,
+  parseWebDisableMfaBody,
+} from "./webRequests";
 
 class WebAccountController {
   constructor(private readonly dependencies: AppDependencies) {}
@@ -129,6 +133,38 @@ class WebAccountController {
     }
   });
 
+  readonly changePassword = withErrorHandling(async (request: Request) => {
+    const userId = this.requireUserId();
+
+    try {
+      const body = await parseWebChangePasswordBody(request);
+      await this.authService.changePassword(userId, body.currentPassword, body.password);
+
+      return flashResponse(Response.redirect("/account", 302), {
+        level: "success",
+        message: "Password updated.",
+      });
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        const user = await this.users.findByIdOrThrow(userId);
+
+        return await this.renderAccount(user, { errors: normalizeFieldErrors(error.details) }, 422);
+      }
+
+      if (error instanceof UnauthorizedError) {
+        const user = await this.users.findByIdOrThrow(userId);
+
+        return await this.renderAccount(
+          user,
+          { errors: { current_password: [error.message] } },
+          422,
+        );
+      }
+
+      throw error;
+    }
+  });
+
   readonly resendVerification = withErrorHandling(async () => {
     const user = await this.users.findByIdOrThrow(this.requireUserId());
 
@@ -158,6 +194,9 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
     },
     "/account/mfa/disable": {
       POST: kernel.wrapWebAuthenticated(controller.disableMfa as unknown as RouteHandler),
+    },
+    "/account/password": {
+      POST: kernel.wrapWebAuthenticated(controller.changePassword as unknown as RouteHandler),
     },
     "/account/email/verification-notification": {
       POST: kernel.wrapWebAuthenticated(controller.resendVerification as unknown as RouteHandler),
