@@ -63,6 +63,15 @@ const membershipRepository = {
     }),
   ),
   removeMember: mock(async () => true),
+  updateMemberRole: mock(
+    async (organizationId: number, userId: number, role: "owner" | "admin" | "member") => ({
+      id: 1,
+      organization_id: organizationId,
+      user_id: userId,
+      role,
+      created_at: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  ),
 };
 
 function createService(): MembershipService {
@@ -141,6 +150,11 @@ describe("MembershipService", () => {
       user_id: 3,
     });
     await expect(service.removeMember(5, 3)).resolves.toBe(true);
+    await expect(service.updateMemberRole(5, 3, "admin")).resolves.toMatchObject({
+      user_id: 3,
+      role: "admin",
+    });
+    expect(membershipRepository.updateMemberRole).toHaveBeenCalledWith(5, 3, "admin");
   });
 
   test("resolveMembershipService returns container service when registered", () => {

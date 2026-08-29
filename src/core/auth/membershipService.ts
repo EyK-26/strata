@@ -76,6 +76,10 @@ class MembershipService {
   removeMember(organizationId: number, userId: number) {
     return this.members.removeMember(organizationId, userId);
   }
+
+  updateMemberRole(organizationId: number, userId: number, role: OrganizationMemberRole) {
+    return this.members.updateMemberRole(organizationId, userId, role);
+  }
 }
 
 export type { MembershipRepositoryLike };

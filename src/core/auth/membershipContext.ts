@@ -28,6 +28,9 @@ const uninitializedMembershipLookup: MembershipLookup = {
   async removeMember() {
     throw new Error("configureMembershipLookup() must be called before mutating memberships.");
   },
+  async updateMemberRole() {
+    throw new Error("configureMembershipLookup() must be called before mutating memberships.");
+  },
 };
 
 let membershipRepository: MembershipLookup = uninitializedMembershipLookup;

@@ -1,3 +1,4 @@
+import { NotFoundError } from "@getstrata/core/errors/http";
 import db from "../../db/connection";
 import type { OrganizationMemberRecord, OrganizationMemberRole } from "./memberTypes";
 
@@ -51,6 +52,27 @@ class OrganizationMemberRepository {
 
     if (!row) {
       throw new Error("Organization member insert did not return a row.");
+    }
+
+    return row;
+  }
+
+  async updateMemberRole(
+    organizationId: number,
+    userId: number,
+    role: OrganizationMemberRole,
+  ): Promise<OrganizationMemberRecord> {
+    const rows = (await db`
+      UPDATE organization_member
+      SET role = ${role}
+      WHERE organization_id = ${organizationId} AND user_id = ${userId}
+      RETURNING id, organization_id, user_id, role, created_at
+    `) as OrganizationMemberRecord[];
+
+    const row = rows[0];
+
+    if (!row) {
+      throw new NotFoundError(`Organization member ${userId} not found.`);
     }
 
     return row;

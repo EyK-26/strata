@@ -1,3 +1,4 @@
+import { ValidationError } from "@getstrata/core/errors/http";
 import { WebFormRequest } from "@getstrata/core/http/webFormRequest";
 import {
   maxLength,
@@ -53,6 +54,10 @@ interface WebAddOrganizationMemberBody {
   role: "owner" | "admin" | "member";
 }
 
+interface WebUpdateOrganizationMemberRoleBody {
+  role: "owner" | "admin" | "member";
+}
+
 const webUpdateOrganizationRules = {
   name: [stringRule(), minLength(1), maxLength(120)],
   slug: [stringRule(), minLength(2), maxLength(64), pattern(SLUG_PATTERN)],
@@ -76,6 +81,21 @@ function parseWebUpdateOrganizationPayload(payload: unknown): WebUpdateOrganizat
   }
 
   return body;
+}
+
+function parseWebUpdateOrganizationMemberRolePayload(
+  payload: unknown,
+): WebUpdateOrganizationMemberRoleBody {
+  const validated = validateObject(payload, { role: [required(), stringRule()] });
+  const role = String(validated.role);
+
+  if (role !== "owner" && role !== "admin" && role !== "member") {
+    throw new ValidationError("Invalid organization role.", {
+      role: ["Invalid organization role."],
+    });
+  }
+
+  return { role };
 }
 
 function parseWebAddOrganizationMemberPayload(payload: unknown): WebAddOrganizationMemberBody {
@@ -119,12 +139,18 @@ async function parseWebAddOrganizationMemberBody(
   return await webAddOrganizationMemberRequest.validate(request);
 }
 
-export type { WebAddOrganizationMemberBody, WebCreateOrganizationBody, WebUpdateOrganizationBody };
+export type {
+  WebAddOrganizationMemberBody,
+  WebCreateOrganizationBody,
+  WebUpdateOrganizationBody,
+  WebUpdateOrganizationMemberRoleBody,
+};
 export {
   parseWebAddOrganizationMemberBody,
   parseWebAddOrganizationMemberPayload,
   parseWebCreateOrganizationBody,
   parseWebCreateOrganizationPayload,
   parseWebUpdateOrganizationBody,
+  parseWebUpdateOrganizationMemberRolePayload,
   parseWebUpdateOrganizationPayload,
 };

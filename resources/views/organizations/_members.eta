@@ -1,5 +1,12 @@
 <section id="org-members">
   <h2>Members</h2>
+  <% if (Object.keys(it.errors ?? {}).length > 0) { %>
+  <div class="form-errors" role="alert">
+    <% for (const [field, messages] of Object.entries(it.errors)) { %>
+    <p><%= field %>: <%= Array.isArray(messages) ? messages.join(" ") : messages %></p>
+    <% } %>
+  </div>
+  <% } %>
   <% if (!it.members?.length) { %>
   <p class="hint">No members yet.</p>
   <% } else { %>
@@ -17,7 +24,26 @@
       <tr>
         <td><%= member.name %></td>
         <td><%= member.email %></td>
-        <td><%= member.role %></td>
+        <td>
+          <form
+            method="post"
+            action="/organizations/<%= it.organization.id %>/members/<%= member.user_id %>/role"
+            hx-post="/organizations/<%= it.organization.id %>/members/<%= member.user_id %>/role"
+            hx-target="#org-members"
+            hx-swap="outerHTML"
+          >
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <label>
+              <span class="visually-hidden">Role for <%= member.email %></span>
+              <select name="role">
+                <option value="member" <%= member.role === "member" ? "selected" : "" %>>Member</option>
+                <option value="admin" <%= member.role === "admin" ? "selected" : "" %>>Admin</option>
+                <option value="owner" <%= member.role === "owner" ? "selected" : "" %>>Owner</option>
+              </select>
+            </label>
+            <button type="submit">Update role</button>
+          </form>
+        </td>
         <td>
           <button
             type="button"

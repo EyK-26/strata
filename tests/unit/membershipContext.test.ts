@@ -51,6 +51,9 @@ describe("membershipContext", () => {
         /configureMembershipLookup/,
       );
       await expect(lookup.removeMember(1, 1)).rejects.toThrow(/configureMembershipLookup/);
+      await expect(lookup.updateMemberRole(1, 1, "admin")).rejects.toThrow(
+        /configureMembershipLookup/,
+      );
     } finally {
       configureMembershipLookup(new OrganizationMemberRepository());
     }

@@ -663,6 +663,69 @@ describe("web routes with server-htmx frontend", () => {
     const html = await response.text();
     expect(html).toContain("org-members");
     expect(html).toContain("admin@workhub.test");
+    expect(html).toContain("Update role");
+    expect(html).toContain('hx-post="/organizations/1/members/2/role"');
+  });
+
+  test("POST /organizations/:id/members/:userId/role updates the HTMX members table", async () => {
+    const csrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const response = await fetch(`${baseUrl}/organizations/1/members/2/role`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+        "HX-Request": "true",
+      },
+      body: new URLSearchParams({
+        role: "member",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("org-members");
+    expect(html).toContain("member@workhub.test");
+    expect(html).toContain('value="member" selected');
+    expect(html).not.toContain("<!doctype html>");
+
+    const restore = await fetch(`${baseUrl}/organizations/1/members/2/role`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+        "HX-Request": "true",
+      },
+      body: new URLSearchParams({
+        role: "admin",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(restore.status).toBe(200);
+    expect(await restore.text()).toContain('value="admin" selected');
+  });
+
+  test("POST /organizations/:id/members/:userId/role rejects an invalid role", async () => {
+    const csrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const response = await fetch(`${baseUrl}/organizations/1/members/2/role`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+        "HX-Request": "true",
+      },
+      body: new URLSearchParams({
+        role: "superadmin",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("Invalid organization role.");
   });
 
   test("GET /reports and /account are available to a signed-in session", async () => {

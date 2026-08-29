@@ -128,7 +128,7 @@ Layouts receive `{ currentUser, csrfToken, flash, cspNonce }`. Put `nonce="<%= i
 
 Use `temporarySignedUrl()` / `hasValidSignature()` from `@getstrata/core/http/signedUrl` for attachment downloads, password reset, and email verification. HMAC uses `SIGNED_URL_SECRET` or `SESSION_SECRET`. Gate routes with `createValidateSignatureMiddleware()` or `kernel.wrapSigned()` (Laravel `signed` middleware). WorkHub applies it to `/reset-password` and `/verify-email`. Markdown mail goes through `Bun.markdown.html()` plus `sanitizeMailHtml`.
 
-TOTP helpers live on `@getstrata/core/security/totp`: `generateTotpSecret()`, `buildOtpauthUrl()`, `generateTotp()`, `verifyTotp()`. WorkHub’s `/account` page dogfoods MFA setup/confirm/disable, API token create/revoke, GDPR JSON export (`GET /account/export`), and password-confirmed account deletion. Login only enforces MFA when `FEATURE_MFA=true`.
+TOTP helpers live on `@getstrata/core/security/totp`: `generateTotpSecret()`, `buildOtpauthUrl()`, `generateTotp()`, `verifyTotp()`. WorkHub’s `/account` page dogfoods MFA setup/confirm/disable, API token create/revoke, GDPR JSON export (`GET /account/export`), and password-confirmed account deletion. Login only enforces MFA when `FEATURE_MFA=true`. Organization show dogfoods member add/remove and role updates (`POST /organizations/:id/members/:userId/role`; API is `PATCH /organizations/:id/members/:userId`).
 
 `createRequireAbilityMiddleware` still returns JSON `{ error }` for API clients. When `FRONTEND_MODE=server-htmx` and the request prefers HTML, it rethrows `ForbiddenError` so `wrapWeb` can render the styled 403 page.
 

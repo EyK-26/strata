@@ -20,6 +20,7 @@ import {
   parseWebAddOrganizationMemberPayload,
   parseWebCreateOrganizationBody,
   parseWebCreateOrganizationPayload,
+  parseWebUpdateOrganizationMemberRolePayload,
   parseWebUpdateOrganizationPayload,
 } from "./webRequests";
 
@@ -234,6 +235,45 @@ class OrganizationWebController {
       throw error;
     }
   });
+
+  readonly updateMemberRole = withErrorHandling(
+    async (request: Request & { params: { id: string; userId: string } }) => {
+      const id = Number.parseInt(String(request.params.id), 10);
+      const userId = Number.parseInt(String(request.params.userId), 10);
+      const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+      const old =
+        contentType.includes("application/x-www-form-urlencoded") ||
+        contentType.includes("multipart/form-data")
+          ? formDataToRecord(await request.formData())
+          : await parseFormBody(request).catch(() => ({}));
+
+      try {
+        await resolveMembershipService().requireOrgAccess(id, "admin");
+        const body = parseWebUpdateOrganizationMemberRolePayload(old);
+        await resolveMembershipService().updateMemberRole(id, userId, body.role);
+
+        if (isHtmxRequest(request)) {
+          return await this.renderShow(request, id, { partial: "members" });
+        }
+
+        return flashResponse(Response.redirect(`/organizations/${id}`, 302), {
+          level: "success",
+          message: "Member role updated.",
+        });
+      } catch (error) {
+        if (error instanceof ValidationError && !requestPrefersJson(request)) {
+          return await this.renderShow(
+            request,
+            id,
+            { errors: normalizeFieldErrors(error.details), old, partial: "members" },
+            422,
+          );
+        }
+
+        throw error;
+      }
+    },
+  );
 
   readonly removeMember = withErrorHandling(
     async (request: Request & { params: { id: string; userId: string } }) => {

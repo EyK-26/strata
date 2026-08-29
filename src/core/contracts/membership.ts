@@ -18,6 +18,11 @@ interface MembershipLookup {
     role?: OrganizationMemberRole;
   }): Promise<MembershipRecord>;
   removeMember(organizationId: number, userId: number): Promise<unknown>;
+  updateMemberRole(
+    organizationId: number,
+    userId: number,
+    role: OrganizationMemberRole,
+  ): Promise<MembershipRecord>;
 }
 
 export type { MembershipLookup, MembershipRecord, OrganizationMemberRole };

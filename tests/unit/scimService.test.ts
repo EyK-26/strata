@@ -108,6 +108,18 @@ class OrganizationMemberRepositoryMock {
     created_at: now,
   });
 
+  updateMemberRole = async (
+    organizationId: number,
+    userId: number,
+    role: OrganizationMemberRole,
+  ): Promise<OrganizationMemberRecord> => ({
+    id: 1,
+    user_id: userId,
+    organization_id: organizationId,
+    role,
+    created_at: now,
+  });
+
   constructor(overrides?: Partial<OrganizationMemberRepositoryMock>) {
     Object.assign(this, overrides);
   }

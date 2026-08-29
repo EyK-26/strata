@@ -139,6 +139,46 @@ describe("OrganizationMemberRepository", () => {
     );
   });
 
+  test("updateMemberRole updates the role and returns the row", async () => {
+    const member = {
+      id: 1,
+      organization_id: 5,
+      user_id: 2,
+      role: "admin" as const,
+      created_at: now,
+    };
+
+    const mockConnection = createMockDatabaseConnection(async (strings) => {
+      if (strings.join("").includes("UPDATE organization_member")) {
+        return [member];
+      }
+
+      return [];
+    });
+
+    resetDatabaseConnectionForTests(mockConnection as never);
+    const repository = new OrganizationMemberRepository();
+
+    await expect(repository.updateMemberRole(5, 2, "admin")).resolves.toEqual(member);
+  });
+
+  test("updateMemberRole throws when the membership is missing", async () => {
+    const mockConnection = createMockDatabaseConnection(async (strings) => {
+      if (strings.join("").includes("UPDATE organization_member")) {
+        return [];
+      }
+
+      return [];
+    });
+
+    resetDatabaseConnectionForTests(mockConnection as never);
+    const repository = new OrganizationMemberRepository();
+
+    await expect(repository.updateMemberRole(5, 99, "member")).rejects.toThrow(
+      "Organization member 99 not found.",
+    );
+  });
+
   test("removeMember reports whether a row was deleted", async () => {
     let deleteCalls = 0;
 

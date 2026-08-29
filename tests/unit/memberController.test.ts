@@ -28,6 +28,15 @@ const membershipService = {
     }),
   ),
   removeMember: mock(async () => undefined),
+  updateMemberRole: mock(
+    async (organizationId: number, userId: number, role: "owner" | "admin" | "member") => ({
+      id: 1,
+      organization_id: organizationId,
+      user_id: userId,
+      role,
+      created_at: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  ),
 };
 
 type OrganizationMemberController =
@@ -171,6 +180,81 @@ describe("OrganizationMemberController", () => {
 
     expect(response.status).toBe(204);
     expect(membershipService.removeMember).toHaveBeenCalledWith(5, 3);
+  });
+
+  test("update changes a member role", async () => {
+    const controller = new OrganizationMemberControllerClass({
+      container: {},
+      cache: {},
+    } as never);
+
+    const response = await controller.update(
+      Object.assign(
+        new Request("http://example.test/organizations/5/members/3", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ role: "owner" }),
+        }),
+        { params: { id: "5", userId: "3" } },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      id: 1,
+      organization_id: 5,
+      user_id: 3,
+      role: "owner",
+      created_at: "2026-01-01T00:00:00.000Z",
+    });
+    expect(membershipService.requireOrgAccess).toHaveBeenCalledWith(5, "admin");
+    expect(membershipService.updateMemberRole).toHaveBeenCalledWith(5, 3, "owner");
+  });
+
+  test("update requires valid organization and user ids", async () => {
+    const controller = new OrganizationMemberControllerClass({
+      container: {},
+      cache: {},
+    } as never);
+
+    const response = await controller.update(
+      Object.assign(
+        new Request("http://example.test/organizations/5/members/abc", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ role: "member" }),
+        }),
+        { params: { id: "5", userId: "abc" } },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Organization id and user id are required.",
+    });
+  });
+
+  test("update rejects an invalid role", async () => {
+    const controller = new OrganizationMemberControllerClass({
+      container: {},
+      cache: {},
+    } as never);
+
+    const response = await controller.update(
+      Object.assign(
+        new Request("http://example.test/organizations/5/members/3", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ role: "superadmin" }),
+        }),
+        { params: { id: "5", userId: "3" } },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "role must be owner, admin, or member.",
+    });
   });
 
   test("destroy requires valid organization and user ids", async () => {

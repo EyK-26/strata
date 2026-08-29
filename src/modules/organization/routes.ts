@@ -36,6 +36,10 @@ function createOrganizationRoutes(
       ),
     },
     "/organizations/:id/members/:userId": {
+      PATCH: kernel.wrapAbility(
+        "organizations:members:write",
+        memberController.update as unknown as RouteHandler,
+      ),
       DELETE: kernel.wrapAbility(
         "organizations:members:delete",
         memberController.destroy as unknown as RouteHandler,

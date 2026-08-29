@@ -540,7 +540,7 @@ docker compose down -v --remove-orphans
 
 ### WorkHub domain (under `/api/v1`)
 
-- `GET/POST /organizations`, members via `/organizations/:id/members`
+- `GET/POST /organizations`, members via `GET/POST /organizations/:id/members`, `PATCH /organizations/:id/members/:userId`. HTMX: `POST /organizations/:id/members/:userId/role`
 - `GET/POST /projects`, `GET/PATCH/DELETE /projects/:id`
 - `GET/POST /tasks`, `GET/PATCH/DELETE /tasks/:id`
 - `GET/POST /tasks/:id/comments`, `GET/PATCH/DELETE /comments/:id`
