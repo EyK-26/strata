@@ -44,7 +44,9 @@ import BillingService from "../../src/modules/billing/service";
 import CommentPolicy from "../../src/modules/comment/policy";
 import CommentRepository from "../../src/modules/comment/repository";
 import OrganizationPolicy from "../../src/modules/organization/policy";
+import OrganizationRepository from "../../src/modules/organization/repository";
 import ProjectPolicy from "../../src/modules/project/policy";
+import ProjectRepository from "../../src/modules/project/repository";
 import SearchService from "../../src/modules/search/service";
 import TaskPolicy from "../../src/modules/task/policy";
 import TaskRepository from "../../src/modules/task/repository";
@@ -306,7 +308,12 @@ describe("coverage gap helpers", () => {
     const billingService = new BillingService();
     await expect(billingService.getSubscriptionForTenant(999_999)).resolves.toBeNull();
 
-    const searchService = new SearchService(new TaskRepository(), new CommentRepository());
+    const searchService = new SearchService(
+      new TaskRepository(),
+      new CommentRepository(),
+      new OrganizationRepository(),
+      new ProjectRepository(),
+    );
     await expect(searchService.search("no-match-query-xyz", 5)).resolves.toEqual([]);
   });
 

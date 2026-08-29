@@ -1,6 +1,6 @@
 <section class="page-header">
   <h1>Search</h1>
-  <p class="hint">Full-text search across tasks and comments.</p>
+  <p class="hint">Search organizations, projects, tasks, and comments.</p>
 </section>
 
 <form
@@ -14,7 +14,7 @@
 >
   <label>
     Query
-    <input type="search" name="q" value="<%= it.query ?? '' %>" placeholder="Find a task or comment" />
+    <input type="search" name="q" value="<%= it.query ?? '' %>" placeholder="Find an organization, project, task, or comment" />
   </label>
   <button type="submit">Search</button>
 </form>

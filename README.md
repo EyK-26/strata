@@ -209,7 +209,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/admin/queue` | Queue monitor with HTMX polling; retry or delete failed jobs |
 | `/admin/audit` | Paginated audit log |
 | `/admin/resources` | Read-only resource browser (users, organizations, projects, tasks) |
-| `/search` | HTMX full-text search over tasks and comments |
+| `/search` | HTMX search over organizations, projects, tasks, and comments |
 | `/notifications` | Session inbox (nav bell polls every 30s) |
 | `/billing` | Current tenant subscription |
 | `/webhooks` | Outbound webhook admin (global admin) |
@@ -257,7 +257,7 @@ Password and OAuth login:
 
 - `GET /api/v1/audit-logs`: recent model change audit entries (`audit:read`)
 - `GET/POST /api/v1/webhooks`: register outbound webhook endpoints (`webhooks:read`, `webhooks:write`)
-- `GET /api/v1/search?q=registry`: PostgreSQL full-text search across tasks and comments
+- `GET /api/v1/search?q=registry`: PostgreSQL full-text search across tasks and comments, plus organization/project name matches
 
 Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC).
 
