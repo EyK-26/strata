@@ -335,9 +335,7 @@ describe("WebAccountController", () => {
   test("deletePhoto redirects after removing the image", async () => {
     const deletePhoto = mock(async () => adminUser);
     const controller = createController({ photos: { deletePhoto } });
-    const response = await asAuthed(() =>
-      controller.deletePhoto(new Request("http://example.test/account/photo/delete")),
-    );
+    const response = await asAuthed(() => controller.deletePhoto());
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/account");
