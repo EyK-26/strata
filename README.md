@@ -253,6 +253,7 @@ Password and OAuth login:
 - `POST /api/v1/auth/register`: `{ "name", "email", "password", "password_confirmation" }` creates a member, a personal workspace (`{name}'s workspace`, slug `personal-{userId}`), and returns a bearer token (`FEATURE_REGISTRATION`, default on). When `FEATURE_EMAIL_VERIFICATION=true` the response is `{ user }` only and a verify email is sent (the workspace still exists so it is ready after verify).
 - `POST /api/v1/auth/forgot-password`: `{ "email" }` always returns a generic success message (does not leak whether the account exists)
 - `POST /api/v1/auth/reset-password`: `{ "email", "token", "password", "password_confirmation" }` updates the password from the emailed token
+- `POST /api/v1/auth/email/verification-notification`: `{ "email" }` always returns a generic success message (does not leak whether the account exists or still needs verification)
 - `GET /api/v1/auth/oauth/:provider`: redirect to provider (GitHub when configured; `mock` in non-production)
 - `GET /api/v1/auth/oauth/:provider/callback?code=...`: exchange OAuth code for a bearer token
 - HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token). Login lists registered providers.
@@ -557,7 +558,7 @@ docker compose down -v --remove-orphans
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
 - Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
-- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`, OAuth routes, token CRUD, `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register`, `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
+- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`, `POST /api/v1/auth/email/verification-notification`, OAuth routes, token CRUD, `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register`, `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …
 

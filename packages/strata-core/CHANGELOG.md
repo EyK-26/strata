@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.73
+
+- OpenAPI treats `POST /auth/email/verification-notification` as a public operation (no bearer).
+
 ## 0.5.72
 
 - OpenAPI treats `POST /auth/forgot-password` and `POST /auth/reset-password` as public operations (no bearer).

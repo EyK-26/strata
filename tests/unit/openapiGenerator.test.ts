@@ -51,10 +51,15 @@ describe("generateOpenApiSpec", () => {
     expect(operation(spec, "/auth/me", "get")?.security).toEqual([{ bearerAuth: [] }]);
   });
 
-  test("marks password reset routes as public OpenAPI operations", () => {
+  test("marks password reset and email verification routes as public OpenAPI operations", () => {
     const spec = generateOpenApiSpec([
       { method: "POST", path: "/api/v1/auth/forgot-password", middleware: ["global", "api"] },
       { method: "POST", path: "/api/v1/auth/reset-password", middleware: ["global", "api"] },
+      {
+        method: "POST",
+        path: "/api/v1/auth/email/verification-notification",
+        middleware: ["global", "api"],
+      },
     ]);
 
     expect(operation(spec, "/api/v1/auth/forgot-password", "post")?.summary).toBe(
@@ -63,8 +68,14 @@ describe("generateOpenApiSpec", () => {
     expect(operation(spec, "/api/v1/auth/reset-password", "post")?.summary).toBe(
       "Reset password with email and token",
     );
+    expect(operation(spec, "/api/v1/auth/email/verification-notification", "post")?.summary).toBe(
+      "Resend email verification link",
+    );
     expect(operation(spec, "/api/v1/auth/forgot-password", "post")?.security).toBeUndefined();
     expect(operation(spec, "/api/v1/auth/reset-password", "post")?.security).toBeUndefined();
+    expect(
+      operation(spec, "/api/v1/auth/email/verification-notification", "post")?.security,
+    ).toBeUndefined();
   });
 
   test("strips API_PREFIX when classifying public auth operations", () => {

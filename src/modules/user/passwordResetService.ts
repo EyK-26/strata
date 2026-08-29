@@ -104,6 +104,22 @@ If you did not request this, you can ignore the email.`,
     logSecurityEvent("password_reset_completed", { user_id: user.id });
   }
 
+  async requestEmailVerification(email: string): Promise<void> {
+    const user = await this.users.findByEmail(email);
+
+    if (!user) {
+      logSecurityEvent("email_verification_ignored", { reason: "unknown_user" });
+      return;
+    }
+
+    if (user.email_verified_at) {
+      logSecurityEvent("email_verification_ignored", { reason: "already_verified" });
+      return;
+    }
+
+    await this.sendEmailVerification(user);
+  }
+
   async sendEmailVerification(user: UserRecord): Promise<void> {
     const verifyUrl = absoluteTemporarySignedUrl(
       "/verify-email",

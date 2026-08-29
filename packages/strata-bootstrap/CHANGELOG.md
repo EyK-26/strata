@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.60
+
+- Peer `@getstrata/core` `^0.5.73` for public OpenAPI email verification resend.
+
 ## 0.2.59
 
 - `HttpKernel.wrapWebGuest()` is Laravel `guest` / `RedirectIfAuthenticated`. Signed-in HTML users redirect to `/organizations` (override the home path). Peer `@getstrata/core` `^0.5.72`.

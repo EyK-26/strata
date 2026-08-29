@@ -41,6 +41,10 @@ export class WorkHubClient {
     return await this.request("/audit-logs", { ...init, method: "GET" });
   }
 
+  async postAuthEmailVerificationNotification(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/auth/email/verification-notification", { ...init, method: "POST" });
+  }
+
   async postAuthForgotPassword(init: RequestInit = {}): Promise<Response> {
     return await this.request("/auth/forgot-password", { ...init, method: "POST" });
   }

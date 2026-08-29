@@ -147,6 +147,15 @@ class AuthController {
     });
   });
 
+  readonly resendVerification = withErrorHandling(async (request: Request) => {
+    const body = await parseForgotPasswordBody(request);
+    await this.passwordResets.requestEmailVerification(body.email);
+
+    return jsonResponse({
+      message: "If that account needs verification, a new link is on its way.",
+    });
+  });
+
   readonly oauthRedirect = withErrorHandling(async (request: Request) => {
     const params = (request as Request & { params?: OAuthProviderParams }).params;
     const provider = params?.provider;

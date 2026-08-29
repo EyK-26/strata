@@ -88,6 +88,35 @@ describe("PasswordResetService", () => {
     });
   });
 
+  test("requestEmailVerification is a no-op for unknown and verified emails", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const service = new PasswordResetService(new UserRepository());
+      await service.requestEmailVerification("missing@workhub.test");
+      await service.requestEmailVerification("admin@workhub.test");
+    });
+  });
+
+  test("requestEmailVerification sends mail for unverified users", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const service = new PasswordResetService(users);
+      const email = `unverified-resend-${Date.now()}@workhub.test`;
+      const user = await users.create({
+        name: "Unverified Resend",
+        email,
+        role: "member",
+        tenant_id: 1,
+        password_hash: await hashPassword("password123"),
+        email_verified_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      await service.requestEmailVerification(email);
+      expect(user.email_verified_at).toBeNull();
+    });
+  });
+
   test("sendEmailVerification writes a markdown mail", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {
       const users = new UserRepository();

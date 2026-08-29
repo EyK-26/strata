@@ -18,8 +18,7 @@ import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
 import type AuthService from "./authService";
 import type PasswordResetService from "./passwordResetService";
-import { authServiceToken, passwordResetServiceToken, userRepositoryToken } from "./provider";
-import type UserRepository from "./repository";
+import { authServiceToken, passwordResetServiceToken } from "./provider";
 import {
   parseWebForgotPasswordBody,
   parseWebLoginBody,
@@ -36,10 +35,6 @@ class WebAuthController {
 
   private get passwordResets(): PasswordResetService {
     return resolveService(this.dependencies, passwordResetServiceToken);
-  }
-
-  private get users(): UserRepository {
-    return resolveService(this.dependencies, userRepositoryToken);
   }
 
   private get view(): ViewEngine {
@@ -337,11 +332,7 @@ class WebAuthController {
 
   readonly resendVerification = withErrorHandling(async (request: Request) => {
     const body = await parseWebForgotPasswordBody(request);
-    const user = await this.users.findByEmail(body.email);
-
-    if (user && !user.email_verified_at) {
-      await this.passwordResets.sendEmailVerification(user);
-    }
+    await this.passwordResets.requestEmailVerification(body.email);
 
     return flashResponse(Response.redirect("/login", 302), {
       level: "success",

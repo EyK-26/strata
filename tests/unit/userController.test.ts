@@ -70,6 +70,7 @@ function createController(services: {
   });
   container.set(passwordResetServiceToken, {
     sendEmailVerification: mock(async () => undefined),
+    requestEmailVerification: mock(async () => undefined),
     requestReset: mock(async () => undefined),
     resetPassword: mock(async () => undefined),
     ...services.passwordResets,
@@ -313,6 +314,27 @@ describe("AuthController", () => {
       message: "If that email exists, a reset link is on its way.",
     });
     expect(requestReset).toHaveBeenCalledWith("ada@workhub.test");
+  });
+
+  test("resendVerification always returns a generic success message", async () => {
+    const requestEmailVerification = mock(async () => undefined);
+    const controller = createController({
+      passwordResets: { requestEmailVerification },
+    });
+
+    const response = await controller.resendVerification(
+      new Request("http://example.test/auth/email/verification-notification", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ada@workhub.test" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      message: "If that account needs verification, a new link is on its way.",
+    });
+    expect(requestEmailVerification).toHaveBeenCalledWith("ada@workhub.test");
   });
 
   test("resetPassword updates the password from the token payload", async () => {

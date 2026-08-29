@@ -201,4 +201,49 @@ describe("spa-react frontend routes", () => {
     const body = (await newLogin.json()) as { token: string };
     expect(body.token.length).toBeGreaterThan(20);
   });
+
+  test("POST /api/v1/auth/email/verification-notification does not leak accounts", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+    const email = `spa-verify-${Date.now()}@workhub.test`;
+
+    try {
+      const registered = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "SPA Verify",
+          email,
+          password: "password123",
+          password_confirmation: "password123",
+        }),
+      });
+      expect(registered.status).toBe(201);
+      expect(await registered.json()).toEqual({
+        user: expect.objectContaining({ email, role: "member" }),
+      });
+
+      const resend = await fetch(`${baseUrl}/api/v1/auth/email/verification-notification`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      expect(resend.status).toBe(200);
+      expect(await resend.json()).toEqual({
+        message: "If that account needs verification, a new link is on its way.",
+      });
+
+      const unknown = await fetch(`${baseUrl}/api/v1/auth/email/verification-notification`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: `missing-${Date.now()}@workhub.test` }),
+      });
+      expect(unknown.status).toBe(200);
+      expect(await unknown.json()).toEqual({
+        message: "If that account needs verification, a new link is on its way.",
+      });
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
 });
