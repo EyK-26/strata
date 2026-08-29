@@ -214,7 +214,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/billing` | Current tenant subscription |
 | `/webhooks` | Outbound webhook admin: create, deactivate, delete, retry delivery |
 | `/reports`, `/reports/organizations/:id` | Tenant summary and per-organization reports |
-| `/account` | Session profile, API tokens, GDPR export/delete, email verification, TOTP MFA + recovery codes |
+| `/account` | Session profile (name/email), API tokens, GDPR export/delete, email verification, TOTP MFA + recovery codes |
 | `/confirm-password` | Laravel `password.confirm` — recent password gate for export and account delete |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |
 
@@ -559,7 +559,7 @@ docker compose down -v --remove-orphans
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
 - Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
-- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`, `POST /api/v1/auth/email/verification-notification`, OAuth routes, token CRUD, `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register`, `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `GET/POST /confirm-password`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
+- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`, `POST /api/v1/auth/email/verification-notification`, OAuth routes, token CRUD, `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register`, `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `GET/POST /confirm-password`, `POST /account/profile`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …
 

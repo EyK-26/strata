@@ -1065,11 +1065,73 @@ describe("web routes with server-htmx frontend", () => {
     expect(account.status).toBe(200);
     const accountHtml = await account.text();
     expect(accountHtml).toContain("admin@workhub.test");
+    expect(accountHtml).toContain("Update profile");
     expect(accountHtml).toContain("Two-factor authentication");
     expect(accountHtml).toContain("API tokens");
     expect(accountHtml).toContain("Export my data");
     expect(orgReport.status).toBe(200);
     expect(await orgReport.text()).toContain("Acme Labs");
+  });
+
+  test("POST /account/profile updates a disposable user name without touching admin", async () => {
+    const email = `profile-html-${Date.now()}@workhub.test`;
+    const passwordHash = await hashPassword("password");
+    const inserted = (await getDatabase()`
+      INSERT INTO users (name, email, email_lookup, role, tenant_id, password_hash, email_verified_at)
+      VALUES (${"Profile Html User"}, ${email}, ${email}, ${"member"}, 1, ${passwordHash}, NOW())
+      RETURNING id
+    `) as Array<{ id: number }>;
+    const userId = inserted[0]?.id;
+    expect(userId).toBeTruthy();
+
+    const sessionCookie = await loginAndGetCookie(email, "password");
+    const csrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const updated = await fetch(`${baseUrl}/account/profile`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        name: "Renamed Profile User",
+        email,
+        _token: csrf.token,
+      }),
+    });
+
+    expect(updated.status).toBe(302);
+    expect(updated.headers.get("location")).toBe("/account");
+
+    const account = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: sessionCookie },
+    });
+    const html = await account.text();
+    expect(account.status).toBe(200);
+    expect(html).toContain("Renamed Profile User");
+    expect(html).toContain(email);
+
+    const takenCsrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const taken = await fetch(`${baseUrl}/account/profile`, {
+      method: "POST",
+      headers: {
+        cookie: takenCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        name: "Renamed Profile User",
+        email: "admin@workhub.test",
+        _token: takenCsrf.token,
+      }),
+    });
+    expect(taken.status).toBe(422);
+    expect(await taken.text()).toContain("An account with this email already exists.");
+
+    const admin = (await getDatabase()`
+      SELECT name, email FROM users WHERE id = 1
+    `) as Array<{ name: string; email: string }>;
+    expect(admin[0]?.email).toBe("admin@workhub.test");
   });
 
   test("POST /account/password rejects a wrong current password", async () => {

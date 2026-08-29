@@ -36,6 +36,7 @@ import {
   parseWebCreateApiTokenBody,
   parseWebDeleteAccountBody,
   parseWebDisableMfaBody,
+  parseWebUpdateProfileBody,
 } from "./webRequests";
 
 class WebAccountController {
@@ -107,6 +108,37 @@ class WebAccountController {
     const user = await this.users.findByIdOrThrow(this.requireUserId());
 
     return await this.renderAccount(user);
+  });
+
+  readonly updateProfile = withErrorHandling(async (request: Request) => {
+    const userId = this.requireUserId();
+
+    try {
+      const body = await parseWebUpdateProfileBody(request);
+      const result = await this.authService.updateProfile(userId, body.name, body.email);
+
+      if (result.emailChanged && isFeatureEnabled("emailVerification")) {
+        await this.passwordResets.sendEmailVerification(result.user);
+
+        return flashResponse(Response.redirect("/email/verify", 302), {
+          level: "success",
+          message: "Profile updated. Check your email to verify the new address.",
+        });
+      }
+
+      return flashResponse(Response.redirect("/account", 302), {
+        level: "success",
+        message: "Profile updated.",
+      });
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        const user = await this.users.findByIdOrThrow(userId);
+
+        return await this.renderAccount(user, { errors: normalizeFieldErrors(error.details) }, 422);
+      }
+
+      throw error;
+    }
   });
 
   readonly beginMfa = withErrorHandling(async () => {
@@ -361,6 +393,9 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
   return {
     "/account": {
       GET: kernel.wrapWebAuthenticated(controller.show as unknown as RouteHandler),
+    },
+    "/account/profile": {
+      POST: kernel.wrapWebAuthenticated(controller.updateProfile as unknown as RouteHandler),
     },
     "/account/mfa": {
       POST: kernel.wrapWebAuthenticated(controller.beginMfa as unknown as RouteHandler),

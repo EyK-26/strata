@@ -3,15 +3,23 @@
   <p class="hint">Profile, API tokens, data export, email verification, and two-factor authentication for the signed-in session.</p>
 </section>
 
+<section class="card" id="profile">
+  <h2>Profile</h2>
+  <form method="post" action="/account/profile" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Name
+      <input type="text" name="name" value="<%= it.user.name %>" required maxlength="120" />
+    </label>
+    <label>
+      Email
+      <input type="email" name="email" value="<%= it.user.email %>" required />
+    </label>
+    <button type="submit">Update profile</button>
+  </form>
+</section>
+
 <dl class="detail-list">
-  <div>
-    <dt>Name</dt>
-    <dd><%= it.user.name %></dd>
-  </div>
-  <div>
-    <dt>Email</dt>
-    <dd><%= it.user.email %></dd>
-  </div>
   <div>
     <dt>Role</dt>
     <dd><%= it.user.role %></dd>

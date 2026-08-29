@@ -1,5 +1,6 @@
 import type { OAuthProvider } from "@getstrata/core/auth/oauth/types";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
+import { normalizeEmail } from "@getstrata/core/crypto/fieldEncryption";
 import { protectMfaSecret, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import {
@@ -239,6 +240,43 @@ class AuthService {
     logSecurityEvent("auth_password_changed", { user_id: user.id });
 
     return updated;
+  }
+
+  async updateProfile(
+    userId: number,
+    name: string,
+    email: string,
+  ): Promise<{ user: UserRecord; emailChanged: boolean }> {
+    const user = await this.users.findByIdOrThrow(userId);
+    const nextName = name.trim();
+    const nextEmail = email.trim();
+    const emailChanged = normalizeEmail(nextEmail) !== normalizeEmail(user.email);
+    const taken = await this.users.findByEmail(nextEmail);
+
+    if (taken && taken.id !== userId) {
+      throw new ValidationError("An account with this email already exists.", {
+        email: ["An account with this email already exists."],
+      });
+    }
+
+    const updated = await this.users.updateByIdOrThrow(userId, {
+      name: nextName,
+      ...(emailChanged
+        ? {
+            email: nextEmail,
+            email_verified_at: isFeatureEnabled("emailVerification")
+              ? null
+              : (user.email_verified_at ?? new Date()),
+          }
+        : {}),
+      updated_at: new Date(),
+    });
+    logSecurityEvent("auth_profile_updated", {
+      user_id: user.id,
+      email_changed: emailChanged,
+    });
+
+    return { user: updated, emailChanged };
   }
 
   async registerWithPassword(name: string, email: string, password: string): Promise<UserRecord> {

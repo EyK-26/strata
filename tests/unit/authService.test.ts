@@ -121,6 +121,157 @@ describe("password auth", () => {
     });
   });
 
+  test("updateProfile changes name and keeps the same email", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const authService = new AuthService(
+        users,
+        new TokenService(users, new ApiTokenRepository()),
+        new OAuthIdentityRepository(),
+      );
+      const email = `profile-name-${Date.now()}@workhub.test`;
+      const created = await users.create({
+        name: "Before Name",
+        email,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        password_hash: await hashPassword("password"),
+        email_verified_at: new Date(),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      const result = await authService.updateProfile(
+        created.id,
+        "  After Name  ",
+        email.toUpperCase(),
+      );
+
+      expect(result.emailChanged).toBe(false);
+      expect(result.user.name).toBe("After Name");
+      expect(result.user.email).toBe(email);
+      expect(result.user.email_verified_at).toBeInstanceOf(Date);
+    });
+  });
+
+  test("updateProfile rejects a duplicate email", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const authService = new AuthService(
+        users,
+        new TokenService(users, new ApiTokenRepository()),
+        new OAuthIdentityRepository(),
+      );
+      const email = `profile-dup-${Date.now()}@workhub.test`;
+      const created = await users.create({
+        name: "Dup Candidate",
+        email,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        password_hash: await hashPassword("password"),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      await expect(
+        authService.updateProfile(created.id, "Dup Candidate", "admin@workhub.test"),
+      ).rejects.toThrow("An account with this email already exists.");
+      expect((await users.findByIdOrThrow(created.id)).email).toBe(email);
+    });
+  });
+
+  test("updateProfile clears verification when the email changes and the flag is on", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+
+    try {
+      await runWithTenantDatabase(defaultTestTenant, async () => {
+        const users = new UserRepository();
+        const authService = new AuthService(
+          users,
+          new TokenService(users, new ApiTokenRepository()),
+          new OAuthIdentityRepository(),
+        );
+        const email = `profile-verify-on-${Date.now()}@workhub.test`;
+        const created = await users.create({
+          name: "Verify On",
+          email,
+          role: "member",
+          tenant_id: defaultTestTenant.id,
+          password_hash: await hashPassword("password"),
+          email_verified_at: new Date(),
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        const nextEmail = `profile-verify-on-next-${Date.now()}@workhub.test`;
+
+        const result = await authService.updateProfile(created.id, "Verify On", nextEmail);
+
+        expect(result.emailChanged).toBe(true);
+        expect(result.user.email).toBe(nextEmail);
+        expect(result.user.email_verified_at).toBeNull();
+      });
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
+  test("updateProfile keeps or stamps verification when the email changes and the flag is off", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "false";
+
+    try {
+      await runWithTenantDatabase(defaultTestTenant, async () => {
+        const users = new UserRepository();
+        const authService = new AuthService(
+          users,
+          new TokenService(users, new ApiTokenRepository()),
+          new OAuthIdentityRepository(),
+        );
+        const verifiedEmail = `profile-verify-off-${Date.now()}@workhub.test`;
+        const verifiedAt = new Date("2024-01-15T12:00:00.000Z");
+        const verified = await users.create({
+          name: "Verify Off",
+          email: verifiedEmail,
+          role: "member",
+          tenant_id: defaultTestTenant.id,
+          password_hash: await hashPassword("password"),
+          email_verified_at: verifiedAt,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        const nextVerifiedEmail = `profile-verify-off-next-${Date.now()}@workhub.test`;
+        const kept = await authService.updateProfile(verified.id, "Verify Off", nextVerifiedEmail);
+
+        expect(kept.emailChanged).toBe(true);
+        expect(kept.user.email).toBe(nextVerifiedEmail);
+        expect(kept.user.email_verified_at?.getTime()).toBe(verifiedAt.getTime());
+
+        const unverifiedEmail = `profile-verify-stamp-${Date.now()}@workhub.test`;
+        const unverified = await users.create({
+          name: "Stamp Verify",
+          email: unverifiedEmail,
+          role: "member",
+          tenant_id: defaultTestTenant.id,
+          password_hash: await hashPassword("password"),
+          email_verified_at: null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        const stamped = await authService.updateProfile(
+          unverified.id,
+          "Stamp Verify",
+          `profile-verify-stamp-next-${Date.now()}@workhub.test`,
+        );
+
+        expect(stamped.emailChanged).toBe(true);
+        expect(stamped.user.email_verified_at).toBeInstanceOf(Date);
+      });
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
   test("changePassword updates a hash and rejects the old password", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {
       const users = new UserRepository();

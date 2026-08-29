@@ -60,6 +60,11 @@ interface WebConfirmPasswordBody {
   redirect?: string;
 }
 
+interface WebUpdateProfileBody {
+  name: string;
+  email: string;
+}
+
 interface WebDeleteAccountBody {
   password: string;
 }
@@ -109,6 +114,11 @@ const webCreateApiTokenRules = {
 const webConfirmPasswordRules = {
   password: [required(), stringRule()],
   redirect: [stringRule()],
+};
+
+const webUpdateProfileRules = {
+  name: [required(), stringRule(), minLength(1), maxLength(120)],
+  email: [required(), stringRule(), emailRule()],
 };
 
 const webDeleteAccountRules = {
@@ -203,6 +213,17 @@ class WebCreateApiTokenRequest extends WebFormRequest<WebCreateApiTokenBody> {
   }
 }
 
+class WebUpdateProfileRequest extends WebFormRequest<WebUpdateProfileBody> {
+  protected parse(payload: unknown): WebUpdateProfileBody {
+    const validated = validateObject(payload, webUpdateProfileRules);
+
+    return {
+      name: String(validated.name).trim(),
+      email: String(validated.email).trim(),
+    };
+  }
+}
+
 class WebConfirmPasswordRequest extends WebFormRequest<WebConfirmPasswordBody> {
   protected parse(payload: unknown): WebConfirmPasswordBody {
     const validated = validateObject(payload, webConfirmPasswordRules);
@@ -249,6 +270,7 @@ const webDisableMfaRequest = new WebDisableMfaRequest();
 const webChangePasswordRequest = new WebChangePasswordRequest();
 const webCreateApiTokenRequest = new WebCreateApiTokenRequest();
 const webConfirmPasswordRequest = new WebConfirmPasswordRequest();
+const webUpdateProfileRequest = new WebUpdateProfileRequest();
 const webDeleteAccountRequest = new WebDeleteAccountRequest();
 
 async function parseWebRegisterBody(request: Request): Promise<WebRegisterBody> {
@@ -287,6 +309,10 @@ async function parseWebConfirmPasswordBody(request: Request): Promise<WebConfirm
   return await webConfirmPasswordRequest.validate(request);
 }
 
+async function parseWebUpdateProfileBody(request: Request): Promise<WebUpdateProfileBody> {
+  return await webUpdateProfileRequest.validate(request);
+}
+
 async function parseWebDeleteAccountBody(request: Request): Promise<WebDeleteAccountBody> {
   return await webDeleteAccountRequest.validate(request);
 }
@@ -302,6 +328,7 @@ export type {
   WebLoginBody,
   WebRegisterBody,
   WebResetPasswordBody,
+  WebUpdateProfileBody,
 };
 export {
   parseWebChangePasswordBody,
@@ -314,4 +341,5 @@ export {
   parseWebLoginBody,
   parseWebRegisterBody,
   parseWebResetPasswordBody,
+  parseWebUpdateProfileBody,
 };

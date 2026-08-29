@@ -5,7 +5,7 @@ WorkHub supports three frontend modes (`FRONTEND_MODE`):
 | Mode | Value | What runs |
 |------|-------|-----------|
 | JSON API only | `api` | `/api/v1/*` routes |
-| Server HTMX | `server-htmx` | HTML views under `/organizations`, `/projects`, `/tasks`, `/search`, `/reports`, `/account` (password + MFA + recovery codes), `/confirm-password` (export/delete), `/notifications`, `/billing`, `/webhooks`, `/forgot-password`, etc. |
+| Server HTMX | `server-htmx` | HTML views under `/organizations`, `/projects`, `/tasks`, `/search`, `/reports`, `/account` (profile name/email, password + MFA + recovery codes), `/confirm-password` (export/delete), `/notifications`, `/billing`, `/webhooks`, `/forgot-password`, etc. |
 | SPA + API | `spa-react` | React app at `/app/*` plus the JSON API |
 
 Set the mode in `.env` or export it before starting the server.
