@@ -421,7 +421,7 @@ class WebAccountController {
     }
   });
 
-  readonly deletePhoto = withErrorHandling(async (request: Request) => {
+  readonly deletePhoto = withErrorHandling(async () => {
     const userId = this.requireUserId();
     await this.requirePhotos().deletePhoto(userId);
 
