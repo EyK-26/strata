@@ -9,6 +9,7 @@ import type { RouteHandler } from "@getstrata/core/http/middleware";
 import { formDataToRecord, parseFormBody } from "@getstrata/core/http/parseFormBody";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { normalizeFieldErrors } from "@getstrata/core/http/webErrorResponse";
+import { webhookSignatureHeader } from "@getstrata/core/runtime/appKeyPrefix";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
 import { webhookServiceToken } from "./provider";
@@ -34,6 +35,7 @@ class WebhookWebController {
     return htmlResponse(
       await this.view.render("webhooks/index", {
         title: "Webhooks",
+        signatureHeader: webhookSignatureHeader(),
         webhooks,
         deliveries,
         errors: {},

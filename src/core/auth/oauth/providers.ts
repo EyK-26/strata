@@ -1,3 +1,4 @@
+import { appUserAgent } from "../../runtime/appKeyPrefix";
 import type { OAuthProfile, OAuthProvider } from "./types";
 
 interface GitHubOAuthOptions {
@@ -47,7 +48,7 @@ class GitHubOAuthProvider implements OAuthProvider {
       headers: {
         authorization: `Bearer ${tokenBody.access_token}`,
         accept: "application/json",
-        "user-agent": "workhub",
+        "user-agent": appUserAgent(),
       },
     });
 

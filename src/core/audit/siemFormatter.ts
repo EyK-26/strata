@@ -1,3 +1,5 @@
+import { appDisplayName, siemEventType } from "../runtime/appKeyPrefix";
+
 interface SiemAuditEvent {
   timestamp: string;
   event_type: string;
@@ -28,7 +30,7 @@ function formatSiemAuditEvent(input: {
 }): SiemAuditEvent {
   return {
     timestamp: input.created_at.toISOString(),
-    event_type: "workhub.audit",
+    event_type: siemEventType(),
     actor_user_id: input.user_id,
     tenant_id: input.tenant_id ?? null,
     trace_id: input.trace_id ?? null,
@@ -56,7 +58,7 @@ function formatCefLine(event: SiemAuditEvent): string {
     `request=${event.trace_id ?? ""}`,
   ].join(" ");
 
-  return `CEF:0|WorkHub|API|1.0|${event.action}|${event.subject_type}|5|${extension}`;
+  return `CEF:0|${appDisplayName()}|API|1.0|${event.action}|${event.subject_type}|5|${extension}`;
 }
 
 export type { SiemAuditEvent };

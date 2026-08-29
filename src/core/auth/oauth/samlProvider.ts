@@ -1,3 +1,4 @@
+import { appKeyPrefix } from "../../runtime/appKeyPrefix";
 import type { OAuthProfile, OAuthProvider } from "./types";
 
 class SamlProvider implements OAuthProvider {
@@ -17,8 +18,8 @@ class SamlProvider implements OAuthProvider {
     const [, email, name] = code.split(":");
 
     return {
-      providerUserId: email ?? "saml-user",
-      email: email ?? "saml-user@workhub.test",
+      providerUserId: email || "saml-user",
+      email: email || `saml-user@${appKeyPrefix()}.test`,
       name: name ?? "SAML User",
     };
   }

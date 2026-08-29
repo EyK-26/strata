@@ -1,3 +1,5 @@
+import { smtpEhloHost } from "../runtime/appKeyPrefix";
+
 interface MailMessage {
   to: string;
   subject: string;
@@ -144,7 +146,7 @@ async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): P
 
   try {
     await waitForSmtpResponse(readResponse, ["220"]);
-    await socket.write("EHLO workhub.local\r\n");
+    await socket.write(`EHLO ${smtpEhloHost()}\r\n`);
     await waitForSmtpResponse(readResponse, ["250"]);
 
     if (config.username && config.password) {

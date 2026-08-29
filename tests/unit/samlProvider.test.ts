@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SamlProvider } from "@getstrata/core/auth/oauth/samlProvider";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("SamlProvider", () => {
   test("builds an authorization url with encoded state", () => {
@@ -31,6 +32,22 @@ describe("SamlProvider", () => {
       email: "user@example.com",
       name: "SAML User",
     });
+  });
+
+  test("uses a prefix-scoped email when the assertion omits one", async () => {
+    const previous = process.env.APP_KEY_PREFIX;
+    delete process.env.APP_KEY_PREFIX;
+    const provider = new SamlProvider("https://idp.example.com/login");
+
+    try {
+      await expect(provider.exchangeCode("saml::Admin")).resolves.toEqual({
+        providerUserId: "saml-user",
+        email: "saml-user@workhub.test",
+        name: "Admin",
+      });
+    } finally {
+      restoreEnvVar("APP_KEY_PREFIX", previous);
+    }
   });
 
   test("rejects invalid assertion references", async () => {

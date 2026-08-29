@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { otelServiceName } from "../runtime/appKeyPrefix";
 
 interface OtelSpan {
   traceId: string;
@@ -44,7 +45,7 @@ async function exportOtelSpan(span: OtelSpan): Promise<void> {
     return;
   }
 
-  const serviceName = process.env.OTEL_SERVICE_NAME?.trim() ?? "workhub-api";
+  const serviceName = otelServiceName();
   const url = endpoint.endsWith("/v1/traces")
     ? endpoint
     : `${endpoint.replace(/\/$/, "")}/v1/traces`;

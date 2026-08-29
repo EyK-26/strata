@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.65
+
+- Identity helpers on `@getstrata/core/runtime/appKeyPrefix` (`smtpEhloHost`, `siemEventType`, `appUserAgent`, `otelServiceName`, `appDisplayName`, `webhookSignatureHeader`) so sibling apps are not stuck with WorkHub SMTP/SIEM/OTEL/OAuth names.
+- SIEM `event_type` and CEF vendor follow `SIEM_EVENT_TYPE` / `APP_NAME` (defaults stay `workhub.audit` / `WorkHub`).
+
 ## 0.5.64
 
 - `APP_KEY_PREFIX` (default `workhub`) namespaces Redis cache, queue, and throttle keys so sibling apps do not share WorkHub’s keyspace.

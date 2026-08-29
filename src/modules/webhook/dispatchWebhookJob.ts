@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { Job } from "@getstrata/core/queue";
+import { webhookSignatureHeader } from "@getstrata/core/runtime/appKeyPrefix";
 import { safeFetch } from "@getstrata/core/security/safeFetch";
 import { assertSafeOutboundUrl } from "@getstrata/core/security/safeUrl";
 import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";
@@ -50,7 +51,7 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
     const signature = createHmac("sha256", webhook.secret).update(body).digest("hex");
 
     const allowHttp = (process.env.APP_ENV ?? "local") !== "production";
-    const signatureHeader = process.env.WEBHOOK_SIGNATURE_HEADER?.trim() || "x-workhub-signature";
+    const signatureHeader = webhookSignatureHeader();
 
     assertSafeOutboundUrl(webhook.url, { allowHttp });
 

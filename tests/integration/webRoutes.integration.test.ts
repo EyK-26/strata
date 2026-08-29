@@ -464,6 +464,19 @@ describe("web routes with server-htmx frontend", () => {
     ).toBe(true);
   });
 
+  test("GET /search finds organizations by slug", async () => {
+    const response = await fetch(`${baseUrl}/search?q=acme-labs`, {
+      headers: {
+        cookie: adminSessionCookie,
+        "HX-Request": "true",
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Acme Labs");
+  });
+
   test("GET /notifications renders the inbox partial", async () => {
     const response = await fetch(`${baseUrl}/notifications`, {
       headers: { cookie: adminSessionCookie },
@@ -502,7 +515,9 @@ describe("web routes with server-htmx frontend", () => {
     expect(billing.status).toBe(200);
     expect(await billing.text()).toContain("Billing");
     expect(webhooks.status).toBe(200);
-    expect(await webhooks.text()).toContain("Outbound webhooks");
+    const webhookHtml = await webhooks.text();
+    expect(webhookHtml).toContain("Outbound webhooks");
+    expect(webhookHtml).toContain("x-workhub-signature");
   });
 
   test("GET /forgot-password renders the reset form", async () => {

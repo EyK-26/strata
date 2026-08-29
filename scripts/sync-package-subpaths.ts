@@ -145,6 +145,7 @@ const CORE_SUBPATHS = [
   "queue/publicQueue",
   "queue/redisQueue",
   "queue/types",
+  "runtime/appKeyPrefix",
   "runtime/applicationRegistry",
   "runtime/asyncContextStore",
   "scheduler/schedule",

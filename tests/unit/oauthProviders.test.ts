@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const originalFetch = globalThis.fetch;
 
@@ -25,12 +26,20 @@ describe("GitHubOAuthProvider", () => {
   });
 
   test("exchanges a code for a profile", async () => {
-    globalThis.fetch = mock((input: string | URL | Request) => {
+    const previousUserAgent = process.env.APP_USER_AGENT;
+    const previousPrefix = process.env.APP_KEY_PREFIX;
+    delete process.env.APP_USER_AGENT;
+    delete process.env.APP_KEY_PREFIX;
+    let profileUserAgent = "";
+
+    globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
 
       if (url.includes("/login/oauth/access_token")) {
         return Promise.resolve(Response.json({ access_token: "gh-token" }));
       }
+
+      profileUserAgent = new Headers(init?.headers).get("user-agent") ?? "";
 
       return Promise.resolve(
         Response.json({
@@ -42,14 +51,20 @@ describe("GitHubOAuthProvider", () => {
       );
     }) as unknown as typeof fetch;
 
-    const provider = new GitHubOAuthProvider(options);
-    const profile = await provider.exchangeCode("gh-code");
+    try {
+      const provider = new GitHubOAuthProvider(options);
+      const profile = await provider.exchangeCode("gh-code");
 
-    expect(profile).toEqual({
-      providerUserId: "42",
-      email: "octocat@github.com",
-      name: "The Octocat",
-    });
+      expect(profile).toEqual({
+        providerUserId: "42",
+        email: "octocat@github.com",
+        name: "The Octocat",
+      });
+      expect(profileUserAgent).toBe("workhub");
+    } finally {
+      restoreEnvVar("APP_USER_AGENT", previousUserAgent);
+      restoreEnvVar("APP_KEY_PREFIX", previousPrefix);
+    }
   });
 
   test("falls back when GitHub profile fields are missing", async () => {

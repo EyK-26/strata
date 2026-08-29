@@ -63,6 +63,11 @@ Cookie names:
 | CSRF | `workhub_csrf` | `CSRF_COOKIE_NAME` |
 | Flash | `workhub_flash` | `FLASH_COOKIE_NAME` |
 | Redis cache / queue / throttle keys | `workhub:` | `APP_KEY_PREFIX` |
+| SMTP EHLO host | `workhub.local` | `MAIL_EHLO` |
+| SIEM `event_type` / CEF vendor | `workhub.audit` / `WorkHub` | `SIEM_EVENT_TYPE` / `APP_NAME` |
+| GitHub OAuth user-agent | `workhub` | `APP_USER_AGENT` |
+| OTEL `service.name` | `workhub-api` | `OTEL_SERVICE_NAME` |
+| Webhook HMAC header | `x-workhub-signature` | `WEBHOOK_SIGNATURE_HEADER` |
 | `CookieSessionStore` | `strata_session` | constructor `cookieName` |
 
 `kernel.wrapWebAuthenticated` / `wrapWebGlobalAdmin` work with this `AuthManager`. Do not bake WorkHub’s ability catalog into the cookie-session path.

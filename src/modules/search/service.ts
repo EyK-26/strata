@@ -39,10 +39,15 @@ class SearchService {
     tenantId: number,
     limit: number,
   ): Promise<SearchHit[]> {
-    const organizations = await this.organizationRepository.findAll({
-      where: { tenant_id: tenantId, name: { ilike: query } },
-      limit,
-    });
+    const organizations = await this.organizationRepository
+      .query({ tenant_id: tenantId })
+      .where((builder) => {
+        builder.whereGroup((group) => {
+          group.where({ name: { ilike: query } }).orWhere({ slug: { ilike: query } });
+        });
+      })
+      .limit(limit)
+      .get();
 
     return organizations.map((organization) => ({
       type: "organization" as const,

@@ -38,6 +38,18 @@ describe("SearchService", () => {
     });
   });
 
+  test("finds seeded organizations by slug", async () => {
+    const service = createSearchService();
+
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const results = await service.search("acme-labs");
+
+      expect(results.some((result) => result.type === "organization" && result.id === 1)).toBe(
+        true,
+      );
+    });
+  });
+
   test("returns an empty array when nothing matches", async () => {
     const service = createSearchService();
 

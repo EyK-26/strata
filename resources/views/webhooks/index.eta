@@ -1,6 +1,6 @@
 <section class="page-header">
   <h1>Outbound webhooks</h1>
-  <p class="hint">Signed deliveries use HMAC and <code>x-workhub-signature</code>.</p>
+  <p class="hint">Signed deliveries use HMAC and <code><%= it.signatureHeader ?? "x-workhub-signature" %></code>.</p>
 </section>
 
 <% if (Object.keys(it.errors ?? {}).length > 0) { %>
