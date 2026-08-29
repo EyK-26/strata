@@ -12,6 +12,7 @@ interface UserRecord {
   mfa_secret?: string | null;
   mfa_enabled?: boolean;
   mfa_recovery_codes?: string | null;
+  profile_photo_path?: string | null;
   created_at: Date;
   updated_at: Date;
 }

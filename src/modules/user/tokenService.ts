@@ -199,6 +199,7 @@ class TokenService {
       name: "Deleted User",
       email: `deleted-${userId}@anonymous.local`,
       password_hash: "",
+      profile_photo_path: null,
       updated_at: new Date(),
     });
   }

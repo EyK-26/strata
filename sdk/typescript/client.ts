@@ -289,6 +289,18 @@ export class WorkHubClient {
     return await this.request("/users/me/password", { ...init, method: "PUT" });
   }
 
+  async getUsersMePhoto(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/photo", { ...init, method: "GET" });
+  }
+
+  async postUsersMePhoto(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/photo", { ...init, method: "POST" });
+  }
+
+  async deleteUsersMePhoto(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/photo", { ...init, method: "DELETE" });
+  }
+
   async getWebhooks(init: RequestInit = {}): Promise<Response> {
     return await this.request("/webhooks", { ...init, method: "GET" });
   }

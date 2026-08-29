@@ -10,6 +10,7 @@ import {
   createMfaChallengeCookie,
 } from "../../src/modules/user/mfaChallengeCookie";
 import { MfaRequiredError } from "../../src/modules/user/mfaRequiredError";
+import { profilePhotoServiceToken } from "../../src/modules/user/profilePhotoService";
 import {
   authServiceToken,
   notificationServiceToken,
@@ -43,6 +44,7 @@ function createController(services: {
   authService?: Record<string, unknown>;
   passwordResets?: Record<string, unknown>;
   organizations?: Record<string, unknown>;
+  photos?: Record<string, unknown>;
 }): AuthControllerInstance {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, {
@@ -106,6 +108,9 @@ function createController(services: {
     })),
     markAllRead: mock(async () => 0),
   });
+  if (services.photos) {
+    container.set(profilePhotoServiceToken, services.photos);
+  }
 
   return new AuthControllerClass(createMockDependencies(container, createMockCache()));
 }
@@ -1112,6 +1117,106 @@ describe("AuthController", () => {
 
     expect(response.status).toBe(204);
     expect(deleteUserAccount).toHaveBeenCalledWith(1);
+  });
+
+  test("deleteMe removes a profile photo when the service is bound", async () => {
+    const deleteUserAccount = mock(async () => undefined);
+    const deletePhoto = mock(async () => undefined);
+    const controller = createController({
+      tokens: { deleteUserAccount },
+      photos: { deletePhoto },
+    });
+
+    const response = await controller.deleteMe(new Request("http://example.test/auth/me"));
+
+    expect(response.status).toBe(204);
+    expect(deletePhoto).toHaveBeenCalledWith(1);
+    expect(deleteUserAccount).toHaveBeenCalledWith(1);
+  });
+
+  test("deleteMe continues when photo service lookup throws", async () => {
+    const deleteUserAccount = mock(async () => undefined);
+    const controller = createController({
+      tokens: { deleteUserAccount },
+    });
+    const dependencies = (
+      controller as unknown as {
+        dependencies: { container: { has: (token: string) => boolean } };
+      }
+    ).dependencies;
+    dependencies.container.has = () => {
+      throw new Error("container unavailable");
+    };
+
+    const response = await controller.deleteMe(new Request("http://example.test/auth/me"));
+
+    expect(response.status).toBe(204);
+    expect(deleteUserAccount).toHaveBeenCalledWith(1);
+  });
+
+  test("uploadPhoto stores a profile photo and returns the photo URL", async () => {
+    const updatePhoto = mock(async () => user);
+    const controller = createController({
+      photos: { updatePhoto },
+    });
+    const formData = new FormData();
+    formData.append("photo", new File(["avatar"], "avatar.png", { type: "image/png" }));
+
+    const response = await controller.uploadPhoto(
+      new Request("http://example.test/users/me/photo", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ photo_url: "/api/v1/users/me/photo" });
+    expect(updatePhoto).toHaveBeenCalled();
+  });
+
+  test("uploadPhoto rejects when the photo service is missing", async () => {
+    const controller = createController({});
+    const formData = new FormData();
+    formData.append("photo", new File(["avatar"], "avatar.png", { type: "image/png" }));
+
+    const response = await controller.uploadPhoto(
+      new Request("http://example.test/users/me/photo", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Profile photo service is not registered." });
+  });
+
+  test("deletePhoto clears the stored photo", async () => {
+    const deletePhoto = mock(async () => user);
+    const controller = createController({
+      photos: { deletePhoto },
+    });
+
+    const response = await controller.deletePhoto(
+      new Request("http://example.test/users/me/photo", { method: "DELETE" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ photo_url: null });
+    expect(deletePhoto).toHaveBeenCalledWith(1);
+  });
+
+  test("showPhoto returns stored image bytes", async () => {
+    const contents = new Uint8Array([137, 80, 78, 71]);
+    const readPhoto = mock(async () => ({ contents, contentType: "image/png" }));
+    const controller = createController({
+      photos: { readPhoto },
+    });
+
+    const response = await controller.showPhoto(new Request("http://example.test/users/me/photo"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(contents);
   });
 
   test("listTokens returns tokens for the authenticated user", async () => {

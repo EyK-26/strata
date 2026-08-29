@@ -115,6 +115,28 @@ describe("TokenService", () => {
     expect(() => service.requireAbility(null, "tasks:read")).toThrow("Token ability required.");
   });
 
+  test("deleteUserAccount clears a stored profile photo path", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const service = new TokenService(users, new ApiTokenRepository());
+      const created = await users.create({
+        name: "Photo Delete User",
+        email: `photo-delete-${Date.now()}@workhub.test`,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        password_hash: await hashPassword("password"),
+        profile_photo_path: "profile-photos/temp/avatar.png",
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      await service.deleteUserAccount(created.id);
+      const anonymized = await users.findById(created.id);
+      expect(anonymized?.email).toContain(`deleted-${created.id}@anonymous.local`);
+      expect(anonymized?.profile_photo_path).toBeNull();
+    });
+  });
+
   test("deleteUserAccount anonymizes the user and revokes tokens", async () => {
     const service = new TokenService(new UserRepository(), new ApiTokenRepository());
     const first = await service.createToken(2, { name: "delete-me" });

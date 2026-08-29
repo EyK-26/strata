@@ -6,7 +6,7 @@ import {
 import { OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
 import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
 import { SamlProvider } from "@getstrata/core/auth/oauth/samlProvider";
-import type { ServiceProvider } from "@getstrata/core/contracts/di";
+import { getRequiredDependency, type ServiceProvider } from "@getstrata/core/contracts/di";
 import { isFeatureEnabled } from "../../config/features";
 import ApiTokenRepository from "./apiTokenRepository";
 import AuthService from "./authService";
@@ -14,6 +14,7 @@ import NotificationRepository from "./notificationRepository";
 import NotificationService from "./notificationService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
 import PasswordResetService from "./passwordResetService";
+import ProfilePhotoService, { profilePhotoServiceToken } from "./profilePhotoService";
 import UserRepository from "./repository";
 import TokenService from "./tokenService";
 
@@ -40,7 +41,7 @@ const userProvider: ServiceProvider = {
     container.singleton(oauthIdentityRepositoryToken, () => new OAuthIdentityRepository());
     container.singleton(notificationRepositoryToken, () => new NotificationRepository());
   },
-  boot({ container }) {
+  boot({ container, dependencies }) {
     container.singleton(tokenServiceToken, () => {
       const users = container.resolve<UserRepository>(userRepositoryToken);
       const tokens = container.resolve<ApiTokenRepository>(apiTokenRepositoryToken);
@@ -60,6 +61,14 @@ const userProvider: ServiceProvider = {
     container.singleton(
       passwordResetServiceToken,
       () => new PasswordResetService(container.resolve<UserRepository>(userRepositoryToken)),
+    );
+    container.singleton(
+      profilePhotoServiceToken,
+      () =>
+        new ProfilePhotoService(
+          container.resolve<UserRepository>(userRepositoryToken),
+          getRequiredDependency(dependencies, "storage"),
+        ),
     );
 
     container.singleton(authServiceToken, () => {
@@ -132,6 +141,7 @@ export {
   notificationServiceToken,
   oauthIdentityRepositoryToken,
   passwordResetServiceToken,
+  profilePhotoServiceToken,
   tokenServiceToken,
   userRepositoryToken,
 };

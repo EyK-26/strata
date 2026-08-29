@@ -13,6 +13,7 @@ class UserModelClass extends Model<UserRecord, "id"> {
     "mfa_secret",
     "mfa_enabled",
     "mfa_recovery_codes",
+    "profile_photo_path",
   ] as const;
 
   static override $casts = {

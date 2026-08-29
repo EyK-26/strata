@@ -1273,8 +1273,76 @@ describe("web routes with server-htmx frontend", () => {
     expect(accountHtml).toContain("Two-factor authentication");
     expect(accountHtml).toContain("API tokens");
     expect(accountHtml).toContain("Export my data");
+    expect(accountHtml).toContain("Profile photo");
+    expect(accountHtml).toContain("Upload photo");
+    expect(accountHtml).toContain("No profile photo yet.");
     expect(orgReport.status).toBe(200);
     expect(await orgReport.text()).toContain("Acme Labs");
+  });
+
+  test("POST /account/photo uploads and POST /account/photo/delete removes a photo", async () => {
+    const email = `photo-html-${Date.now()}@workhub.test`;
+    const passwordHash = await hashPassword("password");
+    const inserted = (await getDatabase()`
+      INSERT INTO users (name, email, email_lookup, role, tenant_id, password_hash, email_verified_at)
+      VALUES (${"Photo Html User"}, ${email}, ${email}, ${"member"}, 1, ${passwordHash}, NOW())
+      RETURNING id
+    `) as Array<{ id: number }>;
+    expect(inserted[0]?.id).toBeTruthy();
+
+    const sessionCookie = await loginAndGetCookie(email, "password");
+    const csrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const png = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      ),
+      (char) => char.charCodeAt(0),
+    );
+    const formData = new FormData();
+    formData.append("_token", csrf.token);
+    formData.append("photo", new File([png], "avatar.png", { type: "image/png" }));
+
+    const uploaded = await fetch(`${baseUrl}/account/photo`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { cookie: csrf.cookies },
+      body: formData,
+    });
+    expect(uploaded.status).toBe(302);
+    expect(uploaded.headers.get("location")).toBe("/account");
+
+    const account = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: sessionCookie },
+    });
+    const html = await account.text();
+    expect(account.status).toBe(200);
+    expect(html).toContain("Remove photo");
+    expect(html).toContain('src="/account/photo"');
+
+    const image = await fetch(`${baseUrl}/account/photo`, {
+      headers: { cookie: sessionCookie },
+    });
+    expect(image.status).toBe(200);
+    expect(image.headers.get("content-type")).toBe("image/png");
+    expect((await image.arrayBuffer()).byteLength).toBeGreaterThan(0);
+
+    const deleteCsrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const deleted = await fetch(`${baseUrl}/account/photo/delete`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: deleteCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: deleteCsrf.token }),
+    });
+    expect(deleted.status).toBe(302);
+    expect(deleted.headers.get("location")).toBe("/account");
+
+    const after = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: sessionCookie },
+    });
+    expect(await after.text()).toContain("No profile photo yet.");
   });
 
   test("POST /account/profile updates a disposable user name without touching admin", async () => {

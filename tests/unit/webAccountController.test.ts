@@ -3,6 +3,7 @@ import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { hashPassword } from "@getstrata/core/auth/password";
+import { profilePhotoServiceToken } from "../../src/modules/user/profilePhotoService";
 import {
   authServiceToken,
   oauthIdentityRepositoryToken,
@@ -43,6 +44,7 @@ function createController(services: {
   oauth?: Record<string, unknown>;
   view?: Record<string, unknown>;
   authService?: Record<string, unknown>;
+  photos?: Record<string, unknown>;
 }): WebAccountController {
   const container = new ServiceContainer();
   container.set(userRepositoryToken, {
@@ -66,6 +68,9 @@ function createController(services: {
   container.set(authServiceToken, {
     ...services.authService,
   });
+  if (services.photos) {
+    container.set(profilePhotoServiceToken, services.photos);
+  }
   container.set(passwordResetServiceToken, {
     sendEmailVerification: mock(async () => undefined),
   });
@@ -280,6 +285,77 @@ describe("WebAccountController", () => {
 
     expect(response.status).toBe(422);
     expect(await response.text()).toContain("Type DELETE to confirm.");
+  });
+
+  test("updatePhoto redirects after storing an image", async () => {
+    const updatePhoto = mock(async () => adminUser);
+    const controller = createController({ photos: { updatePhoto } });
+    const formData = new FormData();
+    formData.append("photo", new File(["avatar"], "avatar.png", { type: "image/png" }));
+
+    const response = await asAuthed(() =>
+      controller.updatePhoto(
+        new Request("http://example.test/account/photo", {
+          method: "POST",
+          body: formData,
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/account");
+    expect(updatePhoto).toHaveBeenCalled();
+  });
+
+  test("updatePhoto re-renders a bad request for a non-image", async () => {
+    const { BadRequestError } = await import("@getstrata/core/errors/http");
+    const controller = createController({
+      photos: {
+        updatePhoto: mock(async () => {
+          throw new BadRequestError("Profile photos must be JPEG, PNG, GIF, or WebP.");
+        }),
+      },
+    });
+    const formData = new FormData();
+    formData.append("photo", new File(["notes"], "notes.txt", { type: "text/plain" }));
+
+    const response = await asAuthed(() =>
+      controller.updatePhoto(
+        new Request("http://example.test/account/photo", {
+          method: "POST",
+          body: formData,
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain("Profile photos must be JPEG, PNG, GIF, or WebP.");
+  });
+
+  test("deletePhoto redirects after removing the image", async () => {
+    const deletePhoto = mock(async () => adminUser);
+    const controller = createController({ photos: { deletePhoto } });
+    const response = await asAuthed(() =>
+      controller.deletePhoto(new Request("http://example.test/account/photo/delete")),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/account");
+    expect(deletePhoto).toHaveBeenCalledWith(1);
+  });
+
+  test("showPhoto returns stored image bytes", async () => {
+    const contents = new Uint8Array([1, 2, 3]);
+    const controller = createController({
+      photos: {
+        readPhoto: mock(async () => ({ contents, contentType: "image/png" })),
+      },
+    });
+    const response = await asAuthed(() => controller.showPhoto());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(contents);
   });
 
   test("requireUserId rejects a missing session", async () => {

@@ -7,6 +7,7 @@ import {
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
+import { parseMultipartUpload } from "@getstrata/core/http/parseMultipartUpload";
 import {
   createdResponse,
   jsonResponse,
@@ -18,6 +19,7 @@ import {
   createOAuthStateCookie,
   verifyOAuthState,
 } from "@getstrata/core/security/oauthState";
+import { appConfig } from "../../config/app";
 import { isFeatureEnabled } from "../../config/features";
 import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
@@ -33,6 +35,8 @@ import { MfaRequiredError } from "./mfaRequiredError";
 import type NotificationService from "./notificationService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
 import type PasswordResetService from "./passwordResetService";
+import type ProfilePhotoService from "./profilePhotoService";
+import { profilePhotoServiceToken } from "./profilePhotoService";
 import {
   authServiceToken,
   notificationServiceToken,
@@ -86,6 +90,28 @@ class AuthController {
 
   private get organizations(): OrganizationService {
     return resolveService(this.dependencies, organizationServiceToken);
+  }
+
+  private tryPhotos(): ProfilePhotoService | null {
+    try {
+      if (!this.dependencies.container.has(profilePhotoServiceToken)) {
+        return null;
+      }
+
+      return resolveService<ProfilePhotoService>(this.dependencies, profilePhotoServiceToken);
+    } catch {
+      return null;
+    }
+  }
+
+  private requirePhotos(): ProfilePhotoService {
+    const photos = this.tryPhotos();
+
+    if (!photos) {
+      throw new Error("Profile photo service is not registered.");
+    }
+
+    return photos;
   }
 
   private async requireUserId(request: Request): Promise<number> {
@@ -429,8 +455,38 @@ class AuthController {
 
   readonly deleteMe = withErrorHandling(async (request: Request) => {
     const userId = await this.requireUserId(request);
+    await this.tryPhotos()?.deletePhoto(userId);
     await this.tokens.deleteUserAccount(userId);
     return noContentResponse();
+  });
+
+  readonly uploadPhoto = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const upload = await parseMultipartUpload(request, "photo");
+    await this.requirePhotos().updatePhoto(userId, upload);
+
+    return jsonResponse({
+      photo_url: `${appConfig.apiPrefix}/users/me/photo`,
+    });
+  });
+
+  readonly deletePhoto = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    await this.requirePhotos().deletePhoto(userId);
+
+    return jsonResponse({ photo_url: null });
+  });
+
+  readonly showPhoto = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const photo = await this.requirePhotos().readPhoto(userId);
+
+    return new Response(photo.contents, {
+      headers: {
+        "Content-Type": photo.contentType,
+        "Cache-Control": "private, max-age=0, must-revalidate",
+      },
+    });
   });
 
   readonly listTokens = withErrorHandling(async (request: Request) => {

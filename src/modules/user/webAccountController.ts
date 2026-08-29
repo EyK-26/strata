@@ -6,9 +6,10 @@ import { clearPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirm
 import { clearSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
+import { BadRequestError, UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
+import { parseMultipartUpload } from "@getstrata/core/http/parseMultipartUpload";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { normalizeFieldErrors } from "@getstrata/core/http/webErrorResponse";
 import { appKeyPrefix } from "@getstrata/core/runtime/appKeyPrefix";
@@ -18,6 +19,8 @@ import { isFeatureEnabled } from "../../config/features";
 import type AuthService from "./authService";
 import type OAuthIdentityRepository from "./oauthIdentityRepository";
 import type PasswordResetService from "./passwordResetService";
+import type ProfilePhotoService from "./profilePhotoService";
+import { profilePhotoServiceToken } from "./profilePhotoService";
 import {
   authServiceToken,
   oauthIdentityRepositoryToken,
@@ -64,6 +67,28 @@ class WebAccountController {
 
   private get view(): ViewEngine {
     return resolveService(this.dependencies, CORE_VIEW_TOKEN);
+  }
+
+  private tryPhotos(): ProfilePhotoService | null {
+    try {
+      if (!this.dependencies.container.has(profilePhotoServiceToken)) {
+        return null;
+      }
+
+      return resolveService<ProfilePhotoService>(this.dependencies, profilePhotoServiceToken);
+    } catch {
+      return null;
+    }
+  }
+
+  private requirePhotos(): ProfilePhotoService {
+    const photos = this.tryPhotos();
+
+    if (!photos) {
+      throw new Error("Profile photo service is not registered.");
+    }
+
+    return photos;
   }
 
   private requireUserId(): number {
@@ -365,6 +390,58 @@ class WebAccountController {
     );
   });
 
+  readonly updatePhoto = withErrorHandling(async (request: Request) => {
+    const userId = this.requireUserId();
+
+    try {
+      const upload = await parseMultipartUpload(request, "photo");
+      await this.requirePhotos().updatePhoto(userId, upload);
+
+      return flashResponse(Response.redirect("/account", 302), {
+        level: "success",
+        message: "Profile photo updated.",
+      });
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof BadRequestError) {
+        const user = await this.users.findByIdOrThrow(userId);
+
+        return await this.renderAccount(
+          user,
+          {
+            errors:
+              error instanceof ValidationError
+                ? normalizeFieldErrors(error.details)
+                : { photo: [error.message] },
+          },
+          error instanceof ValidationError ? 422 : 400,
+        );
+      }
+
+      throw error;
+    }
+  });
+
+  readonly deletePhoto = withErrorHandling(async (request: Request) => {
+    const userId = this.requireUserId();
+    await this.requirePhotos().deletePhoto(userId);
+
+    return flashResponse(Response.redirect("/account", 302), {
+      level: "success",
+      message: "Profile photo removed.",
+    });
+  });
+
+  readonly showPhoto = withErrorHandling(async () => {
+    const photo = await this.requirePhotos().readPhoto(this.requireUserId());
+
+    return new Response(photo.contents, {
+      headers: {
+        "Content-Type": photo.contentType,
+        "Cache-Control": "private, max-age=0, must-revalidate",
+      },
+    });
+  });
+
   readonly deleteAccount = withErrorHandling(async (request: Request) => {
     const userId = this.requireUserId();
 
@@ -376,6 +453,7 @@ class WebAccountController {
         throw new UnauthorizedError("Invalid credentials.");
       }
 
+      await this.tryPhotos()?.deletePhoto(userId);
       await this.tokens.deleteUserAccount(userId);
 
       const headers = new Headers({ Location: "/login" });
@@ -419,6 +497,13 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
     },
     "/account/profile": {
       POST: kernel.wrapWebAuthenticated(controller.updateProfile as unknown as RouteHandler),
+    },
+    "/account/photo": {
+      GET: kernel.wrapWebAuthenticated(controller.showPhoto as unknown as RouteHandler),
+      POST: kernel.wrapWebAuthenticated(controller.updatePhoto as unknown as RouteHandler),
+    },
+    "/account/photo/delete": {
+      POST: kernel.wrapWebAuthenticated(controller.deletePhoto as unknown as RouteHandler),
     },
     "/account/mfa": {
       POST: kernel.wrapWebAuthenticated(controller.beginMfa as unknown as RouteHandler),

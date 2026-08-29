@@ -1399,6 +1399,66 @@ describe("integration routes with postgres", () => {
     expect(stillCurrent.status).toBe(200);
   });
 
+  test("POST /users/me/photo uploads and DELETE removes a Jetstream profile photo", async () => {
+    const email = `json-photo-${Date.now()}@workhub.test`;
+    const registerResponse = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Json Photo User",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(registerResponse.status).toBe(201);
+    const registered = (await registerResponse.json()) as { token: string };
+    const png = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      ),
+      (char) => char.charCodeAt(0),
+    );
+    const formData = new FormData();
+    formData.append("photo", new File([png], "avatar.png", { type: "image/png" }));
+
+    const uploaded = await fetch(api("/users/me/photo"), {
+      method: "POST",
+      headers: { authorization: `Bearer ${registered.token}` },
+      body: formData,
+    });
+    expect(uploaded.status).toBe(200);
+    expect(await uploaded.json()).toEqual({ photo_url: "/api/v1/users/me/photo" });
+
+    const shown = await fetch(api("/users/me/photo"), {
+      headers: { authorization: `Bearer ${registered.token}` },
+    });
+    expect(shown.status).toBe(200);
+    expect(shown.headers.get("content-type")).toBe("image/png");
+    expect((await shown.arrayBuffer()).byteLength).toBeGreaterThan(0);
+
+    const invalid = new FormData();
+    invalid.append("photo", new File(["nope"], "notes.txt", { type: "text/plain" }));
+    const rejected = await fetch(api("/users/me/photo"), {
+      method: "POST",
+      headers: { authorization: `Bearer ${registered.token}` },
+      body: invalid,
+    });
+    expect(rejected.status).toBe(400);
+
+    const deleted = await fetch(api("/users/me/photo"), {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${registered.token}` },
+    });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({ photo_url: null });
+
+    const missing = await fetch(api("/users/me/photo"), {
+      headers: { authorization: `Bearer ${registered.token}` },
+    });
+    expect(missing.status).toBe(404);
+  });
+
   test("PATCH and DELETE /users/me return 401 without credentials", async () => {
     const patch = await fetch(api("/users/me"), {
       method: "PATCH",

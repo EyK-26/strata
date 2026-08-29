@@ -19,6 +19,27 @@
   </form>
 </section>
 
+<section class="card" id="profile-photo">
+  <h2>Profile photo</h2>
+  <% if (it.user.profile_photo_path) { %>
+  <p><img src="/account/photo" alt="Profile photo" width="96" height="96" /></p>
+  <form method="post" action="/account/photo/delete" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <button type="submit">Remove photo</button>
+  </form>
+  <% } else { %>
+  <p class="hint">No profile photo yet.</p>
+  <% } %>
+  <form method="post" action="/account/photo" enctype="multipart/form-data" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Photo
+      <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp" required />
+    </label>
+    <button type="submit">Upload photo</button>
+  </form>
+</section>
+
 <dl class="detail-list">
   <div>
     <dt>Role</dt>
