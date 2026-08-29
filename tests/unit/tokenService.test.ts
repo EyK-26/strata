@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { hashPassword } from "@getstrata/core/auth/password";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
 import UserRepository from "../../src/modules/user/repository";
 import TokenService, {
@@ -8,6 +10,7 @@ import TokenService, {
   resolveExpiresAt,
   toApiTokenResource,
 } from "../../src/modules/user/tokenService";
+import { defaultTestTenant } from "./testHelpers";
 
 describe("TokenService", () => {
   test("createToken returns a plain token and persists a hash", async () => {
@@ -66,15 +69,29 @@ describe("TokenService", () => {
   });
 
   test("revokeOtherTokens keeps the current token", async () => {
-    const service = new TokenService(new UserRepository(), new ApiTokenRepository());
-    const keep = await service.createToken(2, { name: "keep-me" });
-    const drop = await service.createToken(2, { name: "drop-me" });
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const service = new TokenService(users, new ApiTokenRepository());
+      const created = await users.create({
+        name: "Revoke Other Devices",
+        email: `revoke-other-${Date.now()}@workhub.test`,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        password_hash: await hashPassword("password"),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      const keep = await service.createToken(created.id, { name: "keep-me" });
+      const drop = await service.createToken(created.id, { name: "drop-me" });
 
-    expect(await service.revokeOtherTokens(2, keep.token.id)).toBe(1);
-    expect(await service.resolveUserFromToken(keep.plainTextToken)).toMatchObject({ id: 2 });
-    expect(await service.resolveUserFromToken(drop.plainTextToken)).toBeNull();
-    expect(await service.revokeOtherTokens(2)).toBe(1);
-    expect(await service.resolveUserFromToken(keep.plainTextToken)).toBeNull();
+      expect(await service.revokeOtherTokens(created.id, keep.token.id)).toBe(1);
+      expect(await service.resolveUserFromToken(keep.plainTextToken)).toMatchObject({
+        id: created.id,
+      });
+      expect(await service.resolveUserFromToken(drop.plainTextToken)).toBeNull();
+      expect(await service.revokeOtherTokens(created.id)).toBe(1);
+      expect(await service.resolveUserFromToken(keep.plainTextToken)).toBeNull();
+    });
   });
 
   test("revokeToken removes access for the token owner", async () => {
