@@ -26,6 +26,12 @@ const notificationRepositoryToken = "user.notificationRepository";
 const notificationServiceToken = "user.notificationService";
 const passwordResetServiceToken = "user.passwordResetService";
 
+class HtmlMockOAuthProvider extends MockOAuthProvider {
+  getAuthorizationUrl(state: string): string {
+    return `/oauth/mock/callback?code=valid-code&state=${encodeURIComponent(state)}`;
+  }
+}
+
 const userProvider: ServiceProvider = {
   name: "user.provider",
   register({ container }) {
@@ -105,7 +111,7 @@ const userProvider: ServiceProvider = {
 
       if ((process.env.APP_ENV ?? "local") !== "production") {
         authService.registerOAuthProvider(
-          new MockOAuthProvider({
+          new HtmlMockOAuthProvider({
             providerUserId: "mock-user-1",
             email: "oauth@workhub.test",
             name: "OAuth User",

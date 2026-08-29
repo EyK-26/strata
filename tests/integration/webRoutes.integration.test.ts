@@ -260,8 +260,9 @@ describe("web routes with server-htmx frontend", () => {
 
     expect(start.status).toBe(302);
     const location = start.headers.get("location") ?? "";
-    expect(location).toContain("https://mock.oauth/authorize");
-    const state = new URL(location).searchParams.get("state");
+    expect(location).toContain("/oauth/mock/callback");
+    expect(location).toContain("code=valid-code");
+    const state = new URL(location, baseUrl).searchParams.get("state");
     expect(state).toBeTruthy();
 
     const callback = await fetch(`${baseUrl}/oauth/mock/callback?code=valid-code&state=${state}`, {
