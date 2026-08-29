@@ -291,6 +291,28 @@ describe("password auth", () => {
         updated_at: new Date(),
       });
 
+      const oauthOnly = await users.create({
+        name: "OAuth Only",
+        email: `oauth-only-${Date.now()}@workhub.test`,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      await expect(authService.confirmCurrentPassword(oauthOnly.id, "password")).rejects.toThrow(
+        "Invalid credentials.",
+      );
+
+      await authService.confirmCurrentPassword(created.id, "password");
+      await expect(authService.confirmCurrentPassword(created.id, "wrong-pass")).rejects.toThrow(
+        "Invalid credentials.",
+      );
+      await expect(
+        authService.changePassword(created.id, "wrong-pass", "new-member-pass"),
+      ).rejects.toThrow("Invalid credentials.");
+      await expect(authService.changePassword(created.id, "password", "password")).rejects.toThrow(
+        "Choose a different password.",
+      );
       await authService.changePassword(created.id, "password", "new-member-pass");
       await expect(authService.authenticatePassword(email, "password")).rejects.toThrow(
         "Invalid credentials.",

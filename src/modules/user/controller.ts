@@ -1,8 +1,12 @@
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import type { AuthManager } from "@getstrata/core/auth/guard";
+import {
+  createPasswordConfirmCookie,
+  hasFreshPasswordConfirmation,
+} from "@getstrata/core/auth/passwordConfirmCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { UnauthorizedError } from "@getstrata/core/errors/http";
+import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import {
   createdResponse,
   jsonResponse,
@@ -49,6 +53,7 @@ import {
   parseResetPasswordBody,
   parseTokenIdParams,
   parseTwoFactorChallengeBody,
+  parseUpdatePasswordBody,
   parseUpdateProfileBody,
   type TokenIdParams,
 } from "./requests";
@@ -291,6 +296,48 @@ class AuthController {
     return jsonResponse({
       user: toUserResource(result.user),
       email_changed: result.emailChanged,
+    });
+  });
+
+  readonly updatePassword = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const body = await parseUpdatePasswordBody(request);
+
+    try {
+      const user = await this.authService.changePassword(
+        userId,
+        body.current_password,
+        body.password,
+      );
+
+      return jsonResponse({ user: toUserResource(user) });
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        throw new ValidationError("Invalid credentials.", {
+          current_password: ["Invalid credentials."],
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  readonly confirmPassword = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const body = await parsePasswordChallengeBody(request);
+    await this.authService.confirmCurrentPassword(userId, body.password);
+
+    return jsonResponse(
+      { confirmed: true },
+      { headers: { "set-cookie": createPasswordConfirmCookie(userId) } },
+    );
+  });
+
+  readonly confirmedPasswordStatus = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+
+    return jsonResponse({
+      confirmed: hasFreshPasswordConfirmation(request, userId),
     });
   });
 

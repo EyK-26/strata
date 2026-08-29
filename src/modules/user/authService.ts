@@ -224,6 +224,20 @@ class AuthService {
     return updated;
   }
 
+  async confirmCurrentPassword(userId: number, password: string): Promise<void> {
+    const user = await this.users.findByIdOrThrow(userId);
+
+    if (!user.password_hash || !(await verifyPassword(password, user.password_hash))) {
+      logSecurityEvent("auth_password_confirm_failed", {
+        reason: "invalid_password",
+        user_id: user.id,
+      });
+      throw new UnauthorizedError("Invalid credentials.");
+    }
+
+    logSecurityEvent("auth_password_confirmed", { user_id: user.id });
+  }
+
   async changePassword(
     userId: number,
     currentPassword: string,

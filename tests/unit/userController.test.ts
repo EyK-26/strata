@@ -723,6 +723,131 @@ describe("AuthController", () => {
     }
   });
 
+  test("updatePassword returns the updated user", async () => {
+    const changePassword = mock(async () => ({ ...user, name: "Admin User" }));
+    const controller = createController({
+      authService: { changePassword },
+    });
+
+    const response = await controller.updatePassword(
+      new Request("http://example.test/users/me/password", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          current_password: "password123",
+          password: "new-password",
+          password_confirmation: "new-password",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      user: {
+        id: 1,
+        name: "Admin User",
+        email: "admin@workhub.test",
+        role: "admin",
+      },
+    });
+    expect(changePassword).toHaveBeenCalledWith(1, "password123", "new-password");
+  });
+
+  test("updatePassword maps invalid current password to 422", async () => {
+    const { UnauthorizedError } = await import("@getstrata/core/errors/http");
+    const controller = createController({
+      authService: {
+        changePassword: mock(async () => {
+          throw new UnauthorizedError("Invalid credentials.");
+        }),
+      },
+    });
+
+    const response = await controller.updatePassword(
+      new Request("http://example.test/users/me/password", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          current_password: "wrong-password",
+          password: "new-password",
+          password_confirmation: "new-password",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: "Invalid credentials.",
+      details: { current_password: ["Invalid credentials."] },
+    });
+  });
+
+  test("updatePassword rethrows unexpected errors", async () => {
+    const controller = createController({
+      authService: {
+        changePassword: mock(async () => {
+          throw new Error("hash failed");
+        }),
+      },
+    });
+
+    const response = await controller.updatePassword(
+      new Request("http://example.test/users/me/password", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          current_password: "password123",
+          password: "new-password",
+          password_confirmation: "new-password",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "hash failed" });
+  });
+
+  test("confirmPassword sets the confirmation cookie", async () => {
+    const confirmCurrentPassword = mock(async () => undefined);
+    const controller = createController({
+      authService: { confirmCurrentPassword },
+    });
+
+    const response = await controller.confirmPassword(
+      new Request("http://example.test/users/me/confirm-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "password123" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ confirmed: true });
+    expect(confirmCurrentPassword).toHaveBeenCalledWith(1, "password123");
+    expect(response.headers.get("set-cookie")).toContain("workhub_password_confirmed=");
+  });
+
+  test("confirmedPasswordStatus reports the cookie", async () => {
+    const { createPasswordConfirmCookie } = await import(
+      "@getstrata/core/auth/passwordConfirmCookie"
+    );
+    const controller = createController({});
+
+    const missing = await controller.confirmedPasswordStatus(
+      new Request("http://example.test/users/me/confirmed-password-status"),
+    );
+    expect(missing.status).toBe(200);
+    expect(await missing.json()).toEqual({ confirmed: false });
+
+    const present = await controller.confirmedPasswordStatus(
+      new Request("http://example.test/users/me/confirmed-password-status", {
+        headers: { cookie: createPasswordConfirmCookie(1) },
+      }),
+    );
+    expect(present.status).toBe(200);
+    expect(await present.json()).toEqual({ confirmed: true });
+  });
+
   test("beginMfa returns a secret and otpauth url", async () => {
     const beginMfaSetup = mock(async () => ({
       secret: "JBSWY3DPEHPK3PXP",

@@ -62,6 +62,11 @@ interface PasswordChallengeBodyDto {
   password: string;
 }
 
+interface UpdatePasswordBodyDto {
+  current_password: string;
+  password: string;
+}
+
 interface CreateApiTokenBodyDto {
   name: string;
   abilities?: string[];
@@ -230,6 +235,22 @@ class PasswordChallengeRequest extends FormRequest<PasswordChallengeBodyDto> {
 
 const passwordChallengeRequest = new PasswordChallengeRequest();
 
+class UpdatePasswordRequest extends FormRequest<UpdatePasswordBodyDto> {
+  protected parse(payload: unknown): UpdatePasswordBodyDto {
+    const validated = validateObject(payload, {
+      current_password: [required(), stringRule()],
+      password: [required(), stringRule(), minLength(8), maxLength(128), confirmed("password")],
+    });
+
+    return {
+      current_password: String(validated.current_password),
+      password: String(validated.password),
+    };
+  }
+}
+
+const updatePasswordRequest = new UpdatePasswordRequest();
+
 function parseTokenIdParams(params: TokenIdParams): { id: number } {
   return {
     id: parsePositiveIntParam(params.id, "token id"),
@@ -291,6 +312,10 @@ async function parsePasswordChallengeBody(request: Request): Promise<PasswordCha
   return await passwordChallengeRequest.validate(request);
 }
 
+async function parseUpdatePasswordBody(request: Request): Promise<UpdatePasswordBodyDto> {
+  return await updatePasswordRequest.validate(request);
+}
+
 export type {
   ConfirmMfaBodyDto,
   CreateApiTokenBodyDto,
@@ -304,6 +329,7 @@ export type {
   ResetPasswordBodyDto,
   TokenIdParams,
   TwoFactorChallengeBodyDto,
+  UpdatePasswordBodyDto,
   UpdateProfileBodyDto,
 };
 export {
@@ -318,5 +344,6 @@ export {
   parseResetPasswordBody,
   parseTokenIdParams,
   parseTwoFactorChallengeBody,
+  parseUpdatePasswordBody,
   parseUpdateProfileBody,
 };

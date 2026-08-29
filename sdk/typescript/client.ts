@@ -225,6 +225,14 @@ export class WorkHubClient {
     return await this.request("/users/me", { ...init, method: "DELETE" });
   }
 
+  async postUsersMeConfirmPassword(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/confirm-password", { ...init, method: "POST" });
+  }
+
+  async getUsersMeConfirmedPasswordStatus(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/confirmed-password-status", { ...init, method: "GET" });
+  }
+
   async getUsersMeExport(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me/export", { ...init, method: "GET" });
   }
@@ -255,6 +263,10 @@ export class WorkHubClient {
 
   async patchUsersMeNotificationsIdRead(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me/notifications/{id}/read", { ...init, method: "PATCH" });
+  }
+
+  async putUsersMePassword(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/password", { ...init, method: "PUT" });
   }
 
   async getWebhooks(init: RequestInit = {}): Promise<Response> {

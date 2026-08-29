@@ -46,6 +46,15 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
       PATCH: kernel.wrapAuthenticated(controller.updateProfile as unknown as RouteHandler),
       DELETE: kernel.wrapAuthenticated(controller.deleteMe as unknown as RouteHandler),
     },
+    "/users/me/password": {
+      PUT: kernel.wrapAuthenticated(controller.updatePassword as unknown as RouteHandler),
+    },
+    "/users/me/confirm-password": {
+      POST: kernel.wrapAuthenticated(controller.confirmPassword as unknown as RouteHandler),
+    },
+    "/users/me/confirmed-password-status": {
+      GET: kernel.wrapAuthenticated(controller.confirmedPasswordStatus as unknown as RouteHandler),
+    },
     "/users/me/mfa": {
       POST: kernel.wrapAuthenticated(controller.beginMfa as unknown as RouteHandler),
       DELETE: kernel.wrapAuthenticated(controller.disableMfa as unknown as RouteHandler),

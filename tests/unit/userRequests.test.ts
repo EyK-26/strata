@@ -8,6 +8,7 @@ import {
   parseResetPasswordBody,
   parseTokenIdParams,
   parseTwoFactorChallengeBody,
+  parseUpdatePasswordBody,
 } from "../../src/modules/user/requests";
 
 describe("user requests", () => {
@@ -164,6 +165,39 @@ describe("user requests", () => {
       token: "reset-token",
       password: "password123",
     });
+  });
+
+  test("parseUpdatePasswordBody requires confirmation", async () => {
+    await expect(
+      parseUpdatePasswordBody(
+        new Request("http://example.test/users/me/password", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            current_password: "password123",
+            password: "new-password",
+            password_confirmation: "new-password",
+          }),
+        }),
+      ),
+    ).resolves.toEqual({
+      current_password: "password123",
+      password: "new-password",
+    });
+
+    await expect(
+      parseUpdatePasswordBody(
+        new Request("http://example.test/users/me/password", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            current_password: "password123",
+            password: "new-password",
+            password_confirmation: "mismatch",
+          }),
+        }),
+      ),
+    ).rejects.toThrow(ValidationError);
   });
 
   test("parseCreateApiTokenBody validates token metadata", async () => {

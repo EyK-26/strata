@@ -1217,6 +1217,80 @@ describe("integration routes with postgres", () => {
     expect(((await admin.json()) as { email: string }).email).toBe("admin@workhub.test");
   });
 
+  test("PUT /users/me/password and confirm-password work for a disposable user", async () => {
+    const email = `json-password-${Date.now()}@workhub.test`;
+    const registerResponse = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Json Password User",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(registerResponse.status).toBe(201);
+    const registered = (await registerResponse.json()) as { token: string };
+    const headers = {
+      authorization: `Bearer ${registered.token}`,
+      "content-type": "application/json",
+    };
+
+    const statusBefore = await fetch(api("/users/me/confirmed-password-status"), { headers });
+    expect(statusBefore.status).toBe(200);
+    expect(await statusBefore.json()).toEqual({ confirmed: false });
+
+    const confirmed = await fetch(api("/users/me/confirm-password"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ password: "password123" }),
+    });
+    expect(confirmed.status).toBe(200);
+    expect(await confirmed.json()).toEqual({ confirmed: true });
+    const confirmCookie = confirmed.headers.get("set-cookie") ?? "";
+    expect(confirmCookie).toContain("workhub_password_confirmed=");
+
+    const statusAfter = await fetch(api("/users/me/confirmed-password-status"), {
+      headers: { ...headers, cookie: confirmCookie },
+    });
+    expect(statusAfter.status).toBe(200);
+    expect(await statusAfter.json()).toEqual({ confirmed: true });
+
+    const wrong = await fetch(api("/users/me/password"), {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        current_password: "wrong-password",
+        password: "newer-password",
+        password_confirmation: "newer-password",
+      }),
+    });
+    expect(wrong.status).toBe(422);
+
+    const updated = await fetch(api("/users/me/password"), {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        current_password: "password123",
+        password: "newer-password",
+        password_confirmation: "newer-password",
+      }),
+    });
+    expect(updated.status).toBe(200);
+    const updatedBody = (await updated.json()) as { user: { email: string } };
+    expect(updatedBody.user.email).toBe(email);
+
+    const login = await fetch(api("/auth/login"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password: "newer-password",
+      }),
+    });
+    expect(login.status).toBe(201);
+  });
+
   test("PATCH and DELETE /users/me return 401 without credentials", async () => {
     const patch = await fetch(api("/users/me"), {
       method: "PATCH",
