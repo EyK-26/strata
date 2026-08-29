@@ -28,11 +28,13 @@ class GuestGuard implements AuthGuard {
     }
 
     const role = request.headers.get("x-authenticated-user-role");
+    const verified = request.headers.get("x-authenticated-email-verified");
 
     return {
       id: userId,
       abilities: devHeaderAbilities(role),
       ...(role ? { role } : {}),
+      ...(verified === "false" ? { emailVerifiedAt: null } : {}),
     };
   }
 }

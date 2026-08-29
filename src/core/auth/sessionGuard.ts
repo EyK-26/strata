@@ -28,6 +28,7 @@ class SessionGuard implements AuthGuard {
         id: user.id,
         role: user.role,
         abilities: resolveAbilitiesForRole(user.role),
+        emailVerifiedAt: user.email_verified_at ?? null,
       };
     } catch {
       return null;

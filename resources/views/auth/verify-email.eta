@@ -1,0 +1,13 @@
+<section class="page-header">
+  <h1>Verify your email</h1>
+  <p class="hint">We sent a signed link to your inbox. It expires in 24 hours.</p>
+</section>
+
+<form method="post" action="/email/verification-notification" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+  <label>
+    Email
+    <input type="email" name="email" value="<%= it.old?.email ?? '' %>" required />
+  </label>
+  <button type="submit">Resend verification link</button>
+</form>

@@ -345,7 +345,9 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
       POST: kernel.wrapWebAuthenticated(controller.changePassword as unknown as RouteHandler),
     },
     "/account/email/verification-notification": {
-      POST: kernel.wrapWebAuthenticated(controller.resendVerification as unknown as RouteHandler),
+      POST: kernel.wrapWebAuthenticatedAllowUnverified(
+        controller.resendVerification as unknown as RouteHandler,
+      ),
     },
     "/account/tokens": {
       POST: kernel.wrapWebAuthenticated(controller.storeToken as unknown as RouteHandler),

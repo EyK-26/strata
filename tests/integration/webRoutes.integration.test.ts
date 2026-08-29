@@ -330,6 +330,58 @@ describe("web routes with server-htmx frontend", () => {
     expect(await duplicate.text()).toContain("already exists");
   });
 
+  test("POST /register with email verification starts a session on the verify notice", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+    const csrf = await fetchCsrfFromPath("/register");
+    const email = `html-verify-${Date.now()}@workhub.test`;
+
+    try {
+      const response = await fetch(`${baseUrl}/register`, {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: csrf.cookies,
+        },
+        body: new URLSearchParams({
+          name: "HTML Verify",
+          email,
+          password: "password123",
+          password_confirmation: "password123",
+          _token: csrf.token,
+        }),
+      });
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("/email/verify");
+      expect(response.headers.get("set-cookie")).toContain("workhub_session=");
+
+      const session = mergeCookieHeader("", response);
+      const notice = await fetch(`${baseUrl}/email/verify`, {
+        headers: { cookie: session },
+      });
+      expect(notice.status).toBe(200);
+      expect(await notice.text()).toContain("Verify your email");
+
+      const account = await fetch(`${baseUrl}/account`, {
+        redirect: "manual",
+        headers: { cookie: session },
+      });
+      expect(account.status).toBe(302);
+      expect(account.headers.get("location")).toBe("/email/verify");
+
+      const login = await fetch(`${baseUrl}/login`, {
+        redirect: "manual",
+        headers: { cookie: session },
+      });
+      expect(login.status).toBe(302);
+      expect(login.headers.get("location")).toBe("/email/verify");
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
   test("GET /login lists the mock OAuth provider", async () => {
     const response = await fetch(`${baseUrl}/login`);
 

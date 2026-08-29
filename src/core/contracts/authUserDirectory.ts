@@ -4,6 +4,7 @@ interface AuthUserRecord {
   id: number;
   email?: string | null;
   role: string;
+  email_verified_at?: Date | string | null;
 }
 
 interface AuthUserDirectory {

@@ -94,6 +94,7 @@ class TokenService {
       role: user.role,
       abilities: normalizeAbilities(apiToken.abilities),
       tokenId: apiToken.id,
+      emailVerifiedAt: user.email_verified_at ?? null,
     };
   }
 

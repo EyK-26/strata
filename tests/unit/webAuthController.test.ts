@@ -262,7 +262,7 @@ describe("WebAuthController", () => {
     expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
   });
 
-  test("register redirects to login when email verification is required", async () => {
+  test("register starts a session and sends the user to the verify notice", async () => {
     const previous = process.env.FEATURE_EMAIL_VERIFICATION;
     process.env.FEATURE_EMAIL_VERIFICATION = "true";
     const sendEmailVerification = mock(async () => undefined);
@@ -280,8 +280,8 @@ describe("WebAuthController", () => {
       );
 
       expect(response.status).toBe(302);
-      expect(response.headers.get("Location")).toBe("/login");
-      expect(response.headers.get("Set-Cookie")).not.toContain("workhub_session=");
+      expect(response.headers.get("Location")).toBe("/email/verify");
+      expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
       expect(sendEmailVerification).toHaveBeenCalled();
     } finally {
       if (previous === undefined) {

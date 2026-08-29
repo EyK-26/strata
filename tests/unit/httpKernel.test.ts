@@ -169,6 +169,94 @@ describe("HttpKernel", () => {
     }
   });
 
+  test("wrapWebGuest sends unverified sessions to the verify notice", async () => {
+    const previousMode = process.env.FRONTEND_MODE;
+    const previousVerify = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FRONTEND_MODE = "server-htmx";
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapWebGuest(async () => new Response("login"));
+
+      const unverified = await handler(
+        new Request("http://example.test/login", {
+          headers: {
+            "x-authenticated-user-id": "9",
+            "x-authenticated-email-verified": "false",
+          },
+        }),
+      );
+
+      expect(unverified.status).toBe(302);
+      expect(unverified.headers.get("Location")).toBe("/email/verify");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previousMode);
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previousVerify);
+    }
+  });
+
+  test("wrapWebAuthenticated redirects unverified HTML users when verification is required", async () => {
+    const previousMode = process.env.FRONTEND_MODE;
+    const previousVerify = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FRONTEND_MODE = "server-htmx";
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapWebAuthenticated(async () => new Response("ok"));
+
+      const unverified = await handler(
+        new Request("http://example.test/organizations", {
+          headers: {
+            "x-authenticated-user-id": "9",
+            "x-authenticated-email-verified": "false",
+          },
+        }),
+      );
+
+      expect(unverified.status).toBe(302);
+      expect(unverified.headers.get("Location")).toBe("/email/verify");
+
+      const verified = await handler(
+        new Request("http://example.test/organizations", {
+          headers: { "x-authenticated-user-id": "1" },
+        }),
+      );
+      expect(verified.status).toBe(200);
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previousMode);
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previousVerify);
+    }
+  });
+
+  test("wrapVerified returns JSON 403 for unverified API users", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapVerified(async () => Response.json({ ok: true }));
+
+      const unverified = await handler(
+        new Request("http://example.test/api/v1/organizations", {
+          headers: {
+            accept: "application/json",
+            "x-authenticated-user-id": "9",
+            "x-authenticated-email-verified": "false",
+          },
+        }),
+      );
+
+      expect(unverified.status).toBe(403);
+      expect(await unverified.json()).toEqual({
+        error: "Your email address is not verified.",
+      });
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
   test("wrapAuthenticated applies require-auth middleware", async () => {
     const kernel = createHttpKernel(createKernelDependencies());
     const handler = kernel.wrapAuthenticated(async () => Response.json({ ok: true }));

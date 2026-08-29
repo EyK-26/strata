@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.74
+
+- `AuthUser.emailVerifiedAt` and `@getstrata/core/auth/emailVerification` (`isEmailVerificationRequired`, `hasVerifiedEmail`). `null` means unverified; missing is treated as verified (GuestGuard / legacy).
+- `createRequireVerifiedMiddleware()` is Laravel `verified` (HTML 302 `/email/verify`, JSON 403).
+
 ## 0.5.73
 
 - OpenAPI treats `POST /auth/email/verification-notification` as a public operation (no bearer).

@@ -31,12 +31,13 @@ describe("TokenService", () => {
     expect(withExpiry.token.expires_at).not.toBeNull();
 
     const resolved = await service.resolveUserFromToken(created.plainTextToken);
-    expect(resolved).toEqual({
+    expect(resolved).toMatchObject({
       id: 1,
       role: "admin",
       abilities: ["*"],
       tokenId: created.token.id,
     });
+    expect(resolved?.emailVerifiedAt).toBeTruthy();
 
     const stored = await tokens.findByTokenHash(hashApiToken(created.plainTextToken));
     expect(stored?.user_id).toBe(1);

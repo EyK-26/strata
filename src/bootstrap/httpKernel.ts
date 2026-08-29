@@ -1,3 +1,7 @@
+import {
+  hasVerifiedEmail,
+  isEmailVerificationRequired,
+} from "@getstrata/core/auth/emailVerification";
 import type { AuthManager } from "@getstrata/core/auth/guard";
 import { createMembershipMiddleware } from "@getstrata/core/auth/membershipMiddleware";
 import type { Policy, PolicyGate } from "@getstrata/core/auth/policy";
@@ -16,6 +20,7 @@ import { requestIdMiddleware } from "@getstrata/core/http/middleware";
 import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbilityMiddleware";
 import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMiddleware";
 import { createRequireGlobalAdminMiddleware } from "@getstrata/core/http/requireGlobalAdminMiddleware";
+import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
@@ -128,6 +133,10 @@ class HttpKernel {
       const user = await auth.resolve(request);
 
       if (user) {
+        if (isEmailVerificationRequired() && !hasVerifiedEmail(user)) {
+          return Response.redirect("/email/verify", 302);
+        }
+
         return Response.redirect(home, 302);
       }
 
@@ -144,29 +153,51 @@ class HttpKernel {
   }
 
   wrapWebAuthenticated(handler: RouteHandler): RouteHandler {
-    const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
+    return this.wrapWebAuth(handler, { verified: true });
+  }
 
-    return this.wrapWeb(withMiddleware(createRequireWebAuthMiddleware(auth))(handler));
+  /** Signed-in HTML without Laravel `verified` (logout, verification notice). */
+  wrapWebAuthenticatedAllowUnverified(handler: RouteHandler): RouteHandler {
+    return this.wrapWebAuth(handler, { verified: false });
+  }
+
+  wrapWebVerified(handler: RouteHandler): RouteHandler {
+    return this.wrapWebAuth(handler, { verified: true });
   }
 
   wrapWebAbility(ability: string, handler: RouteHandler): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
     const abilityChecker = resolveAbilityChecker(this.dependencies.container);
     const requireAbility = createRequireAbilityMiddleware(abilityChecker);
-    const middleware = [createRequireWebAuthMiddleware(auth), requireAbility(ability)];
+    const middleware = [
+      createRequireWebAuthMiddleware(auth),
+      ...this.verifiedMiddleware(),
+      requireAbility(ability),
+    ];
 
     return this.wrapWeb(withMiddleware(...middleware)(handler));
   }
 
   wrapWebGlobalAdmin(handler: RouteHandler): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
-    const middleware = [createRequireWebAuthMiddleware(auth), createRequireGlobalAdminMiddleware()];
+    const middleware = [
+      createRequireWebAuthMiddleware(auth),
+      ...this.verifiedMiddleware(),
+      createRequireGlobalAdminMiddleware(),
+    ];
 
     return this.wrapWeb(withMiddleware(...middleware)(handler));
   }
 
   wrapAuthenticated(handler: RouteHandler): RouteHandler {
     return this.wrap("authenticated", handler);
+  }
+
+  /** Laravel `verified` for JSON/API routes. No-op when `FEATURE_EMAIL_VERIFICATION` is off. */
+  wrapVerified(handler: RouteHandler): RouteHandler {
+    const middleware = [...this.group("authenticated"), ...this.verifiedMiddleware()];
+
+    return withMiddleware(...middleware)(handler);
   }
 
   wrapPublicRead(handler: RouteHandler): RouteHandler {
@@ -208,6 +239,25 @@ class HttpKernel {
 
   wrapRegister(handler: RouteHandler): RouteHandler {
     return this.wrapThrottle("register", resolveRegisterRateLimit(), handler);
+  }
+
+  private wrapWebAuth(handler: RouteHandler, options: { verified: boolean }): RouteHandler {
+    const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
+    const middleware = [
+      createRequireWebAuthMiddleware(auth),
+      ...(options.verified ? this.verifiedMiddleware() : []),
+    ];
+
+    return this.wrapWeb(withMiddleware(...middleware)(handler));
+  }
+
+  private verifiedMiddleware(): Middleware[] {
+    if (!isEmailVerificationRequired()) {
+      return [];
+    }
+
+    const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
+    return [createRequireVerifiedMiddleware(auth)];
   }
 
   private wrapThrottle(

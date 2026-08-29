@@ -127,10 +127,19 @@ class WebAuthController {
       if (isFeatureEnabled("emailVerification")) {
         await this.passwordResets.sendEmailVerification(user);
 
-        return flashResponse(Response.redirect("/login", 302), {
-          level: "success",
-          message: "Account created. Check your email to verify before signing in.",
-        });
+        return flashResponse(
+          new Response(null, {
+            status: 302,
+            headers: {
+              Location: "/email/verify",
+              "Set-Cookie": createSessionCookie(user.id),
+            },
+          }),
+          {
+            level: "success",
+            message: "Account created. Check your email to verify the address.",
+          },
+        );
       }
 
       return new Response(null, {
@@ -324,10 +333,20 @@ class WebAuthController {
 
     await this.authService.markEmailVerified(userId);
 
-    return flashResponse(Response.redirect("/login", 302), {
+    return flashResponse(Response.redirect("/organizations", 302), {
       level: "success",
-      message: "Email address verified. You can sign in now.",
+      message: "Email address verified.",
     });
+  });
+
+  readonly showVerifyNotice = withErrorHandling(async () => {
+    return htmlResponse(
+      await this.view.render("auth/verify-email", {
+        title: "Verify email",
+        errors: {},
+        old: {},
+      }),
+    );
   });
 
   readonly resendVerification = withErrorHandling(async (request: Request) => {

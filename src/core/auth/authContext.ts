@@ -5,6 +5,7 @@ type AuthUser = {
   role?: string;
   abilities?: string[];
   tokenId?: number;
+  emailVerifiedAt?: Date | string | null;
 };
 
 const authContext = createAsyncContextStore<AuthUser | null>("@getstrata/authContext");
