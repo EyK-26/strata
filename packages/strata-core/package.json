@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "0.5.66",
+  "version": "0.5.67",
   "description": "Strata — Laravel-inspired Bun framework public API",
   "type": "module",
   "license": "MIT",

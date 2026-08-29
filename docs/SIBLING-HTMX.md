@@ -68,6 +68,8 @@ Cookie names:
 | GitHub OAuth user-agent | `workhub` | `APP_USER_AGENT` |
 | OTEL `service.name` | `workhub-api` | `OTEL_SERVICE_NAME` |
 | Webhook HMAC header | `x-workhub-signature` | `WEBHOOK_SIGNATURE_HEADER` |
+| OpenAPI title / SDK class | `WorkHub API` / `WorkHubClient` | `APP_NAME` / `APP_SDK_CLASS` |
+| App URL / API prefix / env | `http://localhost:3000` / `/api/v1` / `local` | `APP_URL` / `API_PREFIX` / `APP_ENV` |
 | `CookieSessionStore` | `strata_session` | constructor `cookieName` |
 
 `kernel.wrapWebAuthenticated` / `wrapWebGlobalAdmin` work with this `AuthManager`. Do not bake WorkHub’s ability catalog into the cookie-session path.

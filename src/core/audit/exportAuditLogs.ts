@@ -1,5 +1,5 @@
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
-import { appConfig } from "../../config/app";
+import { appEnv } from "../runtime/appKeyPrefix";
 import { safeFetch } from "../security/safeFetch";
 import { assertSafeOutboundUrl } from "../security/safeUrl";
 import { runWithMigrationBypass } from "../tenant/databaseTenantContext";
@@ -18,7 +18,7 @@ function resolveAuditExportConfig(): AuditExportConfig | null {
     return null;
   }
 
-  assertSafeOutboundUrl(endpoint, { allowHttp: appConfig.env !== "production" });
+  assertSafeOutboundUrl(endpoint, { allowHttp: appEnv() !== "production" });
 
   const batchSize = Number(process.env.SIEM_EXPORT_BATCH_SIZE ?? "100");
 
@@ -107,7 +107,7 @@ async function exportPendingAuditLogs(): Promise<number> {
         },
         body,
       },
-      { allowHttp: appConfig.env !== "production" },
+      { allowHttp: appEnv() !== "production" },
     );
 
     if (!response.ok) {

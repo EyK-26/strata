@@ -5,7 +5,7 @@ import {
   resolveContentSecurityPolicy,
 } from "@getstrata/core/http/contentSecurityPolicy";
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { appConfig } from "../../config/app";
+import { appEnv } from "../runtime/appKeyPrefix";
 import type { Middleware } from "./middleware";
 
 function createSecurityHeadersMiddleware(options: ContentSecurityPolicyOptions = {}): Middleware {
@@ -32,7 +32,7 @@ function createSecurityHeadersMiddleware(options: ContentSecurityPolicyOptions =
           resolveContentSecurityPolicy(response, { ...options, nonce }),
         );
 
-        if (appConfig.env === "production") {
+        if (appEnv() === "production") {
           headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
         }
 

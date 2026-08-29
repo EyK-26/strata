@@ -1,5 +1,5 @@
-import { appConfig } from "../../config/app";
-import type { RegisteredRoute } from "../openapi/registeredRoute";
+import { apiPrefix, appDisplayName, appUrl, sdkClientClassName } from "../runtime/appKeyPrefix";
+import type { RegisteredRoute } from "./registeredRoute";
 
 interface OpenApiSpec {
   openapi: string;
@@ -101,12 +101,12 @@ function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
   return {
     openapi: "3.1.0",
     info: {
-      title: "WorkHub API",
+      title: `${appDisplayName()} API`,
       version: "1.0.0",
     },
     servers: [
-      { url: `${appConfig.url}${appConfig.apiPrefix}`, description: "WorkHub API" },
-      { url: appConfig.url, description: "Root (health, metrics, SCIM)" },
+      { url: `${appUrl()}${apiPrefix()}`, description: `${appDisplayName()} API` },
+      { url: appUrl(), description: "Root (health, metrics, SCIM)" },
     ],
     paths,
     components: {
@@ -179,9 +179,9 @@ function toRequestPath(path: string, apiPrefix: string): string {
   return path.startsWith(apiPrefix) ? path.slice(apiPrefix.length) || "/" : path;
 }
 
-function renderTypeScriptSdk(spec: OpenApiSpec, apiPrefix = "/api/v1"): string {
+function renderTypeScriptSdk(spec: OpenApiSpec, prefix = apiPrefix()): string {
   const lines = [
-    "export class WorkHubClient {",
+    `export class ${sdkClientClassName()} {`,
     `  constructor(private readonly baseUrl = "${spec.servers[0]?.url ?? ""}") {}`,
     "",
     "  private async request(path: string, init: RequestInit = {}): Promise<Response> {",
@@ -191,10 +191,10 @@ function renderTypeScriptSdk(spec: OpenApiSpec, apiPrefix = "/api/v1"): string {
   ];
 
   for (const [path, methods] of Object.entries(spec.paths)) {
-    const requestPath = toRequestPath(path, apiPrefix);
+    const requestPath = toRequestPath(path, prefix);
 
     for (const method of Object.keys(methods)) {
-      const functionName = toMethodName(method, path, apiPrefix);
+      const functionName = toMethodName(method, path, prefix);
 
       lines.push(
         `  async ${functionName}(init: RequestInit = {}): Promise<Response> {`,

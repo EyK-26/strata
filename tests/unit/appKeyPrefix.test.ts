@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
+  apiPrefix,
   appDisplayName,
+  appEnv,
   appKeyPrefix,
+  appUrl,
   appUserAgent,
   namespacedRedisKey,
   otelServiceName,
+  sdkClientClassName,
   siemEventType,
   smtpEhloHost,
   webhookSignatureHeader,
@@ -139,6 +143,54 @@ describe("appKeyPrefix", () => {
       expect(appDisplayName()).toBe("WorkHub");
     } finally {
       restoreEnvVar("APP_NAME", previous);
+    }
+  });
+
+  test("resolves app URL, env, API prefix, and SDK class from env", () => {
+    const previous = {
+      APP_ENV: process.env.APP_ENV,
+      APP_URL: process.env.APP_URL,
+      API_PREFIX: process.env.API_PREFIX,
+      APP_NAME: process.env.APP_NAME,
+      APP_SDK_CLASS: process.env.APP_SDK_CLASS,
+    };
+
+    delete process.env.APP_ENV;
+    delete process.env.APP_URL;
+    delete process.env.API_PREFIX;
+    delete process.env.APP_NAME;
+    delete process.env.APP_SDK_CLASS;
+
+    try {
+      expect(appEnv()).toBe("local");
+      expect(appUrl()).toBe("http://localhost:3000");
+      expect(apiPrefix()).toBe("/api/v1");
+      expect(sdkClientClassName()).toBe("WorkHubClient");
+
+      process.env.APP_ENV = "production";
+      process.env.APP_URL = "https://forum.test/";
+      process.env.API_PREFIX = "api/v2/";
+      process.env.APP_NAME = "Forum";
+      expect(appEnv()).toBe("production");
+      expect(appUrl()).toBe("https://forum.test");
+      expect(apiPrefix()).toBe("/api/v2");
+      expect(sdkClientClassName()).toBe("ForumClient");
+
+      process.env.APP_SDK_CLASS = "ForumApi";
+      expect(sdkClientClassName()).toBe("ForumApi");
+
+      process.env.APP_SDK_CLASS = "123Bad";
+      process.env.APP_NAME = "!!!";
+      expect(sdkClientClassName()).toBe("AppClient");
+
+      process.env.API_PREFIX = "///";
+      expect(apiPrefix()).toBe("/api/v1");
+    } finally {
+      restoreEnvVar("APP_ENV", previous.APP_ENV);
+      restoreEnvVar("APP_URL", previous.APP_URL);
+      restoreEnvVar("API_PREFIX", previous.API_PREFIX);
+      restoreEnvVar("APP_NAME", previous.APP_NAME);
+      restoreEnvVar("APP_SDK_CLASS", previous.APP_SDK_CLASS);
     }
   });
 });

@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.67
+
+- OpenAPI title, server URLs, and generated SDK class name come from `APP_NAME` / `APP_URL` / `API_PREFIX` / `APP_SDK_CLASS` instead of importing WorkHub `src/config/app`.
+- `appEnv()`, `appUrl()`, `apiPrefix()`, and `sdkClientClassName()` live on `@getstrata/core/runtime/appKeyPrefix`. SIEM export, HSTS, and `safeFetch` DNS resolve use `appEnv()` instead of WorkHub `appConfig`.
+
 ## 0.5.66
 
 - `createValidateSignatureMiddleware()` on `@getstrata/core/http/signedUrl` is Laravel’s `signed` / `ValidateSignature` middleware. Invalid or expired links throw `ForbiddenError`.
