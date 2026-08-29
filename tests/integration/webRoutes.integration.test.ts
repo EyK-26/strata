@@ -298,7 +298,9 @@ describe("web routes with server-htmx frontend", () => {
       headers: { cookie: session },
     });
     expect(workspace.status).toBe(200);
-    expect(await workspace.text()).toContain("HTML Register's workspace");
+    const workspaceHtml = await workspace.text();
+    expect(workspaceHtml).toContain("HTML Register&#39;s workspace");
+    expect(workspaceHtml).toContain("personal-");
 
     const organizations = await fetch(`${baseUrl}/organizations`, {
       headers: { cookie: session },
@@ -306,7 +308,7 @@ describe("web routes with server-htmx frontend", () => {
     expect(organizations.status).toBe(200);
     const organizationsHtml = await organizations.text();
     expect(organizationsHtml).toContain(email);
-    expect(organizationsHtml).toContain("HTML Register's workspace");
+    expect(organizationsHtml).toContain("HTML Register&#39;s workspace");
 
     const duplicate = await fetch(`${baseUrl}/register`, {
       method: "POST",
