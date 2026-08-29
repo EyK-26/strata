@@ -14,6 +14,8 @@ import {
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
 import { isFeatureEnabled } from "../../config/features";
+import { organizationServiceToken } from "../organization/provider";
+import type OrganizationService from "../organization/service";
 import type AuthService from "./authService";
 import type PasswordResetService from "./passwordResetService";
 import { authServiceToken, passwordResetServiceToken, userRepositoryToken } from "./provider";
@@ -42,6 +44,10 @@ class WebAuthController {
 
   private get view(): ViewEngine {
     return resolveService(this.dependencies, CORE_VIEW_TOKEN);
+  }
+
+  private get organizations(): OrganizationService {
+    return resolveService(this.dependencies, organizationServiceToken);
   }
 
   private async renderLogin(extras: Record<string, unknown> = {}, status = 200): Promise<Response> {
@@ -121,6 +127,7 @@ class WebAuthController {
         body.email,
         body.password,
       );
+      const organization = await this.organizations.createPersonalForUser(user);
 
       if (isFeatureEnabled("emailVerification")) {
         await this.passwordResets.sendEmailVerification(user);
@@ -134,7 +141,7 @@ class WebAuthController {
       return new Response(null, {
         status: 302,
         headers: {
-          Location: "/organizations",
+          Location: `/organizations/${organization.id}`,
           "Set-Cookie": createSessionCookie(user.id),
         },
       });

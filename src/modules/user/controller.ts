@@ -15,6 +15,8 @@ import {
   verifyOAuthState,
 } from "@getstrata/core/security/oauthState";
 import { isFeatureEnabled } from "../../config/features";
+import { organizationServiceToken } from "../organization/provider";
+import type OrganizationService from "../organization/service";
 import ApiTokenRepository from "./apiTokenRepository";
 import type AuthService from "./authService";
 import type NotificationService from "./notificationService";
@@ -65,6 +67,10 @@ class AuthController {
     return resolveService(this.dependencies, notificationServiceToken);
   }
 
+  private get organizations(): OrganizationService {
+    return resolveService(this.dependencies, organizationServiceToken);
+  }
+
   private async requireUserId(request: Request): Promise<number> {
     const user = await this.auth.requireUser(request);
     const userId = typeof user.id === "number" ? user.id : Number(user.id);
@@ -98,6 +104,7 @@ class AuthController {
   readonly register = withErrorHandling(async (request: Request) => {
     const body = await parseRegisterBody(request);
     const user = await this.authService.registerWithPassword(body.name, body.email, body.password);
+    await this.organizations.createPersonalForUser(user);
 
     if (isFeatureEnabled("emailVerification")) {
       await this.passwordResets.sendEmailVerification(user);

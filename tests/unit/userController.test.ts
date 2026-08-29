@@ -4,6 +4,7 @@ import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { ValidationError } from "@getstrata/core/errors/http";
 import { createOAuthStateCookie } from "@getstrata/core/security/oauthState";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
+import { organizationServiceToken } from "../../src/modules/organization/provider";
 import {
   authServiceToken,
   notificationServiceToken,
@@ -36,6 +37,7 @@ function createController(services: {
   tokens?: Record<string, unknown>;
   authService?: Record<string, unknown>;
   passwordResets?: Record<string, unknown>;
+  organizations?: Record<string, unknown>;
 }): AuthControllerInstance {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, {
@@ -71,6 +73,14 @@ function createController(services: {
     requestReset: mock(async () => undefined),
     resetPassword: mock(async () => undefined),
     ...services.passwordResets,
+  });
+  container.set(organizationServiceToken, {
+    createPersonalForUser: mock(async () => ({
+      id: 42,
+      name: "Ada Lovelace's workspace",
+      slug: "personal-9",
+    })),
+    ...services.organizations,
   });
   container.set(notificationServiceToken, {
     listForUser: mock(async () => ({
@@ -146,7 +156,14 @@ describe("AuthController", () => {
   });
 
   test("register returns token and user resource", async () => {
-    const controller = createController({});
+    const createPersonalForUser = mock(async () => ({
+      id: 42,
+      name: "Ada Lovelace's workspace",
+      slug: "personal-9",
+    }));
+    const controller = createController({
+      organizations: { createPersonalForUser },
+    });
 
     const response = await controller.register(
       new Request("http://example.test/auth/register", {
@@ -171,16 +188,28 @@ describe("AuthController", () => {
         role: "admin",
       },
     });
+    expect(createPersonalForUser).toHaveBeenCalledWith({
+      id: 9,
+      name: "Ada Lovelace",
+      email: "ada@workhub.test",
+      role: "member",
+    });
   });
 
   test("register returns the user without a token when email verification is required", async () => {
     const previous = process.env.FEATURE_EMAIL_VERIFICATION;
     process.env.FEATURE_EMAIL_VERIFICATION = "true";
     const sendEmailVerification = mock(async () => undefined);
+    const createPersonalForUser = mock(async () => ({
+      id: 42,
+      name: "Ada Lovelace's workspace",
+      slug: "personal-9",
+    }));
 
     try {
       const controller = createController({
         passwordResets: { sendEmailVerification },
+        organizations: { createPersonalForUser },
       });
 
       const response = await controller.register(
@@ -206,6 +235,7 @@ describe("AuthController", () => {
         },
       });
       expect(sendEmailVerification).toHaveBeenCalled();
+      expect(createPersonalForUser).toHaveBeenCalled();
     } finally {
       restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
     }

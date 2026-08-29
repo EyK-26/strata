@@ -21,7 +21,7 @@ After `bun run cli migrate:fresh --seed` (or integration test setup), these acco
 
 ## Bearer tokens (API / SPA)
 
-1. `POST /api/v1/auth/login` with `{ "email", "password" }`, or `POST /api/v1/auth/register` with `{ "name", "email", "password", "password_confirmation" }`.
+1. `POST /api/v1/auth/login` with `{ "email", "password" }`, or `POST /api/v1/auth/register` with `{ "name", "email", "password", "password_confirmation" }` (register also creates `{name}'s workspace` with slug `personal-{userId}`).
 2. Use the returned token as `Authorization: Bearer <token>`.
 
 Forgot / reset (JSON): `POST /api/v1/auth/forgot-password` with `{ "email" }`, then `POST /api/v1/auth/reset-password` with `{ "email", "token", "password", "password_confirmation" }`.

@@ -289,15 +289,24 @@ describe("web routes with server-htmx frontend", () => {
     });
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("/organizations");
+    const location = response.headers.get("location") ?? "";
+    expect(location).toMatch(/^\/organizations\/\d+$/);
     expect(response.headers.get("set-cookie")).toContain("workhub_session=");
 
     const session = mergeCookieHeader("", response);
+    const workspace = await fetch(`${baseUrl}${location}`, {
+      headers: { cookie: session },
+    });
+    expect(workspace.status).toBe(200);
+    expect(await workspace.text()).toContain("HTML Register's workspace");
+
     const organizations = await fetch(`${baseUrl}/organizations`, {
       headers: { cookie: session },
     });
     expect(organizations.status).toBe(200);
-    expect(await organizations.text()).toContain(email);
+    const organizationsHtml = await organizations.text();
+    expect(organizationsHtml).toContain(email);
+    expect(organizationsHtml).toContain("HTML Register's workspace");
 
     const duplicate = await fetch(`${baseUrl}/register`, {
       method: "POST",

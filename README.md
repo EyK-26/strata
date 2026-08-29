@@ -250,7 +250,7 @@ Set `AUTH_DEV_HEADERS=false` in production and rely on bearer tokens only.
 Password and OAuth login:
 
 - `POST /api/v1/auth/login`: `{ "email": "...", "password": "..." }` returns a bearer token (seeded users use password `password`)
-- `POST /api/v1/auth/register`: `{ "name", "email", "password", "password_confirmation" }` creates a member and returns a bearer token (`FEATURE_REGISTRATION`, default on). When `FEATURE_EMAIL_VERIFICATION=true` the response is `{ user }` only and a verify email is sent.
+- `POST /api/v1/auth/register`: `{ "name", "email", "password", "password_confirmation" }` creates a member, a personal workspace (`{name}'s workspace`, slug `personal-{userId}`), and returns a bearer token (`FEATURE_REGISTRATION`, default on). When `FEATURE_EMAIL_VERIFICATION=true` the response is `{ user }` only and a verify email is sent (the workspace still exists so it is ready after verify).
 - `POST /api/v1/auth/forgot-password`: `{ "email" }` always returns a generic success message (does not leak whether the account exists)
 - `POST /api/v1/auth/reset-password`: `{ "email", "token", "password", "password_confirmation" }` updates the password from the emailed token
 - `GET /api/v1/auth/oauth/:provider`: redirect to provider (GitHub when configured; `mock` in non-production)

@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { organizationServiceToken } from "../../src/modules/organization/provider";
 import {
   authServiceToken,
   passwordResetServiceToken,
@@ -13,6 +14,7 @@ function createController(services: {
   authService?: Record<string, unknown>;
   tokens?: Record<string, unknown>;
   passwordResets?: Record<string, unknown>;
+  organizations?: Record<string, unknown>;
   view?: Record<string, unknown>;
 }): WebAuthController {
   const container = new ServiceContainer();
@@ -23,6 +25,7 @@ function createController(services: {
     authenticateOAuth: mock(async () => ({ id: 4, email: "oauth@workhub.test", role: "member" })),
     registerWithPassword: mock(async () => ({
       id: 9,
+      name: "Ada",
       email: "new@workhub.test",
       role: "member",
     })),
@@ -39,6 +42,14 @@ function createController(services: {
   container.set(tokenServiceToken, {
     resolveUserFromToken: mock(async () => ({ id: 1, role: "member" })),
     ...services.tokens,
+  });
+  container.set(organizationServiceToken, {
+    createPersonalForUser: mock(async () => ({
+      id: 42,
+      name: "Ada's workspace",
+      slug: "personal-9",
+    })),
+    ...services.organizations,
   });
   container.set(CORE_VIEW_TOKEN, {
     render: mock(async (_template: string, context: Record<string, unknown>) =>
@@ -247,7 +258,7 @@ describe("WebAuthController", () => {
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/organizations");
+    expect(response.headers.get("Location")).toBe("/organizations/42");
     expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
   });
 

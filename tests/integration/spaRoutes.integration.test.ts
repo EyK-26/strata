@@ -122,7 +122,24 @@ describe("spa-react frontend routes", () => {
     });
 
     expect(meResponse.status).toBe(200);
-    expect(await meResponse.json()).toMatchObject({ email, role: "member" });
+    const me = (await meResponse.json()) as { email: string; role: string; id: number };
+    expect(me).toMatchObject({ email, role: "member" });
+
+    const organizations = await fetch(`${baseUrl}/api/v1/organizations`, {
+      headers: { authorization: `Bearer ${body.token}` },
+    });
+    expect(organizations.status).toBe(200);
+    const listed = (await organizations.json()) as {
+      data: Array<{ id: number; name: string; slug: string }>;
+    };
+    expect(listed.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "SPA Register's workspace",
+          slug: `personal-${me.id}`,
+        }),
+      ]),
+    );
   });
 
   test("POST /api/v1/auth/forgot-password and reset-password rotate a password", async () => {

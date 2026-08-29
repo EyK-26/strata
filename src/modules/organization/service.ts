@@ -19,6 +19,28 @@ interface UpdateOrganizationInput {
   slug?: string;
 }
 
+interface PersonalOrganizationUser {
+  id: number;
+  name?: string | null;
+}
+
+function personalOrganizationName(name: string | null | undefined): string {
+  const trimmed = name?.trim() ?? "";
+  return trimmed.length > 0 ? `${trimmed}'s workspace` : "Personal workspace";
+}
+
+function personalOrganizationSlug(userId: number): string {
+  return `personal-${userId}`;
+}
+
+function resolvePersonalOrganizationUserId(user: PersonalOrganizationUser): number {
+  if (!Number.isInteger(user.id) || user.id <= 0) {
+    throw new Error("Invalid user id for personal organization.");
+  }
+
+  return user.id;
+}
+
 class OrganizationService {
   constructor(private readonly repository: OrganizationRepository) {}
 
@@ -83,6 +105,39 @@ class OrganizationService {
     return organization;
   }
 
+  async createPersonalForUser(user: PersonalOrganizationUser): Promise<OrganizationRecord> {
+    const userId = resolvePersonalOrganizationUserId(user);
+    const slug = personalOrganizationSlug(userId);
+    const existing = await this.repository.findBySlug(slug);
+
+    if (existing) {
+      await this.ensureOwnerMembership(existing.id, userId);
+      return existing;
+    }
+
+    const now = new Date();
+    const organization = await this.repository.create({
+      tenant_id: currentTenantId(),
+      name: personalOrganizationName(user.name),
+      slug,
+      created_at: now,
+      updated_at: now,
+    });
+
+    await this.ensureOwnerMembership(organization.id, userId);
+
+    return organization;
+  }
+
+  private async ensureOwnerMembership(organizationId: number, userId: number): Promise<void> {
+    const memberships = resolveMembershipService();
+    const role = await memberships.getOrgRole(userId, organizationId);
+
+    if (!role) {
+      await memberships.addOwnerOnOrganizationCreate(organizationId, userId);
+    }
+  }
+
   async update(id: number, input: UpdateOrganizationInput): Promise<OrganizationRecord> {
     const changes: UpdateOrganizationInput & { updated_at: Date } = {
       updated_at: new Date(),
@@ -109,4 +164,5 @@ class OrganizationService {
 }
 
 export default OrganizationService;
-export type { CreateOrganizationInput, UpdateOrganizationInput };
+export type { CreateOrganizationInput, PersonalOrganizationUser, UpdateOrganizationInput };
+export { personalOrganizationName, personalOrganizationSlug };
