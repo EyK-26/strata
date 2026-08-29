@@ -252,10 +252,6 @@ class HttpKernel {
   }
 
   private verifiedMiddleware(): Middleware[] {
-    if (!isEmailVerificationRequired()) {
-      return [];
-    }
-
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
     return [createRequireVerifiedMiddleware(auth)];
   }
