@@ -11,6 +11,9 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
     "/auth/login": {
       POST: kernel.wrapLogin(controller.login),
     },
+    "/auth/two-factor-challenge": {
+      POST: kernel.wrapLogin(controller.twoFactorChallenge as unknown as RouteHandler),
+    },
     "/auth/forgot-password": {
       POST: kernel.wrapLogin(controller.forgotPassword as unknown as RouteHandler),
     },

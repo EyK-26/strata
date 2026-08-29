@@ -19,6 +19,13 @@ import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
 import ApiTokenRepository from "./apiTokenRepository";
 import type AuthService from "./authService";
+import {
+  clearMfaChallengeCookie,
+  createMfaChallenge,
+  parseMfaChallengeValue,
+  readMfaChallenge,
+} from "./mfaChallengeCookie";
+import { MfaRequiredError } from "./mfaRequiredError";
 import type NotificationService from "./notificationService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
 import type PasswordResetService from "./passwordResetService";
@@ -41,11 +48,13 @@ import {
   parseRegisterBody,
   parseResetPasswordBody,
   parseTokenIdParams,
+  parseTwoFactorChallengeBody,
   parseUpdateProfileBody,
   type TokenIdParams,
 } from "./requests";
 import { toNotificationResource, toUserResource } from "./resources";
 import type TokenService from "./tokenService";
+import type { CreatedApiToken } from "./types";
 
 class AuthController {
   constructor(private readonly dependencies: AppDependencies) {}
@@ -87,9 +96,53 @@ class AuthController {
 
   readonly login = withErrorHandling(async (request: Request) => {
     const body = await parseLoginBody(request);
-    const created = await this.authService.loginWithPassword(body.email, body.password, {
-      mfaCode: body.mfa_code,
+
+    try {
+      const created = await this.authService.loginWithPassword(body.email, body.password, {
+        mfaCode: body.mfa_code,
+      });
+
+      return await this.loginTokenResponse(created);
+    } catch (error) {
+      if (error instanceof MfaRequiredError) {
+        const challenge = createMfaChallenge(error.userId);
+
+        return jsonResponse(
+          {
+            error: error.message,
+            two_factor: true,
+            mfa_pending: challenge.value,
+          },
+          {
+            status: 401,
+            headers: { "set-cookie": challenge.cookie },
+          },
+        );
+      }
+
+      throw error;
+    }
+  });
+
+  readonly twoFactorChallenge = withErrorHandling(async (request: Request) => {
+    const body = await parseTwoFactorChallengeBody(request);
+    const challenge = parseMfaChallengeValue(body.mfa_pending) ?? readMfaChallenge(request);
+
+    if (!challenge) {
+      throw new UnauthorizedError("Two-factor authentication required.");
+    }
+
+    const created = await this.authService.loginWithMfaChallenge(challenge.userId, body.code);
+
+    return await this.loginTokenResponse(created, {
+      headers: { "set-cookie": clearMfaChallengeCookie() },
     });
+  });
+
+  private async loginTokenResponse(
+    created: CreatedApiToken,
+    init: ResponseInit = {},
+  ): Promise<Response> {
     const authUser = await this.tokens.resolveUserFromToken(created.plainTextToken);
 
     if (!authUser) {
@@ -98,11 +151,14 @@ class AuthController {
 
     const user = await this.tokens.findByIdOrThrow(Number(authUser.id));
 
-    return createdResponse({
-      token: created.plainTextToken,
-      user: toUserResource(user),
-    });
-  });
+    return createdResponse(
+      {
+        token: created.plainTextToken,
+        user: toUserResource(user),
+      },
+      init,
+    );
+  }
 
   readonly register = withErrorHandling(async (request: Request) => {
     const body = await parseRegisterBody(request);

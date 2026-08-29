@@ -6,6 +6,11 @@ import { createOAuthStateCookie } from "@getstrata/core/security/oauthState";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
 import {
+  createMfaChallenge,
+  createMfaChallengeCookie,
+} from "../../src/modules/user/mfaChallengeCookie";
+import { MfaRequiredError } from "../../src/modules/user/mfaRequiredError";
+import {
   authServiceToken,
   notificationServiceToken,
   passwordResetServiceToken,
@@ -134,6 +139,142 @@ describe("AuthController", () => {
         role: "admin",
       },
     });
+  });
+
+  test("login returns a two-factor challenge when MFA is required", async () => {
+    const controller = createController({
+      authService: {
+        loginWithPassword: mock(async () => {
+          throw new MfaRequiredError(1);
+        }),
+      },
+    });
+
+    const response = await controller.login(
+      new Request("http://example.test/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "admin@workhub.test",
+          password: "password123",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    const body = (await response.json()) as {
+      error: string;
+      two_factor: boolean;
+      mfa_pending: string;
+    };
+    expect(body).toMatchObject({
+      error: "Two-factor authentication required.",
+      two_factor: true,
+    });
+    expect(body.mfa_pending).toContain(".");
+    expect(response.headers.get("set-cookie")).toContain("workhub_mfa_pending=");
+  });
+
+  test("twoFactorChallenge completes login from mfa_pending", async () => {
+    const loginWithMfaChallenge = mock(async () => ({ plainTextToken: "challenge-token" }));
+    const controller = createController({
+      authService: { loginWithMfaChallenge },
+    });
+    const challenge = createMfaChallenge(1);
+
+    const response = await controller.twoFactorChallenge(
+      new Request("http://example.test/auth/two-factor-challenge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: "123456",
+          mfa_pending: challenge.value,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      token: "challenge-token",
+      user: {
+        id: 1,
+        name: "Admin User",
+        email: "admin@workhub.test",
+        role: "admin",
+      },
+    });
+    expect(loginWithMfaChallenge).toHaveBeenCalledWith(1, "123456");
+    expect(response.headers.get("set-cookie")).toContain("workhub_mfa_pending=");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  test("twoFactorChallenge accepts the pending cookie", async () => {
+    const loginWithMfaChallenge = mock(async () => ({ plainTextToken: "cookie-token" }));
+    const controller = createController({
+      authService: { loginWithMfaChallenge },
+    });
+
+    const response = await controller.twoFactorChallenge(
+      new Request("http://example.test/auth/two-factor-challenge", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: createMfaChallengeCookie(1),
+        },
+        body: JSON.stringify({ recovery_code: "abcd-efgh" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect((await response.json()) as { token: string }).toEqual({
+      token: "cookie-token",
+      user: {
+        id: 1,
+        name: "Admin User",
+        email: "admin@workhub.test",
+        role: "admin",
+      },
+    });
+    expect(loginWithMfaChallenge).toHaveBeenCalledWith(1, "abcd-efgh");
+  });
+
+  test("twoFactorChallenge rejects a missing challenge", async () => {
+    const controller = createController({});
+
+    const response = await controller.twoFactorChallenge(
+      new Request("http://example.test/auth/two-factor-challenge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mfa_code: "123456" }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Two-factor authentication required." });
+  });
+
+  test("twoFactorChallenge rejects unresolved authenticated users", async () => {
+    const controller = createController({
+      tokens: { resolveUserFromToken: mock(async () => null) },
+      authService: {
+        loginWithMfaChallenge: mock(async () => ({ plainTextToken: "challenge-token" })),
+      },
+    });
+    const challenge = createMfaChallenge(1);
+
+    const response = await controller.twoFactorChallenge(
+      new Request("http://example.test/auth/two-factor-challenge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: "123456",
+          mfa_pending: challenge.value,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Unable to resolve authenticated user." });
   });
 
   test("login rejects unresolved authenticated users", async () => {

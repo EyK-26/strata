@@ -85,6 +85,10 @@ export class WorkHubClient {
     return await this.request("/auth/tokens/{id}", { ...init, method: "DELETE" });
   }
 
+  async postAuthTwoFactorChallenge(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/auth/two-factor-challenge", { ...init, method: "POST" });
+  }
+
   async getBillingSubscription(init: RequestInit = {}): Promise<Response> {
     return await this.request("/billing/subscription", { ...init, method: "GET" });
   }

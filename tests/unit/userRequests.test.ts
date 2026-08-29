@@ -7,6 +7,7 @@ import {
   parseRegisterBody,
   parseResetPasswordBody,
   parseTokenIdParams,
+  parseTwoFactorChallengeBody,
 } from "../../src/modules/user/requests";
 
 describe("user requests", () => {
@@ -42,6 +43,54 @@ describe("user requests", () => {
       password: "password123",
       mfa_code: "123456",
     });
+  });
+
+  test("parseLoginBody accepts recovery-code length mfa_code", async () => {
+    const request = new Request("http://example.test/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "user@workhub.test",
+        password: "password123",
+        mfa_code: "abcd-efgh",
+      }),
+    });
+
+    await expect(parseLoginBody(request)).resolves.toEqual({
+      email: "user@workhub.test",
+      password: "password123",
+      mfa_code: "abcd-efgh",
+    });
+  });
+
+  test("parseTwoFactorChallengeBody accepts code aliases", async () => {
+    await expect(
+      parseTwoFactorChallengeBody(
+        new Request("http://example.test/auth/two-factor-challenge", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            recovery_code: "abcd-efgh",
+            mfa_pending: "1.2.0.deadbeef",
+          }),
+        }),
+      ),
+    ).resolves.toEqual({
+      code: "abcd-efgh",
+      mfa_pending: "1.2.0.deadbeef",
+    });
+  });
+
+  test("parseTwoFactorChallengeBody requires a code", async () => {
+    await expect(
+      parseTwoFactorChallengeBody(
+        new Request("http://example.test/auth/two-factor-challenge", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }),
+      ),
+    ).rejects.toThrow(ValidationError);
   });
 
   test("parseLoginBody rejects invalid payloads", async () => {

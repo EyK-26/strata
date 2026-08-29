@@ -1,3 +1,4 @@
+import { ValidationError } from "@getstrata/core/errors/http";
 import { FormRequest } from "@getstrata/core/http/formRequest";
 import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import {
@@ -52,6 +53,11 @@ interface ConfirmMfaBodyDto {
   mfa_code: string;
 }
 
+interface TwoFactorChallengeBodyDto {
+  code: string;
+  mfa_pending?: string;
+}
+
 interface PasswordChallengeBodyDto {
   password: string;
 }
@@ -93,7 +99,7 @@ class LoginRequest extends FormRequest<LoginBodyDto> {
     const validated = validateObject(payload, {
       email: [required(), stringRule(), minLength(3), maxLength(255)],
       password: [required(), stringRule(), minLength(8), maxLength(255)],
-      mfa_code: [optional(), stringRule(), minLength(6), maxLength(6)],
+      mfa_code: [optional(), stringRule(), minLength(6), maxLength(20)],
     });
 
     return {
@@ -182,6 +188,36 @@ class ConfirmMfaRequest extends FormRequest<ConfirmMfaBodyDto> {
 
 const confirmMfaRequest = new ConfirmMfaRequest();
 
+class TwoFactorChallengeRequest extends FormRequest<TwoFactorChallengeBodyDto> {
+  protected parse(payload: unknown): TwoFactorChallengeBodyDto {
+    const validated = validateObject(payload, {
+      code: [optional(), stringRule(), minLength(1), maxLength(20)],
+      mfa_code: [optional(), stringRule(), minLength(1), maxLength(20)],
+      recovery_code: [optional(), stringRule(), minLength(1), maxLength(20)],
+      mfa_pending: [optional(), stringRule(), minLength(1), maxLength(255)],
+    });
+
+    const code = [validated.code, validated.mfa_code, validated.recovery_code]
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .find((value) => value.length > 0);
+
+    if (!code) {
+      throw new ValidationError("A two-factor authentication code is required.", {
+        code: ["A two-factor authentication code is required."],
+      });
+    }
+
+    return {
+      code,
+      ...(validated.mfa_pending === undefined
+        ? {}
+        : { mfa_pending: String(validated.mfa_pending) }),
+    };
+  }
+}
+
+const twoFactorChallengeRequest = new TwoFactorChallengeRequest();
+
 class PasswordChallengeRequest extends FormRequest<PasswordChallengeBodyDto> {
   protected parse(payload: unknown): PasswordChallengeBodyDto {
     const validated = validateObject(payload, {
@@ -247,6 +283,10 @@ async function parseConfirmMfaBody(request: Request): Promise<ConfirmMfaBodyDto>
   return await confirmMfaRequest.validate(request);
 }
 
+async function parseTwoFactorChallengeBody(request: Request): Promise<TwoFactorChallengeBodyDto> {
+  return await twoFactorChallengeRequest.validate(request);
+}
+
 async function parsePasswordChallengeBody(request: Request): Promise<PasswordChallengeBodyDto> {
   return await passwordChallengeRequest.validate(request);
 }
@@ -263,6 +303,7 @@ export type {
   RegisterBodyDto,
   ResetPasswordBodyDto,
   TokenIdParams,
+  TwoFactorChallengeBodyDto,
   UpdateProfileBodyDto,
 };
 export {
@@ -276,5 +317,6 @@ export {
   parseRegisterBody,
   parseResetPasswordBody,
   parseTokenIdParams,
+  parseTwoFactorChallengeBody,
   parseUpdateProfileBody,
 };

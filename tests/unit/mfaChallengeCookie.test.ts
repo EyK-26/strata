@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   clearMfaChallengeCookie,
+  createMfaChallenge,
   createMfaChallengeCookie,
   DEFAULT_MFA_CHALLENGE_TTL_SECONDS,
   MFA_CHALLENGE_COOKIE,
   mfaChallengeCookieName,
   mfaChallengeTtlSeconds,
+  parseMfaChallengeValue,
   readMfaChallenge,
 } from "../../src/modules/user/mfaChallengeCookie";
 
@@ -49,13 +51,18 @@ describe("mfaChallengeCookie", () => {
   });
 
   test("creates and reads a signed challenge cookie", () => {
-    const cookiePair = createMfaChallengeCookie(42, { remember: true }).split(";")[0] ?? "";
+    const issued = createMfaChallenge(42, { remember: true });
+    const cookiePair = issued.cookie.split(";")[0] ?? "";
     const request = new Request("http://example.test/two-factor-challenge", {
       headers: { cookie: cookiePair },
     });
 
+    expect(parseMfaChallengeValue(issued.value)).toEqual({ userId: 42, remember: true });
+    expect(parseMfaChallengeValue("")).toBeNull();
+    expect(parseMfaChallengeValue(undefined)).toBeNull();
     expect(readMfaChallenge(request)).toEqual({ userId: 42, remember: true });
     expect(readMfaChallenge(new Request("http://example.test/two-factor-challenge"))).toBeNull();
+    expect(createMfaChallengeCookie(42, { remember: true })).toContain("workhub_mfa_pending=");
   });
 
   test("rejects missing, malformed, expired, and tampered cookies", () => {

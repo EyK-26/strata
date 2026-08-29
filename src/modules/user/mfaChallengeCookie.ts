@@ -54,9 +54,7 @@ function readCookieValue(request: Request, cookieName: string): string | null {
   return null;
 }
 
-function readMfaChallenge(request: Request): MfaChallenge | null {
-  const cookieValue = readCookieValue(request, mfaChallengeCookieName());
-
+function parseMfaChallengeValue(cookieValue: string | null | undefined): MfaChallenge | null {
   if (!cookieValue) {
     return null;
   }
@@ -105,15 +103,34 @@ function readMfaChallenge(request: Request): MfaChallenge | null {
   return { userId, remember: rememberRaw === "1" };
 }
 
-function createMfaChallengeCookie(
+function readMfaChallenge(request: Request): MfaChallenge | null {
+  return parseMfaChallengeValue(readCookieValue(request, mfaChallengeCookieName()));
+}
+
+interface IssuedMfaChallenge {
+  value: string;
+  cookie: string;
+}
+
+function createMfaChallenge(
   userId: number,
   options: CreateMfaChallengeCookieOptions = {},
-): string {
+): IssuedMfaChallenge {
   const issuedAt = Date.now();
   const value = signMfaChallenge(userId, issuedAt, Boolean(options.remember));
   const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
 
-  return `${mfaChallengeCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${mfaChallengeTtlSeconds()}${secure}`;
+  return {
+    value,
+    cookie: `${mfaChallengeCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${mfaChallengeTtlSeconds()}${secure}`,
+  };
+}
+
+function createMfaChallengeCookie(
+  userId: number,
+  options: CreateMfaChallengeCookieOptions = {},
+): string {
+  return createMfaChallenge(userId, options).cookie;
 }
 
 function clearMfaChallengeCookie(): string {
@@ -122,13 +139,15 @@ function clearMfaChallengeCookie(): string {
   return `${mfaChallengeCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
-export type { CreateMfaChallengeCookieOptions, MfaChallenge };
+export type { CreateMfaChallengeCookieOptions, IssuedMfaChallenge, MfaChallenge };
 export {
   clearMfaChallengeCookie,
+  createMfaChallenge,
   createMfaChallengeCookie,
   DEFAULT_MFA_CHALLENGE_TTL_SECONDS,
   MFA_CHALLENGE_COOKIE,
   mfaChallengeCookieName,
   mfaChallengeTtlSeconds,
+  parseMfaChallengeValue,
   readMfaChallenge,
 };

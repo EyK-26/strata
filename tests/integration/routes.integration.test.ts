@@ -1086,6 +1086,79 @@ describe("integration routes with postgres", () => {
     expect(unauthorized.status).toBe(401);
   });
 
+  test("POST /auth/login without an MFA code completes via /auth/two-factor-challenge", async () => {
+    const previousMfa = process.env.FEATURE_MFA;
+    process.env.FEATURE_MFA = "true";
+    const { generateTotp } = await import("@getstrata/core/security/totp");
+    const email = `json-mfa-challenge-${Date.now()}@workhub.test`;
+
+    try {
+      const registerResponse = await fetch(api("/auth/register"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Json Mfa Challenge",
+          email,
+          password: "password123",
+          password_confirmation: "password123",
+        }),
+      });
+      expect(registerResponse.status).toBe(201);
+      const registered = (await registerResponse.json()) as { token: string };
+      const headers = {
+        authorization: `Bearer ${registered.token}`,
+        "content-type": "application/json",
+      };
+
+      const setup = await fetch(api("/users/me/mfa"), { method: "POST", headers });
+      expect(setup.status).toBe(200);
+      const setupBody = (await setup.json()) as { secret: string };
+      const confirmed = await fetch(api("/users/me/mfa/confirm"), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          mfa_code: generateTotp(setupBody.secret, Math.floor(Date.now() / 30_000)),
+        }),
+      });
+      expect(confirmed.status).toBe(200);
+
+      const challenged = await fetch(api("/auth/login"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password: "password123",
+        }),
+      });
+      expect(challenged.status).toBe(401);
+      const challengeBody = (await challenged.json()) as {
+        two_factor: boolean;
+        mfa_pending: string;
+      };
+      expect(challengeBody.two_factor).toBe(true);
+      expect(challengeBody.mfa_pending).toBeTruthy();
+
+      const completed = await fetch(api("/auth/two-factor-challenge"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: generateTotp(setupBody.secret, Math.floor(Date.now() / 30_000)),
+          mfa_pending: challengeBody.mfa_pending,
+        }),
+      });
+      expect(completed.status).toBe(201);
+      const completedBody = (await completed.json()) as { token: string; user: { email: string } };
+      expect(completedBody.token).toBeTruthy();
+      expect(completedBody.user.email).toBe(email);
+    } finally {
+      if (previousMfa === undefined) {
+        delete process.env.FEATURE_MFA;
+      } else {
+        process.env.FEATURE_MFA = previousMfa;
+      }
+    }
+  });
+
   test("PATCH /users/me updates a disposable user without touching admin", async () => {
     const email = `json-profile-${Date.now()}@workhub.test`;
     const registerResponse = await fetch(api("/auth/register"), {

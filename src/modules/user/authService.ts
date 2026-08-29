@@ -113,6 +113,16 @@ class AuthService {
   ): Promise<CreatedApiToken> {
     const user = await this.authenticatePassword(email, password, options);
 
+    return await this.issuePasswordLoginToken(user);
+  }
+
+  async loginWithMfaChallenge(userId: number, code: string): Promise<CreatedApiToken> {
+    const user = await this.verifyMfaChallenge(userId, code);
+
+    return await this.issuePasswordLoginToken(user);
+  }
+
+  private async issuePasswordLoginToken(user: UserRecord): Promise<CreatedApiToken> {
     return await this.tokens.createToken(user.id, {
       name: "password-login",
       abilities: resolveAbilitiesForRole(user.role),

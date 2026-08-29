@@ -51,6 +51,17 @@ describe("generateOpenApiSpec", () => {
     expect(operation(spec, "/auth/me", "get")?.security).toEqual([{ bearerAuth: [] }]);
   });
 
+  test("marks the JSON two-factor challenge as a public OpenAPI operation", () => {
+    const spec = generateOpenApiSpec([
+      { method: "POST", path: "/api/v1/auth/two-factor-challenge", middleware: ["global", "api"] },
+    ]);
+
+    expect(operation(spec, "/api/v1/auth/two-factor-challenge", "post")?.summary).toBe(
+      "Complete two-factor login challenge",
+    );
+    expect(operation(spec, "/api/v1/auth/two-factor-challenge", "post")?.security).toBeUndefined();
+  });
+
   test("marks password reset and email verification routes as public OpenAPI operations", () => {
     const spec = generateOpenApiSpec([
       { method: "POST", path: "/api/v1/auth/forgot-password", middleware: ["global", "api"] },

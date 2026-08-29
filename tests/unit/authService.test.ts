@@ -368,6 +368,11 @@ describe("password auth", () => {
           generateTotp(setup.secret, Math.floor(Date.now() / 30_000)),
         );
         expect(challenged.id).toBe(1);
+        const issued = await authService.loginWithMfaChallenge(
+          1,
+          generateTotp(setup.secret, Math.floor(Date.now() / 30_000)),
+        );
+        expect(issued.plainTextToken).toBeTruthy();
 
         const disabled = await authService.disableMfa(1, "password");
         expect(disabled.mfa_enabled).toBe(false);

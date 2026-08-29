@@ -15,6 +15,7 @@ interface OpenApiSpec {
 const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /auth/me": "Current authenticated user",
   "POST /auth/login": "Login with email and password",
+  "POST /auth/two-factor-challenge": "Complete two-factor login challenge",
   "POST /auth/register": "Register with name, email, and password",
   "POST /auth/forgot-password": "Request a password reset email",
   "POST /auth/reset-password": "Reset password with email and token",
@@ -72,6 +73,7 @@ function requiresBearerAuth(path: string, method: string): boolean {
 
   if (
     relative.startsWith("/auth/login") ||
+    relative.startsWith("/auth/two-factor-challenge") ||
     relative.startsWith("/auth/register") ||
     relative.startsWith("/auth/forgot-password") ||
     relative.startsWith("/auth/reset-password") ||

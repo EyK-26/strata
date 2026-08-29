@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.78
+
+- OpenAPI treats `POST /auth/two-factor-challenge` as a public operation (no bearer), including when routes are registered under `API_PREFIX`.
+
 ## 0.5.77
 
 - `@getstrata/core/security/recoveryCodes` (`generateRecoveryCodes`, `hashRecoveryCode`, `recoveryCodeMatches`). Fortify-style one-time MFA backup codes (`abcd-efgh`).
