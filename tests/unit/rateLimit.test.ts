@@ -50,6 +50,7 @@ describe("resolveLoginRateLimit", () => {
 
   test("accepts deprecated LOGIN_RATE_LIMIT_WINDOW_MS as an alias", () => {
     process.env.APP_ENV = "local";
+    delete process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
     delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
     process.env.LOGIN_RATE_LIMIT_WINDOW_MS = "45000";
 
