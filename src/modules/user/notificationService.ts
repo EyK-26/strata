@@ -51,6 +51,14 @@ class NotificationService {
     });
   }
 
+  async countUnread(userId: number): Promise<number> {
+    const unread = await this.repository.findAll({
+      where: { user_id: userId, read_at: null } as never,
+    });
+
+    return unread.length;
+  }
+
   async markAllRead(userId: number): Promise<number> {
     const unread = await this.repository.findAll({
       where: { user_id: userId, read_at: null } as never,

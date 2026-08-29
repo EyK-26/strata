@@ -5,6 +5,8 @@
     <a href="/admin/queue">Queue monitor</a>
     <a href="/admin/resources">Resources</a>
     <a href="/admin/audit">Audit log</a>
+    <a href="/billing">Billing</a>
+    <a href="/webhooks">Webhooks</a>
   </nav>
 </section>
 

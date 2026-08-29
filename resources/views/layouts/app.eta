@@ -24,8 +24,18 @@
         <a href="/organizations">Organizations</a>
         <a href="/projects">Projects</a>
         <a href="/tasks">Tasks</a>
+        <a href="/search">Search</a>
+        <a href="/billing">Billing</a>
+        <a href="/webhooks">Webhooks</a>
         <a href="/admin">Admin</a>
         <% if (it.authUser) { %>
+        <div
+          id="notifications-bell"
+          class="notifications-bell"
+          hx-get="/notifications"
+          hx-trigger="load, every 30s"
+          hx-swap="innerHTML"
+        ></div>
         <span class="nav-user"><%= it.authUser.email %></span>
         <form method="post" action="/logout" class="nav-logout">
           <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />

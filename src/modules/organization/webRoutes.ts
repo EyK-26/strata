@@ -16,6 +16,14 @@ function createOrganizationWebRoutes(dependencies: AppDependencies, kernel: Http
     },
     "/organizations/:id": {
       GET: kernel.wrapWebPublicRead(controller.show as unknown as RouteHandler),
+      POST: kernel.wrapWebAuthenticated(controller.update as unknown as RouteHandler),
+      PATCH: kernel.wrapWebAuthenticated(controller.update as unknown as RouteHandler),
+    },
+    "/organizations/:id/members": {
+      POST: kernel.wrapWebAuthenticated(controller.addMember as unknown as RouteHandler),
+    },
+    "/organizations/:id/members/:userId": {
+      DELETE: kernel.wrapWebAuthenticated(controller.removeMember as unknown as RouteHandler),
     },
   };
 }

@@ -18,6 +18,21 @@
   </div>
 </dl>
 
+<form method="post" action="/organizations/<%= it.organization.id %>" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+  <label>
+    Name
+    <input type="text" name="name" value="<%= it.old?.name ?? it.organization.name %>" required />
+  </label>
+  <label>
+    Slug
+    <input type="text" name="slug" value="<%= it.old?.slug ?? it.organization.slug %>" required />
+  </label>
+  <button type="submit">Save organization</button>
+</form>
+
+<%~ include('../organizations/_members', it) %>
+
 <p><a href="/organizations">← Back to organizations</a></p>
 
 <section

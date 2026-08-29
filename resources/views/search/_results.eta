@@ -1,0 +1,16 @@
+<% if (!it.query) { %>
+<p class="hint">Type a query to search WorkHub.</p>
+<% } else if (!it.results?.length) { %>
+<p class="hint">No matches for “<%= it.query %>”.</p>
+<% } else { %>
+<ul class="search-results">
+  <% for (const hit of it.results) { %>
+  <li>
+    <a href="<%= hit.type === "task" ? `/tasks/${hit.id}` : `/tasks` %>">
+      <strong><%= hit.type %></strong> #<%= hit.id %>
+    </a>
+    <p class="hint"><%= hit.snippet %></p>
+  </li>
+  <% } %>
+</ul>
+<% } %>

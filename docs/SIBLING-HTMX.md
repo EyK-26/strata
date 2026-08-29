@@ -96,6 +96,8 @@ configureWebLayoutData({
 
 Layouts receive `{ currentUser, csrfToken, flash, cspNonce }`. Put `nonce="<%= it.cspNonce %>"` on inline CSRF helpers and set HTMX `inlineStyleNonce` so indicator CSS works without `'unsafe-inline'` on `script-src`.
 
+Use `temporarySignedUrl()` / `hasValidSignature()` from `@getstrata/core/http/signedUrl` for attachment downloads, password reset, and email verification. HMAC uses `SIGNED_URL_SECRET` or `SESSION_SECRET`. Markdown mail goes through `Bun.markdown.html()` plus `sanitizeMailHtml`.
+
 Public HTML show pages should look up the model in the controller. `wrapSecuredRouteModelByKey` is safe on HTML if someone still uses it: a missing slug is a styled 404, and GET ETags are skipped for HTML / composite objects unless you pass `etag: true`.
 
 ## Content-Security-Policy

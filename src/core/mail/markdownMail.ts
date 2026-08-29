@@ -1,3 +1,5 @@
+import { sanitizeMailHtml } from "./sanitizeMailHtml.ts";
+
 interface MarkdownMailLayoutOptions {
   title?: string;
   preview?: string;
@@ -31,28 +33,7 @@ function stripMarkdown(markdown: string): string {
 }
 
 function markdownToHtml(markdown: string): string {
-  const escaped = markdown.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  return escaped
-    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    .replace(/^[-*]\s+(.+)$/gm, "<li>$1</li>")
-    .replace(/(<li>[\s\S]*?<\/li>\n?)+/g, (block) => `<ul>${block}</ul>`)
-    .replace(/```(\w+)?\n([\s\S]*?)```/g, "<pre><code>$2</code></pre>")
-    .split(/\n\n+/)
-    .map((block) => {
-      if (block.startsWith("<")) {
-        return block;
-      }
-
-      return `<p>${block.replace(/\n/g, " ")}</p>`;
-    })
-    .join("\n");
+  return sanitizeMailHtml(Bun.markdown.html(markdown));
 }
 
 function wrapMarkdownMailLayout(bodyHtml: string, options: MarkdownMailLayoutOptions = {}): string {

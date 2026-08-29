@@ -149,7 +149,8 @@ a {
   gap: 0.35rem;
 }
 
-.stack-form input {
+.stack-form input,
+.stack-form select {
   border: 1px solid #2a3140;
   background: #151922;
   color: inherit;
@@ -200,4 +201,66 @@ a {
 
 .upload-form {
   margin-bottom: 1rem;
+}
+
+.notifications-bell {
+  min-width: 5rem;
+}
+
+.notifications-inbox {
+  position: relative;
+}
+
+.notifications-toggle {
+  background: #222733;
+  border: 1px solid #4b5563;
+  color: inherit;
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+
+.notifications-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  width: 18rem;
+  max-height: 20rem;
+  overflow: auto;
+  background: #151922;
+  border: 1px solid #2a3140;
+  border-radius: 0.4rem;
+  padding: 0.75rem;
+  z-index: 20;
+}
+
+.notification-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+}
+
+.notification-list li {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #2a3140;
+}
+
+.notification-list .is-unread {
+  font-weight: 600;
+}
+
+.search-results {
+  list-style: none;
+  padding: 0;
+}
+
+.search-form {
+  max-width: 36rem;
+}
+
+.card {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid #2a3140;
+  border-radius: 0.5rem;
 }

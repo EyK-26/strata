@@ -1,0 +1,83 @@
+<section class="page-header">
+  <h1>Outbound webhooks</h1>
+  <p class="hint">Signed deliveries use HMAC and <code>x-workhub-signature</code>.</p>
+</section>
+
+<% if (Object.keys(it.errors ?? {}).length > 0) { %>
+<div class="form-errors" role="alert">
+  <% for (const [field, messages] of Object.entries(it.errors)) { %>
+    <% for (const message of messages) { %>
+      <p><strong><%= field %></strong>: <%= message %></p>
+    <% } %>
+  <% } %>
+</div>
+<% } %>
+
+<form method="post" action="/webhooks" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+  <label>
+    Endpoint URL
+    <input type="url" name="url" value="<%= it.old?.url ?? '' %>" required />
+  </label>
+  <label>
+    Shared secret
+    <input type="text" name="secret" value="<%= it.old?.secret ?? '' %>" required />
+  </label>
+  <label>
+    Events
+    <input type="text" name="events" value="<%= it.old?.events ?? '*' %>" />
+  </label>
+  <button type="submit">Add webhook</button>
+</form>
+
+<section class="card">
+  <h2>Endpoints</h2>
+  <% if (!it.webhooks?.length) { %>
+  <p class="hint">No webhooks registered.</p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>URL</th>
+        <th>Events</th>
+        <th>Active</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const webhook of it.webhooks) { %>
+      <tr>
+        <td><code><%= webhook.url %></code></td>
+        <td><%= (webhook.events ?? []).join(", ") %></td>
+        <td><%= webhook.active ? "yes" : "no" %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>Recent deliveries</h2>
+  <% if (!it.deliveries?.length) { %>
+  <p class="hint">No deliveries yet.</p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Webhook</th>
+        <th>Event</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const delivery of it.deliveries) { %>
+      <tr>
+        <td>#<%= delivery.webhook_id %></td>
+        <td><%= delivery.event %></td>
+        <td><%= delivery.response_status ?? "—" %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table>
+  <% } %>
+</section>

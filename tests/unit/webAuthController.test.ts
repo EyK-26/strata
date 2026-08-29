@@ -12,6 +12,7 @@ function createController(services: {
 }): WebAuthController {
   const container = new ServiceContainer();
   container.set(authServiceToken, {
+    authenticatePassword: mock(async () => ({ id: 1, email: "admin@workhub.test", role: "admin" })),
     loginWithPassword: mock(async () => ({ plainTextToken: "session-token" })),
     ...services.authService,
   });
@@ -84,9 +85,14 @@ describe("WebAuthController", () => {
     expect(response.headers.get("Location")).toBe("/organizations");
   });
 
-  test("login rejects unresolved authenticated users", async () => {
+  test("login re-renders invalid credentials without creating a session", async () => {
+    const { UnauthorizedError } = await import("@getstrata/core/errors/http");
     const controller = createController({
-      tokens: { resolveUserFromToken: mock(async () => null) },
+      authService: {
+        authenticatePassword: mock(async () => {
+          throw new UnauthorizedError("Invalid credentials.");
+        }),
+      },
     });
 
     const response = await controller.login(
@@ -97,8 +103,9 @@ describe("WebAuthController", () => {
       }),
     );
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "Unable to resolve authenticated user." });
+    expect(response.status).toBe(422);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(await response.text()).toContain("Invalid credentials.");
   });
 
   test("logout clears the session cookie and redirects to login", async () => {

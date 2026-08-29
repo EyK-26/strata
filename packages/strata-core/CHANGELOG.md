@@ -1,5 +1,15 @@
 # @getstrata/core changelog
 
+## 0.5.62
+
+Laravel URL signing, Bun-native markdown mail, and session-auth cleanup.
+
+- `temporarySignedUrl` / `signedUrl` / `hasValidSignature` / `assertValidSignature` on `@getstrata/core/http/signedUrl`. HMAC uses `SIGNED_URL_SECRET` or `SESSION_SECRET`. Paths must be same-origin (`/` only; reject `//` and `://`).
+- `markdownToHtml()` uses `Bun.markdown.html()` plus `sanitizeMailHtml` (allowlist). Scripts, `javascript:` links, and unknown tags are stripped.
+- `ExportAuditLogsJob` (`@getstrata/core/jobs/exportAuditLogsJob`) wraps SIEM export so the scheduler can dispatch a real job.
+- `DispatchWebhookJob` reads `APP_ENV` and `WEBHOOK_SIGNATURE_HEADER` instead of WorkHub `appConfig`.
+- `createRequireWebAuthMiddleware` runs the handler inside `runWithAuthUser` so `currentAuthUser()` works on HTMX session routes.
+
 ## 0.5.61
 
 HTMX HTML kernel gaps that sibling apps could not work around without weakening CSP or duplicating the framework.

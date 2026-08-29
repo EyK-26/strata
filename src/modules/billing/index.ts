@@ -2,6 +2,7 @@ import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { isFeatureEnabled } from "../../config/features";
 import billingProvider, { billingServiceToken } from "./provider";
 import { createBillingRoutes } from "./routes";
+import { createBillingWebRoutes } from "./webController";
 
 const billingModule: AppModule = {
   name: "billing",
@@ -13,6 +14,13 @@ const billingModule: AppModule = {
     }
 
     return createBillingRoutes(dependencies, kernel);
+  },
+  webRoutes({ dependencies, kernel }) {
+    if (!isFeatureEnabled("billing")) {
+      return {};
+    }
+
+    return createBillingWebRoutes(dependencies, kernel);
   },
 };
 

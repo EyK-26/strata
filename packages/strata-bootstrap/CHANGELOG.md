@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.53
+
+- `registerDefaultJobs()` also registers `audit.export` (`ExportAuditLogsJob`).
+- In-process `audit-export` schedule runs that job instead of calling `exportPendingAuditLogs()` inline.
+
 ## 0.2.52
 
 - View provider registers `configureWebErrorView` so `errors/*.eta` render through the app Eta layout. `EtaViewEngine` receives `Request` from the layout-data resolver.

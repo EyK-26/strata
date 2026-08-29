@@ -1,5 +1,8 @@
 import { join } from "node:path";
-import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
+import {
+  configureModulesDirectory,
+  ensureModulesLoaded,
+} from "@getstrata/bootstrap/discoverModules";
 import { configureMembershipLookup } from "@getstrata/core/auth/membershipContext";
 import { getDatabase, pingDatabase } from "../src/db/connection";
 import { freshDatabase } from "../src/db/migrations/runner";
@@ -7,6 +10,7 @@ import OrganizationMemberRepository from "../src/modules/organization/memberRepo
 import { assertSafeTestDatabaseReset } from "./helpers/assertSafeTestDatabaseReset";
 
 configureModulesDirectory(join(import.meta.dir, "../src/modules"));
+await ensureModulesLoaded();
 configureMembershipLookup(new OrganizationMemberRepository());
 
 if (process.env.DATABASE_URL) {

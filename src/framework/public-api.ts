@@ -286,6 +286,13 @@ export {
 } from "../core/http/safeInternalPath.ts";
 export { createScimThrottleMiddleware } from "../core/http/scimThrottleMiddleware.ts";
 export { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMiddleware.ts";
+export {
+  absoluteTemporarySignedUrl,
+  assertValidSignature,
+  hasValidSignature,
+  signedUrl,
+  temporarySignedUrl,
+} from "../core/http/signedUrl.ts";
 export { createThrottleMiddleware } from "../core/http/throttleMiddleware.ts";
 export { WebFormRequest } from "../core/http/webFormRequest.ts";
 export {
@@ -310,6 +317,7 @@ export {
 } from "../core/mail/markdownMail.ts";
 export type { MarkdownMailableInput } from "../core/mail/markdownMailable.ts";
 export { buildMarkdownMailMessage, sendMarkdownMail } from "../core/mail/markdownMailable.ts";
+export { sanitizeMailHtml } from "../core/mail/sanitizeMailHtml.ts";
 export type { MetricLabels } from "../core/metrics/prometheus.ts";
 export { PrometheusRegistry, prometheusRegistry } from "../core/metrics/prometheus.ts";
 export type {

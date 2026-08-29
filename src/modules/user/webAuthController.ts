@@ -2,13 +2,22 @@ import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { clearSessionCookie, createSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
+import { UnauthorizedError } from "@getstrata/core/errors/http";
+import { flashResponse } from "@getstrata/core/http/flashSession";
 import { withErrorHandling } from "@getstrata/core/http/response";
+import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";
+import { assertValidSignature } from "@getstrata/core/http/signedUrl";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
 import type AuthService from "./authService";
-import { authServiceToken, tokenServiceToken } from "./provider";
-import type TokenService from "./tokenService";
-import { parseWebLoginBody } from "./webRequests";
+import type PasswordResetService from "./passwordResetService";
+import { authServiceToken, passwordResetServiceToken, userRepositoryToken } from "./provider";
+import type UserRepository from "./repository";
+import {
+  parseWebForgotPasswordBody,
+  parseWebLoginBody,
+  parseWebResetPasswordBody,
+} from "./webRequests";
 
 class WebAuthController {
   constructor(private readonly dependencies: AppDependencies) {}
@@ -17,8 +26,12 @@ class WebAuthController {
     return resolveService(this.dependencies, authServiceToken);
   }
 
-  private get tokens(): TokenService {
-    return resolveService(this.dependencies, tokenServiceToken);
+  private get passwordResets(): PasswordResetService {
+    return resolveService(this.dependencies, passwordResetServiceToken);
+  }
+
+  private get users(): UserRepository {
+    return resolveService(this.dependencies, userRepositoryToken);
   }
 
   private get view(): ViewEngine {
@@ -40,23 +53,35 @@ class WebAuthController {
 
   readonly login = withErrorHandling(async (request: Request) => {
     const body = await parseWebLoginBody(request);
-    const created = await this.authService.loginWithPassword(body.email, body.password);
-    const authUser = await this.tokens.resolveUserFromToken(created.plainTextToken);
-    const userId = Number(authUser?.id);
 
-    if (!Number.isInteger(userId) || userId <= 0) {
-      throw new Error("Unable to resolve authenticated user.");
+    try {
+      const user = await this.authService.authenticatePassword(body.email, body.password, {
+        mfaCode: body.mfaCode,
+      });
+      const redirect = sanitizeInternalPath(body.redirect ?? "/organizations", "/organizations");
+
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: redirect,
+          "Set-Cookie": createSessionCookie(user.id),
+        },
+      });
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return htmlResponse(
+          await this.view.render("auth/login", {
+            title: "Sign in",
+            redirect: body.redirect ?? "/organizations",
+            errors: { email: [error.message] },
+            old: { email: body.email },
+          }),
+          { status: 422 },
+        );
+      }
+
+      throw error;
     }
-
-    const redirect = body.redirect?.startsWith("/") ? body.redirect : "/organizations";
-
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: redirect,
-        "Set-Cookie": createSessionCookie(userId),
-      },
-    });
   });
 
   readonly logout = withErrorHandling(async () => {
@@ -66,6 +91,88 @@ class WebAuthController {
         Location: "/login",
         "Set-Cookie": clearSessionCookie(),
       },
+    });
+  });
+
+  readonly showForgotPassword = withErrorHandling(async () => {
+    return htmlResponse(
+      await this.view.render("auth/forgot-password", {
+        title: "Forgot password",
+        errors: {},
+        old: {},
+        sent: false,
+      }),
+    );
+  });
+
+  readonly sendResetLink = withErrorHandling(async (request: Request) => {
+    const body = await parseWebForgotPasswordBody(request);
+    await this.passwordResets.requestReset(body.email);
+
+    return htmlResponse(
+      await this.view.render("auth/forgot-password", {
+        title: "Forgot password",
+        errors: {},
+        old: { email: body.email },
+        sent: true,
+      }),
+    );
+  });
+
+  readonly showResetPassword = withErrorHandling(async (request: Request) => {
+    assertValidSignature(request);
+    const url = new URL(request.url);
+
+    return htmlResponse(
+      await this.view.render("auth/reset-password", {
+        title: "Reset password",
+        email: url.searchParams.get("email") ?? "",
+        token: url.searchParams.get("token") ?? "",
+        expires: url.searchParams.get("expires") ?? "",
+        signature: url.searchParams.get("signature") ?? "",
+        errors: {},
+      }),
+    );
+  });
+
+  readonly resetPassword = withErrorHandling(async (request: Request) => {
+    assertValidSignature(request);
+    const body = await parseWebResetPasswordBody(request);
+    await this.passwordResets.resetPassword(body.email, body.token, body.password);
+
+    return flashResponse(Response.redirect("/login", 302), {
+      level: "success",
+      message: "Password updated. Sign in with your new password.",
+    });
+  });
+
+  readonly verifyEmail = withErrorHandling(async (request: Request) => {
+    assertValidSignature(request);
+    const userId = Number.parseInt(new URL(request.url).searchParams.get("id") ?? "", 10);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedError("Invalid verification link.");
+    }
+
+    await this.authService.markEmailVerified(userId);
+
+    return flashResponse(Response.redirect("/login", 302), {
+      level: "success",
+      message: "Email address verified. You can sign in now.",
+    });
+  });
+
+  readonly resendVerification = withErrorHandling(async (request: Request) => {
+    const body = await parseWebForgotPasswordBody(request);
+    const user = await this.users.findByEmail(body.email);
+
+    if (user && !user.email_verified_at) {
+      await this.passwordResets.sendEmailVerification(user);
+    }
+
+    return flashResponse(Response.redirect("/login", 302), {
+      level: "success",
+      message: "If that account needs verification, a new link is on its way.",
     });
   });
 }

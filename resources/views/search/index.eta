@@ -1,0 +1,24 @@
+<section class="page-header">
+  <h1>Search</h1>
+  <p class="hint">Full-text search across tasks and comments.</p>
+</section>
+
+<form
+  method="get"
+  action="/search"
+  class="stack-form search-form"
+  hx-get="/search"
+  hx-target="#search-results"
+  hx-swap="innerHTML"
+  hx-push-url="true"
+>
+  <label>
+    Query
+    <input type="search" name="q" value="<%= it.query ?? '' %>" placeholder="Find a task or comment" />
+  </label>
+  <button type="submit">Search</button>
+</form>
+
+<div id="search-results">
+  <%~ include('./_results', it) %>
+</div>

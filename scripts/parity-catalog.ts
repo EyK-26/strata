@@ -277,6 +277,20 @@ export const PARITY_CATALOG: ParityEntry[] = [
     tier: "core",
   },
   {
+    id: "signed-urls",
+    laravelSection: "URLs",
+    laravelDocPath: "urls#signed-urls",
+    strataApis: [
+      "temporarySignedUrl",
+      "signedUrl",
+      "hasValidSignature",
+      "assertValidSignature",
+      "absoluteTemporarySignedUrl",
+    ],
+    testGlobs: ["unit/signedUrl.test.ts"],
+    tier: "core",
+  },
+  {
     id: "events",
     laravelSection: "Events",
     laravelDocPath: "events",

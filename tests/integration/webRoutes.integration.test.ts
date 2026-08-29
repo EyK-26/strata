@@ -103,12 +103,15 @@ beforeAll(async () => {
   process.env.FRONTEND_MODE = "server-htmx";
   process.env.LOGIN_RATE_LIMIT_PER_WINDOW = "100";
 
-  const [{ freshDatabase }, { createAppDependencies }, { createRoutes }] = await Promise.all([
-    import("../../src/db/migrations/runner"),
-    import("../../src/bootstrap/dependencies"),
-    import("../../src/bootstrap/createRoutes"),
-  ]);
+  const [{ freshDatabase }, { createAppDependencies }, { createRoutes }, { ensureModulesLoaded }] =
+    await Promise.all([
+      import("../../src/db/migrations/runner"),
+      import("../../src/bootstrap/dependencies"),
+      import("../../src/bootstrap/createRoutes"),
+      import("@getstrata/bootstrap/discoverModules"),
+    ]);
 
+  await ensureModulesLoaded();
   await freshDatabase({ seed: true });
 
   server = Bun.serve({
@@ -424,5 +427,134 @@ describe("web routes with server-htmx frontend", () => {
     });
 
     expect(response.status).toBe(403);
+  });
+
+  test("POST without CSRF is rejected", async () => {
+    const response = await fetch(`${baseUrl}/organizations`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: adminSessionCookie,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        name: "No CSRF",
+        slug: "no-csrf",
+      }),
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+  });
+
+  test("GET /search returns HTMX results for signed-in users", async () => {
+    const response = await fetch(`${baseUrl}/search?q=platform`, {
+      headers: {
+        cookie: adminSessionCookie,
+        "HX-Request": "true",
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).not.toContain("<!doctype html>");
+    expect(
+      html.includes("search-results") || html.includes("No matches") || html.includes("task"),
+    ).toBe(true);
+  });
+
+  test("GET /notifications renders the inbox partial", async () => {
+    const response = await fetch(`${baseUrl}/notifications`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("notifications-inbox");
+    expect(html).toContain("Welcome to WorkHub");
+  });
+
+  test("POST /notifications/read-all marks the inbox read", async () => {
+    const csrf = await fetchCsrfFromPath("/organizations", adminSessionCookie);
+    const response = await fetch(`${baseUrl}/notifications/read-all`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        "HX-Request": "true",
+      },
+      body: new URLSearchParams({ _token: csrf.token }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("notifications-inbox");
+  });
+
+  test("GET /billing and /webhooks are available to an admin session", async () => {
+    const billing = await fetch(`${baseUrl}/billing`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    const webhooks = await fetch(`${baseUrl}/webhooks`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(billing.status).toBe(200);
+    expect(await billing.text()).toContain("Billing");
+    expect(webhooks.status).toBe(200);
+    expect(await webhooks.text()).toContain("Outbound webhooks");
+  });
+
+  test("GET /forgot-password renders the reset form", async () => {
+    const response = await fetch(`${baseUrl}/forgot-password`);
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Forgot password");
+  });
+
+  test("POST /forgot-password does not leak whether the email exists", async () => {
+    const csrf = await fetchCsrfFromPath("/forgot-password");
+    const response = await fetch(`${baseUrl}/forgot-password`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        email: "missing@workhub.test",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("If an account exists");
+  });
+
+  test("GET /organizations/:id includes member management", async () => {
+    const response = await fetch(`${baseUrl}/organizations/1`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("org-members");
+    expect(html).toContain("admin@workhub.test");
+  });
+
+  test("POST /logout clears the session cookie", async () => {
+    const csrf = await fetchCsrfFromPath("/organizations", adminSessionCookie);
+    const response = await fetch(`${baseUrl}/logout`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: csrf.token }),
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/login");
+    expect(response.headers.get("set-cookie")).toContain("workhub_session=");
   });
 });

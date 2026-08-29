@@ -1,9 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
-import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
-import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
+import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { attachmentServiceToken } from "../../src/modules/attachment/provider";
 import type { AttachmentRecord } from "../../src/modules/attachment/types";
 import AttachmentWebController, {
@@ -33,25 +35,48 @@ function createUploadRequest(url: string): Request {
   return new Request(url, { method: "POST", body: formData });
 }
 
+class AllowAttachmentPolicy extends Policy {
+  override view(): boolean {
+    return true;
+  }
+
+  override create(): boolean {
+    return true;
+  }
+
+  override delete(): boolean {
+    return true;
+  }
+}
+
 function createController(service: Record<string, unknown>): AttachmentWebController {
   const container = new ServiceContainer();
   container.set(attachmentServiceToken, service);
+  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   container.set(CORE_VIEW_TOKEN, {
     render: mock(async (_template: string, context: Record<string, unknown>) =>
       JSON.stringify(context),
     ),
   });
+  const gate = new PolicyGate();
+  gate.register("attachment", new AllowAttachmentPolicy());
+  container.set(CORE_POLICY_GATE_TOKEN, gate);
 
   const cacheFlush = mock(async () => 0);
-
-  return new AttachmentWebController(
-    createMockDependencies(
-      container,
-      createMockCache({
-        tags: () => ({ remember: async (_key, callback) => callback(), flush: cacheFlush }),
-      }),
-    ),
+  const dependencies = createMockDependencies(
+    container,
+    createMockCache({
+      tags: () => ({ remember: async (_key, callback) => callback(), flush: cacheFlush }),
+    }),
   );
+
+  setActiveApplicationContext({
+    container,
+    config: new ConfigStore(),
+    dependencies,
+  });
+
+  return new AttachmentWebController(dependencies);
 }
 
 describe("AttachmentWebController", () => {
@@ -90,7 +115,8 @@ describe("AttachmentWebController", () => {
       attachment,
       contents: new Uint8Array([104, 101, 108, 108, 111]),
     }));
-    const controller = createController({ readContents });
+    const findByIdOrThrow = mock(async () => attachment);
+    const controller = createController({ readContents, findByIdOrThrow });
 
     const response = await controller.download({
       params: { id: "1" },

@@ -43,5 +43,88 @@ async function parseWebCreateOrganizationBody(
   return await webCreateOrganizationRequest.validate(request);
 }
 
-export type { WebCreateOrganizationBody };
-export { parseWebCreateOrganizationBody, parseWebCreateOrganizationPayload };
+interface WebUpdateOrganizationBody {
+  name?: string;
+  slug?: string;
+}
+
+interface WebAddOrganizationMemberBody {
+  email: string;
+  role: "owner" | "admin" | "member";
+}
+
+const webUpdateOrganizationRules = {
+  name: [stringRule(), minLength(1), maxLength(120)],
+  slug: [stringRule(), minLength(2), maxLength(64), pattern(SLUG_PATTERN)],
+};
+
+const webAddMemberRules = {
+  email: [required(), stringRule()],
+  role: [stringRule()],
+};
+
+function parseWebUpdateOrganizationPayload(payload: unknown): WebUpdateOrganizationBody {
+  const validated = validateObject(payload, webUpdateOrganizationRules);
+  const body: WebUpdateOrganizationBody = {};
+
+  if (validated.name) {
+    body.name = String(validated.name).trim();
+  }
+
+  if (validated.slug) {
+    body.slug = String(validated.slug).trim();
+  }
+
+  return body;
+}
+
+function parseWebAddOrganizationMemberPayload(payload: unknown): WebAddOrganizationMemberBody {
+  const validated = validateObject(payload, webAddMemberRules);
+  const role = String(validated.role ?? "member");
+
+  if (role !== "owner" && role !== "admin" && role !== "member") {
+    throw new Error("Invalid organization role.");
+  }
+
+  return {
+    email: String(validated.email).trim(),
+    role,
+  };
+}
+
+class WebUpdateOrganizationRequest extends WebFormRequest<WebUpdateOrganizationBody> {
+  protected parse(payload: unknown): WebUpdateOrganizationBody {
+    return parseWebUpdateOrganizationPayload(payload);
+  }
+}
+
+class WebAddOrganizationMemberRequest extends WebFormRequest<WebAddOrganizationMemberBody> {
+  protected parse(payload: unknown): WebAddOrganizationMemberBody {
+    return parseWebAddOrganizationMemberPayload(payload);
+  }
+}
+
+const webUpdateOrganizationRequest = new WebUpdateOrganizationRequest();
+const webAddOrganizationMemberRequest = new WebAddOrganizationMemberRequest();
+
+async function parseWebUpdateOrganizationBody(
+  request: Request,
+): Promise<WebUpdateOrganizationBody> {
+  return await webUpdateOrganizationRequest.validate(request);
+}
+
+async function parseWebAddOrganizationMemberBody(
+  request: Request,
+): Promise<WebAddOrganizationMemberBody> {
+  return await webAddOrganizationMemberRequest.validate(request);
+}
+
+export type { WebAddOrganizationMemberBody, WebCreateOrganizationBody, WebUpdateOrganizationBody };
+export {
+  parseWebAddOrganizationMemberBody,
+  parseWebAddOrganizationMemberPayload,
+  parseWebCreateOrganizationBody,
+  parseWebCreateOrganizationPayload,
+  parseWebUpdateOrganizationBody,
+  parseWebUpdateOrganizationPayload,
+};

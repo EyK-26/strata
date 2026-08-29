@@ -2,6 +2,7 @@ import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { isFeatureEnabled } from "../../config/features";
 import searchProvider, { searchServiceToken } from "./provider";
 import { createSearchRoutes } from "./routes";
+import { createSearchWebRoutes } from "./webController";
 
 const searchModule: AppModule = {
   name: "search",
@@ -13,6 +14,13 @@ const searchModule: AppModule = {
     }
 
     return createSearchRoutes(dependencies, kernel);
+  },
+  webRoutes({ dependencies, kernel }) {
+    if (!isFeatureEnabled("fullTextSearch")) {
+      return {};
+    }
+
+    return createSearchWebRoutes(dependencies, kernel);
   },
 };
 

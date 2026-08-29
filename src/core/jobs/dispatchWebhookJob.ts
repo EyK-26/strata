@@ -1,6 +1,5 @@
 import { createHmac } from "node:crypto";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
-import { appConfig } from "../../config/app";
 import { Job } from "../queue";
 import { safeFetch } from "../security/safeFetch";
 import { assertSafeOutboundUrl } from "../security/safeUrl";
@@ -50,7 +49,10 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
     const body = JSON.stringify({ event: payload.event, payload: payload.payload });
     const signature = createHmac("sha256", webhook.secret).update(body).digest("hex");
 
-    assertSafeOutboundUrl(webhook.url, { allowHttp: appConfig.env !== "production" });
+    const allowHttp = (process.env.APP_ENV ?? "local") !== "production";
+    const signatureHeader = process.env.WEBHOOK_SIGNATURE_HEADER?.trim() || "x-workhub-signature";
+
+    assertSafeOutboundUrl(webhook.url, { allowHttp });
 
     let responseStatus: number | null = null;
     let errorMessage: string | null = null;
@@ -62,11 +64,11 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-workhub-signature": signature,
+            [signatureHeader]: signature,
           },
           body,
         },
-        { allowHttp: appConfig.env !== "production" },
+        { allowHttp },
       );
       responseStatus = response.status;
 

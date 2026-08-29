@@ -34,13 +34,13 @@ We run CI and Docker on **Bun 1.4.0**. Notable changes from 1.3:
 - `Temporal` is enabled by default; set `BUN_JSC_useTemporal=0` only if you hit legacy date assumptions.
 - `Bun.TOML` is stricter (duplicate keys, invalid UTF-8, oversized integers fail).
 
-getstrata dogfoods **`Bun.markdown.html()`** instead of the `marked` npm package (HTML is still sanitized with `sanitize-html`).
+Strata mail uses **`Bun.markdown.html()`** plus an allowlist sanitizer (`sanitizeMailHtml`). Do not add `marked` or `sanitize-html` unless a consumer needs them.
 
 Built-in adoption in Strata / WorkHub:
 
 | Bun 1.4 API | Usage |
 |-------------|--------|
-| `Bun.markdown` | getstrata docs rendering |
+| `Bun.markdown` | `@getstrata/core/mail/markdownMail` (`markdownToHtml`) |
 | `Bun.Image` | `GET /attachments/:id/thumbnail?w=` via `@getstrata/core/media/imageTransform` |
 | `Bun.cron()` | `schedule:install` / `schedule:uninstall` CLI; optional `SCHEDULER_DRIVER=in-process-cron` |
 | `Bun.Terminal` | `shell` CLI via `@getstrata/core/terminal/runShell` |
@@ -209,8 +209,13 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/admin/queue` | Queue monitor with HTMX polling; retry or delete failed jobs |
 | `/admin/audit` | Paginated audit log |
 | `/admin/resources` | Read-only resource browser (users, organizations, projects, tasks) |
+| `/search` | HTMX full-text search over tasks and comments |
+| `/notifications` | Session inbox (nav bell polls every 30s) |
+| `/billing` | Current tenant subscription |
+| `/webhooks` | Outbound webhook admin (global admin) |
+| `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |
 
-Sign in as `admin@workhub.test` / `password` to access these routes. Core exports: `AdminResourceRegistry`, `formatAdminValue`, `FailedJobService.delete()`, `runQueueJob`.
+Sign in as `admin@workhub.test` / `password` to access these routes. Core exports: `AdminResourceRegistry`, `formatAdminValue`, `FailedJobService.delete()`, `runQueueJob`, `temporarySignedUrl`.
 
 ### Cache, events, and queues
 
@@ -545,7 +550,7 @@ docker compose down -v --remove-orphans
 - `GET/PATCH /users/me/notifications`, `PATCH /users/me/notifications/:id/read`
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
-- Web admin (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources` when `FRONTEND_MODE=server-htmx`
+- Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
 - Auth: `GET /auth/me`, `POST /auth/login`, OAuth routes, token CRUD, `GET /auth/export`, `DELETE /auth/me`
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
@@ -7,9 +8,10 @@ import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebA
 describe("createRequireWebAuthMiddleware", () => {
   test("allows authenticated requests through", async () => {
     const auth = new AuthManager(new GuestGuard());
-    const handler = composeMiddleware(createRequireWebAuthMiddleware(auth))(async () =>
-      Response.json({ ok: true }),
-    );
+    const handler = composeMiddleware(createRequireWebAuthMiddleware(auth))(async () => {
+      expect(currentAuthUser()?.id).toBe("1");
+      return Response.json({ ok: true });
+    });
 
     const response = await handler(
       new Request("http://example.test/projects/1", {

@@ -27,5 +27,22 @@
     <input type="password" name="password" required />
   </label>
 
+  <label>
+    MFA code
+    <input type="text" name="mfa_code" inputmode="numeric" autocomplete="one-time-code" />
+  </label>
+
   <button type="submit">Sign in</button>
+</form>
+
+<p class="hint"><a href="/forgot-password">Forgot your password?</a></p>
+
+<form method="post" action="/email/verification-notification" class="stack-form">
+  <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+  <p class="hint">Need a new verification link?</p>
+  <label>
+    Email
+    <input type="email" name="email" value="<%= it.old?.email ?? '' %>" />
+  </label>
+  <button type="submit">Resend verification</button>
 </form>

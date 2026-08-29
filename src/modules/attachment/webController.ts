@@ -1,5 +1,6 @@
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
@@ -7,6 +8,11 @@ import type { RouteHandler } from "@getstrata/core/http/middleware";
 import { parseMultipartUpload } from "@getstrata/core/http/parseMultipartUpload";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import type { RouteRequest } from "@getstrata/core/http/route";
+import { hasValidSignature, temporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import {
+  resolveApplicationAuth,
+  resolveApplicationPolicyGate,
+} from "@getstrata/core/runtime/applicationRegistry";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse, isHtmxRequest } from "@getstrata/core/view";
 import { attachmentServiceToken } from "./provider";
@@ -31,7 +37,10 @@ class AttachmentWebController {
       "attachments/_list",
       {
         taskId,
-        attachments,
+        attachments: attachments.map((attachment) => ({
+          ...attachment,
+          downloadUrl: temporarySignedUrl(`/attachments/${attachment.id}/download`, 60 * 60),
+        })),
         errors: {},
         ...extras,
       },
@@ -46,6 +55,7 @@ class AttachmentWebController {
   });
 
   readonly storeForTask = withErrorHandling(async (req: RouteRequest<{ id: string }>) => {
+    resolveApplicationPolicyGate().authorize("attachment", "create", currentAuthUser());
     const { taskId } = parseTaskAttachmentParams(req.params);
     const upload = await parseMultipartUpload(req);
 
@@ -57,7 +67,18 @@ class AttachmentWebController {
 
   readonly download = withErrorHandling(async (req: RouteRequest<{ id: string }>) => {
     const { attachmentId } = parseAttachmentIdParams(req.params);
-    const { attachment, contents } = await this.service.readContents(attachmentId);
+    const attachment = await this.service.findByIdOrThrow(attachmentId);
+
+    const signed = typeof req.url === "string" && hasValidSignature(req);
+
+    if (!signed) {
+      const user =
+        (typeof req.url === "string" ? await resolveApplicationAuth().resolve(req) : null) ??
+        currentAuthUser();
+      resolveApplicationPolicyGate().authorize("attachment", "view", user, attachment);
+    }
+
+    const { contents } = await this.service.readContents(attachmentId);
 
     return new Response(contents, {
       headers: {
@@ -70,6 +91,7 @@ class AttachmentWebController {
   readonly destroy = withErrorHandling(async (req: RouteRequest<{ id: string }>) => {
     const { attachmentId } = parseAttachmentIdParams(req.params);
     const attachment = await this.service.findByIdOrThrow(attachmentId);
+    resolveApplicationPolicyGate().authorize("attachment", "delete", currentAuthUser(), attachment);
     const taskId = attachment.task_id;
 
     await this.service.delete(attachmentId);
@@ -91,9 +113,7 @@ function createAttachmentWebRoutes(dependencies: AppDependencies, kernel: HttpKe
       GET: kernel.wrapWebPublicRead(controller.listForTask as unknown as RouteHandler),
       POST: kernel.wrapWebAuthenticated(controller.storeForTask as unknown as RouteHandler),
     },
-    "/attachments/:id/download": kernel.wrapWebPublicRead(
-      controller.download as unknown as RouteHandler,
-    ),
+    "/attachments/:id/download": kernel.wrapWeb(controller.download as unknown as RouteHandler),
     "/attachments/:id": {
       DELETE: kernel.wrapWebAuthenticated(controller.destroy as unknown as RouteHandler),
     },

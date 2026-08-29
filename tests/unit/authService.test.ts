@@ -29,6 +29,23 @@ describe("password auth", () => {
       expect(created.plainTextToken.length).toBeGreaterThan(20);
     });
   });
+
+  test("session authentication does not create an API token", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const tokens = new TokenService(new UserRepository(), new ApiTokenRepository());
+      const authService = new AuthService(
+        new UserRepository(),
+        tokens,
+        new OAuthIdentityRepository(),
+      );
+      const before = await tokens.listTokensForUser(1);
+      const user = await authService.authenticatePassword("admin@workhub.test", "password");
+      const after = await tokens.listTokensForUser(1);
+
+      expect(user.id).toBe(1);
+      expect(after).toHaveLength(before.length);
+    });
+  });
 });
 
 describe("oauth auth", () => {

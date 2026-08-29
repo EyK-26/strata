@@ -15,6 +15,17 @@ describe("markdown mail", () => {
     expect(html).toContain('<a href="https://getstrata.com">GetStrata</a>');
   });
 
+  test("markdownToHtml strips scripts and javascript links", () => {
+    const html = markdownToHtml(
+      "Hello <script>alert(1)</script>\n\n[xss](javascript:alert(1))\n\n<img src=x onerror=alert(1)>",
+    );
+
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("onerror");
+  });
+
   test("renderMarkdownMail returns html and plain text", () => {
     const rendered = renderMarkdownMail("## Welcome\n\nThanks for joining.", {
       title: "Welcome",

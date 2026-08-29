@@ -4,6 +4,7 @@ import userProvider, { tokenServiceToken, userRepositoryToken } from "./provider
 import { createAuthRoutes } from "./routes";
 import { userTable } from "./table";
 import { createWebAuthRoutes } from "./webAuthRoutes";
+import { createWebNotificationRoutes } from "./webNotificationController";
 
 const userModule: AppModule = {
   name: "user",
@@ -14,7 +15,10 @@ const userModule: AppModule = {
     return createAuthRoutes(dependencies, kernel);
   },
   webRoutes({ dependencies, kernel }) {
-    return createWebAuthRoutes(dependencies, kernel);
+    return {
+      ...createWebAuthRoutes(dependencies, kernel),
+      ...createWebNotificationRoutes(dependencies, kernel),
+    };
   },
 };
 

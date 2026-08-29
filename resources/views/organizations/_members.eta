@@ -1,0 +1,61 @@
+<section id="org-members">
+  <h2>Members</h2>
+  <% if (!it.members?.length) { %>
+  <p class="hint">No members yet.</p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const member of it.members) { %>
+      <tr>
+        <td><%= member.name %></td>
+        <td><%= member.email %></td>
+        <td><%= member.role %></td>
+        <td>
+          <button
+            type="button"
+            class="link-button"
+            hx-delete="/organizations/<%= it.organization.id %>/members/<%= member.user_id %>"
+            hx-target="#org-members"
+            hx-swap="outerHTML"
+          >
+            Remove
+          </button>
+        </td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table>
+  <% } %>
+
+  <form
+    method="post"
+    action="/organizations/<%= it.organization.id %>/members"
+    class="stack-form"
+    hx-post="/organizations/<%= it.organization.id %>/members"
+    hx-target="#org-members"
+    hx-swap="outerHTML"
+  >
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Member email
+      <input type="email" name="email" value="<%= it.old?.email ?? '' %>" required />
+    </label>
+    <label>
+      Role
+      <select name="role">
+        <option value="member">Member</option>
+        <option value="admin">Admin</option>
+        <option value="owner">Owner</option>
+      </select>
+    </label>
+    <button type="submit">Add member</button>
+  </form>
+</section>

@@ -1,3 +1,4 @@
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import type { AuthManager } from "@getstrata/core/auth/guard";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { requestPrefersJson } from "./contentNegotiation";
@@ -9,7 +10,7 @@ function createRequireWebAuthMiddleware(auth: AuthManager): Middleware {
     const user = await auth.resolve(request);
 
     if (user) {
-      return await next();
+      return await runWithAuthUser(user, () => next());
     }
 
     if (requestPrefersJson(request)) {

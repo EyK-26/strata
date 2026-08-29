@@ -13,6 +13,7 @@ import AuthService from "./authService";
 import NotificationRepository from "./notificationRepository";
 import NotificationService from "./notificationService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
+import PasswordResetService from "./passwordResetService";
 import UserRepository from "./repository";
 import TokenService from "./tokenService";
 
@@ -23,6 +24,7 @@ const authServiceToken = "user.authService";
 const oauthIdentityRepositoryToken = "user.oauthIdentityRepository";
 const notificationRepositoryToken = "user.notificationRepository";
 const notificationServiceToken = "user.notificationService";
+const passwordResetServiceToken = "user.passwordResetService";
 
 const userProvider: ServiceProvider = {
   name: "user.provider",
@@ -48,6 +50,10 @@ const userProvider: ServiceProvider = {
     container.singleton(
       notificationServiceToken,
       () => new NotificationService(container.resolve(notificationRepositoryToken)),
+    );
+    container.singleton(
+      passwordResetServiceToken,
+      () => new PasswordResetService(container.resolve<UserRepository>(userRepositoryToken)),
     );
 
     container.singleton(authServiceToken, () => {
@@ -119,6 +125,7 @@ export {
   notificationRepositoryToken,
   notificationServiceToken,
   oauthIdentityRepositoryToken,
+  passwordResetServiceToken,
   tokenServiceToken,
   userRepositoryToken,
 };

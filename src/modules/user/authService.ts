@@ -34,11 +34,11 @@ class AuthService {
     return this.oauthProviders.get(name);
   }
 
-  async loginWithPassword(
+  async authenticatePassword(
     email: string,
     password: string,
     options: LoginOptions = {},
-  ): Promise<CreatedApiToken> {
+  ): Promise<UserRecord> {
     const user = await this.users.findByEmail(email);
 
     if (!user?.password_hash) {
@@ -69,10 +69,27 @@ class AuthService {
 
     logSecurityEvent("auth_login_success", { user_id: user.id, method: "password" });
 
+    return user;
+  }
+
+  async loginWithPassword(
+    email: string,
+    password: string,
+    options: LoginOptions = {},
+  ): Promise<CreatedApiToken> {
+    const user = await this.authenticatePassword(email, password, options);
+
     return await this.tokens.createToken(user.id, {
       name: "password-login",
       abilities: resolveAbilitiesForRole(user.role),
       expiresInDays: resolveDefaultTokenExpiryDays() ?? undefined,
+    });
+  }
+
+  async markEmailVerified(userId: number): Promise<UserRecord> {
+    return await this.users.updateByIdOrThrow(userId, {
+      email_verified_at: new Date(),
+      updated_at: new Date(),
     });
   }
 

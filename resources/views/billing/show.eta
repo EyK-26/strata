@@ -1,0 +1,29 @@
+<section class="page-header">
+  <h1>Billing</h1>
+  <p class="hint">Current tenant subscription from the billing module.</p>
+</section>
+
+<% if (!it.subscription) { %>
+<p class="hint">No subscription row yet. This tenant is on the default free plan.</p>
+<% } else { %>
+<dl class="detail-list">
+  <div>
+    <dt>Plan</dt>
+    <dd><%= it.subscription.plan %></dd>
+  </div>
+  <div>
+    <dt>Status</dt>
+    <dd><%= it.subscription.status %></dd>
+  </div>
+  <div>
+    <dt>Stripe subscription</dt>
+    <dd><%= it.subscription.stripe_subscription_id ?? "—" %></dd>
+  </div>
+  <div>
+    <dt>Period end</dt>
+    <dd><%= it.subscription.current_period_end ?? "—" %></dd>
+  </div>
+</dl>
+<% } %>
+
+<p class="hint">Stripe inbound webhooks stay on <code>POST /api/v1/billing/webhooks/stripe</code>.</p>

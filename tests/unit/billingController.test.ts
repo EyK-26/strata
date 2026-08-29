@@ -96,6 +96,7 @@ describe("BillingController", () => {
     const secret = "whsec_billing_duplicate";
     process.env.STRIPE_WEBHOOK_SECRET = secret;
 
+    await db`DELETE FROM stripe_webhook_event WHERE id = 'evt_duplicate'`;
     await db`
       INSERT INTO stripe_webhook_event (id, event_type, tenant_id)
       VALUES ('evt_duplicate', 'invoice.paid', NULL)
@@ -119,6 +120,7 @@ describe("BillingController", () => {
     const secret = "whsec_billing_subscription";
     process.env.STRIPE_WEBHOOK_SECRET = secret;
 
+    await db`DELETE FROM stripe_webhook_event WHERE id = 'evt_subscription_updated'`;
     const rawBody = JSON.stringify({
       id: "evt_subscription_updated",
       type: "customer.subscription.updated",
@@ -168,6 +170,7 @@ describe("BillingController", () => {
     const secret = "whsec_billing_canceled";
     process.env.STRIPE_WEBHOOK_SECRET = secret;
 
+    await db`DELETE FROM stripe_webhook_event WHERE id = 'evt_subscription_canceled'`;
     const rawBody = JSON.stringify({
       id: "evt_subscription_canceled",
       type: "customer.subscription.updated",

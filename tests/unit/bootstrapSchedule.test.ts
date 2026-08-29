@@ -84,6 +84,7 @@ describe("bootstrap schedule", () => {
 
       process.env.FEATURE_SIEM_EXPORT = "true";
       process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-schedule";
+      await clearPendingAuditLogs();
       await insertPendingAuditLogs(3);
 
       globalThis.fetch = mock(() =>
