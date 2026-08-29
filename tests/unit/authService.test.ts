@@ -46,6 +46,22 @@ describe("password auth", () => {
       expect(after).toHaveLength(before.length);
     });
   });
+
+  test("markEmailVerified stamps email_verified_at", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const authService = new AuthService(
+        users,
+        new TokenService(users, new ApiTokenRepository()),
+        new OAuthIdentityRepository(),
+      );
+
+      await users.updateByIdOrThrow(1, { email_verified_at: null });
+      const verified = await authService.markEmailVerified(1);
+
+      expect(verified.email_verified_at).toBeInstanceOf(Date);
+    });
+  });
 });
 
 describe("oauth auth", () => {

@@ -27,6 +27,15 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function decodeBasicEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 function isSafeHref(value: string): boolean {
   return /^(https?:|mailto:)/i.test(value.trim());
 }
@@ -37,7 +46,7 @@ function sanitizeAttributes(tagName: string, rawAttributes: string): string {
   }
 
   const hrefMatch = rawAttributes.match(/\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
-  const href = hrefMatch?.[2] ?? hrefMatch?.[3] ?? hrefMatch?.[4];
+  const href = decodeBasicEntities(hrefMatch?.[2] ?? hrefMatch?.[3] ?? hrefMatch?.[4] ?? "");
 
   if (!href || !isSafeHref(href)) {
     return "";

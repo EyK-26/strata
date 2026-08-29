@@ -15,6 +15,17 @@ describe("markdown mail", () => {
     expect(html).toContain('<a href="https://getstrata.com">GetStrata</a>');
   });
 
+  test("markdownToHtml keeps query strings in http links", () => {
+    const html = markdownToHtml(
+      "Reset [here](https://workhub.test/reset-password?email=a%40b.test&token=abc).",
+    );
+
+    expect(html).toContain(
+      'href="https://workhub.test/reset-password?email=a%40b.test&amp;token=abc"',
+    );
+    expect(html).not.toContain("&amp;amp;");
+  });
+
   test("markdownToHtml strips scripts and javascript links", () => {
     const html = markdownToHtml(
       "Hello <script>alert(1)</script>\n\n[xss](javascript:alert(1))\n\n<img src=x onerror=alert(1)>",
