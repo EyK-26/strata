@@ -324,7 +324,10 @@ describe("password auth", () => {
 
         await expect(
           authService.authenticatePassword("admin@workhub.test", "password"),
-        ).rejects.toThrow("Invalid MFA code.");
+        ).rejects.toThrow("Two-factor authentication required.");
+        await expect(authService.verifyMfaChallenge(1, "000000")).rejects.toThrow(
+          "Invalid MFA code.",
+        );
 
         const withCode = await authService.authenticatePassword("admin@workhub.test", "password", {
           mfaCode: generateTotp(setup.secret, Math.floor(Date.now() / 30_000)),
@@ -351,8 +354,26 @@ describe("password auth", () => {
         expect(rotated).toHaveLength(8);
         expect(rotated).not.toEqual(enabled.recoveryCodes);
 
+        process.env.FEATURE_MFA = "false";
+        await expect(
+          authService.verifyMfaChallenge(
+            1,
+            generateTotp(setup.secret, Math.floor(Date.now() / 30_000)),
+          ),
+        ).rejects.toThrow("Two-factor authentication is not required.");
+        process.env.FEATURE_MFA = "true";
+
+        const challenged = await authService.verifyMfaChallenge(
+          1,
+          generateTotp(setup.secret, Math.floor(Date.now() / 30_000)),
+        );
+        expect(challenged.id).toBe(1);
+
         const disabled = await authService.disableMfa(1, "password");
         expect(disabled.mfa_enabled).toBe(false);
+        await expect(authService.verifyMfaChallenge(1, "123456")).rejects.toThrow(
+          "Two-factor authentication is not required.",
+        );
         await expect(authService.regenerateRecoveryCodes(1, "password")).rejects.toThrow(
           "MFA is not enabled.",
         );

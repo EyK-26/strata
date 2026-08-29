@@ -29,6 +29,14 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
         controller.loginThrottled as unknown as RouteHandler,
       ),
     },
+    "/two-factor-challenge": {
+      GET: kernel.wrapWebGuest(controller.showTwoFactorChallenge as unknown as RouteHandler),
+      POST: wrapWebLogin(
+        kernel,
+        controller.twoFactorChallenge as unknown as RouteHandler,
+        controller.loginThrottled as unknown as RouteHandler,
+      ),
+    },
     "/oauth/:provider": {
       GET: kernel.wrapWeb(controller.oauthRedirect as unknown as RouteHandler),
     },

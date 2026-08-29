@@ -4,6 +4,8 @@ import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
+import { createMfaChallengeCookie } from "../../src/modules/user/mfaChallengeCookie";
+import { MfaRequiredError } from "../../src/modules/user/mfaRequiredError";
 import {
   authServiceToken,
   passwordResetServiceToken,
@@ -147,6 +149,117 @@ describe("WebAuthController", () => {
     );
 
     expect(response.headers.get("Location")).toBe("/organizations");
+  });
+
+  test("login redirects to the two-factor challenge when MFA is required", async () => {
+    const controller = createController({
+      authService: {
+        authenticatePassword: mock(async () => {
+          throw new MfaRequiredError(9);
+        }),
+      },
+    });
+
+    const response = await controller.login(
+      new Request("http://example.test/login", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "email=admin%40workhub.test&password=password123&remember=1&redirect=%2Freports",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/two-factor-challenge?redirect=%2Freports");
+    expect(response.headers.get("Set-Cookie")).toContain("workhub_mfa_pending=");
+  });
+
+  test("showTwoFactorChallenge redirects to login without a pending cookie", async () => {
+    const controller = createController({});
+    const response = await controller.showTwoFactorChallenge(
+      new Request("http://example.test/two-factor-challenge"),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/login");
+  });
+
+  test("showTwoFactorChallenge renders the form when a pending cookie is present", async () => {
+    const controller = createController({});
+    const cookie = createMfaChallengeCookie(9).split(";")[0] ?? "";
+    const response = await controller.showTwoFactorChallenge(
+      new Request("http://example.test/two-factor-challenge?redirect=%2Freports", {
+        headers: { cookie },
+      }),
+    );
+    const body = JSON.parse(await response.text()) as { title: string; redirect: string };
+
+    expect(response.status).toBe(200);
+    expect(body.title).toBe("Two-factor challenge");
+    expect(body.redirect).toBe("/reports");
+  });
+
+  test("twoFactorChallenge completes the session and clears the pending cookie", async () => {
+    const verifyMfaChallenge = mock(async () => ({ id: 9 }));
+    const controller = createController({
+      authService: { verifyMfaChallenge },
+    });
+    const cookie = createMfaChallengeCookie(9, { remember: true }).split(";")[0] ?? "";
+    const response = await controller.twoFactorChallenge(
+      new Request("http://example.test/two-factor-challenge", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          cookie,
+        },
+        body: "mfa_code=123456&redirect=%2Freports",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/reports");
+    expect(verifyMfaChallenge).toHaveBeenCalledWith(9, "123456");
+    const cookies = response.headers.getSetCookie();
+    expect(cookies.some((item) => item.startsWith("workhub_session="))).toBe(true);
+    expect(cookies.some((item) => item.startsWith("workhub_mfa_pending="))).toBe(true);
+  });
+
+  test("twoFactorChallenge re-renders invalid codes", async () => {
+    const { UnauthorizedError } = await import("@getstrata/core/errors/http");
+    const controller = createController({
+      authService: {
+        verifyMfaChallenge: mock(async () => {
+          throw new UnauthorizedError("Invalid MFA code.");
+        }),
+      },
+    });
+    const cookie = createMfaChallengeCookie(9).split(";")[0] ?? "";
+    const response = await controller.twoFactorChallenge(
+      new Request("http://example.test/two-factor-challenge", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          cookie,
+        },
+        body: "mfa_code=000000",
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("Invalid MFA code.");
+  });
+
+  test("twoFactorChallenge redirects to login without a pending cookie", async () => {
+    const controller = createController({});
+    const response = await controller.twoFactorChallenge(
+      new Request("http://example.test/two-factor-challenge", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "mfa_code=123456",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/login");
   });
 
   test("login re-renders invalid credentials without creating a session", async () => {
@@ -407,6 +520,9 @@ describe("WebAuthController", () => {
       response.headers
         .getSetCookie()
         .some((cookie) => cookie.startsWith("workhub_password_confirmed=")),
+    ).toBe(true);
+    expect(
+      response.headers.getSetCookie().some((cookie) => cookie.startsWith("workhub_mfa_pending=")),
     ).toBe(true);
   });
 

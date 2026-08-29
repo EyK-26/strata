@@ -304,6 +304,121 @@ describe("web routes with server-htmx frontend", () => {
     expect(account.status).toBe(200);
   });
 
+  test("POST /login without an MFA code redirects to /two-factor-challenge", async () => {
+    const previousMfa = process.env.FEATURE_MFA;
+    const email = `mfa-challenge-${Date.now()}@workhub.test`;
+    const passwordHash = await hashPassword("password");
+    const inserted = (await getDatabase()`
+      INSERT INTO users (name, email, email_lookup, role, tenant_id, password_hash, email_verified_at)
+      VALUES (${"Mfa Challenge User"}, ${email}, ${email}, ${"member"}, 1, ${passwordHash}, NOW())
+      RETURNING id
+    `) as Array<{ id: number }>;
+    const userId = inserted[0]?.id;
+    expect(userId).toBeTruthy();
+
+    const sessionCookie = await loginAndGetCookie(email, "password");
+    const setupCsrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const setup = await fetch(`${baseUrl}/account/mfa`, {
+      method: "POST",
+      headers: {
+        cookie: setupCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: setupCsrf.token }),
+    });
+    const setupHtml = await setup.text();
+    const secret = setupHtml.match(/class="mfa-secret">([^<]+)/)?.[1]?.trim();
+    expect(secret).toBeTruthy();
+
+    const confirmCsrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const confirmed = await fetch(`${baseUrl}/account/mfa/confirm`, {
+      method: "POST",
+      headers: {
+        cookie: confirmCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        mfa_code: generateTotp(String(secret), Math.floor(Date.now() / 30_000)),
+        _token: confirmCsrf.token,
+      }),
+    });
+    expect(confirmed.status).toBe(200);
+
+    const logoutCsrf = await fetchCsrfFromPath("/account", sessionCookie);
+    await fetch(`${baseUrl}/logout`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: logoutCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: logoutCsrf.token }),
+    });
+
+    process.env.FEATURE_MFA = "true";
+    try {
+      const blocked = await fetch(`${baseUrl}/two-factor-challenge`, { redirect: "manual" });
+      expect(blocked.status).toBe(302);
+      expect(blocked.headers.get("location")).toBe("/login");
+
+      const loginCsrf = await fetchCsrfFromPath("/login");
+      const challenged = await fetch(`${baseUrl}/login`, {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          cookie: loginCsrf.cookies,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          email,
+          password: "password",
+          redirect: "/reports",
+          _token: loginCsrf.token,
+        }),
+      });
+      expect(challenged.status).toBe(302);
+      expect(challenged.headers.get("location")).toBe("/two-factor-challenge?redirect=%2Freports");
+      expect(
+        readSetCookies(challenged).some((cookie) => cookie.startsWith("workhub_mfa_pending=")),
+      ).toBe(true);
+
+      const pendingCookies = mergeCookieHeader(loginCsrf.cookies, challenged);
+      const challengePage = await fetch(`${baseUrl}/two-factor-challenge?redirect=%2Freports`, {
+        headers: { cookie: pendingCookies },
+      });
+      expect(challengePage.status).toBe(200);
+      expect(await challengePage.text()).toContain("Two-factor authentication");
+
+      const challengeCsrf = await fetchCsrfFromPath(
+        "/two-factor-challenge?redirect=%2Freports",
+        pendingCookies,
+      );
+      const completed = await fetch(`${baseUrl}/two-factor-challenge`, {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          cookie: challengeCsrf.cookies,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          mfa_code: generateTotp(String(secret), Math.floor(Date.now() / 30_000)),
+          redirect: "/reports",
+          _token: challengeCsrf.token,
+        }),
+      });
+      expect(completed.status).toBe(302);
+      expect(completed.headers.get("location")).toBe("/reports");
+      expect(completed.headers.get("set-cookie")).toContain("workhub_session=");
+
+      const reports = await fetch(`${baseUrl}/reports`, {
+        headers: { cookie: mergeCookieHeader(pendingCookies, completed) },
+      });
+      expect(reports.status).toBe(200);
+    } finally {
+      restoreEnvVar("FEATURE_MFA", previousMfa);
+    }
+  });
+
   test("GET /login and /register redirect signed-in users home", async () => {
     const login = await fetch(`${baseUrl}/login`, {
       redirect: "manual",

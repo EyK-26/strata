@@ -216,6 +216,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/reports`, `/reports/organizations/:id` | Tenant summary and per-organization reports |
 | `/account` | Session profile (name/email), API tokens, GDPR export/delete, email verification, TOTP MFA + recovery codes |
 | `/confirm-password` | Laravel `password.confirm` — recent password gate for export and account delete |
+| `/two-factor-challenge` | Fortify 2FA challenge after password login (`FEATURE_MFA=true`) |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |
 
 Sign in as `admin@workhub.test` / `password` to access these routes. Core exports: `AdminResourceRegistry`, `formatAdminValue`, `FailedJobService.delete()`, `runQueueJob`, `temporarySignedUrl`.
@@ -257,7 +258,7 @@ Password and OAuth login:
 - `POST /api/v1/auth/email/verification-notification`: `{ "email" }` always returns a generic success message (does not leak whether the account exists or still needs verification)
 - `GET /api/v1/auth/oauth/:provider`: redirect to provider (GitHub when configured; `mock` in non-production)
 - `GET /api/v1/auth/oauth/:provider/callback?code=...`: exchange OAuth code for a bearer token
-- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token) and ensure a personal workspace. Login lists registered providers. `POST /login` accepts `remember=1` for a 30-day HMAC session (`SESSION_REMEMBER_TTL_SECONDS`) and an MFA or recovery code when `FEATURE_MFA=true`.
+- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token) and ensure a personal workspace. Login lists registered providers. `POST /login` accepts `remember=1` for a 30-day HMAC session (`SESSION_REMEMBER_TTL_SECONDS`). When `FEATURE_MFA=true` and the account has MFA, omitting `mfa_code` sets `workhub_mfa_pending` and redirects to `/two-factor-challenge` (TOTP or recovery code). JSON login still sends `mfa_code` on `POST /auth/login`.
 
 ### Audit log, webhooks, and search
 
@@ -559,7 +560,7 @@ docker compose down -v --remove-orphans
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
 - Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
-- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`, `POST /api/v1/auth/email/verification-notification`, OAuth routes, token CRUD, `PATCH /api/v1/users/me` (`{ name, email }`), `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register`, `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `GET/POST /confirm-password`, `POST /account/profile`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
+- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`, `POST /api/v1/auth/email/verification-notification`, OAuth routes, token CRUD, `PATCH /api/v1/users/me` (`{ name, email }`), `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register`, `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `GET/POST /confirm-password`, `GET/POST /two-factor-challenge`, `POST /account/profile`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …
 

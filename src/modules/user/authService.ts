@@ -14,6 +14,7 @@ import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { isFeatureEnabled } from "../../config/features";
 import { resolveAbilitiesForRole } from "../../domain/abilities";
+import { MfaRequiredError } from "./mfaRequiredError";
 import type OAuthIdentityRepository from "./oauthIdentityRepository";
 import type UserRepository from "./repository";
 import type TokenService from "./tokenService";
@@ -84,24 +85,25 @@ class AuthService {
     }
 
     if (isFeatureEnabled("mfa") && user.mfa_enabled) {
-      const mfaSecret = revealMfaSecret(user.mfa_secret);
-      const totpValid = Boolean(
-        mfaSecret && options.mfaCode && verifyTotp(mfaSecret, options.mfaCode),
-      );
-      const recovered =
-        !totpValid && options.mfaCode
-          ? await this.consumeRecoveryCode(user, options.mfaCode)
-          : false;
-
-      if (!totpValid && !recovered) {
-        logSecurityEvent("auth_login_failed", { reason: "invalid_mfa", user_id: user.id });
-        throw new UnauthorizedError("Invalid MFA code.");
-      }
+      await this.assertMfaSatisfied(user, options.mfaCode);
     }
 
     logSecurityEvent("auth_login_success", { user_id: user.id, method: "password" });
 
     return user;
+  }
+
+  async verifyMfaChallenge(userId: number, code: string): Promise<UserRecord> {
+    const user = await this.users.findByIdOrThrow(userId);
+
+    if (!isFeatureEnabled("mfa") || !user.mfa_enabled) {
+      throw new UnauthorizedError("Two-factor authentication is not required.");
+    }
+
+    await this.assertMfaSatisfied(user, code);
+    logSecurityEvent("auth_login_success", { user_id: user.id, method: "mfa_challenge" });
+
+    return await this.users.findByIdOrThrow(userId);
   }
 
   async loginWithPassword(
@@ -345,6 +347,21 @@ class AuthService {
     return provider.getAuthorizationUrl(state, redirectUri);
   }
 
+  private async assertMfaSatisfied(user: UserRecord, mfaCode?: string): Promise<void> {
+    if (!mfaCode) {
+      throw new MfaRequiredError(user.id);
+    }
+
+    const mfaSecret = revealMfaSecret(user.mfa_secret);
+    const totpValid = Boolean(mfaSecret && verifyTotp(mfaSecret, mfaCode));
+    const recovered = !totpValid ? await this.consumeRecoveryCode(user, mfaCode) : false;
+
+    if (!totpValid && !recovered) {
+      logSecurityEvent("auth_login_failed", { reason: "invalid_mfa", user_id: user.id });
+      throw new UnauthorizedError("Invalid MFA code.");
+    }
+  }
+
   private parseRecoveryHashes(raw: string | null | undefined): string[] {
     if (!raw) {
       return [];
@@ -422,3 +439,4 @@ class AuthService {
 
 export default AuthService;
 export type { LoginOptions, MfaConfirmation };
+export { MfaRequiredError };

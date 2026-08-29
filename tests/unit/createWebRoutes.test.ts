@@ -74,6 +74,7 @@ describe("createWebRoutes", () => {
 
     expect(routes["/organizations"]).toBeDefined();
     expect(routes["/login"]).toBeDefined();
+    expect(routes["/two-factor-challenge"]).toBeDefined();
   });
 
   test("serves static assets from public/", async () => {

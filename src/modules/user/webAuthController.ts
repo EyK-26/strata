@@ -23,6 +23,12 @@ import { isFeatureEnabled } from "../../config/features";
 import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
 import type AuthService from "./authService";
+import {
+  clearMfaChallengeCookie,
+  createMfaChallengeCookie,
+  readMfaChallenge,
+} from "./mfaChallengeCookie";
+import { MfaRequiredError } from "./mfaRequiredError";
 import type PasswordResetService from "./passwordResetService";
 import { authServiceToken, passwordResetServiceToken, userRepositoryToken } from "./provider";
 import type UserRepository from "./repository";
@@ -32,6 +38,7 @@ import {
   parseWebLoginBody,
   parseWebRegisterBody,
   parseWebResetPasswordBody,
+  parseWebTwoFactorChallengeBody,
 } from "./webRequests";
 
 class WebAuthController {
@@ -219,6 +226,19 @@ class WebAuthController {
         },
       });
     } catch (error) {
+      if (error instanceof MfaRequiredError) {
+        const redirect = sanitizeInternalPath(body.redirect ?? "/organizations", "/organizations");
+        const headers = new Headers({
+          Location: `/two-factor-challenge?redirect=${encodeURIComponent(redirect)}`,
+        });
+        headers.append(
+          "Set-Cookie",
+          createMfaChallengeCookie(error.userId, { remember: Boolean(body.remember) }),
+        );
+
+        return new Response(null, { status: 302, headers });
+      }
+
       if (error instanceof UnauthorizedError) {
         return await this.renderLogin(
           {
@@ -309,8 +329,62 @@ class WebAuthController {
     const headers = new Headers({ Location: "/login" });
     headers.append("Set-Cookie", clearSessionCookie());
     headers.append("Set-Cookie", clearPasswordConfirmCookie());
+    headers.append("Set-Cookie", clearMfaChallengeCookie());
 
     return new Response(null, { status: 302, headers });
+  });
+
+  readonly showTwoFactorChallenge = withErrorHandling(async (request?: Request) => {
+    const current = request ? readMfaChallenge(request) : null;
+
+    if (!current) {
+      return Response.redirect("/login", 302);
+    }
+
+    const redirect = new URL(
+      request?.url ?? "http://localhost/two-factor-challenge",
+    ).searchParams.get("redirect");
+
+    return htmlResponse(
+      await this.view.render("auth/two-factor-challenge", {
+        title: "Two-factor challenge",
+        redirect: sanitizeInternalPath(redirect ?? "/organizations", "/organizations"),
+        errors: {},
+      }),
+    );
+  });
+
+  readonly twoFactorChallenge = withErrorHandling(async (request: Request) => {
+    const pending = readMfaChallenge(request);
+
+    if (!pending) {
+      return Response.redirect("/login", 302);
+    }
+
+    const body = await parseWebTwoFactorChallengeBody(request);
+    const redirect = sanitizeInternalPath(body.redirect ?? "/organizations", "/organizations");
+
+    try {
+      const user = await this.authService.verifyMfaChallenge(pending.userId, body.mfaCode);
+      const headers = new Headers({ Location: redirect });
+      headers.append("Set-Cookie", createSessionCookie(user.id, { remember: pending.remember }));
+      headers.append("Set-Cookie", clearMfaChallengeCookie());
+
+      return new Response(null, { status: 302, headers });
+    } catch (error) {
+      if (error instanceof UnauthorizedError || error instanceof ValidationError) {
+        return htmlResponse(
+          await this.view.render("auth/two-factor-challenge", {
+            title: "Two-factor challenge",
+            redirect,
+            errors: { mfa_code: [error.message] },
+          }),
+          { status: 422 },
+        );
+      }
+
+      throw error;
+    }
   });
 
   readonly showConfirmPassword = withErrorHandling(async (request?: Request) => {

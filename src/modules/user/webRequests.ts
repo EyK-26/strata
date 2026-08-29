@@ -60,6 +60,11 @@ interface WebConfirmPasswordBody {
   redirect?: string;
 }
 
+interface WebTwoFactorChallengeBody {
+  mfaCode: string;
+  redirect?: string;
+}
+
 interface WebUpdateProfileBody {
   name: string;
   email: string;
@@ -113,6 +118,11 @@ const webCreateApiTokenRules = {
 
 const webConfirmPasswordRules = {
   password: [required(), stringRule()],
+  redirect: [stringRule()],
+};
+
+const webTwoFactorChallengeRules = {
+  mfa_code: [required(), stringRule(), minLength(1), maxLength(20)],
   redirect: [stringRule()],
 };
 
@@ -224,6 +234,17 @@ class WebUpdateProfileRequest extends WebFormRequest<WebUpdateProfileBody> {
   }
 }
 
+class WebTwoFactorChallengeRequest extends WebFormRequest<WebTwoFactorChallengeBody> {
+  protected parse(payload: unknown): WebTwoFactorChallengeBody {
+    const validated = validateObject(payload, webTwoFactorChallengeRules);
+
+    return {
+      mfaCode: String(validated.mfa_code),
+      ...(validated.redirect ? { redirect: String(validated.redirect) } : {}),
+    };
+  }
+}
+
 class WebConfirmPasswordRequest extends WebFormRequest<WebConfirmPasswordBody> {
   protected parse(payload: unknown): WebConfirmPasswordBody {
     const validated = validateObject(payload, webConfirmPasswordRules);
@@ -270,6 +291,7 @@ const webDisableMfaRequest = new WebDisableMfaRequest();
 const webChangePasswordRequest = new WebChangePasswordRequest();
 const webCreateApiTokenRequest = new WebCreateApiTokenRequest();
 const webConfirmPasswordRequest = new WebConfirmPasswordRequest();
+const webTwoFactorChallengeRequest = new WebTwoFactorChallengeRequest();
 const webUpdateProfileRequest = new WebUpdateProfileRequest();
 const webDeleteAccountRequest = new WebDeleteAccountRequest();
 
@@ -309,6 +331,12 @@ async function parseWebConfirmPasswordBody(request: Request): Promise<WebConfirm
   return await webConfirmPasswordRequest.validate(request);
 }
 
+async function parseWebTwoFactorChallengeBody(
+  request: Request,
+): Promise<WebTwoFactorChallengeBody> {
+  return await webTwoFactorChallengeRequest.validate(request);
+}
+
 async function parseWebUpdateProfileBody(request: Request): Promise<WebUpdateProfileBody> {
   return await webUpdateProfileRequest.validate(request);
 }
@@ -328,6 +356,7 @@ export type {
   WebLoginBody,
   WebRegisterBody,
   WebResetPasswordBody,
+  WebTwoFactorChallengeBody,
   WebUpdateProfileBody,
 };
 export {
@@ -341,5 +370,6 @@ export {
   parseWebLoginBody,
   parseWebRegisterBody,
   parseWebResetPasswordBody,
+  parseWebTwoFactorChallengeBody,
   parseWebUpdateProfileBody,
 };
