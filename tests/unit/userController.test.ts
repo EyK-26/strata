@@ -226,7 +226,7 @@ describe("AuthController", () => {
     );
 
     expect(response.status).toBe(201);
-    expect((await response.json()) as { token: string }).toEqual({
+    expect(await response.json()).toEqual({
       token: "cookie-token",
       user: {
         id: 1,
