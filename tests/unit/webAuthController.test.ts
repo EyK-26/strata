@@ -127,7 +127,7 @@ describe("WebAuthController", () => {
     });
 
     const body = JSON.parse(await (await controller.showLogin()).text()) as {
-      providers: Array<{ name: string }>;
+      providers: Array<{ name: string; label: string }>;
     };
 
     expect(body.providers).toEqual([{ name: "mock", label: "Mock provider" }]);
