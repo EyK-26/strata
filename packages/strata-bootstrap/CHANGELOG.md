@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.57
+
+- Peer `@getstrata/core` `^0.5.70` for optional OAuth `redirectUri`.
+
 ## 0.2.56
 
 - Peer `@getstrata/core` `^0.5.69` for `MembershipLookup.updateMemberRole`.

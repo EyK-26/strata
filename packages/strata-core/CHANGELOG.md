@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.70
+
+- `OAuthProvider.getAuthorizationUrl` / `exchangeCode` accept an optional `redirectUri` so HTMX login can use `/oauth/:provider/callback` while the API keeps `OAUTH_REDIRECT_URI`.
+
 ## 0.5.69
 
 - `MembershipLookup.updateMemberRole(organizationId, userId, role)` is required. The uninitialized lookup throws until `configureMembershipLookup()` is called. `MembershipService.updateMemberRole` delegates to the adapter.
