@@ -27,7 +27,7 @@ const notificationServiceToken = "user.notificationService";
 const passwordResetServiceToken = "user.passwordResetService";
 
 class HtmlMockOAuthProvider extends MockOAuthProvider {
-  getAuthorizationUrl(state: string): string {
+  override getAuthorizationUrl(state: string): string {
     return `/oauth/mock/callback?code=valid-code&state=${encodeURIComponent(state)}`;
   }
 }
