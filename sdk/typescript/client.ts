@@ -113,6 +113,10 @@ export class WorkHubClient {
     return await this.request("/comments/{id}", { ...init, method: "DELETE" });
   }
 
+  async postInvitationsAccept(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/invitations/accept", { ...init, method: "POST" });
+  }
+
   async getOrganizations(init: RequestInit = {}): Promise<Response> {
     return await this.request("/organizations", { ...init, method: "GET" });
   }
@@ -131,6 +135,18 @@ export class WorkHubClient {
 
   async deleteOrganizationsId(init: RequestInit = {}): Promise<Response> {
     return await this.request("/organizations/{id}", { ...init, method: "DELETE" });
+  }
+
+  async getOrganizationsIdInvitations(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/organizations/{id}/invitations", { ...init, method: "GET" });
+  }
+
+  async postOrganizationsIdInvitations(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/organizations/{id}/invitations", { ...init, method: "POST" });
+  }
+
+  async deleteOrganizationsIdInvitationsInvitationId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/organizations/{id}/invitations/{invitationId}", { ...init, method: "DELETE" });
   }
 
   async getOrganizationsIdMembers(init: RequestInit = {}): Promise<Response> {

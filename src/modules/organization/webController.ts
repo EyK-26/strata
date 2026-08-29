@@ -1,9 +1,11 @@
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { resolveUserId } from "@getstrata/core/auth/accessControl";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { resolveMembershipService } from "@getstrata/core/auth/membershipService";
 import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { ValidationError } from "@getstrata/core/errors/http";
+import { ForbiddenError, ValidationError } from "@getstrata/core/errors/http";
 import { requestPrefersJson } from "@getstrata/core/http/contentNegotiation";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import { formDataToRecord, parseFormBody } from "@getstrata/core/http/parseFormBody";
@@ -13,6 +15,7 @@ import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse, isHtmxRequest } from "@getstrata/core/view";
 import { userRepositoryToken } from "../user/provider";
 import type UserRepository from "../user/repository";
+import { type OrganizationInvitationService, resolveInvitationService } from "./invitationService";
 import { organizationServiceToken } from "./provider";
 import { parseOrganizationListQuery } from "./requests";
 import type OrganizationService from "./service";
@@ -39,6 +42,19 @@ class OrganizationWebController {
     return resolveService(this.dependencies, userRepositoryToken);
   }
 
+  private get invitations(): OrganizationInvitationService {
+    return resolveInvitationService();
+  }
+
+  private async pendingInvitationsForAdmin(organizationId: number) {
+    try {
+      await resolveMembershipService().requireOrgAccess(organizationId, "admin");
+      return await this.invitations.listPending(organizationId);
+    } catch {
+      return [];
+    }
+  }
+
   private async membersForOrganization(organizationId: number) {
     const members = await resolveMembershipService().listMembersForOrganization(organizationId);
 
@@ -63,10 +79,12 @@ class OrganizationWebController {
   ): Promise<Response> {
     const organization = await this.service.findByIdOrThrow(organizationId);
     const members = await this.membersForOrganization(organizationId);
+    const invitations = await this.pendingInvitationsForAdmin(organizationId);
     const viewData = {
       title: organization.name,
       organization,
       members,
+      invitations,
       errors: {},
       old: {},
       ...extras,
@@ -201,10 +219,27 @@ class OrganizationWebController {
       await resolveMembershipService().requireOrgAccess(id, "admin");
       const body = parseWebAddOrganizationMemberPayload(old);
       const user = await this.users.findByEmail(body.email);
+      const actor = currentAuthUser();
+
+      if (!actor) {
+        throw new ForbiddenError("Authentication required.");
+      }
 
       if (!user) {
-        throw new ValidationError("No user exists with that email.", {
-          email: ["No user exists with that email."],
+        await this.invitations.invite({
+          organizationId: id,
+          email: body.email,
+          role: body.role,
+          invitedByUserId: resolveUserId(actor),
+        });
+
+        if (isHtmxRequest(request)) {
+          return await this.renderShow(request, id, { partial: "members" });
+        }
+
+        return flashResponse(Response.redirect(`/organizations/${id}`, 302), {
+          level: "success",
+          message: `Invitation sent to ${body.email}.`,
         });
       }
 
@@ -293,6 +328,51 @@ class OrganizationWebController {
       });
     },
   );
+
+  readonly cancelInvitation = withErrorHandling(
+    async (request: Request & { params: { id: string; invitationId: string } }) => {
+      const id = Number.parseInt(String(request.params.id), 10);
+      const invitationId = Number.parseInt(String(request.params.invitationId), 10);
+
+      await resolveMembershipService().requireOrgAccess(id, "admin");
+      await this.invitations.cancel(id, invitationId);
+
+      if (isHtmxRequest(request)) {
+        return await this.renderShow(request, id, { partial: "members" });
+      }
+
+      return flashResponse(Response.redirect(`/organizations/${id}`, 302), {
+        level: "success",
+        message: "Invitation cancelled.",
+      });
+    },
+  );
+
+  readonly acceptInvitation = withErrorHandling(async (request: Request) => {
+    const auth = currentAuthUser();
+
+    if (!auth) {
+      throw new ForbiddenError("Authentication required.");
+    }
+
+    const user = await this.users.findById(resolveUserId(auth));
+
+    if (!user) {
+      throw new ForbiddenError("Authentication required.");
+    }
+
+    const url = new URL(request.url);
+    const member = await this.invitations.accept(
+      url.searchParams.get("email") ?? user.email,
+      url.searchParams.get("token") ?? "",
+      user,
+    );
+
+    return flashResponse(Response.redirect(`/organizations/${member.organization_id}`, 302), {
+      level: "success",
+      message: "You joined the organization.",
+    });
+  });
 
   readonly destroy = withErrorHandling(async (request: Request & { params: { id: string } }) => {
     const id = Number.parseInt(String(request.params.id), 10);

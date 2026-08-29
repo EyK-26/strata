@@ -61,6 +61,38 @@
   </table>
   <% } %>
 
+  <% if (it.invitations?.length) { %>
+  <h3>Pending invitations</h3>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Role</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const invitation of it.invitations) { %>
+      <tr>
+        <td><%= invitation.email %></td>
+        <td><%= invitation.role %></td>
+        <td>
+          <button
+            type="button"
+            class="link-button"
+            hx-delete="/organizations/<%= it.organization.id %>/invitations/<%= invitation.id %>"
+            hx-target="#org-members"
+            hx-swap="outerHTML"
+          >
+            Cancel
+          </button>
+        </td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table>
+  <% } %>
+
   <form
     method="post"
     action="/organizations/<%= it.organization.id %>/members"
@@ -82,6 +114,6 @@
         <option value="owner">Owner</option>
       </select>
     </label>
-    <button type="submit">Add member</button>
+    <button type="submit">Add or invite</button>
   </form>
 </section>

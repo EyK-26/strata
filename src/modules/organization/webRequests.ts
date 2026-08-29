@@ -1,6 +1,7 @@
 import { ValidationError } from "@getstrata/core/errors/http";
 import { WebFormRequest } from "@getstrata/core/http/webFormRequest";
 import {
+  emailRule,
   maxLength,
   minLength,
   pattern,
@@ -64,7 +65,7 @@ const webUpdateOrganizationRules = {
 };
 
 const webAddMemberRules = {
-  email: [required(), stringRule()],
+  email: [required(), stringRule(), emailRule()],
   role: [stringRule()],
 };
 

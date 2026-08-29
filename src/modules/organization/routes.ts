@@ -45,6 +45,22 @@ function createOrganizationRoutes(
         memberController.destroy as unknown as RouteHandler,
       ),
     },
+    "/organizations/:id/invitations": {
+      GET: kernel.wrapAuthenticated(memberController.listInvitations as unknown as RouteHandler),
+      POST: kernel.wrapAbility(
+        "organizations:members:write",
+        memberController.storeInvitation as unknown as RouteHandler,
+      ),
+    },
+    "/organizations/:id/invitations/:invitationId": {
+      DELETE: kernel.wrapAbility(
+        "organizations:members:write",
+        memberController.destroyInvitation as unknown as RouteHandler,
+      ),
+    },
+    "/invitations/accept": {
+      POST: kernel.wrapAuthenticated(memberController.acceptInvitation as unknown as RouteHandler),
+    },
   };
 }
 

@@ -515,6 +515,81 @@ describe("integration routes with postgres", () => {
     );
   });
 
+  test("organization invitations can be created, listed, accepted, and cancelled", async () => {
+    const email = `api-invite-${Date.now()}@workhub.test`;
+    const create = await fetch(api("/organizations/1/invitations"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
+      body: JSON.stringify({ email, role: "member" }),
+    });
+    expect(create.status).toBe(201);
+    const invitation = (await create.json()) as { id: number; email: string };
+    expect(invitation.email).toBe(email);
+
+    const listed = await fetch(api("/organizations/1/invitations"), {
+      headers: adminHeaders(),
+    });
+    expect(listed.status).toBe(200);
+    const listBody = (await listed.json()) as { data: Array<{ id: number; email: string }> };
+    expect(listBody.data.some((row) => row.id === invitation.id)).toBe(true);
+
+    const cancelled = await fetch(api(`/organizations/1/invitations/${invitation.id}`), {
+      method: "DELETE",
+      headers: adminHeaders(),
+    });
+    expect(cancelled.status).toBe(204);
+
+    const register = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "API Invitee",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(register.status).toBe(201);
+    const registered = (await register.json()) as { token: string };
+
+    const reinvite = await fetch(api("/organizations/1/invitations"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
+      body: JSON.stringify({ email, role: "admin" }),
+    });
+    expect(reinvite.status).toBe(201);
+
+    const { hashApiToken } = await import("@getstrata/core/auth/tokenHash");
+    const token = "integration-invite-token";
+    await runWithMigrationBypass(async () => {
+      await getDatabase()`
+        UPDATE organization_invitation
+        SET token_hash = ${hashApiToken(token)}
+        WHERE email = ${email}
+      `;
+    });
+
+    const accepted = await fetch(api("/invitations/accept"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${registered.token}`,
+      },
+      body: JSON.stringify({ token }),
+    });
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      organization_id: 1,
+      role: "admin",
+    });
+  });
+
   test("POST /organizations returns 409 for duplicate slugs", async () => {
     const response = await fetch(api("/organizations"), {
       method: "POST",

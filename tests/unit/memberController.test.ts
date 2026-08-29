@@ -274,4 +274,273 @@ describe("OrganizationMemberController", () => {
       error: "Organization id and user id are required.",
     });
   });
+
+  test("listInvitations returns pending invitations", async () => {
+    const listPending = mock(async () => [
+      {
+        id: 3,
+        organization_id: 5,
+        email: "invitee@workhub.test",
+        role: "member" as const,
+        invited_by: 1,
+        expires_at: "2026-02-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      {
+        listPending,
+      } as never,
+    );
+
+    const response = await controller.listInvitations(
+      Object.assign(new Request("http://example.test/organizations/5/invitations"), {
+        params: { id: "5" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: [
+        {
+          id: 3,
+          organization_id: 5,
+          email: "invitee@workhub.test",
+          role: "member",
+          invited_by: 1,
+          expires_at: "2026-02-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+    expect(membershipService.requireOrgAccess).toHaveBeenCalledWith(5, "member");
+  });
+
+  test("listInvitations requires a valid organization id", async () => {
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      {
+        listPending: mock(async () => []),
+      } as never,
+    );
+
+    const response = await controller.listInvitations(
+      Object.assign(new Request("http://example.test/organizations/abc/invitations"), {
+        params: { id: "abc" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Organization id is required." });
+  });
+
+  test("storeInvitation creates an invitation for the current admin", async () => {
+    const { runWithAuthUser } = await import("@getstrata/core/auth/authContext");
+    const invite = mock(async () => ({
+      invitation: {
+        id: 9,
+        organization_id: 5,
+        email: "new@workhub.test",
+        role: "admin",
+        invited_by: 1,
+        expires_at: "2026-02-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+      token: "plain",
+      acceptUrl: "/invitations/accept",
+    }));
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      {
+        invite,
+      } as never,
+    );
+
+    const response = await runWithAuthUser({ id: 1, role: "admin" }, () =>
+      controller.storeInvitation(
+        Object.assign(
+          new Request("http://example.test/organizations/5/invitations", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: "new@workhub.test", role: "admin" }),
+          }),
+          { params: { id: "5" } },
+        ),
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      id: 9,
+      organization_id: 5,
+      email: "new@workhub.test",
+      role: "admin",
+      invited_by: 1,
+      expires_at: "2026-02-01T00:00:00.000Z",
+      created_at: "2026-01-01T00:00:00.000Z",
+    });
+    expect(invite).toHaveBeenCalledWith({
+      organizationId: 5,
+      email: "new@workhub.test",
+      role: "admin",
+      invitedByUserId: 1,
+    });
+  });
+
+  test("storeInvitation requires an authenticated admin and a valid organization id", async () => {
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      {
+        invite: mock(async () => ({})),
+      } as never,
+    );
+
+    const missingOrg = await controller.storeInvitation(
+      Object.assign(
+        new Request("http://example.test/organizations/0/invitations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "new@workhub.test" }),
+        }),
+        { params: { id: "0" } },
+      ),
+    );
+    expect(missingOrg.status).toBe(400);
+
+    const unauthenticated = await controller.storeInvitation(
+      Object.assign(
+        new Request("http://example.test/organizations/5/invitations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "new@workhub.test" }),
+        }),
+        { params: { id: "5" } },
+      ),
+    );
+    expect(unauthenticated.status).toBe(403);
+  });
+
+  test("destroyInvitation cancels a pending invitation", async () => {
+    const cancel = mock(async () => undefined);
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      {
+        cancel,
+      } as never,
+    );
+
+    const response = await controller.destroyInvitation(
+      Object.assign(new Request("http://example.test/organizations/5/invitations/3"), {
+        params: { id: "5", invitationId: "3" },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(cancel).toHaveBeenCalledWith(5, 3);
+  });
+
+  test("destroyInvitation requires valid ids", async () => {
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      {
+        cancel: mock(async () => undefined),
+      } as never,
+    );
+
+    const response = await controller.destroyInvitation(
+      Object.assign(new Request("http://example.test/organizations/5/invitations/abc"), {
+        params: { id: "5", invitationId: "abc" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Organization id and invitation id are required.",
+    });
+  });
+
+  test("acceptInvitation joins the current user", async () => {
+    const { runWithAuthUser } = await import("@getstrata/core/auth/authContext");
+    const accept = mock(async () => ({
+      id: 11,
+      organization_id: 5,
+      user_id: 1,
+      role: "member" as const,
+      created_at: new Date("2026-01-01T00:00:00.000Z"),
+    }));
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      { accept } as never,
+      { findById: mock(async () => ({ id: 1, email: "admin@workhub.test" })) } as never,
+    );
+
+    const response = await runWithAuthUser({ id: 1, role: "admin" }, () =>
+      controller.acceptInvitation(
+        new Request("http://example.test/invitations/accept", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token: "plain-token" }),
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      id: 11,
+      organization_id: 5,
+      user_id: 1,
+      role: "member",
+      created_at: "2026-01-01T00:00:00.000Z",
+    });
+    expect(accept).toHaveBeenCalledWith("admin@workhub.test", "plain-token", {
+      id: 1,
+      email: "admin@workhub.test",
+    });
+  });
+
+  test("acceptInvitation requires a token and an authenticated user", async () => {
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      { accept: mock(async () => ({})) } as never,
+      { findById: mock(async () => null) } as never,
+    );
+
+    const unauthenticated = await controller.acceptInvitation(
+      new Request("http://example.test/invitations/accept", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: "plain-token" }),
+      }),
+    );
+    expect(unauthenticated.status).toBe(403);
+
+    const { runWithAuthUser } = await import("@getstrata/core/auth/authContext");
+    const missingUser = await runWithAuthUser({ id: 1, role: "admin" }, () =>
+      controller.acceptInvitation(
+        new Request("http://example.test/invitations/accept", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token: "plain-token" }),
+        }),
+      ),
+    );
+    expect(missingUser.status).toBe(403);
+
+    const missingTokenController = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      { accept: mock(async () => ({})) } as never,
+      { findById: mock(async () => ({ id: 1, email: "admin@workhub.test" })) } as never,
+    );
+    const missingToken = await runWithAuthUser({ id: 1, role: "admin" }, () =>
+      missingTokenController.acceptInvitation(
+        new Request("http://example.test/invitations/accept", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }),
+      ),
+    );
+    expect(missingToken.status).toBe(400);
+  });
 });

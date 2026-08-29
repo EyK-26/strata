@@ -1077,6 +1077,7 @@ describe("web routes with server-htmx frontend", () => {
     expect(html).toContain("admin@workhub.test");
     expect(html).toContain("Update role");
     expect(html).toContain('hx-post="/organizations/1/members/2/role"');
+    expect(html).toContain("Add or invite");
   });
 
   test("POST /organizations/:id/members adds a registered user to the HTMX members table", async () => {
@@ -1123,7 +1124,8 @@ describe("web routes with server-htmx frontend", () => {
     expect(html).toContain("HTML Member");
     expect(html).not.toContain("<!doctype html>");
 
-    const missing = await fetch(`${baseUrl}/organizations/1/members`, {
+    const inviteEmail = `html-invite-${Date.now()}@workhub.test`;
+    const invited = await fetch(`${baseUrl}/organizations/1/members`, {
       method: "POST",
       headers: {
         cookie: csrf.cookies,
@@ -1132,14 +1134,63 @@ describe("web routes with server-htmx frontend", () => {
         "HX-Request": "true",
       },
       body: new URLSearchParams({
-        email: "nobody@workhub.test",
+        email: inviteEmail,
         role: "member",
         _token: csrf.token,
       }),
     });
 
-    expect(missing.status).toBe(422);
-    expect(await missing.text()).toContain("No user exists with that email.");
+    expect(invited.status).toBe(200);
+    const invitedHtml = await invited.text();
+    expect(invitedHtml).toContain("Pending invitations");
+    expect(invitedHtml).toContain(inviteEmail);
+    expect(invitedHtml).toContain("Add or invite");
+  });
+
+  test("registering an invited email auto-joins the organization", async () => {
+    const csrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const email = `auto-join-${Date.now()}@workhub.test`;
+    const invited = await fetch(`${baseUrl}/organizations/1/members`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        email,
+        role: "member",
+        _token: csrf.token,
+      }),
+      redirect: "manual",
+    });
+    expect(invited.status).toBe(302);
+
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: registerCsrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "Auto Join",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+    expect(registered.status).toBe(302);
+
+    const show = await fetch(`${baseUrl}/organizations/1`, {
+      headers: { cookie: adminSessionCookie, accept: "text/html" },
+    });
+    const html = await show.text();
+    expect(html).toContain(email);
+    expect(html).toContain("Auto Join");
+    expect(html).not.toContain("Pending invitations");
   });
 
   test("POST /organizations/:id/members/:userId/role updates the HTMX members table", async () => {
