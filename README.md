@@ -134,7 +134,7 @@ strata new --frontend=spa-react
 strata new --frontend=api
 ```
 
-Server mode adds a parallel **`web` middleware group** with cookie sessions (`SessionGuard`), HTML form validation (`WebFormRequest`), and optional `webRoutes()` on modules. Generate web scaffolding with:
+Server mode adds a parallel **`web` middleware group** with cookie sessions (WorkHub HMAC `SessionGuard`; sibling HTMX apps use `CookieSessionStore` + the WorkHub `sessions` table), HTML form validation (`WebFormRequest`), and optional `webRoutes()` on modules. Generate web scaffolding with:
 
 ```bash
 strata make:module widget --with-web

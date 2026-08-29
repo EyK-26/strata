@@ -37,7 +37,24 @@ container.set(
 
 Omit `sql` so the store reads the client from `bindDatabaseConnection()` / the default pool on every call. Tests can call `resetBoundDatabaseConnection()` after `closeDatabase()` without a local auth facade.
 
-The default session SELECT still reads `learn_subscriber` / `is_admin` from `users`. Pass `loadSessionUser` to keep that query in the app:
+WorkHub ships `sessions` (`0031_create_sessions`: `id` text PK, `user_id` → `users` cascade, `expires_at`) so `CookieSessionStore.create` / `read` / `destroy` can run against the same Postgres as HMAC login. WorkHub HTMX login still uses HMAC `workhub_session` — do not swap it onto `CookieSessionStore` without rewriting every web session test.
+
+The default session SELECT still reads `learn_subscriber` / `is_admin` from `users`. WorkHub has `role` instead. Pass `loadSessionUser` (WorkHub’s `loadWorkhubSessionUser` maps `role === "admin"` and `revealEmail`) to keep that query in the app:
+
+```typescript
+import {
+  loadWorkhubSessionUser,
+  mapWorkhubSessionUser,
+} from "../modules/user/loadWorkhubSessionUser";
+
+createCookieSessionAuthManager({
+  secret: process.env.SESSION_SECRET ?? "",
+  loadSessionUser: loadWorkhubSessionUser,
+  mapUser: mapWorkhubSessionUser,
+});
+```
+
+Sibling apps with a different `users` schema keep their own SELECT:
 
 ```typescript
 createCookieSessionAuthManager({

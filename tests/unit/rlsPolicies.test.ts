@@ -19,12 +19,12 @@ describe("tenant RLS inventory", () => {
     expect(tables).toContain("webhook");
   });
 
-  test("keeps api_token and organization_member auth-global without tenant RLS", async () => {
+  test("keeps api_token, organization_member, and sessions auth-global without tenant RLS", async () => {
     const rows = (await db`
       SELECT tablename
       FROM pg_policies
       WHERE policyname = 'tenant_isolation'
-        AND tablename IN ('api_token', 'organization_member')
+        AND tablename IN ('api_token', 'organization_member', 'sessions')
     `) as Array<{ tablename: string }>;
 
     expect(rows).toEqual([]);
