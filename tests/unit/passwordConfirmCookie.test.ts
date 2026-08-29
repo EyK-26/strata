@@ -111,10 +111,11 @@ describe("passwordConfirmCookie", () => {
       ),
     ).toBe(false);
 
+    const freshConfirmedAt = Date.now();
     expect(
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
-          headers: { cookie: "workhub_password_confirmed=1.123." },
+          headers: { cookie: `workhub_password_confirmed=1.${freshConfirmedAt}.` },
         }),
         1,
       ),

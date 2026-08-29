@@ -77,9 +77,9 @@ function hasFreshPasswordConfirmation(request: Request, userId: number): boolean
     return false;
   }
 
-  const expectedSignature = signPasswordConfirm(cookieUserId, confirmedAt).split(".").pop() ?? "";
+  const expectedSignature = signPasswordConfirm(cookieUserId, confirmedAt).split(".").pop();
 
-  if (!cookieSignature) {
+  if (!expectedSignature || !cookieSignature) {
     return false;
   }
 
