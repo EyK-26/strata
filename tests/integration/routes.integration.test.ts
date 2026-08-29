@@ -992,6 +992,64 @@ describe("integration routes with postgres", () => {
     expect(memberResponse.status).toBe(404);
   });
 
+  test("JSON MFA setup, confirm, rotate, and disable work for a disposable user", async () => {
+    const { generateTotp } = await import("@getstrata/core/security/totp");
+    const email = `json-mfa-${Date.now()}@workhub.test`;
+    const registerResponse = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Json Mfa User",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(registerResponse.status).toBe(201);
+    const registered = (await registerResponse.json()) as { token: string };
+    const headers = {
+      authorization: `Bearer ${registered.token}`,
+      "content-type": "application/json",
+    };
+
+    const setup = await fetch(api("/users/me/mfa"), { method: "POST", headers });
+    expect(setup.status).toBe(200);
+    const setupBody = (await setup.json()) as { secret: string; otpauth_url: string };
+    expect(setupBody.secret.length).toBeGreaterThan(10);
+    expect(setupBody.otpauth_url).toContain("otpauth://totp/");
+
+    const confirmed = await fetch(api("/users/me/mfa/confirm"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        mfa_code: generateTotp(setupBody.secret, Math.floor(Date.now() / 30_000)),
+      }),
+    });
+    expect(confirmed.status).toBe(200);
+    const confirmedBody = (await confirmed.json()) as { recovery_codes: string[] };
+    expect(confirmedBody.recovery_codes).toHaveLength(8);
+
+    const rotated = await fetch(api("/users/me/mfa/recovery-codes"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ password: "password123" }),
+    });
+    expect(rotated.status).toBe(200);
+    const rotatedBody = (await rotated.json()) as { recovery_codes: string[] };
+    expect(rotatedBody.recovery_codes).toHaveLength(8);
+    expect(rotatedBody.recovery_codes).not.toEqual(confirmedBody.recovery_codes);
+
+    const disabled = await fetch(api("/users/me/mfa"), {
+      method: "DELETE",
+      headers,
+      body: JSON.stringify({ password: "password123" }),
+    });
+    expect(disabled.status).toBe(200);
+
+    const unauthorized = await fetch(api("/users/me/mfa"), { method: "POST" });
+    expect(unauthorized.status).toBe(401);
+  });
+
   test("PATCH /users/me updates a disposable user without touching admin", async () => {
     const email = `json-profile-${Date.now()}@workhub.test`;
     const registerResponse = await fetch(api("/auth/register"), {

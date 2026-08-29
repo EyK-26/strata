@@ -43,6 +43,16 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
       PATCH: kernel.wrapAuthenticated(controller.updateProfile as unknown as RouteHandler),
       DELETE: kernel.wrapAuthenticated(controller.deleteMe as unknown as RouteHandler),
     },
+    "/users/me/mfa": {
+      POST: kernel.wrapAuthenticated(controller.beginMfa as unknown as RouteHandler),
+      DELETE: kernel.wrapAuthenticated(controller.disableMfa as unknown as RouteHandler),
+    },
+    "/users/me/mfa/confirm": {
+      POST: kernel.wrapAuthenticated(controller.confirmMfa as unknown as RouteHandler),
+    },
+    "/users/me/mfa/recovery-codes": {
+      POST: kernel.wrapAuthenticated(controller.regenerateRecoveryCodes as unknown as RouteHandler),
+    },
     "/auth/tokens": {
       GET: kernel.wrapAbility("auth:tokens:read", controller.listTokens as unknown as RouteHandler),
       POST: kernel.wrapAbility(

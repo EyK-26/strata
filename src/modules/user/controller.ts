@@ -31,11 +31,13 @@ import {
 import {
   type NotificationIdParams,
   type OAuthProviderParams,
+  parseConfirmMfaBody,
   parseCreateApiTokenBody,
   parseForgotPasswordBody,
   parseLoginBody,
   parseNotificationIdParams,
   parseNotificationListQuery,
+  parsePasswordChallengeBody,
   parseRegisterBody,
   parseResetPasswordBody,
   parseTokenIdParams,
@@ -234,6 +236,43 @@ class AuthController {
       user: toUserResource(result.user),
       email_changed: result.emailChanged,
     });
+  });
+
+  readonly beginMfa = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const setup = await this.authService.beginMfaSetup(userId);
+
+    return jsonResponse({
+      secret: setup.secret,
+      otpauth_url: setup.otpauthUrl,
+    });
+  });
+
+  readonly confirmMfa = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const body = await parseConfirmMfaBody(request);
+    const confirmed = await this.authService.confirmMfaSetup(userId, body.mfa_code);
+
+    return jsonResponse({
+      user: toUserResource(confirmed.user),
+      recovery_codes: confirmed.recoveryCodes,
+    });
+  });
+
+  readonly disableMfa = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const body = await parsePasswordChallengeBody(request);
+    const user = await this.authService.disableMfa(userId, body.password);
+
+    return jsonResponse({ user: toUserResource(user) });
+  });
+
+  readonly regenerateRecoveryCodes = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const body = await parsePasswordChallengeBody(request);
+    const recoveryCodes = await this.authService.regenerateRecoveryCodes(userId, body.password);
+
+    return jsonResponse({ recovery_codes: recoveryCodes });
   });
 
   readonly exportMe = withErrorHandling(async (request: Request) => {

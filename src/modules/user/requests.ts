@@ -48,6 +48,14 @@ interface UpdateProfileBodyDto {
   email: string;
 }
 
+interface ConfirmMfaBodyDto {
+  mfa_code: string;
+}
+
+interface PasswordChallengeBodyDto {
+  password: string;
+}
+
 interface CreateApiTokenBodyDto {
   name: string;
   abilities?: string[];
@@ -162,6 +170,30 @@ class UpdateProfileRequest extends FormRequest<UpdateProfileBodyDto> {
 
 const updateProfileRequest = new UpdateProfileRequest();
 
+class ConfirmMfaRequest extends FormRequest<ConfirmMfaBodyDto> {
+  protected parse(payload: unknown): ConfirmMfaBodyDto {
+    const validated = validateObject(payload, {
+      mfa_code: [required(), stringRule(), minLength(6), maxLength(6)],
+    });
+
+    return { mfa_code: String(validated.mfa_code) };
+  }
+}
+
+const confirmMfaRequest = new ConfirmMfaRequest();
+
+class PasswordChallengeRequest extends FormRequest<PasswordChallengeBodyDto> {
+  protected parse(payload: unknown): PasswordChallengeBodyDto {
+    const validated = validateObject(payload, {
+      password: [required(), stringRule()],
+    });
+
+    return { password: String(validated.password) };
+  }
+}
+
+const passwordChallengeRequest = new PasswordChallengeRequest();
+
 function parseTokenIdParams(params: TokenIdParams): { id: number } {
   return {
     id: parsePositiveIntParam(params.id, "token id"),
@@ -211,24 +243,36 @@ async function parseUpdateProfileBody(request: Request): Promise<UpdateProfileBo
   return await updateProfileRequest.validate(request);
 }
 
+async function parseConfirmMfaBody(request: Request): Promise<ConfirmMfaBodyDto> {
+  return await confirmMfaRequest.validate(request);
+}
+
+async function parsePasswordChallengeBody(request: Request): Promise<PasswordChallengeBodyDto> {
+  return await passwordChallengeRequest.validate(request);
+}
+
 export type {
+  ConfirmMfaBodyDto,
   CreateApiTokenBodyDto,
   ForgotPasswordBodyDto,
   LoginBodyDto,
   NotificationIdParams,
   NotificationListQuery,
   OAuthProviderParams,
+  PasswordChallengeBodyDto,
   RegisterBodyDto,
   ResetPasswordBodyDto,
   TokenIdParams,
   UpdateProfileBodyDto,
 };
 export {
+  parseConfirmMfaBody,
   parseCreateApiTokenBody,
   parseForgotPasswordBody,
   parseLoginBody,
   parseNotificationIdParams,
   parseNotificationListQuery,
+  parsePasswordChallengeBody,
   parseRegisterBody,
   parseResetPasswordBody,
   parseTokenIdParams,

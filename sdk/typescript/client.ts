@@ -225,6 +225,22 @@ export class WorkHubClient {
     return await this.request("/users/me/export", { ...init, method: "GET" });
   }
 
+  async postUsersMeMfa(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/mfa", { ...init, method: "POST" });
+  }
+
+  async deleteUsersMeMfa(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/mfa", { ...init, method: "DELETE" });
+  }
+
+  async postUsersMeMfaConfirm(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/mfa/confirm", { ...init, method: "POST" });
+  }
+
+  async postUsersMeMfaRecoveryCodes(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/mfa/recovery-codes", { ...init, method: "POST" });
+  }
+
   async getUsersMeNotifications(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me/notifications", { ...init, method: "GET" });
   }

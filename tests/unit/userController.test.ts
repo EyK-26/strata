@@ -582,6 +582,100 @@ describe("AuthController", () => {
     }
   });
 
+  test("beginMfa returns a secret and otpauth url", async () => {
+    const beginMfaSetup = mock(async () => ({
+      secret: "JBSWY3DPEHPK3PXP",
+      otpauthUrl: "otpauth://totp/WorkHub:admin@workhub.test?secret=JBSWY3DPEHPK3PXP",
+    }));
+    const controller = createController({
+      authService: { beginMfaSetup },
+    });
+
+    const response = await controller.beginMfa(new Request("http://example.test/users/me/mfa"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      secret: "JBSWY3DPEHPK3PXP",
+      otpauth_url: "otpauth://totp/WorkHub:admin@workhub.test?secret=JBSWY3DPEHPK3PXP",
+    });
+    expect(beginMfaSetup).toHaveBeenCalledWith(1);
+  });
+
+  test("confirmMfa returns recovery codes", async () => {
+    const confirmMfaSetup = mock(async () => ({
+      user,
+      recoveryCodes: ["abcd-efgh"],
+    }));
+    const controller = createController({
+      authService: { confirmMfaSetup },
+    });
+
+    const response = await controller.confirmMfa(
+      new Request("http://example.test/users/me/mfa/confirm", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mfa_code: "123456" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      user: {
+        id: 1,
+        name: "Admin User",
+        email: "admin@workhub.test",
+        role: "admin",
+      },
+      recovery_codes: ["abcd-efgh"],
+    });
+    expect(confirmMfaSetup).toHaveBeenCalledWith(1, "123456");
+  });
+
+  test("disableMfa returns the updated user", async () => {
+    const disableMfa = mock(async () => user);
+    const controller = createController({
+      authService: { disableMfa },
+    });
+
+    const response = await controller.disableMfa(
+      new Request("http://example.test/users/me/mfa", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "password" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      user: {
+        id: 1,
+        name: "Admin User",
+        email: "admin@workhub.test",
+        role: "admin",
+      },
+    });
+    expect(disableMfa).toHaveBeenCalledWith(1, "password");
+  });
+
+  test("regenerateRecoveryCodes returns a new set", async () => {
+    const regenerateRecoveryCodes = mock(async () => ["aaaa-bbbb"]);
+    const controller = createController({
+      authService: { regenerateRecoveryCodes },
+    });
+
+    const response = await controller.regenerateRecoveryCodes(
+      new Request("http://example.test/users/me/mfa/recovery-codes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "password" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ recovery_codes: ["aaaa-bbbb"] });
+    expect(regenerateRecoveryCodes).toHaveBeenCalledWith(1, "password");
+  });
+
   test("me returns the authenticated user resource", async () => {
     const controller = createController({});
 
