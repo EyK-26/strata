@@ -1,8 +1,14 @@
 import { RedisClient } from "bun";
+import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import type { CacheStore } from "./store";
 
-const KEY_PREFIX = "workhub:cache:";
-const TAG_PREFIX = "workhub:cache:tag:";
+function cacheKeyPrefix(): string {
+  return namespacedRedisKey("cache:");
+}
+
+function cacheTagPrefix(): string {
+  return namespacedRedisKey("cache:tag:");
+}
 
 class RedisCacheStore implements CacheStore {
   private readonly client: RedisClient;
@@ -117,11 +123,11 @@ class RedisCacheStore implements CacheStore {
   }
 
   async invalidateByPrefix(prefix: string): Promise<number> {
-    const keys = await this.client.keys(`${KEY_PREFIX}*`);
+    const keys = await this.client.keys(`${cacheKeyPrefix()}*`);
     let removed = 0;
 
     for (const storageKey of keys) {
-      const key = storageKey.slice(KEY_PREFIX.length);
+      const key = storageKey.slice(cacheKeyPrefix().length);
 
       if (key === prefix || key.startsWith(`${prefix}?`)) {
         if (await this.invalidate(key)) {
@@ -134,13 +140,13 @@ class RedisCacheStore implements CacheStore {
   }
 
   async clear(): Promise<void> {
-    const keys = await this.client.keys(`${KEY_PREFIX}*`);
+    const keys = await this.client.keys(`${cacheKeyPrefix()}*`);
 
     if (keys.length > 0) {
       await this.client.del(...keys);
     }
 
-    const tagKeys = await this.client.keys(`${TAG_PREFIX}*`);
+    const tagKeys = await this.client.keys(`${cacheTagPrefix()}*`);
 
     if (tagKeys.length > 0) {
       await this.client.del(...tagKeys);
@@ -151,16 +157,16 @@ class RedisCacheStore implements CacheStore {
   }
 
   async size(): Promise<number> {
-    const keys = await this.client.keys(`${KEY_PREFIX}*`);
+    const keys = await this.client.keys(`${cacheKeyPrefix()}*`);
     return keys.length;
   }
 
   private storageKey(key: string): string {
-    return `${KEY_PREFIX}${key}`;
+    return `${cacheKeyPrefix()}${key}`;
   }
 
   private tagKey(tag: string): string {
-    return `${TAG_PREFIX}${tag}`;
+    return `${cacheTagPrefix()}${tag}`;
   }
 
   private async detachKeyFromTags(key: string): Promise<void> {
@@ -178,7 +184,7 @@ class RedisCacheStore implements CacheStore {
   }
 
   private async enforceMaxEntries(): Promise<void> {
-    const keys = await this.client.keys(`${KEY_PREFIX}*`);
+    const keys = await this.client.keys(`${cacheKeyPrefix()}*`);
 
     if (keys.length <= this.maxEntries) {
       return;

@@ -1,6 +1,7 @@
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { currentTenant, rateLimitMultiplierForPlan } from "@getstrata/core/tenant/tenantContext";
 import { RedisClient } from "bun";
+import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 
@@ -27,7 +28,7 @@ function resolveThrottleIdentity(request: Request): string {
 
 function createThrottleMiddleware(options: ThrottleOptions): Middleware {
   const client = new RedisClient(options.redisUrl);
-  const prefix = options.keyPrefix ?? "workhub:throttle:";
+  const prefix = options.keyPrefix ?? namespacedRedisKey("throttle:");
 
   return async (request: Request, next: () => Promise<Response>) => {
     const identity = resolveThrottleIdentity(request);

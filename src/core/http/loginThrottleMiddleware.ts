@@ -1,4 +1,5 @@
 import { RedisClient } from "bun";
+import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 
@@ -37,7 +38,7 @@ async function resolveLoginEmail(request: Request): Promise<string> {
 
 function createLoginThrottleMiddleware(options: LoginThrottleOptions): Middleware {
   const client = new RedisClient(options.redisUrl);
-  const prefix = options.keyPrefix ?? "workhub:login-throttle:";
+  const prefix = options.keyPrefix ?? namespacedRedisKey("login-throttle:");
 
   return async (request: Request, next: () => Promise<Response>) => {
     const identity = resolveLoginIdentity(request);

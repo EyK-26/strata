@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.64
+
+- `APP_KEY_PREFIX` (default `workhub`) namespaces Redis cache, queue, and throttle keys so sibling apps do not share WorkHub’s keyspace.
+- `DispatchWebhookJob` implementation lives in the WorkHub webhook module. `@getstrata/core/jobs/dispatchWebhookJob` remains a compatibility re-export.
+
 ## 0.5.63
 
 - Flash cookies honor `FLASH_COOKIE_NAME` (default `workhub_flash`) so sibling apps do not inherit WorkHub’s cookie name.

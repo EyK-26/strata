@@ -74,6 +74,7 @@ coveragePathIgnorePatterns = [
   # Event listeners (side-effect wiring)
   "src/listeners/**",
   "src/core/jobs/**",
+  "src/modules/**/dispatchWebhookJob.ts",
 
   # Module registration, routing tables, and DTO/schema glue
   "src/modules/**/index.ts",

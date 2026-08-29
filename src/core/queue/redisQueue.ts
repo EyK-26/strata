@@ -1,22 +1,35 @@
 import { RedisClient } from "bun";
+import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import type FailedJobService from "./failedJobService";
 import type { Job, Queue, QueuePriority } from "./index";
 import { jobRegistry } from "./jobRegistry";
 import { type QueueJobEnvelope, runQueueJob } from "./jobRunner";
 
-const QUEUE_LIST_KEY = "workhub:queue:default";
-const QUEUE_HIGH_KEY = "workhub:queue:high";
-const QUEUE_LOW_KEY = "workhub:queue:low";
+function queueListKey(): string {
+  return namespacedRedisKey("queue:default");
+}
+
+function queueHighKey(): string {
+  return namespacedRedisKey("queue:high");
+}
+
+function queueLowKey(): string {
+  return namespacedRedisKey("queue:low");
+}
+
+const QUEUE_LIST_KEY = queueListKey();
+const QUEUE_HIGH_KEY = queueHighKey();
+const QUEUE_LOW_KEY = queueLowKey();
 const QUEUE_KEYS = [QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY] as const;
 
 function queueKeyForPriority(priority: QueuePriority = "default"): string {
   switch (priority) {
     case "high":
-      return QUEUE_HIGH_KEY;
+      return queueHighKey();
     case "low":
-      return QUEUE_LOW_KEY;
+      return queueLowKey();
     default:
-      return QUEUE_LIST_KEY;
+      return queueListKey();
   }
 }
 

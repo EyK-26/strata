@@ -1,3 +1,4 @@
+import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 
@@ -12,7 +13,7 @@ type ThrottleBucket = { count: number; resetAt: number };
 const throttleBucketRegistries = new Set<Map<string, ThrottleBucket>>();
 
 function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Middleware {
-  const prefix = options.keyPrefix ?? "workhub:memory-throttle:";
+  const prefix = options.keyPrefix ?? namespacedRedisKey("memory-throttle:");
   const buckets = new Map<string, ThrottleBucket>();
   throttleBucketRegistries.add(buckets);
 

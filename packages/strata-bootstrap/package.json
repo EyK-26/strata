@@ -180,7 +180,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@getstrata/core": "^0.5.63",
+    "@getstrata/core": "^0.5.64",
     "typescript": "^5.9.0"
   }
 }

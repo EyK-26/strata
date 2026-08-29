@@ -1,4 +1,5 @@
 import { RedisClient } from "bun";
+import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 
@@ -48,7 +49,7 @@ function createScimThrottleMiddleware(options: ScimThrottleOptions): Middleware 
 
   return async (request: Request, next: () => Promise<Response>) => {
     const identity = resolveScimIdentity(request);
-    const key = `workhub:scim-throttle:${identity}`;
+    const key = `${namespacedRedisKey("scim-throttle:")}${identity}`;
 
     if (client) {
       const attempts = Number(await client.incr(key));

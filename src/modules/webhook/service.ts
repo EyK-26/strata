@@ -1,10 +1,10 @@
 import { resolveApplicationQueue } from "@getstrata/bootstrap/applicationRegistry";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
-import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
 import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
 import { assertSafeOutboundUrlResolved } from "@getstrata/core/security/safeUrl";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { appConfig } from "../../config/app";
+import { DispatchWebhookJob } from "./dispatchWebhookJob";
 import type WebhookRepository from "./repository";
 import type { WebhookDeliveryRecord, WebhookRecord } from "./types";
 
