@@ -1,5 +1,6 @@
 import { resolveApplicationQueue } from "@getstrata/bootstrap/applicationRegistry";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
+import { NotFoundError } from "@getstrata/core/errors/http";
 import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
 import { assertSafeOutboundUrlResolved } from "@getstrata/core/security/safeUrl";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
@@ -52,6 +53,55 @@ class WebhookService {
       ORDER BY id DESC
       LIMIT ${limit}
     `) as WebhookDeliveryRecord[];
+  }
+
+  async deactivate(id: number): Promise<WebhookRecord> {
+    await this.requireWebhook(id);
+    return await this.repository.updateByIdOrThrow(id, { active: false });
+  }
+
+  async activate(id: number): Promise<WebhookRecord> {
+    await this.requireWebhook(id);
+    return await this.repository.updateByIdOrThrow(id, { active: true });
+  }
+
+  async delete(id: number): Promise<void> {
+    await this.requireWebhook(id);
+    await this.repository.deleteById(id);
+  }
+
+  async retryDelivery(deliveryId: number): Promise<void> {
+    const delivery = await this.repository.findDeliveryById(deliveryId);
+
+    if (!delivery) {
+      throw new NotFoundError(`Webhook delivery ${deliveryId} not found.`);
+    }
+
+    const webhook = await this.requireWebhook(delivery.webhook_id);
+    const rawPayload = delivery.payload as unknown;
+    const payload =
+      typeof rawPayload === "string"
+        ? (JSON.parse(rawPayload) as Record<string, unknown>)
+        : rawPayload;
+    const queue = resolveApplicationQueue();
+    const job = createTrackedJob("webhook.dispatch", new DispatchWebhookJob());
+
+    await queue.dispatch(job, {
+      webhookId: webhook.id,
+      tenantId: webhook.tenant_id,
+      event: delivery.event,
+      payload,
+    });
+  }
+
+  private async requireWebhook(id: number): Promise<WebhookRecord> {
+    const webhook = await this.repository.findById(id);
+
+    if (!webhook) {
+      throw new NotFoundError(`Webhook ${id} not found.`);
+    }
+
+    return webhook;
   }
 
   async dispatch(event: string, payload: Record<string, unknown>): Promise<void> {

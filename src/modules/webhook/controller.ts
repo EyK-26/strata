@@ -1,6 +1,13 @@
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { createdResponse, jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
+import { ValidationError } from "@getstrata/core/errors/http";
+import {
+  createdResponse,
+  jsonResponse,
+  noContentResponse,
+  withErrorHandling,
+} from "@getstrata/core/http/response";
+import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { webhookServiceToken } from "./provider";
 import type WebhookService from "./service";
 
@@ -45,6 +52,42 @@ class WebhookController {
       events: webhook.events,
     });
   });
+
+  readonly deactivate = withErrorHandling(async (request: Request) => {
+    const webhook = await this.service.deactivate(this.requireId(request));
+    return jsonResponse({
+      id: webhook.id,
+      active: webhook.active,
+    });
+  });
+
+  readonly activate = withErrorHandling(async (request: Request) => {
+    const webhook = await this.service.activate(this.requireId(request));
+    return jsonResponse({
+      id: webhook.id,
+      active: webhook.active,
+    });
+  });
+
+  readonly destroy = withErrorHandling(async (request: Request) => {
+    await this.service.delete(this.requireId(request));
+    return noContentResponse();
+  });
+
+  readonly retryDelivery = withErrorHandling(async (request: Request) => {
+    await this.service.retryDelivery(this.requireId(request));
+    return jsonResponse({ retried: true });
+  });
+
+  private requireId(request: Request): number {
+    const params = (request as Request & { params?: { id: string } }).params;
+
+    if (!params?.id) {
+      throw new ValidationError("Id is required.");
+    }
+
+    return parsePositiveIntParam(params.id, "id");
+  }
 }
 
 export default WebhookController;

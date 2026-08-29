@@ -11,11 +11,59 @@ const dispatched: Array<{
 
 let WebhookService: typeof import("../../src/modules/webhook/service").default;
 
+const sampleWebhook: WebhookRecord = {
+  id: 1,
+  organization_id: null,
+  tenant_id: 1,
+  url: "http://hooks.example.com/all",
+  secret: "secret-all",
+  events: ["*"],
+  active: true,
+  created_at: new Date(),
+};
+
 const repository = {
   create: mock(async (input: Omit<WebhookRecord, "id">) => ({
     id: 42,
     ...input,
   })),
+  findById: mock(async (id: number) => (id === sampleWebhook.id ? sampleWebhook : null)),
+  updateByIdOrThrow: mock(async (id: number, values: Partial<WebhookRecord>) => ({
+    ...sampleWebhook,
+    id,
+    ...values,
+  })),
+  deleteById: mock(async () => true),
+  findDeliveryById: mock(async (id: number) =>
+    id === 8
+      ? {
+          id: 8,
+          webhook_id: 1,
+          event: "task.created",
+          payload: { id: 99 },
+          response_status: 500,
+          created_at: new Date(),
+        }
+      : id === 9
+        ? {
+            id: 9,
+            webhook_id: 1,
+            event: "task.updated",
+            payload: JSON.stringify({ id: 100 }),
+            response_status: null,
+            created_at: new Date(),
+          }
+        : id === 10
+          ? {
+              id: 10,
+              webhook_id: 404,
+              event: "task.deleted",
+              payload: { id: 1 },
+              response_status: null,
+              created_at: new Date(),
+            }
+          : null,
+  ),
   listActive: mock(
     async () =>
       [
@@ -86,6 +134,10 @@ describe("WebhookService", () => {
     dispatched.length = 0;
     repository.create.mockClear?.();
     repository.listActive.mockClear?.();
+    repository.findById.mockClear?.();
+    repository.updateByIdOrThrow.mockClear?.();
+    repository.deleteById.mockClear?.();
+    repository.findDeliveryById.mockClear?.();
   });
 
   test("creates a webhook with tenant defaults", async () => {
@@ -137,6 +189,34 @@ describe("WebhookService", () => {
     expect(dispatched).toEqual([
       { webhookId: 1, tenantId: 1, event: "task.created", payload: { id: 99 } },
       { webhookId: 2, tenantId: 1, event: "task.created", payload: { id: 99 } },
+    ]);
+  });
+
+  test("deactivates, activates, and deletes a webhook", async () => {
+    const service = new WebhookService(repository as never);
+
+    await expect(service.deactivate(1)).resolves.toEqual(
+      expect.objectContaining({ id: 1, active: false }),
+    );
+    await expect(service.activate(1)).resolves.toEqual(
+      expect.objectContaining({ id: 1, active: true }),
+    );
+    await service.delete(1);
+    expect(repository.deleteById).toHaveBeenCalledWith(1);
+    await expect(service.deactivate(99)).rejects.toThrow(/Webhook 99 not found/);
+  });
+
+  test("retries a stored delivery and parses JSON string payloads", async () => {
+    const service = new WebhookService(repository as never);
+
+    await service.retryDelivery(8);
+    await service.retryDelivery(9);
+    await expect(service.retryDelivery(404)).rejects.toThrow(/delivery 404 not found/);
+    await expect(service.retryDelivery(10)).rejects.toThrow(/Webhook 404 not found/);
+
+    expect(dispatched).toEqual([
+      { webhookId: 1, tenantId: 1, event: "task.created", payload: { id: 99 } },
+      { webhookId: 1, tenantId: 1, event: "task.updated", payload: { id: 100 } },
     ]);
   });
 });

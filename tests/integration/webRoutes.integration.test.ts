@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { getDatabase } from "../../src/db/connection";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -521,6 +522,98 @@ describe("web routes with server-htmx frontend", () => {
     const webhookHtml = await webhooks.text();
     expect(webhookHtml).toContain("Outbound webhooks");
     expect(webhookHtml).toContain("x-workhub-signature");
+  });
+
+  test("admin can deactivate, retry, and delete a webhook from HTML", async () => {
+    const csrf = await fetchCsrfFromPath("/webhooks", adminSessionCookie);
+    const url = `https://hooks.example.com/html-${Date.now()}`;
+    const createResponse = await fetch(`${baseUrl}/webhooks`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        url,
+        secret: "html-secret",
+        events: "task.created",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(createResponse.status).toBe(302);
+
+    const created = await runWithMigrationBypass(
+      async () =>
+        (await getDatabase()`
+          SELECT id FROM webhook WHERE url = ${url} ORDER BY id DESC LIMIT 1
+        `) as Array<{ id: number }>,
+    );
+    const webhookId = created[0]?.id;
+    expect(webhookId).toBeTruthy();
+
+    const deactivateCsrf = await fetchCsrfFromPath("/webhooks", adminSessionCookie);
+    const deactivated = await fetch(`${baseUrl}/webhooks/${webhookId}/deactivate`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: deactivateCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: deactivateCsrf.token }),
+    });
+    expect(deactivated.status).toBe(302);
+
+    const afterDeactivate = await fetch(`${baseUrl}/webhooks`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(await afterDeactivate.text()).toContain(`/webhooks/${webhookId}/activate`);
+
+    const activateCsrf = await fetchCsrfFromPath("/webhooks", adminSessionCookie);
+    const activated = await fetch(`${baseUrl}/webhooks/${webhookId}/activate`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: activateCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: activateCsrf.token }),
+    });
+    expect(activated.status).toBe(302);
+
+    const delivery = (await getDatabase()`
+      INSERT INTO webhook_delivery (webhook_id, event, payload, response_status)
+      VALUES (${webhookId}, ${"task.created"}, ${{ id: 7 }}, 500)
+      RETURNING id
+    `) as Array<{ id: number }>;
+    const deliveryId = delivery[0]?.id;
+    expect(deliveryId).toBeTruthy();
+
+    const withDelivery = await fetch(`${baseUrl}/webhooks`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(await withDelivery.text()).toContain(`/webhooks/deliveries/${deliveryId}/retry`);
+
+    const deleteCsrf = await fetchCsrfFromPath("/webhooks", adminSessionCookie);
+    const deleted = await fetch(`${baseUrl}/webhooks/${webhookId}/delete`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: deleteCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: deleteCsrf.token }),
+    });
+    expect(deleted.status).toBe(302);
+
+    const remaining = await runWithMigrationBypass(
+      async () =>
+        (await getDatabase()`
+          SELECT id FROM webhook WHERE id = ${webhookId}
+        `) as Array<{ id: number }>,
+    );
+    expect(remaining).toEqual([]);
   });
 
   test("GET /reset-password requires a valid signed URL", async () => {

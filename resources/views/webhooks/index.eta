@@ -41,6 +41,7 @@
         <th>URL</th>
         <th>Events</th>
         <th>Active</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -49,6 +50,23 @@
         <td><code><%= webhook.url %></code></td>
         <td><%= (webhook.events ?? []).join(", ") %></td>
         <td><%= webhook.active ? "yes" : "no" %></td>
+        <td>
+          <% if (webhook.active) { %>
+          <form method="post" action="/webhooks/<%= webhook.id %>/deactivate">
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit">Deactivate</button>
+          </form>
+          <% } else { %>
+          <form method="post" action="/webhooks/<%= webhook.id %>/activate">
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit">Activate</button>
+          </form>
+          <% } %>
+          <form method="post" action="/webhooks/<%= webhook.id %>/delete">
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit" class="danger-button">Delete</button>
+          </form>
+        </td>
       </tr>
       <% } %>
     </tbody>
@@ -67,6 +85,7 @@
         <th>Webhook</th>
         <th>Event</th>
         <th>Status</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -75,6 +94,12 @@
         <td>#<%= delivery.webhook_id %></td>
         <td><%= delivery.event %></td>
         <td><%= delivery.response_status ?? "—" %></td>
+        <td>
+          <form method="post" action="/webhooks/deliveries/<%= delivery.id %>/retry">
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit">Retry</button>
+          </form>
+        </td>
       </tr>
       <% } %>
     </tbody>

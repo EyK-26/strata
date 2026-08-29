@@ -8,6 +8,7 @@ import { flashResponse } from "@getstrata/core/http/flashSession";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
 import { formDataToRecord, parseFormBody } from "@getstrata/core/http/parseFormBody";
 import { withErrorHandling } from "@getstrata/core/http/response";
+import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { normalizeFieldErrors } from "@getstrata/core/http/webErrorResponse";
 import { webhookSignatureHeader } from "@getstrata/core/runtime/appKeyPrefix";
 import type { ViewEngine } from "@getstrata/core/view";
@@ -94,6 +95,48 @@ class WebhookWebController {
       throw error;
     }
   });
+
+  readonly deactivate = withErrorHandling(async (request: Request) => {
+    await this.service.deactivate(this.requireId(request));
+    return flashResponse(Response.redirect("/webhooks", 302), {
+      level: "success",
+      message: "Webhook deactivated.",
+    });
+  });
+
+  readonly activate = withErrorHandling(async (request: Request) => {
+    await this.service.activate(this.requireId(request));
+    return flashResponse(Response.redirect("/webhooks", 302), {
+      level: "success",
+      message: "Webhook activated.",
+    });
+  });
+
+  readonly destroy = withErrorHandling(async (request: Request) => {
+    await this.service.delete(this.requireId(request));
+    return flashResponse(Response.redirect("/webhooks", 302), {
+      level: "success",
+      message: "Webhook deleted.",
+    });
+  });
+
+  readonly retryDelivery = withErrorHandling(async (request: Request) => {
+    await this.service.retryDelivery(this.requireId(request));
+    return flashResponse(Response.redirect("/webhooks", 302), {
+      level: "success",
+      message: "Delivery queued for retry.",
+    });
+  });
+
+  private requireId(request: Request): number {
+    const params = (request as Request & { params?: { id: string } }).params;
+
+    if (!params?.id) {
+      throw new ValidationError("Id is required.");
+    }
+
+    return parsePositiveIntParam(params.id, "id");
+  }
 }
 
 function createWebhookWebRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
@@ -103,6 +146,18 @@ function createWebhookWebRoutes(dependencies: AppDependencies, kernel: HttpKerne
     "/webhooks": {
       GET: kernel.wrapWebGlobalAdmin(controller.index as unknown as RouteHandler),
       POST: kernel.wrapWebGlobalAdmin(controller.store as unknown as RouteHandler),
+    },
+    "/webhooks/:id/deactivate": {
+      POST: kernel.wrapWebGlobalAdmin(controller.deactivate as unknown as RouteHandler),
+    },
+    "/webhooks/:id/activate": {
+      POST: kernel.wrapWebGlobalAdmin(controller.activate as unknown as RouteHandler),
+    },
+    "/webhooks/:id/delete": {
+      POST: kernel.wrapWebGlobalAdmin(controller.destroy as unknown as RouteHandler),
+    },
+    "/webhooks/deliveries/:id/retry": {
+      POST: kernel.wrapWebGlobalAdmin(controller.retryDelivery as unknown as RouteHandler),
     },
   };
 }

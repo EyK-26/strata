@@ -212,7 +212,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/search` | HTMX search over organizations, projects, tasks, and comments |
 | `/notifications` | Session inbox (nav bell polls every 30s) |
 | `/billing` | Current tenant subscription |
-| `/webhooks` | Outbound webhook admin (global admin) |
+| `/webhooks` | Outbound webhook admin: create, deactivate, delete, retry delivery |
 | `/reports`, `/reports/organizations/:id` | Tenant summary and per-organization reports |
 | `/account` | Session profile, API tokens, GDPR export/delete, email verification, TOTP MFA |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |
@@ -256,7 +256,7 @@ Password and OAuth login:
 ### Audit log, webhooks, and search
 
 - `GET /api/v1/audit-logs`: recent model change audit entries (`audit:read`)
-- `GET/POST /api/v1/webhooks`: register outbound webhook endpoints (`webhooks:read`, `webhooks:write`)
+- `GET/POST /api/v1/webhooks`: register outbound webhook endpoints (`webhooks:read`, `webhooks:write`). Lifecycle: `POST /api/v1/webhooks/:id/deactivate`, `POST /api/v1/webhooks/:id/activate`, `DELETE /api/v1/webhooks/:id`, `POST /api/v1/webhooks/deliveries/:id/retry`
 - `GET /api/v1/search?q=registry`: PostgreSQL full-text search across tasks and comments, plus organization/project name matches
 
 Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC).
@@ -548,7 +548,7 @@ docker compose down -v --remove-orphans
 - `GET /reports/summary`, `GET /reports/organizations/:id`
 - `GET /search?q=...`
 - `GET /audit-logs`
-- `GET/POST /webhooks`
+- `GET/POST /webhooks`, `POST /webhooks/:id/deactivate`, `POST /webhooks/:id/activate`, `POST /webhooks/:id/delete`, `POST /webhooks/deliveries/:id/retry`
 - `GET/PATCH /users/me/notifications`, `PATCH /users/me/notifications/:id/read`
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
