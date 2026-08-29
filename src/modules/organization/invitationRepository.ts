@@ -14,6 +14,8 @@ type OrganizationInvitationRecord = {
 };
 
 class OrganizationInvitationRepository {
+  constructor() {}
+
   async create(input: {
     organizationId: number;
     email: string;
