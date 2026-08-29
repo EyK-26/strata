@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.72
+
+- OpenAPI treats `POST /auth/forgot-password` and `POST /auth/reset-password` as public operations (no bearer).
+
 ## 0.5.71
 
 - OpenAPI treats `POST /auth/login` and `POST /auth/register` as public (no bearer), including when routes are registered under `API_PREFIX`.

@@ -30,10 +30,12 @@ import {
   type NotificationIdParams,
   type OAuthProviderParams,
   parseCreateApiTokenBody,
+  parseForgotPasswordBody,
   parseLoginBody,
   parseNotificationIdParams,
   parseNotificationListQuery,
   parseRegisterBody,
+  parseResetPasswordBody,
   parseTokenIdParams,
   type TokenIdParams,
 } from "./requests";
@@ -117,6 +119,24 @@ class AuthController {
     return createdResponse({
       token: created.plainTextToken,
       user: toUserResource(record),
+    });
+  });
+
+  readonly forgotPassword = withErrorHandling(async (request: Request) => {
+    const body = await parseForgotPasswordBody(request);
+    await this.passwordResets.requestReset(body.email);
+
+    return jsonResponse({
+      message: "If that email exists, a reset link is on its way.",
+    });
+  });
+
+  readonly resetPassword = withErrorHandling(async (request: Request) => {
+    const body = await parseResetPasswordBody(request);
+    await this.passwordResets.resetPassword(body.email, body.token, body.password);
+
+    return jsonResponse({
+      message: "Password updated. Sign in with your new password.",
     });
   });
 

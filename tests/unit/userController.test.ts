@@ -68,6 +68,8 @@ function createController(services: {
   });
   container.set(passwordResetServiceToken, {
     sendEmailVerification: mock(async () => undefined),
+    requestReset: mock(async () => undefined),
+    resetPassword: mock(async () => undefined),
     ...services.passwordResets,
   });
   container.set(notificationServiceToken, {
@@ -260,6 +262,53 @@ describe("AuthController", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "Unable to resolve authenticated user." });
+  });
+
+  test("forgotPassword always returns a generic success message", async () => {
+    const requestReset = mock(async () => undefined);
+    const controller = createController({
+      passwordResets: { requestReset },
+    });
+
+    const response = await controller.forgotPassword(
+      new Request("http://example.test/auth/forgot-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ada@workhub.test" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      message: "If that email exists, a reset link is on its way.",
+    });
+    expect(requestReset).toHaveBeenCalledWith("ada@workhub.test");
+  });
+
+  test("resetPassword updates the password from the token payload", async () => {
+    const resetPassword = mock(async () => undefined);
+    const controller = createController({
+      passwordResets: { resetPassword },
+    });
+
+    const response = await controller.resetPassword(
+      new Request("http://example.test/auth/reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "ada@workhub.test",
+          token: "reset-token",
+          password: "password123",
+          password_confirmation: "password123",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      message: "Password updated. Sign in with your new password.",
+    });
+    expect(resetPassword).toHaveBeenCalledWith("ada@workhub.test", "reset-token", "password123");
   });
 
   test("oauthRedirect redirects to the provider authorization url", async () => {

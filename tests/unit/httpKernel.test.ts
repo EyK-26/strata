@@ -145,6 +145,30 @@ describe("HttpKernel", () => {
     }
   });
 
+  test("wrapWebGuest redirects signed-in users and lets guests through", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapWebGuest(async () => new Response("login"));
+
+      const guest = await handler(new Request("http://example.test/login"));
+      expect(guest.status).toBe(200);
+      expect(await guest.text()).toBe("login");
+
+      const signedIn = await handler(
+        new Request("http://example.test/login", {
+          headers: { "x-authenticated-user-id": "1" },
+        }),
+      );
+      expect(signedIn.status).toBe(302);
+      expect(signedIn.headers.get("Location")).toBe("/organizations");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
   test("wrapAuthenticated applies require-auth middleware", async () => {
     const kernel = createHttpKernel(createKernelDependencies());
     const handler = kernel.wrapAuthenticated(async () => Response.json({ ok: true }));

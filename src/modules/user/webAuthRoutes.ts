@@ -12,7 +12,7 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
     ...(isFeatureEnabled("registration")
       ? {
           "/register": {
-            GET: kernel.wrapWeb(controller.showRegister as unknown as RouteHandler),
+            GET: kernel.wrapWebGuest(controller.showRegister as unknown as RouteHandler),
             POST: wrapWebRegister(
               kernel,
               controller.register as unknown as RouteHandler,
@@ -22,7 +22,7 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
         }
       : {}),
     "/login": {
-      GET: kernel.wrapWeb(controller.showLogin as unknown as RouteHandler),
+      GET: kernel.wrapWebGuest(controller.showLogin as unknown as RouteHandler),
       POST: wrapWebLogin(
         kernel,
         controller.login as unknown as RouteHandler,
@@ -39,7 +39,7 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
       POST: kernel.wrapWebAuthenticated(controller.logout as unknown as RouteHandler),
     },
     "/forgot-password": {
-      GET: kernel.wrapWeb(controller.showForgotPassword as unknown as RouteHandler),
+      GET: kernel.wrapWebGuest(controller.showForgotPassword as unknown as RouteHandler),
       POST: wrapWebLogin(
         kernel,
         controller.sendResetLink as unknown as RouteHandler,

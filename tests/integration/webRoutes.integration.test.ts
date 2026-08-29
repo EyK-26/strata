@@ -244,6 +244,22 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.headers.get("location")).toBe("/organizations");
   });
 
+  test("GET /login and /register redirect signed-in users home", async () => {
+    const login = await fetch(`${baseUrl}/login`, {
+      redirect: "manual",
+      headers: { cookie: adminSessionCookie },
+    });
+    const register = await fetch(`${baseUrl}/register`, {
+      redirect: "manual",
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(login.status).toBe(302);
+    expect(login.headers.get("location")).toBe("/organizations");
+    expect(register.status).toBe(302);
+    expect(register.headers.get("location")).toBe("/organizations");
+  });
+
   test("GET /register and POST /register create a session without an API token", async () => {
     const page = await fetch(`${baseUrl}/register`);
     expect(page.status).toBe(200);

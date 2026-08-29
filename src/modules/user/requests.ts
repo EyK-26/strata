@@ -33,6 +33,16 @@ interface RegisterBodyDto {
   password: string;
 }
 
+interface ForgotPasswordBodyDto {
+  email: string;
+}
+
+interface ResetPasswordBodyDto {
+  email: string;
+  token: string;
+  password: string;
+}
+
 interface CreateApiTokenBodyDto {
   name: string;
   abilities?: string[];
@@ -101,6 +111,36 @@ class RegisterRequest extends FormRequest<RegisterBodyDto> {
 
 const registerRequest = new RegisterRequest();
 
+class ForgotPasswordRequest extends FormRequest<ForgotPasswordBodyDto> {
+  protected parse(payload: unknown): ForgotPasswordBodyDto {
+    const validated = validateObject(payload, {
+      email: [required(), stringRule(), emailRule()],
+    });
+
+    return { email: String(validated.email).trim() };
+  }
+}
+
+const forgotPasswordRequest = new ForgotPasswordRequest();
+
+class ResetPasswordRequest extends FormRequest<ResetPasswordBodyDto> {
+  protected parse(payload: unknown): ResetPasswordBodyDto {
+    const validated = validateObject(payload, {
+      email: [required(), stringRule(), emailRule()],
+      token: [required(), stringRule(), minLength(1)],
+      password: [required(), stringRule(), minLength(8), maxLength(128), confirmed("password")],
+    });
+
+    return {
+      email: String(validated.email).trim(),
+      token: String(validated.token),
+      password: validated.password as string,
+    };
+  }
+}
+
+const resetPasswordRequest = new ResetPasswordRequest();
+
 function parseTokenIdParams(params: TokenIdParams): { id: number } {
   return {
     id: parsePositiveIntParam(params.id, "token id"),
@@ -138,20 +178,32 @@ async function parseRegisterBody(request: Request): Promise<RegisterBodyDto> {
   return await registerRequest.validate(request);
 }
 
+async function parseForgotPasswordBody(request: Request): Promise<ForgotPasswordBodyDto> {
+  return await forgotPasswordRequest.validate(request);
+}
+
+async function parseResetPasswordBody(request: Request): Promise<ResetPasswordBodyDto> {
+  return await resetPasswordRequest.validate(request);
+}
+
 export type {
   CreateApiTokenBodyDto,
+  ForgotPasswordBodyDto,
   LoginBodyDto,
   NotificationIdParams,
   NotificationListQuery,
   OAuthProviderParams,
   RegisterBodyDto,
+  ResetPasswordBodyDto,
   TokenIdParams,
 };
 export {
   parseCreateApiTokenBody,
+  parseForgotPasswordBody,
   parseLoginBody,
   parseNotificationIdParams,
   parseNotificationListQuery,
   parseRegisterBody,
+  parseResetPasswordBody,
   parseTokenIdParams,
 };

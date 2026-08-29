@@ -120,6 +120,21 @@ class HttpKernel {
     return withErrorHandling(this.wrap("web", handler));
   }
 
+  /** Laravel `guest` / `RedirectIfAuthenticated` — signed-in users go to `home`. */
+  wrapWebGuest(handler: RouteHandler, home = "/organizations"): RouteHandler {
+    const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
+
+    return this.wrapWeb(async (request) => {
+      const user = await auth.resolve(request);
+
+      if (user) {
+        return Response.redirect(home, 302);
+      }
+
+      return handler(request);
+    });
+  }
+
   wrapWebPublicRead(handler: RouteHandler): RouteHandler {
     if (isPublicReadsEnabled()) {
       return this.wrapWeb(handler);

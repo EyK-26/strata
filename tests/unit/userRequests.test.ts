@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { BadRequestError, ValidationError } from "@getstrata/core/errors/http";
 import {
   parseCreateApiTokenBody,
+  parseForgotPasswordBody,
   parseLoginBody,
   parseRegisterBody,
+  parseResetPasswordBody,
   parseTokenIdParams,
 } from "../../src/modules/user/requests";
 
@@ -84,6 +86,35 @@ describe("user requests", () => {
     });
 
     await expect(parseRegisterBody(request)).rejects.toThrow(ValidationError);
+  });
+
+  test("parseForgotPasswordBody validates email", async () => {
+    const request = new Request("http://example.test/auth/forgot-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "ada@workhub.test" }),
+    });
+
+    await expect(parseForgotPasswordBody(request)).resolves.toEqual({ email: "ada@workhub.test" });
+  });
+
+  test("parseResetPasswordBody validates token and confirmed password", async () => {
+    const request = new Request("http://example.test/auth/reset-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "ada@workhub.test",
+        token: "reset-token",
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+
+    await expect(parseResetPasswordBody(request)).resolves.toEqual({
+      email: "ada@workhub.test",
+      token: "reset-token",
+      password: "password123",
+    });
   });
 
   test("parseCreateApiTokenBody validates token metadata", async () => {

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { hashApiToken } from "@getstrata/core/auth/tokenHash";
+import { getDatabase } from "../../src/db/connection";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -121,5 +123,65 @@ describe("spa-react frontend routes", () => {
 
     expect(meResponse.status).toBe(200);
     expect(await meResponse.json()).toMatchObject({ email, role: "member" });
+  });
+
+  test("POST /api/v1/auth/forgot-password and reset-password rotate a password", async () => {
+    const email = `spa-reset-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "SPA Reset",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(registered.status).toBe(201);
+
+    const forgot = await fetch(`${baseUrl}/api/v1/auth/forgot-password`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    expect(forgot.status).toBe(200);
+    expect(await forgot.json()).toEqual({
+      message: "If that email exists, a reset link is on its way.",
+    });
+
+    const token = "spa-reset-token";
+    await getDatabase()`
+      UPDATE password_reset_token
+      SET token = ${hashApiToken(token)}
+      WHERE email = ${email}
+    `;
+
+    const reset = await fetch(`${baseUrl}/api/v1/auth/reset-password`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email,
+        token,
+        password: "password456",
+        password_confirmation: "password456",
+      }),
+    });
+    expect(reset.status).toBe(200);
+
+    const oldLogin = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password: "password123" }),
+    });
+    expect(oldLogin.status).toBe(401);
+
+    const newLogin = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password: "password456" }),
+    });
+    expect(newLogin.status).toBe(201);
+    const body = (await newLogin.json()) as { token: string };
+    expect(body.token.length).toBeGreaterThan(20);
   });
 });

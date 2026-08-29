@@ -41,6 +41,10 @@ export class WorkHubClient {
     return await this.request("/audit-logs", { ...init, method: "GET" });
   }
 
+  async postAuthForgotPassword(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/auth/forgot-password", { ...init, method: "POST" });
+  }
+
   async postAuthLogin(init: RequestInit = {}): Promise<Response> {
     return await this.request("/auth/login", { ...init, method: "POST" });
   }
@@ -59,6 +63,10 @@ export class WorkHubClient {
 
   async postAuthRegister(init: RequestInit = {}): Promise<Response> {
     return await this.request("/auth/register", { ...init, method: "POST" });
+  }
+
+  async postAuthResetPassword(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/auth/reset-password", { ...init, method: "POST" });
   }
 
   async getAuthTokens(init: RequestInit = {}): Promise<Response> {

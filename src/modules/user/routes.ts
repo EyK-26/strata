@@ -11,6 +11,12 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
     "/auth/login": {
       POST: kernel.wrapLogin(controller.login),
     },
+    "/auth/forgot-password": {
+      POST: kernel.wrapLogin(controller.forgotPassword as unknown as RouteHandler),
+    },
+    "/auth/reset-password": {
+      POST: kernel.wrapLogin(controller.resetPassword as unknown as RouteHandler),
+    },
     ...(isFeatureEnabled("registration")
       ? {
           "/auth/register": {

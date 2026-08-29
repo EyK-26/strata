@@ -16,6 +16,8 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /auth/me": "Current authenticated user",
   "POST /auth/login": "Login with email and password",
   "POST /auth/register": "Register with name, email, and password",
+  "POST /auth/forgot-password": "Request a password reset email",
+  "POST /auth/reset-password": "Reset password with email and token",
   "GET /auth/tokens": "List API tokens",
   "POST /auth/tokens": "Create API token",
   "DELETE /auth/tokens/:id": "Revoke API token",
@@ -70,6 +72,8 @@ function requiresBearerAuth(path: string, method: string): boolean {
   if (
     relative.startsWith("/auth/login") ||
     relative.startsWith("/auth/register") ||
+    relative.startsWith("/auth/forgot-password") ||
+    relative.startsWith("/auth/reset-password") ||
     relative.startsWith("/auth/oauth")
   ) {
     return false;

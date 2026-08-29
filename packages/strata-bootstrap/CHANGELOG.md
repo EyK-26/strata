@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.59
+
+- `HttpKernel.wrapWebGuest()` is Laravel `guest` / `RedirectIfAuthenticated`. Signed-in HTML users redirect to `/organizations` (override the home path). Peer `@getstrata/core` `^0.5.72`.
+
 ## 0.2.58
 
 - Peer `@getstrata/core` `^0.5.71` for public OpenAPI `/auth/register`.
