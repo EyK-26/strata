@@ -1,5 +1,5 @@
 <div id="notifications-inbox" class="notifications-inbox">
-  <button type="button" class="notifications-toggle" aria-expanded="true">
+  <button type="button" class="notifications-toggle" aria-expanded="false" aria-haspopup="true">
     Inbox<% if (it.unreadCount) { %> (<%= it.unreadCount %>)<% } %>
   </button>
   <div class="notifications-panel">

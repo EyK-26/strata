@@ -37,7 +37,8 @@
           hx-trigger="load, every 30s"
           hx-swap="innerHTML"
         ></div>
-        <a href="/account" class="nav-user"><%= it.authUser.email %></a>
+        <a href="/account">Account</a>
+        <span class="nav-user"><%= it.authUser.email %></span>
         <form method="post" action="/logout" class="nav-logout">
           <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
           <button type="submit">Sign out</button>

@@ -221,6 +221,7 @@ a {
 }
 
 .notifications-panel {
+  display: none;
   position: absolute;
   right: 0;
   top: calc(100% + 0.4rem);
@@ -232,6 +233,11 @@ a {
   border-radius: 0.4rem;
   padding: 0.75rem;
   z-index: 20;
+}
+
+.notifications-inbox:hover .notifications-panel,
+.notifications-inbox:focus-within .notifications-panel {
+  display: block;
 }
 
 .notification-list {

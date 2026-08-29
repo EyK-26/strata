@@ -73,24 +73,23 @@ describe("password auth", () => {
         new TokenService(users, new ApiTokenRepository()),
         new OAuthIdentityRepository(),
       );
+      const email = `pw-change-${Date.now()}@workhub.test`;
+      const created = await users.create({
+        name: "Password Change User",
+        email,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        password_hash: await hashPassword("password"),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
 
-      try {
-        await authService.changePassword(2, "password", "new-member-pass");
-        await expect(
-          authService.authenticatePassword("member@workhub.test", "password"),
-        ).rejects.toThrow("Invalid credentials.");
-        const user = await authService.authenticatePassword(
-          "member@workhub.test",
-          "new-member-pass",
-        );
-        expect(user.id).toBe(2);
-      } finally {
-        await authService.changePassword(2, "new-member-pass", "password").catch(async () => {
-          await users.updateByIdOrThrow(2, {
-            password_hash: await hashPassword("password"),
-          });
-        });
-      }
+      await authService.changePassword(created.id, "password", "new-member-pass");
+      await expect(authService.authenticatePassword(email, "password")).rejects.toThrow(
+        "Invalid credentials.",
+      );
+      const user = await authService.authenticatePassword(email, "new-member-pass");
+      expect(user.id).toBe(created.id);
     });
   });
 
