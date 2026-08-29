@@ -32,6 +32,11 @@
     <input type="text" name="mfa_code" inputmode="numeric" autocomplete="one-time-code" />
   </label>
 
+  <label>
+    <input type="checkbox" name="remember" value="1" />
+    Remember me
+  </label>
+
   <button type="submit">Sign in</button>
 </form>
 

@@ -18,6 +18,7 @@ interface WebLoginBody {
   password: string;
   redirect?: string;
   mfaCode?: string;
+  remember?: boolean;
 }
 
 interface WebRegisterBody {
@@ -68,6 +69,7 @@ const webLoginRules = {
   password: [required(), stringRule()],
   redirect: [stringRule()],
   mfa_code: [stringRule()],
+  remember: [stringRule()],
 };
 
 const webRegisterRules = {
@@ -135,6 +137,7 @@ class WebLoginRequest extends WebFormRequest<WebLoginBody> {
       password: String(validated.password),
       ...(validated.redirect ? { redirect: String(validated.redirect) } : {}),
       ...(validated.mfa_code ? { mfaCode: String(validated.mfa_code) } : {}),
+      ...(isRememberChecked(validated.remember) ? { remember: true } : {}),
     };
   }
 }
@@ -223,6 +226,18 @@ class WebDeleteAccountRequest extends WebFormRequest<WebDeleteAccountBody> {
 
     return { password: String(validated.password) };
   }
+}
+
+function isRememberChecked(value: unknown): boolean {
+  if (value === true || value === 1) {
+    return true;
+  }
+
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  return normalized === "1" || normalized === "on" || normalized === "true" || normalized === "yes";
 }
 
 const webRegisterRequest = new WebRegisterRequest();

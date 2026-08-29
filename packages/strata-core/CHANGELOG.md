@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.76
+
+- `createSessionCookie(userId, { remember })` issues a longer HMAC session (default 30 days, `SESSION_REMEMBER_TTL_SECONDS`). Remember cookies embed the TTL in the signed payload so they stay valid after the default 7-day session lifetime. `SESSION_TTL_SECONDS` overrides the short session.
+
 ## 0.5.75
 
 - Laravel `password.confirm`: `@getstrata/core/auth/passwordConfirmCookie` (`createPasswordConfirmCookie`, `hasFreshPasswordConfirmation`, `clearPasswordConfirmCookie`) and `createRequirePasswordConfirmMiddleware()` (HTML 302 `/confirm-password`, JSON 423). Cookie name `PASSWORD_CONFIRM_COOKIE_NAME` (default `workhub_password_confirmed`), TTL `PASSWORD_CONFIRM_TIMEOUT` (default 10800s).

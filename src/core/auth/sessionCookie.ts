@@ -2,9 +2,30 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 const SESSION_COOKIE = "workhub_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const SESSION_REMEMBER_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+interface CreateSessionCookieOptions {
+  remember?: boolean;
+}
 
 function sessionCookieName(): string {
   return process.env.SESSION_COOKIE_NAME?.trim() || SESSION_COOKIE;
+}
+
+function parsePositiveSeconds(raw: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(raw ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function sessionTtlSeconds(): number {
+  return parsePositiveSeconds(process.env.SESSION_TTL_SECONDS, SESSION_TTL_SECONDS);
+}
+
+function sessionRememberTtlSeconds(): number {
+  return parsePositiveSeconds(
+    process.env.SESSION_REMEMBER_TTL_SECONDS,
+    SESSION_REMEMBER_TTL_SECONDS,
+  );
 }
 
 function resolveSessionSecret(): string {
@@ -16,8 +37,9 @@ function resolveSessionSecret(): string {
   );
 }
 
-function signSession(userId: number, issuedAt: number): string {
-  const payload = `${userId}.${issuedAt}`;
+function signSession(userId: number, issuedAt: number, ttlSeconds?: number): string {
+  const payload =
+    ttlSeconds === undefined ? `${userId}.${issuedAt}` : `${userId}.${issuedAt}.${ttlSeconds}`;
   const signature = createHmac("sha256", resolveSessionSecret()).update(payload).digest("hex");
 
   return `${payload}.${signature}`;
@@ -41,32 +63,33 @@ function readCookieValue(request: Request, cookieName: string): string | null {
   return null;
 }
 
-function readSessionUserId(request: Request): number | null {
-  const cookieValue = readCookieValue(request, sessionCookieName());
-
-  if (!cookieValue) {
-    return null;
-  }
-
-  const parts = cookieValue.split(".");
-
-  if (parts.length !== 3) {
-    return null;
-  }
-
-  const [userIdRaw, issuedAtRaw, cookieSignature] = parts;
-  const userId = Number.parseInt(String(userIdRaw), 10);
-  const issuedAt = Number.parseInt(String(issuedAtRaw), 10);
+function readSignedSession(
+  userIdRaw: string,
+  issuedAtRaw: string,
+  cookieSignature: string | undefined,
+  ttlSeconds: number,
+  remember: boolean,
+): number | null {
+  const userId = Number.parseInt(userIdRaw, 10);
+  const issuedAt = Number.parseInt(issuedAtRaw, 10);
 
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isFinite(issuedAt)) {
     return null;
   }
 
-  if (Date.now() - issuedAt > SESSION_TTL_SECONDS * 1000) {
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
     return null;
   }
 
-  const expectedSignature = signSession(userId, issuedAt).split(".").pop();
+  if (Date.now() - issuedAt > ttlSeconds * 1000) {
+    return null;
+  }
+
+  const expectedSignature = (
+    remember ? signSession(userId, issuedAt, ttlSeconds) : signSession(userId, issuedAt)
+  )
+    .split(".")
+    .pop();
 
   if (!expectedSignature || !cookieSignature) {
     return null;
@@ -86,12 +109,49 @@ function readSessionUserId(request: Request): number | null {
   return userId;
 }
 
-function createSessionCookie(userId: number): string {
+function readSessionUserId(request: Request): number | null {
+  const cookieValue = readCookieValue(request, sessionCookieName());
+
+  if (!cookieValue) {
+    return null;
+  }
+
+  const parts = cookieValue.split(".");
+
+  if (parts.length === 4) {
+    const [userIdRaw, issuedAtRaw, ttlRaw, cookieSignature] = parts;
+    return readSignedSession(
+      String(userIdRaw),
+      String(issuedAtRaw),
+      cookieSignature,
+      Number.parseInt(String(ttlRaw), 10),
+      true,
+    );
+  }
+
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const [userIdRaw, issuedAtRaw, cookieSignature] = parts;
+  return readSignedSession(
+    String(userIdRaw),
+    String(issuedAtRaw),
+    cookieSignature,
+    sessionTtlSeconds(),
+    false,
+  );
+}
+
+function createSessionCookie(userId: number, options: CreateSessionCookieOptions = {}): string {
   const issuedAt = Date.now();
-  const value = signSession(userId, issuedAt);
+  const ttlSeconds = options.remember ? sessionRememberTtlSeconds() : sessionTtlSeconds();
+  const value = options.remember
+    ? signSession(userId, issuedAt, ttlSeconds)
+    : signSession(userId, issuedAt);
   const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
 
-  return `${sessionCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secure}`;
+  return `${sessionCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}${secure}`;
 }
 
 function clearSessionCookie(): string {
@@ -100,11 +160,15 @@ function clearSessionCookie(): string {
   return `${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
+export type { CreateSessionCookieOptions };
 export {
   clearSessionCookie,
   createSessionCookie,
   readSessionUserId,
   SESSION_COOKIE,
+  SESSION_REMEMBER_TTL_SECONDS,
   SESSION_TTL_SECONDS,
   sessionCookieName,
+  sessionRememberTtlSeconds,
+  sessionTtlSeconds,
 };

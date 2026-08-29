@@ -117,6 +117,22 @@ describe("WebAuthController", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/projects");
     expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=604800");
+  });
+
+  test("login with remember sets a longer session cookie", async () => {
+    const controller = createController({});
+
+    const response = await controller.login(
+      new Request("http://example.test/login", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "email=admin%40workhub.test&password=password123&remember=1",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=2592000");
   });
 
   test("login falls back to organizations for unsafe redirects", async () => {

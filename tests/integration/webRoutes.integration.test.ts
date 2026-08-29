@@ -270,7 +270,37 @@ describe("web routes with server-htmx frontend", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("set-cookie")).toContain("workhub_session=");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=604800");
     expect(response.headers.get("location")).toBe("/organizations");
+  });
+
+  test("POST /login with remember sets a 30-day session cookie", async () => {
+    const csrf = await fetchCsrfFromPath("/login");
+
+    const response = await fetch(`${baseUrl}/login`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: csrf.cookies,
+      },
+      body: new URLSearchParams({
+        email: "member@workhub.test",
+        password: "password",
+        redirect: "/organizations",
+        remember: "1",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("set-cookie")).toContain("workhub_session=");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=2592000");
+
+    const account = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: mergeCookieHeader("", response) },
+    });
+    expect(account.status).toBe(200);
   });
 
   test("GET /login and /register redirect signed-in users home", async () => {

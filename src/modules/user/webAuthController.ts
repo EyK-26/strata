@@ -215,7 +215,7 @@ class WebAuthController {
         status: 302,
         headers: {
           Location: redirect,
-          "Set-Cookie": createSessionCookie(user.id),
+          "Set-Cookie": createSessionCookie(user.id, { remember: Boolean(body.remember) }),
         },
       });
     } catch (error) {

@@ -22,6 +22,22 @@ describe("webRequests", () => {
     });
   });
 
+  test("parseWebLoginBody accepts a remember checkbox", async () => {
+    await expect(
+      parseWebLoginBody(
+        new Request("http://example.test/login", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "email=user%40workhub.test&password=password123&remember=1",
+        }),
+      ),
+    ).resolves.toEqual({
+      email: "user@workhub.test",
+      password: "password123",
+      remember: true,
+    });
+  });
+
   test("parseWebLoginBody trims email and includes redirect when present", async () => {
     const request = new Request("http://example.test/login", {
       method: "POST",

@@ -4,8 +4,11 @@ import {
   createSessionCookie,
   readSessionUserId,
   SESSION_COOKIE,
+  SESSION_REMEMBER_TTL_SECONDS,
   SESSION_TTL_SECONDS,
   sessionCookieName,
+  sessionRememberTtlSeconds,
+  sessionTtlSeconds,
 } from "@getstrata/core/auth/sessionCookie";
 
 describe("sessionCookie", () => {
@@ -14,6 +17,8 @@ describe("sessionCookie", () => {
   const originalOAuthStateSecret = process.env.OAUTH_STATE_SECRET;
   const originalAdminApiToken = process.env.ADMIN_API_TOKEN;
   const originalSessionCookieName = process.env.SESSION_COOKIE_NAME;
+  const originalSessionTtl = process.env.SESSION_TTL_SECONDS;
+  const originalRememberTtl = process.env.SESSION_REMEMBER_TTL_SECONDS;
 
   afterEach(() => {
     if (originalAppEnv === undefined) {
@@ -45,6 +50,18 @@ describe("sessionCookie", () => {
     } else {
       process.env.SESSION_COOKIE_NAME = originalSessionCookieName;
     }
+
+    if (originalSessionTtl === undefined) {
+      delete process.env.SESSION_TTL_SECONDS;
+    } else {
+      process.env.SESSION_TTL_SECONDS = originalSessionTtl;
+    }
+
+    if (originalRememberTtl === undefined) {
+      delete process.env.SESSION_REMEMBER_TTL_SECONDS;
+    } else {
+      process.env.SESSION_REMEMBER_TTL_SECONDS = originalRememberTtl;
+    }
   });
 
   test("creates and reads a signed session cookie", () => {
@@ -59,6 +76,8 @@ describe("sessionCookie", () => {
   });
 
   test("rejects tampered session cookies", () => {
+    expect(readSessionUserId(new Request("http://example.test/organizations"))).toBeNull();
+
     const request = new Request("http://example.test/organizations", {
       headers: {
         cookie: "workhub_session=999.123.deadbeef",
@@ -205,5 +224,113 @@ describe("sessionCookie", () => {
 
     process.env.SESSION_COOKIE_NAME = "   ";
     expect(sessionCookieName()).toBe("workhub_session");
+  });
+
+  test("creates a longer remember-me cookie that stays valid past the session TTL", () => {
+    const cookie = createSessionCookie(42, { remember: true });
+    expect(cookie).toContain(`Max-Age=${SESSION_REMEMBER_TTL_SECONDS}`);
+
+    const pair = cookie.split(";")[0] ?? "";
+    const request = new Request("http://example.test/", { headers: { cookie: pair } });
+    expect(readSessionUserId(request)).toBe(42);
+
+    const encoded = pair.split("=")[1] ?? "";
+    const decoded = decodeURIComponent(encoded);
+    const parts = decoded.split(".");
+    expect(parts).toHaveLength(4);
+    expect(parts[2]).toBe(String(SESSION_REMEMBER_TTL_SECONDS));
+  });
+
+  test("rejects malformed, expired, and invalid remember-me cookies", () => {
+    const now = Date.now();
+
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: { cookie: `workhub_session=${encodeURIComponent(`42.${now}.0.deadbeef`)}` },
+        }),
+      ),
+    ).toBeNull();
+
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: { cookie: `workhub_session=${encodeURIComponent(`42.${now}.abc.deadbeef`)}` },
+        }),
+      ),
+    ).toBeNull();
+
+    const expiredIssuedAt = now - SESSION_REMEMBER_TTL_SECONDS * 1000 - 1_000;
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: {
+            cookie: `workhub_session=${encodeURIComponent(`${42}.${expiredIssuedAt}.${SESSION_REMEMBER_TTL_SECONDS}.deadbeef`)}`,
+          },
+        }),
+      ),
+    ).toBeNull();
+
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: {
+            cookie: `workhub_session=${encodeURIComponent(`42.${now}.${SESSION_REMEMBER_TTL_SECONDS}.`)}`,
+          },
+        }),
+      ),
+    ).toBeNull();
+
+    const validCookie =
+      createSessionCookie(42, { remember: true }).split(";")[0]?.split("=")[1] ?? "";
+    const decoded = decodeURIComponent(validCookie);
+    const [userIdRaw, issuedAtRaw, ttlRaw, signature] = decoded.split(".");
+    const shortSignature = "ab";
+
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: {
+            cookie: `workhub_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${ttlRaw}.${shortSignature}`)}`,
+          },
+        }),
+      ),
+    ).toBeNull();
+
+    const badSignature = `${signature?.slice(0, -1)}${signature?.slice(-1) === "a" ? "b" : "a"}`;
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: {
+            cookie: `workhub_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${ttlRaw}.${badSignature}`)}`,
+          },
+        }),
+      ),
+    ).toBeNull();
+
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", {
+          headers: {
+            cookie: `workhub_session=${encodeURIComponent(`0.${now}.${SESSION_REMEMBER_TTL_SECONDS}.deadbeef`)}`,
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  test("overrides session and remember TTLs from the environment", () => {
+    process.env.SESSION_TTL_SECONDS = "120";
+    process.env.SESSION_REMEMBER_TTL_SECONDS = "3600";
+
+    expect(sessionTtlSeconds()).toBe(120);
+    expect(sessionRememberTtlSeconds()).toBe(3600);
+    expect(createSessionCookie(3)).toContain("Max-Age=120");
+    expect(createSessionCookie(3, { remember: true })).toContain("Max-Age=3600");
+
+    process.env.SESSION_TTL_SECONDS = "0";
+    process.env.SESSION_REMEMBER_TTL_SECONDS = "nope";
+    expect(sessionTtlSeconds()).toBe(SESSION_TTL_SECONDS);
+    expect(sessionRememberTtlSeconds()).toBe(SESSION_REMEMBER_TTL_SECONDS);
   });
 });

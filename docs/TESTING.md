@@ -31,7 +31,7 @@ Integration tests and the SPA client use `cache: 'no-store'` on API fetches.
 ## HTMX session login
 
 1. `GET /login` — read `csrf-token` meta and `workhub_csrf` cookie.
-2. `POST /login` with form fields `email`, `password`, `redirect`, `_token`.
+2. `POST /login` with form fields `email`, `password`, `redirect`, `_token`, and optional `remember=1` (30-day HMAC session; `SESSION_REMEMBER_TTL_SECONDS`).
 3. Follow `workhub_session` cookie on subsequent requests.
 4. Sensitive HTML (`GET /account/export`, `POST /account/delete`) requires a recent `POST /confirm-password` (`workhub_password_confirmed` cookie).
 

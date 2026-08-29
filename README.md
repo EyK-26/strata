@@ -123,7 +123,7 @@ Choose how the app is initialized:
 | Mode | Env | What you get |
 |------|-----|--------------|
 | **API-only** (default) | `FRONTEND_MODE=api` | JSON API under `/api/v1`, static landing at `/` |
-| **Server + HTMX** | `FRONTEND_MODE=server-htmx` | Eta templates (HTML + `<% %>`, not Pug), cookie sessions, HTMX partials, `/login`, `/register`, `/email/verify` |
+| **Server + HTMX** | `FRONTEND_MODE=server-htmx` | Eta templates (HTML + `<% %>`, not Pug), cookie sessions (optional `remember` on `/login`), HTMX partials, `/login`, `/register`, `/email/verify` |
 | **SPA (React)** | `FRONTEND_MODE=spa-react` | Bun + React app served from `/app/*` |
 
 Switch modes in an existing project:
@@ -257,7 +257,7 @@ Password and OAuth login:
 - `POST /api/v1/auth/email/verification-notification`: `{ "email" }` always returns a generic success message (does not leak whether the account exists or still needs verification)
 - `GET /api/v1/auth/oauth/:provider`: redirect to provider (GitHub when configured; `mock` in non-production)
 - `GET /api/v1/auth/oauth/:provider/callback?code=...`: exchange OAuth code for a bearer token
-- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token) and ensure a personal workspace. Login lists registered providers.
+- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token) and ensure a personal workspace. Login lists registered providers. `POST /login` accepts `remember=1` for a 30-day HMAC session (`SESSION_REMEMBER_TTL_SECONDS`).
 
 ### Audit log, webhooks, and search
 
