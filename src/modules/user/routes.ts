@@ -1,6 +1,7 @@
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
+import { isFeatureEnabled } from "../../config/features";
 import AuthController from "./controller";
 
 function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
@@ -10,6 +11,13 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
     "/auth/login": {
       POST: kernel.wrapLogin(controller.login),
     },
+    ...(isFeatureEnabled("registration")
+      ? {
+          "/auth/register": {
+            POST: kernel.wrapRegister(controller.register as unknown as RouteHandler),
+          },
+        }
+      : {}),
     "/auth/oauth/:provider": {
       GET: controller.oauthRedirect,
     },

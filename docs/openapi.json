@@ -17,7 +17,7 @@
   "paths": {
     "/api/v1/admin/features": {
       "get": {
-        "summary": "GET /api/v1/admin/features",
+        "summary": "Runtime feature flags",
         "responses": {
           "200": {
             "description": "OK"
@@ -79,7 +79,7 @@
     },
     "/api/v1/admin/stats": {
       "get": {
-        "summary": "GET /api/v1/admin/stats",
+        "summary": "Platform statistics",
         "responses": {
           "200": {
             "description": "OK"
@@ -110,7 +110,7 @@
     },
     "/api/v1/admin/tenants": {
       "get": {
-        "summary": "GET /api/v1/admin/tenants",
+        "summary": "List tenants",
         "responses": {
           "200": {
             "description": "OK"
@@ -268,7 +268,7 @@
     },
     "/api/v1/audit-logs": {
       "get": {
-        "summary": "GET /api/v1/audit-logs",
+        "summary": "List audit log entries",
         "responses": {
           "200": {
             "description": "OK"
@@ -299,12 +299,7 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "summary": "POST /api/v1/auth/login",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "summary": "Login with email and password",
         "responses": {
           "200": {
             "description": "OK"
@@ -335,7 +330,12 @@
     },
     "/api/v1/auth/me": {
       "get": {
-        "summary": "GET /api/v1/auth/me",
+        "summary": "Current authenticated user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -426,9 +426,45 @@
         }
       }
     },
+    "/api/v1/auth/register": {
+      "post": {
+        "summary": "Register with name, email, and password",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
     "/api/v1/auth/tokens": {
       "get": {
-        "summary": "GET /api/v1/auth/tokens",
+        "summary": "List API tokens",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -457,7 +493,7 @@
         }
       },
       "post": {
-        "summary": "POST /api/v1/auth/tokens",
+        "summary": "Create API token",
         "security": [
           {
             "bearerAuth": []
@@ -493,7 +529,7 @@
     },
     "/api/v1/auth/tokens/{id}": {
       "delete": {
-        "summary": "DELETE /api/v1/auth/tokens/:id",
+        "summary": "Revoke API token",
         "security": [
           {
             "bearerAuth": []
@@ -529,7 +565,7 @@
     },
     "/api/v1/billing/subscription": {
       "get": {
-        "summary": "GET /api/v1/billing/subscription",
+        "summary": "Current tenant subscription",
         "responses": {
           "200": {
             "description": "OK"
@@ -560,12 +596,7 @@
     },
     "/api/v1/billing/webhooks/stripe": {
       "post": {
-        "summary": "POST /api/v1/billing/webhooks/stripe",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "summary": "Stripe webhook receiver (stub)",
         "responses": {
           "200": {
             "description": "OK"
@@ -726,7 +757,7 @@
     },
     "/api/v1/organizations": {
       "get": {
-        "summary": "GET /api/v1/organizations",
+        "summary": "List organizations",
         "responses": {
           "200": {
             "description": "OK"
@@ -755,7 +786,7 @@
         }
       },
       "post": {
-        "summary": "POST /api/v1/organizations",
+        "summary": "Create organization",
         "security": [
           {
             "bearerAuth": []
@@ -890,7 +921,7 @@
     },
     "/api/v1/organizations/{id}/members": {
       "get": {
-        "summary": "GET /api/v1/organizations/:id/members",
+        "summary": "List organization members",
         "responses": {
           "200": {
             "description": "OK"
@@ -1025,7 +1056,7 @@
     },
     "/api/v1/projects": {
       "get": {
-        "summary": "GET /api/v1/projects",
+        "summary": "List projects",
         "responses": {
           "200": {
             "description": "OK"
@@ -1054,7 +1085,7 @@
         }
       },
       "post": {
-        "summary": "POST /api/v1/projects",
+        "summary": "Create project",
         "security": [
           {
             "bearerAuth": []
@@ -1220,7 +1251,7 @@
     },
     "/api/v1/reports/summary": {
       "get": {
-        "summary": "GET /api/v1/reports/summary",
+        "summary": "Cross-module summary report",
         "responses": {
           "200": {
             "description": "OK"
@@ -1251,7 +1282,7 @@
     },
     "/api/v1/search": {
       "get": {
-        "summary": "GET /api/v1/search",
+        "summary": "Full-text search tasks and comments",
         "responses": {
           "200": {
             "description": "OK"
@@ -1282,7 +1313,7 @@
     },
     "/api/v1/tasks": {
       "get": {
-        "summary": "GET /api/v1/tasks",
+        "summary": "List tasks",
         "responses": {
           "200": {
             "description": "OK"
@@ -1311,7 +1342,7 @@
         }
       },
       "post": {
-        "summary": "POST /api/v1/tasks",
+        "summary": "Create task",
         "security": [
           {
             "bearerAuth": []
@@ -1576,7 +1607,7 @@
     },
     "/api/v1/users/me": {
       "delete": {
-        "summary": "DELETE /api/v1/users/me",
+        "summary": "GDPR account erasure (anonymize user, revoke tokens)",
         "security": [
           {
             "bearerAuth": []
@@ -1612,7 +1643,7 @@
     },
     "/api/v1/users/me/export": {
       "get": {
-        "summary": "GET /api/v1/users/me/export",
+        "summary": "GDPR export of user data",
         "responses": {
           "200": {
             "description": "OK"
@@ -1744,7 +1775,7 @@
     },
     "/api/v1/webhooks": {
       "get": {
-        "summary": "GET /api/v1/webhooks",
+        "summary": "List webhooks",
         "responses": {
           "200": {
             "description": "OK"
@@ -1773,7 +1804,7 @@
         }
       },
       "post": {
-        "summary": "POST /api/v1/webhooks",
+        "summary": "Create webhook",
         "security": [
           {
             "bearerAuth": []

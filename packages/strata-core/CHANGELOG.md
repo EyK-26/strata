@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.71
+
+- OpenAPI treats `POST /auth/login` and `POST /auth/register` as public (no bearer), including when routes are registered under `API_PREFIX`.
+- Route summaries look up `PUBLIC_ROUTE_DESCRIPTIONS` after stripping `API_PREFIX`.
+
 ## 0.5.70
 
 - `OAuthProvider.getAuthorizationUrl` / `exchangeCode` accept an optional `redirectUri` so HTMX login can use `/oauth/:provider/callback` while the API keeps `OAUTH_REDIRECT_URI`.

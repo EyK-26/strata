@@ -14,11 +14,18 @@ import {
   createOAuthStateCookie,
   verifyOAuthState,
 } from "@getstrata/core/security/oauthState";
+import { isFeatureEnabled } from "../../config/features";
 import ApiTokenRepository from "./apiTokenRepository";
 import type AuthService from "./authService";
 import type NotificationService from "./notificationService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
-import { authServiceToken, notificationServiceToken, tokenServiceToken } from "./provider";
+import type PasswordResetService from "./passwordResetService";
+import {
+  authServiceToken,
+  notificationServiceToken,
+  passwordResetServiceToken,
+  tokenServiceToken,
+} from "./provider";
 import {
   type NotificationIdParams,
   type OAuthProviderParams,
@@ -26,6 +33,7 @@ import {
   parseLoginBody,
   parseNotificationIdParams,
   parseNotificationListQuery,
+  parseRegisterBody,
   parseTokenIdParams,
   type TokenIdParams,
 } from "./requests";
@@ -45,6 +53,10 @@ class AuthController {
 
   private get authService(): AuthService {
     return resolveService(this.dependencies, authServiceToken);
+  }
+
+  private get passwordResets(): PasswordResetService {
+    return resolveService(this.dependencies, passwordResetServiceToken);
   }
 
   private get notifications(): NotificationService {
@@ -78,6 +90,33 @@ class AuthController {
     return createdResponse({
       token: created.plainTextToken,
       user: toUserResource(user),
+    });
+  });
+
+  readonly register = withErrorHandling(async (request: Request) => {
+    const body = await parseRegisterBody(request);
+    const user = await this.authService.registerWithPassword(body.name, body.email, body.password);
+
+    if (isFeatureEnabled("emailVerification")) {
+      await this.passwordResets.sendEmailVerification(user);
+
+      return createdResponse({
+        user: toUserResource(user),
+      });
+    }
+
+    const created = await this.authService.loginWithPassword(body.email, body.password);
+    const authUser = await this.tokens.resolveUserFromToken(created.plainTextToken);
+
+    if (!authUser) {
+      throw new Error("Unable to resolve authenticated user.");
+    }
+
+    const record = await this.tokens.findByIdOrThrow(Number(authUser.id));
+
+    return createdResponse({
+      token: created.plainTextToken,
+      user: toUserResource(record),
     });
   });
 

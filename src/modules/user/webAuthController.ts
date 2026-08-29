@@ -93,6 +93,25 @@ class WebAuthController {
     );
   });
 
+  readonly loginThrottled = withErrorHandling(async () => {
+    return await this.renderLogin(
+      { errors: { email: ["Too many login attempts. Try again shortly."] } },
+      429,
+    );
+  });
+
+  readonly forgotPasswordThrottled = withErrorHandling(async () => {
+    return htmlResponse(
+      await this.view.render("auth/forgot-password", {
+        title: "Forgot password",
+        errors: { email: ["Too many reset attempts. Try again shortly."] },
+        old: {},
+        sent: false,
+      }),
+      { status: 429 },
+    );
+  });
+
   readonly register = withErrorHandling(async (request: Request) => {
     const body = await parseWebRegisterBody(request);
 

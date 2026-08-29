@@ -22,6 +22,38 @@ describe("generateOpenApiSpec", () => {
     }
   });
 
+  test("marks login and register as public OpenAPI operations", () => {
+    const spec = generateOpenApiSpec([
+      { method: "POST", path: "/auth/login", middleware: ["global", "api"] },
+      { method: "POST", path: "/auth/register", middleware: ["global", "api"] },
+      { method: "GET", path: "/auth/me", middleware: ["global", "api"] },
+    ]);
+
+    expect(spec.paths["/auth/login"]?.post?.summary).toBe("Login with email and password");
+    expect(spec.paths["/auth/register"]?.post?.summary).toBe(
+      "Register with name, email, and password",
+    );
+    expect(spec.paths["/auth/login"]?.post?.security).toBeUndefined();
+    expect(spec.paths["/auth/register"]?.post?.security).toBeUndefined();
+    expect(spec.paths["/auth/me"]?.get?.security).toEqual([{ bearerAuth: [] }]);
+  });
+
+  test("strips API_PREFIX when classifying public auth operations", () => {
+    const spec = generateOpenApiSpec([
+      { method: "POST", path: "/api/v1/auth/login", middleware: ["global", "api"] },
+      { method: "POST", path: "/api/v1/auth/register", middleware: ["global", "api"] },
+      { method: "GET", path: "/api/v1/auth/me", middleware: ["global", "api"] },
+    ]);
+
+    expect(spec.paths["/api/v1/auth/login"]?.post?.summary).toBe("Login with email and password");
+    expect(spec.paths["/api/v1/auth/register"]?.post?.summary).toBe(
+      "Register with name, email, and password",
+    );
+    expect(spec.paths["/api/v1/auth/login"]?.post?.security).toBeUndefined();
+    expect(spec.paths["/api/v1/auth/register"]?.post?.security).toBeUndefined();
+    expect(spec.paths["/api/v1/auth/me"]?.get?.security).toEqual([{ bearerAuth: [] }]);
+  });
+
   test("renders valid TypeScript SDK method names", () => {
     const previousClass = process.env.APP_SDK_CLASS;
     const previousName = process.env.APP_NAME;

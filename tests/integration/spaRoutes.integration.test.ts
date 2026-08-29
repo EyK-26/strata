@@ -96,4 +96,30 @@ describe("spa-react frontend routes", () => {
 
     expect(meResponse.status).toBe(200);
   });
+
+  test("POST /api/v1/auth/register returns a bearer token for SPA clients", async () => {
+    const email = `spa-register-${Date.now()}@workhub.test`;
+    const response = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "SPA Register",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { token: string; user: { email: string } };
+    expect(body.token.length).toBeGreaterThan(20);
+    expect(body.user.email).toBe(email);
+
+    const meResponse = await fetch(`${baseUrl}/api/v1/auth/me`, {
+      headers: { authorization: `Bearer ${body.token}` },
+    });
+
+    expect(meResponse.status).toBe(200);
+    expect(await meResponse.json()).toMatchObject({ email, role: "member" });
+  });
 });

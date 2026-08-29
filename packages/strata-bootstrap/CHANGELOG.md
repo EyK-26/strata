@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.58
+
+- Peer `@getstrata/core` `^0.5.71` for public OpenAPI `/auth/register`.
+
 ## 0.2.57
 
 - Peer `@getstrata/core` `^0.5.70` for optional OAuth `redirectUri`.

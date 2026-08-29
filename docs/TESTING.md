@@ -21,7 +21,7 @@ After `bun run cli migrate:fresh --seed` (or integration test setup), these acco
 
 ## Bearer tokens (API / SPA)
 
-1. `POST /api/v1/auth/login` with `{ "email", "password" }`.
+1. `POST /api/v1/auth/login` with `{ "email", "password" }`, or `POST /api/v1/auth/register` with `{ "name", "email", "password", "password_confirmation" }`.
 2. Use the returned token as `Authorization: Bearer <token>`.
 
 Integration tests and the SPA client use `cache: 'no-store'` on API fetches.

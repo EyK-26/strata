@@ -314,6 +314,22 @@ describe("WebAuthController", () => {
     expect(await response.text()).toContain("Too many registration attempts");
   });
 
+  test("loginThrottled returns a 429 login form", async () => {
+    const controller = createController({});
+    const response = await controller.loginThrottled();
+
+    expect(response.status).toBe(429);
+    expect(await response.text()).toContain("Too many login attempts");
+  });
+
+  test("forgotPasswordThrottled returns a 429 reset form", async () => {
+    const controller = createController({});
+    const response = await controller.forgotPasswordThrottled();
+
+    expect(response.status).toBe(429);
+    expect(await response.text()).toContain("Too many reset attempts");
+  });
+
   test("logout clears the session cookie and redirects to login", async () => {
     const controller = createController({});
 

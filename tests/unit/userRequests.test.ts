@@ -3,6 +3,7 @@ import { BadRequestError, ValidationError } from "@getstrata/core/errors/http";
 import {
   parseCreateApiTokenBody,
   parseLoginBody,
+  parseRegisterBody,
   parseTokenIdParams,
 } from "../../src/modules/user/requests";
 
@@ -49,6 +50,40 @@ describe("user requests", () => {
     });
 
     await expect(parseLoginBody(request)).rejects.toThrow(ValidationError);
+  });
+
+  test("parseRegisterBody validates name, email, and confirmed password", async () => {
+    const request = new Request("http://example.test/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: " Ada Lovelace ",
+        email: "ada@workhub.test",
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+
+    await expect(parseRegisterBody(request)).resolves.toEqual({
+      name: "Ada Lovelace",
+      email: "ada@workhub.test",
+      password: "password123",
+    });
+  });
+
+  test("parseRegisterBody rejects mismatched confirmation", async () => {
+    const request = new Request("http://example.test/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Ada",
+        email: "ada@workhub.test",
+        password: "password123",
+        password_confirmation: "password124",
+      }),
+    });
+
+    await expect(parseRegisterBody(request)).rejects.toThrow(ValidationError);
   });
 
   test("parseCreateApiTokenBody validates token metadata", async () => {

@@ -1,6 +1,8 @@
 import { FormRequest } from "@getstrata/core/http/formRequest";
 import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import {
+  confirmed,
+  emailRule,
   maxLength,
   minLength,
   optional,
@@ -23,6 +25,12 @@ interface LoginBodyDto {
   email: string;
   password: string;
   mfa_code?: string;
+}
+
+interface RegisterBodyDto {
+  name: string;
+  email: string;
+  password: string;
 }
 
 interface CreateApiTokenBodyDto {
@@ -75,6 +83,24 @@ class LoginRequest extends FormRequest<LoginBodyDto> {
 
 const loginRequest = new LoginRequest();
 
+class RegisterRequest extends FormRequest<RegisterBodyDto> {
+  protected parse(payload: unknown): RegisterBodyDto {
+    const validated = validateObject(payload, {
+      name: [required(), stringRule(), minLength(1), maxLength(120)],
+      email: [required(), stringRule(), emailRule()],
+      password: [required(), stringRule(), minLength(8), maxLength(128), confirmed("password")],
+    });
+
+    return {
+      name: String(validated.name).trim(),
+      email: String(validated.email).trim(),
+      password: validated.password as string,
+    };
+  }
+}
+
+const registerRequest = new RegisterRequest();
+
 function parseTokenIdParams(params: TokenIdParams): { id: number } {
   return {
     id: parsePositiveIntParam(params.id, "token id"),
@@ -108,12 +134,17 @@ async function parseLoginBody(request: Request): Promise<LoginBodyDto> {
   return await loginRequest.validate(request);
 }
 
+async function parseRegisterBody(request: Request): Promise<RegisterBodyDto> {
+  return await registerRequest.validate(request);
+}
+
 export type {
   CreateApiTokenBodyDto,
   LoginBodyDto,
   NotificationIdParams,
   NotificationListQuery,
   OAuthProviderParams,
+  RegisterBodyDto,
   TokenIdParams,
 };
 export {
@@ -121,5 +152,6 @@ export {
   parseLoginBody,
   parseNotificationIdParams,
   parseNotificationListQuery,
+  parseRegisterBody,
   parseTokenIdParams,
 };

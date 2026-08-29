@@ -776,6 +776,69 @@ describe("web routes with server-htmx frontend", () => {
     expect(html).toContain('hx-post="/organizations/1/members/2/role"');
   });
 
+  test("POST /organizations/:id/members adds a registered user to the HTMX members table", async () => {
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const email = `html-member-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: registerCsrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "HTML Member",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+
+    expect(registered.status).toBe(302);
+
+    const csrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const response = await fetch(`${baseUrl}/organizations/1/members`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+        "HX-Request": "true",
+      },
+      body: new URLSearchParams({
+        email,
+        role: "member",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("org-members");
+    expect(html).toContain(email);
+    expect(html).toContain("HTML Member");
+    expect(html).not.toContain("<!doctype html>");
+
+    const missing = await fetch(`${baseUrl}/organizations/1/members`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+        "HX-Request": "true",
+      },
+      body: new URLSearchParams({
+        email: "nobody@workhub.test",
+        role: "member",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(missing.status).toBe(422);
+    expect(await missing.text()).toContain("No user exists with that email.");
+  });
+
   test("POST /organizations/:id/members/:userId/role updates the HTMX members table", async () => {
     const csrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
     const response = await fetch(`${baseUrl}/organizations/1/members/2/role`, {

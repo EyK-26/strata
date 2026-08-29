@@ -5,6 +5,38 @@ export class WorkHubClient {
     return await fetch(`${this.baseUrl}${path}`, init);
   }
 
+  async getAdminFeatures(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/admin/features", { ...init, method: "GET" });
+  }
+
+  async getAdminOrganizationMembers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/admin/organization-members", { ...init, method: "GET" });
+  }
+
+  async getAdminStats(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/admin/stats", { ...init, method: "GET" });
+  }
+
+  async getAdminTenants(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/admin/tenants", { ...init, method: "GET" });
+  }
+
+  async getAttachmentsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/attachments/{id}", { ...init, method: "GET" });
+  }
+
+  async deleteAttachmentsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/attachments/{id}", { ...init, method: "DELETE" });
+  }
+
+  async getAttachmentsIdDownload(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/attachments/{id}/download", { ...init, method: "GET" });
+  }
+
+  async getAttachmentsIdThumbnail(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/attachments/{id}/thumbnail", { ...init, method: "GET" });
+  }
+
   async getAuditLogs(init: RequestInit = {}): Promise<Response> {
     return await this.request("/audit-logs", { ...init, method: "GET" });
   }
@@ -25,6 +57,10 @@ export class WorkHubClient {
     return await this.request("/auth/oauth/{provider}/callback", { ...init, method: "GET" });
   }
 
+  async postAuthRegister(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/auth/register", { ...init, method: "POST" });
+  }
+
   async getAuthTokens(init: RequestInit = {}): Promise<Response> {
     return await this.request("/auth/tokens", { ...init, method: "GET" });
   }
@@ -35,6 +71,14 @@ export class WorkHubClient {
 
   async deleteAuthTokensId(init: RequestInit = {}): Promise<Response> {
     return await this.request("/auth/tokens/{id}", { ...init, method: "DELETE" });
+  }
+
+  async getBillingSubscription(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/billing/subscription", { ...init, method: "GET" });
+  }
+
+  async postBillingWebhooksStripe(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/billing/webhooks/stripe", { ...init, method: "POST" });
   }
 
   async getComments(init: RequestInit = {}): Promise<Response> {
@@ -71,6 +115,22 @@ export class WorkHubClient {
 
   async deleteOrganizationsId(init: RequestInit = {}): Promise<Response> {
     return await this.request("/organizations/{id}", { ...init, method: "DELETE" });
+  }
+
+  async getOrganizationsIdMembers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/organizations/{id}/members", { ...init, method: "GET" });
+  }
+
+  async postOrganizationsIdMembers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/organizations/{id}/members", { ...init, method: "POST" });
+  }
+
+  async patchOrganizationsIdMembersUserId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/organizations/{id}/members/{userId}", { ...init, method: "PATCH" });
+  }
+
+  async deleteOrganizationsIdMembersUserId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/organizations/{id}/members/{userId}", { ...init, method: "DELETE" });
   }
 
   async getProjects(init: RequestInit = {}): Promise<Response> {
@@ -125,6 +185,14 @@ export class WorkHubClient {
     return await this.request("/tasks/{id}", { ...init, method: "DELETE" });
   }
 
+  async getTasksIdAttachments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/tasks/{id}/attachments", { ...init, method: "GET" });
+  }
+
+  async postTasksIdAttachments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/tasks/{id}/attachments", { ...init, method: "POST" });
+  }
+
   async getTasksIdComments(init: RequestInit = {}): Promise<Response> {
     return await this.request("/tasks/{id}/comments", { ...init, method: "GET" });
   }
@@ -133,12 +201,48 @@ export class WorkHubClient {
     return await this.request("/tasks/{id}/comments", { ...init, method: "POST" });
   }
 
+  async deleteUsersMe(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me", { ...init, method: "DELETE" });
+  }
+
+  async getUsersMeExport(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/export", { ...init, method: "GET" });
+  }
+
+  async getUsersMeNotifications(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/notifications", { ...init, method: "GET" });
+  }
+
+  async patchUsersMeNotifications(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/notifications", { ...init, method: "PATCH" });
+  }
+
+  async patchUsersMeNotificationsIdRead(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/notifications/{id}/read", { ...init, method: "PATCH" });
+  }
+
   async getWebhooks(init: RequestInit = {}): Promise<Response> {
     return await this.request("/webhooks", { ...init, method: "GET" });
   }
 
   async postWebhooks(init: RequestInit = {}): Promise<Response> {
     return await this.request("/webhooks", { ...init, method: "POST" });
+  }
+
+  async deleteWebhooksId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/webhooks/{id}", { ...init, method: "DELETE" });
+  }
+
+  async postWebhooksIdActivate(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/webhooks/{id}/activate", { ...init, method: "POST" });
+  }
+
+  async postWebhooksIdDeactivate(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/webhooks/{id}/deactivate", { ...init, method: "POST" });
+  }
+
+  async postWebhooksDeliveriesIdRetry(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/webhooks/deliveries/{id}/retry", { ...init, method: "POST" });
   }
 
   async getHealth(init: RequestInit = {}): Promise<Response> {
@@ -151,6 +255,42 @@ export class WorkHubClient {
 
   async getReady(init: RequestInit = {}): Promise<Response> {
     return await this.request("/ready", { ...init, method: "GET" });
+  }
+
+  async getScimV2Groups(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/Groups", { ...init, method: "GET" });
+  }
+
+  async getScimV2GroupsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/Groups/{id}", { ...init, method: "GET" });
+  }
+
+  async patchScimV2GroupsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/Groups/{id}", { ...init, method: "PATCH" });
+  }
+
+  async getScimV2ServiceProviderConfig(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/ServiceProviderConfig", { ...init, method: "GET" });
+  }
+
+  async getScimV2Users(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/Users", { ...init, method: "GET" });
+  }
+
+  async postScimV2Users(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/Users", { ...init, method: "POST" });
+  }
+
+  async getScimV2UsersId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/Users/{id}", { ...init, method: "GET" });
+  }
+
+  async patchScimV2UsersId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/Users/{id}", { ...init, method: "PATCH" });
+  }
+
+  async deleteScimV2UsersId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/scim/v2/Users/{id}", { ...init, method: "DELETE" });
   }
 
 }

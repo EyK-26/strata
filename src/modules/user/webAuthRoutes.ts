@@ -1,5 +1,5 @@
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
-import { wrapWebRegister } from "@getstrata/bootstrap/web/routing";
+import { wrapWebLogin, wrapWebRegister } from "@getstrata/bootstrap/web/routing";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
 import { isFeatureEnabled } from "../../config/features";
@@ -23,7 +23,11 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
       : {}),
     "/login": {
       GET: kernel.wrapWeb(controller.showLogin as unknown as RouteHandler),
-      POST: kernel.wrapWeb(kernel.wrapLogin(controller.login as unknown as RouteHandler)),
+      POST: wrapWebLogin(
+        kernel,
+        controller.login as unknown as RouteHandler,
+        controller.loginThrottled as unknown as RouteHandler,
+      ),
     },
     "/oauth/:provider": {
       GET: kernel.wrapWeb(controller.oauthRedirect as unknown as RouteHandler),
@@ -36,7 +40,11 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
     },
     "/forgot-password": {
       GET: kernel.wrapWeb(controller.showForgotPassword as unknown as RouteHandler),
-      POST: kernel.wrapWeb(kernel.wrapLogin(controller.sendResetLink as unknown as RouteHandler)),
+      POST: wrapWebLogin(
+        kernel,
+        controller.sendResetLink as unknown as RouteHandler,
+        controller.forgotPasswordThrottled as unknown as RouteHandler,
+      ),
     },
     "/reset-password": {
       GET: kernel.wrapWeb(
@@ -48,8 +56,10 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
       GET: kernel.wrapWeb(kernel.wrapSigned(controller.verifyEmail as unknown as RouteHandler)),
     },
     "/email/verification-notification": {
-      POST: kernel.wrapWeb(
-        kernel.wrapLogin(controller.resendVerification as unknown as RouteHandler),
+      POST: wrapWebLogin(
+        kernel,
+        controller.resendVerification as unknown as RouteHandler,
+        controller.loginThrottled as unknown as RouteHandler,
       ),
     },
   };

@@ -1,14 +1,17 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { ValidationError } from "@getstrata/core/errors/http";
 import { createOAuthStateCookie } from "@getstrata/core/security/oauthState";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import {
   authServiceToken,
   notificationServiceToken,
+  passwordResetServiceToken,
   tokenServiceToken,
 } from "../../src/modules/user/provider";
 import type { UserRecord } from "../../src/modules/user/types";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockCache, createMockDependencies, defaultTestTenant } from "./testHelpers";
 
 type AuthControllerClass = typeof import("../../src/modules/user/controller").default;
@@ -32,6 +35,7 @@ function createController(services: {
   auth?: Record<string, unknown>;
   tokens?: Record<string, unknown>;
   authService?: Record<string, unknown>;
+  passwordResets?: Record<string, unknown>;
 }): AuthControllerInstance {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, {
@@ -52,9 +56,19 @@ function createController(services: {
   });
   container.set(authServiceToken, {
     loginWithPassword: mock(async () => ({ plainTextToken: "plain-token" })),
+    registerWithPassword: mock(async () => ({
+      id: 9,
+      name: "Ada Lovelace",
+      email: "ada@workhub.test",
+      role: "member",
+    })),
     buildOAuthAuthorizationUrl: mock(() => "https://oauth.example/authorize"),
     loginWithOAuth: mock(async () => ({ plainTextToken: "oauth-token" })),
     ...services.authService,
+  });
+  container.set(passwordResetServiceToken, {
+    sendEmailVerification: mock(async () => undefined),
+    ...services.passwordResets,
   });
   container.set(notificationServiceToken, {
     listForUser: mock(async () => ({
@@ -121,6 +135,125 @@ describe("AuthController", () => {
         body: JSON.stringify({
           email: "admin@workhub.test",
           password: "password123",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Unable to resolve authenticated user." });
+  });
+
+  test("register returns token and user resource", async () => {
+    const controller = createController({});
+
+    const response = await controller.register(
+      new Request("http://example.test/auth/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Ada Lovelace",
+          email: "ada@workhub.test",
+          password: "password123",
+          password_confirmation: "password123",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      token: "plain-token",
+      user: {
+        id: 1,
+        name: "Admin User",
+        email: "admin@workhub.test",
+        role: "admin",
+      },
+    });
+  });
+
+  test("register returns the user without a token when email verification is required", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+    const sendEmailVerification = mock(async () => undefined);
+
+    try {
+      const controller = createController({
+        passwordResets: { sendEmailVerification },
+      });
+
+      const response = await controller.register(
+        new Request("http://example.test/auth/register", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: "Ada Lovelace",
+            email: "ada@workhub.test",
+            password: "password123",
+            password_confirmation: "password123",
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toEqual({
+        user: {
+          id: 9,
+          name: "Ada Lovelace",
+          email: "ada@workhub.test",
+          role: "member",
+        },
+      });
+      expect(sendEmailVerification).toHaveBeenCalled();
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
+  test("register rejects duplicate emails", async () => {
+    const controller = createController({
+      authService: {
+        registerWithPassword: mock(async () => {
+          throw new ValidationError("An account with this email already exists.", {
+            email: ["An account with this email already exists."],
+          });
+        }),
+      },
+    });
+
+    const response = await controller.register(
+      new Request("http://example.test/auth/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Admin",
+          email: "admin@workhub.test",
+          password: "password123",
+          password_confirmation: "password123",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: "An account with this email already exists.",
+      details: { email: ["An account with this email already exists."] },
+    });
+  });
+
+  test("register rejects unresolved authenticated users", async () => {
+    const controller = createController({
+      tokens: { resolveUserFromToken: mock(async () => null) },
+    });
+
+    const response = await controller.register(
+      new Request("http://example.test/auth/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Ada Lovelace",
+          email: "ada@workhub.test",
+          password: "password123",
+          password_confirmation: "password123",
         }),
       }),
     );

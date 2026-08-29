@@ -15,6 +15,7 @@ interface OpenApiSpec {
 const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /auth/me": "Current authenticated user",
   "POST /auth/login": "Login with email and password",
+  "POST /auth/register": "Register with name, email, and password",
   "GET /auth/tokens": "List API tokens",
   "POST /auth/tokens": "Create API token",
   "DELETE /auth/tokens/:id": "Revoke API token",
@@ -49,27 +50,57 @@ function toOpenApiPath(path: string): string {
   return path.replace(/:([A-Za-z_]+)/g, "{$1}");
 }
 
+function toRelativeApiPath(path: string): string {
+  const prefix = apiPrefix();
+
+  if (path === prefix) {
+    return "/";
+  }
+
+  if (path.startsWith(`${prefix}/`)) {
+    return path.slice(prefix.length);
+  }
+
+  return path;
+}
+
 function requiresBearerAuth(path: string, method: string): boolean {
-  if (path.startsWith("/auth/login") || path.startsWith("/auth/oauth")) {
+  const relative = toRelativeApiPath(path);
+
+  if (
+    relative.startsWith("/auth/login") ||
+    relative.startsWith("/auth/register") ||
+    relative.startsWith("/auth/oauth")
+  ) {
     return false;
   }
 
-  if (path.startsWith("/scim/") || path.startsWith("/billing/webhooks/")) {
+  if (
+    relative.startsWith("/scim/") ||
+    relative.startsWith("/billing/webhooks/") ||
+    path.startsWith("/scim/") ||
+    path.startsWith("/billing/webhooks/")
+  ) {
     return false;
   }
 
-  if (["/health", "/ready", "/metrics", "/"].includes(path)) {
+  if (
+    ["/health", "/ready", "/metrics", "/"].includes(relative) ||
+    ["/health", "/ready", "/metrics", "/"].includes(path)
+  ) {
     return false;
   }
 
   if (
     method === "GET" &&
-    ["/organizations", "/projects", "/tasks", "/search"].some((prefix) => path.startsWith(prefix))
+    ["/organizations", "/projects", "/tasks", "/search"].some(
+      (prefix) => relative.startsWith(prefix) || path.startsWith(prefix),
+    )
   ) {
     return false;
   }
 
-  return path.startsWith("/auth/") || ["POST", "PATCH", "PUT", "DELETE"].includes(method);
+  return relative.startsWith("/auth/") || ["POST", "PATCH", "PUT", "DELETE"].includes(method);
 }
 
 function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
@@ -79,7 +110,9 @@ function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
     const openApiPath = toOpenApiPath(route.path);
     const method = route.method.toLowerCase();
     const description =
-      PUBLIC_ROUTE_DESCRIPTIONS[`${route.method} ${route.path}`] ?? `${route.method} ${route.path}`;
+      PUBLIC_ROUTE_DESCRIPTIONS[`${route.method} ${toRelativeApiPath(route.path)}`] ??
+      PUBLIC_ROUTE_DESCRIPTIONS[`${route.method} ${route.path}`] ??
+      `${route.method} ${route.path}`;
 
     paths[openApiPath] ??= {};
     paths[openApiPath][method] = {
