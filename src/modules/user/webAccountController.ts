@@ -95,6 +95,7 @@ class WebAccountController {
         mfaFeatureEnabled: isFeatureEnabled("mfa"),
         pendingSecret: null,
         otpauthUrl: null,
+        recoveryCodes: null,
         errors: {},
         ...extras,
       }),
@@ -124,17 +125,44 @@ class WebAccountController {
 
     try {
       const body = await parseWebConfirmMfaBody(request);
-      await this.authService.confirmMfaSetup(userId, body.mfaCode);
+      const confirmed = await this.authService.confirmMfaSetup(userId, body.mfaCode);
+      const user = await this.users.findByIdOrThrow(userId);
 
-      return flashResponse(Response.redirect("/account", 302), {
-        level: "success",
-        message: "Two-factor authentication is on.",
+      return await this.renderAccount(user, {
+        recoveryCodes: confirmed.recoveryCodes,
+        errors: {},
       });
     } catch (error) {
       if (error instanceof ValidationError) {
         const user = await this.users.findByIdOrThrow(userId);
 
         return await this.renderAccount(user, { errors: normalizeFieldErrors(error.details) }, 422);
+      }
+
+      throw error;
+    }
+  });
+
+  readonly regenerateRecoveryCodes = withErrorHandling(async (request: Request) => {
+    const userId = this.requireUserId();
+
+    try {
+      const body = await parseWebDisableMfaBody(request);
+      const recoveryCodes = await this.authService.regenerateRecoveryCodes(userId, body.password);
+      const user = await this.users.findByIdOrThrow(userId);
+
+      return await this.renderAccount(user, { recoveryCodes });
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        const user = await this.users.findByIdOrThrow(userId);
+
+        return await this.renderAccount(user, { errors: normalizeFieldErrors(error.details) }, 422);
+      }
+
+      if (error instanceof UnauthorizedError) {
+        const user = await this.users.findByIdOrThrow(userId);
+
+        return await this.renderAccount(user, { errors: { password: [error.message] } }, 422);
       }
 
       throw error;
@@ -342,6 +370,11 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
     },
     "/account/mfa/disable": {
       POST: kernel.wrapWebAuthenticated(controller.disableMfa as unknown as RouteHandler),
+    },
+    "/account/mfa/recovery-codes": {
+      POST: kernel.wrapWebAuthenticated(
+        controller.regenerateRecoveryCodes as unknown as RouteHandler,
+      ),
     },
     "/account/password": {
       POST: kernel.wrapWebAuthenticated(controller.changePassword as unknown as RouteHandler),

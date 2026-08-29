@@ -15,6 +15,7 @@ const userTable = defineTable<UserRecord, "id">({
     "email_verified_at",
     "mfa_secret",
     "mfa_enabled",
+    "mfa_recovery_codes",
     "created_at",
     "updated_at",
   ],

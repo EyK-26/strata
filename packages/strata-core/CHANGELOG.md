@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.77
+
+- `@getstrata/core/security/recoveryCodes` (`generateRecoveryCodes`, `hashRecoveryCode`, `recoveryCodeMatches`). Fortify-style one-time MFA backup codes (`abcd-efgh`).
+
 ## 0.5.76
 
 - `createSessionCookie(userId, { remember })` issues a longer HMAC session (default 30 days, `SESSION_REMEMBER_TTL_SECONDS`). Remember cookies embed the TTL in the signed payload so they stay valid after the default 7-day session lifetime. `SESSION_TTL_SECONDS` overrides the short session.

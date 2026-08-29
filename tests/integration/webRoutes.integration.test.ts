@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { generateTotp } from "@getstrata/core/security/totp";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { getDatabase } from "../../src/db/connection";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
@@ -1262,7 +1263,57 @@ describe("web routes with server-htmx frontend", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("mfa-secret");
+    const html = await response.text();
+    expect(html).toContain("mfa-secret");
+    const secret = html.match(/class="mfa-secret">([^<]+)/)?.[1]?.trim();
+    expect(secret).toBeTruthy();
+
+    const confirmCsrf = await fetchCsrfFromPath("/account", adminSessionCookie);
+    const confirmed = await fetch(`${baseUrl}/account/mfa/confirm`, {
+      method: "POST",
+      headers: {
+        cookie: confirmCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        mfa_code: generateTotp(String(secret), Math.floor(Date.now() / 30_000)),
+        _token: confirmCsrf.token,
+      }),
+    });
+    const confirmedHtml = await confirmed.text();
+    expect(confirmed.status).toBe(200);
+    expect(confirmedHtml).toContain("recovery-codes");
+    expect(confirmedHtml).toContain("Generate new recovery codes");
+
+    const rotateCsrf = await fetchCsrfFromPath("/account", adminSessionCookie);
+    const rotated = await fetch(`${baseUrl}/account/mfa/recovery-codes`, {
+      method: "POST",
+      headers: {
+        cookie: rotateCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        password: "password",
+        _token: rotateCsrf.token,
+      }),
+    });
+    expect(rotated.status).toBe(200);
+    expect(await rotated.text()).toContain("recovery-codes");
+
+    const disableCsrf = await fetchCsrfFromPath("/account", adminSessionCookie);
+    const disabled = await fetch(`${baseUrl}/account/mfa/disable`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: disableCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        password: "password",
+        _token: disableCsrf.token,
+      }),
+    });
+    expect(disabled.status).toBe(302);
   });
 
   test("admin can delete a newly created organization from HTML", async () => {

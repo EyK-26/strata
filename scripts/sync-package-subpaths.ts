@@ -157,6 +157,7 @@ const CORE_SUBPATHS = [
   "scheduler/osCron",
   "security/oauthState",
   "security/publicReads",
+  "security/recoveryCodes",
   "security/safeFetch",
   "security/safeUrl",
   "security/scimTenantTokens",

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
+import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { generateTotp } from "@getstrata/core/security/totp";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
@@ -167,7 +168,8 @@ describe("password auth", () => {
 
         const code = generateTotp(setup.secret, Math.floor(Date.now() / 30_000));
         const enabled = await authService.confirmMfaSetup(1, code);
-        expect(enabled.mfa_enabled).toBe(true);
+        expect(enabled.user.mfa_enabled).toBe(true);
+        expect(enabled.recoveryCodes).toHaveLength(8);
 
         await expect(
           authService.authenticatePassword("admin@workhub.test", "password"),
@@ -178,12 +180,61 @@ describe("password auth", () => {
         });
         expect(withCode.id).toBe(1);
 
+        const [recoveryCode] = enabled.recoveryCodes;
+        const withRecovery = await authService.authenticatePassword(
+          "admin@workhub.test",
+          "password",
+          { mfaCode: recoveryCode },
+        );
+        expect(withRecovery.id).toBe(1);
+        await expect(
+          authService.authenticatePassword("admin@workhub.test", "password", {
+            mfaCode: recoveryCode,
+          }),
+        ).rejects.toThrow("Invalid MFA code.");
+
+        await expect(authService.regenerateRecoveryCodes(1, "wrong-password")).rejects.toThrow(
+          "Invalid credentials.",
+        );
+        const rotated = await authService.regenerateRecoveryCodes(1, "password");
+        expect(rotated).toHaveLength(8);
+        expect(rotated).not.toEqual(enabled.recoveryCodes);
+
         const disabled = await authService.disableMfa(1, "password");
         expect(disabled.mfa_enabled).toBe(false);
+        await expect(authService.regenerateRecoveryCodes(1, "password")).rejects.toThrow(
+          "MFA is not enabled.",
+        );
+
+        const setupAgain = await authService.beginMfaSetup(1);
+        const confirmAgain = await authService.confirmMfaSetup(
+          1,
+          generateTotp(setupAgain.secret, Math.floor(Date.now() / 30_000)),
+        );
+        expect(confirmAgain.user.mfa_enabled).toBe(true);
+
+        for (const stored of ["not-json", "{}", "[1,true]", "[]"]) {
+          await users.updateByIdOrThrow(1, { mfa_recovery_codes: stored });
+          await expect(
+            authService.authenticatePassword("admin@workhub.test", "password", {
+              mfaCode: "abcd-efgh",
+            }),
+          ).rejects.toThrow("Invalid MFA code.");
+        }
+
+        const [lastCode] = generateRecoveryCodes(1);
+        await users.updateByIdOrThrow(1, {
+          mfa_recovery_codes: JSON.stringify([hashRecoveryCode(String(lastCode))]),
+        });
+        await authService.authenticatePassword("admin@workhub.test", "password", {
+          mfaCode: lastCode,
+        });
+        expect((await users.findById(1))?.mfa_recovery_codes).toBeNull();
       } finally {
         await users.updateByIdOrThrow(1, {
           mfa_enabled: false,
           mfa_secret: null,
+          mfa_recovery_codes: null,
           email_verified_at: new Date(),
         });
         restoreEnvVar("FEATURE_MFA", previousMfa);

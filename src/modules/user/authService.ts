@@ -2,6 +2,11 @@ import type { OAuthProvider } from "@getstrata/core/auth/oauth/types";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
 import { protectMfaSecret, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
+import {
+  generateRecoveryCodes,
+  hashRecoveryCode,
+  recoveryCodeMatches,
+} from "@getstrata/core/security/recoveryCodes";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
 import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core/security/totp";
@@ -15,6 +20,11 @@ import type { CreatedApiToken, UserRecord } from "./types";
 
 interface LoginOptions {
   mfaCode?: string;
+}
+
+interface MfaConfirmation {
+  user: UserRecord;
+  recoveryCodes: string[];
 }
 
 class AuthService {
@@ -74,8 +84,15 @@ class AuthService {
 
     if (isFeatureEnabled("mfa") && user.mfa_enabled) {
       const mfaSecret = revealMfaSecret(user.mfa_secret);
+      const totpValid = Boolean(
+        mfaSecret && options.mfaCode && verifyTotp(mfaSecret, options.mfaCode),
+      );
+      const recovered =
+        !totpValid && options.mfaCode
+          ? await this.consumeRecoveryCode(user, options.mfaCode)
+          : false;
 
-      if (!mfaSecret || !options.mfaCode || !verifyTotp(mfaSecret, options.mfaCode)) {
+      if (!totpValid && !recovered) {
         logSecurityEvent("auth_login_failed", { reason: "invalid_mfa", user_id: user.id });
         throw new UnauthorizedError("Invalid MFA code.");
       }
@@ -129,7 +146,7 @@ class AuthService {
     };
   }
 
-  async confirmMfaSetup(userId: number, code: string): Promise<UserRecord> {
+  async confirmMfaSetup(userId: number, code: string): Promise<MfaConfirmation> {
     const user = await this.users.findByIdOrThrow(userId);
     const secret = revealMfaSecret(user.mfa_secret);
 
@@ -140,13 +157,39 @@ class AuthService {
       });
     }
 
+    const recoveryCodes = generateRecoveryCodes();
     const updated = await this.users.updateByIdOrThrow(userId, {
       mfa_enabled: true,
+      mfa_recovery_codes: JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
       updated_at: new Date(),
     });
     logSecurityEvent("auth_mfa_enabled", { user_id: user.id });
 
-    return updated;
+    return { user: updated, recoveryCodes };
+  }
+
+  async regenerateRecoveryCodes(userId: number, password: string): Promise<string[]> {
+    const user = await this.users.findByIdOrThrow(userId);
+
+    if (!user.mfa_enabled) {
+      throw new ValidationError("MFA is not enabled.", {
+        mfa: ["MFA is not enabled."],
+      });
+    }
+
+    if (!user.password_hash || !(await verifyPassword(password, user.password_hash))) {
+      logSecurityEvent("auth_mfa_failed", { reason: "invalid_password", user_id: user.id });
+      throw new UnauthorizedError("Invalid credentials.");
+    }
+
+    const recoveryCodes = generateRecoveryCodes();
+    await this.users.updateByIdOrThrow(userId, {
+      mfa_recovery_codes: JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
+      updated_at: new Date(),
+    });
+    logSecurityEvent("auth_mfa_recovery_codes_rotated", { user_id: user.id });
+
+    return recoveryCodes;
   }
 
   async disableMfa(userId: number, password: string): Promise<UserRecord> {
@@ -160,6 +203,7 @@ class AuthService {
     const updated = await this.users.updateByIdOrThrow(userId, {
       mfa_enabled: false,
       mfa_secret: null,
+      mfa_recovery_codes: null,
       updated_at: new Date(),
     });
     logSecurityEvent("auth_mfa_disabled", { user_id: user.id });
@@ -263,6 +307,43 @@ class AuthService {
     return provider.getAuthorizationUrl(state, redirectUri);
   }
 
+  private parseRecoveryHashes(raw: string | null | undefined): string[] {
+    if (!raw) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed.filter((item): item is string => typeof item === "string" && item.length > 0);
+    } catch {
+      return [];
+    }
+  }
+
+  private async consumeRecoveryCode(user: UserRecord, code: string): Promise<boolean> {
+    const hashes = this.parseRecoveryHashes(user.mfa_recovery_codes);
+    const index = hashes.findIndex((hash) => recoveryCodeMatches(code, hash));
+
+    if (index === -1) {
+      return false;
+    }
+
+    const remaining = hashes.filter((_, hashIndex) => hashIndex !== index);
+    await this.users.updateByIdOrThrow(user.id, {
+      mfa_recovery_codes: remaining.length > 0 ? JSON.stringify(remaining) : null,
+      updated_at: new Date(),
+    });
+
+    logSecurityEvent("auth_mfa_recovery_code_used", { user_id: user.id });
+
+    return true;
+  }
+
   private async findOrCreateOAuthUser(
     providerName: string,
     profile: { providerUserId: string; email: string; name: string },
@@ -302,4 +383,4 @@ class AuthService {
 }
 
 export default AuthService;
-export type { LoginOptions };
+export type { LoginOptions, MfaConfirmation };

@@ -11,6 +11,7 @@ interface UserRecord {
   email_verified_at?: Date | null;
   mfa_secret?: string | null;
   mfa_enabled?: boolean;
+  mfa_recovery_codes?: string | null;
   created_at: Date;
   updated_at: Date;
 }

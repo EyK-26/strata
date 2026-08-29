@@ -214,7 +214,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/billing` | Current tenant subscription |
 | `/webhooks` | Outbound webhook admin: create, deactivate, delete, retry delivery |
 | `/reports`, `/reports/organizations/:id` | Tenant summary and per-organization reports |
-| `/account` | Session profile, API tokens, GDPR export/delete, email verification, TOTP MFA |
+| `/account` | Session profile, API tokens, GDPR export/delete, email verification, TOTP MFA + recovery codes |
 | `/confirm-password` | Laravel `password.confirm` — recent password gate for export and account delete |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |
 
@@ -257,7 +257,7 @@ Password and OAuth login:
 - `POST /api/v1/auth/email/verification-notification`: `{ "email" }` always returns a generic success message (does not leak whether the account exists or still needs verification)
 - `GET /api/v1/auth/oauth/:provider`: redirect to provider (GitHub when configured; `mock` in non-production)
 - `GET /api/v1/auth/oauth/:provider/callback?code=...`: exchange OAuth code for a bearer token
-- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token) and ensure a personal workspace. Login lists registered providers. `POST /login` accepts `remember=1` for a 30-day HMAC session (`SESSION_REMEMBER_TTL_SECONDS`).
+- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token) and ensure a personal workspace. Login lists registered providers. `POST /login` accepts `remember=1` for a 30-day HMAC session (`SESSION_REMEMBER_TTL_SECONDS`) and an MFA or recovery code when `FEATURE_MFA=true`.
 
 ### Audit log, webhooks, and search
 
