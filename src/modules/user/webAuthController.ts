@@ -250,7 +250,10 @@ class WebAuthController {
         const user = await this.authService.authenticateOAuth(provider, code, {
           redirectUri: `${url.origin}/oauth/${provider}/callback`,
         });
-        const headers = new Headers({ Location: redirect });
+        const organization = await this.organizations.createPersonalForUser(user);
+        const location =
+          redirect === "/organizations" ? `/organizations/${organization.id}` : redirect;
+        const headers = new Headers({ Location: location });
         headers.append("Set-Cookie", createSessionCookie(user.id));
         headers.append("Set-Cookie", clearOAuthStateCookie());
         headers.append("Set-Cookie", clearOAuthLoginRedirectCookie());

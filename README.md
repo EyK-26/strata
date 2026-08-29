@@ -256,7 +256,7 @@ Password and OAuth login:
 - `POST /api/v1/auth/email/verification-notification`: `{ "email" }` always returns a generic success message (does not leak whether the account exists or still needs verification)
 - `GET /api/v1/auth/oauth/:provider`: redirect to provider (GitHub when configured; `mock` in non-production)
 - `GET /api/v1/auth/oauth/:provider/callback?code=...`: exchange OAuth code for a bearer token
-- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token). Login lists registered providers.
+- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token) and ensure a personal workspace. Login lists registered providers.
 
 ### Audit log, webhooks, and search
 

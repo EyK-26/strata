@@ -199,6 +199,7 @@ class AuthController {
     }
 
     const user = await this.tokens.findByIdOrThrow(Number(authUser.id));
+    await this.organizations.createPersonalForUser(user);
 
     return createdResponse(
       {

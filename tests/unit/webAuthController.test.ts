@@ -224,6 +224,32 @@ describe("WebAuthController", () => {
     });
   });
 
+  test("oauthCallback sends default redirects to the personal workspace", async () => {
+    const { createOAuthStateCookie } = await import("@getstrata/core/security/oauthState");
+    const { state, cookie } = createOAuthStateCookie();
+    const createPersonalForUser = mock(async () => ({
+      id: 42,
+      name: "OAuth User's workspace",
+      slug: "personal-4",
+    }));
+    const controller = createController({
+      organizations: { createPersonalForUser },
+    });
+
+    const response = await controller.oauthCallback(
+      Object.assign(
+        new Request(`http://example.test/oauth/mock/callback?code=valid-code&state=${state}`, {
+          headers: { cookie },
+        }),
+        { params: { provider: "mock" } },
+      ),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/organizations/42");
+    expect(createPersonalForUser).toHaveBeenCalled();
+  });
+
   test("oauthCallback rejects invalid state", async () => {
     const controller = createController({});
     const response = await controller.oauthCallback(

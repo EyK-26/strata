@@ -388,7 +388,14 @@ describe("AuthController", () => {
 
   test("oauthCallback exchanges codes for tokens and clears state cookies", async () => {
     const { state, cookie } = createOAuthStateCookie();
-    const controller = createController({});
+    const createPersonalForUser = mock(async () => ({
+      id: 42,
+      name: "Admin User's workspace",
+      slug: "personal-1",
+    }));
+    const controller = createController({
+      organizations: { createPersonalForUser },
+    });
 
     const response = await controller.oauthCallback(
       Object.assign(
@@ -410,6 +417,7 @@ describe("AuthController", () => {
       },
     });
     expect(response.headers.get("Set-Cookie")).toContain("oauth_state=");
+    expect(createPersonalForUser).toHaveBeenCalled();
   });
 
   test("oauthCallback validates provider, code, and state", async () => {

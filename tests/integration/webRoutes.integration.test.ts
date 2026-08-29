@@ -409,10 +409,19 @@ describe("web routes with server-htmx frontend", () => {
     });
 
     expect(callback.status).toBe(302);
-    expect(callback.headers.get("location")).toBe("/organizations");
+    const workspaceLocation = callback.headers.get("location") ?? "";
+    expect(workspaceLocation).toMatch(/^\/organizations\/\d+$/);
     expect(callback.headers.get("set-cookie")).toContain("workhub_session=");
 
     const session = mergeCookieHeader("", callback);
+    const workspace = await fetch(`${baseUrl}${workspaceLocation}`, {
+      headers: { cookie: session },
+    });
+    expect(workspace.status).toBe(200);
+    const workspaceHtml = await workspace.text();
+    expect(workspaceHtml).toContain("OAuth User&#39;s workspace");
+    expect(workspaceHtml).toContain("oauth@workhub.test");
+
     const organizations = await fetch(`${baseUrl}/organizations`, {
       headers: { cookie: session },
     });
@@ -420,6 +429,7 @@ describe("web routes with server-htmx frontend", () => {
     expect(organizations.status).toBe(200);
     const html = await organizations.text();
     expect(html).toContain("oauth@workhub.test");
+    expect(html).toContain("OAuth User&#39;s workspace");
     expect(html).toContain('action="/logout"');
   });
 
