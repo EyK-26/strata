@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.63
+
+- Flash cookies honor `FLASH_COOKIE_NAME` (default `workhub_flash`) so sibling apps do not inherit WorkHub’s cookie name.
+
 ## 0.5.62
 
 Laravel URL signing, Bun-native markdown mail, and session-auth cleanup.
