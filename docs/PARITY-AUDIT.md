@@ -1,6 +1,6 @@
 # Laravel parity audit
 
-Generated: 2026-08-22T13:31:30.966Z
+Generated: 2026-08-29T10:38:44.516Z
 
 ## Score
 
@@ -26,7 +26,7 @@ Target: ≥99% core coverage across all documented Laravel sections.
 | ✅ covered | [CSRF Protection](https://laravel.com/docs/csrf) | createCsrfMiddleware, @getstrata/bootstrap:createCsrfProtection | `unit/csrf.test.ts` |
 | ✅ covered | [Controllers](https://laravel.com/docs/controllers) | withErrorHandling, jsonResponse, RouteHandler | `integration/routes.integration.test.ts` |
 | ✅ covered | [Form Requests](https://laravel.com/docs/validation#form-request-validation) | FormRequest, WebFormRequest, validateObject… | `unit/formRequest.test.ts` |
-| ✅ covered | [Views](https://laravel.com/docs/views) | EtaViewEngine, htmlResponse, resolveWebLayoutData | `unit/etaViewEngine.test.ts` |
+| ✅ covered | [Views](https://laravel.com/docs/views) | EtaViewEngine, htmlResponse, resolveWebLayoutData… | `unit/etaViewEngine.test.ts` |
 | ✅ covered | [Validation](https://laravel.com/docs/validation) | ValidationError, validateObject, minLength… | `unit/validationRules.test.ts` |
 | ✅ covered | [Error Handling](https://laravel.com/docs/errors) | NotFoundError, ForbiddenError, UnauthorizedError… | `unit/databaseErrors.test.ts` |
 | ✅ covered | [Database: Getting Started](https://laravel.com/docs/database) | bindDatabaseConnection, getActiveDatabaseConnection, runWithDatabaseConnection | `unit/databaseConnection.test.ts` |
