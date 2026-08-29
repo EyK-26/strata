@@ -214,7 +214,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/billing` | Current tenant subscription |
 | `/webhooks` | Outbound webhook admin (global admin) |
 | `/reports`, `/reports/organizations/:id` | Tenant summary and per-organization reports |
-| `/account` | Session profile, email verification, TOTP MFA setup |
+| `/account` | Session profile, API tokens, GDPR export/delete, email verification, TOTP MFA |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |
 
 Sign in as `admin@workhub.test` / `password` to access these routes. Core exports: `AdminResourceRegistry`, `formatAdminValue`, `FailedJobService.delete()`, `runQueueJob`, `temporarySignedUrl`.
@@ -553,7 +553,7 @@ docker compose down -v --remove-orphans
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
 - Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
-- Auth: `GET /auth/me`, `POST /auth/login`, OAuth routes, token CRUD, `GET /auth/export`, `DELETE /auth/me`
+- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, OAuth routes, token CRUD, `GET /api/v1/users/me/export`, `DELETE /api/v1/users/me`. HTMX: `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …
 

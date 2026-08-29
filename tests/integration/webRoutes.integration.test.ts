@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { hashPassword } from "@getstrata/core/auth/password";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { getDatabase } from "../../src/db/connection";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -587,6 +589,8 @@ describe("web routes with server-htmx frontend", () => {
     const accountHtml = await account.text();
     expect(accountHtml).toContain("admin@workhub.test");
     expect(accountHtml).toContain("Two-factor authentication");
+    expect(accountHtml).toContain("API tokens");
+    expect(accountHtml).toContain("Export my data");
     expect(orgReport.status).toBe(200);
     expect(await orgReport.text()).toContain("Acme Labs");
   });
@@ -609,6 +613,126 @@ describe("web routes with server-htmx frontend", () => {
 
     expect(response.status).toBe(422);
     expect(await response.text()).toContain("Invalid credentials.");
+  });
+
+  test("POST /account/tokens creates a token and POST revoke removes it", async () => {
+    const csrf = await fetchCsrfFromPath("/account", adminSessionCookie);
+    const name = `html-token-${Date.now()}`;
+    const createResponse = await fetch(`${baseUrl}/account/tokens`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        name,
+        expires_in_days: "30",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(createResponse.status).toBe(200);
+    const createdHtml = await createResponse.text();
+    expect(createdHtml).toContain("plain-token");
+    expect(createdHtml).toContain(name);
+
+    const createdRows = (await getDatabase()`
+      SELECT id FROM api_token WHERE name = ${name} ORDER BY id DESC LIMIT 1
+    `) as Array<{ id: number }>;
+    const tokenId = createdRows[0]?.id;
+    expect(tokenId).toBeTruthy();
+
+    const revokeCsrf = await fetchCsrfFromPath("/account", adminSessionCookie);
+    const revokeResponse = await fetch(`${baseUrl}/account/tokens/${tokenId}/revoke`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: revokeCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: revokeCsrf.token }),
+    });
+
+    expect(revokeResponse.status).toBe(302);
+    expect(revokeResponse.headers.get("location")).toBe("/account");
+
+    const after = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(await after.text()).not.toContain(name);
+  });
+
+  test("GET /account/export downloads a GDPR JSON attachment", async () => {
+    const response = await fetch(`${baseUrl}/account/export`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    const payload = (await response.json()) as {
+      user: { email: string };
+      api_tokens: unknown[];
+      exported_at: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain("workhub-export.json");
+    expect(payload.user.email).toBe("admin@workhub.test");
+    expect(Array.isArray(payload.api_tokens)).toBe(true);
+    expect(payload.exported_at).toBeTruthy();
+  });
+
+  test("POST /account/delete anonymizes a disposable user and clears the session", async () => {
+    const email = `delete-me-${Date.now()}@workhub.test`;
+    const passwordHash = await hashPassword("password");
+    const inserted = (await getDatabase()`
+      INSERT INTO users (name, email, email_lookup, role, tenant_id, password_hash, email_verified_at)
+      VALUES (${"Disposable User"}, ${email}, ${email}, ${"member"}, 1, ${passwordHash}, NOW())
+      RETURNING id
+    `) as Array<{ id: number }>;
+    const userId = inserted[0]?.id;
+    expect(userId).toBeTruthy();
+
+    const sessionCookie = await loginAndGetCookie(email, "password");
+    const csrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const wrong = await fetch(`${baseUrl}/account/delete`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        password: "not-the-password",
+        confirm: "DELETE",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(wrong.status).toBe(422);
+    expect(await wrong.text()).toContain("Invalid credentials.");
+
+    const deleted = await fetch(`${baseUrl}/account/delete`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        password: "password",
+        confirm: "DELETE",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(deleted.status).toBe(302);
+    expect(deleted.headers.get("location")).toBe("/login");
+    expect(deleted.headers.get("set-cookie")).toContain("workhub_session=");
+
+    const rows = (await getDatabase()`
+      SELECT name, email FROM users WHERE id = ${userId}
+    `) as Array<{ name: string; email: string }>;
+    expect(rows[0]?.name).toBe("Deleted User");
+    expect(rows[0]?.email).toContain("anonymous.local");
   });
 
   test("POST /account/mfa generates an authenticator secret", async () => {

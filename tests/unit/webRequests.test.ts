@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { ValidationError } from "@getstrata/core/errors/http";
-import { parseWebLoginBody } from "../../src/modules/user/webRequests";
+import {
+  parseWebCreateApiTokenBody,
+  parseWebDeleteAccountBody,
+  parseWebLoginBody,
+} from "../../src/modules/user/webRequests";
 
 describe("webRequests", () => {
   test("parseWebLoginBody validates form login payloads", async () => {
@@ -38,5 +42,40 @@ describe("webRequests", () => {
     });
 
     await expect(parseWebLoginBody(request)).rejects.toThrow(ValidationError);
+  });
+
+  test("parseWebCreateApiTokenBody accepts an optional expiry", async () => {
+    const request = new Request("http://example.test/account/tokens", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: "name=ci+bot&expires_in_days=14",
+    });
+
+    await expect(parseWebCreateApiTokenBody(request)).resolves.toEqual({
+      name: "ci bot",
+      expiresInDays: 14,
+    });
+  });
+
+  test("parseWebDeleteAccountBody requires typing DELETE", async () => {
+    await expect(
+      parseWebDeleteAccountBody(
+        new Request("http://example.test/account/delete", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "password=password&confirm=nope",
+        }),
+      ),
+    ).rejects.toThrow(ValidationError);
+
+    await expect(
+      parseWebDeleteAccountBody(
+        new Request("http://example.test/account/delete", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "password=password&confirm=DELETE",
+        }),
+      ),
+    ).resolves.toEqual({ password: "password" });
   });
 });

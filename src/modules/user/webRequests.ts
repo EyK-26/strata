@@ -1,8 +1,12 @@
+import { ValidationError } from "@getstrata/core/errors/http";
 import { WebFormRequest } from "@getstrata/core/http/webFormRequest";
 import {
   emailRule,
+  integerRange,
+  integerRule,
   maxLength,
   minLength,
+  optional,
   required,
   stringRule,
   validateObject,
@@ -38,6 +42,15 @@ interface WebChangePasswordBody {
   password: string;
 }
 
+interface WebCreateApiTokenBody {
+  name: string;
+  expiresInDays?: number;
+}
+
+interface WebDeleteAccountBody {
+  password: string;
+}
+
 const webLoginRules = {
   email: [required(), stringRule(), emailRule()],
   password: [required(), stringRule()],
@@ -66,6 +79,16 @@ const webDisableMfaRules = {
 const webChangePasswordRules = {
   current_password: [required(), stringRule()],
   password: [required(), stringRule(), minLength(8), maxLength(128)],
+};
+
+const webCreateApiTokenRules = {
+  name: [required(), stringRule(), minLength(1), maxLength(120)],
+  expires_in_days: [optional(), integerRule(), integerRange(1, 3650)],
+};
+
+const webDeleteAccountRules = {
+  password: [required(), stringRule()],
+  confirm: [required(), stringRule()],
 };
 
 class WebLoginRequest extends WebFormRequest<WebLoginBody> {
@@ -128,12 +151,42 @@ class WebChangePasswordRequest extends WebFormRequest<WebChangePasswordBody> {
   }
 }
 
+class WebCreateApiTokenRequest extends WebFormRequest<WebCreateApiTokenBody> {
+  protected parse(payload: unknown): WebCreateApiTokenBody {
+    const validated = validateObject(payload, webCreateApiTokenRules);
+    const rawDays = validated.expires_in_days;
+
+    return {
+      name: String(validated.name).trim(),
+      ...(rawDays === undefined || rawDays === null || rawDays === ""
+        ? {}
+        : { expiresInDays: Number(rawDays) }),
+    };
+  }
+}
+
+class WebDeleteAccountRequest extends WebFormRequest<WebDeleteAccountBody> {
+  protected parse(payload: unknown): WebDeleteAccountBody {
+    const validated = validateObject(payload, webDeleteAccountRules);
+
+    if (String(validated.confirm).trim() !== "DELETE") {
+      throw new ValidationError("Type DELETE to confirm.", {
+        confirm: ["Type DELETE to confirm."],
+      });
+    }
+
+    return { password: String(validated.password) };
+  }
+}
+
 const webLoginRequest = new WebLoginRequest();
 const webForgotPasswordRequest = new WebForgotPasswordRequest();
 const webResetPasswordRequest = new WebResetPasswordRequest();
 const webConfirmMfaRequest = new WebConfirmMfaRequest();
 const webDisableMfaRequest = new WebDisableMfaRequest();
 const webChangePasswordRequest = new WebChangePasswordRequest();
+const webCreateApiTokenRequest = new WebCreateApiTokenRequest();
+const webDeleteAccountRequest = new WebDeleteAccountRequest();
 
 async function parseWebLoginBody(request: Request): Promise<WebLoginBody> {
   return await webLoginRequest.validate(request);
@@ -159,9 +212,19 @@ async function parseWebChangePasswordBody(request: Request): Promise<WebChangePa
   return await webChangePasswordRequest.validate(request);
 }
 
+async function parseWebCreateApiTokenBody(request: Request): Promise<WebCreateApiTokenBody> {
+  return await webCreateApiTokenRequest.validate(request);
+}
+
+async function parseWebDeleteAccountBody(request: Request): Promise<WebDeleteAccountBody> {
+  return await webDeleteAccountRequest.validate(request);
+}
+
 export type {
   WebChangePasswordBody,
   WebConfirmMfaBody,
+  WebCreateApiTokenBody,
+  WebDeleteAccountBody,
   WebDisableMfaBody,
   WebForgotPasswordBody,
   WebLoginBody,
@@ -170,6 +233,8 @@ export type {
 export {
   parseWebChangePasswordBody,
   parseWebConfirmMfaBody,
+  parseWebCreateApiTokenBody,
+  parseWebDeleteAccountBody,
   parseWebDisableMfaBody,
   parseWebForgotPasswordBody,
   parseWebLoginBody,

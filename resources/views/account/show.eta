@@ -1,6 +1,6 @@
 <section class="page-header">
   <h1>Account</h1>
-  <p class="hint">Profile, email verification, and two-factor authentication for the signed-in session.</p>
+  <p class="hint">Profile, API tokens, data export, email verification, and two-factor authentication for the signed-in session.</p>
 </section>
 
 <dl class="detail-list">
@@ -94,4 +94,76 @@
   </form>
   <% } %>
   <% } %>
+</section>
+
+<section class="card" id="api-tokens">
+  <h2>API tokens</h2>
+  <p class="hint">Personal access tokens for the JSON API. The plaintext secret is shown only once after you create it.</p>
+
+  <% if (it.plainToken) { %>
+  <p class="hint">Copy this token now. It will not be shown again.</p>
+  <p><code class="plain-token"><%= it.plainToken %></code></p>
+  <% } %>
+
+  <form method="post" action="/account/tokens" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Token name
+      <input type="text" name="name" maxlength="120" required />
+    </label>
+    <label>
+      Expires in days (optional)
+      <input type="number" name="expires_in_days" min="1" max="3650" />
+    </label>
+    <button type="submit">Create token</button>
+  </form>
+
+  <% if (!it.tokens?.length) { %>
+  <p class="hint">No API tokens yet.</p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Created</th>
+        <th>Expires</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const token of it.tokens) { %>
+      <tr>
+        <td><%= token.name %></td>
+        <td><%= token.created_at %></td>
+        <td><%= token.expires_at ?? "Never" %></td>
+        <td>
+          <form method="post" action="/account/tokens/<%= token.id %>/revoke">
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit" class="danger-button">Revoke</button>
+          </form>
+        </td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table>
+  <% } %>
+</section>
+
+<section class="card" id="data-privacy">
+  <h2>Your data</h2>
+  <p class="hint">Download a JSON copy of your profile, API tokens, and OAuth identities. Deleting the account anonymizes your user row and revokes tokens.</p>
+  <p><a href="/account/export">Export my data</a></p>
+
+  <form method="post" action="/account/delete" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <label>
+      Current password
+      <input type="password" name="password" required />
+    </label>
+    <label>
+      Type DELETE to confirm
+      <input type="text" name="confirm" autocomplete="off" required />
+    </label>
+    <button type="submit" class="danger-button">Delete account</button>
+  </form>
 </section>
