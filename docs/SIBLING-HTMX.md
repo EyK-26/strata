@@ -103,7 +103,7 @@ configureWebLayoutData({
 
 Layouts receive `{ currentUser, csrfToken, flash, cspNonce }`. Put `nonce="<%= it.cspNonce %>"` on inline CSRF helpers and set HTMX `inlineStyleNonce` so indicator CSS works without `'unsafe-inline'` on `script-src`.
 
-Use `temporarySignedUrl()` / `hasValidSignature()` from `@getstrata/core/http/signedUrl` for attachment downloads, password reset, and email verification. HMAC uses `SIGNED_URL_SECRET` or `SESSION_SECRET`. Markdown mail goes through `Bun.markdown.html()` plus `sanitizeMailHtml`.
+Use `temporarySignedUrl()` / `hasValidSignature()` from `@getstrata/core/http/signedUrl` for attachment downloads, password reset, and email verification. HMAC uses `SIGNED_URL_SECRET` or `SESSION_SECRET`. Gate routes with `createValidateSignatureMiddleware()` or `kernel.wrapSigned()` (Laravel `signed` middleware). WorkHub applies it to `/reset-password` and `/verify-email`. Markdown mail goes through `Bun.markdown.html()` plus `sanitizeMailHtml`.
 
 TOTP helpers live on `@getstrata/core/security/totp`: `generateTotpSecret()`, `buildOtpauthUrl()`, `generateTotp()`, `verifyTotp()`. WorkHub’s `/account` page dogfoods setup/confirm/disable. Login only enforces MFA when `FEATURE_MFA=true`.
 

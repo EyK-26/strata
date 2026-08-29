@@ -19,11 +19,13 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
       POST: kernel.wrapWeb(kernel.wrapLogin(controller.sendResetLink as unknown as RouteHandler)),
     },
     "/reset-password": {
-      GET: kernel.wrapWeb(controller.showResetPassword as unknown as RouteHandler),
-      POST: kernel.wrapWeb(controller.resetPassword as unknown as RouteHandler),
+      GET: kernel.wrapWeb(
+        kernel.wrapSigned(controller.showResetPassword as unknown as RouteHandler),
+      ),
+      POST: kernel.wrapWeb(kernel.wrapSigned(controller.resetPassword as unknown as RouteHandler)),
     },
     "/verify-email": {
-      GET: kernel.wrapWeb(controller.verifyEmail as unknown as RouteHandler),
+      GET: kernel.wrapWeb(kernel.wrapSigned(controller.verifyEmail as unknown as RouteHandler)),
     },
     "/email/verification-notification": {
       POST: kernel.wrapWeb(

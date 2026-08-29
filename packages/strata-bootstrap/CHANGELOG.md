@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.54
+
+- `HttpKernel.wrapSigned()` applies `createValidateSignatureMiddleware` so HTMX routes can require a valid signed URL.
+
 ## 0.2.53
 
 - `registerDefaultJobs()` also registers `audit.export` (`ExportAuditLogsJob`).

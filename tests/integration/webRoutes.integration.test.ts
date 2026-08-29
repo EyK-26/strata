@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -518,6 +519,19 @@ describe("web routes with server-htmx frontend", () => {
     const webhookHtml = await webhooks.text();
     expect(webhookHtml).toContain("Outbound webhooks");
     expect(webhookHtml).toContain("x-workhub-signature");
+  });
+
+  test("GET /reset-password requires a valid signed URL", async () => {
+    const unsigned = await fetch(`${baseUrl}/reset-password`);
+    expect(unsigned.status).toBe(403);
+
+    const path = temporarySignedUrl("/reset-password", 120, {
+      email: "admin@workhub.test",
+      token: "demo-token",
+    });
+    const signed = await fetch(`${baseUrl}${path}`);
+    expect(signed.status).toBe(200);
+    expect(await signed.text()).toContain("Choose a new password");
   });
 
   test("GET /forgot-password renders the reset form", async () => {

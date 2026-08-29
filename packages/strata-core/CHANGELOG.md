@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.66
+
+- `createValidateSignatureMiddleware()` on `@getstrata/core/http/signedUrl` is Laravel’s `signed` / `ValidateSignature` middleware. Invalid or expired links throw `ForbiddenError`.
+
 ## 0.5.65
 
 - Identity helpers on `@getstrata/core/runtime/appKeyPrefix` (`smtpEhloHost`, `siemEventType`, `appUserAgent`, `otelServiceName`, `appDisplayName`, `webhookSignatureHeader`) so sibling apps are not stuck with WorkHub SMTP/SIEM/OTEL/OAuth names.

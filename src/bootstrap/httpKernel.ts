@@ -20,6 +20,7 @@ import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebA
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { createSecurityHeadersMiddleware } from "@getstrata/core/http/securityHeadersMiddleware";
+import { createValidateSignatureMiddleware } from "@getstrata/core/http/signedUrl";
 import { createThrottleMiddleware } from "@getstrata/core/http/throttleMiddleware";
 import { createRequestLoggingMiddleware } from "@getstrata/core/logging/requestLoggingMiddleware";
 import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
@@ -184,6 +185,10 @@ class HttpKernel {
 
   wrapLogin(handler: RouteHandler): RouteHandler {
     return this.wrapThrottle("login", resolveLoginRateLimit(), handler);
+  }
+
+  wrapSigned(handler: RouteHandler): RouteHandler {
+    return withMiddleware(createValidateSignatureMiddleware())(handler);
   }
 
   wrapRegister(handler: RouteHandler): RouteHandler {

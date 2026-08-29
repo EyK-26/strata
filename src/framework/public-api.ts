@@ -289,6 +289,7 @@ export { createSecurityHeadersMiddleware } from "../core/http/securityHeadersMid
 export {
   absoluteTemporarySignedUrl,
   assertValidSignature,
+  createValidateSignatureMiddleware,
   hasValidSignature,
   signedUrl,
   temporarySignedUrl,

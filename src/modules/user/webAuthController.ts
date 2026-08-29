@@ -6,7 +6,6 @@ import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";
-import { assertValidSignature } from "@getstrata/core/http/signedUrl";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
 import type AuthService from "./authService";
@@ -120,7 +119,6 @@ class WebAuthController {
   });
 
   readonly showResetPassword = withErrorHandling(async (request: Request) => {
-    assertValidSignature(request);
     const url = new URL(request.url);
 
     return htmlResponse(
@@ -136,7 +134,6 @@ class WebAuthController {
   });
 
   readonly resetPassword = withErrorHandling(async (request: Request) => {
-    assertValidSignature(request);
     const body = await parseWebResetPasswordBody(request);
     await this.passwordResets.resetPassword(body.email, body.token, body.password);
 
@@ -147,7 +144,6 @@ class WebAuthController {
   });
 
   readonly verifyEmail = withErrorHandling(async (request: Request) => {
-    assertValidSignature(request);
     const userId = Number.parseInt(new URL(request.url).searchParams.get("id") ?? "", 10);
 
     if (!Number.isInteger(userId) || userId <= 0) {

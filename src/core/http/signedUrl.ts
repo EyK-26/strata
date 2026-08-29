@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
+import type { Middleware } from "./middleware";
 
 interface TemporarySignedUrlOptions {
   expiresInSeconds?: number;
@@ -143,10 +144,18 @@ function assertValidSignature(input: Request | URL | string): void {
   }
 }
 
+function createValidateSignatureMiddleware(): Middleware {
+  return async (request, next) => {
+    assertValidSignature(request);
+    return await next();
+  };
+}
+
 export type { TemporarySignedUrlOptions };
 export {
   absoluteTemporarySignedUrl,
   assertValidSignature,
+  createValidateSignatureMiddleware,
   hasValidSignature,
   signedUrl,
   temporarySignedUrl,

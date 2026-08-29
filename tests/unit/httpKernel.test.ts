@@ -13,6 +13,7 @@ import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { ForbiddenError } from "@getstrata/core/errors/http";
+import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { tokenServiceToken } from "../../src/modules/user/provider";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -95,6 +96,32 @@ describe("HttpKernel", () => {
       expect(await postResponse.text()).toContain("Invalid or missing CSRF token.");
     } finally {
       restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
+  test("wrapSigned rejects unsigned URLs and allows valid ones", async () => {
+    const previousMode = process.env.FRONTEND_MODE;
+    const previousSecret = process.env.SIGNED_URL_SECRET;
+    process.env.FRONTEND_MODE = "server-htmx";
+    process.env.SIGNED_URL_SECRET = "test-signed-url-secret";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapWeb(kernel.wrapSigned(async () => new Response("ok")));
+
+      const unsigned = await handler(new Request("http://example.test/reset-password"));
+      expect(unsigned.status).toBe(403);
+      expect(await unsigned.text()).toContain("Invalid or expired signed URL.");
+
+      const signed = await handler(
+        new Request(
+          `http://example.test${temporarySignedUrl("/reset-password", 120, { email: "a@workhub.test" })}`,
+        ),
+      );
+      expect(signed.status).toBe(200);
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previousMode);
+      restoreEnvVar("SIGNED_URL_SECRET", previousSecret);
     }
   });
 

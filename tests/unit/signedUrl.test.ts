@@ -3,6 +3,7 @@ import { ForbiddenError } from "@getstrata/core/errors/http";
 import {
   absoluteTemporarySignedUrl,
   assertValidSignature,
+  createValidateSignatureMiddleware,
   hasValidSignature,
   signedUrl,
   temporarySignedUrl,
@@ -61,5 +62,20 @@ describe("signed URLs", () => {
 
   test("rejects protocol-relative paths", () => {
     expect(() => signedUrl("//evil.test/phish")).toThrow("same-origin");
+  });
+
+  test("createValidateSignatureMiddleware rejects unsigned and expired links", async () => {
+    process.env.SIGNED_URL_SECRET = "test-signed-url-secret";
+    const middleware = createValidateSignatureMiddleware();
+
+    await expect(
+      middleware(new Request("http://example.test/reset-password"), async () => new Response("ok")),
+    ).rejects.toThrow(ForbiddenError);
+
+    const valid = new Request(
+      `http://example.test${temporarySignedUrl("/reset-password", 60, { email: "a@workhub.test" })}`,
+    );
+    const response = await middleware(valid, async () => new Response("ok"));
+    expect(response.status).toBe(200);
   });
 });
