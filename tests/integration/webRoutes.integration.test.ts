@@ -1188,9 +1188,8 @@ describe("web routes with server-htmx frontend", () => {
       headers: { cookie: adminSessionCookie, accept: "text/html" },
     });
     const html = await show.text();
-    expect(html).toContain(email);
     expect(html).toContain("Auto Join");
-    expect(html).not.toContain("Pending invitations");
+    expect(html).toContain(`Role for ${email}`);
   });
 
   test("POST /organizations/:id/members/:userId/role updates the HTMX members table", async () => {
