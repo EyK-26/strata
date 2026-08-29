@@ -6,8 +6,8 @@ interface OAuthProfile {
 
 interface OAuthProvider {
   readonly name: string;
-  getAuthorizationUrl(state: string): string;
-  exchangeCode(code: string): Promise<OAuthProfile>;
+  getAuthorizationUrl(state: string, redirectUri?: string): string;
+  exchangeCode(code: string, redirectUri?: string): Promise<OAuthProfile>;
 }
 
 export type { OAuthProfile, OAuthProvider };

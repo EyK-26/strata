@@ -6,6 +6,11 @@ import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";
+import {
+  clearOAuthStateCookie,
+  createOAuthStateCookie,
+  verifyOAuthState,
+} from "@getstrata/core/security/oauthState";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
 import type AuthService from "./authService";
@@ -37,17 +42,26 @@ class WebAuthController {
     return resolveService(this.dependencies, CORE_VIEW_TOKEN);
   }
 
-  readonly showLogin = withErrorHandling(async (request?: Request) => {
-    const redirect = new URL(request?.url ?? "http://localhost/login").searchParams.get("redirect");
-
+  private async renderLogin(extras: Record<string, unknown> = {}, status = 200): Promise<Response> {
     return htmlResponse(
       await this.view.render("auth/login", {
         title: "Sign in",
-        redirect: redirect ?? "/organizations",
+        redirect: "/organizations",
         errors: {},
         old: {},
+        providers: this.authService.listOAuthProviders(),
+        ...extras,
       }),
+      { status },
     );
+  }
+
+  readonly showLogin = withErrorHandling(async (request?: Request) => {
+    const redirect = new URL(request?.url ?? "http://localhost/login").searchParams.get("redirect");
+
+    return await this.renderLogin({
+      redirect: redirect ?? "/organizations",
+    });
   });
 
   readonly login = withErrorHandling(async (request: Request) => {
@@ -68,20 +82,87 @@ class WebAuthController {
       });
     } catch (error) {
       if (error instanceof UnauthorizedError) {
-        return htmlResponse(
-          await this.view.render("auth/login", {
-            title: "Sign in",
+        return await this.renderLogin(
+          {
             redirect: body.redirect ?? "/organizations",
             errors: { email: [error.message] },
             old: { email: body.email },
-          }),
-          { status: 422 },
+          },
+          422,
         );
       }
 
       throw error;
     }
   });
+
+  readonly oauthRedirect = withErrorHandling(
+    async (request: Request & { params: { provider: string } }) => {
+      const provider = request.params.provider;
+      const url = new URL(request.url);
+      const redirect = sanitizeInternalPath(
+        url.searchParams.get("redirect") ?? "/organizations",
+        "/organizations",
+      );
+
+      try {
+        const { state, cookie } = createOAuthStateCookie();
+        const callbackUri = `${url.origin}/oauth/${provider}/callback`;
+        const location = this.authService.buildOAuthAuthorizationUrl(provider, state, callbackUri);
+        const headers = new Headers({ Location: location });
+        headers.append("Set-Cookie", cookie);
+        headers.append(
+          "Set-Cookie",
+          `oauth_login_redirect=${encodeURIComponent(redirect)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
+        );
+
+        return new Response(null, { status: 302, headers });
+      } catch (error) {
+        if (error instanceof UnauthorizedError) {
+          return await this.renderLogin({ redirect, errors: { oauth: [error.message] } }, 422);
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  readonly oauthCallback = withErrorHandling(
+    async (request: Request & { params: { provider: string } }) => {
+      const provider = request.params.provider;
+      const url = new URL(request.url);
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      const redirect = sanitizeInternalPath(
+        readOAuthLoginRedirect(request) ?? "/organizations",
+        "/organizations",
+      );
+
+      try {
+        if (!provider || !code) {
+          throw new UnauthorizedError("OAuth provider and code are required.");
+        }
+
+        if (!verifyOAuthState(request, state)) {
+          throw new UnauthorizedError("Invalid OAuth state.");
+        }
+
+        const user = await this.authService.authenticateOAuth(provider, code, {
+          redirectUri: `${url.origin}/oauth/${provider}/callback`,
+        });
+        const headers = new Headers({ Location: redirect });
+        headers.append("Set-Cookie", createSessionCookie(user.id));
+        headers.append("Set-Cookie", clearOAuthStateCookie());
+        headers.append("Set-Cookie", clearOAuthLoginRedirectCookie());
+
+        return new Response(null, { status: 302, headers });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "OAuth login failed.";
+
+        return await this.renderLogin({ redirect, errors: { oauth: [message] } }, 422);
+      }
+    },
+  );
 
   readonly logout = withErrorHandling(async () => {
     return new Response(null, {
@@ -171,6 +252,30 @@ class WebAuthController {
       message: "If that account needs verification, a new link is on its way.",
     });
   });
+}
+
+const OAUTH_LOGIN_REDIRECT_COOKIE = "oauth_login_redirect";
+
+function readOAuthLoginRedirect(request: Request): string | null {
+  const cookieHeader = request.headers.get("cookie");
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const part of cookieHeader.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+
+    if (name === OAUTH_LOGIN_REDIRECT_COOKIE) {
+      return decodeURIComponent(rest.join("="));
+    }
+  }
+
+  return null;
+}
+
+function clearOAuthLoginRedirectCookie(): string {
+  return `${OAUTH_LOGIN_REDIRECT_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
 export default WebAuthController;

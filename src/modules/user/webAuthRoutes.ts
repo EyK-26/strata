@@ -11,6 +11,12 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
       GET: kernel.wrapWeb(controller.showLogin as unknown as RouteHandler),
       POST: kernel.wrapWeb(kernel.wrapLogin(controller.login as unknown as RouteHandler)),
     },
+    "/oauth/:provider": {
+      GET: kernel.wrapWeb(controller.oauthRedirect as unknown as RouteHandler),
+    },
+    "/oauth/:provider/callback": {
+      GET: kernel.wrapWeb(controller.oauthCallback as unknown as RouteHandler),
+    },
     "/logout": {
       POST: kernel.wrapWebAuthenticated(controller.logout as unknown as RouteHandler),
     },

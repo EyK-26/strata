@@ -16,10 +16,10 @@ class OidcProvider implements OAuthProvider {
     this.name = options.name;
   }
 
-  getAuthorizationUrl(state: string): string {
+  getAuthorizationUrl(state: string, redirectUri = this.options.redirectUri): string {
     const params = new URLSearchParams({
       client_id: this.options.clientId,
-      redirect_uri: this.options.redirectUri,
+      redirect_uri: redirectUri,
       response_type: "code",
       scope: (this.options.scopes ?? ["openid", "email", "profile"]).join(" "),
       state,
@@ -28,14 +28,14 @@ class OidcProvider implements OAuthProvider {
     return `${this.options.issuer.replace(/\/$/, "")}/authorize?${params.toString()}`;
   }
 
-  async exchangeCode(code: string): Promise<OAuthProfile> {
+  async exchangeCode(code: string, redirectUri = this.options.redirectUri): Promise<OAuthProfile> {
     const tokenResponse = await fetch(`${this.options.issuer.replace(/\/$/, "")}/token`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code,
-        redirect_uri: this.options.redirectUri,
+        redirect_uri: redirectUri,
         client_id: this.options.clientId,
         client_secret: this.options.clientSecret,
       }),

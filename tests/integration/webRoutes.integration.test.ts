@@ -244,6 +244,55 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.headers.get("location")).toBe("/organizations");
   });
 
+  test("GET /login lists the mock OAuth provider", async () => {
+    const response = await fetch(`${baseUrl}/login`);
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Sign in with Mock provider");
+    expect(html).toContain('href="/oauth/mock?redirect=');
+  });
+
+  test("GET /oauth/mock/callback sets a session cookie without an API token", async () => {
+    const start = await fetch(`${baseUrl}/oauth/mock?redirect=/organizations`, {
+      redirect: "manual",
+    });
+
+    expect(start.status).toBe(302);
+    const location = start.headers.get("location") ?? "";
+    expect(location).toContain("https://mock.oauth/authorize");
+    const state = new URL(location).searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    const callback = await fetch(`${baseUrl}/oauth/mock/callback?code=valid-code&state=${state}`, {
+      redirect: "manual",
+      headers: { cookie: mergeCookieHeader("", start) },
+    });
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get("location")).toBe("/organizations");
+    expect(callback.headers.get("set-cookie")).toContain("workhub_session=");
+
+    const session = mergeCookieHeader("", callback);
+    const organizations = await fetch(`${baseUrl}/organizations`, {
+      headers: { cookie: session },
+    });
+
+    expect(organizations.status).toBe(200);
+    const html = await organizations.text();
+    expect(html).toContain("oauth@workhub.test");
+    expect(html).toContain('action="/logout"');
+  });
+
+  test("GET /oauth/mock/callback rejects an invalid state", async () => {
+    const response = await fetch(`${baseUrl}/oauth/mock/callback?code=valid-code&state=nope`, {
+      headers: { accept: "text/html" },
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("Invalid OAuth state.");
+  });
+
   test("POST /organizations re-renders HTML validation errors", async () => {
     const csrf = await fetchCsrfFromPath("/organizations", adminSessionCookie);
 

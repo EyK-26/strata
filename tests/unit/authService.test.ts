@@ -159,7 +159,37 @@ describe("oauth auth", () => {
     });
   });
 
-  test("exposes registered oauth providers and authorization urls", () => {
+  test("authenticateOAuth returns a user without creating a token", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const tokens = new TokenService(new UserRepository(), new ApiTokenRepository());
+      const createToken = tokens.createToken.bind(tokens);
+      let tokenCalls = 0;
+      tokens.createToken = async (...args) => {
+        tokenCalls += 1;
+        return await createToken(...args);
+      };
+
+      const authService = new AuthService(
+        new UserRepository(),
+        tokens,
+        new OAuthIdentityRepository(),
+      );
+
+      authService.registerOAuthProvider(
+        new MockOAuthProvider({
+          providerUserId: "oauth-session-user",
+          email: "oauth-session@workhub.test",
+          name: "OAuth Session User",
+        }),
+      );
+
+      const user = await authService.authenticateOAuth("mock", "valid-code");
+      expect(user.email).toBe("oauth-session@workhub.test");
+      expect(tokenCalls).toBe(0);
+    });
+  });
+
+  test("exposes registered oauth providers and authorization urls", async () => {
     const authService = new AuthService(
       new UserRepository(),
       new TokenService(new UserRepository(), new ApiTokenRepository()),
@@ -173,8 +203,12 @@ describe("oauth auth", () => {
 
     authService.registerOAuthProvider(provider);
     expect(authService.getOAuthProvider("mock")).toBe(provider);
+    expect(authService.listOAuthProviders()).toEqual([{ name: "mock", label: "Mock provider" }]);
     expect(authService.buildOAuthAuthorizationUrl("mock", "state-123")).toContain("state-123");
     expect(() => authService.buildOAuthAuthorizationUrl("missing", "state-123")).toThrow(
+      "Unsupported OAuth provider.",
+    );
+    await expect(authService.authenticateOAuth("missing", "valid-code")).rejects.toThrow(
       "Unsupported OAuth provider.",
     );
   });

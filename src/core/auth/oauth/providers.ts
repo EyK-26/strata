@@ -12,10 +12,10 @@ class GitHubOAuthProvider implements OAuthProvider {
 
   constructor(private readonly options: GitHubOAuthOptions) {}
 
-  getAuthorizationUrl(state: string): string {
+  getAuthorizationUrl(state: string, redirectUri = this.options.redirectUri): string {
     const params = new URLSearchParams({
       client_id: this.options.clientId,
-      redirect_uri: this.options.redirectUri,
+      redirect_uri: redirectUri,
       scope: "read:user user:email",
       state,
     });
@@ -23,7 +23,7 @@ class GitHubOAuthProvider implements OAuthProvider {
     return `https://github.com/login/oauth/authorize?${params.toString()}`;
   }
 
-  async exchangeCode(code: string): Promise<OAuthProfile> {
+  async exchangeCode(code: string, redirectUri = this.options.redirectUri): Promise<OAuthProfile> {
     const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
       headers: {
@@ -34,7 +34,7 @@ class GitHubOAuthProvider implements OAuthProvider {
         client_id: this.options.clientId,
         client_secret: this.options.clientSecret,
         code,
-        redirect_uri: this.options.redirectUri,
+        redirect_uri: redirectUri,
       }),
     });
 

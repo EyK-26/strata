@@ -23,6 +23,41 @@ describe("GitHubOAuthProvider", () => {
     expect(url.pathname).toBe("/login/oauth/authorize");
     expect(url.searchParams.get("client_id")).toBe("github-client");
     expect(url.searchParams.get("state")).toBe("gh-state");
+    expect(url.searchParams.get("redirect_uri")).toBe(options.redirectUri);
+
+    const webUrl = new URL(
+      provider.getAuthorizationUrl("gh-state", "https://app.example.com/oauth/github/callback"),
+    );
+    expect(webUrl.searchParams.get("redirect_uri")).toBe(
+      "https://app.example.com/oauth/github/callback",
+    );
+  });
+
+  test("exchanges a code using an override redirect uri", async () => {
+    let tokenBody = "";
+
+    globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/login/oauth/access_token")) {
+        tokenBody = String(init?.body ?? "");
+        return Promise.resolve(Response.json({ access_token: "gh-token" }));
+      }
+
+      return Promise.resolve(
+        Response.json({
+          id: 7,
+          login: "web-octocat",
+          email: "web@github.com",
+          name: "Web Octocat",
+        }),
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = new GitHubOAuthProvider(options);
+    await provider.exchangeCode("gh-code", "https://app.example.com/oauth/github/callback");
+
+    expect(tokenBody).toContain("https://app.example.com/oauth/github/callback");
   });
 
   test("exchanges a code for a profile", async () => {

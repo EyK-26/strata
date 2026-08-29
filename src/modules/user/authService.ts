@@ -34,6 +34,20 @@ class AuthService {
     return this.oauthProviders.get(name);
   }
 
+  listOAuthProviders(): Array<{ name: string; label: string }> {
+    const labels: Record<string, string> = {
+      github: "GitHub",
+      oidc: "OpenID Connect",
+      saml: "SAML",
+      mock: "Mock provider",
+    };
+
+    return [...this.oauthProviders.keys()].sort().map((name) => ({
+      name,
+      label: labels[name] ?? name,
+    }));
+  }
+
   async authenticatePassword(
     email: string,
     password: string,
@@ -183,17 +197,31 @@ class AuthService {
     return updated;
   }
 
-  async loginWithOAuth(providerName: string, code: string): Promise<CreatedApiToken> {
+  async authenticateOAuth(
+    providerName: string,
+    code: string,
+    options: { redirectUri?: string } = {},
+  ): Promise<UserRecord> {
     const provider = this.oauthProviders.get(providerName);
 
     if (!provider) {
       throw new UnauthorizedError("Unsupported OAuth provider.");
     }
 
-    const profile = await provider.exchangeCode(code);
+    const profile = await provider.exchangeCode(code, options.redirectUri);
     const user = await this.findOrCreateOAuthUser(providerName, profile);
 
     logSecurityEvent("auth_login_success", { user_id: user.id, method: `oauth:${providerName}` });
+
+    return user;
+  }
+
+  async loginWithOAuth(
+    providerName: string,
+    code: string,
+    options: { redirectUri?: string } = {},
+  ): Promise<CreatedApiToken> {
+    const user = await this.authenticateOAuth(providerName, code, options);
 
     return await this.tokens.createToken(user.id, {
       name: `${providerName}-oauth`,
@@ -202,14 +230,14 @@ class AuthService {
     });
   }
 
-  buildOAuthAuthorizationUrl(providerName: string, state: string): string {
+  buildOAuthAuthorizationUrl(providerName: string, state: string, redirectUri?: string): string {
     const provider = this.oauthProviders.get(providerName);
 
     if (!provider) {
       throw new UnauthorizedError("Unsupported OAuth provider.");
     }
 
-    return provider.getAuthorizationUrl(state);
+    return provider.getAuthorizationUrl(state, redirectUri);
   }
 
   private async findOrCreateOAuthUser(

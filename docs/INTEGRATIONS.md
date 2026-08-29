@@ -81,6 +81,8 @@ OAUTH_REDIRECT_URI=https://your-host/api/v1/auth/oauth/github/callback
 OAUTH_STATE_SECRET=...   # required in production
 ```
 
+Register the HTMX callback (`https://your-host/oauth/github/callback`) as an additional authorized redirect URI on the GitHub app. WorkHub sends that URI for `/oauth/:provider` and keeps `OAUTH_REDIRECT_URI` for the API bearer flow.
+
 ### Production setup — OIDC (Azure AD, Okta, etc.)
 
 ```env

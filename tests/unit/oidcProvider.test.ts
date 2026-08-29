@@ -25,6 +25,14 @@ describe("OidcProvider", () => {
     expect(url.searchParams.get("client_id")).toBe("client-id");
     expect(url.searchParams.get("scope")).toBe("openid email profile");
     expect(url.searchParams.get("state")).toBe("state-123");
+    expect(url.searchParams.get("redirect_uri")).toBe(options.redirectUri);
+
+    const webUrl = new URL(
+      provider.getAuthorizationUrl("state-123", "https://app.example.com/oauth/oidc/callback"),
+    );
+    expect(webUrl.searchParams.get("redirect_uri")).toBe(
+      "https://app.example.com/oauth/oidc/callback",
+    );
   });
 
   test("builds an authorization url with custom scopes", () => {
@@ -36,6 +44,32 @@ describe("OidcProvider", () => {
     const url = new URL(provider.getAuthorizationUrl("state-456"));
 
     expect(url.searchParams.get("scope")).toBe("openid groups");
+  });
+
+  test("exchanges a code using an override redirect uri", async () => {
+    let tokenBody = "";
+
+    globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith("/token")) {
+        tokenBody = String(init?.body ?? "");
+        return Promise.resolve(Response.json({ access_token: "access-token" }));
+      }
+
+      return Promise.resolve(
+        Response.json({
+          sub: "user-web",
+          email: "web@example.com",
+          name: "Web OIDC",
+        }),
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = new OidcProvider(options);
+    await provider.exchangeCode("auth-code", "https://app.example.com/oauth/oidc/callback");
+
+    expect(tokenBody).toContain(encodeURIComponent("https://app.example.com/oauth/oidc/callback"));
   });
 
   test("exchanges a code for a profile", async () => {
