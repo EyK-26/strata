@@ -1,11 +1,14 @@
 import { describe, expect, mock, test } from "bun:test";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { hashPassword } from "@getstrata/core/auth/password";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
 import {
   authServiceToken,
   passwordResetServiceToken,
   tokenServiceToken,
+  userRepositoryToken,
 } from "../../src/modules/user/provider";
 import WebAuthController from "../../src/modules/user/webAuthController";
 import { createMockCache, createMockDependencies } from "./testHelpers";
@@ -15,6 +18,7 @@ function createController(services: {
   tokens?: Record<string, unknown>;
   passwordResets?: Record<string, unknown>;
   organizations?: Record<string, unknown>;
+  users?: Record<string, unknown>;
   view?: Record<string, unknown>;
 }): WebAuthController {
   const container = new ServiceContainer();
@@ -42,6 +46,14 @@ function createController(services: {
   container.set(tokenServiceToken, {
     resolveUserFromToken: mock(async () => ({ id: 1, role: "member" })),
     ...services.tokens,
+  });
+  container.set(userRepositoryToken, {
+    findByIdOrThrow: mock(async () => ({
+      id: 1,
+      email: "admin@workhub.test",
+      password_hash: null,
+    })),
+    ...services.users,
   });
   container.set(organizationServiceToken, {
     createPersonalForUser: mock(async () => ({
@@ -375,5 +387,95 @@ describe("WebAuthController", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/login");
     expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
+    expect(
+      response.headers
+        .getSetCookie()
+        .some((cookie) => cookie.startsWith("workhub_password_confirmed=")),
+    ).toBe(true);
+  });
+
+  test("showConfirmPassword renders the confirmation form", async () => {
+    const controller = createController({});
+    const response = await controller.showConfirmPassword(
+      new Request("http://example.test/confirm-password?redirect=%2Faccount%2Fexport"),
+    );
+    const body = JSON.parse(await response.text()) as { title: string; redirect: string };
+
+    expect(response.status).toBe(200);
+    expect(body.title).toBe("Confirm password");
+    expect(body.redirect).toBe("/account/export");
+  });
+
+  test("confirmPassword sets the confirmation cookie", async () => {
+    const passwordHash = await hashPassword("password123");
+    const controller = createController({
+      users: {
+        findByIdOrThrow: mock(async () => ({
+          id: 1,
+          email: "admin@workhub.test",
+          password_hash: passwordHash,
+        })),
+      },
+    });
+
+    const response = await runWithAuthUser({ id: 1, role: "admin" }, () =>
+      controller.confirmPassword(
+        new Request("http://example.test/confirm-password", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "password=password123&redirect=%2Faccount%2Fexport",
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/account/export");
+    expect(
+      response.headers
+        .getSetCookie()
+        .some((cookie) => cookie.startsWith("workhub_password_confirmed=")),
+    ).toBe(true);
+  });
+
+  test("confirmPassword rejects accounts without a password", async () => {
+    const controller = createController({});
+    const response = await runWithAuthUser({ id: 1, role: "member" }, () =>
+      controller.confirmPassword(
+        new Request("http://example.test/confirm-password", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "password=password123",
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("does not have a password");
+  });
+
+  test("confirmPassword rejects an incorrect password", async () => {
+    const passwordHash = await hashPassword("password123");
+    const controller = createController({
+      users: {
+        findByIdOrThrow: mock(async () => ({
+          id: 1,
+          email: "admin@workhub.test",
+          password_hash: passwordHash,
+        })),
+      },
+    });
+
+    const response = await runWithAuthUser({ id: 1, role: "admin" }, () =>
+      controller.confirmPassword(
+        new Request("http://example.test/confirm-password", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "password=wrong-password",
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("incorrect");
   });
 });

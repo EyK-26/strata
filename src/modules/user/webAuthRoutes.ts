@@ -40,6 +40,10 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
         controller.logout as unknown as RouteHandler,
       ),
     },
+    "/confirm-password": {
+      GET: kernel.wrapWebAuthenticated(controller.showConfirmPassword as unknown as RouteHandler),
+      POST: kernel.wrapWebAuthenticated(controller.confirmPassword as unknown as RouteHandler),
+    },
     "/email/verify": {
       GET: kernel.wrapWebAuthenticatedAllowUnverified(
         controller.showVerifyNotice as unknown as RouteHandler,

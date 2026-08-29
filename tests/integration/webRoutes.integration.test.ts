@@ -83,6 +83,35 @@ async function loginAndGetCookie(email: string, password: string): Promise<strin
   return mergeCookieHeader(cookies, response);
 }
 
+async function confirmPasswordAndGetCookie(
+  sessionCookie: string,
+  password = "password",
+  redirect = "/account",
+): Promise<string> {
+  const csrf = await fetchCsrfFromPath(
+    `/confirm-password?redirect=${encodeURIComponent(redirect)}`,
+    sessionCookie,
+  );
+  const response = await fetch(`${baseUrl}/confirm-password`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      cookie: csrf.cookies,
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      password,
+      redirect,
+      _token: csrf.token,
+    }),
+  });
+
+  expect(response.status).toBe(302);
+  expect(response.headers.get("location")).toBe(redirect);
+
+  return mergeCookieHeader(csrf.cookies, response);
+}
+
 async function fetchCsrfFromPath(
   path: string,
   cookie = "",
@@ -1081,8 +1110,26 @@ describe("web routes with server-htmx frontend", () => {
   });
 
   test("GET /account/export downloads a GDPR JSON attachment", async () => {
-    const response = await fetch(`${baseUrl}/account/export`, {
+    const blocked = await fetch(`${baseUrl}/account/export`, {
+      redirect: "manual",
       headers: { cookie: adminSessionCookie },
+    });
+    expect(blocked.status).toBe(302);
+    expect(blocked.headers.get("location")).toBe("/confirm-password?redirect=%2Faccount%2Fexport");
+
+    const confirmPage = await fetch(`${baseUrl}${blocked.headers.get("location")}`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(confirmPage.status).toBe(200);
+    expect(await confirmPage.text()).toContain("Confirm your password");
+
+    const confirmedCookie = await confirmPasswordAndGetCookie(
+      adminSessionCookie,
+      "password",
+      "/account/export",
+    );
+    const response = await fetch(`${baseUrl}/account/export`, {
+      headers: { cookie: confirmedCookie },
     });
     const payload = (await response.json()) as {
       user: { email: string };
@@ -1109,7 +1156,25 @@ describe("web routes with server-htmx frontend", () => {
     expect(userId).toBeTruthy();
 
     const sessionCookie = await loginAndGetCookie(email, "password");
-    const csrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const blockedCsrf = await fetchCsrfFromPath("/account", sessionCookie);
+    const blockedDelete = await fetch(`${baseUrl}/account/delete`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: blockedCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        password: "password",
+        confirm: "DELETE",
+        _token: blockedCsrf.token,
+      }),
+    });
+    expect(blockedDelete.status).toBe(302);
+    expect(blockedDelete.headers.get("location")).toBe("/confirm-password?redirect=%2Faccount");
+
+    const confirmedCookie = await confirmPasswordAndGetCookie(sessionCookie);
+    const csrf = await fetchCsrfFromPath("/account", confirmedCookie);
     const wrong = await fetch(`${baseUrl}/account/delete`, {
       method: "POST",
       headers: {
@@ -1144,6 +1209,9 @@ describe("web routes with server-htmx frontend", () => {
     expect(deleted.status).toBe(302);
     expect(deleted.headers.get("location")).toBe("/login");
     expect(deleted.headers.get("set-cookie")).toContain("workhub_session=");
+    expect(
+      readSetCookies(deleted).some((cookie) => cookie.startsWith("workhub_password_confirmed=")),
+    ).toBe(true);
 
     const rows = (await getDatabase()`
       SELECT name, email FROM users WHERE id = ${userId}
@@ -1229,5 +1297,8 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/login");
     expect(response.headers.get("set-cookie")).toContain("workhub_session=");
+    expect(
+      readSetCookies(response).some((cookie) => cookie.startsWith("workhub_password_confirmed=")),
+    ).toBe(true);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ValidationError } from "@getstrata/core/errors/http";
 import {
+  parseWebConfirmPasswordBody,
   parseWebCreateApiTokenBody,
   parseWebDeleteAccountBody,
   parseWebLoginBody,
@@ -81,6 +82,21 @@ describe("webRequests", () => {
     await expect(parseWebCreateApiTokenBody(request)).resolves.toEqual({
       name: "ci bot",
       expiresInDays: 14,
+    });
+  });
+
+  test("parseWebConfirmPasswordBody accepts an optional redirect", async () => {
+    await expect(
+      parseWebConfirmPasswordBody(
+        new Request("http://example.test/confirm-password", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "password=password123&redirect=%2Faccount%2Fexport",
+        }),
+      ),
+    ).resolves.toEqual({
+      password: "password123",
+      redirect: "/account/export",
     });
   });
 

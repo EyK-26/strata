@@ -5,7 +5,7 @@ WorkHub supports three frontend modes (`FRONTEND_MODE`):
 | Mode | Value | What runs |
 |------|-------|-----------|
 | JSON API only | `api` | `/api/v1/*` routes |
-| Server HTMX | `server-htmx` | HTML views under `/organizations`, `/projects`, `/tasks`, `/search`, `/reports`, `/account` (password + MFA), `/notifications`, `/billing`, `/webhooks`, `/forgot-password`, etc. |
+| Server HTMX | `server-htmx` | HTML views under `/organizations`, `/projects`, `/tasks`, `/search`, `/reports`, `/account` (password + MFA), `/confirm-password` (export/delete), `/notifications`, `/billing`, `/webhooks`, `/forgot-password`, etc. |
 | SPA + API | `spa-react` | React app at `/app/*` plus the JSON API |
 
 Set the mode in `.env` or export it before starting the server.
@@ -33,6 +33,7 @@ Integration tests and the SPA client use `cache: 'no-store'` on API fetches.
 1. `GET /login` — read `csrf-token` meta and `workhub_csrf` cookie.
 2. `POST /login` with form fields `email`, `password`, `redirect`, `_token`.
 3. Follow `workhub_session` cookie on subsequent requests.
+4. Sensitive HTML (`GET /account/export`, `POST /account/delete`) requires a recent `POST /confirm-password` (`workhub_password_confirmed` cookie).
 
 HTMX mutating requests send `X-CSRF-Token` automatically (see `resources/views/layouts/app.eta`).
 

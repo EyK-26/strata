@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.75
+
+- Laravel `password.confirm`: `@getstrata/core/auth/passwordConfirmCookie` (`createPasswordConfirmCookie`, `hasFreshPasswordConfirmation`, `clearPasswordConfirmCookie`) and `createRequirePasswordConfirmMiddleware()` (HTML 302 `/confirm-password`, JSON 423). Cookie name `PASSWORD_CONFIRM_COOKIE_NAME` (default `workhub_password_confirmed`), TTL `PASSWORD_CONFIRM_TIMEOUT` (default 10800s).
+
 ## 0.5.74
 
 - `AuthUser.emailVerifiedAt` and `@getstrata/core/auth/emailVerification` (`isEmailVerificationRequired`, `hasVerifiedEmail`). `null` means unverified; missing is treated as verified (GuestGuard / legacy).

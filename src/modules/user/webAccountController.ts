@@ -2,6 +2,7 @@ import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
+import { clearPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";
 import { clearSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
@@ -294,13 +295,14 @@ class WebAccountController {
 
       await this.tokens.deleteUserAccount(userId);
 
+      const headers = new Headers({ Location: "/login" });
+      headers.append("Set-Cookie", clearSessionCookie());
+      headers.append("Set-Cookie", clearPasswordConfirmCookie());
+
       return flashResponse(
         new Response(null, {
           status: 302,
-          headers: {
-            Location: "/login",
-            "Set-Cookie": clearSessionCookie(),
-          },
+          headers,
         }),
         {
           level: "success",
@@ -356,10 +358,10 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
       POST: kernel.wrapWebAuthenticated(controller.revokeToken as unknown as RouteHandler),
     },
     "/account/export": {
-      GET: kernel.wrapWebAuthenticated(controller.exportAccount as unknown as RouteHandler),
+      GET: kernel.wrapWebPasswordConfirm(controller.exportAccount as unknown as RouteHandler),
     },
     "/account/delete": {
-      POST: kernel.wrapWebAuthenticated(controller.deleteAccount as unknown as RouteHandler),
+      POST: kernel.wrapWebPasswordConfirm(controller.deleteAccount as unknown as RouteHandler),
     },
   };
 }

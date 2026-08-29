@@ -1,4 +1,10 @@
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { verifyPassword } from "@getstrata/core/auth/password";
+import {
+  clearPasswordConfirmCookie,
+  createPasswordConfirmCookie,
+} from "@getstrata/core/auth/passwordConfirmCookie";
 import { clearSessionCookie, createSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
@@ -18,8 +24,10 @@ import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
 import type AuthService from "./authService";
 import type PasswordResetService from "./passwordResetService";
-import { authServiceToken, passwordResetServiceToken } from "./provider";
+import { authServiceToken, passwordResetServiceToken, userRepositoryToken } from "./provider";
+import type UserRepository from "./repository";
 import {
+  parseWebConfirmPasswordBody,
   parseWebForgotPasswordBody,
   parseWebLoginBody,
   parseWebRegisterBody,
@@ -43,6 +51,36 @@ class WebAuthController {
 
   private get organizations(): OrganizationService {
     return resolveService(this.dependencies, organizationServiceToken);
+  }
+
+  private get users(): UserRepository {
+    return resolveService(this.dependencies, userRepositoryToken);
+  }
+
+  private requireUserId(): number {
+    const user = currentAuthUser();
+    const userId = typeof user?.id === "number" ? user.id : Number(user?.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedError("Authentication required.");
+    }
+
+    return userId;
+  }
+
+  private async renderConfirmPassword(
+    extras: Record<string, unknown> = {},
+    status = 200,
+  ): Promise<Response> {
+    return htmlResponse(
+      await this.view.render("auth/confirm-password", {
+        title: "Confirm password",
+        redirect: "/account",
+        errors: {},
+        ...extras,
+      }),
+      { status },
+    );
   }
 
   private async renderLogin(extras: Record<string, unknown> = {}, status = 200): Promise<Response> {
@@ -268,13 +306,71 @@ class WebAuthController {
   );
 
   readonly logout = withErrorHandling(async () => {
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: "/login",
-        "Set-Cookie": clearSessionCookie(),
-      },
+    const headers = new Headers({ Location: "/login" });
+    headers.append("Set-Cookie", clearSessionCookie());
+    headers.append("Set-Cookie", clearPasswordConfirmCookie());
+
+    return new Response(null, { status: 302, headers });
+  });
+
+  readonly showConfirmPassword = withErrorHandling(async (request?: Request) => {
+    const redirect = new URL(request?.url ?? "http://localhost/confirm-password").searchParams.get(
+      "redirect",
+    );
+
+    return await this.renderConfirmPassword({
+      redirect: sanitizeInternalPath(redirect ?? "/account", "/account"),
     });
+  });
+
+  readonly confirmPassword = withErrorHandling(async (request: Request) => {
+    const body = await parseWebConfirmPasswordBody(request);
+    const redirect = sanitizeInternalPath(body.redirect ?? "/account", "/account");
+
+    try {
+      const userId = this.requireUserId();
+      const user = await this.users.findByIdOrThrow(userId);
+
+      if (!user.password_hash) {
+        throw new ValidationError("This account does not have a password.", {
+          password: ["This account does not have a password."],
+        });
+      }
+
+      if (!(await verifyPassword(body.password, user.password_hash))) {
+        throw new UnauthorizedError("The provided password was incorrect.");
+      }
+
+      const headers = new Headers({ Location: redirect });
+      headers.append("Set-Cookie", createPasswordConfirmCookie(userId));
+
+      return flashResponse(new Response(null, { status: 302, headers }), {
+        level: "success",
+        message: "Password confirmed.",
+      });
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return await this.renderConfirmPassword(
+          {
+            redirect,
+            errors: error.details ?? { password: [error.message] },
+          },
+          422,
+        );
+      }
+
+      if (error instanceof UnauthorizedError) {
+        return await this.renderConfirmPassword(
+          {
+            redirect,
+            errors: { password: [error.message] },
+          },
+          422,
+        );
+      }
+
+      throw error;
+    }
   });
 
   readonly showForgotPassword = withErrorHandling(async () => {

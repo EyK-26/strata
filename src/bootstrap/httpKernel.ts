@@ -20,6 +20,7 @@ import { requestIdMiddleware } from "@getstrata/core/http/middleware";
 import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbilityMiddleware";
 import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMiddleware";
 import { createRequireGlobalAdminMiddleware } from "@getstrata/core/http/requireGlobalAdminMiddleware";
+import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
 import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
 import { withErrorHandling } from "@getstrata/core/http/response";
@@ -163,6 +164,13 @@ class HttpKernel {
 
   wrapWebVerified(handler: RouteHandler): RouteHandler {
     return this.wrapWebAuth(handler, { verified: true });
+  }
+
+  /** Laravel `password.confirm` — requires a fresh signed confirmation cookie. */
+  wrapWebPasswordConfirm(handler: RouteHandler): RouteHandler {
+    return this.wrapWebAuth(withMiddleware(createRequirePasswordConfirmMiddleware())(handler), {
+      verified: true,
+    });
   }
 
   wrapWebAbility(ability: string, handler: RouteHandler): RouteHandler {

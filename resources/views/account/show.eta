@@ -151,7 +151,7 @@
 
 <section class="card" id="data-privacy">
   <h2>Your data</h2>
-  <p class="hint">Download a JSON copy of your profile, API tokens, and OAuth identities. Deleting the account anonymizes your user row and revokes tokens.</p>
+  <p class="hint">Download a JSON copy of your profile, API tokens, and OAuth identities. Export and delete ask you to confirm your password first. Deleting the account anonymizes your user row and revokes tokens.</p>
   <p><a href="/account/export">Export my data</a></p>
 
   <form method="post" action="/account/delete" class="stack-form">

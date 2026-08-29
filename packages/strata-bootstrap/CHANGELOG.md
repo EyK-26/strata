@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.62
+
+- `HttpKernel.wrapWebPasswordConfirm()` is Laravel `password.confirm` for HTML routes. Peer `@getstrata/core` `^0.5.75`.
+
 ## 0.2.61
 
 - `HttpKernel.wrapVerified()` / `wrapWebVerified()` / `wrapWebAuthenticatedAllowUnverified()`. When `FEATURE_EMAIL_VERIFICATION=true`, `wrapWebAuthenticated` and `wrapWebAbility` require a verified email. Peer `@getstrata/core` `^0.5.74`.

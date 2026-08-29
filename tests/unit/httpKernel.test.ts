@@ -9,6 +9,7 @@ import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { wrapWebLogin } from "@getstrata/bootstrap/web/routing";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { createPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
@@ -227,6 +228,52 @@ describe("HttpKernel", () => {
     } finally {
       restoreEnvVar("FRONTEND_MODE", previousMode);
       restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previousVerify);
+    }
+  });
+
+  test("wrapWebPasswordConfirm redirects HTML and returns JSON 423 until confirmed", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapWebPasswordConfirm(async () => new Response("ok"));
+
+      const unconfirmed = await handler(
+        new Request("http://example.test/account/export", {
+          headers: { "x-authenticated-user-id": "1" },
+        }),
+      );
+      expect(unconfirmed.status).toBe(302);
+      expect(unconfirmed.headers.get("Location")).toBe(
+        "/confirm-password?redirect=%2Faccount%2Fexport",
+      );
+
+      const jsonUnconfirmed = await handler(
+        new Request("http://example.test/account/export", {
+          headers: {
+            accept: "application/json",
+            "x-authenticated-user-id": "1",
+          },
+        }),
+      );
+      expect(jsonUnconfirmed.status).toBe(423);
+      expect(await jsonUnconfirmed.json()).toEqual({
+        error: "Password confirmation required.",
+      });
+
+      const confirmed = await handler(
+        new Request("http://example.test/account/export", {
+          headers: {
+            "x-authenticated-user-id": "1",
+            cookie: createPasswordConfirmCookie(1),
+          },
+        }),
+      );
+      expect(confirmed.status).toBe(200);
+      expect(await confirmed.text()).toBe("ok");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
     }
   });
 
