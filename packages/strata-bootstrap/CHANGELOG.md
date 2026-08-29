@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.56
+
+- Peer `@getstrata/core` `^0.5.69` for `MembershipLookup.updateMemberRole`.
+
 ## 0.2.55
 
 - HttpKernel and route builders read `isViewsEnabled` / `isSpaEnabled` from `@getstrata/core/runtime/frontendMode` instead of WorkHub `src/config/frontend`.

@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.69
+
+- `MembershipLookup.updateMemberRole(organizationId, userId, role)` is required. The uninitialized lookup throws until `configureMembershipLookup()` is called. `MembershipService.updateMemberRole` delegates to the adapter.
+
 ## 0.5.68
 
 - Published core no longer imports WorkHub `src/config`. Frontend mode, queue retries, CORS, and upload limits read env (`FRONTEND_MODE`, `QUEUE_*`, `CORS_ALLOWED_ORIGINS`, `MAX_UPLOAD_BYTES`).
