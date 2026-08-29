@@ -2,6 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { generateOpenApiSpec, renderTypeScriptSdk } from "@getstrata/core/openapi/generator";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
+interface OpenApiOperation {
+  summary?: string;
+  security?: Array<Record<string, unknown[]>>;
+}
+
+function operation(
+  spec: ReturnType<typeof generateOpenApiSpec>,
+  path: string,
+  method: string,
+): OpenApiOperation | undefined {
+  return spec.paths[path]?.[method] as OpenApiOperation | undefined;
+}
+
 describe("generateOpenApiSpec", () => {
   test("maps registered routes into an OpenAPI document", () => {
     const previousName = process.env.APP_NAME;
@@ -29,13 +42,13 @@ describe("generateOpenApiSpec", () => {
       { method: "GET", path: "/auth/me", middleware: ["global", "api"] },
     ]);
 
-    expect(spec.paths["/auth/login"]?.post?.summary).toBe("Login with email and password");
-    expect(spec.paths["/auth/register"]?.post?.summary).toBe(
+    expect(operation(spec, "/auth/login", "post")?.summary).toBe("Login with email and password");
+    expect(operation(spec, "/auth/register", "post")?.summary).toBe(
       "Register with name, email, and password",
     );
-    expect(spec.paths["/auth/login"]?.post?.security).toBeUndefined();
-    expect(spec.paths["/auth/register"]?.post?.security).toBeUndefined();
-    expect(spec.paths["/auth/me"]?.get?.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation(spec, "/auth/login", "post")?.security).toBeUndefined();
+    expect(operation(spec, "/auth/register", "post")?.security).toBeUndefined();
+    expect(operation(spec, "/auth/me", "get")?.security).toEqual([{ bearerAuth: [] }]);
   });
 
   test("strips API_PREFIX when classifying public auth operations", () => {
@@ -45,13 +58,15 @@ describe("generateOpenApiSpec", () => {
       { method: "GET", path: "/api/v1/auth/me", middleware: ["global", "api"] },
     ]);
 
-    expect(spec.paths["/api/v1/auth/login"]?.post?.summary).toBe("Login with email and password");
-    expect(spec.paths["/api/v1/auth/register"]?.post?.summary).toBe(
+    expect(operation(spec, "/api/v1/auth/login", "post")?.summary).toBe(
+      "Login with email and password",
+    );
+    expect(operation(spec, "/api/v1/auth/register", "post")?.summary).toBe(
       "Register with name, email, and password",
     );
-    expect(spec.paths["/api/v1/auth/login"]?.post?.security).toBeUndefined();
-    expect(spec.paths["/api/v1/auth/register"]?.post?.security).toBeUndefined();
-    expect(spec.paths["/api/v1/auth/me"]?.get?.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation(spec, "/api/v1/auth/login", "post")?.security).toBeUndefined();
+    expect(operation(spec, "/api/v1/auth/register", "post")?.security).toBeUndefined();
+    expect(operation(spec, "/api/v1/auth/me", "get")?.security).toEqual([{ bearerAuth: [] }]);
   });
 
   test("renders valid TypeScript SDK method names", () => {
