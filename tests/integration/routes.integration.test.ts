@@ -1289,6 +1289,39 @@ describe("integration routes with postgres", () => {
       }),
     });
     expect(login.status).toBe(201);
+    const loggedIn = (await login.json()) as { token: string };
+    const extra = await fetch(api("/auth/tokens"), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${loggedIn.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name: "other-device", abilities: ["*"] }),
+    });
+    expect(extra.status).toBe(201);
+    const extraBody = (await extra.json()) as { token: string };
+
+    const loggedOut = await fetch(api("/users/me/logout-other-devices"), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${loggedIn.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ password: "newer-password" }),
+    });
+    expect(loggedOut.status).toBe(200);
+    const loggedOutBody = (await loggedOut.json()) as { revoked: number };
+    expect(loggedOutBody.revoked).toBeGreaterThanOrEqual(1);
+
+    const stale = await fetch(api("/auth/me"), {
+      headers: { authorization: `Bearer ${extraBody.token}` },
+    });
+    expect(stale.status).toBe(401);
+
+    const stillCurrent = await fetch(api("/auth/me"), {
+      headers: { authorization: `Bearer ${loggedIn.token}` },
+    });
+    expect(stillCurrent.status).toBe(200);
   });
 
   test("PATCH and DELETE /users/me return 401 without credentials", async () => {

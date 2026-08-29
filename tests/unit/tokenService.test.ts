@@ -65,6 +65,18 @@ describe("TokenService", () => {
     expect(listed.every((token) => !("token_hash" in token))).toBe(true);
   });
 
+  test("revokeOtherTokens keeps the current token", async () => {
+    const service = new TokenService(new UserRepository(), new ApiTokenRepository());
+    const keep = await service.createToken(2, { name: "keep-me" });
+    const drop = await service.createToken(2, { name: "drop-me" });
+
+    expect(await service.revokeOtherTokens(2, keep.token.id)).toBe(1);
+    expect(await service.resolveUserFromToken(keep.plainTextToken)).toMatchObject({ id: 2 });
+    expect(await service.resolveUserFromToken(drop.plainTextToken)).toBeNull();
+    expect(await service.revokeOtherTokens(2)).toBe(1);
+    expect(await service.resolveUserFromToken(keep.plainTextToken)).toBeNull();
+  });
+
   test("revokeToken removes access for the token owner", async () => {
     const service = new TokenService(new UserRepository(), new ApiTokenRepository());
     const created = await service.createToken(2, { name: "revoke-me" });

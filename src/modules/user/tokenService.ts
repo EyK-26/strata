@@ -126,6 +126,27 @@ class TokenService {
     return records.map(toApiTokenResource);
   }
 
+  async revokeOtherTokens(userId: number, exceptTokenId?: number): Promise<number> {
+    const records = await this.tokens.findAll({
+      where: { user_id: userId },
+    });
+    let revoked = 0;
+
+    for (const record of records) {
+      if (exceptTokenId !== undefined && record.id === exceptTokenId) {
+        continue;
+      }
+
+      const deleted = await this.tokens.deleteById(record.id);
+
+      if (deleted) {
+        revoked += 1;
+      }
+    }
+
+    return revoked;
+  }
+
   async revokeToken(userId: number, tokenId: number): Promise<void> {
     const record = await this.tokens.findById(tokenId);
 

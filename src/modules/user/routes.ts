@@ -49,6 +49,9 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
     "/users/me/password": {
       PUT: kernel.wrapAuthenticated(controller.updatePassword as unknown as RouteHandler),
     },
+    "/users/me/logout-other-devices": {
+      POST: kernel.wrapAuthenticated(controller.logoutOtherDevices as unknown as RouteHandler),
+    },
     "/users/me/confirm-password": {
       POST: kernel.wrapAuthenticated(controller.confirmPassword as unknown as RouteHandler),
     },

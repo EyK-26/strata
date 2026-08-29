@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
@@ -275,11 +276,8 @@ describe("password auth", () => {
   test("changePassword updates a hash and rejects the old password", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {
       const users = new UserRepository();
-      const authService = new AuthService(
-        users,
-        new TokenService(users, new ApiTokenRepository()),
-        new OAuthIdentityRepository(),
-      );
+      const tokens = new TokenService(users, new ApiTokenRepository());
+      const authService = new AuthService(users, tokens, new OAuthIdentityRepository());
       const email = `pw-change-${Date.now()}@workhub.test`;
       const created = await users.create({
         name: "Password Change User",
@@ -313,7 +311,25 @@ describe("password auth", () => {
       await expect(authService.changePassword(created.id, "password", "password")).rejects.toThrow(
         "Choose a different password.",
       );
-      await authService.changePassword(created.id, "password", "new-member-pass");
+      const keep = await tokens.createToken(created.id, { name: "keep" });
+      const drop = await tokens.createToken(created.id, { name: "drop" });
+      await runWithAuthUser(
+        { id: created.id, role: "member", tokenId: keep.token.id },
+        async () => {
+          expect(await authService.logoutOtherDevices(created.id, "password")).toBe(1);
+        },
+      );
+      expect(await tokens.resolveUserFromToken(keep.plainTextToken)).toMatchObject({
+        id: created.id,
+      });
+      expect(await tokens.resolveUserFromToken(drop.plainTextToken)).toBeNull();
+
+      const extra = await tokens.createToken(created.id, { name: "extra" });
+      await runWithAuthUser({ id: created.id, role: "member", tokenId: 0 }, async () => {
+        await authService.changePassword(created.id, "password", "new-member-pass");
+      });
+      expect(await tokens.resolveUserFromToken(keep.plainTextToken)).toBeNull();
+      expect(await tokens.resolveUserFromToken(extra.plainTextToken)).toBeNull();
       await expect(authService.authenticatePassword(email, "password")).rejects.toThrow(
         "Invalid credentials.",
       );

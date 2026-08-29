@@ -42,6 +42,7 @@ function createController(services: {
   tokens?: Record<string, unknown>;
   oauth?: Record<string, unknown>;
   view?: Record<string, unknown>;
+  authService?: Record<string, unknown>;
 }): WebAccountController {
   const container = new ServiceContainer();
   container.set(userRepositoryToken, {
@@ -62,7 +63,9 @@ function createController(services: {
     findAll: mock(async () => []),
     ...services.oauth,
   });
-  container.set(authServiceToken, {});
+  container.set(authServiceToken, {
+    ...services.authService,
+  });
   container.set(passwordResetServiceToken, {
     sendEmailVerification: mock(async () => undefined),
   });
@@ -136,6 +139,49 @@ describe("WebAccountController", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/account");
     expect(revokeToken).toHaveBeenCalledWith(1, 9);
+  });
+
+  test("logoutOtherDevices redirects after revoking tokens", async () => {
+    const logoutOtherDevices = mock(async () => 2);
+    const controller = createController({
+      authService: { logoutOtherDevices },
+    });
+    const response = await asAuthed(() =>
+      controller.logoutOtherDevices(
+        new Request("http://example.test/account/logout-other-devices", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "password=password123",
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/account");
+    expect(logoutOtherDevices).toHaveBeenCalledWith(1, "password123");
+  });
+
+  test("logoutOtherDevices re-renders an invalid password", async () => {
+    const { UnauthorizedError } = await import("@getstrata/core/errors/http");
+    const controller = createController({
+      authService: {
+        logoutOtherDevices: mock(async () => {
+          throw new UnauthorizedError("Invalid credentials.");
+        }),
+      },
+    });
+    const response = await asAuthed(() =>
+      controller.logoutOtherDevices(
+        new Request("http://example.test/account/logout-other-devices", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "password=wrong",
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("Invalid credentials.");
   });
 
   test("revokeToken requires a token id", async () => {

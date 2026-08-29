@@ -1308,6 +1308,70 @@ describe("web routes with server-htmx frontend", () => {
     expect(await response.text()).toContain("Invalid credentials.");
   });
 
+  test("POST /account/logout-other-devices revokes API tokens for a disposable user", async () => {
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const email = `html-logout-other-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: registerCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        name: "Logout Other",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+    expect(registered.status).toBe(302);
+    const session = mergeCookieHeader("", registered);
+
+    const tokenCsrf = await fetchCsrfFromPath("/account", session);
+    const tokenName = `logout-other-${Date.now()}`;
+    const created = await fetch(`${baseUrl}/account/tokens`, {
+      method: "POST",
+      headers: {
+        cookie: tokenCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        name: tokenName,
+        _token: tokenCsrf.token,
+      }),
+    });
+    expect(created.status).toBe(200);
+    expect(await created.text()).toContain(tokenName);
+
+    const logoutCsrf = await fetchCsrfFromPath("/account", session);
+    expect(
+      await (await fetch(`${baseUrl}/account`, { headers: { cookie: session } })).text(),
+    ).toContain("logout-other-devices");
+    const loggedOut = await fetch(`${baseUrl}/account/logout-other-devices`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: logoutCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        password: "password123",
+        _token: logoutCsrf.token,
+      }),
+    });
+    expect(loggedOut.status).toBe(302);
+    expect(loggedOut.headers.get("location")).toBe("/account");
+
+    const after = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: mergeCookieHeader(session, loggedOut) },
+    });
+    expect(after.status).toBe(200);
+    expect(await after.text()).not.toContain(tokenName);
+  });
+
   test("POST /account/tokens creates a token and POST revoke removes it", async () => {
     const csrf = await fetchCsrfFromPath("/account", adminSessionCookie);
     const name = `html-token-${Date.now()}`;

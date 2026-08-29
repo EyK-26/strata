@@ -807,6 +807,71 @@ describe("AuthController", () => {
     expect(await response.json()).toEqual({ error: "hash failed" });
   });
 
+  test("logoutOtherDevices returns the revoked count", async () => {
+    const logoutOtherDevices = mock(async () => 3);
+    const controller = createController({
+      authService: { logoutOtherDevices },
+    });
+
+    const response = await controller.logoutOtherDevices(
+      new Request("http://example.test/users/me/logout-other-devices", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "password123" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ revoked: 3 });
+    expect(logoutOtherDevices).toHaveBeenCalledWith(1, "password123");
+  });
+
+  test("logoutOtherDevices rethrows unexpected errors", async () => {
+    const controller = createController({
+      authService: {
+        logoutOtherDevices: mock(async () => {
+          throw new Error("revoke failed");
+        }),
+      },
+    });
+
+    const response = await controller.logoutOtherDevices(
+      new Request("http://example.test/users/me/logout-other-devices", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "password123" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "revoke failed" });
+  });
+
+  test("logoutOtherDevices maps invalid password to 422", async () => {
+    const { UnauthorizedError } = await import("@getstrata/core/errors/http");
+    const controller = createController({
+      authService: {
+        logoutOtherDevices: mock(async () => {
+          throw new UnauthorizedError("Invalid credentials.");
+        }),
+      },
+    });
+
+    const response = await controller.logoutOtherDevices(
+      new Request("http://example.test/users/me/logout-other-devices", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "wrong" }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: "Invalid credentials.",
+      details: { password: ["Invalid credentials."] },
+    });
+  });
+
   test("confirmPassword sets the confirmation cookie", async () => {
     const confirmCurrentPassword = mock(async () => undefined);
     const controller = createController({

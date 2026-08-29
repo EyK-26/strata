@@ -237,6 +237,10 @@ export class WorkHubClient {
     return await this.request("/users/me/export", { ...init, method: "GET" });
   }
 
+  async postUsersMeLogoutOtherDevices(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/logout-other-devices", { ...init, method: "POST" });
+  }
+
   async postUsersMeMfa(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me/mfa", { ...init, method: "POST" });
   }

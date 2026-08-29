@@ -172,6 +172,16 @@
     </tbody>
   </table>
   <% } %>
+
+  <form method="post" action="/account/logout-other-devices" class="stack-form">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <p class="hint">Revoke every API token except the one used by this request (HMAC login has no bearer, so all tokens are revoked). Browser HMAC cookies stay valid until they expire.</p>
+    <label>
+      Current password
+      <input type="password" name="password" required />
+    </label>
+    <button type="submit" class="danger-button">Log out other devices</button>
+  </form>
 </section>
 
 <section class="card" id="data-privacy">

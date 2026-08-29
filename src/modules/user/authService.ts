@@ -1,3 +1,4 @@
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import type { OAuthProvider } from "@getstrata/core/auth/oauth/types";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
 import { normalizeEmail } from "@getstrata/core/crypto/fieldEncryption";
@@ -22,6 +23,14 @@ import type { CreatedApiToken, UserRecord } from "./types";
 
 interface LoginOptions {
   mfaCode?: string;
+}
+
+function currentTokenId(): number | undefined {
+  const tokenId = currentAuthUser()?.tokenId;
+
+  return typeof tokenId === "number" && Number.isInteger(tokenId) && tokenId > 0
+    ? tokenId
+    : undefined;
 }
 
 interface MfaConfirmation {
@@ -238,6 +247,14 @@ class AuthService {
     logSecurityEvent("auth_password_confirmed", { user_id: user.id });
   }
 
+  async logoutOtherDevices(userId: number, password: string): Promise<number> {
+    await this.confirmCurrentPassword(userId, password);
+    const revoked = await this.tokens.revokeOtherTokens(userId, currentTokenId());
+    logSecurityEvent("auth_logout_other_devices", { user_id: userId, revoked });
+
+    return revoked;
+  }
+
   async changePassword(
     userId: number,
     currentPassword: string,
@@ -263,7 +280,8 @@ class AuthService {
       password_hash: await hashPassword(nextPassword),
       updated_at: new Date(),
     });
-    logSecurityEvent("auth_password_changed", { user_id: user.id });
+    const revoked = await this.tokens.revokeOtherTokens(userId, currentTokenId());
+    logSecurityEvent("auth_password_changed", { user_id: user.id, revoked });
 
     return updated;
   }

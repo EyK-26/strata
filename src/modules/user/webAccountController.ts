@@ -223,6 +223,29 @@ class WebAccountController {
     }
   });
 
+  readonly logoutOtherDevices = withErrorHandling(async (request: Request) => {
+    const userId = this.requireUserId();
+
+    try {
+      const body = await parseWebDisableMfaBody(request);
+      const revoked = await this.authService.logoutOtherDevices(userId, body.password);
+
+      return flashResponse(Response.redirect("/account", 302), {
+        level: "success",
+        message:
+          revoked === 1 ? "Revoked 1 other API token." : `Revoked ${revoked} other API tokens.`,
+      });
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        const user = await this.users.findByIdOrThrow(userId);
+
+        return await this.renderAccount(user, { errors: { password: [error.message] } }, 422);
+      }
+
+      throw error;
+    }
+  });
+
   readonly changePassword = withErrorHandling(async (request: Request) => {
     const userId = this.requireUserId();
 
@@ -413,6 +436,9 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
     },
     "/account/password": {
       POST: kernel.wrapWebAuthenticated(controller.changePassword as unknown as RouteHandler),
+    },
+    "/account/logout-other-devices": {
+      POST: kernel.wrapWebAuthenticated(controller.logoutOtherDevices as unknown as RouteHandler),
     },
     "/account/email/verification-notification": {
       POST: kernel.wrapWebAuthenticatedAllowUnverified(

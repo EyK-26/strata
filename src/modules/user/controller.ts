@@ -322,6 +322,25 @@ class AuthController {
     }
   });
 
+  readonly logoutOtherDevices = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const body = await parsePasswordChallengeBody(request);
+
+    try {
+      const revoked = await this.authService.logoutOtherDevices(userId, body.password);
+
+      return jsonResponse({ revoked });
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        throw new ValidationError("Invalid credentials.", {
+          password: ["Invalid credentials."],
+        });
+      }
+
+      throw error;
+    }
+  });
+
   readonly confirmPassword = withErrorHandling(async (request: Request) => {
     const userId = await this.requireUserId(request);
     const body = await parsePasswordChallengeBody(request);

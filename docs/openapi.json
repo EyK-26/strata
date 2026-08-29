@@ -1897,6 +1897,42 @@
         }
       }
     },
+    "/api/v1/users/me/logout-other-devices": {
+      "post": {
+        "summary": "POST /api/v1/users/me/logout-other-devices",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
     "/api/v1/users/me/mfa": {
       "post": {
         "summary": "POST /api/v1/users/me/mfa",
