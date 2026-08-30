@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { appDisplayName } from "../runtime/appKeyPrefix";
 
 function decodeBase32(input: string): Buffer {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -47,7 +48,7 @@ function generateTotpSecret(byteLength = 20): string {
 }
 
 function buildOtpauthUrl(options: { secret: string; account: string; issuer?: string }): string {
-  const issuer = options.issuer?.trim() || process.env.APP_NAME?.trim() || "WorkHub";
+  const issuer = options.issuer?.trim() || appDisplayName();
   const label = `${issuer}:${options.account}`;
   const params = new URLSearchParams({
     secret: options.secret,

@@ -6,6 +6,7 @@ import { ValidationError } from "@getstrata/core/errors/http";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { mailer } from "@getstrata/core/mail/mailer";
 import { sendMarkdownMail } from "@getstrata/core/mail/markdownMailable";
+import { appDisplayName } from "@getstrata/core/runtime/appKeyPrefix";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
 import { appConfig } from "../../config/app";
@@ -48,9 +49,10 @@ class PasswordResetService {
       appConfig.url,
     );
 
+    const appName = appDisplayName();
     await sendMarkdownMail(mailer(), {
       to: user.email,
-      subject: "Reset your WorkHub password",
+      subject: `Reset your ${appName} password`,
       markdown: `# Reset your password
 
 Use this signed link to choose a new password. It expires in 60 minutes.
@@ -58,7 +60,7 @@ Use this signed link to choose a new password. It expires in 60 minutes.
 [Reset password](${resetUrl})
 
 If you did not request this, you can ignore the email.`,
-      layout: { title: "Reset your password", footer: "WorkHub" },
+      layout: { title: "Reset your password", footer: appName },
     });
 
     logSecurityEvent("password_reset_sent", { user_id: user.id });
@@ -128,15 +130,16 @@ If you did not request this, you can ignore the email.`,
       appConfig.url,
     );
 
+    const appName = appDisplayName();
     await sendMarkdownMail(mailer(), {
       to: user.email,
-      subject: "Verify your WorkHub email",
+      subject: `Verify your ${appName} email`,
       markdown: `# Confirm your email
 
 [Verify email address](${verifyUrl})
 
 This signed link expires in 24 hours.`,
-      layout: { title: "Verify your email", footer: "WorkHub" },
+      layout: { title: "Verify your email", footer: appName },
     });
 
     logSecurityEvent("email_verification_sent", { user_id: user.id });

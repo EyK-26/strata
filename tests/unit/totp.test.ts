@@ -5,6 +5,7 @@ import {
   generateTotpSecret,
   verifyTotp,
 } from "@getstrata/core/security/totp";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("totp", () => {
   const secret = "JBSWY3DPEHPK3PXP";
@@ -47,5 +48,23 @@ describe("totp", () => {
     expect(url.startsWith("otpauth://totp/")).toBe(true);
     expect(url).toContain("secret=JBSWY3DPEHPK3PXP");
     expect(url).toContain("issuer=WorkHub");
+  });
+
+  test("buildOtpauthUrl defaults the issuer from APP_NAME", () => {
+    const previous = process.env.APP_NAME;
+
+    try {
+      delete process.env.APP_NAME;
+      expect(
+        buildOtpauthUrl({ secret: "JBSWY3DPEHPK3PXP", account: "admin@workhub.test" }),
+      ).toContain("issuer=WorkHub");
+
+      process.env.APP_NAME = "Acme";
+      expect(
+        buildOtpauthUrl({ secret: "JBSWY3DPEHPK3PXP", account: "admin@workhub.test" }),
+      ).toContain("issuer=Acme");
+    } finally {
+      restoreEnvVar("APP_NAME", previous);
+    }
   });
 });

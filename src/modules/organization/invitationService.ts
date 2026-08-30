@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from "@getstrata/core/errors/http";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { mailer } from "@getstrata/core/mail/mailer";
 import { sendMarkdownMail } from "@getstrata/core/mail/markdownMailable";
+import { appDisplayName } from "@getstrata/core/runtime/appKeyPrefix";
 import { resolveApplicationDependencies } from "@getstrata/core/runtime/applicationRegistry";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
@@ -131,9 +132,10 @@ class OrganizationInvitationService {
       appConfig.url,
     );
 
+    const appName = appDisplayName();
     await sendMarkdownMail(mailer(), {
       to: email,
-      subject: `Join ${organization.name} on WorkHub`,
+      subject: `Join ${organization.name} on ${appName}`,
       markdown: `# You are invited to ${organization.name}
 
 Accept this signed invitation to join as **${role}**. The link expires in 7 days.
@@ -141,7 +143,7 @@ Accept this signed invitation to join as **${role}**. The link expires in 7 days
 [Accept invitation](${acceptUrl})
 
 If you do not have an account yet, register with **${email}** and this invitation is applied automatically.`,
-      layout: { title: `Join ${organization.name}`, footer: "WorkHub" },
+      layout: { title: `Join ${organization.name}`, footer: appName },
     });
 
     logSecurityEvent("organization_invitation_sent", {

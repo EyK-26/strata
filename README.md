@@ -451,6 +451,8 @@ strata help
 strata tinker
 ```
 
+`strata tinker` banners `${APP_NAME} tinker` (default `WorkHub`).
+
 Database:
 
 ```bash
