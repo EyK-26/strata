@@ -6,6 +6,7 @@ import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { generateTotp } from "@getstrata/core/security/totp";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { getDatabase } from "../../src/db/connection";
+import { TEST_ADMIN_API_TOKEN } from "../../src/domain/auth";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -1667,7 +1668,7 @@ describe("web routes with server-htmx frontend", () => {
     expect(html).not.toContain("Leave team");
   });
 
-  test("POST /organizations/:id/members adds a registered user to the HTMX members table", async () => {
+  test("POST /organizations/:id/members invites a registered user instead of adding them", async () => {
     const registerCsrf = await fetchCsrfFromPath("/register");
     const email = `html-member-${Date.now()}@workhub.test`;
     const registered = await fetch(`${baseUrl}/register`, {
@@ -1707,8 +1708,9 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain("org-members");
+    expect(html).toContain("Pending invitations");
     expect(html).toContain(email);
-    expect(html).toContain("HTML Member");
+    expect(html).not.toContain(`Role for ${email}`);
     expect(html).not.toContain("<!doctype html>");
 
     const inviteEmail = `html-invite-${Date.now()}@workhub.test`;
@@ -1814,19 +1816,29 @@ describe("web routes with server-htmx frontend", () => {
     expect(personalLocation).toMatch(/^\/organizations\/\d+$/);
     const session = mergeCookieHeader(registerCsrf.cookies, registered);
 
+    const inviteCsrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const invited = await fetch(`${baseUrl}/organizations/1/members`, {
+      method: "POST",
+      headers: {
+        cookie: inviteCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        email,
+        role: "member",
+        _token: inviteCsrf.token,
+      }),
+      redirect: "manual",
+    });
+    expect(invited.status).toBe(302);
+
     const token = "html-accept-invite-token";
     await runWithMigrationBypass(async () => {
       await getDatabase()`
-        INSERT INTO organization_invitation (
-          organization_id, email, role, invited_by, token_hash, expires_at
-        ) VALUES (
-          1,
-          ${email},
-          ${"member"},
-          1,
-          ${hashApiToken(token)},
-          ${new Date(Date.now() + 60 * 60 * 1000)}
-        )
+        UPDATE organization_invitation
+        SET token_hash = ${hashApiToken(token)}
+        WHERE email = ${email}
       `;
     });
 
@@ -1944,21 +1956,23 @@ describe("web routes with server-htmx frontend", () => {
     expect(personalPath).toMatch(/^\/organizations\/\d+$/);
     const session = mergeCookieHeader("", registered);
 
-    const addCsrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
-    const added = await fetch(`${baseUrl}/organizations/1/members`, {
-      method: "POST",
-      redirect: "manual",
-      headers: {
-        cookie: addCsrf.cookies,
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        email,
-        role: "member",
-        _token: addCsrf.token,
-      }),
+    const profile = await runWithMigrationBypass(async () => {
+      const rows = (await getDatabase()`
+        SELECT id FROM users WHERE email_lookup = ${emailLookupForQuery(email)}
+      `) as Array<{ id: number }>;
+      return rows[0];
     });
-    expect(added.status).toBe(302);
+    expect(profile?.id).toBeGreaterThan(0);
+
+    const added = await fetch(`${baseUrl}/api/v1/organizations/1/members`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${TEST_ADMIN_API_TOKEN}`,
+      },
+      body: JSON.stringify({ user_id: profile?.id, role: "member" }),
+    });
+    expect(added.status).toBe(201);
 
     const show = await fetch(`${baseUrl}/organizations/1`, {
       headers: { cookie: session, accept: "text/html" },

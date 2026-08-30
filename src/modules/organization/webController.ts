@@ -264,35 +264,17 @@ class OrganizationWebController {
     try {
       await resolveMembershipService().requireOrgAccess(id, "admin");
       const body = parseWebAddOrganizationMemberPayload(old);
-      const user = await this.users.findByEmail(body.email);
       const actor = currentAuthUser();
 
       if (!actor) {
         throw new ForbiddenError("Authentication required.");
       }
 
-      if (!user) {
-        await this.invitations.invite({
-          organizationId: id,
-          email: body.email,
-          role: body.role,
-          invitedByUserId: resolveUserId(actor),
-        });
-
-        if (isHtmxRequest(request)) {
-          return await this.renderShow(request, id, { partial: "members" });
-        }
-
-        return flashResponse(Response.redirect(`/organizations/${id}`, 302), {
-          level: "success",
-          message: `Invitation sent to ${body.email}.`,
-        });
-      }
-
-      await resolveMembershipService().addMember({
+      await this.invitations.invite({
         organizationId: id,
-        userId: user.id,
+        email: body.email,
         role: body.role,
+        invitedByUserId: resolveUserId(actor),
       });
 
       if (isHtmxRequest(request)) {
@@ -301,7 +283,7 @@ class OrganizationWebController {
 
       return flashResponse(Response.redirect(`/organizations/${id}`, 302), {
         level: "success",
-        message: "Member added.",
+        message: `Invitation sent to ${body.email}.`,
       });
     } catch (error) {
       if (error instanceof ValidationError && !requestPrefersJson(request)) {
