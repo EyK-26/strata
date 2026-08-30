@@ -212,7 +212,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/search` | HTMX search scoped to the current team (`?organizationId=` overrides; JSON stays tenant-wide) |
 | `/notifications` | Session inbox (nav bell polls every 30s) |
 | `/billing` | Current tenant subscription |
-| `/webhooks` | Outbound webhook admin: create, deactivate, delete, retry delivery |
+| `/webhooks` | Outbound webhook admin: create (defaults to current team), deactivate, delete, retry delivery |
 | `/reports`, `/reports/organizations/:id` | Current-team report (signed-in `/reports` redirects); tenant summary at `/reports?all=1` |
 | `/account` | Session profile (name/email), API tokens, GDPR export/delete, email verification, TOTP MFA + recovery codes |
 | `/confirm-password` | Laravel `password.confirm` — recent password gate for export and account delete |
@@ -561,7 +561,7 @@ docker compose down -v --remove-orphans
 - `GET/PATCH /users/me/notifications`, `PATCH /users/me/notifications/:id/read`
 - `GET /billing/subscription` (when `FEATURE_BILLING=true`)
 - `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
-- Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks`, `/forgot-password` when `FRONTEND_MODE=server-htmx`
+- Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks` (create defaults to the current team), `/forgot-password` when `FRONTEND_MODE=server-htmx`
 - Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, `POST /api/v1/auth/two-factor-challenge`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`, `POST /api/v1/auth/email/verification-notification`, OAuth routes, token CRUD, `PATCH /api/v1/users/me` (`{ name, email }`), `PUT /api/v1/users/me/password` (`{ current_password, password, password_confirmation }`; revokes other API tokens), `POST /api/v1/users/me/logout-other-devices` (`{ password }`; also invalidates older HMAC sessions), `POST /api/v1/users/me/confirm-password`, `GET /api/v1/users/me/confirmed-password-status`, `POST /api/v1/users/me/mfa`, `POST /api/v1/users/me/mfa/confirm`, `POST /api/v1/users/me/mfa/recovery-codes`, `DELETE /api/v1/users/me/mfa`, `GET /api/v1/users/me/export`, `POST /api/v1/users/me/photo` (multipart field `photo`), `GET /api/v1/users/me/photo`, `DELETE /api/v1/users/me/photo`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register` (optional same-origin `redirect`), `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `GET/POST /confirm-password`, `GET/POST /two-factor-challenge`, `POST /account/profile`, `POST /account/photo`, `GET /account/photo`, `POST /account/photo/delete`, `POST /account/password`, `POST /account/logout-other-devices`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`
 
 SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …

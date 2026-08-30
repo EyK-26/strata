@@ -154,10 +154,31 @@ describe("WebhookService", () => {
     expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         tenant_id: 1,
+        organization_id: null,
         url: "http://hooks.example.com/new",
         secret: "top-secret",
         events: ["*"],
         active: true,
+      }),
+    );
+  });
+
+  test("creates a webhook for an explicit organization", async () => {
+    const service = new WebhookService(repository as never);
+
+    await runWithTenant({ id: 1, slug: "default", plan: "pro", region: "eu" }, () =>
+      service.create({
+        url: "http://hooks.example.com/org",
+        secret: "org-secret",
+        organizationId: 7,
+      }),
+    );
+
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: 1,
+        organization_id: 7,
+        url: "http://hooks.example.com/org",
       }),
     );
   });

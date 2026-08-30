@@ -27,6 +27,23 @@
     Events
     <input type="text" name="events" value="<%= it.old?.events ?? '*' %>" />
   </label>
+  <label>
+    Team
+    <select name="organization_id">
+      <option value="" <%= String(it.old?.organization_id ?? it.currentOrganization?.id ?? "") === "" ? "selected" : "" %>>
+        All teams
+      </option>
+      <% for (const organization of it.organizations ?? []) { %>
+      <option
+        value="<%= organization.id %>"
+        <%= String(it.old?.organization_id ?? it.currentOrganization?.id ?? "") === String(organization.id) ? "selected" : "" %>
+      >
+        <%= organization.name %>
+      </option>
+      <% } %>
+    </select>
+  </label>
+  <p class="hint">Defaults to your current team. Choose All teams for tenant-wide deliveries.</p>
   <button type="submit">Add webhook</button>
 </form>
 
@@ -39,6 +56,7 @@
     <thead>
       <tr>
         <th>URL</th>
+        <th>Team</th>
         <th>Events</th>
         <th>Active</th>
         <th></th>
@@ -48,6 +66,15 @@
       <% for (const webhook of it.webhooks) { %>
       <tr>
         <td><code><%= webhook.url %></code></td>
+        <td>
+          <% if (webhook.organization_id) { %>
+          <a href="/organizations/<%= webhook.organization_id %>">
+            <%= (it.organizationNames && it.organizationNames[webhook.organization_id]) || ("Team #" + webhook.organization_id) %>
+          </a>
+          <% } else { %>
+          All teams
+          <% } %>
+        </td>
         <td><%= (webhook.events ?? []).join(", ") %></td>
         <td><%= webhook.active ? "yes" : "no" %></td>
         <td>

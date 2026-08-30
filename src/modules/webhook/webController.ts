@@ -1,5 +1,6 @@
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { ValidationError } from "@getstrata/core/errors/http";
@@ -13,11 +14,22 @@ import { normalizeFieldErrors } from "@getstrata/core/http/webErrorResponse";
 import { webhookSignatureHeader } from "@getstrata/core/runtime/appKeyPrefix";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
+import OrganizationRepository from "../organization/repository";
+import {
+  type CurrentOrganizationService,
+  currentOrganizationServiceToken,
+} from "../user/currentOrganizationService";
+import { resolveHtmlWebhookOrganizationId } from "./htmlOrganization";
 import { webhookServiceToken } from "./provider";
 import type WebhookService from "./service";
+import type { WebhookRecord } from "./types";
 
 class WebhookWebController {
   constructor(private readonly dependencies: AppDependencies) {}
+
+  private get currentOrganization(): CurrentOrganizationService {
+    return resolveService(this.dependencies, currentOrganizationServiceToken);
+  }
 
   private get service(): WebhookService {
     return resolveService(this.dependencies, webhookServiceToken);
@@ -25,6 +37,30 @@ class WebhookWebController {
 
   private get view(): ViewEngine {
     return resolveService(this.dependencies, CORE_VIEW_TOKEN);
+  }
+
+  private async organizationNamesById(webhooks: WebhookRecord[]): Promise<Record<number, string>> {
+    const ids = [
+      ...new Set(
+        webhooks
+          .map((webhook) => webhook.organization_id)
+          .filter((id): id is number => typeof id === "number"),
+      ),
+    ];
+    const names: Record<number, string> = {};
+    const repository = new OrganizationRepository();
+
+    await Promise.all(
+      ids.map(async (id) => {
+        const organization = await repository.findById(id);
+
+        if (organization) {
+          names[id] = organization.name;
+        }
+      }),
+    );
+
+    return names;
   }
 
   private async renderIndex(extras: Record<string, unknown> = {}, status = 200) {
@@ -38,6 +74,7 @@ class WebhookWebController {
         title: "Webhooks",
         signatureHeader: webhookSignatureHeader(),
         webhooks,
+        organizationNames: await this.organizationNamesById(webhooks),
         deliveries,
         errors: {},
         old: {},
@@ -75,7 +112,16 @@ class WebhookWebController {
         });
       }
 
-      await this.service.create({ url, secret, events: events.length > 0 ? events : ["*"] });
+      await this.service.create({
+        url,
+        secret,
+        events: events.length > 0 ? events : ["*"],
+        organizationId: await resolveHtmlWebhookOrganizationId({
+          form: record,
+          user: currentAuthUser(),
+          currentForUser: (userId) => this.currentOrganization.currentForUser(userId),
+        }),
+      });
 
       return flashResponse(Response.redirect("/webhooks", 302), {
         level: "success",

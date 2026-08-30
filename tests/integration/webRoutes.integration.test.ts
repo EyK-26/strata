@@ -1513,6 +1513,92 @@ describe("web routes with server-htmx frontend", () => {
     const webhookHtml = await webhooks.text();
     expect(webhookHtml).toContain("Outbound webhooks");
     expect(webhookHtml).toContain("x-workhub-signature");
+    expect(webhookHtml).toContain('name="organization_id"');
+  });
+
+  test("HTML webhook create defaults to the current team", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
+    const page = await fetch(`${baseUrl}/webhooks`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(page.status).toBe(200);
+    const formHtml = await page.text();
+    expect(formHtml).toContain("Defaults to your current team");
+    expect(formHtml).toContain("All teams");
+    expect(formHtml).toMatch(/value="1"\s+selected/);
+
+    const csrf = await fetchCsrfFromPath("/webhooks", adminSessionCookie);
+    const url = `https://hooks.example.com/current-team-${Date.now()}`;
+    const createdResponse = await fetch(`${baseUrl}/webhooks`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        url,
+        secret: "current-team-secret",
+        events: "task.created",
+        _token: csrf.token,
+      }),
+    });
+    expect(createdResponse.status).toBe(302);
+
+    const created = await runWithMigrationBypass(
+      async () =>
+        (await getDatabase()`
+          SELECT id, organization_id FROM webhook WHERE url = ${url} ORDER BY id DESC LIMIT 1
+        `) as Array<{ id: number; organization_id: number | null }>,
+    );
+    expect(created[0]?.organization_id).toBe(1);
+
+    const tenantUrl = `https://hooks.example.com/all-teams-${Date.now()}`;
+    const tenantCsrf = await fetchCsrfFromPath("/webhooks", adminSessionCookie);
+    const tenantResponse = await fetch(`${baseUrl}/webhooks`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: tenantCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        url: tenantUrl,
+        secret: "all-teams-secret",
+        events: "task.created",
+        organization_id: "",
+        _token: tenantCsrf.token,
+      }),
+    });
+    expect(tenantResponse.status).toBe(302);
+
+    const tenantWide = await runWithMigrationBypass(
+      async () =>
+        (await getDatabase()`
+          SELECT organization_id FROM webhook WHERE url = ${tenantUrl} ORDER BY id DESC LIMIT 1
+        `) as Array<{ organization_id: number | null }>,
+    );
+    expect(tenantWide[0]?.organization_id).toBeNull();
+
+    const listed = await fetch(`${baseUrl}/webhooks`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    const listedHtml = await listed.text();
+    expect(listedHtml).toContain("<th>Team</th>");
+    expect(listedHtml).toContain(url);
+    expect(listedHtml).toContain('href="/organizations/1"');
+    expect(listedHtml).toContain("Acme Labs");
+    expect(listedHtml).toContain(tenantUrl);
+    expect(listedHtml).toContain("All teams");
+
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`DELETE FROM webhook WHERE url = ${url} OR url = ${tenantUrl}`;
+    });
   });
 
   test("admin can deactivate, retry, and delete a webhook from HTML", async () => {
