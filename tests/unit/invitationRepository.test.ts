@@ -134,4 +134,22 @@ describe("OrganizationInvitationRepository", () => {
       new OrganizationInvitationRepository().findByIdAndOrganizationOrThrow(5, 4),
     ).rejects.toThrow("Organization invitation 4 not found.");
   });
+
+  test("refreshToken updates the token hash or throws", async () => {
+    const refreshed = { ...invitation, token_hash: "next" };
+    resetDatabaseConnectionForTests(
+      createMockDatabaseConnection(async (strings) => {
+        expect(strings.join("")).toContain("UPDATE organization_invitation");
+        return [refreshed];
+      }) as never,
+    );
+    await expect(
+      new OrganizationInvitationRepository().refreshToken(4, "next", now),
+    ).resolves.toEqual(refreshed);
+
+    resetDatabaseConnectionForTests(createMockDatabaseConnection(async () => []) as never);
+    await expect(
+      new OrganizationInvitationRepository().refreshToken(4, "next", now),
+    ).rejects.toThrow("Organization invitation refresh did not return a row.");
+  });
 });

@@ -33,6 +33,8 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /organizations": "List organizations",
   "POST /organizations": "Create organization",
   "GET /organizations/:id/members": "List organization members",
+  "POST /organizations/:id/invitations/:invitationId/resend":
+    "Resend a pending team invitation and rotate its token",
   "GET /projects": "List projects",
   "POST /projects": "Create project",
   "GET /tasks": "List tasks",

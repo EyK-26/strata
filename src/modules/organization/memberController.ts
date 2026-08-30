@@ -158,19 +158,19 @@ class OrganizationMemberController {
   });
 
   readonly destroyInvitation = withErrorHandling(async (request: Request) => {
-    const params = (request as Request & { params?: { id?: string; invitationId?: string } })
-      .params;
-    const organizationId = Number.parseInt(params?.id ?? "", 10);
-    const invitationId = Number.parseInt(params?.invitationId ?? "", 10);
-
-    if (!Number.isInteger(organizationId) || !Number.isInteger(invitationId)) {
-      throw new Error("Organization id and invitation id are required.");
-    }
-
+    const { organizationId, invitationId } = this.requireInvitationIds(request);
     await resolveMembershipService().requireOrgAccess(organizationId, "admin");
     await this.invitations.cancel(organizationId, invitationId);
 
     return noContentResponse();
+  });
+
+  readonly resendInvitation = withErrorHandling(async (request: Request) => {
+    const { organizationId, invitationId } = this.requireInvitationIds(request);
+    await resolveMembershipService().requireOrgAccess(organizationId, "admin");
+    const resent = await this.invitations.resend(organizationId, invitationId);
+
+    return jsonResponse(resent.invitation);
   });
 
   readonly acceptInvitation = withErrorHandling(async (request: Request) => {
@@ -203,6 +203,19 @@ class OrganizationMemberController {
       created_at: member.created_at.toISOString(),
     });
   });
+
+  private requireInvitationIds(request: Request): { organizationId: number; invitationId: number } {
+    const params = (request as Request & { params?: { id?: string; invitationId?: string } })
+      .params;
+    const organizationId = Number.parseInt(params?.id ?? "", 10);
+    const invitationId = Number.parseInt(params?.invitationId ?? "", 10);
+
+    if (!Number.isInteger(organizationId) || !Number.isInteger(invitationId)) {
+      throw new Error("Organization id and invitation id are required.");
+    }
+
+    return { organizationId, invitationId };
+  }
 }
 
 export default OrganizationMemberController;

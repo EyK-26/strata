@@ -729,6 +729,17 @@ describe("integration routes with postgres", () => {
     const listBody = (await listed.json()) as { data: Array<{ id: number; email: string }> };
     expect(listBody.data.some((row) => row.id === invitation.id)).toBe(true);
 
+    const resent = await fetch(api(`/organizations/1/invitations/${invitation.id}/resend`), {
+      method: "POST",
+      headers: adminHeaders(),
+    });
+    expect(resent.status).toBe(200);
+    expect(await resent.json()).toMatchObject({
+      id: invitation.id,
+      email,
+      role: "member",
+    });
+
     const cancelled = await fetch(api(`/organizations/1/invitations/${invitation.id}`), {
       method: "DELETE",
       headers: adminHeaders(),
@@ -1356,36 +1367,45 @@ describe("integration routes with postgres", () => {
 
   test("webhook dispatch delivers team endpoints only for matching organizations", async () => {
     const stamp = Date.now();
-    const inserted = await runWithMigrationBypass(
-      async () =>
-        (await getDatabase()`
-          INSERT INTO webhook (organization_id, tenant_id, url, secret, events, active, created_at)
-          VALUES
-            (
-              1,
-              1,
-              ${`http://127.0.0.1/scope-org1-${stamp}`},
-              ${"scope-org1"},
-              ${["project.created"]},
-              TRUE,
-              NOW()
-            ),
-            (
-              2,
-              1,
-              ${`http://127.0.0.1/scope-org2-${stamp}`},
-              ${"scope-org2"},
-              ${["project.created"]},
-              TRUE,
-              NOW()
-            )
-          RETURNING id, organization_id
-        `) as Array<{ id: number; organization_id: number }>,
-    );
-    const org1Id = inserted.find((row) => row.organization_id === 1)?.id;
-    const org2Id = inserted.find((row) => row.organization_id === 2)?.id;
-    expect(org1Id).toBeTruthy();
-    expect(org2Id).toBeTruthy();
+    const org1Create = await fetch(api("/webhooks"), {
+      method: "POST",
+      headers: adminHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({
+        url: `https://example.com/scope-org1-${stamp}`,
+        secret: "scope-org1",
+        organization_id: 1,
+        events: ["project.created"],
+      }),
+    });
+    expect(org1Create.status).toBe(201);
+    const org1Id = ((await org1Create.json()) as { id: number }).id;
+
+    const org2Create = await fetch(api("/webhooks"), {
+      method: "POST",
+      headers: adminHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({
+        url: `https://example.com/scope-org2-${stamp}`,
+        secret: "scope-org2",
+        organization_id: 2,
+        events: ["project.created"],
+      }),
+    });
+    expect(org2Create.status).toBe(201);
+    const org2Id = ((await org2Create.json()) as { id: number }).id;
+
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`
+        UPDATE webhook
+        SET url = ${`http://127.0.0.1/scope-org1-${stamp}`}
+        WHERE id = ${org1Id}
+      `;
+      await db`
+        UPDATE webhook
+        SET url = ${`http://127.0.0.1/scope-org2-${stamp}`}
+        WHERE id = ${org2Id}
+      `;
+    });
 
     let projectId: number | undefined;
     try {

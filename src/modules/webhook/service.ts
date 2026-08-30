@@ -129,8 +129,9 @@ class WebhookService {
     }
   }
 
-  private matchesEvent(events: string[], event: string): boolean {
-    return events.includes("*") || events.includes(event);
+  private matchesEvent(events: unknown, event: string): boolean {
+    const list = Array.isArray(events) ? events.filter((item) => typeof item === "string") : [];
+    return list.includes("*") || list.includes(event);
   }
 }
 

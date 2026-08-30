@@ -125,6 +125,84 @@ describe("OrganizationInvitationService", () => {
     });
   });
 
+  test("resend rotates the token and listPending prunes expired rows", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const invitations = service();
+      const email = `resend-${Date.now()}@workhub.test`;
+      const created = await invitations.invite({
+        organizationId: 1,
+        email,
+        role: "admin",
+        invitedByUserId: 1,
+      });
+      const resent = await invitations.resend(1, created.invitation.id);
+
+      expect(resent.invitation.id).toBe(created.invitation.id);
+      expect(resent.token).not.toBe(created.token);
+      expect(resent.acceptUrl).toContain("/invitations/accept");
+      expect(await invitations.listPending(1)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: created.invitation.id, email })]),
+      );
+
+      await db`
+        UPDATE organization_invitation
+        SET expires_at = ${new Date(Date.now() - 1000)}
+        WHERE id = ${created.invitation.id}
+      `;
+      expect(await invitations.listPending(1)).toEqual(
+        expect.not.arrayContaining([expect.objectContaining({ id: created.invitation.id })]),
+      );
+      await expect(invitations.resend(1, created.invitation.id)).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+    });
+  });
+
+  test("resend rejects an expired invitation and a missing organization", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const invitations = service();
+      const email = `resend-expired-${Date.now()}@workhub.test`;
+      const created = await invitations.invite({
+        organizationId: 1,
+        email,
+        invitedByUserId: 1,
+      });
+      await db`
+        UPDATE organization_invitation
+        SET expires_at = ${new Date(Date.now() - 1000)}
+        WHERE id = ${created.invitation.id}
+      `;
+      await expect(invitations.resend(1, created.invitation.id)).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+      expect(await invitations.listPending(1)).toEqual(
+        expect.not.arrayContaining([expect.objectContaining({ id: created.invitation.id })]),
+      );
+    });
+
+    const missingOrg = new OrganizationInvitationService(
+      {
+        findByIdAndOrganizationOrThrow: mock(async () => ({
+          id: 9,
+          organization_id: 99,
+          email: "gone@workhub.test",
+          role: "member" as const,
+          invited_by: 1,
+          token_hash: "hash",
+          expires_at: new Date(Date.now() + 60_000),
+          created_at: new Date(),
+        })),
+        refreshToken: mock(async () => {
+          throw new Error("should not refresh");
+        }),
+        deleteById: mock(async () => true),
+      } as never,
+      {} as never,
+      { findById: async () => null } as never,
+    );
+    await expect(missingOrg.resend(99, 9)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
   test("accept rejects a mismatched email, bad token, and expired invitation", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {
       const invitations = service();

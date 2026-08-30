@@ -233,6 +233,31 @@ describe("WebhookService", () => {
     ]);
   });
 
+  test("skips webhooks whose events list is not a string array", async () => {
+    repository.listActive.mockImplementationOnce(
+      async () =>
+        [
+          {
+            ...sampleWebhook,
+            id: 6,
+            events: { invalid: true } as unknown as string[],
+          },
+          {
+            ...sampleWebhook,
+            id: 7,
+            events: [1, "task.created"] as unknown as string[],
+          },
+        ] as WebhookRecord[],
+    );
+    const service = new WebhookService(repository as never);
+
+    await service.dispatch("task.created", { id: 99 });
+
+    expect(dispatched).toEqual([
+      { webhookId: 7, tenantId: 1, event: "task.created", payload: { id: 99 } },
+    ]);
+  });
+
   test("dispatches team-scoped webhooks only when the payload org matches", async () => {
     const service = new WebhookService(repository as never);
     const payload = { organization_id: 7, id: 99 };

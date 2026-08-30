@@ -149,6 +149,10 @@ export class WorkHubClient {
     return await this.request("/organizations/{id}/invitations/{invitationId}", { ...init, method: "DELETE" });
   }
 
+  async postOrganizationsIdInvitationsInvitationIdResend(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/organizations/{id}/invitations/{invitationId}/resend", { ...init, method: "POST" });
+  }
+
   async getOrganizationsIdMembers(init: RequestInit = {}): Promise<Response> {
     return await this.request("/organizations/{id}/members", { ...init, method: "GET" });
   }

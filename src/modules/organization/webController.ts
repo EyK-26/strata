@@ -382,6 +382,25 @@ class OrganizationWebController {
     },
   );
 
+  readonly resendInvitation = withErrorHandling(
+    async (request: Request & { params: { id: string; invitationId: string } }) => {
+      const id = Number.parseInt(String(request.params.id), 10);
+      const invitationId = Number.parseInt(String(request.params.invitationId), 10);
+
+      await resolveMembershipService().requireOrgAccess(id, "admin");
+      await this.invitations.resend(id, invitationId);
+
+      if (isHtmxRequest(request)) {
+        return await this.renderShow(request, id, { partial: "members" });
+      }
+
+      return flashResponse(Response.redirect(`/organizations/${id}`, 302), {
+        level: "success",
+        message: "Invitation resent.",
+      });
+    },
+  );
+
   readonly acceptInvitation = withErrorHandling(async (request: Request) => {
     const auth = currentAuthUser();
 

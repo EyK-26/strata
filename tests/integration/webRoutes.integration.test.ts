@@ -1820,6 +1820,33 @@ describe("web routes with server-htmx frontend", () => {
     expect(invitedHtml).toContain("Pending invitations");
     expect(invitedHtml).toContain(inviteEmail);
     expect(invitedHtml).toContain("Add or invite");
+    expect(invitedHtml).toContain("Resend");
+
+    const pending = await runWithMigrationBypass(
+      async () =>
+        (await getDatabase()`
+          SELECT id FROM organization_invitation WHERE email = ${inviteEmail} ORDER BY id DESC LIMIT 1
+        `) as Array<{ id: number }>,
+    );
+    const invitationId = pending[0]?.id;
+    expect(invitationId).toBeTruthy();
+
+    const resendCsrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const resent = await fetch(`${baseUrl}/organizations/1/invitations/${invitationId}/resend`, {
+      method: "POST",
+      headers: {
+        cookie: resendCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+        "HX-Request": "true",
+      },
+      body: new URLSearchParams({ _token: resendCsrf.token }),
+    });
+    expect(resent.status).toBe(200);
+    const resentHtml = await resent.text();
+    expect(resentHtml).toContain(inviteEmail);
+    expect(resentHtml).toContain("Resend");
+    expect(resentHtml).toContain("Pending invitations");
   });
 
   test("registering an invited email auto-joins the organization", async () => {

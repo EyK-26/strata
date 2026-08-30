@@ -530,6 +530,59 @@ describe("OrganizationMemberController", () => {
     });
   });
 
+  test("resendInvitation returns the refreshed invitation", async () => {
+    const resend = mock(async () => ({
+      invitation: {
+        id: 3,
+        organization_id: 5,
+        email: "invitee@workhub.test",
+        role: "member",
+        invited_by: 1,
+        expires_at: "2026-02-08T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+      token: "rotated",
+      acceptUrl: "/invitations/accept",
+    }));
+    const controller = new OrganizationMemberControllerClass(
+      { container: {}, cache: {} } as never,
+      {
+        resend,
+      } as never,
+    );
+
+    const response = await controller.resendInvitation(
+      Object.assign(
+        new Request("http://example.test/organizations/5/invitations/3/resend", {
+          method: "POST",
+        }),
+        { params: { id: "5", invitationId: "3" } },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      id: 3,
+      organization_id: 5,
+      email: "invitee@workhub.test",
+      role: "member",
+      invited_by: 1,
+      expires_at: "2026-02-08T00:00:00.000Z",
+      created_at: "2026-01-01T00:00:00.000Z",
+    });
+    expect(resend).toHaveBeenCalledWith(5, 3);
+
+    const missing = await controller.resendInvitation(
+      Object.assign(
+        new Request("http://example.test/organizations/5/invitations/resend", {
+          method: "POST",
+        }),
+        { params: { id: "5" } },
+      ),
+    );
+    expect(missing.status).toBe(400);
+  });
+
   test("acceptInvitation joins the current user", async () => {
     const { runWithAuthUser } = await import("@getstrata/core/auth/authContext");
     const accept = mock(async () => ({

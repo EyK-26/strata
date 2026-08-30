@@ -80,6 +80,40 @@ function toInvitationResource(
   };
 }
 
+function invitationExpired(expiresAt: Date | string): boolean {
+  return new Date(expiresAt).getTime() <= Date.now();
+}
+
+function buildInvitationAcceptUrl(email: string, token: string): string {
+  return absoluteTemporarySignedUrl(
+    "/invitations/accept",
+    resolveInvitationTtlSeconds(),
+    { email, token },
+    appConfig.url,
+  );
+}
+
+async function sendInvitationMail(input: {
+  email: string;
+  role: OrganizationMemberRole;
+  organizationName: string;
+  acceptUrl: string;
+}): Promise<void> {
+  const appName = appDisplayName();
+  await sendMarkdownMail(mailer(), {
+    to: input.email,
+    subject: `Join ${input.organizationName} on ${appName}`,
+    markdown: `# You are invited to ${input.organizationName}
+
+Accept this signed invitation to join as **${input.role}**. The link expires in 7 days.
+
+[Accept invitation](${input.acceptUrl})
+
+If you do not have an account yet, register with **${input.email}** and this invitation is applied automatically.`,
+    layout: { title: `Join ${input.organizationName}`, footer: appName },
+  });
+}
+
 class OrganizationInvitationService {
   constructor(
     private readonly invitations: OrganizationInvitationRepository,
@@ -130,25 +164,12 @@ class OrganizationInvitationService {
       tokenHash: hashApiToken(token),
       expiresAt,
     });
-    const acceptUrl = absoluteTemporarySignedUrl(
-      "/invitations/accept",
-      resolveInvitationTtlSeconds(),
-      { email, token },
-      appConfig.url,
-    );
-
-    const appName = appDisplayName();
-    await sendMarkdownMail(mailer(), {
-      to: email,
-      subject: `Join ${organization.name} on ${appName}`,
-      markdown: `# You are invited to ${organization.name}
-
-Accept this signed invitation to join as **${role}**. The link expires in 7 days.
-
-[Accept invitation](${acceptUrl})
-
-If you do not have an account yet, register with **${email}** and this invitation is applied automatically.`,
-      layout: { title: `Join ${organization.name}`, footer: appName },
+    const acceptUrl = buildInvitationAcceptUrl(email, token);
+    await sendInvitationMail({
+      email,
+      role,
+      organizationName: organization.name,
+      acceptUrl,
     });
 
     logSecurityEvent("organization_invitation_sent", {
@@ -164,8 +185,57 @@ If you do not have an account yet, register with **${email}** and this invitatio
     };
   }
 
+  async resend(organizationId: number, invitationId: number): Promise<InviteResult> {
+    const invitation = await this.invitations.findByIdAndOrganizationOrThrow(
+      organizationId,
+      invitationId,
+    );
+
+    if (invitationExpired(invitation.expires_at)) {
+      await this.invitations.deleteById(invitation.id);
+      throw new ValidationError("This invitation has expired.", {
+        token: ["This invitation has expired."],
+      });
+    }
+
+    const organization = await this.organizations.findById(organizationId);
+
+    if (!organization) {
+      throw new NotFoundError(`Organization ${organizationId} not found.`);
+    }
+
+    const token = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + resolveInvitationTtlSeconds() * 1000);
+    const updated = await this.invitations.refreshToken(
+      invitation.id,
+      hashApiToken(token),
+      expiresAt,
+    );
+    const acceptUrl = buildInvitationAcceptUrl(updated.email, token);
+    await sendInvitationMail({
+      email: updated.email,
+      role: updated.role,
+      organizationName: organization.name,
+      acceptUrl,
+    });
+
+    logSecurityEvent("organization_invitation_resent", {
+      organization_id: organizationId,
+      invitation_id: invitationId,
+      email: updated.email,
+    });
+
+    return {
+      invitation: toInvitationResource(updated),
+      token,
+      acceptUrl,
+    };
+  }
+
   async listPending(organizationId: number): Promise<OrganizationInvitationResource[]> {
-    const rows = await this.invitations.listPendingForOrganization(organizationId);
+    const rows = await this.keepUnexpired(
+      await this.invitations.listPendingForOrganization(organizationId),
+    );
     return rows.map(toInvitationResource);
   }
 
@@ -206,7 +276,7 @@ If you do not have an account yet, register with **${email}** and this invitatio
       });
     }
 
-    if (new Date(invitation.expires_at).getTime() <= Date.now()) {
+    if (invitationExpired(invitation.expires_at)) {
       await this.invitations.deleteById(invitation.id);
       throw new ValidationError("This invitation has expired.", {
         token: ["This invitation has expired."],
@@ -230,7 +300,7 @@ If you do not have an account yet, register with **${email}** and this invitatio
     let currentOrganizationId: number | undefined;
 
     for (const invitation of pending) {
-      if (new Date(invitation.expires_at).getTime() <= Date.now()) {
+      if (invitationExpired(invitation.expires_at)) {
         await this.invitations.deleteById(invitation.id);
         continue;
       }
@@ -253,15 +323,12 @@ If you do not have an account yet, register with **${email}** and this invitatio
   }
 
   async listPendingForUser(user: Pick<UserRecord, "email">): Promise<ReceivedInvitationResource[]> {
-    const pending = await this.invitations.listPendingByEmail(normalizeEmail(user.email));
+    const pending = await this.keepUnexpired(
+      await this.invitations.listPendingByEmail(normalizeEmail(user.email)),
+    );
     const received: ReceivedInvitationResource[] = [];
 
     for (const invitation of pending) {
-      if (new Date(invitation.expires_at).getTime() <= Date.now()) {
-        await this.invitations.deleteById(invitation.id);
-        continue;
-      }
-
       const organization = await this.organizations.findById(invitation.organization_id);
       received.push({
         ...toInvitationResource(invitation),
@@ -314,7 +381,7 @@ If you do not have an account yet, register with **${email}** and this invitatio
       throw new NotFoundError(`Organization invitation ${invitationId} not found.`);
     }
 
-    if (new Date(invitation.expires_at).getTime() <= Date.now()) {
+    if (invitationExpired(invitation.expires_at)) {
       await this.invitations.deleteById(invitation.id);
       throw new ValidationError("This invitation has expired.", {
         token: ["This invitation has expired."],
@@ -322,6 +389,23 @@ If you do not have an account yet, register with **${email}** and this invitatio
     }
 
     return invitation;
+  }
+
+  private async keepUnexpired(
+    rows: OrganizationInvitationRecord[],
+  ): Promise<OrganizationInvitationRecord[]> {
+    const pending: OrganizationInvitationRecord[] = [];
+
+    for (const invitation of rows) {
+      if (invitationExpired(invitation.expires_at)) {
+        await this.invitations.deleteById(invitation.id);
+        continue;
+      }
+
+      pending.push(invitation);
+    }
+
+    return pending;
   }
 
   private async addIfMissing(

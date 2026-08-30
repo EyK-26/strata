@@ -50,6 +50,9 @@ function createOrganizationWebRoutes(dependencies: AppDependencies, kernel: Http
     "/organizations/:id/invitations/:invitationId/cancel": {
       POST: kernel.wrapWebAuthenticated(controller.cancelInvitation as unknown as RouteHandler),
     },
+    "/organizations/:id/invitations/:invitationId/resend": {
+      POST: kernel.wrapWebAuthenticated(controller.resendInvitation as unknown as RouteHandler),
+    },
     "/invitations/accept": {
       GET: kernel.wrapWebAuthenticatedAllowUnverified(
         kernel.wrapSigned(controller.acceptInvitation as unknown as RouteHandler),

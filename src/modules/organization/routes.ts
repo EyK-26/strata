@@ -55,6 +55,12 @@ function createOrganizationRoutes(
         memberController.destroyInvitation as unknown as RouteHandler,
       ),
     },
+    "/organizations/:id/invitations/:invitationId/resend": {
+      POST: kernel.wrapAbility(
+        "organizations:members:write",
+        memberController.resendInvitation as unknown as RouteHandler,
+      ),
+    },
     "/invitations/accept": {
       POST: kernel.wrapAuthenticated(memberController.acceptInvitation as unknown as RouteHandler),
     },

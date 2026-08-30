@@ -141,6 +141,26 @@ class OrganizationInvitationRepository {
 
     return row;
   }
+
+  async refreshToken(
+    id: number,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<OrganizationInvitationRecord> {
+    const rows = (await db`
+      UPDATE organization_invitation
+      SET token_hash = ${tokenHash}, expires_at = ${expiresAt}
+      WHERE id = ${id}
+      RETURNING id, organization_id, email, role, invited_by, token_hash, expires_at, created_at
+    `) as OrganizationInvitationRecord[];
+    const row = rows[0];
+
+    if (!row) {
+      throw new Error("Organization invitation refresh did not return a row.");
+    }
+
+    return row;
+  }
 }
 
 export type { OrganizationInvitationRecord };

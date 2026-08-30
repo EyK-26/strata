@@ -88,6 +88,16 @@
         <td><%= invitation.email %></td>
         <td><%= invitation.role %></td>
         <td>
+          <form
+            method="post"
+            action="/organizations/<%= it.organization.id %>/invitations/<%= invitation.id %>/resend"
+            hx-post="/organizations/<%= it.organization.id %>/invitations/<%= invitation.id %>/resend"
+            hx-target="#org-members"
+            hx-swap="outerHTML"
+          >
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit" class="link-button">Resend</button>
+          </form>
           <button
             type="button"
             class="link-button"
