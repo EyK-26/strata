@@ -1601,6 +1601,45 @@ describe("web routes with server-htmx frontend", () => {
     });
   });
 
+  test("HTML webhook list defaults to the current team", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
+    const stamp = Date.now();
+    const org2Url = `https://hooks.example.com/org2-list-${stamp}`;
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`
+        INSERT INTO webhook (organization_id, tenant_id, url, secret, events, active, created_at)
+        VALUES (2, 1, ${org2Url}, ${"org2-list-secret"}, ${["project.created"]}, TRUE, NOW())
+      `;
+    });
+
+    const scoped = await fetch(`${baseUrl}/webhooks`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(scoped.status).toBe(200);
+    const scopedHtml = await scoped.text();
+    expect(scopedHtml).toContain("webhook-list-scope");
+    expect(scopedHtml).toContain("/webhooks?all=1");
+    expect(scopedHtml).not.toContain(org2Url);
+
+    const allTeams = await fetch(`${baseUrl}/webhooks?all=1`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(allTeams.status).toBe(200);
+    const allHtml = await allTeams.text();
+    expect(allHtml).toContain(org2Url);
+    expect(allHtml).toContain('href="/webhooks"');
+
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`DELETE FROM webhook WHERE url = ${org2Url}`;
+    });
+  });
+
   test("admin can deactivate, retry, and delete a webhook from HTML", async () => {
     const csrf = await fetchCsrfFromPath("/webhooks", adminSessionCookie);
     const url = `https://hooks.example.com/html-${Date.now()}`;

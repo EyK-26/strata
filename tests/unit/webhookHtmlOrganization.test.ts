@@ -1,6 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
 import { BadRequestError } from "@getstrata/core/errors/http";
-import { resolveHtmlWebhookOrganizationId } from "../../src/modules/webhook/htmlOrganization";
+import {
+  matchesHtmlWebhookList,
+  resolveHtmlWebhookListOrganizationId,
+  resolveHtmlWebhookOrganizationId,
+} from "../../src/modules/webhook/htmlOrganization";
 
 describe("resolveHtmlWebhookOrganizationId", () => {
   test("keeps an explicit form organization id", async () => {
@@ -59,6 +63,42 @@ describe("resolveHtmlWebhookOrganizationId", () => {
         currentForUser: async () => ({ organization_id: null }),
       }),
     ).toBeUndefined();
+  });
+
+  test("list filter keeps tenant-wide hooks on a team page", () => {
+    expect(matchesHtmlWebhookList(1, null)).toBe(true);
+    expect(matchesHtmlWebhookList(1, 1)).toBe(true);
+    expect(matchesHtmlWebhookList(1, "1")).toBe(true);
+    expect(matchesHtmlWebhookList(1, 2)).toBe(false);
+    expect(matchesHtmlWebhookList(undefined, 2)).toBe(true);
+  });
+
+  test("list defaults to the current team and honors all=1", async () => {
+    const currentForUser = mock(async () => ({ organization_id: 1 }));
+
+    expect(
+      await resolveHtmlWebhookListOrganizationId({
+        request: new Request("http://localhost/webhooks"),
+        user: { id: 1, role: "admin" },
+        currentForUser,
+      }),
+    ).toBe(1);
+
+    expect(
+      await resolveHtmlWebhookListOrganizationId({
+        request: new Request("http://localhost/webhooks?all=1"),
+        user: { id: 1, role: "admin" },
+        currentForUser,
+      }),
+    ).toBeUndefined();
+
+    expect(
+      await resolveHtmlWebhookListOrganizationId({
+        request: new Request("http://localhost/webhooks?organizationId=2"),
+        user: { id: 1, role: "admin" },
+        currentForUser,
+      }),
+    ).toBe(2);
   });
 
   test("rejects an invalid form organization id", async () => {

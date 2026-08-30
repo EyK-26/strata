@@ -1,6 +1,9 @@
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { parsePositiveIntParam } from "@getstrata/core/http/validation";
-import { resolveHtmlProjectListOrganizationId } from "../project/listScope";
+import {
+  parseHtmlOrganizationIdQuery,
+  resolveHtmlProjectListOrganizationId,
+} from "../project/listScope";
 
 interface CurrentOrganizationId {
   organization_id: number | null;
@@ -29,4 +32,39 @@ async function resolveHtmlWebhookOrganizationId(options: {
   });
 }
 
-export { resolveHtmlWebhookOrganizationId };
+function matchesHtmlWebhookList(
+  listOrganizationId: number | undefined,
+  webhookOrganizationId: unknown,
+): boolean {
+  if (listOrganizationId === undefined) {
+    return true;
+  }
+
+  if (webhookOrganizationId == null) {
+    return true;
+  }
+
+  return Number(webhookOrganizationId) === listOrganizationId;
+}
+
+async function resolveHtmlWebhookListOrganizationId(options: {
+  request?: Request;
+  user?: AuthUser | null;
+  currentForUser: (userId: number) => Promise<CurrentOrganizationId>;
+}): Promise<number | undefined> {
+  if (options.request && new URL(options.request.url).searchParams.get("all") === "1") {
+    return undefined;
+  }
+
+  return await resolveHtmlProjectListOrganizationId({
+    queryOrganizationId: parseHtmlOrganizationIdQuery(options.request),
+    user: options.user,
+    currentForUser: options.currentForUser,
+  });
+}
+
+export {
+  matchesHtmlWebhookList,
+  resolveHtmlWebhookListOrganizationId,
+  resolveHtmlWebhookOrganizationId,
+};

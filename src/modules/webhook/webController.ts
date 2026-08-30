@@ -19,7 +19,10 @@ import {
   type CurrentOrganizationService,
   currentOrganizationServiceToken,
 } from "../user/currentOrganizationService";
-import { resolveHtmlWebhookOrganizationId } from "./htmlOrganization";
+import {
+  resolveHtmlWebhookListOrganizationId,
+  resolveHtmlWebhookOrganizationId,
+} from "./htmlOrganization";
 import { webhookServiceToken } from "./provider";
 import type WebhookService from "./service";
 import type { WebhookRecord } from "./types";
@@ -63,17 +66,25 @@ class WebhookWebController {
     return names;
   }
 
-  private async renderIndex(extras: Record<string, unknown> = {}, status = 200) {
-    const [webhooks, deliveries] = await Promise.all([
-      this.service.listAll(),
+  private async renderIndex(extras: Record<string, unknown> = {}, status = 200, request?: Request) {
+    const listOrganizationId = await resolveHtmlWebhookListOrganizationId({
+      request,
+      user: currentAuthUser(),
+      currentForUser: (userId) => this.currentOrganization.currentForUser(userId),
+    });
+    const [webhooks, recentDeliveries] = await Promise.all([
+      this.service.listForHtml(listOrganizationId),
       this.service.listRecentDeliveries(),
     ]);
+    const webhookIds = new Set(webhooks.map((webhook) => webhook.id));
+    const deliveries = recentDeliveries.filter((delivery) => webhookIds.has(delivery.webhook_id));
 
     return htmlResponse(
       await this.view.render("webhooks/index", {
         title: "Webhooks",
         signatureHeader: webhookSignatureHeader(),
         webhooks,
+        listOrganizationId,
         organizationNames: await this.organizationNamesById(webhooks),
         deliveries,
         errors: {},
@@ -84,8 +95,8 @@ class WebhookWebController {
     );
   }
 
-  readonly index = withErrorHandling(async () => {
-    return await this.renderIndex();
+  readonly index = withErrorHandling(async (request: Request) => {
+    return await this.renderIndex({}, 200, request);
   });
 
   readonly store = withErrorHandling(async (request: Request) => {

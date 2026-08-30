@@ -49,6 +49,17 @@
 
 <section class="card">
   <h2>Endpoints</h2>
+  <% if (it.listOrganizationId) { %>
+  <p class="hint" id="webhook-list-scope">
+    Showing the current team plus All teams endpoints.
+    <a href="/webhooks?all=1">View every team</a>
+  </p>
+  <% } else { %>
+  <p class="hint" id="webhook-list-scope">
+    Showing every team.
+    <a href="/webhooks">Back to current team</a>
+  </p>
+  <% } %>
   <% if (!it.webhooks?.length) { %>
   <p class="hint">No webhooks registered.</p>
   <% } else { %>

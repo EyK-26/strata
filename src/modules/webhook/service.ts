@@ -11,6 +11,7 @@ import {
   resolveWebhookOrganizationId,
 } from "./dispatchScope";
 import { DispatchWebhookJob } from "./dispatchWebhookJob";
+import { matchesHtmlWebhookList } from "./htmlOrganization";
 import type WebhookRepository from "./repository";
 import type { WebhookDeliveryRecord, WebhookRecord } from "./types";
 
@@ -56,6 +57,14 @@ class WebhookService {
     return await this.repository.findAll({
       orderBy: { column: "id", direction: "DESC" },
     });
+  }
+
+  async listForHtml(organizationId?: number): Promise<WebhookRecord[]> {
+    const webhooks = await this.listAll();
+
+    return webhooks.filter((webhook) =>
+      matchesHtmlWebhookList(organizationId, webhook.organization_id),
+    );
   }
 
   async listRecentDeliveries(limit = 20): Promise<WebhookDeliveryRecord[]> {

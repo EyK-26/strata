@@ -66,6 +66,7 @@ const repository = {
             }
           : null,
   ),
+  findAll: mock(async () => repository.listActive()),
   listActive: mock(
     async () =>
       [
@@ -147,6 +148,7 @@ describe("WebhookService", () => {
   beforeEach(() => {
     dispatched.length = 0;
     repository.create.mockClear?.();
+    repository.findAll.mockClear?.();
     repository.listActive.mockClear?.();
     repository.findById.mockClear?.();
     repository.updateByIdOrThrow.mockClear?.();
@@ -214,6 +216,16 @@ describe("WebhookService", () => {
     const webhooks = await service.listActive();
 
     expect(webhooks).toHaveLength(5);
+  });
+
+  test("lists HTML webhooks for one team plus tenant-wide endpoints", async () => {
+    const service = makeService();
+
+    const scoped = await service.listForHtml(7);
+    const all = await service.listForHtml();
+
+    expect(scoped.map((webhook) => webhook.id)).toEqual([1, 2, 3, 4]);
+    expect(all).toHaveLength(5);
   });
 
   test("dispatches only matching active webhooks", async () => {
