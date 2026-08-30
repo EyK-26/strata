@@ -1007,6 +1007,11 @@ describe("web routes with server-htmx frontend", () => {
   });
 
   test("GET /projects defaults signed-in HTML to the current organization", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
     const response = await fetch(`${baseUrl}/projects?per_page=1`, {
       headers: { cookie: adminSessionCookie },
     });
@@ -1034,6 +1039,11 @@ describe("web routes with server-htmx frontend", () => {
   });
 
   test("POST /current-organization scopes HTML /projects to the switched team", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
     const csrf = await fetchCsrfFromPath("/projects", adminSessionCookie);
     const switched = await fetch(`${baseUrl}/current-organization`, {
       method: "POST",
