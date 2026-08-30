@@ -5,6 +5,7 @@ import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
 import { assertSafeOutboundUrlResolved } from "@getstrata/core/security/safeUrl";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { appConfig } from "../../config/app";
+import { matchesWebhookOrganization, resolveWebhookOrganizationId } from "./dispatchScope";
 import { DispatchWebhookJob } from "./dispatchWebhookJob";
 import type WebhookRepository from "./repository";
 import type { WebhookDeliveryRecord, WebhookRecord } from "./types";
@@ -106,11 +107,16 @@ class WebhookService {
 
   async dispatch(event: string, payload: Record<string, unknown>): Promise<void> {
     const webhooks = await this.listActive();
+    const organizationId = await resolveWebhookOrganizationId(payload);
     const queue = resolveApplicationQueue();
     const job = createTrackedJob("webhook.dispatch", new DispatchWebhookJob());
 
     for (const webhook of webhooks) {
       if (!this.matchesEvent(webhook.events, event)) {
+        continue;
+      }
+
+      if (!matchesWebhookOrganization(webhook.organization_id, organizationId)) {
         continue;
       }
 

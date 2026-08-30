@@ -97,6 +97,26 @@ const repository = {
           active: true,
           created_at: new Date(),
         },
+        {
+          id: 4,
+          organization_id: 7,
+          tenant_id: 1,
+          url: "http://hooks.example.com/team-7",
+          secret: "secret-team-7",
+          events: ["*"],
+          active: true,
+          created_at: new Date(),
+        },
+        {
+          id: 5,
+          organization_id: 8,
+          tenant_id: 1,
+          url: "http://hooks.example.com/team-8",
+          secret: "secret-team-8",
+          events: ["*"],
+          active: true,
+          created_at: new Date(),
+        },
       ] as WebhookRecord[],
   ),
 };
@@ -199,7 +219,7 @@ describe("WebhookService", () => {
 
     const webhooks = await service.listActive();
 
-    expect(webhooks).toHaveLength(3);
+    expect(webhooks).toHaveLength(5);
   });
 
   test("dispatches only matching active webhooks", async () => {
@@ -210,6 +230,19 @@ describe("WebhookService", () => {
     expect(dispatched).toEqual([
       { webhookId: 1, tenantId: 1, event: "task.created", payload: { id: 99 } },
       { webhookId: 2, tenantId: 1, event: "task.created", payload: { id: 99 } },
+    ]);
+  });
+
+  test("dispatches team-scoped webhooks only when the payload org matches", async () => {
+    const service = new WebhookService(repository as never);
+    const payload = { organization_id: 7, id: 99 };
+
+    await service.dispatch("task.created", payload);
+
+    expect(dispatched).toEqual([
+      { webhookId: 1, tenantId: 1, event: "task.created", payload },
+      { webhookId: 2, tenantId: 1, event: "task.created", payload },
+      { webhookId: 4, tenantId: 1, event: "task.created", payload },
     ]);
   });
 

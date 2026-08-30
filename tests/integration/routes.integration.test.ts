@@ -1354,6 +1354,77 @@ describe("integration routes with postgres", () => {
     expect(Array.isArray(body.data)).toBe(true);
   });
 
+  test("webhook dispatch delivers team endpoints only for matching organizations", async () => {
+    const stamp = Date.now();
+    const inserted = await runWithMigrationBypass(
+      async () =>
+        (await getDatabase()`
+          INSERT INTO webhook (organization_id, tenant_id, url, secret, events, active, created_at)
+          VALUES
+            (
+              1,
+              1,
+              ${`http://127.0.0.1/scope-org1-${stamp}`},
+              ${"scope-org1"},
+              ${["project.created"]},
+              TRUE,
+              NOW()
+            ),
+            (
+              2,
+              1,
+              ${`http://127.0.0.1/scope-org2-${stamp}`},
+              ${"scope-org2"},
+              ${["project.created"]},
+              TRUE,
+              NOW()
+            )
+          RETURNING id, organization_id
+        `) as Array<{ id: number; organization_id: number }>,
+    );
+    const org1Id = inserted.find((row) => row.organization_id === 1)?.id;
+    const org2Id = inserted.find((row) => row.organization_id === 2)?.id;
+    expect(org1Id).toBeTruthy();
+    expect(org2Id).toBeTruthy();
+
+    let projectId: number | undefined;
+    try {
+      const createdProject = await fetch(api("/projects"), {
+        method: "POST",
+        headers: adminHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({
+          organization_id: 1,
+          name: `Webhook scope ${stamp}`,
+          status: "draft",
+        }),
+      });
+      expect(createdProject.status).toBe(201);
+      projectId = ((await createdProject.json()) as { id: number }).id;
+
+      const deliveries = await runWithMigrationBypass(
+        async () =>
+          (await getDatabase()`
+            SELECT webhook_id
+            FROM webhook_delivery
+            WHERE (webhook_id = ${org1Id} OR webhook_id = ${org2Id})
+              AND event = ${"project.created"}
+            ORDER BY webhook_id
+          `) as Array<{ webhook_id: number }>,
+      );
+      expect(deliveries.some((row) => row.webhook_id === org1Id)).toBe(true);
+      expect(deliveries.some((row) => row.webhook_id === org2Id)).toBe(false);
+    } finally {
+      await runWithMigrationBypass(async () => {
+        const db = getDatabase();
+        await db`DELETE FROM webhook_delivery WHERE webhook_id = ${org1Id} OR webhook_id = ${org2Id}`;
+        await db`DELETE FROM webhook WHERE id = ${org1Id} OR id = ${org2Id}`;
+        if (projectId) {
+          await db`DELETE FROM project WHERE id = ${projectId}`;
+        }
+      });
+    }
+  });
+
   test("GET /billing/subscription returns tenant subscription when enabled", async () => {
     const response = await fetch(api("/billing/subscription"), {
       headers: adminHeaders(),

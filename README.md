@@ -212,7 +212,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/search` | HTMX search scoped to the current team (`?organizationId=` overrides; JSON stays tenant-wide) |
 | `/notifications` | Session inbox (nav bell polls every 30s) |
 | `/billing` | Current tenant subscription |
-| `/webhooks` | Outbound webhook admin: create (defaults to current team), deactivate, delete, retry delivery |
+| `/webhooks` | Outbound webhook admin: create (defaults to current team; dispatch is scoped to that team), deactivate, delete, retry delivery |
 | `/reports`, `/reports/organizations/:id` | Current-team report (signed-in `/reports` redirects); tenant summary at `/reports?all=1` |
 | `/account` | Session profile (name/email), current team, received team invitations, API tokens, GDPR export/delete, email verification, TOTP MFA + recovery codes |
 | `/confirm-password` | Laravel `password.confirm` — recent password gate for export and account delete |
@@ -266,7 +266,7 @@ Password and OAuth login:
 - `GET/POST /api/v1/webhooks`: register outbound webhook endpoints (`webhooks:read`, `webhooks:write`). Lifecycle: `POST /api/v1/webhooks/:id/deactivate`, `POST /api/v1/webhooks/:id/activate`, `DELETE /api/v1/webhooks/:id`, `POST /api/v1/webhooks/deliveries/:id/retry`
 - `GET /api/v1/search?q=registry`: PostgreSQL full-text search across tasks and comments, plus organization/project name matches
 
-Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC). Blocked or invalid webhook URLs are recorded as failed deliveries and do not fail the originating request (`DispatchWebhookJob` swallows `BadRequestError` from `assertSafeOutboundUrl`; the listener also swallows dispatch failures).
+Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC). Team-scoped webhooks (`organization_id` set) only receive events whose payload org matches; `organization_id` null stays tenant-wide. Blocked or invalid webhook URLs are recorded as failed deliveries and do not fail the originating request (`DispatchWebhookJob` swallows `BadRequestError` from `assertSafeOutboundUrl`; the listener also swallows dispatch failures).
 
 ### OpenAPI and SDK generation
 
