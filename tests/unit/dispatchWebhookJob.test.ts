@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
 import db from "../../src/db/connection";
+import { DispatchWebhookJob } from "../../src/modules/webhook/dispatchWebhookJob";
 
 const originalFetch = globalThis.fetch;
 

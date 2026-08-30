@@ -123,7 +123,6 @@ const CORE_SUBPATHS = [
   "http/webFormRequest",
   "http/throttleMiddleware",
   "http/validation",
-  "jobs/dispatchWebhookJob",
   "jobs/exportAuditLogsJob",
   "jobs/invalidateCacheTagsJob",
   "lifecycle/gracefulShutdown",

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
 import { ExportAuditLogsJob } from "@getstrata/core/jobs/exportAuditLogsJob";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { registerDefaultJobs } from "../../src/bootstrap/queue/defaultJobs";
+import { DispatchWebhookJob } from "../../src/modules/webhook/dispatchWebhookJob";
 import { registerWebhookJobs } from "../../src/modules/webhook/registerWebhookJobs";
 
 describe("registerWebhookJobs", () => {

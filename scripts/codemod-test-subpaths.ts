@@ -76,7 +76,6 @@ const SUBPATHS = new Set([
   "http/requestMetaContext",
   "http/webErrorResponse",
   "http/webFormRequest",
-  "jobs/dispatchWebhookJob",
   "jobs/invalidateCacheTagsJob",
   "lifecycle/gracefulShutdown",
   "logging/logger",

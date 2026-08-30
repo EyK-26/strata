@@ -18,7 +18,6 @@ import {
 import { Factory } from "@getstrata/core/database/factory";
 import { buildWhereClause } from "@getstrata/core/database/query";
 import { EventBus } from "@getstrata/core/events";
-import { DispatchWebhookJob } from "@getstrata/core/jobs/dispatchWebhookJob";
 import { FailedJobService } from "@getstrata/core/queue/failedJobService";
 import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 import {
@@ -52,6 +51,7 @@ import TaskPolicy from "../../src/modules/task/policy";
 import TaskRepository from "../../src/modules/task/repository";
 import NotificationService from "../../src/modules/user/notificationService";
 import TokenService from "../../src/modules/user/tokenService";
+import { DispatchWebhookJob } from "../../src/modules/webhook/dispatchWebhookJob";
 
 class WidgetFactory extends Factory<{ name: string }> {
   protected override definition() {

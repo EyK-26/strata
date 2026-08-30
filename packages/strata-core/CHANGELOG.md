@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.89
+
+- **Breaking:** removed `@getstrata/core/jobs/dispatchWebhookJob`. Import `DispatchWebhookJob` from the app webhook module (`src/modules/webhook/dispatchWebhookJob.ts`).
+
 ## 0.5.88
 
 - Exported cookie name constants (`SESSION_COOKIE`, `CSRF_COOKIE`, `FLASH_COOKIE`, `INTENDED_URL_COOKIE`, `PASSWORD_CONFIRM_COOKIE`) are `appCookieName(...)` so they match the default prefix instead of a hardcoded `workhub_` string.
