@@ -2,7 +2,10 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import MembershipService from "@getstrata/core/auth/membershipService";
-import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
+import {
+  resolveApplicationDependencies,
+  setActiveApplicationContext,
+} from "@getstrata/core/runtime/applicationRegistry";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const membershipService = {
@@ -77,13 +80,11 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  const container = new ServiceContainer();
-  container.set("core.membership", new MembershipService());
-  setActiveApplicationContext({
-    container,
-    config: new ConfigStore(),
-    dependencies: createMockDependencies(container, createMockCache()),
-  });
+  try {
+    resolveApplicationDependencies().container.set("core.membership", new MembershipService());
+  } catch {
+    // No active app context to restore.
+  }
 });
 
 describe("OrganizationMemberController", () => {

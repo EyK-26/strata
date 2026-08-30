@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import MembershipService from "@getstrata/core/auth/membershipService";
 import { ForbiddenError, NotFoundError } from "@getstrata/core/errors/http";
-import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
+import { resolveApplicationDependencies } from "@getstrata/core/runtime/applicationRegistry";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import OrganizationMemberRepository from "../../src/modules/organization/memberRepository";
 import OrganizationRepository from "../../src/modules/organization/repository";
@@ -12,16 +11,14 @@ import {
   toCurrentOrganizationResource,
 } from "../../src/modules/user/currentOrganizationService";
 import UserRepository from "../../src/modules/user/repository";
-import { createMockCache, createMockDependencies, defaultTestTenant } from "./testHelpers";
+import { defaultTestTenant } from "./testHelpers";
 
 function useRealMembershipService(): void {
-  const container = new ServiceContainer();
-  container.set("core.membership", new MembershipService());
-  setActiveApplicationContext({
-    container,
-    config: new ConfigStore(),
-    dependencies: createMockDependencies(container, createMockCache()),
-  });
+  try {
+    resolveApplicationDependencies().container.set("core.membership", new MembershipService());
+  } catch {
+    // No active app context — resolveMembershipService() constructs MembershipService.
+  }
 }
 
 function service(): CurrentOrganizationService {
