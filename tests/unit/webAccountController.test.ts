@@ -3,6 +3,8 @@ import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { hashPassword } from "@getstrata/core/auth/password";
+import { NotFoundError, ValidationError } from "@getstrata/core/errors/http";
+import { organizationInvitationServiceToken } from "../../src/modules/organization/invitationService";
 import { profilePhotoServiceToken } from "../../src/modules/user/profilePhotoService";
 import {
   authServiceToken,
@@ -45,6 +47,7 @@ function createController(services: {
   view?: Record<string, unknown>;
   authService?: Record<string, unknown>;
   photos?: Record<string, unknown>;
+  invitations?: Record<string, unknown>;
 }): WebAccountController {
   const container = new ServiceContainer();
   container.set(userRepositoryToken, {
@@ -74,6 +77,12 @@ function createController(services: {
   container.set(passwordResetServiceToken, {
     sendEmailVerification: mock(async () => undefined),
   });
+  container.set(organizationInvitationServiceToken, {
+    listPendingForUser: mock(async () => []),
+    acceptForUser: mock(async () => ({ organization_id: 1, user_id: 1, role: "member" })),
+    declineForUser: mock(async () => undefined),
+    ...services.invitations,
+  });
   container.set(CORE_VIEW_TOKEN, {
     render: mock(async (_template: string, context: Record<string, unknown>) =>
       JSON.stringify(context),
@@ -95,12 +104,73 @@ describe("WebAccountController", () => {
     const body = JSON.parse(await response.text()) as {
       tokens: ApiTokenResource[];
       availableAbilities: string[];
+      receivedInvitations: unknown[];
     };
 
     expect(response.status).toBe(200);
     expect(body.tokens).toEqual([sampleToken]);
     expect(body.availableAbilities).toContain("*");
     expect(body.availableAbilities).toContain("organizations:create");
+    expect(body.receivedInvitations).toEqual([]);
+  });
+
+  test("acceptInvitation redirects to the joined team", async () => {
+    const acceptForUser = mock(async () => ({ organization_id: 4, user_id: 1, role: "member" }));
+    const controller = createController({ invitations: { acceptForUser } });
+    const request = new Request("http://example.test/account/invitations/4/accept", {
+      method: "POST",
+    }) as Request & { params?: { id: string } };
+    request.params = { id: "4" };
+
+    const response = await asAuthed(() => controller.acceptInvitation(request));
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/organizations/4");
+    expect(acceptForUser).toHaveBeenCalled();
+  });
+
+  test("declineInvitation redirects back to account", async () => {
+    const declineForUser = mock(async () => undefined);
+    const controller = createController({ invitations: { declineForUser } });
+    const request = new Request("http://example.test/account/invitations/4/decline", {
+      method: "POST",
+    }) as Request & { params?: { id: string } };
+    request.params = { id: "4" };
+
+    const response = await asAuthed(() => controller.declineInvitation(request));
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/account");
+    expect(declineForUser).toHaveBeenCalled();
+  });
+
+  test("acceptInvitation and declineInvitation redirect on missing invitations", async () => {
+    const controller = createController({
+      invitations: {
+        acceptForUser: mock(async () => {
+          throw new NotFoundError("Organization invitation 4 not found.");
+        }),
+        declineForUser: mock(async () => {
+          throw new ValidationError("This invitation has expired.");
+        }),
+      },
+    });
+    const request = new Request("http://example.test/account/invitations/4/accept", {
+      method: "POST",
+    }) as Request & { params?: { id: string } };
+    request.params = { id: "4" };
+
+    const accepted = await asAuthed(() => controller.acceptInvitation(request));
+    expect(accepted.status).toBe(302);
+    expect(accepted.headers.get("location")).toBe("/account");
+
+    const declined = await asAuthed(() => controller.declineInvitation(request));
+    expect(declined.status).toBe(302);
+    expect(declined.headers.get("location")).toBe("/account");
+
+    const missingId = await asAuthed(() =>
+      controller.acceptInvitation(new Request("http://example.test/account/invitations/accept")),
+    );
+    expect(missingId.status).toBe(302);
+    expect(missingId.headers.get("location")).toBe("/account");
   });
 
   test("storeToken renders the one-time plaintext token", async () => {
