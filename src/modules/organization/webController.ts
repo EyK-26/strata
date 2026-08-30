@@ -141,6 +141,17 @@ class OrganizationWebController {
     return await this.renderIndex(request);
   });
 
+  readonly home = withErrorHandling(async () => {
+    const user = currentAuthUser();
+
+    if (!user) {
+      return Response.redirect("/organizations", 302);
+    }
+
+    const location = await this.currentOrganization.resolveHomePath(resolveUserId(user));
+    return Response.redirect(location, 302);
+  });
+
   readonly store = withErrorHandling(async (request: Request) => {
     const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
     const old =
@@ -155,9 +166,9 @@ class OrganizationWebController {
         contentType.includes("multipart/form-data")
           ? parseWebCreateOrganizationPayload(old)
           : await parseWebCreateOrganizationBody(request);
-      await this.service.create(body);
+      const organization = await this.service.create(body);
 
-      return flashResponse(Response.redirect("/organizations", 302), {
+      return flashResponse(Response.redirect(`/organizations/${organization.id}`, 302), {
         level: "success",
         message: "Organization created.",
       });

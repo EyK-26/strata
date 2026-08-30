@@ -182,6 +182,16 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.headers.get("location")).toBe("/organizations");
   });
 
+  test("GET / sends a signed-in session to the current organization", async () => {
+    const response = await fetch(baseUrl, {
+      redirect: "manual",
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/organizations/1");
+  });
+
   test("GET /organizations returns HTML", async () => {
     const response = await fetch(`${baseUrl}/organizations`);
 
@@ -853,9 +863,10 @@ describe("web routes with server-htmx frontend", () => {
     });
 
     expect(createResponse.status).toBe(302);
-    expect(createResponse.headers.get("location")).toBe("/organizations");
+    const createdLocation = createResponse.headers.get("location") ?? "";
+    expect(createdLocation).toMatch(/^\/organizations\/\d+$/);
 
-    const followResponse = await fetch(`${baseUrl}/organizations`, {
+    const followResponse = await fetch(`${baseUrl}${createdLocation}`, {
       headers: { cookie: mergeCookieHeader(csrf.cookies, createResponse) },
     });
 
@@ -902,7 +913,7 @@ describe("web routes with server-htmx frontend", () => {
     });
 
     expect(created.status).toBe(302);
-    expect(created.headers.get("location")).toBe("/organizations");
+    expect(created.headers.get("location")).toMatch(/^\/organizations\/\d+$/);
 
     const list = await fetch(`${baseUrl}/organizations`, {
       headers: { cookie: mergeCookieHeader(csrf.cookies, created) },

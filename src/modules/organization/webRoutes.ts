@@ -7,6 +7,9 @@ function createOrganizationWebRoutes(dependencies: AppDependencies, kernel: Http
   const controller = new OrganizationWebController(dependencies);
 
   return {
+    "/": {
+      GET: kernel.wrapWeb(controller.home as unknown as RouteHandler),
+    },
     "/organizations": {
       GET: kernel.wrapWebPublicRead(controller.index as unknown as RouteHandler),
       POST: kernel.wrapWebAbility(
