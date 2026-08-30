@@ -164,7 +164,7 @@ describe("HttpKernel", () => {
         }),
       );
       expect(signedIn.status).toBe(302);
-      expect(signedIn.headers.get("Location")).toBe("/organizations");
+      expect(signedIn.headers.get("Location")).toBe("/");
     } finally {
       restoreEnvVar("FRONTEND_MODE", previous);
     }

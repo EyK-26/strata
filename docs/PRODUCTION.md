@@ -1,6 +1,6 @@
 # Production readiness
 
-WorkHub blocks `APP_ENV=production` HTTP and queue workers when unsafe defaults are detected (`assertProductionSecrets` from `App.serve()` and `queue:work`). `createAppContext()` does not run that gate so sibling apps can boot without WorkHub tokens. Use this checklist before going live.
+WorkHub blocks `APP_ENV=production` HTTP and queue workers when unsafe defaults are detected (`assertProductionSecrets` plus WorkHub extras from `App.serve()` and `queue:work`). `createAppContext()` does not run that gate. The published helper is feature-gated for every app; WorkHub’s default-on encryption/CORS/OAuth/public-read checklist lives in `src/config/productionSecrets.ts`. Use this checklist before going live.
 
 ## Quick validation
 
@@ -21,16 +21,16 @@ Fix every error until the command prints `Production secret checks passed`.
 | `APP_DEBUG=false` | Always (recommended) |
 | `AUTH_DEV_HEADERS=false` | Always in production |
 | `SESSION_SECRET` (32+ chars) | `FRONTEND_MODE=server-htmx` |
-| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Token auth enabled (`ADMIN_API_TOKEN` / `MEMBER_API_TOKEN` / `FEATURE_API_TOKENS=true`) — rotate away from WorkHub test defaults |
+| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Token auth enabled (`ADMIN_API_TOKEN` / `MEMBER_API_TOKEN` / `FEATURE_API_TOKENS=true`) — rotate away from published test defaults |
 | `TOKEN_HASH_PEPPER` | Token auth enabled |
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Token auth enabled |
 | `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled (`FEATURE_OAUTH`, `FEATURE_SAML`, or provider env) |
-| `CORS_ALLOWED_ORIGINS` | Token-auth WorkHub apps, or when `CORS_ALLOWED_ORIGINS` is set (no `*`) |
-| `FEATURE_PUBLIC_READS=false` | WorkHub / token-auth apps, or when `FEATURE_PUBLIC_READS=true` is set |
+| `CORS_ALLOWED_ORIGINS` | Only when `CORS_ALLOWED_ORIGINS` is set (no `*`) |
+| `FEATURE_PUBLIC_READS=false` | Only when `FEATURE_PUBLIC_READS=true` is set |
 
-A production HTMX sibling app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need WorkHub API tokens, SCIM, OAuth, or CORS when those features are off.
+A production HTMX sibling app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need API tokens, SCIM, OAuth, or CORS when those features are off.
 
-WorkHub’s current production env (rotated `ADMIN_API_TOKEN` / `MEMBER_API_TOKEN` / `SCIM_BEARER_TOKEN`, explicit CORS, pepper, expiry, public reads off) still passes. See [SIBLING-HTMX.md](./SIBLING-HTMX.md).
+WorkHub still requires its extra production profile (encryption/billing defaults, explicit CORS, OAuth state, public reads off). See [SIBLING-HTMX.md](./SIBLING-HTMX.md).
 
 ## Enterprise modules (when enabled)
 

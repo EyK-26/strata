@@ -3,7 +3,7 @@ import {
   LOCAL_LOGIN_RATE_LIMIT,
   PRODUCTION_LOGIN_RATE_LIMIT,
   resolveLoginRateLimit,
-} from "../../src/config/rateLimit";
+} from "../../src/bootstrap/rateLimit";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("resolveLoginRateLimit", () => {

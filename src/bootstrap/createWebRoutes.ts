@@ -12,9 +12,6 @@ function registerRoute(method: string, path: string, middleware: string[]): void
 function createWebRoutes(dependencies: AppDependencies): AppRouteMap {
   const wrappedRoutes = buildWebModuleRoutes(dependencies, {
     clearRegistry: false,
-    seedRoutes: {
-      "/": () => Response.redirect("/organizations", 302),
-    },
   });
 
   registerRoute("GET", "/", ["global", "web"]);

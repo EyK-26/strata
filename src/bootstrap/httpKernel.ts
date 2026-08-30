@@ -34,7 +34,6 @@ import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { createTracingMiddleware } from "@getstrata/core/tracing/tracingMiddleware";
-import { resolveLoginRateLimit, resolveRegisterRateLimit } from "../config/rateLimit";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
@@ -42,6 +41,7 @@ import {
   REDIS_URL_CONFIG_KEY,
 } from "./config";
 import type { AppDependencies, ConfigStore } from "./contracts";
+import { resolveLoginRateLimit, resolveRegisterRateLimit } from "./rateLimit";
 
 type MiddlewareGroupName = "api" | "authenticated" | "web";
 type WebGuestHome = string | ((user: AuthUser) => string | Promise<string>);
@@ -129,7 +129,7 @@ class HttpKernel {
   }
 
   /** Laravel `guest` / `RedirectIfAuthenticated` — signed-in users go to `home`. */
-  wrapWebGuest(handler: RouteHandler, home: WebGuestHome = "/organizations"): RouteHandler {
+  wrapWebGuest(handler: RouteHandler, home: WebGuestHome = "/"): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
     return this.wrapWeb(async (request) => {

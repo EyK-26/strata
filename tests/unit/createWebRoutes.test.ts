@@ -64,7 +64,7 @@ describe("createWebRoutes", () => {
     await rm(join(PUBLIC_ASSETS_DIR, "coverage-test.css"), { force: true });
   });
 
-  test("registers a root redirect and module web routes", async () => {
+  test("registers the app home route and module web routes", async () => {
     const routes = createWebRoutes(createTestDependencies());
 
     expect(routes["/"]).toBeDefined();
