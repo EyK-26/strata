@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   clearSessionCookie,
   createSessionCookie,
+  isSessionInvalidated,
+  readSession,
   readSessionUserId,
   SESSION_COOKIE,
   SESSION_REMEMBER_TTL_SECONDS,
@@ -73,6 +75,9 @@ describe("sessionCookie", () => {
     });
 
     expect(readSessionUserId(request)).toBe(42);
+    const session = readSession(request);
+    expect(session?.userId).toBe(42);
+    expect(session?.issuedAt).toBeGreaterThan(0);
   });
 
   test("rejects tampered session cookies", () => {
@@ -332,5 +337,15 @@ describe("sessionCookie", () => {
     process.env.SESSION_REMEMBER_TTL_SECONDS = "nope";
     expect(sessionTtlSeconds()).toBe(SESSION_TTL_SECONDS);
     expect(sessionRememberTtlSeconds()).toBe(SESSION_REMEMBER_TTL_SECONDS);
+  });
+
+  test("isSessionInvalidated compares issuedAt against session_valid_after", () => {
+    expect(isSessionInvalidated(100, null)).toBe(false);
+    expect(isSessionInvalidated(100, undefined)).toBe(false);
+    expect(isSessionInvalidated(100, "not-a-date")).toBe(false);
+    expect(isSessionInvalidated(200, new Date(100))).toBe(false);
+    expect(isSessionInvalidated(100, new Date(200))).toBe(true);
+    expect(isSessionInvalidated(100, new Date(100).toISOString())).toBe(false);
+    expect(isSessionInvalidated(99, new Date(100).toISOString())).toBe(true);
   });
 });

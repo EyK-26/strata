@@ -14,10 +14,12 @@ class UserModelClass extends Model<UserRecord, "id"> {
     "mfa_enabled",
     "mfa_recovery_codes",
     "profile_photo_path",
+    "session_valid_after",
   ] as const;
 
   static override $casts = {
     email_verified_at: "datetime",
+    session_valid_after: "datetime",
     mfa_enabled: "bool",
     created_at: "datetime",
     updated_at: "datetime",

@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.79
+
+- `readSession()` returns `{ userId, issuedAt }` from the HMAC session cookie. `isSessionInvalidated(issuedAt, session_valid_after)` lets `SessionGuard` reject cookies issued before `AuthUserRecord.session_valid_after` (Jetstream logout-other-devices / password change).
+
 ## 0.5.78
 
 - OpenAPI treats `POST /auth/two-factor-challenge` as a public operation (no bearer), including when routes are registered under `API_PREFIX`.

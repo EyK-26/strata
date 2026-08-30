@@ -323,6 +323,8 @@ describe("password auth", () => {
         id: created.id,
       });
       expect(await tokens.resolveUserFromToken(drop.plainTextToken)).toBeNull();
+      const afterLogout = await users.findById(created.id);
+      expect(afterLogout?.session_valid_after).toBeInstanceOf(Date);
 
       const extra = await tokens.createToken(created.id, { name: "extra" });
       await runWithAuthUser({ id: created.id, role: "member", tokenId: 0 }, async () => {
@@ -335,6 +337,7 @@ describe("password auth", () => {
       );
       const user = await authService.authenticatePassword(email, "new-member-pass");
       expect(user.id).toBe(created.id);
+      expect(user.session_valid_after).toBeInstanceOf(Date);
     });
   });
 

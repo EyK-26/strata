@@ -163,6 +163,7 @@ describe("WebAccountController", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/account");
+    expect(response.headers.get("set-cookie")).toContain("workhub_session=");
     expect(logoutOtherDevices).toHaveBeenCalledWith(1, "password123");
   });
 

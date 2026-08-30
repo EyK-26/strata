@@ -3,7 +3,7 @@ import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import { clearPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";
-import { clearSessionCookie } from "@getstrata/core/auth/sessionCookie";
+import { clearSessionCookie, createSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { BadRequestError, UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
@@ -89,6 +89,22 @@ class WebAccountController {
     }
 
     return photos;
+  }
+
+  private continueHtmlSession(userId: number, location: string, message: string): Response {
+    const headers = new Headers({ Location: location });
+    headers.append("Set-Cookie", createSessionCookie(userId));
+
+    return flashResponse(
+      new Response(null, {
+        status: 302,
+        headers,
+      }),
+      {
+        level: "success",
+        message,
+      },
+    );
   }
 
   private requireUserId(): number {
@@ -255,11 +271,13 @@ class WebAccountController {
       const body = await parseWebDisableMfaBody(request);
       const revoked = await this.authService.logoutOtherDevices(userId, body.password);
 
-      return flashResponse(Response.redirect("/account", 302), {
-        level: "success",
-        message:
-          revoked === 1 ? "Revoked 1 other API token." : `Revoked ${revoked} other API tokens.`,
-      });
+      return this.continueHtmlSession(
+        userId,
+        "/account",
+        revoked === 1
+          ? "Revoked 1 other API token and signed out other browsers."
+          : `Revoked ${revoked} other API tokens and signed out other browsers.`,
+      );
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         const user = await this.users.findByIdOrThrow(userId);
@@ -278,10 +296,7 @@ class WebAccountController {
       const body = await parseWebChangePasswordBody(request);
       await this.authService.changePassword(userId, body.currentPassword, body.password);
 
-      return flashResponse(Response.redirect("/account", 302), {
-        level: "success",
-        message: "Password updated.",
-      });
+      return this.continueHtmlSession(userId, "/account", "Password updated.");
     } catch (error) {
       if (error instanceof ValidationError) {
         const user = await this.users.findByIdOrThrow(userId);

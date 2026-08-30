@@ -8,6 +8,11 @@ interface CreateSessionCookieOptions {
   remember?: boolean;
 }
 
+interface SignedSession {
+  userId: number;
+  issuedAt: number;
+}
+
 function sessionCookieName(): string {
   return process.env.SESSION_COOKIE_NAME?.trim() || SESSION_COOKIE;
 }
@@ -69,7 +74,7 @@ function readSignedSession(
   cookieSignature: string | undefined,
   ttlSeconds: number,
   remember: boolean,
-): number | null {
+): SignedSession | null {
   const userId = Number.parseInt(userIdRaw, 10);
   const issuedAt = Number.parseInt(issuedAtRaw, 10);
 
@@ -106,10 +111,10 @@ function readSignedSession(
     return null;
   }
 
-  return userId;
+  return { userId, issuedAt };
 }
 
-function readSessionUserId(request: Request): number | null {
+function readSession(request: Request): SignedSession | null {
   const cookieValue = readCookieValue(request, sessionCookieName());
 
   if (!cookieValue) {
@@ -143,6 +148,28 @@ function readSessionUserId(request: Request): number | null {
   );
 }
 
+function readSessionUserId(request: Request): number | null {
+  return readSession(request)?.userId ?? null;
+}
+
+function isSessionInvalidated(
+  issuedAt: number,
+  validAfter: Date | string | null | undefined,
+): boolean {
+  if (!validAfter) {
+    return false;
+  }
+
+  const timestamp =
+    validAfter instanceof Date ? validAfter.getTime() : Date.parse(String(validAfter));
+
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+
+  return issuedAt < timestamp;
+}
+
 function createSessionCookie(userId: number, options: CreateSessionCookieOptions = {}): string {
   const issuedAt = Date.now();
   const ttlSeconds = options.remember ? sessionRememberTtlSeconds() : sessionTtlSeconds();
@@ -160,10 +187,12 @@ function clearSessionCookie(): string {
   return `${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
-export type { CreateSessionCookieOptions };
+export type { CreateSessionCookieOptions, SignedSession };
 export {
   clearSessionCookie,
   createSessionCookie,
+  isSessionInvalidated,
+  readSession,
   readSessionUserId,
   SESSION_COOKIE,
   SESSION_REMEMBER_TTL_SECONDS,

@@ -3,15 +3,15 @@ import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { resolveAbilitiesForRole } from "./abilityCatalog";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
-import { readSessionUserId } from "./sessionCookie";
+import { isSessionInvalidated, readSession } from "./sessionCookie";
 
 class SessionGuard implements AuthGuard {
   constructor(private readonly container: ServiceContainerLike) {}
 
   async resolve(request: Request): Promise<AuthUser | null> {
-    const userId = readSessionUserId(request);
+    const session = readSession(request);
 
-    if (!userId) {
+    if (!session) {
       return null;
     }
 
@@ -22,7 +22,11 @@ class SessionGuard implements AuthGuard {
     }
 
     try {
-      const user = await tokenService.findByIdOrThrow(userId);
+      const user = await tokenService.findByIdOrThrow(session.userId);
+
+      if (isSessionInvalidated(session.issuedAt, user.session_valid_after)) {
+        return null;
+      }
 
       return {
         id: user.id,

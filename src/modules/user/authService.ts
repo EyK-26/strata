@@ -249,6 +249,7 @@ class AuthService {
 
   async logoutOtherDevices(userId: number, password: string): Promise<number> {
     await this.confirmCurrentPassword(userId, password);
+    await this.invalidateBrowserSessions(userId);
     const revoked = await this.tokens.revokeOtherTokens(userId, currentTokenId());
     logSecurityEvent("auth_logout_other_devices", { user_id: userId, revoked });
 
@@ -278,6 +279,7 @@ class AuthService {
 
     const updated = await this.users.updateByIdOrThrow(userId, {
       password_hash: await hashPassword(nextPassword),
+      session_valid_after: new Date(),
       updated_at: new Date(),
     });
     const revoked = await this.tokens.revokeOtherTokens(userId, currentTokenId());
@@ -476,6 +478,13 @@ class AuthService {
     });
 
     return user;
+  }
+
+  private async invalidateBrowserSessions(userId: number): Promise<void> {
+    await this.users.updateByIdOrThrow(userId, {
+      session_valid_after: new Date(),
+      updated_at: new Date(),
+    });
   }
 }
 
