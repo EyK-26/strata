@@ -248,7 +248,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
     id: "factories",
     laravelSection: "Eloquent: Factories",
     laravelDocPath: "eloquent-factories",
-    strataApis: ["Factory"],
+    strataApis: [],
     testGlobs: ["unit/factory.test.ts"],
     tier: "core",
     notes:

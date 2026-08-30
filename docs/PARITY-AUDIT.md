@@ -1,6 +1,6 @@
 # Laravel parity audit
 
-Generated: 2026-08-30T20:35:05.719Z
+Generated: 2026-08-30T21:02:21.922Z
 
 ## Score
 
@@ -39,7 +39,7 @@ Target: ≥99% core coverage across all documented Laravel sections.
 | ✅ covered | [Eloquent: Relationships](https://laravel.com/docs/eloquent-relationships) | hasMany, hasOne, belongsTo… | `unit/database/model.relationships.test.ts` |
 | ✅ covered | [Eloquent: Soft Deleting](https://laravel.com/docs/eloquent#soft-deleting) | Model | `unit/database/model.softDelete.test.ts` |
 | ✅ covered | [Eloquent: API Resources](https://laravel.com/docs/eloquent-resources) | toResourceCollection, serializeDate, toPaginatedResourceCollection | `unit/frameworkPublicApi.test.ts` |
-| ✅ covered | [Eloquent: Factories](https://laravel.com/docs/eloquent-factories) | Factory.make() merges in-memory defaults. No create(), states, sequences, or relationships. | `unit/factory.test.ts` |
+| ✅ covered | [Eloquent: Factories](https://laravel.com/docs/eloquent-factories) | Factory.make() merges in-memory defaults. Factory.create() persists make() via persist() and strips id 0. No states, sequences, or relationships. | `unit/factory.test.ts` |
 | ✅ covered | [Authorization](https://laravel.com/docs/authorization) | Policy, PolicyGate, createAuthorizeMiddleware | `unit/policy.test.ts` |
 | ✅ covered | [Authentication](https://laravel.com/docs/authentication) | createAuthMiddleware, createRequireAuthMiddleware, currentAuthUser | `unit/authService.test.ts` |
 | ✅ covered | [Route Model Binding](https://laravel.com/docs/routing#route-model-binding) | securedBindRouteModel, securedBindRouteModelByKey, @getstrata/bootstrap:securedBindRouteModel… | `unit/securedRouteModelBinding.test.ts` |
