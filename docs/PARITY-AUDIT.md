@@ -1,6 +1,6 @@
 # Laravel parity audit
 
-Generated: 2026-08-29T11:19:31.319Z
+Generated: 2026-08-30T20:35:05.719Z
 
 ## Score
 
@@ -39,7 +39,7 @@ Target: ≥99% core coverage across all documented Laravel sections.
 | ✅ covered | [Eloquent: Relationships](https://laravel.com/docs/eloquent-relationships) | hasMany, hasOne, belongsTo… | `unit/database/model.relationships.test.ts` |
 | ✅ covered | [Eloquent: Soft Deleting](https://laravel.com/docs/eloquent#soft-deleting) | Model | `unit/database/model.softDelete.test.ts` |
 | ✅ covered | [Eloquent: API Resources](https://laravel.com/docs/eloquent-resources) | toResourceCollection, serializeDate, toPaginatedResourceCollection | `unit/frameworkPublicApi.test.ts` |
-| ✅ covered | [Eloquent: Factories](https://laravel.com/docs/eloquent-factories) | Exported via @getstrata/core/database/factory subpath | `unit/factory.test.ts` |
+| ✅ covered | [Eloquent: Factories](https://laravel.com/docs/eloquent-factories) | Factory.make() merges in-memory defaults. No create(), states, sequences, or relationships. | `unit/factory.test.ts` |
 | ✅ covered | [Authorization](https://laravel.com/docs/authorization) | Policy, PolicyGate, createAuthorizeMiddleware | `unit/policy.test.ts` |
 | ✅ covered | [Authentication](https://laravel.com/docs/authentication) | createAuthMiddleware, createRequireAuthMiddleware, currentAuthUser | `unit/authService.test.ts` |
 | ✅ covered | [Route Model Binding](https://laravel.com/docs/routing#route-model-binding) | securedBindRouteModel, securedBindRouteModelByKey, @getstrata/bootstrap:securedBindRouteModel… | `unit/securedRouteModelBinding.test.ts` |
@@ -62,6 +62,6 @@ Target: ≥99% core coverage across all documented Laravel sections.
 | ✅ covered | [Eloquent: Polymorphic Relations](https://laravel.com/docs/eloquent-relationships#polymorphic-relationships) | morphTo, morphMany, morphOne… | `unit/database/morphRelations.test.ts` |
 | ✅ covered | [Notifications](https://laravel.com/docs/notifications) | Notification, NotificationDispatcher, createNotificationDispatcher | `unit/notifications.test.ts` |
 | ✅ covered | [Mail: Markdown Templates](https://laravel.com/docs/mail#markdown-mailables) | renderMarkdownMail, buildMarkdownMailMessage, sendMarkdownMail… | `unit/markdownMail.test.ts` |
-| ✅ covered | [Horizon (queue dashboard)](https://laravel.com/docs/horizon) | collectQueueMetrics, FailedJobService, FailedJobRepository… | `unit/adminServiceMetrics.test.ts` |
-| ✅ covered | [Nova (admin panel)](https://laravel.com/docs/nova) | AdminResourceRegistry, formatAdminValue | `unit/adminRegistry.test.ts` |
+| ✅ covered | [Queue dashboard (not Laravel Horizon)](https://laravel.com/docs/horizon) | collectQueueMetrics, FailedJobService, FailedJobRepository… | `unit/adminServiceMetrics.test.ts` |
+| ✅ covered | [Admin resources (not Laravel Nova)](https://laravel.com/docs/nova) | AdminResourceRegistry, formatAdminValue | `unit/adminRegistry.test.ts` |
 | ✅ covered | [Artisan Console](https://laravel.com/docs/artisan) | WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API | `unit/bootstrapSchedule.test.ts` |
