@@ -3,9 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { getDatabase } from "../../src/db/connection";
 import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../../src/domain/auth";
 import { TEST_SCIM_BEARER_TOKEN } from "../../src/domain/scim";
+import { webhookServiceToken } from "../../src/modules/webhook/provider";
+import type WebhookService from "../../src/modules/webhook/service";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
@@ -29,6 +32,7 @@ interface PaginatedBody<T> {
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
 let storageDirectory = "";
+let webhookService: WebhookService;
 
 function api(pathname: string): string {
   return `${baseUrl}/api/v1${pathname}`;
@@ -102,9 +106,12 @@ beforeAll(async () => {
 
   await freshDatabase({ seed: true });
 
+  const dependencies = createAppDependencies();
+  webhookService = dependencies.container.resolve<WebhookService>(webhookServiceToken);
+
   server = Bun.serve({
     port: 0,
-    routes: createRoutes(createAppDependencies()),
+    routes: createRoutes(dependencies),
   });
 
   baseUrl = server.url.toString().replace(/\/$/, "");
@@ -1366,11 +1373,6 @@ describe("integration routes with postgres", () => {
   });
 
   test("webhook dispatch delivers team endpoints only for matching organizations", async () => {
-    const { default: registerWebhookDispatchListeners } = await import(
-      "../../src/listeners/dispatchWebhooks"
-    );
-    registerWebhookDispatchListeners();
-
     const stamp = Date.now();
     const sameId = (left: unknown, right: unknown): boolean => Number(left) === Number(right);
 
@@ -1416,19 +1418,13 @@ describe("integration routes with postgres", () => {
       `;
     });
 
-    let projectId: number | undefined;
     try {
-      const createdProject = await fetch(api("/projects"), {
-        method: "POST",
-        headers: adminHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({
+      await runWithTenantDatabase({ id: 1, slug: "acme", plan: "pro", region: "eu" }, async () => {
+        await webhookService.dispatch("project.created", {
           organization_id: 1,
           name: `Webhook scope ${stamp}`,
-          status: "draft",
-        }),
+        });
       });
-      expect(createdProject.status).toBe(201);
-      projectId = ((await createdProject.json()) as { id: number }).id;
 
       const [deliveries, storedHooks, recentDeliveries] = await runWithMigrationBypass(async () => {
         const db = getDatabase();
@@ -1470,9 +1466,6 @@ describe("integration routes with postgres", () => {
         const db = getDatabase();
         await db`DELETE FROM webhook_delivery WHERE webhook_id = ${org1Id} OR webhook_id = ${org2Id}`;
         await db`DELETE FROM webhook WHERE id = ${org1Id} OR id = ${org2Id}`;
-        if (projectId) {
-          await db`DELETE FROM project WHERE id = ${projectId}`;
-        }
       });
     }
   });

@@ -1,5 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { Queue } from "@getstrata/core/queue";
 import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
+import WebhookService from "../../src/modules/webhook/service";
 import type { WebhookRecord } from "../../src/modules/webhook/types";
 
 const dispatched: Array<{
@@ -10,8 +12,6 @@ const dispatched: Array<{
   event: string;
   payload: Record<string, unknown>;
 }> = [];
-
-let WebhookService: typeof import("../../src/modules/webhook/service").default;
 
 const sampleWebhook: WebhookRecord = {
   id: 1,
@@ -123,33 +123,25 @@ const repository = {
   ),
 };
 
-beforeAll(async () => {
-  mock.module("../../src/bootstrap/applicationRegistry", () => ({
-    resolveApplicationQueue: () => ({
-      dispatch: async (
-        _job: unknown,
-        payload: {
-          webhookId: number;
-          tenantId: number;
-          event: string;
-          payload: Record<string, unknown>;
-        },
-      ) => {
-        dispatched.push(payload);
-      },
-    }),
-  }));
+const queue: Queue = {
+  dispatch: async (
+    _job: unknown,
+    payload: {
+      webhookId: number;
+      tenantId: number;
+      url?: string;
+      secret?: string;
+      event: string;
+      payload: Record<string, unknown>;
+    },
+  ) => {
+    dispatched.push(payload);
+  },
+};
 
-  mock.module("@getstrata/core/queue/createAppQueue", () => ({
-    createTrackedJob: (_name: string, job: unknown) => job,
-  }));
-
-  ({ default: WebhookService } = await import("../../src/modules/webhook/service"));
-});
-
-afterAll(() => {
-  mock.restore();
-});
+function makeService(): WebhookService {
+  return new WebhookService(repository as never, queue);
+}
 
 describe("WebhookService", () => {
   beforeEach(() => {
@@ -163,7 +155,7 @@ describe("WebhookService", () => {
   });
 
   test("creates a webhook with tenant defaults", async () => {
-    const service = new WebhookService(repository as never);
+    const service = makeService();
 
     const created = await runWithTenant({ id: 1, slug: "default", plan: "pro", region: "eu" }, () =>
       service.create({
@@ -186,7 +178,7 @@ describe("WebhookService", () => {
   });
 
   test("creates a webhook for an explicit organization", async () => {
-    const service = new WebhookService(repository as never);
+    const service = makeService();
 
     await runWithTenant({ id: 1, slug: "default", plan: "pro", region: "eu" }, () =>
       service.create({
@@ -206,7 +198,7 @@ describe("WebhookService", () => {
   });
 
   test("rejects unsafe webhook urls", async () => {
-    const service = new WebhookService(repository as never);
+    const service = makeService();
 
     await expect(
       service.create({
@@ -217,7 +209,7 @@ describe("WebhookService", () => {
   });
 
   test("lists active webhooks", async () => {
-    const service = new WebhookService(repository as never);
+    const service = makeService();
 
     const webhooks = await service.listActive();
 
@@ -225,7 +217,7 @@ describe("WebhookService", () => {
   });
 
   test("dispatches only matching active webhooks", async () => {
-    const service = new WebhookService(repository as never);
+    const service = makeService();
 
     await service.dispatch("task.created", { id: 99 });
 
@@ -270,7 +262,7 @@ describe("WebhookService", () => {
           },
         ] as WebhookRecord[],
     );
-    const service = new WebhookService(repository as never);
+    const service = makeService();
 
     await service.dispatch("task.created", { id: 99 });
 
@@ -312,7 +304,7 @@ describe("WebhookService", () => {
           },
         ] as WebhookRecord[],
     );
-    const service = new WebhookService(repository as never);
+    const service = makeService();
     const payload = { organization_id: 7, id: 99 };
 
     await service.dispatch("task.created", payload);
@@ -330,7 +322,7 @@ describe("WebhookService", () => {
   });
 
   test("dispatches team-scoped webhooks only when the payload org matches", async () => {
-    const service = new WebhookService(repository as never);
+    const service = makeService();
     const payload = { organization_id: 7, id: 99 };
 
     await service.dispatch("task.created", payload);
@@ -364,7 +356,7 @@ describe("WebhookService", () => {
   });
 
   test("deactivates, activates, and deletes a webhook", async () => {
-    const service = new WebhookService(repository as never);
+    const service = makeService();
 
     await expect(service.deactivate(1)).resolves.toEqual(
       expect.objectContaining({ id: 1, active: false }),
@@ -378,7 +370,7 @@ describe("WebhookService", () => {
   });
 
   test("retries a stored delivery and parses JSON string payloads", async () => {
-    const service = new WebhookService(repository as never);
+    const service = makeService();
 
     await service.retryDelivery(8);
     await service.retryDelivery(9);

@@ -18,16 +18,13 @@ const APPLICATION_CONTEXT_KEY = Symbol.for("@getstrata/applicationContext");
 let activeContext: AppContext | undefined;
 
 function readStoredApplicationContext(): AppContext | undefined {
-  if (activeContext) {
-    return activeContext;
-  }
-
   const globalContext = (globalThis as Record<symbol, AppContext | undefined>)[
     APPLICATION_CONTEXT_KEY
   ];
 
   if (globalContext) {
     activeContext = globalContext;
+    return activeContext;
   }
 
   return activeContext;

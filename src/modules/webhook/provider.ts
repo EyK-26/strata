@@ -1,4 +1,6 @@
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
+import { CORE_QUEUE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import type { Queue } from "@getstrata/core/queue";
 import { registerWebhookJobs } from "./registerWebhookJobs";
 import WebhookRepository from "./repository";
 import WebhookService from "./service";
@@ -10,7 +12,10 @@ const webhookProvider: ServiceProvider = {
   register({ container }) {
     registerWebhookJobs();
     container.singleton(webhookServiceToken, () => {
-      return new WebhookService(new WebhookRepository());
+      return new WebhookService(
+        new WebhookRepository(),
+        container.resolve<Queue>(CORE_QUEUE_TOKEN),
+      );
     });
   },
 };

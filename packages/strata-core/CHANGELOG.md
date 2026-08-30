@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.85
+
+- `applicationRegistry` prefers the latest `Symbol.for("@getstrata/applicationContext")` on `globalThis` so a stale module-local context cannot hide the bootstrapped app after `build:framework`.
+
 ## 0.5.84
 
 - `eventBus` is a `Symbol.for("@getstrata/eventBus")` process singleton so model writes from a built `@getstrata/core/database/baseRepository` bundle reach app listeners that imported a different copy of `@getstrata/core/events` (GitHub Actions `build:framework` before tests).

@@ -1,7 +1,7 @@
-import { resolveApplicationQueue } from "@getstrata/bootstrap/applicationRegistry";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { NotFoundError } from "@getstrata/core/errors/http";
-import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
+import type { Queue } from "@getstrata/core/queue";
+import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { assertSafeOutboundUrlResolved } from "@getstrata/core/security/safeUrl";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { appConfig } from "../../config/app";
@@ -22,7 +22,14 @@ interface CreateWebhookInput {
 }
 
 class WebhookService {
-  constructor(private readonly repository: WebhookRepository) {}
+  constructor(
+    private readonly repository: WebhookRepository,
+    private readonly queue: Queue,
+  ) {}
+
+  private trackedDispatchJob() {
+    return jobRegistry.track("webhook.dispatch", new DispatchWebhookJob());
+  }
 
   async create(input: CreateWebhookInput): Promise<WebhookRecord> {
     await assertSafeOutboundUrlResolved(input.url, {
@@ -88,10 +95,7 @@ class WebhookService {
       typeof rawPayload === "string"
         ? (JSON.parse(rawPayload) as Record<string, unknown>)
         : (rawPayload as Record<string, unknown>);
-    const queue = resolveApplicationQueue();
-    const job = createTrackedJob("webhook.dispatch", new DispatchWebhookJob());
-
-    await queue.dispatch(job, {
+    await this.queue.dispatch(this.trackedDispatchJob(), {
       webhookId: webhook.id,
       tenantId: Number(webhook.tenant_id),
       url: webhook.url,
@@ -114,8 +118,6 @@ class WebhookService {
   async dispatch(event: string, payload: Record<string, unknown>): Promise<void> {
     const webhooks = await this.listActive();
     const organizationId = await resolveWebhookOrganizationId(payload);
-    const queue = resolveApplicationQueue();
-    const job = createTrackedJob("webhook.dispatch", new DispatchWebhookJob());
 
     for (const webhook of webhooks) {
       if (!matchesWebhookEvent(webhook.events, event)) {
@@ -126,7 +128,7 @@ class WebhookService {
         continue;
       }
 
-      await queue.dispatch(job, {
+      await this.queue.dispatch(this.trackedDispatchJob(), {
         webhookId: webhook.id,
         tenantId: Number(webhook.tenant_id),
         url: webhook.url,

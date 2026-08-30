@@ -7,6 +7,7 @@ function pinWorkhubIntegrationEnv(): void {
   process.env.MEMBER_API_TOKEN = TEST_MEMBER_API_TOKEN;
   process.env.SCIM_BEARER_TOKEN = TEST_SCIM_BEARER_TOKEN;
   process.env.FEATURE_SCIM = "true";
+  process.env.FEATURE_WEBHOOKS = "true";
   delete process.env.TOKEN_HASH_PEPPER;
 }
 

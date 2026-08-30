@@ -5,7 +5,7 @@ WorkHub supports three frontend modes (`FRONTEND_MODE`):
 | Mode | Value | What runs |
 |------|-------|-----------|
 | JSON API only | `api` | `/api/v1/*` routes |
-| Server HTMX | `server-htmx` | HTML views under `/organizations` (members + pending invitations), `/projects`, `/tasks`, `/search`, `/reports`, `/account` (current team, received team invitations, profile name/email + Jetstream profile photo, password + MFA + recovery codes + logout other devices), `/confirm-password` (export/delete), `/two-factor-challenge` (Fortify 2FA), `/notifications`, `/billing`, `/webhooks` (create defaults to current team; dispatch is scoped to that team and coerces driver-string org ids / jsonb events), `/forgot-password`, etc. |
+| Server HTMX | `server-htmx` | HTML views under `/organizations` (members + pending invitations), `/projects`, `/tasks`, `/search`, `/reports`, `/account` (current team, received team invitations, profile name/email + Jetstream profile photo, password + MFA + recovery codes + logout other devices), `/confirm-password` (export/delete), `/two-factor-challenge` (Fortify 2FA), `/notifications`, `/billing`, `/webhooks` (create defaults to current team; `WebhookService` is constructed with the app queue and scopes dispatch to that team, coercing driver-string org ids / jsonb events), `/forgot-password`, etc. |
 | SPA + API | `spa-react` | React app at `/app/*` plus the JSON API |
 
 Set the mode in `.env` or export it before starting the server.
