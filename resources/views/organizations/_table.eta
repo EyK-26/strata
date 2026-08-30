@@ -9,9 +9,19 @@
   </thead>
   <tbody>
     <% for (const organization of it.organizations) { %>
-    <tr>
+    <tr
+      data-organization-id="<%= organization.id %>"
+      <% if (it.currentOrganization && it.currentOrganization.id === organization.id) { %>
+      data-current-team="true"
+      <% } %>
+    >
       <td><a href="/organizations/<%= organization.id %>"><%= organization.id %></a></td>
-      <td><%= organization.name %></td>
+      <td>
+        <%= organization.name %>
+        <% if (it.currentOrganization && it.currentOrganization.id === organization.id) { %>
+        <span class="current-team">Current</span>
+        <% } %>
+      </td>
       <td><%= organization.slug %></td>
       <td><%= organization.updated_at.toISOString?.() ?? organization.updated_at %></td>
     </tr>

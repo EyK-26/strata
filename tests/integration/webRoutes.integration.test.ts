@@ -225,6 +225,35 @@ describe("web routes with server-htmx frontend", () => {
     expect(html).toContain("site-header");
   });
 
+  test("GET /organizations marks the current team", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
+    const guest = await fetch(`${baseUrl}/organizations`);
+    expect(guest.status).toBe(200);
+    expect(await guest.text()).not.toContain('data-current-team="true"');
+
+    const signedIn = await fetch(`${baseUrl}/organizations`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(signedIn.status).toBe(200);
+    const html = await signedIn.text();
+    expect(html).toContain("Acme Labs");
+    expect(html).toMatch(/data-organization-id="1"\s+data-current-team="true"/);
+    expect(html).toContain("current-team");
+    expect(html).not.toMatch(/data-organization-id="2"\s+data-current-team="true"/);
+
+    const partial = await fetch(`${baseUrl}/organizations`, {
+      headers: { cookie: adminSessionCookie, "HX-Request": "true" },
+    });
+    expect(partial.status).toBe(200);
+    const partialHtml = await partial.text();
+    expect(partialHtml).toMatch(/data-organization-id="1"\s+data-current-team="true"/);
+    expect(partialHtml).not.toContain("<!doctype html>");
+  });
+
   test("GET /organizations shows sign out for signed-in session", async () => {
     const response = await fetch(`${baseUrl}/organizations`, {
       headers: { cookie: adminSessionCookie },
@@ -965,12 +994,22 @@ describe("web routes with server-htmx frontend", () => {
     });
     expect(created.status).toBe(302);
 
+    const extraLocation = created.headers.get("location") ?? "";
+    expect(extraLocation).toMatch(/^\/organizations\/\d+$/);
+    const extraId = extraLocation.split("/").pop() ?? "";
+
     const listCookies = mergeCookieHeader(createCsrf.cookies, created);
     const list = await fetch(`${baseUrl}/organizations`, { headers: { cookie: listCookies } });
     const listHtml = await list.text();
     expect(listHtml).toContain("HTML Current Extra");
     expect(listHtml).toContain('id="current-organization"');
     expect(listHtml).toContain("HTML Current Extra");
+    expect(listHtml).toMatch(
+      new RegExp(`data-organization-id="${extraId}"\\s+data-current-team="true"`),
+    );
+    expect(listHtml).not.toMatch(
+      new RegExp(`data-organization-id="${personalId}"\\s+data-current-team="true"`),
+    );
 
     const switchCsrf = await fetchCsrfFromPath("/organizations", listCookies);
     const switched = await fetch(`${baseUrl}/current-organization`, {
@@ -989,13 +1028,26 @@ describe("web routes with server-htmx frontend", () => {
     expect(switched.status).toBe(302);
     expect(switched.headers.get("location")).toBe(`/organizations/${personalId}`);
 
+    const afterCookies = mergeCookieHeader(switchCsrf.cookies, switched);
     const show = await fetch(`${baseUrl}/organizations/${personalId}`, {
-      headers: { cookie: mergeCookieHeader(switchCsrf.cookies, switched) },
+      headers: { cookie: afterCookies },
     });
     expect(show.status).toBe(200);
     const showHtml = await show.text();
     expect(showHtml).toContain(`value="${personalId}"`);
     expect(showHtml).toContain("selected");
+
+    const afterList = await fetch(`${baseUrl}/organizations`, {
+      headers: { cookie: afterCookies },
+    });
+    expect(afterList.status).toBe(200);
+    const afterHtml = await afterList.text();
+    expect(afterHtml).toMatch(
+      new RegExp(`data-organization-id="${personalId}"\\s+data-current-team="true"`),
+    );
+    expect(afterHtml).not.toMatch(
+      new RegExp(`data-organization-id="${extraId}"\\s+data-current-team="true"`),
+    );
   });
 
   test("GET /projects returns HTML project list", async () => {

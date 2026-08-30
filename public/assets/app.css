@@ -118,6 +118,16 @@ a {
   color: #b8c0cc;
 }
 
+.current-team {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid #2a3140;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: #9bd1ff;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
