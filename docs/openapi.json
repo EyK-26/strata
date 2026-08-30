@@ -2011,6 +2011,11 @@
     "/api/v1/users/me/confirmed-password-status": {
       "get": {
         "summary": "GET /api/v1/users/me/confirmed-password-status",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -2041,7 +2046,12 @@
     },
     "/api/v1/users/me/current-organization": {
       "get": {
-        "summary": "Current Jetstream organization",
+        "summary": "Current organization",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -2070,7 +2080,7 @@
         }
       },
       "put": {
-        "summary": "Switch current Jetstream organization",
+        "summary": "Switch current organization",
         "security": [
           {
             "bearerAuth": []
@@ -2107,6 +2117,11 @@
     "/api/v1/users/me/export": {
       "get": {
         "summary": "GDPR export of user data",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -2138,6 +2153,11 @@
     "/api/v1/users/me/invitations": {
       "get": {
         "summary": "List pending team invitations for the signed-in email",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -2419,6 +2439,11 @@
     "/api/v1/users/me/notifications": {
       "get": {
         "summary": "GET /api/v1/users/me/notifications",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -2556,6 +2581,11 @@
     "/api/v1/users/me/photo": {
       "get": {
         "summary": "GET /api/v1/users/me/photo",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -2655,6 +2685,11 @@
     "/api/v1/users/me/sessions": {
       "get": {
         "summary": "List active browser sessions for the signed-in user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
