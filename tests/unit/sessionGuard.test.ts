@@ -16,8 +16,8 @@ function containerWith(directory: unknown) {
     has(key: string) {
       return key === CORE_AUTH_USER_DIRECTORY_TOKEN && directory !== null;
     },
-    resolve() {
-      return directory;
+    resolve<T>(_key: string): T {
+      return directory as T;
     },
   };
 }
