@@ -1299,6 +1299,11 @@ describe("web routes with server-htmx frontend", () => {
   });
 
   test("GET /search returns HTMX results for signed-in users", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
     const response = await fetch(`${baseUrl}/search?q=platform`, {
       headers: {
         cookie: adminSessionCookie,
@@ -1315,6 +1320,11 @@ describe("web routes with server-htmx frontend", () => {
   });
 
   test("GET /search finds organizations by slug", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
     const response = await fetch(`${baseUrl}/search?q=acme-labs`, {
       headers: {
         cookie: adminSessionCookie,
@@ -1325,6 +1335,64 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain("Acme Labs");
+  });
+
+  test("GET /search defaults signed-in HTML to the current organization", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
+    const docking = await fetch(`${baseUrl}/search?q=docking`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(docking.status).toBe(200);
+    expect(await docking.text()).toContain("No matches");
+
+    const override = await fetch(`${baseUrl}/search?q=docking&organizationId=2`, {
+      headers: { cookie: adminSessionCookie },
+    });
+    expect(override.status).toBe(200);
+    expect(await override.text()).toContain("Docking Simulator");
+  });
+
+  test("POST /current-organization scopes HTML /search to the switched team", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
+    const csrf = await fetchCsrfFromPath("/search", adminSessionCookie);
+    const switched = await fetch(`${baseUrl}/current-organization`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        organization_id: "2",
+        _token: csrf.token,
+      }),
+    });
+    expect(switched.status).toBe(302);
+
+    try {
+      const cookies = mergeCookieHeader(csrf.cookies, switched);
+      const scoped = await fetch(`${baseUrl}/search?q=docking`, {
+        headers: { cookie: cookies },
+      });
+      expect(scoped.status).toBe(200);
+      const html = await scoped.text();
+      expect(html).toContain("Docking Simulator");
+      expect(html).not.toContain("No matches");
+    } finally {
+      await runWithMigrationBypass(async () => {
+        const db = getDatabase();
+        await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+      });
+    }
   });
 
   test("GET /notifications renders the inbox partial", async () => {

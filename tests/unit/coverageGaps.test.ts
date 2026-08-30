@@ -316,7 +316,7 @@ describe("coverage gap helpers", () => {
       new OrganizationRepository(),
       new ProjectRepository(),
     );
-    await expect(searchService.search("no-match-query-xyz", 5)).resolves.toEqual([]);
+    await expect(searchService.search("no-match-query-xyz", { limit: 5 })).resolves.toEqual([]);
   });
 
   test("covers failed job service listRecent default limit", async () => {

@@ -1,6 +1,6 @@
 <section class="page-header">
   <h1>Search</h1>
-  <p class="hint">Search organizations, projects, tasks, and comments.</p>
+  <p class="hint">Search the current team. Override with <code>?organizationId=</code>. JSON <code>GET /search</code> stays tenant-wide.</p>
 </section>
 
 <form

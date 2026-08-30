@@ -19,13 +19,18 @@ class SearchService {
     private readonly projectRepository: ProjectRepository,
   ) {}
 
-  async search(query: string, limit = 20): Promise<SearchHit[]> {
+  async search(
+    query: string,
+    options: { limit?: number; organizationId?: number } = {},
+  ): Promise<SearchHit[]> {
+    const limit = options.limit ?? 20;
+    const organizationId = options.organizationId;
     const tenantId = currentTenantId();
     const [tasks, comments, organizations, projects] = await Promise.all([
-      this.taskRepository.searchFullText(query, tenantId, limit),
-      this.commentRepository.searchFullText(query, tenantId, limit),
-      this.searchOrganizations(query, tenantId, limit),
-      this.searchProjects(query, tenantId, limit),
+      this.taskRepository.searchFullText(query, tenantId, limit, organizationId),
+      this.commentRepository.searchFullText(query, tenantId, limit, organizationId),
+      this.searchOrganizations(query, tenantId, limit, organizationId),
+      this.searchProjects(query, tenantId, limit, organizationId),
     ]);
 
     return [...organizations, ...projects, ...tasks, ...comments]
@@ -38,9 +43,13 @@ class SearchService {
     query: string,
     tenantId: number,
     limit: number,
+    organizationId?: number,
   ): Promise<SearchHit[]> {
     const organizations = await this.organizationRepository
-      .query({ tenant_id: tenantId })
+      .query({
+        tenant_id: tenantId,
+        ...(organizationId === undefined ? {} : { id: organizationId }),
+      })
       .where((builder) => {
         builder.whereGroup((group) => {
           group.where({ name: { ilike: query } }).orWhere({ slug: { ilike: query } });
@@ -61,9 +70,14 @@ class SearchService {
     query: string,
     tenantId: number,
     limit: number,
+    organizationId?: number,
   ): Promise<SearchHit[]> {
     const projects = await this.projectRepository.findAll({
-      where: { tenant_id: tenantId, name: { ilike: query } },
+      where: {
+        tenant_id: tenantId,
+        name: { ilike: query },
+        ...(organizationId === undefined ? {} : { organization_id: organizationId }),
+      },
       limit,
     });
 

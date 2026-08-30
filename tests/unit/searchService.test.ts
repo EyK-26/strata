@@ -54,8 +54,24 @@ describe("SearchService", () => {
     const service = createSearchService();
 
     await runWithTenantDatabase(defaultTestTenant, async () => {
-      const results = await service.search("zzzz-no-match-zzzz", 5);
+      const results = await service.search("zzzz-no-match-zzzz", { limit: 5 });
       expect(results).toEqual([]);
+    });
+  });
+
+  test("scopes hits to a requested organization", async () => {
+    const service = createSearchService();
+
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const orbital = await service.search("docking", { organizationId: 2 });
+      const acme = await service.search("docking", { organizationId: 1 });
+      const collision = await service.search("collision", { organizationId: 2 });
+      const otherOrg = await service.search("acme-labs", { organizationId: 2 });
+
+      expect(orbital.some((result) => result.type === "project" && result.id === 3)).toBe(true);
+      expect(acme).toEqual([]);
+      expect(collision.some((result) => result.type === "comment")).toBe(true);
+      expect(otherOrg).toEqual([]);
     });
   });
 });

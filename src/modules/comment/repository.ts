@@ -19,6 +19,7 @@ class CommentRepository extends BaseRepository<CommentRecord, "id"> {
     query: string,
     tenantId: number,
     limit: number,
+    organizationId?: number,
   ): Promise<CommentSearchHit[]> {
     const rows = await this.findAll({
       joins: [
@@ -55,6 +56,7 @@ class CommentRepository extends BaseRepository<CommentRecord, "id"> {
       ],
       where: {
         "organization.tenant_id": tenantId,
+        ...(organizationId === undefined ? {} : { "organization.id": organizationId }),
         search_vector: { tsMatch: query },
       } as QueryWhere<CommentRecord>,
       select: [

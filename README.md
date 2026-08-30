@@ -209,7 +209,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/admin/queue` | Queue monitor with HTMX polling; retry or delete failed jobs |
 | `/admin/audit` | Paginated audit log |
 | `/admin/resources` | Read-only resource browser (users, organizations, projects, tasks) |
-| `/search` | HTMX search over organizations, projects, tasks, and comments |
+| `/search` | HTMX search scoped to the current team (`?organizationId=` overrides; JSON stays tenant-wide) |
 | `/notifications` | Session inbox (nav bell polls every 30s) |
 | `/billing` | Current tenant subscription |
 | `/webhooks` | Outbound webhook admin: create, deactivate, delete, retry delivery |

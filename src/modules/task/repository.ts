@@ -17,7 +17,12 @@ class TaskRepository extends BaseRepository<TaskRecord, "id"> {
     super(taskTable);
   }
 
-  async searchFullText(query: string, tenantId: number, limit: number): Promise<TaskSearchHit[]> {
+  async searchFullText(
+    query: string,
+    tenantId: number,
+    limit: number,
+    organizationId?: number,
+  ): Promise<TaskSearchHit[]> {
     const rows = await this.findAll({
       joins: [
         {
@@ -43,6 +48,7 @@ class TaskRepository extends BaseRepository<TaskRecord, "id"> {
       ],
       where: {
         "organization.tenant_id": tenantId,
+        ...(organizationId === undefined ? {} : { "organization.id": organizationId }),
         search_vector: { tsMatch: query },
       } as QueryWhere<TaskRecord>,
       select: [
