@@ -186,7 +186,7 @@ class WebAuthController {
         body.email,
         body.password,
       );
-      const organization = await this.organizations.createPersonalForUser(user);
+      await this.organizations.createPersonalForUser(user);
 
       if (isFeatureEnabled("emailVerification")) {
         await this.passwordResets.sendEmailVerification(user);
@@ -204,8 +204,8 @@ class WebAuthController {
         });
       }
 
-      const fallback = `/organizations/${organization.id}`;
-      const location = body.redirect ? sanitizeInternalPath(body.redirect, fallback) : fallback;
+      const home = await this.currentOrganization.resolveHomePath(user.id);
+      const location = body.redirect ? sanitizeInternalPath(body.redirect, home) : home;
 
       return new Response(null, {
         status: 302,
@@ -332,11 +332,8 @@ class WebAuthController {
         const user = await this.authService.authenticateOAuth(provider, code, {
           redirectUri: `${url.origin}/oauth/${provider}/callback`,
         });
-        const organization = await this.organizations.createPersonalForUser(user);
-        const location = await this.currentOrganization.resolveHomePath(
-          user.id,
-          redirect === "/organizations" ? `/organizations/${organization.id}` : redirect,
-        );
+        await this.organizations.createPersonalForUser(user);
+        const location = await this.currentOrganization.resolveHomePath(user.id, redirect);
         const headers = new Headers({ Location: location });
         headers.append("Set-Cookie", createSessionCookie(user.id));
         headers.append("Set-Cookie", clearOAuthStateCookie());

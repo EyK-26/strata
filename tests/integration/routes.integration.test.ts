@@ -676,6 +676,38 @@ describe("integration routes with postgres", () => {
     expect(me.status).toBe(401);
   });
 
+  test("POST /auth/register with a pending invitation sets the current team", async () => {
+    const email = `api-invite-register-${Date.now()}@workhub.test`;
+    const invited = await fetch(api("/organizations/1/invitations"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
+      body: JSON.stringify({ email, role: "member" }),
+    });
+    expect(invited.status).toBe(201);
+
+    const register = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "API Invite Register",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(register.status).toBe(201);
+    const registered = (await register.json()) as { token: string };
+
+    const current = await fetch(api("/users/me/current-organization"), {
+      headers: { authorization: `Bearer ${registered.token}` },
+    });
+    expect(current.status).toBe(200);
+    expect(await current.json()).toMatchObject({ organization_id: 1 });
+  });
+
   test("organization invitations can be created, listed, accepted, and cancelled", async () => {
     const email = `api-invite-${Date.now()}@workhub.test`;
     const create = await fetch(api("/organizations/1/invitations"), {

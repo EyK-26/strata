@@ -73,7 +73,9 @@ function createController(services: {
     ...services.organizations,
   });
   container.set(currentOrganizationServiceToken, {
-    resolveHomePath: mock(async (_userId: number, requested = "/organizations") => requested),
+    resolveHomePath: mock(async (_userId: number, requested = "/organizations") =>
+      requested === "/organizations" || requested === "/" ? "/organizations/42" : requested,
+    ),
     ...services.currentOrganization,
   });
   container.set(CORE_VIEW_TOKEN, {
@@ -178,7 +180,7 @@ describe("WebAuthController", () => {
       }),
     );
 
-    expect(response.headers.get("Location")).toBe("/organizations");
+    expect(response.headers.get("Location")).toBe("/organizations/42");
   });
 
   test("login redirects to the two-factor challenge when MFA is required", async () => {
@@ -395,7 +397,7 @@ describe("WebAuthController", () => {
     });
   });
 
-  test("oauthCallback sends default redirects to the personal workspace", async () => {
+  test("oauthCallback sends default redirects to the current organization home", async () => {
     const { createOAuthStateCookie } = await import("@getstrata/core/security/oauthState");
     const { state, cookie } = createOAuthStateCookie();
     const createPersonalForUser = mock(async () => ({
@@ -419,6 +421,28 @@ describe("WebAuthController", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/organizations/42");
     expect(createPersonalForUser).toHaveBeenCalled();
+  });
+
+  test("oauthCallback prefers an invited current team over the personal workspace", async () => {
+    const { createOAuthStateCookie } = await import("@getstrata/core/security/oauthState");
+    const { state, cookie } = createOAuthStateCookie();
+    const resolveHomePath = mock(async () => "/organizations/1");
+    const controller = createController({
+      currentOrganization: { resolveHomePath },
+    });
+
+    const response = await controller.oauthCallback(
+      Object.assign(
+        new Request(`http://example.test/oauth/mock/callback?code=valid-code&state=${state}`, {
+          headers: { cookie },
+        }),
+        { params: { provider: "mock" } },
+      ),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/organizations/1");
+    expect(resolveHomePath).toHaveBeenCalledWith(4, "/organizations");
   });
 
   test("oauthCallback rejects invalid state", async () => {
@@ -469,6 +493,24 @@ describe("WebAuthController", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/organizations/42");
     expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
+  });
+
+  test("register sends invited users to the current organization home", async () => {
+    const resolveHomePath = mock(async () => "/organizations/1");
+    const controller = createController({
+      currentOrganization: { resolveHomePath },
+    });
+    const response = await controller.register(
+      new Request("http://example.test/register", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "name=Ada&email=new%40workhub.test&password=password123&password_confirmation=password123",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/organizations/1");
+    expect(resolveHomePath).toHaveBeenCalledWith(9);
   });
 
   test("register honors a same-origin intended redirect", async () => {
@@ -603,7 +645,7 @@ describe("WebAuthController", () => {
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/organizations");
+    expect(response.headers.get("Location")).toBe("/organizations/42");
     expect(
       response.headers.getSetCookie().some((cookie) => cookie.startsWith("workhub_intended=")),
     ).toBe(true);

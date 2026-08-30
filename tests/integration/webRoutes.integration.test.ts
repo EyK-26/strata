@@ -1686,6 +1686,18 @@ describe("web routes with server-htmx frontend", () => {
       }),
     });
     expect(registered.status).toBe(302);
+    expect(registered.headers.get("location")).toBe("/organizations/1");
+
+    const session = mergeCookieHeader(registerCsrf.cookies, registered);
+    const home = await fetch(`${baseUrl}/organizations/1`, {
+      headers: { cookie: session, accept: "text/html" },
+    });
+    expect(home.status).toBe(200);
+    const homeHtml = await home.text();
+    expect(homeHtml).toContain("Acme Labs");
+    expect(homeHtml).toContain('id="current-organization"');
+    expect(homeHtml).toMatch(/value="1"\s+selected/);
+    expect(homeHtml).toContain("Auto Join&#39;s workspace");
 
     const show = await fetch(`${baseUrl}/organizations/1`, {
       headers: { cookie: adminSessionCookie, accept: "text/html" },
