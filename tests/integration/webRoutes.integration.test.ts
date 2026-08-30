@@ -2033,6 +2033,10 @@ describe("web routes with server-htmx frontend", () => {
     expect(account.status).toBe(200);
     const accountHtml = await account.text();
     expect(accountHtml).toContain("admin@workhub.test");
+    expect(accountHtml).toContain("Current team");
+    expect(accountHtml).toContain('id="current-team"');
+    expect(accountHtml).toContain("Acme Labs");
+    expect(accountHtml).toContain('href="/organizations/1"');
     expect(accountHtml).toContain("Update profile");
     expect(accountHtml).toContain("Two-factor authentication");
     expect(accountHtml).toContain("API tokens");

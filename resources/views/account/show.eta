@@ -3,6 +3,17 @@
   <p class="hint">Profile, API tokens, data export, email verification, and two-factor authentication for the signed-in session.</p>
 </section>
 
+<% if (it.currentOrganization) { %>
+<section class="card" id="current-team">
+  <h2>Current team</h2>
+  <p>
+    <a href="/organizations/<%= it.currentOrganization.id %>"><%= it.currentOrganization.name %></a>
+    <span class="current-team">Current</span>
+  </p>
+  <p class="hint">Switch teams from the header Team select or an organization show page.</p>
+</section>
+<% } %>
+
 <section class="card" id="profile">
   <h2>Profile</h2>
   <form method="post" action="/account/profile" class="stack-form">
