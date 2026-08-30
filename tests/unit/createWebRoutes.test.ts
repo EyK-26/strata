@@ -68,7 +68,10 @@ describe("createWebRoutes", () => {
     const routes = createWebRoutes(createTestDependencies());
 
     expect(routes["/"]).toBeDefined();
-    const response = await routes["/"](new Request("http://localhost/"));
+    const root = routes["/"];
+    const handler = typeof root === "function" ? root : root.GET;
+    expect(handler).toBeDefined();
+    const response = await handler(new Request("http://localhost/"));
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/organizations");
 
