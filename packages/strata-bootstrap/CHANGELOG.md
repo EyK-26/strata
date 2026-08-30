@@ -1,5 +1,11 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.66
+
+- `assertProductionSecrets()` is feature-gated for every app. API tokens no longer imply WorkHub’s encryption/CORS/OAuth/public-read checklist. Published test token strings are still denied. WorkHub’s extra production profile lives in the app (`src/config/productionSecrets.ts`).
+- **Breaking:** `HttpKernel.wrapWebGuest()` defaults `home` to `/` instead of `/organizations`. Apps with an org home should pass that path (WorkHub already does).
+- `createWebRoutes()` no longer seeds a `/` → `/organizations` redirect. The in-repo app owns `/` via its organization module.
+
 ## 0.2.65
 
 - App listener discovery reads `src/listeners` from `process.cwd()` so a built `@getstrata/bootstrap` bundle still finds WorkHub registrars (`import.meta.dir` after `build:bootstrap` is the package dist). Listener boot calls each registrar every time (registrars are idempotent per `eventBus`).

@@ -1,5 +1,12 @@
 # @getstrata/core changelog
 
+## 0.5.90
+
+- **Breaking identity defaults:** `appKeyPrefix()` is `strata` and `appDisplayName()` is `Strata` when `APP_KEY_PREFIX` / `APP_NAME` are unset (were `workhub` / `WorkHub`). WorkHub pins those env vars.
+- `Schedule.command()` rejects cron strings other than `* * * * *` and `*/N * * * *` instead of silently never running them.
+- OpenAPI marks `GET /users/me/*` as bearer-authenticated.
+- OpenAPI `/users/me/current-organization` summaries no longer say Jetstream.
+
 ## 0.5.89
 
 - **Breaking:** removed `@getstrata/core/jobs/dispatchWebhookJob`. Import `DispatchWebhookJob` from the app webhook module (`src/modules/webhook/dispatchWebhookJob.ts`).
