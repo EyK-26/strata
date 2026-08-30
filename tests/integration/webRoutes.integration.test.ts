@@ -911,6 +911,82 @@ describe("web routes with server-htmx frontend", () => {
     expect(await list.text()).toContain("Member Extra Org");
   });
 
+  test("POST /current-organization switches the HTMX current team", async () => {
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const email = `html-current-org-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: registerCsrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "HTML Current Org",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+    expect(registered.status).toBe(302);
+    const session = mergeCookieHeader("", registered);
+
+    const personalLocation = registered.headers.get("location") ?? "";
+    expect(personalLocation).toMatch(/^\/organizations\/\d+$/);
+    const personalId = personalLocation.split("/").pop() ?? "";
+
+    const createCsrf = await fetchCsrfFromPath("/organizations", session);
+    const slug = `html-current-extra-${Date.now()}`;
+    const created = await fetch(`${baseUrl}/organizations`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: createCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        name: "HTML Current Extra",
+        slug,
+        _token: createCsrf.token,
+      }),
+    });
+    expect(created.status).toBe(302);
+
+    const listCookies = mergeCookieHeader(createCsrf.cookies, created);
+    const list = await fetch(`${baseUrl}/organizations`, { headers: { cookie: listCookies } });
+    const listHtml = await list.text();
+    expect(listHtml).toContain("HTML Current Extra");
+    expect(listHtml).toContain('id="current-organization"');
+    expect(listHtml).toContain("HTML Current Extra");
+
+    const switchCsrf = await fetchCsrfFromPath("/organizations", listCookies);
+    const switched = await fetch(`${baseUrl}/current-organization`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: switchCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        organization_id: personalId,
+        _token: switchCsrf.token,
+      }),
+    });
+    expect(switched.status).toBe(302);
+    expect(switched.headers.get("location")).toBe(`/organizations/${personalId}`);
+
+    const show = await fetch(`${baseUrl}/organizations/${personalId}`, {
+      headers: { cookie: mergeCookieHeader(switchCsrf.cookies, switched) },
+    });
+    expect(show.status).toBe(200);
+    const showHtml = await show.text();
+    expect(showHtml).toContain(`value="${personalId}"`);
+    expect(showHtml).toContain("selected");
+  });
+
   test("GET /projects returns HTML project list", async () => {
     const response = await fetch(`${baseUrl}/projects`);
 

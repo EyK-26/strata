@@ -5,6 +5,7 @@ import { ValidationError } from "@getstrata/core/errors/http";
 import { createOAuthStateCookie } from "@getstrata/core/security/oauthState";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
+import { currentOrganizationServiceToken } from "../../src/modules/user/currentOrganizationService";
 import {
   createMfaChallenge,
   createMfaChallengeCookie,
@@ -44,6 +45,7 @@ function createController(services: {
   authService?: Record<string, unknown>;
   passwordResets?: Record<string, unknown>;
   organizations?: Record<string, unknown>;
+  currentOrganization?: Record<string, unknown>;
   photos?: Record<string, unknown>;
 }): AuthControllerInstance {
   const container = new ServiceContainer();
@@ -89,6 +91,17 @@ function createController(services: {
       slug: "personal-9",
     })),
     ...services.organizations,
+  });
+  container.set(currentOrganizationServiceToken, {
+    currentForUser: mock(async () => ({
+      organization_id: 1,
+      organization: { id: 1, name: "Acme Labs", slug: "acme-labs" },
+    })),
+    switchForUser: mock(async () => ({
+      organization_id: 2,
+      organization: { id: 2, name: "Orbital Works", slug: "orbital-works" },
+    })),
+    ...services.currentOrganization,
   });
   container.set(notificationServiceToken, {
     listForUser: mock(async () => ({
@@ -1010,6 +1023,39 @@ describe("AuthController", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ recovery_codes: ["aaaa-bbbb"] });
     expect(regenerateRecoveryCodes).toHaveBeenCalledWith(1, "password");
+  });
+
+  test("showCurrentOrganization and switchCurrentOrganization proxy the service", async () => {
+    const switchForUser = mock(async () => ({
+      organization_id: 2,
+      organization: { id: 2, name: "Orbital Works", slug: "orbital-works" },
+    }));
+    const controller = createController({
+      currentOrganization: { switchForUser },
+    });
+
+    const shown = await controller.showCurrentOrganization(
+      new Request("http://example.test/users/me/current-organization"),
+    );
+    expect(shown.status).toBe(200);
+    expect(await shown.json()).toEqual({
+      organization_id: 1,
+      organization: { id: 1, name: "Acme Labs", slug: "acme-labs" },
+    });
+
+    const switched = await controller.switchCurrentOrganization(
+      new Request("http://example.test/users/me/current-organization", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ organization_id: 2 }),
+      }),
+    );
+    expect(switched.status).toBe(200);
+    expect(await switched.json()).toEqual({
+      organization_id: 2,
+      organization: { id: 2, name: "Orbital Works", slug: "orbital-works" },
+    });
+    expect(switchForUser).toHaveBeenCalledWith(1, 2);
   });
 
   test("me returns the authenticated user resource", async () => {

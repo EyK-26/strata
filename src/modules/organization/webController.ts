@@ -13,6 +13,10 @@ import { withErrorHandling } from "@getstrata/core/http/response";
 import { normalizeFieldErrors } from "@getstrata/core/http/webErrorResponse";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse, isHtmxRequest } from "@getstrata/core/view";
+import {
+  type CurrentOrganizationService,
+  currentOrganizationServiceToken,
+} from "../user/currentOrganizationService";
 import { userRepositoryToken } from "../user/provider";
 import type UserRepository from "../user/repository";
 import { type OrganizationInvitationService, resolveInvitationService } from "./invitationService";
@@ -23,6 +27,7 @@ import {
   parseWebAddOrganizationMemberPayload,
   parseWebCreateOrganizationBody,
   parseWebCreateOrganizationPayload,
+  parseWebSwitchCurrentOrganizationPayload,
   parseWebUpdateOrganizationMemberRolePayload,
   parseWebUpdateOrganizationPayload,
 } from "./webRequests";
@@ -40,6 +45,10 @@ class OrganizationWebController {
 
   private get users(): UserRepository {
     return resolveService(this.dependencies, userRepositoryToken);
+  }
+
+  private get currentOrganization(): CurrentOrganizationService {
+    return resolveService(this.dependencies, currentOrganizationServiceToken);
   }
 
   private get invitations(): OrganizationInvitationService {
@@ -384,6 +393,34 @@ class OrganizationWebController {
     return flashResponse(Response.redirect("/organizations", 302), {
       level: "success",
       message: "Organization deleted.",
+    });
+  });
+
+  readonly switchCurrent = withErrorHandling(async (request: Request) => {
+    const user = currentAuthUser();
+
+    if (!user) {
+      throw new ForbiddenError("Authentication required.");
+    }
+
+    const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+    const payload =
+      contentType.includes("application/x-www-form-urlencoded") ||
+      contentType.includes("multipart/form-data")
+        ? formDataToRecord(await request.formData())
+        : await parseFormBody(request).catch(() => ({}));
+    const body = parseWebSwitchCurrentOrganizationPayload(payload);
+    const switched = await this.currentOrganization.switchForUser(
+      resolveUserId(user),
+      body.organization_id,
+    );
+    const destination = switched.organization_id
+      ? `/organizations/${switched.organization_id}`
+      : "/organizations";
+
+    return flashResponse(Response.redirect(destination, 302), {
+      level: "success",
+      message: "Current organization updated.",
     });
   });
 }

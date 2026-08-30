@@ -27,6 +27,10 @@ import type OrganizationService from "../organization/service";
 import ApiTokenRepository from "./apiTokenRepository";
 import type AuthService from "./authService";
 import {
+  type CurrentOrganizationService,
+  currentOrganizationServiceToken,
+} from "./currentOrganizationService";
+import {
   clearMfaChallengeCookie,
   createMfaChallenge,
   parseMfaChallengeValue,
@@ -56,6 +60,7 @@ import {
   parsePasswordChallengeBody,
   parseRegisterBody,
   parseResetPasswordBody,
+  parseSwitchCurrentOrganizationBody,
   parseTokenIdParams,
   parseTwoFactorChallengeBody,
   parseUpdatePasswordBody,
@@ -91,6 +96,10 @@ class AuthController {
 
   private get organizations(): OrganizationService {
     return resolveService(this.dependencies, organizationServiceToken);
+  }
+
+  private get currentOrganization(): CurrentOrganizationService {
+    return resolveService(this.dependencies, currentOrganizationServiceToken);
   }
 
   private tryPhotos(): ProfilePhotoService | null {
@@ -309,6 +318,17 @@ class AuthController {
     const userId = await this.requireUserId(request);
     const record = await this.tokens.findByIdOrThrow(userId);
     return jsonResponse(toUserResource(record));
+  });
+
+  readonly showCurrentOrganization = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    return jsonResponse(await this.currentOrganization.currentForUser(userId));
+  });
+
+  readonly switchCurrentOrganization = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const body = await parseSwitchCurrentOrganizationBody(request);
+    return jsonResponse(await this.currentOrganization.switchForUser(userId, body.organization_id));
   });
 
   readonly updateProfile = withErrorHandling(async (request: Request) => {

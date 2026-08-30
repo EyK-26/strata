@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title><%= it.title ?? "WorkHub" %></title>
+    <title><%= it.title ?? it.appName ?? "WorkHub" %></title>
     <meta name="csrf-token" content="<%= it.csrfToken ?? "" %>" />
     <meta name="htmx-config" content='{"inlineStyleNonce":"<%= it.cspNonce ?? "" %>"}' />
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
@@ -19,8 +19,23 @@
   </head>
   <body>
     <header class="site-header">
-      <a href="/organizations" class="brand">WorkHub</a>
+      <a href="/organizations" class="brand"><%= it.appName ?? "WorkHub" %></a>
       <nav>
+        <% if (it.authUser && it.organizations && it.organizations.length > 0) { %>
+        <form method="post" action="/current-organization" class="nav-org">
+          <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+          <label class="nav-org-label" for="current-organization">Team</label>
+          <select id="current-organization" name="organization_id">
+            <% for (const org of it.organizations) { %>
+            <option
+              value="<%= org.id %>"
+              <%= it.currentOrganization && it.currentOrganization.id === org.id ? "selected" : "" %>
+            ><%= org.name %></option>
+            <% } %>
+          </select>
+          <button type="submit">Switch</button>
+        </form>
+        <% } %>
         <a href="/organizations">Organizations</a>
         <a href="/projects">Projects</a>
         <a href="/tasks">Tasks</a>

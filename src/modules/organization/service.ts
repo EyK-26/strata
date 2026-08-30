@@ -6,6 +6,7 @@ import { resolveMembershipService } from "@getstrata/core/auth/membershipService
 import type { QueryWhere } from "@getstrata/core/database/types";
 import { NotFoundError } from "@getstrata/core/errors/http";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
+import type { CurrentOrganizationWriter } from "../user/currentOrganizationService";
 import type OrganizationRepository from "./repository";
 import type { OrganizationRecord } from "./types";
 
@@ -42,7 +43,10 @@ function resolvePersonalOrganizationUserId(user: PersonalOrganizationUser): numb
 }
 
 class OrganizationService {
-  constructor(private readonly repository: OrganizationRepository) {}
+  constructor(
+    private readonly repository: OrganizationRepository,
+    private readonly currentOrganization: CurrentOrganizationWriter,
+  ) {}
 
   paginate(options: { page: number; perPage: number }) {
     const user = currentAuthUser();
@@ -99,6 +103,7 @@ class OrganizationService {
 
       if (Number.isInteger(userId) && userId > 0) {
         await resolveMembershipService().addOwnerOnOrganizationCreate(organization.id, userId);
+        await this.currentOrganization.assign(userId, organization.id);
       }
     }
 
@@ -112,6 +117,7 @@ class OrganizationService {
 
     if (existing) {
       await this.ensureOwnerMembership(existing.id, userId);
+      await this.currentOrganization.assignIfMissing(userId, existing.id);
       return existing;
     }
 
@@ -125,6 +131,7 @@ class OrganizationService {
     });
 
     await this.ensureOwnerMembership(organization.id, userId);
+    await this.currentOrganization.assignIfMissing(userId, organization.id);
 
     return organization;
   }

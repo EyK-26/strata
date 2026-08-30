@@ -10,15 +10,16 @@ const seeder: Seeder = {
     const memberPasswordHash = await hashPassword("password");
 
     await db`
-      INSERT INTO users (id, name, email, email_lookup, role, tenant_id, password_hash)
+      INSERT INTO users (id, name, email, email_lookup, role, tenant_id, password_hash, current_organization_id)
       VALUES
-        (1, 'Admin User', 'admin@workhub.test', 'admin@workhub.test', 'admin', 1, ${adminPasswordHash}),
-        (2, 'Member User', 'member@workhub.test', 'member@workhub.test', 'member', 1, ${memberPasswordHash})
+        (1, 'Admin User', 'admin@workhub.test', 'admin@workhub.test', 'admin', 1, ${adminPasswordHash}, 1),
+        (2, 'Member User', 'member@workhub.test', 'member@workhub.test', 'member', 1, ${memberPasswordHash}, 1)
       ON CONFLICT (id) DO UPDATE SET
         password_hash = EXCLUDED.password_hash,
         email_lookup = EXCLUDED.email_lookup,
         role = EXCLUDED.role,
-        tenant_id = EXCLUDED.tenant_id
+        tenant_id = EXCLUDED.tenant_id,
+        current_organization_id = COALESCE(users.current_organization_id, EXCLUDED.current_organization_id)
     `;
     await db`
       SELECT setval(

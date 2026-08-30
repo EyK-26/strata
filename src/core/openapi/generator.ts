@@ -24,6 +24,8 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "POST /auth/tokens": "Create API token",
   "DELETE /auth/tokens/:id": "Revoke API token",
   "GET /users/me/export": "GDPR export of user data",
+  "GET /users/me/current-organization": "Current Jetstream organization",
+  "PUT /users/me/current-organization": "Switch current Jetstream organization",
   "DELETE /users/me": "GDPR account erasure (anonymize user, revoke tokens)",
   "GET /organizations": "List organizations",
   "POST /organizations": "Create organization",

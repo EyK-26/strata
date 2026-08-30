@@ -46,6 +46,12 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
       PATCH: kernel.wrapAuthenticated(controller.updateProfile as unknown as RouteHandler),
       DELETE: kernel.wrapAuthenticated(controller.deleteMe as unknown as RouteHandler),
     },
+    "/users/me/current-organization": {
+      GET: kernel.wrapAuthenticated(controller.showCurrentOrganization as unknown as RouteHandler),
+      PUT: kernel.wrapAuthenticated(
+        controller.switchCurrentOrganization as unknown as RouteHandler,
+      ),
+    },
     "/users/me/photo": {
       GET: kernel.wrapAuthenticated(controller.showPhoto as unknown as RouteHandler),
       POST: kernel.wrapAuthenticated(controller.uploadPhoto as unknown as RouteHandler),

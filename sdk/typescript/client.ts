@@ -249,6 +249,14 @@ export class WorkHubClient {
     return await this.request("/users/me/confirmed-password-status", { ...init, method: "GET" });
   }
 
+  async getUsersMeCurrentOrganization(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/current-organization", { ...init, method: "GET" });
+  }
+
+  async putUsersMeCurrentOrganization(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/current-organization", { ...init, method: "PUT" });
+  }
+
   async getUsersMeExport(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me/export", { ...init, method: "GET" });
   }

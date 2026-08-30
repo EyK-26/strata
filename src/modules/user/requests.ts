@@ -4,6 +4,7 @@ import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import {
   confirmed,
   emailRule,
+  integerRule,
   maxLength,
   minLength,
   optional,
@@ -71,6 +72,10 @@ interface CreateApiTokenBodyDto {
   name: string;
   abilities?: string[];
   expires_in_days?: number;
+}
+
+interface SwitchCurrentOrganizationBodyDto {
+  organization_id: number;
 }
 
 class CreateApiTokenRequest extends FormRequest<CreateApiTokenBodyDto> {
@@ -251,6 +256,25 @@ class UpdatePasswordRequest extends FormRequest<UpdatePasswordBodyDto> {
 
 const updatePasswordRequest = new UpdatePasswordRequest();
 
+class SwitchCurrentOrganizationRequest extends FormRequest<SwitchCurrentOrganizationBodyDto> {
+  protected parse(payload: unknown): SwitchCurrentOrganizationBodyDto {
+    const validated = validateObject(payload, {
+      organization_id: [required(), integerRule()],
+    });
+    const organizationId = Number.parseInt(String(validated.organization_id), 10);
+
+    if (!Number.isInteger(organizationId) || organizationId <= 0) {
+      throw new ValidationError("A valid organization is required.", {
+        organization_id: ["A valid organization is required."],
+      });
+    }
+
+    return { organization_id: organizationId };
+  }
+}
+
+const switchCurrentOrganizationRequest = new SwitchCurrentOrganizationRequest();
+
 function parseTokenIdParams(params: TokenIdParams): { id: number } {
   return {
     id: parsePositiveIntParam(params.id, "token id"),
@@ -316,6 +340,12 @@ async function parseUpdatePasswordBody(request: Request): Promise<UpdatePassword
   return await updatePasswordRequest.validate(request);
 }
 
+async function parseSwitchCurrentOrganizationBody(
+  request: Request,
+): Promise<SwitchCurrentOrganizationBodyDto> {
+  return await switchCurrentOrganizationRequest.validate(request);
+}
+
 export type {
   ConfirmMfaBodyDto,
   CreateApiTokenBodyDto,
@@ -327,6 +357,7 @@ export type {
   PasswordChallengeBodyDto,
   RegisterBodyDto,
   ResetPasswordBodyDto,
+  SwitchCurrentOrganizationBodyDto,
   TokenIdParams,
   TwoFactorChallengeBodyDto,
   UpdatePasswordBodyDto,
@@ -342,6 +373,7 @@ export {
   parsePasswordChallengeBody,
   parseRegisterBody,
   parseResetPasswordBody,
+  parseSwitchCurrentOrganizationBody,
   parseTokenIdParams,
   parseTwoFactorChallengeBody,
   parseUpdatePasswordBody,

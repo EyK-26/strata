@@ -8,8 +8,13 @@ import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oau
 import { SamlProvider } from "@getstrata/core/auth/oauth/samlProvider";
 import { getRequiredDependency, type ServiceProvider } from "@getstrata/core/contracts/di";
 import { isFeatureEnabled } from "../../config/features";
+import OrganizationRepository from "../organization/repository";
 import ApiTokenRepository from "./apiTokenRepository";
 import AuthService from "./authService";
+import {
+  CurrentOrganizationService,
+  currentOrganizationServiceToken,
+} from "./currentOrganizationService";
 import NotificationRepository from "./notificationRepository";
 import NotificationService from "./notificationService";
 import OAuthIdentityRepository from "./oauthIdentityRepository";
@@ -40,6 +45,14 @@ const userProvider: ServiceProvider = {
     container.singleton(apiTokenRepositoryToken, () => new ApiTokenRepository());
     container.singleton(oauthIdentityRepositoryToken, () => new OAuthIdentityRepository());
     container.singleton(notificationRepositoryToken, () => new NotificationRepository());
+    container.singleton(
+      currentOrganizationServiceToken,
+      () =>
+        new CurrentOrganizationService(
+          container.resolve<UserRepository>(userRepositoryToken),
+          new OrganizationRepository(),
+        ),
+    );
   },
   boot({ container, dependencies }) {
     container.singleton(tokenServiceToken, () => {
@@ -134,6 +147,7 @@ const userProvider: ServiceProvider = {
 };
 
 export default userProvider;
+export { currentOrganizationServiceToken } from "./currentOrganizationService";
 export {
   apiTokenRepositoryToken,
   authServiceToken,

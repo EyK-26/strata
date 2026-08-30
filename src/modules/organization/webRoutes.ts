@@ -49,6 +49,9 @@ function createOrganizationWebRoutes(dependencies: AppDependencies, kernel: Http
         kernel.wrapSigned(controller.acceptInvitation as unknown as RouteHandler),
       ),
     },
+    "/current-organization": {
+      POST: kernel.wrapWebAuthenticated(controller.switchCurrent as unknown as RouteHandler),
+    },
   };
 }
 

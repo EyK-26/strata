@@ -515,6 +515,60 @@ describe("integration routes with postgres", () => {
     );
   });
 
+  test("GET and PUT /users/me/current-organization switch a registered member's current team", async () => {
+    const email = `api-current-org-${Date.now()}@workhub.test`;
+    const register = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Current Org Member",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(register.status).toBe(201);
+    const registered = (await register.json()) as { token: string };
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${registered.token}`,
+    };
+
+    const initial = await fetch(api("/users/me/current-organization"), { headers });
+    expect(initial.status).toBe(200);
+    const starting = (await initial.json()) as {
+      organization_id: number;
+      organization: { slug: string };
+    };
+    expect(starting.organization_id).toBeGreaterThan(0);
+    expect(starting.organization.slug).toMatch(/^personal-/);
+
+    const slug = `api-current-org-${Date.now()}`;
+    const created = await fetch(api("/organizations"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "API Current Org Extra", slug }),
+    });
+    expect(created.status).toBe(201);
+    const extra = (await created.json()) as { id: number; slug: string };
+
+    const afterCreate = await fetch(api("/users/me/current-organization"), { headers });
+    expect((await afterCreate.json()) as { organization_id: number }).toMatchObject({
+      organization_id: extra.id,
+    });
+
+    const switched = await fetch(api("/users/me/current-organization"), {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ organization_id: starting.organization_id }),
+    });
+    expect(switched.status).toBe(200);
+    expect(await switched.json()).toMatchObject({
+      organization_id: starting.organization_id,
+      organization: { slug: starting.organization.slug },
+    });
+  });
+
   test("POST /organizations lets a registered member create an extra organization", async () => {
     const email = `api-member-org-${Date.now()}@workhub.test`;
     const register = await fetch(api("/auth/register"), {

@@ -14,6 +14,7 @@ interface UserRecord {
   mfa_recovery_codes?: string | null;
   profile_photo_path?: string | null;
   session_valid_after?: Date | null;
+  current_organization_id?: number | null;
   created_at: Date;
   updated_at: Date;
 }

@@ -2,6 +2,7 @@ import { ValidationError } from "@getstrata/core/errors/http";
 import { WebFormRequest } from "@getstrata/core/http/webFormRequest";
 import {
   emailRule,
+  integerRule,
   maxLength,
   minLength,
   pattern,
@@ -140,9 +141,45 @@ async function parseWebAddOrganizationMemberBody(
   return await webAddOrganizationMemberRequest.validate(request);
 }
 
+interface WebSwitchCurrentOrganizationBody {
+  organization_id: number;
+}
+
+function parseWebSwitchCurrentOrganizationPayload(
+  payload: unknown,
+): WebSwitchCurrentOrganizationBody {
+  const validated = validateObject(payload, {
+    organization_id: [required(), integerRule()],
+  });
+  const organizationId = Number.parseInt(String(validated.organization_id), 10);
+
+  if (!Number.isInteger(organizationId) || organizationId <= 0) {
+    throw new ValidationError("A valid organization is required.", {
+      organization_id: ["A valid organization is required."],
+    });
+  }
+
+  return { organization_id: organizationId };
+}
+
+class WebSwitchCurrentOrganizationRequest extends WebFormRequest<WebSwitchCurrentOrganizationBody> {
+  protected parse(payload: unknown): WebSwitchCurrentOrganizationBody {
+    return parseWebSwitchCurrentOrganizationPayload(payload);
+  }
+}
+
+const webSwitchCurrentOrganizationRequest = new WebSwitchCurrentOrganizationRequest();
+
+async function parseWebSwitchCurrentOrganizationBody(
+  request: Request,
+): Promise<WebSwitchCurrentOrganizationBody> {
+  return await webSwitchCurrentOrganizationRequest.validate(request);
+}
+
 export type {
   WebAddOrganizationMemberBody,
   WebCreateOrganizationBody,
+  WebSwitchCurrentOrganizationBody,
   WebUpdateOrganizationBody,
   WebUpdateOrganizationMemberRoleBody,
 };
@@ -151,6 +188,8 @@ export {
   parseWebAddOrganizationMemberPayload,
   parseWebCreateOrganizationBody,
   parseWebCreateOrganizationPayload,
+  parseWebSwitchCurrentOrganizationBody,
+  parseWebSwitchCurrentOrganizationPayload,
   parseWebUpdateOrganizationBody,
   parseWebUpdateOrganizationMemberRolePayload,
   parseWebUpdateOrganizationPayload,

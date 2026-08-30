@@ -36,9 +36,17 @@ function createRepository(
   };
 }
 
+function createCurrentOrganizationWriter() {
+  return {
+    assign: mock(async () => undefined),
+    assignIfMissing: mock(async () => undefined),
+  };
+}
+
 function createService(
   repository: Pick<OrganizationRepository, "findBySlug" | "create">,
   memberships: MembershipService,
+  currentOrganization = createCurrentOrganizationWriter(),
 ): OrganizationService {
   const container = new ServiceContainer();
   container.set("core.membership", memberships);
@@ -48,7 +56,7 @@ function createService(
     dependencies: createMockDependencies(container, createMockCache()),
   });
 
-  return new OrganizationService(repository as OrganizationRepository);
+  return new OrganizationService(repository as OrganizationRepository, currentOrganization);
 }
 
 describe("OrganizationService.createPersonalForUser", () => {
@@ -89,6 +97,22 @@ describe("OrganizationService.createPersonalForUser", () => {
     expect(addOwnerOnOrganizationCreate).toHaveBeenCalledWith(42, 9);
   });
 
+  test("assigns a current organization when creating a personal workspace", async () => {
+    const repository = createRepository();
+    const currentOrganization = createCurrentOrganizationWriter();
+    const service = createService(
+      repository,
+      {
+        getOrgRole: mock(async () => null),
+        addOwnerOnOrganizationCreate: mock(async () => undefined),
+      } as unknown as MembershipService,
+      currentOrganization,
+    );
+
+    await service.createPersonalForUser({ id: 9, name: "Ada Lovelace" });
+    expect(currentOrganization.assignIfMissing).toHaveBeenCalledWith(9, 42);
+  });
+
   test("uses a fallback name when the user name is blank", async () => {
     const repository = createRepository();
     const service = createService(repository, {
@@ -104,19 +128,25 @@ describe("OrganizationService.createPersonalForUser", () => {
 
   test("returns the existing personal workspace and skips addOwner when already a member", async () => {
     const addOwnerOnOrganizationCreate = mock(async () => undefined);
+    const currentOrganization = createCurrentOrganizationWriter();
     const repository = createRepository({
       findBySlug: mock(async () => existingOrganization),
     });
-    const service = createService(repository, {
-      getOrgRole: mock(async () => "owner"),
-      addOwnerOnOrganizationCreate,
-    } as unknown as MembershipService);
+    const service = createService(
+      repository,
+      {
+        getOrgRole: mock(async () => "owner"),
+        addOwnerOnOrganizationCreate,
+      } as unknown as MembershipService,
+      currentOrganization,
+    );
 
     await expect(service.createPersonalForUser({ id: 9, name: "Ada Lovelace" })).resolves.toEqual(
       existingOrganization,
     );
     expect(repository.create).not.toHaveBeenCalled();
     expect(addOwnerOnOrganizationCreate).not.toHaveBeenCalled();
+    expect(currentOrganization.assignIfMissing).toHaveBeenCalledWith(9, 7);
   });
 
   test("reattaches owner membership when the personal workspace already exists", async () => {

@@ -1,6 +1,7 @@
 import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import { configureMembershipLookup } from "@getstrata/core/auth/membershipContext";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
+import { currentOrganizationServiceToken } from "../user/currentOrganizationService";
 import UserRepository from "../user/repository";
 import OrganizationInvitationRepository from "./invitationRepository";
 import {
@@ -26,7 +27,11 @@ const organizationProvider: ServiceProvider = {
   boot({ container }) {
     container.singleton(
       organizationServiceToken,
-      () => new OrganizationService(container.resolve(organizationRepositoryToken)),
+      () =>
+        new OrganizationService(
+          container.resolve(organizationRepositoryToken),
+          container.resolve(currentOrganizationServiceToken),
+        ),
     );
     container.singleton(
       organizationInvitationServiceToken,
