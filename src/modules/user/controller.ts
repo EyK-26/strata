@@ -15,6 +15,7 @@ import {
   noContentResponse,
   withErrorHandling,
 } from "@getstrata/core/http/response";
+import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import {
   clearOAuthStateCookie,
   createOAuthStateCookie,
@@ -22,6 +23,10 @@ import {
 } from "@getstrata/core/security/oauthState";
 import { appConfig } from "../../config/app";
 import { isFeatureEnabled } from "../../config/features";
+import {
+  type OrganizationInvitationService,
+  organizationInvitationServiceToken,
+} from "../organization/invitationService";
 import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
 import ApiTokenRepository from "./apiTokenRepository";
@@ -100,6 +105,20 @@ class AuthController {
 
   private get currentOrganization(): CurrentOrganizationService {
     return resolveService(this.dependencies, currentOrganizationServiceToken);
+  }
+
+  private get invitations(): OrganizationInvitationService {
+    return resolveService(this.dependencies, organizationInvitationServiceToken);
+  }
+
+  private requireInvitationId(request: Request): number {
+    const params = (request as Request & { params?: { id: string } }).params;
+
+    if (!params?.id) {
+      throw new ValidationError("Id is required.");
+    }
+
+    return parsePositiveIntParam(params.id, "id");
   }
 
   private tryPhotos(): ProfilePhotoService | null {
@@ -329,6 +348,34 @@ class AuthController {
     const userId = await this.requireUserId(request);
     const body = await parseSwitchCurrentOrganizationBody(request);
     return jsonResponse(await this.currentOrganization.switchForUser(userId, body.organization_id));
+  });
+
+  readonly listReceivedInvitations = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const user = await this.tokens.findByIdOrThrow(userId);
+    return jsonResponse({ data: await this.invitations.listPendingForUser(user) });
+  });
+
+  readonly acceptReceivedInvitation = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const user = await this.tokens.findByIdOrThrow(userId);
+    const membership = await this.invitations.acceptForUser(
+      this.requireInvitationId(request),
+      user,
+    );
+
+    return jsonResponse({
+      organization_id: membership.organization_id,
+      user_id: membership.user_id,
+      role: membership.role,
+    });
+  });
+
+  readonly declineReceivedInvitation = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const user = await this.tokens.findByIdOrThrow(userId);
+    await this.invitations.declineForUser(this.requireInvitationId(request), user);
+    return noContentResponse();
   });
 
   readonly updateProfile = withErrorHandling(async (request: Request) => {

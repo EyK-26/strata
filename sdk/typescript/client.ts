@@ -261,6 +261,18 @@ export class WorkHubClient {
     return await this.request("/users/me/export", { ...init, method: "GET" });
   }
 
+  async getUsersMeInvitations(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/invitations", { ...init, method: "GET" });
+  }
+
+  async deleteUsersMeInvitationsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/invitations/{id}", { ...init, method: "DELETE" });
+  }
+
+  async postUsersMeInvitationsIdAccept(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/invitations/{id}/accept", { ...init, method: "POST" });
+  }
+
   async postUsersMeLogoutOtherDevices(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me/logout-other-devices", { ...init, method: "POST" });
   }

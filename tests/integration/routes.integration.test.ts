@@ -789,6 +789,89 @@ describe("integration routes with postgres", () => {
     expect(await current.json()).toMatchObject({ organization_id: 1 });
   });
 
+  test("GET /users/me/invitations lists, accepts, and declines received invites", async () => {
+    const email = `api-received-invite-${Date.now()}@workhub.test`;
+    const register = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "API Received Invitee",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(register.status).toBe(201);
+    const registered = (await register.json()) as { token: string };
+    const headers = { authorization: `Bearer ${registered.token}` };
+
+    const empty = await fetch(api("/users/me/invitations"), { headers });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual({ data: [] });
+
+    const invited = await fetch(api("/organizations/1/invitations"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
+      body: JSON.stringify({ email, role: "member" }),
+    });
+    expect(invited.status).toBe(201);
+    const invitation = (await invited.json()) as { id: number };
+
+    const listed = await fetch(api("/users/me/invitations"), { headers });
+    expect(listed.status).toBe(200);
+    const listBody = (await listed.json()) as {
+      data: Array<{ id: number; organization_id: number; role: string }>;
+    };
+    expect(listBody.data).toEqual([
+      expect.objectContaining({
+        id: invitation.id,
+        organization_id: 1,
+        role: "member",
+        organization: expect.objectContaining({ id: 1, name: "Acme Labs" }),
+      }),
+    ]);
+
+    const declined = await fetch(api(`/users/me/invitations/${invitation.id}`), {
+      method: "DELETE",
+      headers,
+    });
+    expect(declined.status).toBe(204);
+
+    const afterDecline = await fetch(api("/users/me/invitations"), { headers });
+    expect(await afterDecline.json()).toEqual({ data: [] });
+
+    const reinvite = await fetch(api("/organizations/1/invitations"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...adminHeaders(),
+      },
+      body: JSON.stringify({ email, role: "admin" }),
+    });
+    expect(reinvite.status).toBe(201);
+    const second = (await reinvite.json()) as { id: number };
+
+    const accepted = await fetch(api(`/users/me/invitations/${second.id}/accept`), {
+      method: "POST",
+      headers,
+    });
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      organization_id: 1,
+      role: "admin",
+    });
+
+    const current = await fetch(api("/users/me/current-organization"), { headers });
+    expect(current.status).toBe(200);
+    expect(await current.json()).toMatchObject({ organization_id: 1 });
+
+    const afterAccept = await fetch(api("/users/me/invitations"), { headers });
+    expect(await afterAccept.json()).toEqual({ data: [] });
+  });
+
   test("DELETE /organizations/:id/members/:userId lets a member leave a team", async () => {
     const email = `json-leave-${Date.now()}@workhub.test`;
     const registerResponse = await fetch(api("/auth/register"), {

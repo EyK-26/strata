@@ -4,6 +4,7 @@ import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { ValidationError } from "@getstrata/core/errors/http";
 import { createOAuthStateCookie } from "@getstrata/core/security/oauthState";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
+import { organizationInvitationServiceToken } from "../../src/modules/organization/invitationService";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
 import { currentOrganizationServiceToken } from "../../src/modules/user/currentOrganizationService";
 import {
@@ -47,6 +48,7 @@ function createController(services: {
   organizations?: Record<string, unknown>;
   currentOrganization?: Record<string, unknown>;
   photos?: Record<string, unknown>;
+  invitations?: Record<string, unknown>;
 }): AuthControllerInstance {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, {
@@ -124,6 +126,12 @@ function createController(services: {
   if (services.photos) {
     container.set(profilePhotoServiceToken, services.photos);
   }
+  container.set(organizationInvitationServiceToken, {
+    listPendingForUser: mock(async () => []),
+    acceptForUser: mock(async () => ({ organization_id: 1, user_id: 1, role: "member" })),
+    declineForUser: mock(async () => undefined),
+    ...services.invitations,
+  });
 
   return new AuthControllerClass(createMockDependencies(container, createMockCache()));
 }
@@ -1056,6 +1064,71 @@ describe("AuthController", () => {
       organization: { id: 2, name: "Orbital Works", slug: "orbital-works" },
     });
     expect(switchForUser).toHaveBeenCalledWith(1, 2);
+  });
+
+  test("listReceivedInvitations returns pending invites for the session email", async () => {
+    const listPendingForUser = mock(async () => [
+      {
+        id: 8,
+        organization_id: 1,
+        email: "admin@workhub.test",
+        role: "member",
+        organization: { id: 1, name: "Acme Labs", slug: "acme-labs" },
+      },
+    ]);
+    const controller = createController({ invitations: { listPendingForUser } });
+    const response = await controller.listReceivedInvitations(
+      new Request("http://example.test/users/me/invitations"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: [
+        {
+          id: 8,
+          organization_id: 1,
+          email: "admin@workhub.test",
+          role: "member",
+          organization: { id: 1, name: "Acme Labs", slug: "acme-labs" },
+        },
+      ],
+    });
+    expect(listPendingForUser).toHaveBeenCalledWith(user);
+  });
+
+  test("acceptReceivedInvitation and declineReceivedInvitation use the invitation id", async () => {
+    const acceptForUser = mock(async () => ({ organization_id: 4, user_id: 1, role: "admin" }));
+    const declineForUser = mock(async () => undefined);
+    const controller = createController({ invitations: { acceptForUser, declineForUser } });
+    const withId = (url: string) => {
+      const request = new Request(url, { method: "POST" }) as Request & {
+        params?: { id: string };
+      };
+      request.params = { id: "4" };
+      return request;
+    };
+
+    const accepted = await controller.acceptReceivedInvitation(
+      withId("http://example.test/users/me/invitations/4/accept"),
+    );
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toEqual({
+      organization_id: 4,
+      user_id: 1,
+      role: "admin",
+    });
+    expect(acceptForUser).toHaveBeenCalledWith(4, user);
+
+    const declined = await controller.declineReceivedInvitation(
+      withId("http://example.test/users/me/invitations/4"),
+    );
+    expect(declined.status).toBe(204);
+    expect(declineForUser).toHaveBeenCalledWith(4, user);
+
+    const missing = await controller.acceptReceivedInvitation(
+      new Request("http://example.test/users/me/invitations/accept"),
+    );
+    expect(missing.status).toBeGreaterThanOrEqual(400);
   });
 
   test("me returns the authenticated user resource", async () => {

@@ -52,6 +52,19 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
         controller.switchCurrentOrganization as unknown as RouteHandler,
       ),
     },
+    "/users/me/invitations": {
+      GET: kernel.wrapAuthenticated(controller.listReceivedInvitations as unknown as RouteHandler),
+    },
+    "/users/me/invitations/:id/accept": {
+      POST: kernel.wrapAuthenticated(
+        controller.acceptReceivedInvitation as unknown as RouteHandler,
+      ),
+    },
+    "/users/me/invitations/:id": {
+      DELETE: kernel.wrapAuthenticated(
+        controller.declineReceivedInvitation as unknown as RouteHandler,
+      ),
+    },
     "/users/me/photo": {
       GET: kernel.wrapAuthenticated(controller.showPhoto as unknown as RouteHandler),
       POST: kernel.wrapAuthenticated(controller.uploadPhoto as unknown as RouteHandler),
