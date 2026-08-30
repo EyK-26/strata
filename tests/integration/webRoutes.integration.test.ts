@@ -669,7 +669,7 @@ describe("web routes with server-htmx frontend", () => {
             SELECT id FROM users WHERE email_lookup = ${emailLookupForQuery(email)}
           `) as Array<{ id: number }>,
       );
-      const userId = users[0]?.id;
+      const userId = users[0]?.id ?? 0;
       expect(userId).toBeGreaterThan(0);
 
       const path = temporarySignedUrl("/verify-email", 120, { id: userId });
@@ -737,7 +737,9 @@ describe("web routes with server-htmx frontend", () => {
             SELECT id FROM users WHERE email_lookup = ${emailLookupForQuery(email)}
           `) as Array<{ id: number }>,
       );
-      const path = temporarySignedUrl("/verify-email", 120, { id: users[0]?.id });
+      const userId = users[0]?.id ?? 0;
+      expect(userId).toBeGreaterThan(0);
+      const path = temporarySignedUrl("/verify-email", 120, { id: userId });
       const verified = await fetch(`${baseUrl}${path}`, {
         redirect: "manual",
         headers: { cookie: mergeCookieHeader(session, account) },
