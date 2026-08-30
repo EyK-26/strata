@@ -275,7 +275,7 @@
       </thead>
       <tbody>
         <% for (const session of it.browserSessions) { %>
-        <tr<%= session.current ? ' data-current-session="1"' : "" %>>
+        <tr data-current-session="<%= session.current ? "1" : "0" %>">
           <td><%= session.user_agent ?? "Unknown browser" %></td>
           <td><%= session.ip_address ?? "Unknown IP" %></td>
           <td><%= session.last_active_at ?? session.expires_at %></td>
