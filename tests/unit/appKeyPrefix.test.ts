@@ -56,23 +56,23 @@ function clearIdentityOverrides(): void {
 }
 
 describe("appKeyPrefix", () => {
-  test("defaults to workhub", () => {
+  test("defaults to strata", () => {
     const previous = snapshotIdentityEnv();
     clearIdentityOverrides();
     delete process.env.APP_KEY_PREFIX;
 
     try {
-      expect(appKeyPrefix()).toBe("workhub");
-      expect(appCookieName("session")).toBe("workhub_session");
-      expect(appCookieName("csrf")).toBe("workhub_csrf");
-      expect(appDevSecret("session-secret")).toBe("workhub-dev-session-secret");
-      expect(appDevSecret("token-pepper")).toBe("workhub-dev-token-pepper");
-      expect(namespacedRedisKey("cache:")).toBe("workhub:cache:");
-      expect(smtpEhloHost()).toBe("workhub.local");
-      expect(siemEventType()).toBe("workhub.audit");
-      expect(appUserAgent()).toBe("workhub");
-      expect(otelServiceName()).toBe("workhub-api");
-      expect(webhookSignatureHeader()).toBe("x-workhub-signature");
+      expect(appKeyPrefix()).toBe("strata");
+      expect(appCookieName("session")).toBe("strata_session");
+      expect(appCookieName("csrf")).toBe("strata_csrf");
+      expect(appDevSecret("session-secret")).toBe("strata-dev-session-secret");
+      expect(appDevSecret("token-pepper")).toBe("strata-dev-token-pepper");
+      expect(namespacedRedisKey("cache:")).toBe("strata:cache:");
+      expect(smtpEhloHost()).toBe("strata.local");
+      expect(siemEventType()).toBe("strata.audit");
+      expect(appUserAgent()).toBe("strata");
+      expect(otelServiceName()).toBe("strata-api");
+      expect(webhookSignatureHeader()).toBe("x-strata-signature");
     } finally {
       restoreIdentityEnv(previous);
     }
@@ -144,12 +144,12 @@ describe("appKeyPrefix", () => {
     }
   });
 
-  test("defaults the display name to WorkHub", () => {
+  test("defaults the display name to Strata", () => {
     const previous = process.env.APP_NAME;
     delete process.env.APP_NAME;
 
     try {
-      expect(appDisplayName()).toBe("WorkHub");
+      expect(appDisplayName()).toBe("Strata");
     } finally {
       restoreEnvVar("APP_NAME", previous);
     }
@@ -174,7 +174,7 @@ describe("appKeyPrefix", () => {
       expect(appEnv()).toBe("local");
       expect(appUrl()).toBe("http://localhost:3000");
       expect(apiPrefix()).toBe("/api/v1");
-      expect(sdkClientClassName()).toBe("WorkHubClient");
+      expect(sdkClientClassName()).toBe("StrataClient");
 
       process.env.APP_ENV = "production";
       process.env.APP_URL = "https://forum.test/";

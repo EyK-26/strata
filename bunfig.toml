@@ -1,5 +1,5 @@
 [test]
-preload = ["./tests/globalSetup.ts"]
+preload = ["./tests/preloadEnv.ts", "./tests/globalSetup.ts"]
 coveragePath = ["src"]
 coverageThreshold = { lines = 1.0, functions = 1.0, statements = 1.0 }
 

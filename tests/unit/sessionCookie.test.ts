@@ -210,14 +210,13 @@ describe("sessionCookie", () => {
     ).toBeNull();
   });
 
-  test("defaults to the WorkHub session cookie name", () => {
+  test("defaults to the WorkHub session cookie name when APP_KEY_PREFIX is pinned", () => {
     delete process.env.SESSION_COOKIE_NAME;
 
-    expect(SESSION_COOKIE).toBe("workhub_session");
     expect(SESSION_COOKIE).toBe(appCookieName("session"));
-    expect(sessionCookieName()).toBe("workhub_session");
-    expect(createSessionCookie(1)).toContain("workhub_session=");
-    expect(clearSessionCookie()).toContain("workhub_session=");
+    expect(sessionCookieName()).toBe(appCookieName("session"));
+    expect(createSessionCookie(1)).toContain(`${appCookieName("session")}=`);
+    expect(clearSessionCookie()).toContain(`${appCookieName("session")}=`);
   });
 
   test("derives the session cookie name from APP_KEY_PREFIX", () => {

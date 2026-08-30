@@ -42,7 +42,7 @@ describe("SamlProvider", () => {
     try {
       await expect(provider.exchangeCode("saml::Admin")).resolves.toEqual({
         providerUserId: "saml-user",
-        email: "saml-user@workhub.test",
+        email: "saml-user@strata.test",
         name: "Admin",
       });
     } finally {

@@ -30,9 +30,9 @@ describe("siemFormatter", () => {
     try {
       const event = sampleEvent();
 
-      expect(event.event_type).toBe("workhub.audit");
+      expect(event.event_type).toBe("strata.audit");
       expect(formatCefLine(event)).toContain("organization.created");
-      expect(formatCefLine(event)).toContain("CEF:0|WorkHub|API|1.0|");
+      expect(formatCefLine(event)).toContain("CEF:0|Strata|API|1.0|");
     } finally {
       restoreEnvVar("SIEM_EVENT_TYPE", previousType);
       restoreEnvVar("APP_NAME", previousName);

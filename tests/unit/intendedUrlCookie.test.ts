@@ -123,9 +123,9 @@ describe("intendedUrlCookie", () => {
     delete process.env.APP_KEY_PREFIX;
 
     expect(INTENDED_URL_COOKIE).toBe("workhub_intended");
-    expect(intendedUrlCookieName()).toBe("workhub_intended");
-    expect(createIntendedUrlCookie("/account")).toContain("workhub_intended=");
-    expect(clearIntendedUrlCookie()).toContain("workhub_intended=");
+    expect(intendedUrlCookieName()).toBe("strata_intended");
+    expect(createIntendedUrlCookie("/account")).toContain("strata_intended=");
+    expect(clearIntendedUrlCookie()).toContain("strata_intended=");
     expect(intendedUrlTtlSeconds()).toBe(DEFAULT_INTENDED_URL_TTL_SECONDS);
   });
 

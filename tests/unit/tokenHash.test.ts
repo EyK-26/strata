@@ -31,7 +31,7 @@ describe("hashApiToken", () => {
     delete process.env.APP_KEY_PREFIX;
 
     try {
-      expect(resolveTokenPepper()).toBe("workhub-dev-token-pepper");
+      expect(resolveTokenPepper()).toBe("strata-dev-token-pepper");
       process.env.APP_KEY_PREFIX = "forum";
       expect(resolveTokenPepper()).toBe("forum-dev-token-pepper");
     } finally {

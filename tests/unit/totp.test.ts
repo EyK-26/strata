@@ -57,7 +57,7 @@ describe("totp", () => {
       delete process.env.APP_NAME;
       expect(
         buildOtpauthUrl({ secret: "JBSWY3DPEHPK3PXP", account: "admin@workhub.test" }),
-      ).toContain("issuer=WorkHub");
+      ).toContain("issuer=Strata");
 
       process.env.APP_NAME = "Acme";
       expect(

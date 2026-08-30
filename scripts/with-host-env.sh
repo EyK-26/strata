@@ -7,5 +7,7 @@ export REDIS_URL="${REDIS_URL:-redis://localhost:6379}"
 export PORT="${PORT:-3000}"
 export CACHE_DRIVER="${CACHE_DRIVER:-redis}"
 export QUEUE_DRIVER="${QUEUE_DRIVER:-sync}"
+export APP_KEY_PREFIX="${APP_KEY_PREFIX:-workhub}"
+export APP_NAME="${APP_NAME:-WorkHub}"
 
 exec "$@"

@@ -95,7 +95,7 @@ describe("GitHubOAuthProvider", () => {
         email: "octocat@github.com",
         name: "The Octocat",
       });
-      expect(profileUserAgent).toBe("workhub");
+      expect(profileUserAgent).toBe("strata");
     } finally {
       restoreEnvVar("APP_USER_AGENT", previousUserAgent);
       restoreEnvVar("APP_KEY_PREFIX", previousPrefix);

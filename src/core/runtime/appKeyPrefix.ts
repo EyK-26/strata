@@ -1,5 +1,5 @@
 function appKeyPrefix(): string {
-  return process.env.APP_KEY_PREFIX?.trim() || "workhub";
+  return process.env.APP_KEY_PREFIX?.trim() || "strata";
 }
 
 function appCookieName(kind: string): string {
@@ -38,7 +38,7 @@ function webhookSignatureHeader(): string {
 }
 
 function appDisplayName(): string {
-  return process.env.APP_NAME?.trim() || "WorkHub";
+  return process.env.APP_NAME?.trim() || "Strata";
 }
 
 function appEnv(): string {
