@@ -228,8 +228,22 @@ describe("WebhookService", () => {
     await service.dispatch("task.created", { id: 99 });
 
     expect(dispatched).toEqual([
-      { webhookId: 1, tenantId: 1, event: "task.created", payload: { id: 99 } },
-      { webhookId: 2, tenantId: 1, event: "task.created", payload: { id: 99 } },
+      {
+        webhookId: 1,
+        tenantId: 1,
+        url: "http://hooks.example.com/all",
+        secret: "secret-all",
+        event: "task.created",
+        payload: { id: 99 },
+      },
+      {
+        webhookId: 2,
+        tenantId: 1,
+        url: "http://hooks.example.com/task-created",
+        secret: "secret-task",
+        event: "task.created",
+        payload: { id: 99 },
+      },
     ]);
   });
 
@@ -259,8 +273,22 @@ describe("WebhookService", () => {
     await service.dispatch("task.created", { id: 99 });
 
     expect(dispatched).toEqual([
-      { webhookId: 7, tenantId: 1, event: "task.created", payload: { id: 99 } },
-      { webhookId: 8, tenantId: 1, event: "task.created", payload: { id: 99 } },
+      {
+        webhookId: 7,
+        tenantId: 1,
+        url: "http://hooks.example.com/all",
+        secret: "secret-all",
+        event: "task.created",
+        payload: { id: 99 },
+      },
+      {
+        webhookId: 8,
+        tenantId: 1,
+        url: "http://hooks.example.com/all",
+        secret: "secret-all",
+        event: "task.created",
+        payload: { id: 99 },
+      },
     ]);
   });
 
@@ -287,7 +315,16 @@ describe("WebhookService", () => {
 
     await service.dispatch("task.created", payload);
 
-    expect(dispatched).toEqual([{ webhookId: 11, tenantId: 1, event: "task.created", payload }]);
+    expect(dispatched).toEqual([
+      {
+        webhookId: 11,
+        tenantId: 1,
+        url: "http://hooks.example.com/all",
+        secret: "secret-all",
+        event: "task.created",
+        payload,
+      },
+    ]);
   });
 
   test("dispatches team-scoped webhooks only when the payload org matches", async () => {
@@ -297,9 +334,30 @@ describe("WebhookService", () => {
     await service.dispatch("task.created", payload);
 
     expect(dispatched).toEqual([
-      { webhookId: 1, tenantId: 1, event: "task.created", payload },
-      { webhookId: 2, tenantId: 1, event: "task.created", payload },
-      { webhookId: 4, tenantId: 1, event: "task.created", payload },
+      {
+        webhookId: 1,
+        tenantId: 1,
+        url: "http://hooks.example.com/all",
+        secret: "secret-all",
+        event: "task.created",
+        payload,
+      },
+      {
+        webhookId: 2,
+        tenantId: 1,
+        url: "http://hooks.example.com/task-created",
+        secret: "secret-task",
+        event: "task.created",
+        payload,
+      },
+      {
+        webhookId: 4,
+        tenantId: 1,
+        url: "http://hooks.example.com/team-7",
+        secret: "secret-team-7",
+        event: "task.created",
+        payload,
+      },
     ]);
   });
 
@@ -326,8 +384,22 @@ describe("WebhookService", () => {
     await expect(service.retryDelivery(10)).rejects.toThrow(/Webhook 404 not found/);
 
     expect(dispatched).toEqual([
-      { webhookId: 1, tenantId: 1, event: "task.created", payload: { id: 99 } },
-      { webhookId: 1, tenantId: 1, event: "task.updated", payload: { id: 100 } },
+      {
+        webhookId: 1,
+        tenantId: 1,
+        url: "http://hooks.example.com/all",
+        secret: "secret-all",
+        event: "task.created",
+        payload: { id: 99 },
+      },
+      {
+        webhookId: 1,
+        tenantId: 1,
+        url: "http://hooks.example.com/all",
+        secret: "secret-all",
+        event: "task.updated",
+        payload: { id: 100 },
+      },
     ]);
   });
 });

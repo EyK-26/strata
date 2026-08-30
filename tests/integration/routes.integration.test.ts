@@ -1366,6 +1366,11 @@ describe("integration routes with postgres", () => {
   });
 
   test("webhook dispatch delivers team endpoints only for matching organizations", async () => {
+    const { default: registerWebhookDispatchListeners } = await import(
+      "../../src/listeners/dispatchWebhooks"
+    );
+    registerWebhookDispatchListeners();
+
     const stamp = Date.now();
     const sameId = (left: unknown, right: unknown): boolean => Number(left) === Number(right);
 

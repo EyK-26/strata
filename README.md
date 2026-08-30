@@ -266,7 +266,7 @@ Password and OAuth login:
 - `GET/POST /api/v1/webhooks`: register outbound webhook endpoints (`webhooks:read`, `webhooks:write`). Lifecycle: `POST /api/v1/webhooks/:id/deactivate`, `POST /api/v1/webhooks/:id/activate`, `DELETE /api/v1/webhooks/:id`, `POST /api/v1/webhooks/deliveries/:id/retry`
 - `GET /api/v1/search?q=registry`: PostgreSQL full-text search across tasks and comments, plus organization/project name matches
 
-Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC). Team-scoped webhooks (`organization_id` set) only receive events whose payload org matches; `organization_id` null stays tenant-wide. Dispatch coerces driver-string org ids and jsonb `events` (GitHub Actions Postgres can return those as strings). Blocked or invalid webhook URLs are recorded as failed deliveries and do not fail the originating request (`DispatchWebhookJob` swallows `BadRequestError` from `assertSafeOutboundUrl`; the listener also swallows dispatch failures).
+Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC). Team-scoped webhooks (`organization_id` set) only receive events whose payload org matches; `organization_id` null stays tenant-wide. Dispatch coerces driver-string org ids and jsonb `events`, and queues `url`/`secret` on the job so delivery does not depend on an RLS `SELECT` of `webhook`. App listeners are discovered from `src/listeners` via `process.cwd()`. Blocked or invalid webhook URLs are recorded as failed deliveries and do not fail the originating request (`DispatchWebhookJob` swallows `BadRequestError` from `assertSafeOutboundUrl`; the listener also swallows dispatch failures).
 
 ### OpenAPI and SDK generation
 

@@ -13,6 +13,8 @@ interface DispatchWebhookPayload {
   tenantId: number;
   event: string;
   payload: Record<string, unknown>;
+  url?: string;
+  secret?: string;
 }
 
 class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
@@ -20,8 +22,9 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
   override readonly backoffMs = 2_000;
 
   override async handle(payload: DispatchWebhookPayload): Promise<void> {
-    const tenant = (await resolveTenant(payload.tenantId)) ?? {
-      id: payload.tenantId,
+    const tenantId = Number(payload.tenantId);
+    const tenant = (await resolveTenant(tenantId)) ?? {
+      id: tenantId,
       slug: "job",
       plan: "free" as const,
       region: "eu" as const,
@@ -35,14 +38,23 @@ class DispatchWebhookJob extends Job<DispatchWebhookPayload> {
   }
 
   private async deliver(payload: DispatchWebhookPayload): Promise<Error | undefined> {
-    const rows = (await db`
-      SELECT id, url, secret
-      FROM webhook
-      WHERE id = ${payload.webhookId} AND active = TRUE
-      LIMIT 1
-    `) as Array<{ id: number; url: string; secret: string }>;
+    const queuedUrl = typeof payload.url === "string" ? payload.url : "";
+    const queuedSecret = typeof payload.secret === "string" ? payload.secret : "";
+    const queued =
+      queuedUrl !== "" && queuedSecret !== ""
+        ? { id: payload.webhookId, url: queuedUrl, secret: queuedSecret }
+        : null;
 
-    const webhook = rows[0];
+    const rows = queued
+      ? []
+      : ((await db`
+          SELECT id, url, secret
+          FROM webhook
+          WHERE id = ${payload.webhookId} AND active = TRUE
+          LIMIT 1
+        `) as Array<{ id: number; url: string; secret: string }>);
+
+    const webhook = queued ?? rows[0];
 
     if (!webhook) {
       return;

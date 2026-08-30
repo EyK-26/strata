@@ -93,7 +93,9 @@ class WebhookService {
 
     await queue.dispatch(job, {
       webhookId: webhook.id,
-      tenantId: webhook.tenant_id,
+      tenantId: Number(webhook.tenant_id),
+      url: webhook.url,
+      secret: webhook.secret,
       event: delivery.event,
       payload,
     });
@@ -126,7 +128,9 @@ class WebhookService {
 
       await queue.dispatch(job, {
         webhookId: webhook.id,
-        tenantId: webhook.tenant_id,
+        tenantId: Number(webhook.tenant_id),
+        url: webhook.url,
+        secret: webhook.secret,
         event,
         payload,
       });
