@@ -123,8 +123,8 @@ const repository = {
   ),
 };
 
-const queue: Queue = {
-  dispatch: async (
+const queue = {
+  async dispatch(
     _job: unknown,
     payload: {
       webhookId: number;
@@ -134,10 +134,10 @@ const queue: Queue = {
       event: string;
       payload: Record<string, unknown>;
     },
-  ) => {
+  ) {
     dispatched.push(payload);
   },
-};
+} as Queue;
 
 function makeService(): WebhookService {
   return new WebhookService(repository as never, queue);
