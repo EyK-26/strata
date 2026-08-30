@@ -4,10 +4,24 @@ type ScheduledTask = {
   run: () => void | Promise<void>;
 };
 
+function isSupportedScheduleExpression(expression: string): boolean {
+  if (expression === "* * * * *") {
+    return true;
+  }
+
+  return /^(\*\/\d+)( \*){4}$/.test(expression);
+}
+
 class Schedule {
   private readonly tasks: ScheduledTask[] = [];
 
   command(expression: string, name: string, run: () => void | Promise<void>): this {
+    if (!isSupportedScheduleExpression(expression)) {
+      throw new Error(
+        `Unsupported schedule expression "${expression}". Only "* * * * *" and "*/N * * * *" are implemented.`,
+      );
+    }
+
     this.tasks.push({ expression, name, run });
     return this;
   }
@@ -20,8 +34,10 @@ class Schedule {
         return true;
       }
 
-      if (task.expression.startsWith("*/")) {
-        const interval = Number.parseInt(task.expression.slice(2), 10);
+      const intervalMatch = task.expression.match(/^\*\/(\d+)(?: \*){4}$/);
+
+      if (intervalMatch) {
+        const interval = Number.parseInt(intervalMatch[1] ?? "", 10);
         return Number.isInteger(interval) && interval > 0 && minute % interval === 0;
       }
 

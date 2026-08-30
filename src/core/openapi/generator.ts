@@ -24,8 +24,8 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "POST /auth/tokens": "Create API token",
   "DELETE /auth/tokens/:id": "Revoke API token",
   "GET /users/me/export": "GDPR export of user data",
-  "GET /users/me/current-organization": "Current Jetstream organization",
-  "PUT /users/me/current-organization": "Switch current Jetstream organization",
+  "GET /users/me/current-organization": "Current organization",
+  "PUT /users/me/current-organization": "Switch current organization",
   "GET /users/me/invitations": "List pending team invitations for the signed-in email",
   "POST /users/me/invitations/:id/accept": "Accept a pending team invitation",
   "DELETE /users/me/invitations/:id": "Decline a pending team invitation",
@@ -118,7 +118,12 @@ function requiresBearerAuth(path: string, method: string): boolean {
     return false;
   }
 
-  return relative.startsWith("/auth/") || ["POST", "PATCH", "PUT", "DELETE"].includes(method);
+  return (
+    relative.startsWith("/auth/") ||
+    relative.startsWith("/users/me") ||
+    path.startsWith("/users/me") ||
+    ["POST", "PATCH", "PUT", "DELETE"].includes(method)
+  );
 }
 
 function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {

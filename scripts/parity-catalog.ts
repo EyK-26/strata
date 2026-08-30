@@ -241,6 +241,8 @@ export const PARITY_CATALOG: ParityEntry[] = [
     strataApis: ["toResourceCollection", "serializeDate", "toPaginatedResourceCollection"],
     testGlobs: ["unit/frameworkPublicApi.test.ts", "unit/presentation.test.ts"],
     tier: "core",
+    notes:
+      "toResourceCollection is items.map(transformer). Not JsonResource, whenLoaded, or wrapping.",
   },
   {
     id: "factories",
@@ -249,7 +251,8 @@ export const PARITY_CATALOG: ParityEntry[] = [
     strataApis: [],
     testGlobs: ["unit/factory.test.ts"],
     tier: "core",
-    notes: "Exported via @getstrata/core/database/factory subpath",
+    notes:
+      "Factory.make() merges in-memory defaults. No create(), states, sequences, or relationships.",
   },
   {
     id: "authorization",
@@ -334,6 +337,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
     bootstrapApis: [],
     testGlobs: ["unit/schedule.test.ts", "unit/bootstrapSchedule.test.ts"],
     tier: "core",
+    notes: "Only * * * * * and */N * * * *. Other cron strings are rejected at registration.",
   },
   {
     id: "cache",
@@ -416,6 +420,8 @@ export const PARITY_CATALOG: ParityEntry[] = [
     bootstrapApis: ["CookieSessionStore", "createWebServer"],
     testGlobs: ["unit/sessionCookie.test.ts", "unit/flashSession.test.ts"],
     tier: "core",
+    notes:
+      "Two session models: HMAC SessionGuard (API/token apps) and CookieSessionStore (sibling HTMX). Not a Laravel session bag.",
   },
   {
     id: "chunk-cursor",
@@ -457,7 +463,8 @@ export const PARITY_CATALOG: ParityEntry[] = [
     strataApis: ["Notification", "NotificationDispatcher", "createNotificationDispatcher"],
     testGlobs: ["unit/notifications.test.ts"],
     tier: "core",
-    notes: "Mail and database channels; Slack/SMS remain app-level integrations",
+    notes:
+      "Mail and database channels only. Not Laravel Notifications (no Slack/SMS/broadcast, no Notifiable trait).",
   },
   {
     id: "mail-markdown",
@@ -474,7 +481,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
   },
   {
     id: "horizon",
-    laravelSection: "Horizon (queue dashboard)",
+    laravelSection: "Queue dashboard (not Laravel Horizon)",
     laravelDocPath: "horizon",
     strataApis: [
       "collectQueueMetrics",
@@ -488,11 +495,12 @@ export const PARITY_CATALOG: ParityEntry[] = [
       "integration/webRoutes.integration.test.ts",
     ],
     tier: "core",
-    notes: "Horizon-lite admin queue monitor at /admin/queue with HTMX polling, retry, and delete",
+    notes:
+      "WorkHub /admin/queue: depth snapshot, failed-job list, retry/delete. Not Horizon workers, tags, or balancing.",
   },
   {
     id: "nova",
-    laravelSection: "Nova (admin panel)",
+    laravelSection: "Admin resources (not Laravel Nova)",
     laravelDocPath: "nova",
     strataApis: ["AdminResourceRegistry", "formatAdminValue"],
     testGlobs: [
@@ -501,7 +509,8 @@ export const PARITY_CATALOG: ParityEntry[] = [
       "integration/webRoutes.integration.test.ts",
     ],
     tier: "core",
-    notes: "WorkHub admin module with resource browser at /admin/resources",
+    notes:
+      "Read-only AdminResourceRegistry + /admin/resources. Not Nova fields, filters, actions, or lenses.",
   },
   {
     id: "cli",

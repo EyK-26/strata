@@ -26,7 +26,7 @@ describe("generateOpenApiSpec", () => {
         { method: "DELETE", path: "/api/v1/projects/:id", middleware: ["global", "api"] },
       ]);
 
-      expect(spec.info.title).toBe("WorkHub API");
+      expect(spec.info.title).toBe("Strata API");
       expect(spec.paths["/api/v1/audit-logs"]?.get).toBeDefined();
       expect(spec.paths["/api/v1/projects/{id}"]?.delete).toBeDefined();
       expect(spec.components.securitySchemes.bearerAuth).toBeDefined();
@@ -49,6 +49,18 @@ describe("generateOpenApiSpec", () => {
     expect(operation(spec, "/auth/login", "post")?.security).toBeUndefined();
     expect(operation(spec, "/auth/register", "post")?.security).toBeUndefined();
     expect(operation(spec, "/auth/me", "get")?.security).toEqual([{ bearerAuth: [] }]);
+  });
+
+  test("marks GET /users/me/sessions as bearer-authenticated", () => {
+    const spec = generateOpenApiSpec([
+      { method: "GET", path: "/api/v1/users/me/sessions", middleware: ["global", "api"] },
+      { method: "GET", path: "/api/v1/organizations", middleware: ["global", "api"] },
+    ]);
+
+    expect(operation(spec, "/api/v1/users/me/sessions", "get")?.security).toEqual([
+      { bearerAuth: [] },
+    ]);
+    expect(operation(spec, "/api/v1/organizations", "get")?.security).toBeUndefined();
   });
 
   test("marks the JSON two-factor challenge as a public OpenAPI operation", () => {
@@ -119,7 +131,7 @@ describe("generateOpenApiSpec", () => {
       ]);
 
       const sdk = renderTypeScriptSdk(spec, "/api/v1");
-      expect(sdk).toContain("export class WorkHubClient {");
+      expect(sdk).toContain("export class StrataClient {");
       expect(sdk).toContain("async getAuditLogs(");
       expect(sdk).toContain('this.request("/audit-logs"');
     } finally {
