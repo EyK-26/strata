@@ -5,6 +5,7 @@ import {
   clientIpAddress,
   clientUserAgent,
   forgetBrowserSessionById,
+  forgetBrowserSessionsForUser,
   forgetHmacBrowserSession,
   forgetOtherBrowserSessions,
   hasActiveHmacBrowserSession,
@@ -168,6 +169,25 @@ describe("browserSessions", () => {
     ids.length = 0;
     expect(await hasActiveHmacBrowserSession(2, issuedAt)).toBe(false);
     expect(await forgetBrowserSessionById(2, id)).toBe(false);
+  });
+
+  test("forgetBrowserSessionsForUser deletes every row for that user", async () => {
+    const first = await recordHmacBrowserSession({
+      userId: 2,
+      issuedAt: Date.now(),
+      ttlSeconds: 600,
+    });
+    const second = await recordHmacBrowserSession({
+      userId: 2,
+      issuedAt: Date.now() + 1,
+      ttlSeconds: 600,
+    });
+    ids.push(first, second);
+
+    await forgetBrowserSessionsForUser(2);
+    ids.length = 0;
+
+    expect((await listBrowserSessionsForUser(2)).map((row) => row.id)).toEqual([]);
   });
 
   test("toBrowserSessionResource serializes dates", () => {

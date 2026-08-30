@@ -134,6 +134,10 @@ async function forgetOtherBrowserSessions(userId: number, keepSessionId: string)
   await db`DELETE FROM sessions WHERE user_id = ${userId} AND id <> ${keepSessionId}`;
 }
 
+async function forgetBrowserSessionsForUser(userId: number): Promise<void> {
+  await db`DELETE FROM sessions WHERE user_id = ${userId}`;
+}
+
 async function forgetBrowserSessionById(userId: number, sessionId: string): Promise<boolean> {
   const deleted = (await db`
     DELETE FROM sessions
@@ -193,6 +197,7 @@ export {
   clientIpAddress,
   clientUserAgent,
   forgetBrowserSessionById,
+  forgetBrowserSessionsForUser,
   forgetHmacBrowserSession,
   forgetOtherBrowserSessions,
   hasActiveHmacBrowserSession,

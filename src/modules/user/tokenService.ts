@@ -5,7 +5,7 @@ import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import { ForbiddenError, NotFoundError, ValidationError } from "@getstrata/core/errors/http";
 import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
 import type ApiTokenRepository from "./apiTokenRepository";
-import { hasActiveHmacBrowserSession } from "./browserSessions";
+import { forgetBrowserSessionsForUser, hasActiveHmacBrowserSession } from "./browserSessions";
 import type UserRepository from "./repository";
 import type { ApiTokenRecord, ApiTokenResource, CreatedApiToken, UserRecord } from "./types";
 
@@ -240,6 +240,8 @@ class TokenService {
     for (const token of tokens) {
       await this.tokens.deleteById(token.id);
     }
+
+    await forgetBrowserSessionsForUser(userId);
 
     await this.users.updateByIdOrThrow(userId, {
       name: "Deleted User",

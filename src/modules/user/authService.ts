@@ -15,6 +15,7 @@ import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { isFeatureEnabled } from "../../config/features";
 import { resolveAbilitiesForRole } from "../../domain/abilities";
+import { forgetBrowserSessionsForUser } from "./browserSessions";
 import { MfaRequiredError } from "./mfaRequiredError";
 import type OAuthIdentityRepository from "./oauthIdentityRepository";
 import type UserRepository from "./repository";
@@ -250,6 +251,7 @@ class AuthService {
   async logoutOtherDevices(userId: number, password: string): Promise<number> {
     await this.confirmCurrentPassword(userId, password);
     await this.invalidateBrowserSessions(userId);
+    await forgetBrowserSessionsForUser(userId);
     const revoked = await this.tokens.revokeOtherTokens(userId, currentTokenId());
     logSecurityEvent("auth_logout_other_devices", { user_id: userId, revoked });
 
@@ -282,6 +284,7 @@ class AuthService {
       session_valid_after: new Date(),
       updated_at: new Date(),
     });
+    await forgetBrowserSessionsForUser(userId);
     const revoked = await this.tokens.revokeOtherTokens(userId, currentTokenId());
     logSecurityEvent("auth_password_changed", { user_id: user.id, revoked });
 
