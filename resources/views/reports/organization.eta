@@ -37,7 +37,7 @@
 </section>
 
 <p>
-  <a href="/reports">← All reports</a>
+  <a href="/reports?all=1">← All reports</a>
   ·
   <a href="/organizations/<%= it.report.organization.id %>">View organization</a>
 </p>

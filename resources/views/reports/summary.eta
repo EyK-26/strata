@@ -1,6 +1,6 @@
 <section class="page-header">
   <h1>Reports</h1>
-  <p class="hint">Cross-module counts for the current tenant. The JSON twin is GET /api/v1/reports/summary.</p>
+  <p class="hint">Tenant-wide counts. Signed-in HTML <code>/reports</code> redirects to the current team; this page is <code>?all=1</code>. The JSON twin is GET /api/v1/reports/summary.</p>
 </section>
 
 <dl class="detail-list">
@@ -41,7 +41,10 @@
 </section>
 
 <p class="hint">
-  Open an organization report at
-  <a href="/reports/organizations/1">/reports/organizations/1</a>
-  (Acme Labs in the seed).
+  <% if (it.currentOrganizationId) { %>
+  <a href="/reports/organizations/<%= it.currentOrganizationId %>">Current team report</a>
+  ·
+  <% } %>
+  Open any organization report at
+  <code>/reports/organizations/:id</code>.
 </p>

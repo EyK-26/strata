@@ -1760,7 +1760,13 @@ describe("web routes with server-htmx frontend", () => {
   });
 
   test("GET /reports and /account are available to a signed-in session", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
     const reports = await fetch(`${baseUrl}/reports`, {
+      redirect: "manual",
       headers: { cookie: adminSessionCookie },
     });
     const account = await fetch(`${baseUrl}/account`, {
@@ -1769,9 +1775,14 @@ describe("web routes with server-htmx frontend", () => {
     const orgReport = await fetch(`${baseUrl}/reports/organizations/1`, {
       headers: { cookie: adminSessionCookie },
     });
+    const allReports = await fetch(`${baseUrl}/reports?all=1`, {
+      headers: { cookie: adminSessionCookie },
+    });
 
-    expect(reports.status).toBe(200);
-    expect(await reports.text()).toContain("Reports");
+    expect(reports.status).toBe(302);
+    expect(reports.headers.get("location")).toBe("/reports/organizations/1");
+    expect(allReports.status).toBe(200);
+    expect(await allReports.text()).toContain("Reports");
     expect(account.status).toBe(200);
     const accountHtml = await account.text();
     expect(accountHtml).toContain("admin@workhub.test");
@@ -1783,7 +1794,47 @@ describe("web routes with server-htmx frontend", () => {
     expect(accountHtml).toContain("Upload photo");
     expect(accountHtml).toContain("No profile photo yet.");
     expect(orgReport.status).toBe(200);
-    expect(await orgReport.text()).toContain("Acme Labs");
+    const orgReportHtml = await orgReport.text();
+    expect(orgReportHtml).toContain("Acme Labs");
+    expect(orgReportHtml).toContain("/reports?all=1");
+  });
+
+  test("POST /current-organization scopes HTML /reports to the switched team", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
+    const csrf = await fetchCsrfFromPath("/reports?all=1", adminSessionCookie);
+    const switched = await fetch(`${baseUrl}/current-organization`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        organization_id: "2",
+        _token: csrf.token,
+      }),
+    });
+    expect(switched.status).toBe(302);
+
+    try {
+      const cookies = mergeCookieHeader(csrf.cookies, switched);
+      const reports = await fetch(`${baseUrl}/reports`, {
+        redirect: "manual",
+        headers: { cookie: cookies },
+      });
+      expect(reports.status).toBe(302);
+      expect(reports.headers.get("location")).toBe("/reports/organizations/2");
+    } finally {
+      await runWithMigrationBypass(async () => {
+        const db = getDatabase();
+        await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+      });
+    }
   });
 
   test("POST /account/photo uploads and POST /account/photo/delete removes a photo", async () => {
