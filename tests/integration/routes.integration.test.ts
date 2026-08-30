@@ -584,6 +584,44 @@ describe("integration routes with postgres", () => {
     expect(body.abilities).toEqual(["projects:read"]);
   });
 
+  test("DELETE /auth/tokens/:id lets a registered member revoke their own token", async () => {
+    const email = `api-token-revoke-${Date.now()}@workhub.test`;
+    const register = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Token Revoke Member",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(register.status).toBe(201);
+    const registered = (await register.json()) as { token: string };
+
+    const created = await fetch(api("/auth/tokens"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${registered.token}`,
+      },
+      body: JSON.stringify({ name: `revocable-${Date.now()}` }),
+    });
+    expect(created.status).toBe(201);
+    const child = (await created.json()) as { id: number; token: string };
+
+    const revoked = await fetch(api(`/auth/tokens/${child.id}`), {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${registered.token}` },
+    });
+    expect(revoked.status).toBe(204);
+
+    const me = await fetch(api("/auth/me"), {
+      headers: { authorization: `Bearer ${child.token}` },
+    });
+    expect(me.status).toBe(401);
+  });
+
   test("organization invitations can be created, listed, accepted, and cancelled", async () => {
     const email = `api-invite-${Date.now()}@workhub.test`;
     const create = await fetch(api("/organizations/1/invitations"), {

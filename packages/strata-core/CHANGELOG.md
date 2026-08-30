@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.83
+
+- `MEMBER_ABILITIES` includes `auth:tokens:delete` so Jetstream-style personal access token revoke works for members (`DELETE /auth/tokens/:id`). HTML `/account/tokens/:id/revoke` was already authenticated-only.
+- `buildOtpauthUrl()` defaults the issuer through `appDisplayName()` (`APP_NAME`).
+
 ## 0.5.82
 
 - `MEMBER_ABILITIES` includes `organizations:create` so Jetstream-style extra teams work for members (HTML `POST /organizations` and JSON `POST /organizations`). `OrganizationPolicy.create` already allowed any authenticated user.

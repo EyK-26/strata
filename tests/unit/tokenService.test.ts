@@ -136,6 +136,7 @@ describe("TokenService", () => {
       "None of the selected abilities can be granted.",
     );
     expect(grantableTokenAbilities(["*"])).toContain("organizations:create");
+    expect(grantableTokenAbilities(["*"])).toContain("auth:tokens:delete");
     expect(grantableTokenAbilities(["*"])[0]).toBe("*");
     expect(grantableTokenAbilities(["projects:read", "projects:read"])).toEqual(["projects:read"]);
     expect(grantableTokenAbilities([])).toEqual([]);

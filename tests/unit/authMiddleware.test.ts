@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { MEMBER_ABILITIES } from "@getstrata/core/auth/abilityCatalog";
 import { ApiTokenGuard, AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
@@ -18,20 +19,7 @@ describe("GuestGuard", () => {
     expect(user).toEqual({
       id: "7",
       role: "member",
-      abilities: [
-        "organizations:read",
-        "organizations:create",
-        "projects:read",
-        "projects:create",
-        "tasks:read",
-        "tasks:create",
-        "comments:read",
-        "comments:create",
-        "attachments:read",
-        "attachments:create",
-        "auth:tokens:read",
-        "auth:tokens:write",
-      ],
+      abilities: [...MEMBER_ABILITIES],
     });
   });
 });

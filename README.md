@@ -243,9 +243,9 @@ Token lifecycle endpoints (authenticated):
 - `GET /api/v1/auth/me`: current user
 - `GET /api/v1/auth/tokens`: list tokens (requires `auth:tokens:read` or `*`)
 - `POST /api/v1/auth/tokens`: create token (`name`, optional `abilities`, `expires_in_days`; abilities are scoped to the granter)
-- `DELETE /api/v1/auth/tokens/:id`: revoke a token
+- `DELETE /api/v1/auth/tokens/:id`: revoke a token (requires `auth:tokens:delete`; on `MEMBER_ABILITIES`)
 
-Protected mutations require both authentication and a matching ability (for example `projects:delete`, `organizations:update`). The seeded admin token uses `["*"]`; the member token uses `MEMBER_ABILITIES` (including `organizations:create`). Create scoped tokens via `POST /auth/tokens` or HTML `/account/tokens` (ability checkboxes). Grants cannot exceed the issuer's abilities.
+Protected mutations require both authentication and a matching ability (for example `projects:delete`, `organizations:update`). The seeded admin token uses `["*"]`; login/register member tokens use `MEMBER_ABILITIES` (including `organizations:create` and `auth:tokens:delete`). Create scoped tokens via `POST /auth/tokens` or HTML `/account/tokens` (ability checkboxes). Grants cannot exceed the issuer's abilities.
 
 Set `AUTH_DEV_HEADERS=false` in production and rely on bearer tokens only.
 

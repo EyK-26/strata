@@ -11,6 +11,7 @@ const MEMBER_ABILITIES = [
   "attachments:create",
   "auth:tokens:read",
   "auth:tokens:write",
+  "auth:tokens:delete",
 ] as const;
 
 const ADMIN_ABILITIES = [
