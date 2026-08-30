@@ -863,6 +863,54 @@ describe("web routes with server-htmx frontend", () => {
     expect(await followResponse.text()).toContain("Organization created.");
   });
 
+  test("POST /organizations lets a registered member create an extra organization", async () => {
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const email = `html-member-org-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: registerCsrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "Member Org Creator",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+    expect(registered.status).toBe(302);
+
+    const session = mergeCookieHeader("", registered);
+    const csrf = await fetchCsrfFromPath("/organizations", session);
+    const slug = `member-extra-org-${Date.now()}`;
+    const created = await fetch(`${baseUrl}/organizations`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        name: "Member Extra Org",
+        slug,
+        _token: csrf.token,
+      }),
+    });
+
+    expect(created.status).toBe(302);
+    expect(created.headers.get("location")).toBe("/organizations");
+
+    const list = await fetch(`${baseUrl}/organizations`, {
+      headers: { cookie: mergeCookieHeader(csrf.cookies, created) },
+    });
+    expect(list.status).toBe(200);
+    expect(await list.text()).toContain("Member Extra Org");
+  });
+
   test("GET /projects returns HTML project list", async () => {
     const response = await fetch(`${baseUrl}/projects`);
 

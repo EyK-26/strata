@@ -1,5 +1,6 @@
 const MEMBER_ABILITIES = [
   "organizations:read",
+  "organizations:create",
   "projects:read",
   "projects:create",
   "tasks:read",

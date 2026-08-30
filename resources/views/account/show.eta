@@ -196,7 +196,7 @@
 
   <form method="post" action="/account/logout-other-devices" class="stack-form">
     <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
-    <p class="hint">Revoke every API token except the one used by this request (HMAC login has no bearer, so all tokens are revoked). Browser HMAC cookies stay valid until they expire.</p>
+    <p class="hint">Revoke every API token except the one used by this request (HMAC login has no bearer, so all tokens are revoked). Older HMAC cookies fail <code>SessionGuard</code> after <code>users.session_valid_after</code>; this browser stays signed in because the handler re-issues the session cookie.</p>
     <label>
       Current password
       <input type="password" name="password" required />

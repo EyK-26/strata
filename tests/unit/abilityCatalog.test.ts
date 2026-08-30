@@ -11,6 +11,7 @@ describe("abilityCatalog", () => {
   test("resolves platform admin and member abilities", () => {
     expect(resolveAbilitiesForRole("admin")).toEqual(["*"]);
     expect(resolveAbilitiesForRole("member")).toEqual([...MEMBER_ABILITIES]);
+    expect(MEMBER_ABILITIES).toContain("organizations:create");
     expect(abilityCatalog().admin).toEqual([...ADMIN_ABILITIES]);
   });
 

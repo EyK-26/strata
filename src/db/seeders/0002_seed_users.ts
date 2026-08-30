@@ -34,7 +34,7 @@ const seeder: Seeder = {
       INSERT INTO api_token (user_id, name, token_hash, abilities)
       VALUES
         (1, 'admin', ${hashApiToken(adminToken)}, '["*"]'::jsonb),
-        (2, 'member', ${hashApiToken(memberToken)}, '["organizations:read","projects:read","projects:create","tasks:read","tasks:create","comments:read","comments:create"]'::jsonb)
+        (2, 'member', ${hashApiToken(memberToken)}, '["organizations:read","organizations:create","projects:read","projects:create","tasks:read","tasks:create","comments:read","comments:create"]'::jsonb)
       ON CONFLICT (token_hash) DO NOTHING
     `;
 

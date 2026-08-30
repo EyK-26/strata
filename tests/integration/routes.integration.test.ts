@@ -515,6 +515,43 @@ describe("integration routes with postgres", () => {
     );
   });
 
+  test("POST /organizations lets a registered member create an extra organization", async () => {
+    const email = `api-member-org-${Date.now()}@workhub.test`;
+    const register = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "API Member Org Creator",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(register.status).toBe(201);
+    const registered = (await register.json()) as { token: string };
+    expect(registered.token).toBeTruthy();
+
+    const slug = `api-member-extra-${Date.now()}`;
+    const response = await fetch(api("/organizations"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${registered.token}`,
+      },
+      body: JSON.stringify({
+        name: "API Member Extra Org",
+        slug,
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { slug: string; name: string };
+    expect(body).toMatchObject({
+      slug,
+      name: "API Member Extra Org",
+    });
+  });
+
   test("organization invitations can be created, listed, accepted, and cancelled", async () => {
     const email = `api-invite-${Date.now()}@workhub.test`;
     const create = await fetch(api("/organizations/1/invitations"), {

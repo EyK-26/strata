@@ -20,6 +20,7 @@ describe("GuestGuard", () => {
       role: "member",
       abilities: [
         "organizations:read",
+        "organizations:create",
         "projects:read",
         "projects:create",
         "tasks:read",
