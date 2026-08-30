@@ -408,10 +408,22 @@ describe("WebAuthController", () => {
   test("showRegister renders the registration page", async () => {
     const controller = createController({});
     const response = await controller.showRegister();
-    const body = JSON.parse(await response.text()) as { title: string };
+    const body = JSON.parse(await response.text()) as { title: string; redirect: string };
 
     expect(response.status).toBe(200);
     expect(body.title).toBe("Create account");
+    expect(body.redirect).toBe("");
+  });
+
+  test("showRegister reads the intended redirect query", async () => {
+    const controller = createController({});
+    const response = await controller.showRegister(
+      new Request("http://example.test/register?redirect=%2Finvitations%2Faccept%3Ftoken%3Dabc"),
+    );
+    const body = JSON.parse(await response.text()) as { redirect: string };
+
+    expect(response.status).toBe(200);
+    expect(body.redirect).toBe("/invitations/accept?token=abc");
   });
 
   test("register sets a session cookie when email verification is off", async () => {
@@ -427,6 +439,34 @@ describe("WebAuthController", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/organizations/42");
     expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
+  });
+
+  test("register honors a same-origin intended redirect", async () => {
+    const controller = createController({});
+    const response = await controller.register(
+      new Request("http://example.test/register", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "name=Ada&email=new%40workhub.test&password=password123&password_confirmation=password123&redirect=%2Faccount",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/account");
+  });
+
+  test("register ignores an external intended redirect", async () => {
+    const controller = createController({});
+    const response = await controller.register(
+      new Request("http://example.test/register", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "name=Ada&email=new%40workhub.test&password=password123&password_confirmation=password123&redirect=https%3A%2F%2Fevil.example%2Fphish",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/organizations/42");
   });
 
   test("register starts a session and sends the user to the verify notice", async () => {

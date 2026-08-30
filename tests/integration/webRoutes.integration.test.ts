@@ -505,6 +505,41 @@ describe("web routes with server-htmx frontend", () => {
     expect(await duplicate.text()).toContain("already exists");
   });
 
+  test("GET /register?redirect= and POST /register honor a same-origin intended URL", async () => {
+    const page = await fetch(`${baseUrl}/register?redirect=${encodeURIComponent("/account")}`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('name="redirect" value="/account"');
+
+    const csrf = await fetchCsrfFromPath("/register?redirect=%2Faccount");
+    const email = `html-register-redirect-${Date.now()}@workhub.test`;
+    const response = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: csrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "Redirect Register",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        redirect: "/account",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/account");
+
+    const session = mergeCookieHeader("", response);
+    const account = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: session },
+    });
+    expect(account.status).toBe(200);
+    expect(await account.text()).toContain("Redirect Register");
+  });
+
   test("POST /register succeeds when an existing webhook URL is blocked", async () => {
     await runWithMigrationBypass(async () => {
       await getDatabase()`
@@ -1445,7 +1480,9 @@ describe("web routes with server-htmx frontend", () => {
       }),
     });
     expect(registered.status).toBe(302);
-    const session = mergeCookieHeader("", registered);
+    const sessionA = mergeCookieHeader("", registered);
+    const sessionB = await loginAndGetCookie(email, "password123");
+    const session = sessionB;
 
     const tokenCsrf = await fetchCsrfFromPath("/account", session);
     const tokenName = `logout-other-${Date.now()}`;
@@ -1488,6 +1525,13 @@ describe("web routes with server-htmx frontend", () => {
     });
     expect(after.status).toBe(200);
     expect(await after.text()).not.toContain(tokenName);
+
+    const stale = await fetch(`${baseUrl}/account`, {
+      redirect: "manual",
+      headers: { cookie: sessionA },
+    });
+    expect(stale.status).toBe(302);
+    expect(stale.headers.get("location") ?? "").toContain("/login");
   });
 
   test("POST /account/tokens creates a token and POST revoke removes it", async () => {

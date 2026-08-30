@@ -25,6 +25,7 @@ interface WebRegisterBody {
   name: string;
   email: string;
   password: string;
+  redirect?: string;
 }
 
 interface WebForgotPasswordBody {
@@ -86,6 +87,7 @@ const webRegisterRules = {
   name: [required(), stringRule(), minLength(1), maxLength(120)],
   email: [required(), stringRule(), emailRule()],
   password: [required(), stringRule(), minLength(8), maxLength(128), confirmed("password")],
+  redirect: [stringRule()],
 };
 
 const webForgotPasswordRules = {
@@ -144,6 +146,7 @@ class WebRegisterRequest extends WebFormRequest<WebRegisterBody> {
       name: String(validated.name).trim(),
       email: String(validated.email).trim(),
       password: String(validated.password),
+      ...(validated.redirect ? { redirect: String(validated.redirect) } : {}),
     };
   }
 }

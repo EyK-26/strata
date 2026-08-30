@@ -128,8 +128,14 @@ class WebAuthController {
     });
   });
 
-  readonly showRegister = withErrorHandling(async () => {
-    return await this.renderRegister();
+  readonly showRegister = withErrorHandling(async (request?: Request) => {
+    const redirect = new URL(request?.url ?? "http://localhost/register").searchParams.get(
+      "redirect",
+    );
+
+    return await this.renderRegister({
+      redirect: redirect ?? "",
+    });
   });
 
   readonly registerThrottled = withErrorHandling(async () => {
@@ -187,10 +193,13 @@ class WebAuthController {
         );
       }
 
+      const fallback = `/organizations/${organization.id}`;
+      const location = body.redirect ? sanitizeInternalPath(body.redirect, fallback) : fallback;
+
       return new Response(null, {
         status: 302,
         headers: {
-          Location: `/organizations/${organization.id}`,
+          Location: location,
           "Set-Cookie": createSessionCookie(user.id),
         },
       });
@@ -200,6 +209,7 @@ class WebAuthController {
           {
             errors: error.details ?? { email: [error.message] },
             old: { name: body.name, email: body.email },
+            redirect: body.redirect ?? "",
           },
           422,
         );
