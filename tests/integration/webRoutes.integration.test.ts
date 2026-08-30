@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { hashPassword } from "@getstrata/core/auth/password";
+import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import { emailLookupForQuery } from "@getstrata/core/crypto/fieldEncryption";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { generateTotp } from "@getstrata/core/security/totp";
@@ -1788,6 +1789,75 @@ describe("web routes with server-htmx frontend", () => {
     const html = await show.text();
     expect(html).toContain("Auto Join");
     expect(html).toContain(`Role for ${email}`);
+  });
+
+  test("signed GET /invitations/accept joins an existing user and sets current team", async () => {
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const email = `html-accept-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: registerCsrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "HTML Accept",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+    expect(registered.status).toBe(302);
+    const personalLocation = registered.headers.get("location") ?? "";
+    expect(personalLocation).toMatch(/^\/organizations\/\d+$/);
+    const session = mergeCookieHeader(registerCsrf.cookies, registered);
+
+    const token = "html-accept-invite-token";
+    await runWithMigrationBypass(async () => {
+      await getDatabase()`
+        INSERT INTO organization_invitation (
+          organization_id, email, role, invited_by, token_hash, expires_at
+        ) VALUES (
+          1,
+          ${email},
+          ${"member"},
+          1,
+          ${hashApiToken(token)},
+          ${new Date(Date.now() + 60 * 60 * 1000)}
+        )
+      `;
+    });
+
+    const path = temporarySignedUrl("/invitations/accept", 120, { email, token });
+    const guest = await fetch(`${baseUrl}${path}`, { redirect: "manual" });
+    expect(guest.status).toBe(302);
+    const loginLocation = guest.headers.get("location") ?? "";
+    expect(loginLocation.startsWith("/login?redirect=")).toBe(true);
+    expect(decodeURIComponent(loginLocation)).toContain("/invitations/accept");
+
+    const accepted = await fetch(`${baseUrl}${path}`, {
+      redirect: "manual",
+      headers: { cookie: session },
+    });
+    expect(accepted.status).toBe(302);
+    expect(accepted.headers.get("location")).toBe("/organizations/1");
+
+    const joined = mergeCookieHeader(session, accepted);
+    const show = await fetch(`${baseUrl}/organizations/1`, {
+      headers: { cookie: joined, accept: "text/html" },
+    });
+    expect(show.status).toBe(200);
+    const showHtml = await show.text();
+    expect(showHtml).toContain("This is your current team");
+    expect(showHtml).toContain(email);
+
+    const personal = await fetch(`${baseUrl}${personalLocation}`, {
+      headers: { cookie: joined, accept: "text/html" },
+    });
+    expect(personal.status).toBe(200);
+    expect(await personal.text()).toContain("Switch to this team");
   });
 
   test("POST /organizations/:id/members/:userId/role updates the HTMX members table", async () => {
