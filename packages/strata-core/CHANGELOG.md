@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.80
+
+- `appCookieName()` / `appDevSecret()` on `@getstrata/core/runtime/appKeyPrefix`. HMAC session, CSRF, flash, password-confirm, signed-URL, OAuth-state, and token-pepper fallbacks follow `APP_KEY_PREFIX` (WorkHub defaults unchanged).
+
 ## 0.5.79
 
 - `readSession()` returns `{ userId, issuedAt }` from the HMAC session cookie. `isSessionInvalidated(issuedAt, session_valid_after)` lets `SessionGuard` reject cookies issued before `AuthUserRecord.session_valid_after` (Jetstream logout-other-devices / password change).

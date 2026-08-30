@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   apiPrefix,
+  appCookieName,
+  appDevSecret,
   appDisplayName,
   appEnv,
   appKeyPrefix,
@@ -61,6 +63,10 @@ describe("appKeyPrefix", () => {
 
     try {
       expect(appKeyPrefix()).toBe("workhub");
+      expect(appCookieName("session")).toBe("workhub_session");
+      expect(appCookieName("csrf")).toBe("workhub_csrf");
+      expect(appDevSecret("session-secret")).toBe("workhub-dev-session-secret");
+      expect(appDevSecret("token-pepper")).toBe("workhub-dev-token-pepper");
       expect(namespacedRedisKey("cache:")).toBe("workhub:cache:");
       expect(smtpEhloHost()).toBe("workhub.local");
       expect(siemEventType()).toBe("workhub.audit");
@@ -79,6 +85,9 @@ describe("appKeyPrefix", () => {
 
     try {
       expect(appKeyPrefix()).toBe("forum");
+      expect(appCookieName("session")).toBe("forum_session");
+      expect(appCookieName("mfa_pending")).toBe("forum_mfa_pending");
+      expect(appDevSecret("csrf-secret")).toBe("forum-dev-csrf-secret");
       expect(namespacedRedisKey("queue:default")).toBe("forum:queue:default");
       expect(smtpEhloHost()).toBe("forum.local");
       expect(siemEventType()).toBe("forum.audit");

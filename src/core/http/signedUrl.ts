@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
+import { appDevSecret } from "../runtime/appKeyPrefix";
 import type { Middleware } from "./middleware";
 
 interface TemporarySignedUrlOptions {
@@ -13,7 +14,7 @@ function resolveSignedUrlSecret(): string {
     process.env.SIGNED_URL_SECRET?.trim() ||
     process.env.SESSION_SECRET?.trim() ||
     process.env.OAUTH_STATE_SECRET?.trim() ||
-    "workhub-dev-signed-url-secret"
+    appDevSecret("signed-url-secret")
   );
 }
 

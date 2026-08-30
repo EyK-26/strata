@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
 import { readRequestCookie } from "./cookies.ts";
 import { currentRequestMeta } from "./requestMetaContext";
 
@@ -6,7 +7,7 @@ const CSRF_COOKIE = "workhub_csrf";
 const CSRF_TTL_MS = 60 * 60 * 1000;
 
 function csrfCookieName(): string {
-  return process.env.CSRF_COOKIE_NAME?.trim() || CSRF_COOKIE;
+  return process.env.CSRF_COOKIE_NAME?.trim() || appCookieName("csrf");
 }
 
 function resolveCsrfSecret(): string {
@@ -14,7 +15,7 @@ function resolveCsrfSecret(): string {
     process.env.SESSION_SECRET?.trim() ||
     process.env.OAUTH_STATE_SECRET?.trim() ||
     process.env.ADMIN_API_TOKEN?.trim() ||
-    "workhub-dev-csrf-secret"
+    appDevSecret("csrf-secret")
   );
 }
 

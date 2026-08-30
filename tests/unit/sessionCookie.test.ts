@@ -202,6 +202,23 @@ describe("sessionCookie", () => {
     expect(clearSessionCookie()).toContain("workhub_session=");
   });
 
+  test("derives the session cookie name from APP_KEY_PREFIX", () => {
+    const previousPrefix = process.env.APP_KEY_PREFIX;
+    delete process.env.SESSION_COOKIE_NAME;
+    process.env.APP_KEY_PREFIX = "forum";
+
+    try {
+      expect(sessionCookieName()).toBe("forum_session");
+      expect(createSessionCookie(11)).toContain("forum_session=");
+    } finally {
+      if (previousPrefix === undefined) {
+        delete process.env.APP_KEY_PREFIX;
+      } else {
+        process.env.APP_KEY_PREFIX = previousPrefix;
+      }
+    }
+  });
+
   test("overrides the HMAC session cookie name from SESSION_COOKIE_NAME", () => {
     process.env.SESSION_COOKIE_NAME = "strata_session";
 

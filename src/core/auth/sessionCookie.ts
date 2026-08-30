@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
 
 const SESSION_COOKIE = "workhub_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -14,7 +15,7 @@ interface SignedSession {
 }
 
 function sessionCookieName(): string {
-  return process.env.SESSION_COOKIE_NAME?.trim() || SESSION_COOKIE;
+  return process.env.SESSION_COOKIE_NAME?.trim() || appCookieName("session");
 }
 
 function parsePositiveSeconds(raw: string | undefined, fallback: number): number {
@@ -38,7 +39,7 @@ function resolveSessionSecret(): string {
     process.env.SESSION_SECRET?.trim() ||
     process.env.OAUTH_STATE_SECRET?.trim() ||
     process.env.ADMIN_API_TOKEN?.trim() ||
-    "workhub-dev-session-secret"
+    appDevSecret("session-secret")
   );
 }
 

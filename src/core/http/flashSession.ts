@@ -1,10 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
 
 const FLASH_COOKIE = "workhub_flash";
 const FLASH_TTL_MS = 60 * 1000;
 
 function flashCookieName(): string {
-  return process.env.FLASH_COOKIE_NAME?.trim() || FLASH_COOKIE;
+  return process.env.FLASH_COOKIE_NAME?.trim() || appCookieName("flash");
 }
 
 type FlashLevel = "success" | "error" | "info";
@@ -18,7 +19,7 @@ function resolveFlashSecret(): string {
   return (
     process.env.SESSION_SECRET?.trim() ||
     process.env.OAUTH_STATE_SECRET?.trim() ||
-    "workhub-dev-flash-secret"
+    appDevSecret("flash-secret")
   );
 }
 

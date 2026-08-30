@@ -24,4 +24,22 @@ describe("hashApiToken", () => {
     expect(resolveTokenPepper()).toBe("custom-pepper-value");
     expect(hashApiToken("token-value")).toMatch(/^[a-f0-9]{64}$/);
   });
+
+  test("defaults the pepper from APP_KEY_PREFIX", () => {
+    const previousPrefix = process.env.APP_KEY_PREFIX;
+    delete process.env.TOKEN_HASH_PEPPER;
+    delete process.env.APP_KEY_PREFIX;
+
+    try {
+      expect(resolveTokenPepper()).toBe("workhub-dev-token-pepper");
+      process.env.APP_KEY_PREFIX = "forum";
+      expect(resolveTokenPepper()).toBe("forum-dev-token-pepper");
+    } finally {
+      if (previousPrefix === undefined) {
+        delete process.env.APP_KEY_PREFIX;
+      } else {
+        process.env.APP_KEY_PREFIX = previousPrefix;
+      }
+    }
+  });
 });

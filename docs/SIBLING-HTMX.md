@@ -8,7 +8,7 @@ Use `@getstrata/cli` (`strata dev|start|migrate|migrate:fresh|run`). Do not inve
 
 ## CookieSessionStore guard
 
-HMAC `SessionGuard` (`@getstrata/core/auth/sessionGuard`) is for WorkHub API/token apps. It reads `workhub_session` (override with `SESSION_COOKIE_NAME`) and loads the user through an `AuthUserDirectory`.
+HMAC `SessionGuard` (`@getstrata/core/auth/sessionGuard`) is for WorkHub API/token apps. It reads `${APP_KEY_PREFIX}_session` (default `workhub_session`; override with `SESSION_COOKIE_NAME`) and loads the user through an `AuthUserDirectory`. `appCookieName()` / `appDevSecret()` on `@getstrata/core/runtime/appKeyPrefix` derive cookie names and local secret fallbacks from the same prefix.
 
 Sibling HTMX apps should bind `CookieSessionStore` + the published adapter:
 
@@ -76,9 +76,11 @@ Cookie names:
 
 | Cookie | Default | Override |
 |--------|---------|----------|
-| HMAC session (`SessionGuard`) | `workhub_session` | `SESSION_COOKIE_NAME` |
-| CSRF | `workhub_csrf` | `CSRF_COOKIE_NAME` |
-| Flash | `workhub_flash` | `FLASH_COOKIE_NAME` |
+| HMAC session (`SessionGuard`) | `${APP_KEY_PREFIX}_session` (`workhub_session`) | `SESSION_COOKIE_NAME` |
+| CSRF | `${APP_KEY_PREFIX}_csrf` | `CSRF_COOKIE_NAME` |
+| Flash | `${APP_KEY_PREFIX}_flash` | `FLASH_COOKIE_NAME` |
+| Password confirm | `${APP_KEY_PREFIX}_password_confirmed` | `PASSWORD_CONFIRM_COOKIE_NAME` |
+| MFA pending | `${APP_KEY_PREFIX}_mfa_pending` | `MFA_CHALLENGE_COOKIE_NAME` |
 | Redis cache / queue / throttle keys | `workhub:` | `APP_KEY_PREFIX` |
 | SMTP EHLO host | `workhub.local` | `MAIL_EHLO` |
 | SIEM `event_type` / CEF vendor | `workhub.audit` / `WorkHub` | `SIEM_EVENT_TYPE` / `APP_NAME` |

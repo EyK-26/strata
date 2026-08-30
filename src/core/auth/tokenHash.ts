@@ -1,13 +1,14 @@
 import { createHash, createHmac } from "node:crypto";
+import { appDevSecret } from "../runtime/appKeyPrefix";
 
 function resolveTokenPepper(): string {
-  return process.env.TOKEN_HASH_PEPPER?.trim() ?? "workhub-dev-token-pepper";
+  return process.env.TOKEN_HASH_PEPPER?.trim() ?? appDevSecret("token-pepper");
 }
 
 function hashApiToken(token: string): string {
   const pepper = resolveTokenPepper();
 
-  if (pepper && pepper !== "workhub-dev-token-pepper") {
+  if (pepper && pepper !== appDevSecret("token-pepper")) {
     return createHmac("sha256", pepper).update(token).digest("hex");
   }
 

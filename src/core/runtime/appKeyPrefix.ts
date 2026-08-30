@@ -2,6 +2,14 @@ function appKeyPrefix(): string {
   return process.env.APP_KEY_PREFIX?.trim() || "workhub";
 }
 
+function appCookieName(kind: string): string {
+  return `${appKeyPrefix()}_${kind}`;
+}
+
+function appDevSecret(kind: string): string {
+  return `${appKeyPrefix()}-dev-${kind}`;
+}
+
 function namespacedRedisKey(kind: string): string {
   return `${appKeyPrefix()}:${kind}`;
 }
@@ -63,6 +71,8 @@ function sdkClientClassName(): string {
 
 export {
   apiPrefix,
+  appCookieName,
+  appDevSecret,
   appDisplayName,
   appEnv,
   appKeyPrefix,

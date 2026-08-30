@@ -1,10 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
 
 const PASSWORD_CONFIRM_COOKIE = "workhub_password_confirmed";
 const DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS = 3 * 60 * 60;
 
 function passwordConfirmCookieName(): string {
-  return process.env.PASSWORD_CONFIRM_COOKIE_NAME?.trim() || PASSWORD_CONFIRM_COOKIE;
+  return process.env.PASSWORD_CONFIRM_COOKIE_NAME?.trim() || appCookieName("password_confirmed");
 }
 
 function passwordConfirmTtlSeconds(): number {
@@ -16,7 +17,7 @@ function resolvePasswordConfirmSecret(): string {
   return (
     process.env.SESSION_SECRET?.trim() ||
     process.env.OAUTH_STATE_SECRET?.trim() ||
-    "workhub-dev-session-secret"
+    appDevSecret("session-secret")
   );
 }
 
