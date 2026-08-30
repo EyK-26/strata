@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { membershipContext } from "@getstrata/core/auth/membershipContext";
 import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
@@ -297,6 +297,33 @@ describe("TaskService", () => {
     await expect(
       missingOrganization.create({ project_id: project.id, title: "Missing organization" }),
     ).rejects.toThrow(`Project ${project.id} not found.`);
+  });
+
+  test("scopes pagination to a requested organization for unrestricted users", async () => {
+    const findIds = mock(async (ids: number | number[]) => {
+      expect(ids).toEqual([5]);
+
+      return [project.id];
+    });
+    const service = createService({
+      projectRepository: {
+        findIdsByOrganizationIds: findIds,
+      },
+    });
+
+    await runWithAuthUser({ id: 1, role: "admin" }, async () => {
+      const allowed = await service.paginate({ page: 1, perPage: 10, organizationId: 5 });
+      expect(allowed.data).toEqual([task]);
+      expect(findIds).toHaveBeenCalled();
+
+      const denied = await service.paginate({
+        page: 1,
+        perPage: 10,
+        organizationId: 5,
+        projectId: 999,
+      });
+      expect(denied.data).toEqual([]);
+    });
   });
 
   test("scopes pagination to accessible projects for members", async () => {

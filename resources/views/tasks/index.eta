@@ -1,6 +1,6 @@
 <section class="page-header">
   <h1>Tasks</h1>
-  <p class="hint">Server-rendered task list with HTMX pagination and HTML form validation.</p>
+  <p class="hint">Server-rendered task list. Signed-in sessions default to the current team. HTMX pagination and HTML form validation.</p>
 </section>
 
 <section class="create-form">

@@ -17,7 +17,7 @@
       <% for (const project of it.projects ?? []) { %>
       <option
         value="<%= project.id %>"
-        <%= String(it.old?.project_id ?? "") === String(project.id) ? "selected" : "" %>
+        <%= String(it.old?.project_id ?? it.defaultProjectId ?? "") === String(project.id) ? "selected" : "" %>
       >
         <%= project.name %>
       </option>

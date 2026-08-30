@@ -32,6 +32,7 @@ interface TaskListOptions {
   page: number;
   perPage: number;
   projectId?: number;
+  organizationId?: number;
   status?: TaskStatus;
   includeProject?: boolean;
 }
@@ -44,7 +45,10 @@ class TaskService {
   ) {}
 
   async paginate(options: TaskListOptions): Promise<PaginatedResult<TaskWithProjectRecord>> {
-    const accessibleProjectIds = await this.resolveAccessibleProjectIds(options.projectId);
+    const accessibleProjectIds = await this.resolveAccessibleProjectIds(
+      options.projectId,
+      options.organizationId,
+    );
 
     if (accessibleProjectIds !== null && accessibleProjectIds.length === 0) {
       return emptyPaginateResult(options.page, options.perPage);
@@ -182,8 +186,11 @@ class TaskService {
     }
   }
 
-  private async resolveAccessibleProjectIds(requestedProjectId?: number): Promise<number[] | null> {
-    const organizationIds = scopedOrganizationIds();
+  private async resolveAccessibleProjectIds(
+    requestedProjectId?: number,
+    requestedOrganizationId?: number,
+  ): Promise<number[] | null> {
+    const organizationIds = scopedOrganizationIds(requestedOrganizationId);
 
     if (organizationIds === null) {
       return requestedProjectId === undefined ? null : [requestedProjectId];

@@ -1,4 +1,5 @@
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { ValidationError } from "@getstrata/core/errors/http";
@@ -13,8 +14,17 @@ import { attachmentServiceToken } from "../attachment/provider";
 import type AttachmentService from "../attachment/service";
 import { commentServiceToken } from "../comment/provider";
 import type CommentService from "../comment/service";
+import {
+  htmlProjectListQuerySuffix,
+  parseHtmlOrganizationIdQuery,
+  resolveHtmlProjectListOrganizationId,
+} from "../project/listScope";
 import { projectServiceToken } from "../project/provider";
 import type ProjectService from "../project/service";
+import {
+  type CurrentOrganizationService,
+  currentOrganizationServiceToken,
+} from "../user/currentOrganizationService";
 import { taskServiceToken } from "./provider";
 import { parseTaskListQuery } from "./requests";
 import type TaskService from "./service";
@@ -36,6 +46,10 @@ class TaskWebController {
     return resolveService(this.dependencies, commentServiceToken);
   }
 
+  private get currentOrganization(): CurrentOrganizationService {
+    return resolveService(this.dependencies, currentOrganizationServiceToken);
+  }
+
   private get projects(): ProjectService {
     return resolveService(this.dependencies, projectServiceToken);
   }
@@ -48,10 +62,11 @@ class TaskWebController {
     return resolveService(this.dependencies, CORE_VIEW_TOKEN);
   }
 
-  private async loadProjects() {
+  private async loadProjects(organizationId?: number) {
     const result = await this.projects.paginate({
       page: 1,
       perPage: 100,
+      organizationId,
       includeOrganization: true,
     });
 
@@ -87,20 +102,34 @@ class TaskWebController {
     status = 200,
   ): Promise<Response> {
     const query = parseTaskListQuery(request);
+    const organizationId = await resolveHtmlProjectListOrganizationId({
+      queryOrganizationId: parseHtmlOrganizationIdQuery(request),
+      user: currentAuthUser(),
+      currentForUser: (userId) => this.currentOrganization.currentForUser(userId),
+    });
     const result = await this.service.paginate({
       page: query.page,
       perPage: query.perPage,
       projectId: query.projectId,
+      organizationId,
       status: query.status,
       includeProject: true,
     });
+    const projects = await this.loadProjects(organizationId);
     const viewData = {
       title: "Tasks",
       tasks: result.data,
       meta: result.meta,
       page: query.page,
       perPage: query.perPage,
-      projects: await this.loadProjects(),
+      projects,
+      currentOrganizationId: organizationId,
+      defaultProjectId: projects[0]?.id,
+      listQuerySuffix: htmlProjectListQuerySuffix({
+        organizationId,
+        projectId: query.projectId,
+        status: query.status,
+      }),
       errors: {},
       old: {},
       ...extras,

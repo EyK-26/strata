@@ -1,8 +1,23 @@
 import { resolveUserId } from "@getstrata/core/auth/accessControl";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
+import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 
 interface CurrentOrganizationId {
   organization_id: number | null;
+}
+
+function parseHtmlOrganizationIdQuery(request?: Request): number | undefined {
+  if (!request) {
+    return undefined;
+  }
+
+  const raw = new URL(request.url).searchParams.get("organizationId");
+
+  if (raw === null || raw === "") {
+    return undefined;
+  }
+
+  return parsePositiveIntParam(raw, "organizationId");
 }
 
 async function resolveHtmlProjectListOrganizationId(options: {
@@ -23,11 +38,19 @@ async function resolveHtmlProjectListOrganizationId(options: {
   return current.organization_id ?? undefined;
 }
 
-function htmlProjectListQuerySuffix(options: { organizationId?: number; status?: string }): string {
+function htmlProjectListQuerySuffix(options: {
+  organizationId?: number;
+  projectId?: number;
+  status?: string;
+}): string {
   const params = new URLSearchParams();
 
   if (options.organizationId !== undefined) {
     params.set("organizationId", String(options.organizationId));
+  }
+
+  if (options.projectId !== undefined) {
+    params.set("projectId", String(options.projectId));
   }
 
   if (options.status !== undefined && options.status !== "") {
@@ -39,4 +62,8 @@ function htmlProjectListQuerySuffix(options: { organizationId?: number; status?:
   return encoded === "" ? "" : `&${encoded}`;
 }
 
-export { htmlProjectListQuerySuffix, resolveHtmlProjectListOrganizationId };
+export {
+  htmlProjectListQuerySuffix,
+  parseHtmlOrganizationIdQuery,
+  resolveHtmlProjectListOrganizationId,
+};

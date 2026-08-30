@@ -1086,6 +1086,77 @@ describe("web routes with server-htmx frontend", () => {
     expect(await response.text()).toContain("Tasks");
   });
 
+  test("GET /tasks defaults signed-in HTML to the current organization", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
+    const response = await fetch(`${baseUrl}/tasks?per_page=1`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Design module registry");
+    expect(html).not.toContain("Simulate docking sequence");
+    expect(html).toContain('data-organization-id="1"');
+    expect(html).toMatch(/value="1"\s+selected/);
+    expect(html).toContain("/tasks?page=2&per_page=1&amp;organizationId=1");
+  });
+
+  test("GET /tasks?organizationId= overrides the current organization", async () => {
+    const response = await fetch(`${baseUrl}/tasks?organizationId=2`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Simulate docking sequence");
+    expect(html).not.toContain("Design module registry");
+    expect(html).toContain('data-organization-id="2"');
+  });
+
+  test("POST /current-organization scopes HTML /tasks to the switched team", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
+    const csrf = await fetchCsrfFromPath("/tasks", adminSessionCookie);
+    const switched = await fetch(`${baseUrl}/current-organization`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        organization_id: "2",
+        _token: csrf.token,
+      }),
+    });
+    expect(switched.status).toBe(302);
+
+    try {
+      const cookies = mergeCookieHeader(csrf.cookies, switched);
+      const scoped = await fetch(`${baseUrl}/tasks`, {
+        headers: { cookie: cookies },
+      });
+      expect(scoped.status).toBe(200);
+      const html = await scoped.text();
+      expect(html).toContain("Simulate docking sequence");
+      expect(html).not.toContain("Design module registry");
+      expect(html).toContain('data-organization-id="2"');
+    } finally {
+      await runWithMigrationBypass(async () => {
+        const db = getDatabase();
+        await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+      });
+    }
+  });
+
   test("GET /admin returns dashboard for signed-in admin session", async () => {
     const response = await fetch(`${baseUrl}/admin`, {
       headers: { cookie: adminSessionCookie },

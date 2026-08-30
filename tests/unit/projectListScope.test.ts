@@ -1,7 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
-import { ForbiddenError } from "@getstrata/core/errors/http";
+import { BadRequestError, ForbiddenError } from "@getstrata/core/errors/http";
 import {
   htmlProjectListQuerySuffix,
+  parseHtmlOrganizationIdQuery,
   resolveHtmlProjectListOrganizationId,
 } from "../../src/modules/project/listScope";
 
@@ -63,17 +64,40 @@ describe("resolveHtmlProjectListOrganizationId", () => {
   });
 });
 
+describe("parseHtmlOrganizationIdQuery", () => {
+  test("returns undefined when the query is missing or empty", () => {
+    expect(parseHtmlOrganizationIdQuery()).toBeUndefined();
+    expect(parseHtmlOrganizationIdQuery(new Request("http://example.test/tasks"))).toBeUndefined();
+    expect(
+      parseHtmlOrganizationIdQuery(new Request("http://example.test/tasks?organizationId=")),
+    ).toBeUndefined();
+  });
+
+  test("parses a positive organization id", () => {
+    expect(
+      parseHtmlOrganizationIdQuery(new Request("http://example.test/tasks?organizationId=2")),
+    ).toBe(2);
+  });
+
+  test("rejects an invalid organization id", () => {
+    expect(() =>
+      parseHtmlOrganizationIdQuery(new Request("http://example.test/tasks?organizationId=nope")),
+    ).toThrow(BadRequestError);
+  });
+});
+
 describe("htmlProjectListQuerySuffix", () => {
   test("returns an empty suffix when nothing is filtered", () => {
     expect(htmlProjectListQuerySuffix({})).toBe("");
     expect(htmlProjectListQuerySuffix({ status: "" })).toBe("");
   });
 
-  test("encodes organization and status filters", () => {
+  test("encodes organization, project, and status filters", () => {
     expect(htmlProjectListQuerySuffix({ organizationId: 2 })).toBe("&organizationId=2");
+    expect(htmlProjectListQuerySuffix({ projectId: 3 })).toBe("&projectId=3");
     expect(htmlProjectListQuerySuffix({ status: "active" })).toBe("&status=active");
-    expect(htmlProjectListQuerySuffix({ organizationId: 1, status: "draft" })).toBe(
-      "&organizationId=1&status=draft",
+    expect(htmlProjectListQuerySuffix({ organizationId: 1, projectId: 4, status: "draft" })).toBe(
+      "&organizationId=1&projectId=4&status=draft",
     );
   });
 });
