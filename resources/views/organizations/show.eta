@@ -1,6 +1,20 @@
 <section class="page-header">
-  <h1><%= it.organization.name %></h1>
+  <h1>
+    <%= it.organization.name %>
+    <% if (it.isCurrentTeam) { %>
+    <span class="current-team">Current</span>
+    <% } %>
+  </h1>
   <p class="hint"><code><%= it.organization.slug %></code></p>
+  <% if (it.isCurrentTeam) { %>
+  <p class="hint">This is your current team.</p>
+  <% } else if (it.canSwitchToTeam) { %>
+  <form method="post" action="/current-organization" class="nav-org">
+    <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+    <input type="hidden" name="organization_id" value="<%= it.organization.id %>" />
+    <button type="submit">Switch to this team</button>
+  </form>
+  <% } %>
 </section>
 
 <dl class="detail-list">

@@ -281,7 +281,10 @@ describe("web routes with server-htmx frontend", () => {
     const response = await fetch(`${baseUrl}/organizations/1`);
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("Acme Labs");
+    const html = await response.text();
+    expect(html).toContain("Acme Labs");
+    expect(html).not.toContain("This is your current team");
+    expect(html).not.toContain("Switch to this team");
   });
 
   test("GET /assets/app.css serves static styles", async () => {
@@ -976,6 +979,15 @@ describe("web routes with server-htmx frontend", () => {
     expect(personalLocation).toMatch(/^\/organizations\/\d+$/);
     const personalId = personalLocation.split("/").pop() ?? "";
 
+    const personalHome = await fetch(`${baseUrl}${personalLocation}`, {
+      headers: { cookie: session },
+    });
+    expect(personalHome.status).toBe(200);
+    const personalHomeHtml = await personalHome.text();
+    expect(personalHomeHtml).toContain("This is your current team");
+    expect(personalHomeHtml).toContain("current-team");
+    expect(personalHomeHtml).not.toContain("Switch to this team");
+
     const createCsrf = await fetchCsrfFromPath("/organizations", session);
     const slug = `html-current-extra-${Date.now()}`;
     const created = await fetch(`${baseUrl}/organizations`, {
@@ -1011,6 +1023,15 @@ describe("web routes with server-htmx frontend", () => {
       new RegExp(`data-organization-id="${personalId}"\\s+data-current-team="true"`),
     );
 
+    const personalOther = await fetch(`${baseUrl}/organizations/${personalId}`, {
+      headers: { cookie: listCookies },
+    });
+    expect(personalOther.status).toBe(200);
+    const personalOtherHtml = await personalOther.text();
+    expect(personalOtherHtml).toContain("Switch to this team");
+    expect(personalOtherHtml).toContain(`action="/current-organization"`);
+    expect(personalOtherHtml).not.toContain("This is your current team");
+
     const switchCsrf = await fetchCsrfFromPath("/organizations", listCookies);
     const switched = await fetch(`${baseUrl}/current-organization`, {
       method: "POST",
@@ -1036,6 +1057,8 @@ describe("web routes with server-htmx frontend", () => {
     const showHtml = await show.text();
     expect(showHtml).toContain(`value="${personalId}"`);
     expect(showHtml).toContain("selected");
+    expect(showHtml).toContain("This is your current team");
+    expect(showHtml).not.toContain("Switch to this team");
 
     const afterList = await fetch(`${baseUrl}/organizations`, {
       headers: { cookie: afterCookies },
@@ -1621,6 +1644,11 @@ describe("web routes with server-htmx frontend", () => {
   });
 
   test("GET /organizations/:id includes member management", async () => {
+    await runWithMigrationBypass(async () => {
+      const db = getDatabase();
+      await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+    });
+
     const response = await fetch(`${baseUrl}/organizations/1`, {
       headers: { cookie: adminSessionCookie },
     });
@@ -1629,6 +1657,9 @@ describe("web routes with server-htmx frontend", () => {
     const html = await response.text();
     expect(html).toContain("org-members");
     expect(html).toContain("admin@workhub.test");
+    expect(html).toContain("This is your current team");
+    expect(html).toContain("current-team");
+    expect(html).not.toContain("Switch to this team");
     expect(html).toContain("Update role");
     expect(html).toContain('hx-post="/organizations/1/members/2/role"');
     expect(html).toContain("Add or invite");

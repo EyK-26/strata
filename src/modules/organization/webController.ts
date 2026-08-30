@@ -105,6 +105,11 @@ class OrganizationWebController {
         !(self.role === "owner" && owners.length <= 1) &&
         organization.slug !== personalOrganizationSlug(currentUserId),
     );
+    const current = currentUserId
+      ? await this.currentOrganization.currentForUser(currentUserId)
+      : null;
+    const isCurrentTeam = current?.organization_id === organization.id;
+    const canSwitchToTeam = Boolean(self && !isCurrentTeam);
     const viewData = {
       title: organization.name,
       organization,
@@ -113,6 +118,8 @@ class OrganizationWebController {
       currentUserId,
       canManageMembers,
       canLeave,
+      isCurrentTeam,
+      canSwitchToTeam,
       errors: {},
       old: {},
       ...extras,
