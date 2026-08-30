@@ -1,6 +1,6 @@
+import { eventBus, modelEventName } from "@getstrata/core/events";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { isFeatureEnabled } from "../config/features";
-import { eventBus, modelEventName } from "../core/events";
 import { resolveApplicationDependencies } from "../core/runtime/applicationRegistry";
 import { webhookServiceToken } from "../modules/webhook/provider";
 import type WebhookService from "../modules/webhook/service";

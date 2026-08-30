@@ -1,5 +1,5 @@
+import { eventBus, modelEventName } from "@getstrata/core/events";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
-import { eventBus, modelEventName } from "../core/events";
 import { resolveInvitationService } from "../modules/organization/invitationService";
 
 async function acceptPendingInvitationsForUser(payload: unknown): Promise<number> {

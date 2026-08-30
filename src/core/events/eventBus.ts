@@ -32,7 +32,21 @@ class EventBus {
   }
 }
 
-const eventBus = new EventBus();
+const EVENT_BUS_KEY = Symbol.for("@getstrata/eventBus");
+
+function readSharedEventBus(): EventBus {
+  const globalBus = (globalThis as Record<symbol, EventBus | undefined>)[EVENT_BUS_KEY];
+
+  if (globalBus) {
+    return globalBus;
+  }
+
+  const bus = new EventBus();
+  (globalThis as Record<symbol, EventBus>)[EVENT_BUS_KEY] = bus;
+  return bus;
+}
+
+const eventBus = readSharedEventBus();
 
 export type { EventListener };
-export { EventBus, eventBus };
+export { EventBus, eventBus, readSharedEventBus };

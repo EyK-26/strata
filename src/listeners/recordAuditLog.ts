@@ -1,5 +1,5 @@
+import { eventBus, modelEventName } from "@getstrata/core/events";
 import { isFeatureEnabled } from "../config/features";
-import { eventBus, modelEventName } from "../core/events";
 import { resolveApplicationDependencies } from "../core/runtime/applicationRegistry";
 import { auditServiceToken } from "../modules/audit/provider";
 import type AuditService from "../modules/audit/service";

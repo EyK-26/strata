@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { EventBus, eventBus } from "@getstrata/core/events";
+import { EventBus, eventBus, readSharedEventBus } from "@getstrata/core/events";
 
 describe("EventBus", () => {
   test("dispatches events to registered listeners in registration order", async () => {
@@ -82,5 +82,13 @@ describe("EventBus", () => {
     unsubscribe();
 
     expect(count).toBe(1);
+    expect(readSharedEventBus()).toBe(eventBus);
+  });
+
+  test("src and package eventBus share one process instance", async () => {
+    const src = await import("../../src/core/events/eventBus");
+
+    expect(src.eventBus).toBe(eventBus);
+    expect(src.readSharedEventBus()).toBe(eventBus);
   });
 });

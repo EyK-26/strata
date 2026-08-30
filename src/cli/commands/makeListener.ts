@@ -24,7 +24,7 @@ async function makeListenerCommand(name?: string, eventName?: string): Promise<v
     }
   }
 
-  const content = `import { eventBus } from "../core/events";
+  const content = `import { eventBus } from "@getstrata/core/events";
 
 function ${registerFunction}(): void {
   eventBus.listen("${resolvedEventName}", async (payload) => {

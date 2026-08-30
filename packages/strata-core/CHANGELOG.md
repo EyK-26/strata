@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.84
+
+- `eventBus` is a `Symbol.for("@getstrata/eventBus")` process singleton so model writes from a built `@getstrata/core/database/baseRepository` bundle reach app listeners that imported a different copy of `@getstrata/core/events` (GitHub Actions `build:framework` before tests).
+
 ## 0.5.83
 
 - `MEMBER_ABILITIES` includes `auth:tokens:delete` so Jetstream-style personal access token revoke works for members (`DELETE /auth/tokens/:id`). HTML `/account/tokens/:id/revoke` was already authenticated-only.
