@@ -1,5 +1,6 @@
 import { Factory } from "@getstrata/core/database/factory";
-import type { UserRecord } from "../../modules/user/types";
+import UserRepository from "./repository";
+import type { UserRecord } from "./types";
 
 class UserFactory extends Factory<UserRecord> {
   protected override definition(): UserRecord {
@@ -14,6 +15,10 @@ class UserFactory extends Factory<UserRecord> {
       created_at: now,
       updated_at: now,
     };
+  }
+
+  protected override persist(values: Partial<UserRecord>): Promise<UserRecord> {
+    return new UserRepository().create(values);
   }
 }
 

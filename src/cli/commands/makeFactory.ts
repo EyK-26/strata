@@ -30,6 +30,10 @@ class ${modelName}Factory extends Factory<${modelName}Record> {
       id: 0,
     } satisfies Partial<${modelName}Record> as ${modelName}Record;
   }
+
+  protected persist(values: Partial<${modelName}Record>): Promise<${modelName}Record> {
+    throw new Error("${modelName}Factory.persist() is not implemented.");
+  }
 }
 
 const ${moduleIdentifier}Factory = new ${modelName}Factory();
