@@ -29,10 +29,13 @@ import {
 } from "../organization/invitationService";
 import type AuthService from "./authService";
 import {
+  forgetBrowserSessionById,
   forgetHmacBrowserSession,
   forgetOtherBrowserSessions,
+  hmacBrowserSessionId,
   issueHmacBrowserSession,
   listBrowserSessionsForUser,
+  parseBrowserSessionId,
 } from "./browserSessions";
 import type OAuthIdentityRepository from "./oauthIdentityRepository";
 import type PasswordResetService from "./passwordResetService";
@@ -391,6 +394,43 @@ class WebAccountController {
     }
   });
 
+  readonly logoutBrowserSession = withErrorHandling(async (request: Request) => {
+    const userId = this.requireUserId();
+    const params = (request as Request & { params?: { id?: string } }).params;
+    const sessionId = parseBrowserSessionId(params?.id);
+    const current = readSession(request);
+    const currentId = current ? hmacBrowserSessionId(current.userId, current.issuedAt) : null;
+
+    if (currentId && sessionId === currentId) {
+      const user = await this.users.findByIdOrThrow(userId);
+
+      return await this.renderAccount(
+        user,
+        { errors: { session: ["Cannot log out this device."] } },
+        422,
+        request,
+      );
+    }
+
+    const deleted = await forgetBrowserSessionById(userId, sessionId);
+
+    if (!deleted) {
+      const user = await this.users.findByIdOrThrow(userId);
+
+      return await this.renderAccount(
+        user,
+        { errors: { session: ["That browser session is no longer active."] } },
+        422,
+        request,
+      );
+    }
+
+    return flashResponse(Response.redirect("/account", 302), {
+      level: "success",
+      message: "Signed out that browser.",
+    });
+  });
+
   readonly changePassword = withErrorHandling(async (request: Request) => {
     const userId = this.requireUserId();
 
@@ -650,6 +690,9 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
     },
     "/account/logout-other-devices": {
       POST: kernel.wrapWebAuthenticated(controller.logoutOtherDevices as unknown as RouteHandler),
+    },
+    "/account/sessions/:id/logout": {
+      POST: kernel.wrapWebAuthenticated(controller.logoutBrowserSession as unknown as RouteHandler),
     },
     "/account/email/verification-notification": {
       POST: kernel.wrapWebAuthenticatedAllowUnverified(

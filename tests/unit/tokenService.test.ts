@@ -3,6 +3,10 @@ import { hashPassword } from "@getstrata/core/auth/password";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
+import {
+  forgetHmacBrowserSession,
+  recordHmacBrowserSession,
+} from "../../src/modules/user/browserSessions";
 import UserRepository from "../../src/modules/user/repository";
 import TokenService, {
   generatePlainTextToken,
@@ -195,6 +199,23 @@ describe("TokenService", () => {
     await expect(service.revokeToken(2, created.token.id)).rejects.toThrow(
       `API token ${created.token.id} not found.`,
     );
+  });
+
+  test("hasActiveBrowserSession follows HMAC sessions rows", async () => {
+    const service = new TokenService(new UserRepository(), new ApiTokenRepository());
+    const issuedAt = Date.now();
+    const id = await recordHmacBrowserSession({
+      userId: 2,
+      issuedAt,
+      ttlSeconds: 600,
+    });
+
+    expect(await service.hasActiveBrowserSession(2, issuedAt)).toBe(true);
+    expect(await service.hasActiveBrowserSession(2, issuedAt + 99)).toBe(false);
+
+    await forgetHmacBrowserSession(2, issuedAt);
+    expect(id).toHaveLength(64);
+    expect(await service.hasActiveBrowserSession(2, issuedAt)).toBe(false);
   });
 
   test("findByIdOrThrow returns the requested user", async () => {

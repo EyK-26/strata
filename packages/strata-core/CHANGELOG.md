@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.87
+
+- `AuthUserDirectory.hasActiveBrowserSession?(userId, issuedAt)` is optional. `SessionGuard` calls it after `session_valid_after` and rejects the HMAC cookie when it returns false so WorkHub can revoke a single browser session by deleting the `sessions` row.
+
 ## 0.5.86
 
 - `createSessionCookieDetails()` returns the HMAC session header plus `issuedAt` / `ttlSeconds` so apps can persist Jetstream browser-session rows without changing the cookie format.

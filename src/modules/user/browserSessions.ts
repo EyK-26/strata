@@ -5,6 +5,7 @@ import {
   readSession,
 } from "@getstrata/core/auth/sessionCookie";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
+import { BadRequestError } from "@getstrata/core/errors/http";
 
 interface BrowserSessionRow {
   id: string;
@@ -104,6 +105,38 @@ async function forgetOtherBrowserSessions(userId: number, keepSessionId: string)
   await db`DELETE FROM sessions WHERE user_id = ${userId} AND id <> ${keepSessionId}`;
 }
 
+async function forgetBrowserSessionById(userId: number, sessionId: string): Promise<boolean> {
+  const deleted = (await db`
+    DELETE FROM sessions
+    WHERE id = ${sessionId} AND user_id = ${userId}
+    RETURNING id
+  `) as Array<{ id: string }>;
+
+  return deleted.length > 0;
+}
+
+async function hasActiveHmacBrowserSession(userId: number, issuedAt: number): Promise<boolean> {
+  const id = hmacBrowserSessionId(userId, issuedAt);
+  const rows = (await db`
+    UPDATE sessions
+    SET last_active_at = NOW()
+    WHERE id = ${id} AND user_id = ${userId} AND expires_at > NOW()
+    RETURNING id
+  `) as Array<{ id: string }>;
+
+  return rows.length > 0;
+}
+
+function parseBrowserSessionId(raw: string | undefined): string {
+  const id = raw?.trim() ?? "";
+
+  if (!/^[a-f0-9]{64}$/i.test(id)) {
+    throw new BadRequestError("Invalid browser session.");
+  }
+
+  return id.toLowerCase();
+}
+
 async function listBrowserSessionsForUser(
   userId: number,
   request?: Request,
@@ -130,10 +163,13 @@ export type { BrowserSessionView };
 export {
   clientIpAddress,
   clientUserAgent,
+  forgetBrowserSessionById,
   forgetHmacBrowserSession,
   forgetOtherBrowserSessions,
+  hasActiveHmacBrowserSession,
   hmacBrowserSessionId,
   issueHmacBrowserSession,
   listBrowserSessionsForUser,
+  parseBrowserSessionId,
   recordHmacBrowserSession,
 };

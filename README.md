@@ -214,7 +214,7 @@ When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web 
 | `/billing` | Current tenant subscription |
 | `/webhooks` | Outbound webhook admin: create (defaults to current team; dispatch is scoped to that team), deactivate, delete, retry delivery |
 | `/reports`, `/reports/organizations/:id` | Current-team report (signed-in `/reports` redirects); tenant summary at `/reports?all=1` |
-| `/account` | Session profile (name/email), current team, received team invitations, API tokens, GDPR export/delete, email verification, TOTP MFA + recovery codes |
+| `/account` | Session profile (name/email), current team, received team invitations, API tokens, GDPR export/delete, email verification, TOTP MFA + recovery codes, browser sessions (This device + Log out) |
 | `/confirm-password` | Laravel `password.confirm` — recent password gate for export and account delete |
 | `/two-factor-challenge` | Fortify 2FA challenge after password login (`FEATURE_MFA=true`) |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |

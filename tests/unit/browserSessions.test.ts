@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { BadRequestError } from "@getstrata/core/errors/http";
 import { getDatabase } from "../../src/db/connection";
 import {
   clientIpAddress,
   clientUserAgent,
+  forgetBrowserSessionById,
   forgetHmacBrowserSession,
   forgetOtherBrowserSessions,
+  hasActiveHmacBrowserSession,
   hmacBrowserSessionId,
   issueHmacBrowserSession,
   listBrowserSessionsForUser,
+  parseBrowserSessionId,
   recordHmacBrowserSession,
 } from "../../src/modules/user/browserSessions";
 
@@ -137,5 +141,31 @@ describe("browserSessions", () => {
     ids.splice(ids.indexOf(otherId), 1);
     expect((await listBrowserSessionsForUser(2)).map((row) => row.id)).toContain(issued.id);
     expect((await listBrowserSessionsForUser(2)).map((row) => row.id)).not.toContain(otherId);
+  });
+
+  test("parseBrowserSessionId accepts sha256 hex and rejects junk", () => {
+    const id = hmacBrowserSessionId(2, 100);
+    expect(parseBrowserSessionId(` ${id.toUpperCase()} `)).toBe(id);
+    expect(() => parseBrowserSessionId(undefined)).toThrow(BadRequestError);
+    expect(() => parseBrowserSessionId("not-a-session")).toThrow(BadRequestError);
+  });
+
+  test("hasActiveHmacBrowserSession touches last_active and forgetBrowserSessionById revokes", async () => {
+    const issuedAt = Date.now();
+    const id = await recordHmacBrowserSession({
+      userId: 2,
+      issuedAt,
+      ttlSeconds: 600,
+      userAgent: "RevokeMe/1.0",
+    });
+    ids.push(id);
+
+    expect(await hasActiveHmacBrowserSession(2, issuedAt)).toBe(true);
+    expect(await hasActiveHmacBrowserSession(2, issuedAt + 1)).toBe(false);
+
+    expect(await forgetBrowserSessionById(2, id)).toBe(true);
+    ids.length = 0;
+    expect(await hasActiveHmacBrowserSession(2, issuedAt)).toBe(false);
+    expect(await forgetBrowserSessionById(2, id)).toBe(false);
   });
 });

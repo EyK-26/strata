@@ -260,7 +260,7 @@
 
   <div id="browser-sessions">
     <h3>Browser sessions</h3>
-    <p class="hint">HMAC login writes a <code>sessions</code> row (user agent and IP) so this list can mark This device. Cookie-store sessions from sibling HTMX apps appear here too.</p>
+    <p class="hint">HMAC login writes a <code>sessions</code> row (user agent and IP) so this list can mark This device. <code>SessionGuard</code> rejects a cookie after that row is deleted. Cookie-store sessions from sibling HTMX apps appear here too.</p>
     <% if (!it.browserSessions?.length) { %>
     <p class="hint">No active browser sessions recorded yet.</p>
     <% } else { %>
@@ -275,11 +275,20 @@
       </thead>
       <tbody>
         <% for (const session of it.browserSessions) { %>
-        <tr data-current-session="<%= session.current ? "1" : "0" %>">
+        <tr data-current-session="<%= session.current ? "1" : "0" %>" data-session-id="<%= session.id %>">
           <td><%= session.user_agent ?? "Unknown browser" %></td>
           <td><%= session.ip_address ?? "Unknown IP" %></td>
           <td><%= session.last_active_at ?? session.expires_at %></td>
-          <td><% if (session.current) { %>This device<% } %></td>
+          <td>
+            <% if (session.current) { %>
+            This device
+            <% } else { %>
+            <form method="post" action="/account/sessions/<%= session.id %>/logout">
+              <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+              <button type="submit" class="link-button">Log out</button>
+            </form>
+            <% } %>
+          </td>
         </tr>
         <% } %>
       </tbody>

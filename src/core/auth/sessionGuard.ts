@@ -28,6 +28,14 @@ class SessionGuard implements AuthGuard {
         return null;
       }
 
+      if (typeof tokenService.hasActiveBrowserSession === "function") {
+        const active = await tokenService.hasActiveBrowserSession(session.userId, session.issuedAt);
+
+        if (!active) {
+          return null;
+        }
+      }
+
       return {
         id: user.id,
         role: user.role,

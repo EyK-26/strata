@@ -7,6 +7,7 @@ import { generateTotp } from "@getstrata/core/security/totp";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { getDatabase } from "../../src/db/connection";
 import { TEST_ADMIN_API_TOKEN } from "../../src/domain/auth";
+import { issueHmacBrowserSession } from "../../src/modules/user/browserSessions";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -2206,6 +2207,94 @@ describe("web routes with server-htmx frontend", () => {
     const orgReportHtml = await orgReport.text();
     expect(orgReportHtml).toContain("Acme Labs");
     expect(orgReportHtml).toContain("/reports?all=1");
+  });
+
+  test("POST /account/sessions/:id/logout revokes another HMAC browser session", async () => {
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const email = `session-logout-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: registerCsrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "Session Logout",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+    expect(registered.status).toBe(302);
+    const session = mergeCookieHeader(registerCsrf.cookies, registered);
+    const user = (await getDatabase()`
+      SELECT id FROM users WHERE email_lookup = ${emailLookupForQuery(email)} LIMIT 1
+    `) as Array<{ id: number }>;
+    const userId = user[0]?.id;
+    expect(userId).toBeTruthy();
+
+    const other = await issueHmacBrowserSession(
+      new Request("http://localhost/login", {
+        headers: { "user-agent": "OtherDevice/1.0" },
+      }),
+      Number(userId),
+    );
+
+    const listed = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: session, accept: "text/html" },
+    });
+    expect(listed.status).toBe(200);
+    const listedHtml = await listed.text();
+    expect(listedHtml).toContain("OtherDevice/1.0");
+    expect(listedHtml).toContain(`/account/sessions/${other.id}/logout`);
+    expect(listedHtml).toContain("Log out");
+
+    const currentMatch = listedHtml.match(
+      /data-current-session="1"[^>]*data-session-id="([a-f0-9]{64})"/,
+    );
+    const currentId = currentMatch?.[1];
+    expect(currentId).toBeTruthy();
+
+    const csrf = await fetchCsrfFromPath("/account", session);
+    const self = await fetch(`${baseUrl}/account/sessions/${currentId}/logout`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({ _token: csrf.token }),
+    });
+    expect(self.status).toBe(422);
+    expect(await self.text()).toContain("Cannot log out this device.");
+
+    const revoked = await fetch(`${baseUrl}/account/sessions/${other.id}/logout`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: csrf.token }),
+    });
+    expect(revoked.status).toBe(302);
+    expect(revoked.headers.get("location")).toBe("/account");
+
+    const after = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: session, accept: "text/html" },
+    });
+    expect(after.status).toBe(200);
+    expect(await after.text()).not.toContain("OtherDevice/1.0");
+
+    const otherCookie = other.header.split(";")[0] ?? "";
+    const rejected = await fetch(`${baseUrl}/account`, {
+      redirect: "manual",
+      headers: { cookie: otherCookie },
+    });
+    expect(rejected.status).toBe(302);
+    expect(rejected.headers.get("location") ?? "").toContain("/login");
   });
 
   test("HTML account accept and decline team invitations for the signed-in email", async () => {

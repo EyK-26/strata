@@ -37,7 +37,7 @@ container.set(
 
 Omit `sql` so the store reads the client from `bindDatabaseConnection()` / the default pool on every call. Tests can call `resetBoundDatabaseConnection()` after `closeDatabase()` without a local auth facade.
 
-WorkHub ships `sessions` (`0031_create_sessions`: `id` text PK, `user_id` → `users` cascade, `expires_at`) so `CookieSessionStore.create` / `read` / `destroy` can run against the same Postgres as HMAC login. WorkHub HTMX login still uses HMAC `workhub_session` — do not swap it onto `CookieSessionStore` without rewriting every web session test. HMAC login now dual-writes a `sessions` row so Jetstream browser-session lists work without changing the cookie format.
+WorkHub ships `sessions` (`0031_create_sessions`: `id` text PK, `user_id` → `users` cascade, `expires_at`) so `CookieSessionStore.create` / `read` / `destroy` can run against the same Postgres as HMAC login. WorkHub HTMX login still uses HMAC `workhub_session` — do not swap it onto `CookieSessionStore` without rewriting every web session test. HMAC login now dual-writes a `sessions` row so Jetstream browser-session lists work without changing the cookie format. WorkHub’s `TokenService.hasActiveBrowserSession` looks up that HMAC id; `SessionGuard` then rejects a cookie after `/account` logs out that row (or after logout-other-devices deletes the others).
 
 The default session SELECT still reads `learn_subscriber` / `is_admin` from `users`. WorkHub has `role` instead. Pass `loadSessionUser` (WorkHub’s `loadWorkhubSessionUser` maps `role === "admin"` and `revealEmail`) to keep that query in the app:
 
