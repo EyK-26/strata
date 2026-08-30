@@ -1,4 +1,4 @@
-<table class="data-table">
+<table class="data-table" data-organization-id="<%= it.currentOrganizationId ?? "" %>">
   <thead>
     <tr>
       <th>Name</th>
@@ -21,8 +21,8 @@
 <nav class="pagination" aria-label="Project pagination">
   <% if (it.meta.page > 1) { %>
   <a
-    href="/projects?page=<%= it.meta.page - 1 %>&per_page=<%= it.meta.per_page %>"
-    hx-get="/projects?page=<%= it.meta.page - 1 %>&per_page=<%= it.meta.per_page %>"
+    href="/projects?page=<%= it.meta.page - 1 %>&per_page=<%= it.meta.per_page %><%= it.listQuerySuffix ?? "" %>"
+    hx-get="/projects?page=<%= it.meta.page - 1 %>&per_page=<%= it.meta.per_page %><%= it.listQuerySuffix ?? "" %>"
     hx-target="#project-table"
     hx-swap="innerHTML"
   >
@@ -32,8 +32,8 @@
   <span>Page <%= it.meta.page %> of <%= it.meta.last_page %> (<%= it.meta.total %> total)</span>
   <% if (it.meta.page < it.meta.last_page) { %>
   <a
-    href="/projects?page=<%= it.meta.page + 1 %>&per_page=<%= it.meta.per_page %>"
-    hx-get="/projects?page=<%= it.meta.page + 1 %>&per_page=<%= it.meta.per_page %>"
+    href="/projects?page=<%= it.meta.page + 1 %>&per_page=<%= it.meta.per_page %><%= it.listQuerySuffix ?? "" %>"
+    hx-get="/projects?page=<%= it.meta.page + 1 %>&per_page=<%= it.meta.per_page %><%= it.listQuerySuffix ?? "" %>"
     hx-target="#project-table"
     hx-swap="innerHTML"
   >

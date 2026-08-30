@@ -550,7 +550,7 @@ docker compose down -v --remove-orphans
 ### WorkHub domain (under `/api/v1`)
 
 - `GET/POST /organizations`, members via `GET/POST /organizations/:id/members`, `PATCH /organizations/:id/members/:userId`. Invitations: `GET/POST /organizations/:id/invitations`, `DELETE /organizations/:id/invitations/:invitationId`, `POST /invitations/accept`. HTMX: `POST /organizations/:id/members/:userId/role`, unknown emails send a signed invite (`GET /invitations/accept`)
-- `GET/POST /projects`, `GET/PATCH/DELETE /projects/:id`
+- `GET/POST /projects`, `GET/PATCH/DELETE /projects/:id`. Signed-in HTML `GET /projects` defaults to the current team (`?organizationId=` overrides; guests and JSON stay unscoped)
 - `GET/POST /tasks`, `GET/PATCH/DELETE /tasks/:id`
 - `GET/POST /tasks/:id/comments`, `GET/PATCH/DELETE /comments/:id`
 - `GET/POST /tasks/:id/attachments`, `GET/DELETE /attachments/:id`, `GET /attachments/:id/download`

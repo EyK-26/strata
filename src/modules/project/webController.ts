@@ -1,4 +1,5 @@
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { ValidationError } from "@getstrata/core/errors/http";
@@ -11,6 +12,11 @@ import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse, isHtmxRequest } from "@getstrata/core/view";
 import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
+import {
+  type CurrentOrganizationService,
+  currentOrganizationServiceToken,
+} from "../user/currentOrganizationService";
+import { htmlProjectListQuerySuffix, resolveHtmlProjectListOrganizationId } from "./listScope";
 import { projectServiceToken } from "./provider";
 import { parseProjectListQuery } from "./requests";
 import type ProjectService from "./service";
@@ -23,6 +29,10 @@ import {
 
 class ProjectWebController {
   constructor(private readonly dependencies: AppDependencies) {}
+
+  private get currentOrganization(): CurrentOrganizationService {
+    return resolveService(this.dependencies, currentOrganizationServiceToken);
+  }
 
   private get organizations(): OrganizationService {
     return resolveService(this.dependencies, organizationServiceToken);
@@ -48,10 +58,15 @@ class ProjectWebController {
     status = 200,
   ): Promise<Response> {
     const query = parseProjectListQuery(request);
+    const organizationId = await resolveHtmlProjectListOrganizationId({
+      queryOrganizationId: query.organizationId,
+      user: currentAuthUser(),
+      currentForUser: (userId) => this.currentOrganization.currentForUser(userId),
+    });
     const result = await this.service.paginate({
       page: query.page,
       perPage: query.perPage,
-      organizationId: query.organizationId,
+      organizationId,
       status: query.status,
       includeOrganization: true,
     });
@@ -62,6 +77,11 @@ class ProjectWebController {
       page: query.page,
       perPage: query.perPage,
       organizations: await this.loadOrganizations(),
+      currentOrganizationId: organizationId,
+      listQuerySuffix: htmlProjectListQuerySuffix({
+        organizationId,
+        status: query.status,
+      }),
       errors: {},
       old: {},
       ...extras,

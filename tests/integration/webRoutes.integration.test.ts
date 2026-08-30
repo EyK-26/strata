@@ -1006,6 +1006,69 @@ describe("web routes with server-htmx frontend", () => {
     expect(await response.text()).toContain("Platform Rewrite");
   });
 
+  test("GET /projects defaults signed-in HTML to the current organization", async () => {
+    const response = await fetch(`${baseUrl}/projects?per_page=1`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Platform Rewrite");
+    expect(html).not.toContain("Docking Simulator");
+    expect(html).toContain('data-organization-id="1"');
+    expect(html).toMatch(/value="1"\s+selected/);
+    expect(html).toContain("/projects?page=2&per_page=1&amp;organizationId=1");
+  });
+
+  test("GET /projects?organizationId= overrides the current organization", async () => {
+    const response = await fetch(`${baseUrl}/projects?organizationId=2`, {
+      headers: { cookie: adminSessionCookie },
+    });
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Docking Simulator");
+    expect(html).not.toContain("Platform Rewrite");
+    expect(html).toContain('data-organization-id="2"');
+    expect(html).toMatch(/value="2"\s+selected/);
+  });
+
+  test("POST /current-organization scopes HTML /projects to the switched team", async () => {
+    const csrf = await fetchCsrfFromPath("/projects", adminSessionCookie);
+    const switched = await fetch(`${baseUrl}/current-organization`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        organization_id: "2",
+        _token: csrf.token,
+      }),
+    });
+    expect(switched.status).toBe(302);
+
+    try {
+      const cookies = mergeCookieHeader(csrf.cookies, switched);
+      const scoped = await fetch(`${baseUrl}/projects`, {
+        headers: { cookie: cookies },
+      });
+      expect(scoped.status).toBe(200);
+      const html = await scoped.text();
+      expect(html).toContain("Docking Simulator");
+      expect(html).not.toContain("Platform Rewrite");
+      expect(html).toContain('data-organization-id="2"');
+      expect(html).toMatch(/value="2"\s+selected/);
+    } finally {
+      await runWithMigrationBypass(async () => {
+        const db = getDatabase();
+        await db`UPDATE users SET current_organization_id = 1 WHERE id = 1`;
+      });
+    }
+  });
+
   test("GET /tasks returns HTML task list", async () => {
     const response = await fetch(`${baseUrl}/tasks`);
 
