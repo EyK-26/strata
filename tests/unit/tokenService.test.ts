@@ -6,8 +6,10 @@ import ApiTokenRepository from "../../src/modules/user/apiTokenRepository";
 import UserRepository from "../../src/modules/user/repository";
 import TokenService, {
   generatePlainTextToken,
+  grantableTokenAbilities,
   normalizeAbilities,
   resolveExpiresAt,
+  resolveTokenAbilities,
   toApiTokenResource,
 } from "../../src/modules/user/tokenService";
 import { defaultTestTenant } from "./testHelpers";
@@ -113,6 +115,41 @@ describe("TokenService", () => {
     expect(service.tokenCan(null, "tasks:read")).toBe(false);
 
     expect(() => service.requireAbility(null, "tasks:read")).toThrow("Token ability required.");
+  });
+
+  test("resolveTokenAbilities scopes grants to the issuer", () => {
+    expect(resolveTokenAbilities(undefined, ["*"])).toEqual(["*"]);
+    expect(resolveTokenAbilities([], ["*"])).toEqual(["*"]);
+    expect(resolveTokenAbilities(["*"], ["*"])).toEqual(["*"]);
+    expect(resolveTokenAbilities(["projects:read", "projects:read"], ["*"])).toEqual([
+      "projects:read",
+    ]);
+    expect(resolveTokenAbilities(undefined, ["projects:read", "tasks:read"])).toEqual([
+      "projects:read",
+      "tasks:read",
+    ]);
+    expect(resolveTokenAbilities(["*"], ["projects:read"])).toEqual(["projects:read"]);
+    expect(
+      resolveTokenAbilities(["projects:read", "organizations:delete"], ["projects:read"]),
+    ).toEqual(["projects:read"]);
+    expect(() => resolveTokenAbilities(["organizations:delete"], ["projects:read"])).toThrow(
+      "None of the selected abilities can be granted.",
+    );
+    expect(grantableTokenAbilities(["*"])).toContain("organizations:create");
+    expect(grantableTokenAbilities(["*"])[0]).toBe("*");
+    expect(grantableTokenAbilities(["projects:read", "projects:read"])).toEqual(["projects:read"]);
+    expect(grantableTokenAbilities([])).toEqual([]);
+  });
+
+  test("createToken filters abilities through the granter", async () => {
+    const service = new TokenService(new UserRepository(), new ApiTokenRepository());
+    const created = await service.createToken(1, {
+      name: `scoped-${Date.now()}`,
+      abilities: ["projects:read", "organizations:delete"],
+      granterAbilities: ["projects:read", "tasks:read"],
+    });
+
+    expect(created.token.abilities).toEqual(["projects:read"]);
   });
 
   test("deleteUserAccount clears a stored profile photo path", async () => {

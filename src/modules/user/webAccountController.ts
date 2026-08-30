@@ -1,5 +1,6 @@
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
+import { resolveAbilitiesForRole } from "@getstrata/core/auth/abilityCatalog";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import { clearPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";
@@ -32,6 +33,7 @@ import type UserRepository from "./repository";
 import { parseTokenIdParams } from "./requests";
 import { toUserResource } from "./resources";
 import type TokenService from "./tokenService";
+import { grantableTokenAbilities } from "./tokenService";
 import type { ApiTokenResource, UserRecord } from "./types";
 import {
   parseWebChangePasswordBody,
@@ -126,12 +128,16 @@ class WebAccountController {
     const tokens = Array.isArray(extras.tokens)
       ? (extras.tokens as ApiTokenResource[])
       : await this.tokens.listTokensForUser(user.id);
+    const authUser = currentAuthUser();
 
     return htmlResponse(
       await this.view.render("account/show", {
         title: "Account",
         user,
         tokens,
+        availableAbilities: grantableTokenAbilities(
+          authUser?.abilities ?? resolveAbilitiesForRole(authUser?.role ?? user.role),
+        ),
         plainToken: null,
         mfaEnabled: Boolean(user.mfa_enabled),
         mfaFeatureEnabled: isFeatureEnabled("mfa"),
@@ -336,8 +342,11 @@ class WebAccountController {
 
     try {
       const body = await parseWebCreateApiTokenBody(request);
+      const authUser = currentAuthUser();
       const created = await this.tokens.createToken(userId, {
         name: body.name,
+        abilities: body.abilities,
+        granterAbilities: authUser?.abilities ?? resolveAbilitiesForRole(authUser?.role),
         expiresInDays: body.expiresInDays,
       });
       const user = await this.users.findByIdOrThrow(userId);

@@ -1,4 +1,5 @@
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
+import { resolveAbilitiesForRole } from "@getstrata/core/auth/abilityCatalog";
 import type { AuthManager } from "@getstrata/core/auth/guard";
 import {
   createPasswordConfirmCookie,
@@ -496,10 +497,12 @@ class AuthController {
 
   readonly storeToken = withErrorHandling(async (request: Request) => {
     const userId = await this.requireUserId(request);
+    const user = await this.auth.requireUser(request);
     const body = await parseCreateApiTokenBody(request);
     const created = await this.tokens.createToken(userId, {
       name: body.name,
       abilities: body.abilities,
+      granterAbilities: user.abilities ?? resolveAbilitiesForRole(user.role),
       expiresInDays: body.expires_in_days,
     });
 

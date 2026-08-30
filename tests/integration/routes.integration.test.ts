@@ -552,6 +552,38 @@ describe("integration routes with postgres", () => {
     });
   });
 
+  test("POST /auth/tokens scopes abilities to the granter token", async () => {
+    const email = `api-token-scope-${Date.now()}@workhub.test`;
+    const register = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Token Scope Member",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(register.status).toBe(201);
+    const registered = (await register.json()) as { token: string };
+
+    const response = await fetch(api("/auth/tokens"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${registered.token}`,
+      },
+      body: JSON.stringify({
+        name: `scoped-child-${Date.now()}`,
+        abilities: ["projects:read", "organizations:delete"],
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { abilities: string[] };
+    expect(body.abilities).toEqual(["projects:read"]);
+  });
+
   test("organization invitations can be created, listed, accepted, and cancelled", async () => {
     const email = `api-invite-${Date.now()}@workhub.test`;
     const create = await fetch(api("/organizations/1/invitations"), {

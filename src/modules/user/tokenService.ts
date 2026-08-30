@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
+import { ADMIN_ABILITIES } from "@getstrata/core/auth/abilityCatalog";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
-import { ForbiddenError, NotFoundError } from "@getstrata/core/errors/http";
+import { ForbiddenError, NotFoundError, ValidationError } from "@getstrata/core/errors/http";
 import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
 import type ApiTokenRepository from "./apiTokenRepository";
 import type UserRepository from "./repository";
@@ -10,6 +11,7 @@ import type { ApiTokenRecord, ApiTokenResource, CreatedApiToken, UserRecord } fr
 interface CreateTokenInput {
   name: string;
   abilities?: string[];
+  granterAbilities?: string[];
   expiresAt?: Date | null;
   expiresInDays?: number;
 }
@@ -63,6 +65,41 @@ function normalizeAbilities(value: unknown): string[] {
   return ["*"];
 }
 
+function grantableTokenAbilities(granter: string[]): string[] {
+  if (granter.includes("*")) {
+    return ["*", ...ADMIN_ABILITIES];
+  }
+
+  return [...new Set(granter)];
+}
+
+function resolveTokenAbilities(requested: string[] | undefined, granter: string[]): string[] {
+  const selected = [...new Set((requested ?? []).map(String).filter(Boolean))];
+  const granterHasWildcard = granter.includes("*");
+
+  if (selected.length === 0) {
+    return granterHasWildcard ? ["*"] : [...granter];
+  }
+
+  if (selected.includes("*")) {
+    return granterHasWildcard ? ["*"] : [...granter];
+  }
+
+  if (granterHasWildcard) {
+    return selected;
+  }
+
+  const allowed = selected.filter((ability) => granter.includes(ability));
+
+  if (allowed.length === 0) {
+    throw new ValidationError("None of the selected abilities can be granted.", {
+      abilities: ["None of the selected abilities can be granted."],
+    });
+  }
+
+  return allowed;
+}
+
 class TokenService {
   constructor(
     private readonly users: UserRepository,
@@ -102,11 +139,15 @@ class TokenService {
     await this.users.findByIdOrThrow(userId, (id) => new NotFoundError(`User ${id} not found.`));
 
     const plainTextToken = generatePlainTextToken();
+    const abilities =
+      input.granterAbilities === undefined
+        ? normalizeAbilities(input.abilities ?? ["*"])
+        : resolveTokenAbilities(input.abilities, input.granterAbilities);
     const record = await this.tokens.create({
       user_id: userId,
       name: input.name,
       token_hash: hashApiToken(plainTextToken),
-      abilities: normalizeAbilities(input.abilities ?? ["*"]),
+      abilities,
       expires_at: resolveExpiresAt(input),
       created_at: new Date(),
     });
@@ -206,4 +247,11 @@ class TokenService {
 }
 
 export default TokenService;
-export { generatePlainTextToken, normalizeAbilities, resolveExpiresAt, toApiTokenResource };
+export {
+  generatePlainTextToken,
+  grantableTokenAbilities,
+  normalizeAbilities,
+  resolveExpiresAt,
+  resolveTokenAbilities,
+  toApiTokenResource,
+};

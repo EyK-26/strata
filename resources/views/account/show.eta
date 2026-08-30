@@ -161,6 +161,16 @@
       Expires in days (optional)
       <input type="number" name="expires_in_days" min="1" max="3650" />
     </label>
+    <fieldset>
+      <legend>Abilities</legend>
+      <p class="hint">Leave all unchecked for the same abilities as this session. You cannot grant abilities you do not have.</p>
+      <% for (const ability of it.availableAbilities ?? []) { %>
+      <label class="checkbox">
+        <input type="checkbox" name="ability:<%= ability %>" value="1" />
+        <code><%= ability %></code>
+      </label>
+      <% } %>
+    </fieldset>
     <button type="submit">Create token</button>
   </form>
 
@@ -171,6 +181,7 @@
     <thead>
       <tr>
         <th>Name</th>
+        <th>Abilities</th>
         <th>Created</th>
         <th>Expires</th>
         <th></th>
@@ -180,6 +191,7 @@
       <% for (const token of it.tokens) { %>
       <tr>
         <td><%= token.name %></td>
+        <td><code><%= (token.abilities ?? []).join(", ") %></code></td>
         <td><%= token.created_at %></td>
         <td><%= token.expires_at ?? "Never" %></td>
         <td>

@@ -1723,6 +1723,8 @@ describe("web routes with server-htmx frontend", () => {
     const createdHtml = await createResponse.text();
     expect(createdHtml).toContain("plain-token");
     expect(createdHtml).toContain(name);
+    expect(createdHtml).toContain("ability:projects:read");
+    expect(createdHtml).toContain("*");
 
     const createdRows = (await getDatabase()`
       SELECT id FROM api_token WHERE name = ${name} ORDER BY id DESC LIMIT 1
@@ -1748,6 +1750,33 @@ describe("web routes with server-htmx frontend", () => {
       headers: { cookie: adminSessionCookie },
     });
     expect(await after.text()).not.toContain(name);
+  });
+
+  test("POST /account/tokens honors selected abilities", async () => {
+    const csrf = await fetchCsrfFromPath("/account", adminSessionCookie);
+    const name = `html-scoped-token-${Date.now()}`;
+    const createResponse = await fetch(`${baseUrl}/account/tokens`, {
+      method: "POST",
+      headers: {
+        cookie: csrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        name,
+        "ability:projects:read": "1",
+        _token: csrf.token,
+      }),
+    });
+
+    expect(createResponse.status).toBe(200);
+    expect(await createResponse.text()).toContain("projects:read");
+
+    const stored = (await getDatabase()`
+      SELECT abilities FROM api_token WHERE name = ${name} ORDER BY id DESC LIMIT 1
+    `) as Array<{ abilities: string[] | string }>;
+    const abilities = stored[0]?.abilities;
+    expect(abilities).toEqual(["projects:read"]);
   });
 
   test("GET /account/export downloads a GDPR JSON attachment", async () => {

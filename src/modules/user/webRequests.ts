@@ -53,6 +53,7 @@ interface WebChangePasswordBody {
 
 interface WebCreateApiTokenBody {
   name: string;
+  abilities?: string[];
   expiresInDays?: number;
 }
 
@@ -212,13 +213,36 @@ class WebChangePasswordRequest extends WebFormRequest<WebChangePasswordBody> {
   }
 }
 
+function abilitiesFromFormPayload(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  const selected: string[] = [];
+
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (!key.startsWith("ability:")) {
+      continue;
+    }
+
+    if (value === "1" || value === "on" || value === true || value === "true") {
+      selected.push(key.slice("ability:".length));
+    }
+  }
+
+  return selected;
+}
+
 class WebCreateApiTokenRequest extends WebFormRequest<WebCreateApiTokenBody> {
   protected parse(payload: unknown): WebCreateApiTokenBody {
     const validated = validateObject(payload, webCreateApiTokenRules);
     const rawDays = validated.expires_in_days;
 
+    const abilities = abilitiesFromFormPayload(payload);
+
     return {
       name: String(validated.name).trim(),
+      ...(abilities.length > 0 ? { abilities } : {}),
       ...(rawDays === undefined || rawDays === null || rawDays === ""
         ? {}
         : { expiresInDays: Number(rawDays) }),

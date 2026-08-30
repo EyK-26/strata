@@ -101,6 +101,21 @@ describe("webRequests", () => {
     });
   });
 
+  test("parseWebCreateApiTokenBody reads ability checkboxes", async () => {
+    await expect(
+      parseWebCreateApiTokenBody(
+        new Request("http://example.test/account/tokens", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "name=scoped&ability%3Aprojects%3Aread=1&ability%3Atasks%3Acreate=on&ability%3Aignored=0",
+        }),
+      ),
+    ).resolves.toEqual({
+      name: "scoped",
+      abilities: ["projects:read", "tasks:create"],
+    });
+  });
+
   test("parseWebConfirmPasswordBody accepts an optional redirect", async () => {
     await expect(
       parseWebConfirmPasswordBody(

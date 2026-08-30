@@ -92,20 +92,29 @@ describe("WebAccountController", () => {
   test("show includes the token list", async () => {
     const controller = createController({});
     const response = await asAuthed(() => controller.show());
-    const body = JSON.parse(await response.text()) as { tokens: ApiTokenResource[] };
+    const body = JSON.parse(await response.text()) as {
+      tokens: ApiTokenResource[];
+      availableAbilities: string[];
+    };
 
     expect(response.status).toBe(200);
     expect(body.tokens).toEqual([sampleToken]);
+    expect(body.availableAbilities).toContain("*");
+    expect(body.availableAbilities).toContain("organizations:create");
   });
 
   test("storeToken renders the one-time plaintext token", async () => {
-    const controller = createController({});
+    const createToken = mock(async () => ({
+      token: sampleToken,
+      plainTextToken: "plain-token-once",
+    }));
+    const controller = createController({ tokens: { createToken } });
     const response = await asAuthed(() =>
       controller.storeToken(
         new Request("http://example.test/account/tokens", {
           method: "POST",
           headers: { "content-type": "application/x-www-form-urlencoded" },
-          body: "name=ci&expires_in_days=30",
+          body: "name=ci&expires_in_days=30&ability%3Aprojects%3Aread=1",
         }),
       ),
     );
@@ -113,6 +122,12 @@ describe("WebAccountController", () => {
 
     expect(response.status).toBe(200);
     expect(body.plainToken).toBe("plain-token-once");
+    expect(createToken).toHaveBeenCalledWith(1, {
+      name: "ci",
+      abilities: ["projects:read"],
+      granterAbilities: ["*"],
+      expiresInDays: 30,
+    });
   });
 
   test("storeToken re-renders validation errors", async () => {

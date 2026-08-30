@@ -6,6 +6,7 @@ describe("abilities", () => {
     const abilities = resolveAbilitiesForRole("member");
 
     expect(abilities).toContain("projects:create");
+    expect(abilities).toContain("organizations:create");
     expect(abilities).not.toContain("*");
   });
 
