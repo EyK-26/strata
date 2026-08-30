@@ -5,6 +5,8 @@ import type { WebhookRecord } from "../../src/modules/webhook/types";
 const dispatched: Array<{
   webhookId: number;
   tenantId: number;
+  url?: string;
+  secret?: string;
   event: string;
   payload: Record<string, unknown>;
 }> = [];

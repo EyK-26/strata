@@ -87,7 +87,7 @@ class WebhookService {
     const payload =
       typeof rawPayload === "string"
         ? (JSON.parse(rawPayload) as Record<string, unknown>)
-        : rawPayload;
+        : (rawPayload as Record<string, unknown>);
     const queue = resolveApplicationQueue();
     const job = createTrackedJob("webhook.dispatch", new DispatchWebhookJob());
 
