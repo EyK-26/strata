@@ -248,11 +248,11 @@ export const PARITY_CATALOG: ParityEntry[] = [
     id: "factories",
     laravelSection: "Eloquent: Factories",
     laravelDocPath: "eloquent-factories",
-    strataApis: [],
+    strataApis: ["Factory"],
     testGlobs: ["unit/factory.test.ts"],
     tier: "core",
     notes:
-      "Factory.make() merges in-memory defaults. No create(), states, sequences, or relationships.",
+      "Factory.make() merges in-memory defaults. Factory.create() persists make() via persist() and strips id 0. No states, sequences, or relationships.",
   },
   {
     id: "authorization",
@@ -337,7 +337,8 @@ export const PARITY_CATALOG: ParityEntry[] = [
     bootstrapApis: [],
     testGlobs: ["unit/schedule.test.ts", "unit/bootstrapSchedule.test.ts"],
     tier: "core",
-    notes: "Only * * * * * and */N * * * *. Other cron strings are rejected at registration.",
+    notes:
+      "dueTasks() uses Bun.cron.parse for the current minute. Laravel withoutOverlapping/timezone/onOneServer are not implemented.",
   },
   {
     id: "cache",
