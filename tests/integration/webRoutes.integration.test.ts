@@ -1191,7 +1191,7 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain("notifications-inbox");
-    expect(html).toContain("Welcome to WorkHub");
+    expect(html).toContain(`Welcome to ${process.env.APP_NAME?.trim() || "WorkHub"}`);
   });
 
   test("POST /notifications/read-all marks the inbox read", async () => {

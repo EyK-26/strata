@@ -1,8 +1,11 @@
+import { appDisplayName } from "@getstrata/core/runtime/appKeyPrefix";
 import type { Seeder } from "./types";
 
 const seeder: Seeder = {
   name: "0003_seed_notifications",
   async run(db) {
+    const title = `Welcome to ${appDisplayName()}`;
+
     await db`
       INSERT INTO notification (user_id, tenant_id, type, title, body, data, read_at, created_at)
       VALUES
@@ -10,7 +13,7 @@ const seeder: Seeder = {
           1,
           1,
           'welcome',
-          'Welcome to WorkHub',
+          ${title},
           'Your admin inbox is live. Mark this read from the bell.',
           '{}'::jsonb,
           NULL,
@@ -20,7 +23,7 @@ const seeder: Seeder = {
           2,
           1,
           'welcome',
-          'Welcome to WorkHub',
+          ${title},
           'You can follow tasks and comments from this inbox.',
           '{}'::jsonb,
           NULL,
