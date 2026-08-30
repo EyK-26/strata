@@ -121,7 +121,7 @@ class FakeProjectRepository
 {
   findById = async (id: number) => (id === project.id ? project : null);
 
-  findIdsByOrganizationIds = async () => [project.id];
+  findIdsByOrganizationIds = async (_organizationIds: number | number[]) => [project.id];
 
   withConnection(_connection: DatabaseConnection) {
     return this as never;
