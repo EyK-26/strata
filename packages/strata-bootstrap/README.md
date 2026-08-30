@@ -34,6 +34,8 @@ Sibling HTMX apps should bind `createCookieSessionAuthManager` from `@getstrata/
 
 `wrapWeb` applies the web group (CSRF + flash) and `withErrorHandling`, so CSRF `ForbiddenError` becomes an HTML 403 in `FRONTEND_MODE=server-htmx`. `wrapWebGuest` is Laravel `guest` / `RedirectIfAuthenticated` (signed-in users go to `/organizations` by default; pass a string or `(user) => path` to override). `wrapWebLogin` / `wrapWebRegister` include that web group plus throttle — do not wrap them with `wrapWeb` again. The throttle callback should return an HTML form at 429 (WorkHub’s `/login` and `/register` do).
 
+`registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. WorkHub webhook dispatch is `registerWebhookJobs()` in the app webhook provider.
+
 These subpaths remain WorkHub-oriented and are not a generic starter API: `@getstrata/bootstrap/createRoutes` (includes SCIM), `@getstrata/bootstrap/schedule`, and `@getstrata/bootstrap/createWebRoutes` (redirects `/` to `/organizations`).
 
 See the [strata](https://github.com/EyK-26/strata) monorepo reference app for full module patterns.

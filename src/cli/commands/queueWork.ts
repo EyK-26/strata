@@ -7,6 +7,7 @@ import {
 } from "../../core/lifecycle/gracefulShutdown";
 import { createFailedJobService, createQueueWorker } from "../../core/queue/createAppQueue";
 import { closeDatabase } from "../../db/connection";
+import { registerWebhookJobs } from "../../modules/webhook/registerWebhookJobs";
 
 async function queueWorkCommand(): Promise<void> {
   const redisUrl = process.env.REDIS_URL;
@@ -18,6 +19,7 @@ async function queueWorkCommand(): Promise<void> {
   assertProductionSecrets();
   createAppContext();
   registerDefaultJobs();
+  registerWebhookJobs();
 
   console.log("[queue:work] Listening for jobs on Redis...");
   const worker = createQueueWorker(redisUrl, createFailedJobService());

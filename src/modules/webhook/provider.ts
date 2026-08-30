@@ -1,4 +1,5 @@
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
+import { registerWebhookJobs } from "./registerWebhookJobs";
 import WebhookRepository from "./repository";
 import WebhookService from "./service";
 
@@ -7,6 +8,7 @@ const webhookServiceToken = "webhook.service";
 const webhookProvider: ServiceProvider = {
   name: "webhook.provider",
   register({ container }) {
+    registerWebhookJobs();
     container.singleton(webhookServiceToken, () => {
       return new WebhookService(new WebhookRepository());
     });

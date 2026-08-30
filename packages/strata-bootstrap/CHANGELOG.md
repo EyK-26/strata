@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.64
+
+- `registerDefaultJobs()` no longer registers WorkHub `webhook.dispatch`. Apps that dispatch model webhooks should call `registerWebhookJobs()` (WorkHub’s webhook provider and `queue:work` do).
+
 ## 0.2.63
 
 - `HttpKernel.wrapWebGuest()` `home` accepts `string | ((user) => string | Promise<string>)` so signed-in guest redirects can follow the current team. Default remains `/organizations`.

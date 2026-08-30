@@ -223,7 +223,9 @@ describe("coverage gap helpers", () => {
 
     const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
     const { registerDefaultJobs } = await import("../../src/bootstrap/queue/defaultJobs");
+    const { registerWebhookJobs } = await import("../../src/modules/webhook/registerWebhookJobs");
     registerDefaultJobs();
+    registerWebhookJobs();
     expect(jobRegistry.create("webhook.dispatch")).toBeInstanceOf(DispatchWebhookJob);
 
     const job = new DispatchWebhookJob();
