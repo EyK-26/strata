@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.91
+
+- `Schedule.command()` accepts any expression `Bun.cron.parse` understands. `dueTasks()` uses the next fire time in the current minute instead of a `*/N` whitelist.
+- `Factory.create()` persists `make()` through subclass `persist()` and strips a placeholder `id` of `0`. No states, sequences, or relationships.
+
 ## 0.5.90
 
 - **Breaking identity defaults:** `appKeyPrefix()` is `strata` and `appDisplayName()` is `Strata` when `APP_KEY_PREFIX` / `APP_NAME` are unset (were `workhub` / `WorkHub`). WorkHub pins those env vars.
