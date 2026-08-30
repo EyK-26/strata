@@ -4,6 +4,7 @@ import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { organizationServiceToken } from "../../src/modules/organization/provider";
+import { currentOrganizationServiceToken } from "../../src/modules/user/currentOrganizationService";
 import { createMfaChallengeCookie } from "../../src/modules/user/mfaChallengeCookie";
 import { MfaRequiredError } from "../../src/modules/user/mfaRequiredError";
 import {
@@ -20,6 +21,7 @@ function createController(services: {
   tokens?: Record<string, unknown>;
   passwordResets?: Record<string, unknown>;
   organizations?: Record<string, unknown>;
+  currentOrganization?: Record<string, unknown>;
   users?: Record<string, unknown>;
   view?: Record<string, unknown>;
 }): WebAuthController {
@@ -69,6 +71,10 @@ function createController(services: {
       slug: "personal-9",
     })),
     ...services.organizations,
+  });
+  container.set(currentOrganizationServiceToken, {
+    resolveHomePath: mock(async (_userId: number, requested = "/organizations") => requested),
+    ...services.currentOrganization,
   });
   container.set(CORE_VIEW_TOKEN, {
     render: mock(async (_template: string, context: Record<string, unknown>) =>
@@ -125,6 +131,25 @@ describe("WebAuthController", () => {
     expect(response.headers.get("Location")).toBe("/projects");
     expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
     expect(response.headers.get("Set-Cookie")).toContain("Max-Age=604800");
+  });
+
+  test("login sends /organizations to the current organization home", async () => {
+    const controller = createController({
+      currentOrganization: {
+        resolveHomePath: mock(async () => "/organizations/1"),
+      },
+    });
+
+    const response = await controller.login(
+      new Request("http://example.test/login", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "email=admin%40workhub.test&password=password123&redirect=%2Forganizations",
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/organizations/1");
   });
 
   test("login with remember sets a longer session cookie", async () => {

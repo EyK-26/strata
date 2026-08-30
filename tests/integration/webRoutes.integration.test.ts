@@ -273,7 +273,7 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("set-cookie")).toContain("workhub_session=");
     expect(response.headers.get("set-cookie")).toContain("Max-Age=604800");
-    expect(response.headers.get("location")).toBe("/organizations");
+    expect(response.headers.get("location")).toBe("/organizations/1");
   });
 
   test("POST /login with remember sets a 30-day session cookie", async () => {

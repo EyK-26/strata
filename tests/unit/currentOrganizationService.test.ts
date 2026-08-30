@@ -68,6 +68,7 @@ describe("CurrentOrganizationService", () => {
         organization_id: 1,
         organization: null,
       });
+      expect(await missing.resolveHomePath(created.id, "/organizations")).toBe("/organizations");
     });
   });
 
@@ -91,6 +92,28 @@ describe("CurrentOrganizationService", () => {
         organization: { id: 2, name: "Orbital Works", slug: "orbital-works" },
       });
       await current.assign(1, 1);
+    });
+  });
+
+  test("resolveHomePath uses the current organization for the org list and root", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const current = service();
+      await current.assign(1, 1);
+
+      expect(await current.resolveHomePath(1, "/account")).toBe("/account");
+      expect(await current.resolveHomePath(1, "/organizations")).toBe("/organizations/1");
+      expect(await current.resolveHomePath(1, "/")).toBe("/organizations/1");
+
+      const users = new UserRepository();
+      const created = await users.create({
+        name: "No Current Org",
+        email: `no-current-${Date.now()}@workhub.test`,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      expect(await current.resolveHomePath(created.id)).toBe("/organizations");
     });
   });
 

@@ -29,6 +29,10 @@ import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
 import type AuthService from "./authService";
 import {
+  type CurrentOrganizationService,
+  currentOrganizationServiceToken,
+} from "./currentOrganizationService";
+import {
   clearMfaChallengeCookie,
   createMfaChallengeCookie,
   readMfaChallenge,
@@ -67,6 +71,10 @@ class WebAuthController {
 
   private get users(): UserRepository {
     return resolveService(this.dependencies, userRepositoryToken);
+  }
+
+  private get currentOrganization(): CurrentOrganizationService {
+    return resolveService(this.dependencies, currentOrganizationServiceToken);
   }
 
   private requireUserId(): number {
@@ -229,7 +237,10 @@ class WebAuthController {
       const user = await this.authService.authenticatePassword(body.email, body.password, {
         mfaCode: body.mfaCode,
       });
-      const redirect = sanitizeInternalPath(body.redirect ?? "/organizations", "/organizations");
+      const redirect = await this.currentOrganization.resolveHomePath(
+        user.id,
+        sanitizeInternalPath(body.redirect ?? "/organizations", "/organizations"),
+      );
 
       return new Response(null, {
         status: 302,
@@ -322,8 +333,10 @@ class WebAuthController {
           redirectUri: `${url.origin}/oauth/${provider}/callback`,
         });
         const organization = await this.organizations.createPersonalForUser(user);
-        const location =
-          redirect === "/organizations" ? `/organizations/${organization.id}` : redirect;
+        const location = await this.currentOrganization.resolveHomePath(
+          user.id,
+          redirect === "/organizations" ? `/organizations/${organization.id}` : redirect,
+        );
         const headers = new Headers({ Location: location });
         headers.append("Set-Cookie", createSessionCookie(user.id));
         headers.append("Set-Cookie", clearOAuthStateCookie());
@@ -380,7 +393,8 @@ class WebAuthController {
 
     try {
       const user = await this.authService.verifyMfaChallenge(pending.userId, body.mfaCode);
-      const headers = new Headers({ Location: redirect });
+      const location = await this.currentOrganization.resolveHomePath(user.id, redirect);
+      const headers = new Headers({ Location: location });
       headers.append("Set-Cookie", createSessionCookie(user.id, { remember: pending.remember }));
       headers.append("Set-Cookie", clearMfaChallengeCookie());
 
@@ -519,7 +533,10 @@ class WebAuthController {
     }
 
     await this.authService.markEmailVerified(userId);
-    const location = readIntendedUrl(request) ?? "/organizations";
+    const location = await this.currentOrganization.resolveHomePath(
+      userId,
+      readIntendedUrl(request) ?? "/organizations",
+    );
     const headers = new Headers({ Location: location });
     headers.append("Set-Cookie", clearIntendedUrlCookie());
 

@@ -65,6 +65,15 @@ class CurrentOrganizationService implements CurrentOrganizationWriter {
     return toCurrentOrganizationResource(organization, organizationId);
   }
 
+  async resolveHomePath(userId: number, requested = "/organizations"): Promise<string> {
+    if (requested !== "/organizations" && requested !== "/") {
+      return requested;
+    }
+
+    const current = await this.currentForUser(userId);
+    return current.organization ? `/organizations/${current.organization.id}` : "/organizations";
+  }
+
   async switchForUser(
     userId: number,
     organizationId: number,
