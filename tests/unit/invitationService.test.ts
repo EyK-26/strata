@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
@@ -237,6 +237,153 @@ describe("OrganizationInvitationService", () => {
       expect(await invitations.acceptPendingForUser(user)).toBe(1);
       expect((await users.findByIdOrThrow(user.id)).current_organization_id).toBe(1);
       expect(await invitations.acceptPendingForUser(user)).toBe(0);
+    });
+  });
+
+  test("listPendingForUser prunes expired rows and includes the organization", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const invitations = service();
+      const users = new UserRepository();
+      const email = `inbox-${Date.now()}@workhub.test`;
+      const user = await users.create({
+        name: "Inbox Invitee",
+        email,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        password_hash: await hashPassword("password"),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      const created = await invitations.invite({
+        organizationId: 1,
+        email,
+        role: "admin",
+        invitedByUserId: 1,
+      });
+
+      expect(await invitations.listPendingForUser(user)).toEqual([
+        expect.objectContaining({
+          id: created.invitation.id,
+          role: "admin",
+          organization: expect.objectContaining({ id: 1, name: "Acme Labs" }),
+        }),
+      ]);
+
+      await db`
+        UPDATE organization_invitation
+        SET expires_at = ${new Date(Date.now() - 1000)}
+        WHERE email = ${email}
+      `;
+      expect(await invitations.listPendingForUser(user)).toEqual([]);
+    });
+  });
+
+  test("listPendingForUser keeps a row when the organization is missing", async () => {
+    const email = "gone-org@workhub.test";
+    const invitations = {
+      listPendingByEmail: mock(async () => [
+        {
+          id: 9,
+          organization_id: 99,
+          email,
+          role: "member" as const,
+          invited_by: 1,
+          token_hash: "hash",
+          expires_at: new Date(Date.now() + 60_000),
+          created_at: new Date(),
+        },
+      ]),
+      deleteById: mock(async () => true),
+    };
+    const listed = await new OrganizationInvitationService(
+      invitations as never,
+      {} as never,
+      { findById: async () => null } as never,
+    ).listPendingForUser({ email });
+
+    expect(listed).toEqual([
+      expect.objectContaining({
+        id: 9,
+        organization_id: 99,
+        organization: null,
+      }),
+    ]);
+    expect(invitations.deleteById).not.toHaveBeenCalled();
+  });
+
+  test("acceptForUser joins without the mail token and declineForUser removes the invite", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const invitations = service();
+      const users = new UserRepository();
+      const email = `session-${Date.now()}@workhub.test`;
+      const user = await users.create({
+        name: "Session Invitee",
+        email,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        password_hash: await hashPassword("password"),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      const declined = await invitations.invite({
+        organizationId: 1,
+        email,
+        invitedByUserId: 1,
+      });
+      await invitations.declineForUser(declined.invitation.id, user);
+      expect(await invitations.listPendingForUser(user)).toEqual([]);
+      expect((await users.findByIdOrThrow(user.id)).current_organization_id).toBeNull();
+
+      const accepted = await invitations.invite({
+        organizationId: 1,
+        email,
+        role: "member",
+        invitedByUserId: 1,
+      });
+      const member = await invitations.acceptForUser(accepted.invitation.id, user);
+      expect(member.organization_id).toBe(1);
+      expect(member.user_id).toBe(user.id);
+      expect((await users.findByIdOrThrow(user.id)).current_organization_id).toBe(1);
+      expect(await invitations.listPendingForUser(user)).toEqual([]);
+    });
+  });
+
+  test("acceptForUser rejects another user's invitation and an expired row", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const invitations = service();
+      const users = new UserRepository();
+      const email = `owned-${Date.now()}@workhub.test`;
+      const user = await users.create({
+        name: "Owned Invitee",
+        email,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        password_hash: await hashPassword("password"),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      const created = await invitations.invite({
+        organizationId: 1,
+        email,
+        invitedByUserId: 1,
+      });
+
+      await expect(
+        invitations.acceptForUser(created.invitation.id, {
+          id: user.id,
+          email: "other@workhub.test",
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      await expect(invitations.declineForUser(999_999, user)).rejects.toBeInstanceOf(NotFoundError);
+
+      await db`
+        UPDATE organization_invitation
+        SET expires_at = ${new Date(Date.now() - 1000)}
+        WHERE email = ${email}
+      `;
+      await expect(invitations.acceptForUser(created.invitation.id, user)).rejects.toBeInstanceOf(
+        ValidationError,
+      );
     });
   });
 

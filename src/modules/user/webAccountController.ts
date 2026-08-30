@@ -7,16 +7,26 @@ import { clearPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirm
 import { clearSessionCookie, createSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { BadRequestError, UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
+import {
+  BadRequestError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from "@getstrata/core/errors/http";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
 import { parseMultipartUpload } from "@getstrata/core/http/parseMultipartUpload";
 import { withErrorHandling } from "@getstrata/core/http/response";
+import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { normalizeFieldErrors } from "@getstrata/core/http/webErrorResponse";
 import { appKeyPrefix } from "@getstrata/core/runtime/appKeyPrefix";
 import type { ViewEngine } from "@getstrata/core/view";
 import { htmlResponse } from "@getstrata/core/view";
 import { isFeatureEnabled } from "../../config/features";
+import {
+  type OrganizationInvitationService,
+  organizationInvitationServiceToken,
+} from "../organization/invitationService";
 import type AuthService from "./authService";
 import type OAuthIdentityRepository from "./oauthIdentityRepository";
 import type PasswordResetService from "./passwordResetService";
@@ -69,6 +79,10 @@ class WebAccountController {
 
   private get view(): ViewEngine {
     return resolveService(this.dependencies, CORE_VIEW_TOKEN);
+  }
+
+  private get invitations(): OrganizationInvitationService {
+    return resolveService(this.dependencies, organizationInvitationServiceToken);
   }
 
   private tryPhotos(): ProfilePhotoService | null {
@@ -146,6 +160,8 @@ class WebAccountController {
         recoveryCodes: null,
         errors: {},
         ...extras,
+        receivedInvitations:
+          extras.receivedInvitations ?? (await this.invitations.listPendingForUser(user)),
       }),
       { status },
     );
@@ -156,6 +172,63 @@ class WebAccountController {
 
     return await this.renderAccount(user);
   });
+
+  readonly acceptInvitation = withErrorHandling(async (request: Request) => {
+    const user = await this.users.findByIdOrThrow(this.requireUserId());
+
+    try {
+      const membership = await this.invitations.acceptForUser(
+        this.requireInvitationId(request),
+        user,
+      );
+
+      return flashResponse(Response.redirect(`/organizations/${membership.organization_id}`, 302), {
+        level: "success",
+        message: "You joined the team.",
+      });
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof NotFoundError) {
+        return flashResponse(Response.redirect("/account", 302), {
+          level: "error",
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  readonly declineInvitation = withErrorHandling(async (request: Request) => {
+    const user = await this.users.findByIdOrThrow(this.requireUserId());
+
+    try {
+      await this.invitations.declineForUser(this.requireInvitationId(request), user);
+
+      return flashResponse(Response.redirect("/account", 302), {
+        level: "success",
+        message: "Invitation declined.",
+      });
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof NotFoundError) {
+        return flashResponse(Response.redirect("/account", 302), {
+          level: "error",
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+  });
+
+  private requireInvitationId(request: Request): number {
+    const params = (request as Request & { params?: { id: string } }).params;
+
+    if (!params?.id) {
+      throw new ValidationError("Id is required.");
+    }
+
+    return parsePositiveIntParam(params.id, "id");
+  }
 
   readonly updateProfile = withErrorHandling(async (request: Request) => {
     const userId = this.requireUserId();
@@ -565,6 +638,12 @@ function createWebAccountRoutes(dependencies: AppDependencies, kernel: HttpKerne
     },
     "/account/delete": {
       POST: kernel.wrapWebPasswordConfirm(controller.deleteAccount as unknown as RouteHandler),
+    },
+    "/account/invitations/:id/accept": {
+      POST: kernel.wrapWebAuthenticated(controller.acceptInvitation as unknown as RouteHandler),
+    },
+    "/account/invitations/:id/decline": {
+      POST: kernel.wrapWebAuthenticated(controller.declineInvitation as unknown as RouteHandler),
     },
   };
 }

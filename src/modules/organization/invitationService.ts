@@ -40,6 +40,10 @@ type InviteResult = {
   acceptUrl: string;
 };
 
+type ReceivedInvitationResource = OrganizationInvitationResource & {
+  organization: { id: number; name: string; slug: string } | null;
+};
+
 function resolveInvitationTtlSeconds(): number {
   const raw = Number(process.env.ORGANIZATION_INVITATION_TTL_SECONDS ?? "");
 
@@ -248,6 +252,78 @@ If you do not have an account yet, register with **${email}** and this invitatio
     return accepted;
   }
 
+  async listPendingForUser(user: Pick<UserRecord, "email">): Promise<ReceivedInvitationResource[]> {
+    const pending = await this.invitations.listPendingByEmail(normalizeEmail(user.email));
+    const received: ReceivedInvitationResource[] = [];
+
+    for (const invitation of pending) {
+      if (new Date(invitation.expires_at).getTime() <= Date.now()) {
+        await this.invitations.deleteById(invitation.id);
+        continue;
+      }
+
+      const organization = await this.organizations.findById(invitation.organization_id);
+      received.push({
+        ...toInvitationResource(invitation),
+        organization: organization
+          ? { id: organization.id, name: organization.name, slug: organization.slug }
+          : null,
+      });
+    }
+
+    return received;
+  }
+
+  async acceptForUser(
+    invitationId: number,
+    user: Pick<UserRecord, "id" | "email">,
+  ): Promise<OrganizationMemberRecord> {
+    const invitation = await this.requirePendingForUser(invitationId, user);
+    const membership = await this.addIfMissing(invitation, user.id);
+    await this.invitations.deleteById(invitation.id);
+    await this.switchCurrentOrganization(user.id, invitation.organization_id);
+    logSecurityEvent("organization_invitation_accepted", {
+      organization_id: invitation.organization_id,
+      user_id: user.id,
+    });
+
+    return membership;
+  }
+
+  async declineForUser(
+    invitationId: number,
+    user: Pick<UserRecord, "id" | "email">,
+  ): Promise<void> {
+    const invitation = await this.requirePendingForUser(invitationId, user);
+    await this.invitations.deleteById(invitation.id);
+    logSecurityEvent("organization_invitation_declined", {
+      organization_id: invitation.organization_id,
+      user_id: user.id,
+      invitation_id: invitation.id,
+    });
+  }
+
+  private async requirePendingForUser(
+    invitationId: number,
+    user: Pick<UserRecord, "id" | "email">,
+  ): Promise<OrganizationInvitationRecord> {
+    const pending = await this.invitations.listPendingByEmail(normalizeEmail(user.email));
+    const invitation = pending.find((row) => row.id === invitationId);
+
+    if (!invitation) {
+      throw new NotFoundError(`Organization invitation ${invitationId} not found.`);
+    }
+
+    if (new Date(invitation.expires_at).getTime() <= Date.now()) {
+      await this.invitations.deleteById(invitation.id);
+      throw new ValidationError("This invitation has expired.", {
+        token: ["This invitation has expired."],
+      });
+    }
+
+    return invitation;
+  }
+
   private async addIfMissing(
     invitation: OrganizationInvitationRecord,
     userId: number,
@@ -293,7 +369,7 @@ function resolveInvitationService(): OrganizationInvitationService {
   );
 }
 
-export type { InviteResult, OrganizationInvitationResource };
+export type { InviteResult, OrganizationInvitationResource, ReceivedInvitationResource };
 export {
   OrganizationInvitationService,
   organizationInvitationServiceToken,

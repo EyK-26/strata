@@ -2130,10 +2130,142 @@ describe("web routes with server-htmx frontend", () => {
     expect(accountHtml).toContain("Profile photo");
     expect(accountHtml).toContain("Upload photo");
     expect(accountHtml).toContain("No profile photo yet.");
+    expect(accountHtml).toContain("Team invitations");
+    expect(accountHtml).toContain('id="team-invitations"');
+    expect(accountHtml).toContain("No pending team invitations.");
     expect(orgReport.status).toBe(200);
     const orgReportHtml = await orgReport.text();
     expect(orgReportHtml).toContain("Acme Labs");
     expect(orgReportHtml).toContain("/reports?all=1");
+  });
+
+  test("HTML account accept and decline team invitations for the signed-in email", async () => {
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const email = `html-account-invite-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: registerCsrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "Account Invitee",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+    expect(registered.status).toBe(302);
+    const session = mergeCookieHeader(registerCsrf.cookies, registered);
+
+    const inviteCsrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const invited = await fetch(`${baseUrl}/organizations/1/members`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: inviteCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        email,
+        role: "member",
+        _token: inviteCsrf.token,
+      }),
+    });
+    expect(invited.status).toBe(302);
+
+    const invitation = await runWithMigrationBypass(
+      async () =>
+        (await getDatabase()`
+          SELECT id FROM organization_invitation WHERE email = ${email} ORDER BY id DESC LIMIT 1
+        `) as Array<{ id: number }>,
+    );
+    const invitationId = invitation[0]?.id;
+    expect(invitationId).toBeTruthy();
+
+    const account = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: session, accept: "text/html" },
+    });
+    expect(account.status).toBe(200);
+    const accountHtml = await account.text();
+    expect(accountHtml).toContain('id="team-invitations"');
+    expect(accountHtml).toContain("Acme Labs");
+    expect(accountHtml).toContain(`/account/invitations/${invitationId}/accept`);
+    expect(accountHtml).toContain(`/account/invitations/${invitationId}/decline`);
+
+    const declineCsrf = await fetchCsrfFromPath("/account", session);
+    const declined = await fetch(`${baseUrl}/account/invitations/${invitationId}/decline`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: declineCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: declineCsrf.token }),
+    });
+    expect(declined.status).toBe(302);
+    expect(declined.headers.get("location")).toBe("/account");
+
+    const afterDecline = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: session, accept: "text/html" },
+    });
+    expect(await afterDecline.text()).toContain("No pending team invitations.");
+
+    const reinviteCsrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const reinvited = await fetch(`${baseUrl}/organizations/1/members`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: reinviteCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+      },
+      body: new URLSearchParams({
+        email,
+        role: "admin",
+        _token: reinviteCsrf.token,
+      }),
+    });
+    expect(reinvited.status).toBe(302);
+
+    const second = await runWithMigrationBypass(
+      async () =>
+        (await getDatabase()`
+          SELECT id FROM organization_invitation WHERE email = ${email} ORDER BY id DESC LIMIT 1
+        `) as Array<{ id: number }>,
+    );
+    const secondId = second[0]?.id;
+    expect(secondId).toBeTruthy();
+
+    const acceptCsrf = await fetchCsrfFromPath("/account", session);
+    const accepted = await fetch(`${baseUrl}/account/invitations/${secondId}/accept`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: acceptCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ _token: acceptCsrf.token }),
+    });
+    expect(accepted.status).toBe(302);
+    expect(accepted.headers.get("location")).toBe("/organizations/1");
+
+    const joined = mergeCookieHeader(session, accepted);
+    const show = await fetch(`${baseUrl}/organizations/1`, {
+      headers: { cookie: joined, accept: "text/html" },
+    });
+    expect(show.status).toBe(200);
+    const showHtml = await show.text();
+    expect(showHtml).toContain("This is your current team");
+    expect(showHtml).toContain(email);
+
+    const afterAccept = await fetch(`${baseUrl}/account`, {
+      headers: { cookie: joined, accept: "text/html" },
+    });
+    expect(await afterAccept.text()).toContain("No pending team invitations.");
   });
 
   test("POST /current-organization scopes HTML /reports to the switched team", async () => {

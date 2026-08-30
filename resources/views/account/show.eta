@@ -14,6 +14,47 @@
 </section>
 <% } %>
 
+<section class="card" id="team-invitations">
+  <h2>Team invitations</h2>
+  <% if (!it.receivedInvitations?.length) { %>
+  <p class="hint">No pending team invitations.</p>
+  <% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Team</th>
+        <th>Role</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const invitation of it.receivedInvitations) { %>
+      <tr>
+        <td>
+          <% if (invitation.organization) { %>
+          <a href="/organizations/<%= invitation.organization.id %>"><%= invitation.organization.name %></a>
+          <% } else { %>
+          Team #<%= invitation.organization_id %>
+          <% } %>
+        </td>
+        <td><%= invitation.role %></td>
+        <td>
+          <form method="post" action="/account/invitations/<%= invitation.id %>/accept">
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit">Accept</button>
+          </form>
+          <form method="post" action="/account/invitations/<%= invitation.id %>/decline">
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit" class="danger-button">Decline</button>
+          </form>
+        </td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table>
+  <% } %>
+</section>
+
 <section class="card" id="profile">
   <h2>Profile</h2>
   <form method="post" action="/account/profile" class="stack-form">
