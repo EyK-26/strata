@@ -29,6 +29,7 @@ const CORE_SUBPATHS = [
   "auth/oauth/samlProvider",
   "auth/oauth/types",
   "auth/password",
+  "auth/intendedUrlCookie",
   "auth/passwordConfirmCookie",
   "auth/policy",
   "auth/scimAuthMiddleware",

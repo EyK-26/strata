@@ -1,5 +1,10 @@
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import {
+  clearIntendedUrlCookie,
+  createIntendedUrlCookie,
+  readIntendedUrl,
+} from "@getstrata/core/auth/intendedUrlCookie";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import {
   clearPasswordConfirmCookie,
@@ -177,20 +182,18 @@ class WebAuthController {
 
       if (isFeatureEnabled("emailVerification")) {
         await this.passwordResets.sendEmailVerification(user);
+        const headers = new Headers({ Location: "/email/verify" });
+        headers.append("Set-Cookie", createSessionCookie(user.id));
+        const intended = createIntendedUrlCookie(body.redirect ?? "");
 
-        return flashResponse(
-          new Response(null, {
-            status: 302,
-            headers: {
-              Location: "/email/verify",
-              "Set-Cookie": createSessionCookie(user.id),
-            },
-          }),
-          {
-            level: "success",
-            message: "Account created. Check your email to verify the address.",
-          },
-        );
+        if (intended) {
+          headers.append("Set-Cookie", intended);
+        }
+
+        return flashResponse(new Response(null, { status: 302, headers }), {
+          level: "success",
+          message: "Account created. Check your email to verify the address.",
+        });
       }
 
       const fallback = `/organizations/${organization.id}`;
@@ -340,6 +343,7 @@ class WebAuthController {
     headers.append("Set-Cookie", clearSessionCookie());
     headers.append("Set-Cookie", clearPasswordConfirmCookie());
     headers.append("Set-Cookie", clearMfaChallengeCookie());
+    headers.append("Set-Cookie", clearIntendedUrlCookie());
 
     return new Response(null, { status: 302, headers });
   });
@@ -515,8 +519,11 @@ class WebAuthController {
     }
 
     await this.authService.markEmailVerified(userId);
+    const location = readIntendedUrl(request) ?? "/organizations";
+    const headers = new Headers({ Location: location });
+    headers.append("Set-Cookie", clearIntendedUrlCookie());
 
-    return flashResponse(Response.redirect("/organizations", 302), {
+    return flashResponse(new Response(null, { status: 302, headers }), {
       level: "success",
       message: "Email address verified.",
     });

@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.81
+
+- `@getstrata/core/auth/intendedUrlCookie` (`createIntendedUrlCookie`, `readIntendedUrl`, `clearIntendedUrlCookie`, `createIntendedUrlCookieFromRequest`). Fortify intended URL after HTML email verification: register with `redirect=` and Laravel `verified` HTML redirects stash `${APP_KEY_PREFIX}_intended` (`INTENDED_URL_COOKIE_NAME`, default `workhub_intended`; TTL `INTENDED_URL_TTL_SECONDS`, default 86400s). `GET /verify-email` honors and clears it.
+
 ## 0.5.80
 
 - `appCookieName()` / `appDevSecret()` on `@getstrata/core/runtime/appKeyPrefix`. HMAC session, CSRF, flash, password-confirm, signed-URL, OAuth-state, and token-pepper fallbacks follow `APP_KEY_PREFIX` (WorkHub defaults unchanged).

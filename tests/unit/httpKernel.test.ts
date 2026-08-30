@@ -191,6 +191,7 @@ describe("HttpKernel", () => {
 
       expect(unverified.status).toBe(302);
       expect(unverified.headers.get("Location")).toBe("/email/verify");
+      expect(unverified.headers.get("Set-Cookie") ?? "").not.toContain("workhub_intended=");
     } finally {
       restoreEnvVar("FRONTEND_MODE", previousMode);
       restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previousVerify);
@@ -218,6 +219,11 @@ describe("HttpKernel", () => {
 
       expect(unverified.status).toBe(302);
       expect(unverified.headers.get("Location")).toBe("/email/verify");
+      expect(
+        (unverified.headers.getSetCookie?.() ?? [unverified.headers.get("Set-Cookie") ?? ""]).some(
+          (cookie) => cookie.includes("workhub_intended="),
+        ),
+      ).toBe(true);
 
       const verified = await handler(
         new Request("http://example.test/organizations", {

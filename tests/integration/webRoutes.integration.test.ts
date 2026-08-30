@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { hashPassword } from "@getstrata/core/auth/password";
+import { emailLookupForQuery } from "@getstrata/core/crypto/fieldEncryption";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { generateTotp } from "@getstrata/core/security/totp";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
@@ -626,6 +627,123 @@ describe("web routes with server-htmx frontend", () => {
       });
       expect(login.status).toBe(302);
       expect(login.headers.get("location")).toBe("/email/verify");
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
+  test("POST /register with email verification restores the intended URL after verify", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+    const csrf = await fetchCsrfFromPath("/register");
+    const email = `html-verify-intended-${Date.now()}@workhub.test`;
+
+    try {
+      const response = await fetch(`${baseUrl}/register`, {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: csrf.cookies,
+        },
+        body: new URLSearchParams({
+          name: "HTML Verify Intended",
+          email,
+          password: "password123",
+          password_confirmation: "password123",
+          redirect: "/account",
+          _token: csrf.token,
+        }),
+      });
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("/email/verify");
+      expect(
+        readSetCookies(response).some((cookie) => cookie.startsWith("workhub_intended=")),
+      ).toBe(true);
+
+      const session = mergeCookieHeader("", response);
+      const users = await runWithMigrationBypass(
+        async () =>
+          (await getDatabase()`
+            SELECT id FROM users WHERE email_lookup = ${emailLookupForQuery(email)}
+          `) as Array<{ id: number }>,
+      );
+      const userId = users[0]?.id;
+      expect(userId).toBeGreaterThan(0);
+
+      const path = temporarySignedUrl("/verify-email", 120, { id: userId });
+      const verified = await fetch(`${baseUrl}${path}`, {
+        redirect: "manual",
+        headers: { cookie: session },
+      });
+
+      expect(verified.status).toBe(302);
+      expect(verified.headers.get("location")).toBe("/account");
+      expect(
+        readSetCookies(verified).some(
+          (cookie) => cookie.startsWith("workhub_intended=") && cookie.includes("Max-Age=0"),
+        ),
+      ).toBe(true);
+
+      const account = await fetch(`${baseUrl}/account`, {
+        headers: { cookie: mergeCookieHeader(session, verified) },
+      });
+      expect(account.status).toBe(200);
+      expect(await account.text()).toContain("HTML Verify Intended");
+    } finally {
+      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
+    }
+  });
+
+  test("GET /account while unverified stashes the intended URL for verify", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+    const csrf = await fetchCsrfFromPath("/register");
+    const email = `html-verify-stash-${Date.now()}@workhub.test`;
+
+    try {
+      const registered = await fetch(`${baseUrl}/register`, {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: csrf.cookies,
+        },
+        body: new URLSearchParams({
+          name: "HTML Verify Stash",
+          email,
+          password: "password123",
+          password_confirmation: "password123",
+          _token: csrf.token,
+        }),
+      });
+      expect(registered.status).toBe(302);
+
+      const session = mergeCookieHeader("", registered);
+      const account = await fetch(`${baseUrl}/account`, {
+        redirect: "manual",
+        headers: { cookie: session },
+      });
+      expect(account.status).toBe(302);
+      expect(account.headers.get("location")).toBe("/email/verify");
+      expect(readSetCookies(account).some((cookie) => cookie.startsWith("workhub_intended="))).toBe(
+        true,
+      );
+
+      const users = await runWithMigrationBypass(
+        async () =>
+          (await getDatabase()`
+            SELECT id FROM users WHERE email_lookup = ${emailLookupForQuery(email)}
+          `) as Array<{ id: number }>,
+      );
+      const path = temporarySignedUrl("/verify-email", 120, { id: users[0]?.id });
+      const verified = await fetch(`${baseUrl}${path}`, {
+        redirect: "manual",
+        headers: { cookie: mergeCookieHeader(session, account) },
+      });
+      expect(verified.status).toBe(302);
+      expect(verified.headers.get("location")).toBe("/account");
     } finally {
       restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
     }

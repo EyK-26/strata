@@ -35,6 +35,11 @@ function createController(services: {
       email: "new@workhub.test",
       role: "member",
     })),
+    markEmailVerified: mock(async () => ({
+      id: 9,
+      email: "new@workhub.test",
+      role: "member",
+    })),
     buildOAuthAuthorizationUrl: mock(
       (_name: string, state: string, redirectUri?: string) =>
         `https://mock.oauth/authorize?state=${state}${redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
@@ -489,6 +494,9 @@ describe("WebAuthController", () => {
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toBe("/email/verify");
       expect(response.headers.get("Set-Cookie")).toContain("workhub_session=");
+      expect(
+        response.headers.getSetCookie().some((cookie) => cookie.startsWith("workhub_intended=")),
+      ).toBe(false);
       expect(sendEmailVerification).toHaveBeenCalled();
     } finally {
       if (previous === undefined) {
@@ -497,6 +505,110 @@ describe("WebAuthController", () => {
         process.env.FEATURE_EMAIL_VERIFICATION = previous;
       }
     }
+  });
+
+  test("register stashes a same-origin intended URL when verification is on", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+
+    try {
+      const controller = createController({});
+      const response = await controller.register(
+        new Request("http://example.test/register", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "name=Ada&email=new%40workhub.test&password=password123&password_confirmation=password123&redirect=%2Faccount",
+        }),
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe("/email/verify");
+      expect(
+        response.headers.getSetCookie().some((cookie) => cookie.startsWith("workhub_intended=")),
+      ).toBe(true);
+      expect(response.headers.getSetCookie().join("\n")).toContain("workhub_intended=%2Faccount");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.FEATURE_EMAIL_VERIFICATION;
+      } else {
+        process.env.FEATURE_EMAIL_VERIFICATION = previous;
+      }
+    }
+  });
+
+  test("register ignores an external intended URL when verification is on", async () => {
+    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+    process.env.FEATURE_EMAIL_VERIFICATION = "true";
+
+    try {
+      const controller = createController({});
+      const response = await controller.register(
+        new Request("http://example.test/register", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "name=Ada&email=new%40workhub.test&password=password123&password_confirmation=password123&redirect=https%3A%2F%2Fevil.example%2Fphish",
+        }),
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe("/email/verify");
+      expect(
+        response.headers.getSetCookie().some((cookie) => cookie.startsWith("workhub_intended=")),
+      ).toBe(false);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.FEATURE_EMAIL_VERIFICATION;
+      } else {
+        process.env.FEATURE_EMAIL_VERIFICATION = previous;
+      }
+    }
+  });
+
+  test("verifyEmail redirects to /organizations without an intended cookie", async () => {
+    const markEmailVerified = mock(async () => ({
+      id: 9,
+      email: "new@workhub.test",
+      role: "member",
+    }));
+    const controller = createController({
+      authService: { markEmailVerified },
+    });
+    const response = await controller.verifyEmail(
+      new Request("http://example.test/verify-email?id=9"),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/organizations");
+    expect(
+      response.headers.getSetCookie().some((cookie) => cookie.startsWith("workhub_intended=")),
+    ).toBe(true);
+    expect(markEmailVerified).toHaveBeenCalledWith(9);
+  });
+
+  test("verifyEmail honors a stashed intended URL and clears the cookie", async () => {
+    const controller = createController({});
+    const response = await controller.verifyEmail(
+      new Request("http://example.test/verify-email?id=9", {
+        headers: { cookie: "workhub_intended=%2Faccount" },
+      }),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/account");
+    expect(
+      response.headers
+        .getSetCookie()
+        .some((cookie) => cookie.startsWith("workhub_intended=") && cookie.includes("Max-Age=0")),
+    ).toBe(true);
+  });
+
+  test("verifyEmail rejects an invalid id", async () => {
+    const controller = createController({});
+    const response = await controller.verifyEmail(
+      new Request("http://example.test/verify-email?id=abc"),
+    );
+
+    expect(response.status).toBe(401);
   });
 
   test("register re-renders duplicate email errors", async () => {
@@ -563,6 +675,9 @@ describe("WebAuthController", () => {
     ).toBe(true);
     expect(
       response.headers.getSetCookie().some((cookie) => cookie.startsWith("workhub_mfa_pending=")),
+    ).toBe(true);
+    expect(
+      response.headers.getSetCookie().some((cookie) => cookie.startsWith("workhub_intended=")),
     ).toBe(true);
   });
 

@@ -4,6 +4,7 @@ import {
   isEmailVerificationRequired,
 } from "@getstrata/core/auth/emailVerification";
 import type { AuthManager } from "@getstrata/core/auth/guard";
+import { createIntendedUrlCookieFromRequest } from "@getstrata/core/auth/intendedUrlCookie";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
 
@@ -26,7 +27,14 @@ function createRequireVerifiedMiddleware(auth?: AuthManager): Middleware {
       return Response.json({ error: UNVERIFIED_MESSAGE }, { status: 403 });
     }
 
-    return Response.redirect(VERIFY_NOTICE_PATH, 302);
+    const headers = new Headers({ Location: VERIFY_NOTICE_PATH });
+    const intended = createIntendedUrlCookieFromRequest(request);
+
+    if (intended) {
+      headers.append("Set-Cookie", intended);
+    }
+
+    return new Response(null, { status: 302, headers });
   };
 }
 
