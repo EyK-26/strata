@@ -441,9 +441,9 @@ describe("web routes with server-htmx frontend", () => {
     });
 
     expect(login.status).toBe(302);
-    expect(login.headers.get("location")).toBe("/organizations");
+    expect(login.headers.get("location")).toBe("/organizations/1");
     expect(register.status).toBe(302);
-    expect(register.headers.get("location")).toBe("/organizations");
+    expect(register.headers.get("location")).toBe("/organizations/1");
   });
 
   test("GET /register and POST /register create a session without an API token", async () => {

@@ -1,3 +1,4 @@
+import type { AuthUser } from "@getstrata/core/auth/authContext";
 import {
   hasVerifiedEmail,
   isEmailVerificationRequired,
@@ -43,6 +44,7 @@ import {
 import type { AppDependencies, ConfigStore } from "./contracts";
 
 type MiddlewareGroupName = "api" | "authenticated" | "web";
+type WebGuestHome = string | ((user: AuthUser) => string | Promise<string>);
 
 class HttpKernel {
   constructor(private readonly dependencies: AppDependencies) {}
@@ -127,7 +129,7 @@ class HttpKernel {
   }
 
   /** Laravel `guest` / `RedirectIfAuthenticated` — signed-in users go to `home`. */
-  wrapWebGuest(handler: RouteHandler, home = "/organizations"): RouteHandler {
+  wrapWebGuest(handler: RouteHandler, home: WebGuestHome = "/organizations"): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
     return this.wrapWeb(async (request) => {
@@ -138,7 +140,8 @@ class HttpKernel {
           return Response.redirect("/email/verify", 302);
         }
 
-        return Response.redirect(home, 302);
+        const location = typeof home === "function" ? await home(user) : home;
+        return Response.redirect(location, 302);
       }
 
       return handler(request);
@@ -323,5 +326,5 @@ function createHttpKernel(dependencies: AppDependencies): HttpKernel {
   return new HttpKernel(dependencies);
 }
 
-export type { MiddlewareGroupName };
+export type { MiddlewareGroupName, WebGuestHome };
 export { createHttpKernel, HttpKernel };

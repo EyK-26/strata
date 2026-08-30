@@ -170,6 +170,31 @@ describe("HttpKernel", () => {
     }
   });
 
+  test("wrapWebGuest accepts an async home resolver", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapWebGuest(
+        async () => new Response("login"),
+        async (user) => {
+          return `/organizations/${user.id}`;
+        },
+      );
+
+      const signedIn = await handler(
+        new Request("http://example.test/login", {
+          headers: { "x-authenticated-user-id": "7" },
+        }),
+      );
+      expect(signedIn.status).toBe(302);
+      expect(signedIn.headers.get("Location")).toBe("/organizations/7");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
   test("wrapWebGuest sends unverified sessions to the verify notice", async () => {
     const previousMode = process.env.FRONTEND_MODE;
     const previousVerify = process.env.FEATURE_EMAIL_VERIFICATION;

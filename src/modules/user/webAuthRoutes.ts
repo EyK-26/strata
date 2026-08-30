@@ -1,18 +1,32 @@
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { wrapWebLogin, wrapWebRegister } from "@getstrata/bootstrap/web/routing";
+import { resolveUserId } from "@getstrata/core/auth/accessControl";
+import type { AuthUser } from "@getstrata/core/auth/authContext";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
+import { resolveService } from "@getstrata/core/contracts/di";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
 import { isFeatureEnabled } from "../../config/features";
+import {
+  type CurrentOrganizationService,
+  currentOrganizationServiceToken,
+} from "./currentOrganizationService";
 import WebAuthController from "./webAuthController";
 
 function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
   const controller = new WebAuthController(dependencies);
+  const guestHome = async (user: AuthUser) => {
+    const currentOrganization = resolveService<CurrentOrganizationService>(
+      dependencies,
+      currentOrganizationServiceToken,
+    );
+    return currentOrganization.resolveHomePath(resolveUserId(user));
+  };
 
   return {
     ...(isFeatureEnabled("registration")
       ? {
           "/register": {
-            GET: kernel.wrapWebGuest(controller.showRegister as unknown as RouteHandler),
+            GET: kernel.wrapWebGuest(controller.showRegister as unknown as RouteHandler, guestHome),
             POST: wrapWebRegister(
               kernel,
               controller.register as unknown as RouteHandler,
@@ -22,7 +36,7 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
         }
       : {}),
     "/login": {
-      GET: kernel.wrapWebGuest(controller.showLogin as unknown as RouteHandler),
+      GET: kernel.wrapWebGuest(controller.showLogin as unknown as RouteHandler, guestHome),
       POST: wrapWebLogin(
         kernel,
         controller.login as unknown as RouteHandler,
@@ -30,7 +44,10 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
       ),
     },
     "/two-factor-challenge": {
-      GET: kernel.wrapWebGuest(controller.showTwoFactorChallenge as unknown as RouteHandler),
+      GET: kernel.wrapWebGuest(
+        controller.showTwoFactorChallenge as unknown as RouteHandler,
+        guestHome,
+      ),
       POST: wrapWebLogin(
         kernel,
         controller.twoFactorChallenge as unknown as RouteHandler,
@@ -58,7 +75,7 @@ function createWebAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) 
       ),
     },
     "/forgot-password": {
-      GET: kernel.wrapWebGuest(controller.showForgotPassword as unknown as RouteHandler),
+      GET: kernel.wrapWebGuest(controller.showForgotPassword as unknown as RouteHandler, guestHome),
       POST: wrapWebLogin(
         kernel,
         controller.sendResetLink as unknown as RouteHandler,

@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.63
+
+- `HttpKernel.wrapWebGuest()` `home` accepts `string | ((user) => string | Promise<string>)` so signed-in guest redirects can follow the current team. Default remains `/organizations`.
+
 ## 0.2.62
 
 - `HttpKernel.wrapWebPasswordConfirm()` is Laravel `password.confirm` for HTML routes. Peer `@getstrata/core` `^0.5.75`.
