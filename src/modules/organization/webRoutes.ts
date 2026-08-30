@@ -38,6 +38,9 @@ function createOrganizationWebRoutes(dependencies: AppDependencies, kernel: Http
     "/organizations/:id/members/:userId": {
       DELETE: kernel.wrapWebAuthenticated(controller.removeMember as unknown as RouteHandler),
     },
+    "/organizations/:id/members/:userId/leave": {
+      POST: kernel.wrapWebAuthenticated(controller.removeMember as unknown as RouteHandler),
+    },
     "/organizations/:id/members/:userId/role": {
       POST: kernel.wrapWebAuthenticated(controller.updateMemberRole as unknown as RouteHandler),
     },

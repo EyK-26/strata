@@ -25,6 +25,7 @@
         <td><%= member.name %></td>
         <td><%= member.email %></td>
         <td>
+          <% if (it.canManageMembers) { %>
           <form
             method="post"
             action="/organizations/<%= it.organization.id %>/members/<%= member.user_id %>/role"
@@ -43,8 +44,17 @@
             </label>
             <button type="submit">Update role</button>
           </form>
+          <% } else { %>
+          <%= member.role %>
+          <% } %>
         </td>
         <td>
+          <% if (it.canLeave && member.user_id === it.currentUserId) { %>
+          <form method="post" action="/organizations/<%= it.organization.id %>/members/<%= member.user_id %>/leave">
+            <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+            <button type="submit" class="link-button">Leave team</button>
+          </form>
+          <% } else if (it.canManageMembers && member.user_id !== it.currentUserId) { %>
           <button
             type="button"
             class="link-button"
@@ -54,6 +64,7 @@
           >
             Remove
           </button>
+          <% } %>
         </td>
       </tr>
       <% } %>
@@ -93,6 +104,7 @@
   </table>
   <% } %>
 
+  <% if (it.canManageMembers) { %>
   <form
     method="post"
     action="/organizations/<%= it.organization.id %>/members"
@@ -116,4 +128,5 @@
     </label>
     <button type="submit">Add or invite</button>
   </form>
+  <% } %>
 </section>

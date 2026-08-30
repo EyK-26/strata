@@ -1368,6 +1368,7 @@ describe("web routes with server-htmx frontend", () => {
     expect(html).toContain("Update role");
     expect(html).toContain('hx-post="/organizations/1/members/2/role"');
     expect(html).toContain("Add or invite");
+    expect(html).not.toContain("Leave team");
   });
 
   test("POST /organizations/:id/members adds a registered user to the HTMX members table", async () => {
@@ -1541,6 +1542,77 @@ describe("web routes with server-htmx frontend", () => {
 
     expect(response.status).toBe(422);
     expect(await response.text()).toContain("Invalid organization role.");
+  });
+
+  test("POST /organizations/:id/members/:userId/leave is Jetstream leave-team", async () => {
+    const registerCsrf = await fetchCsrfFromPath("/register");
+    const email = `html-leave-${Date.now()}@workhub.test`;
+    const registered = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: registerCsrf.cookies,
+      },
+      body: new URLSearchParams({
+        name: "HTML Leave",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+        _token: registerCsrf.token,
+      }),
+    });
+    expect(registered.status).toBe(302);
+    const personalPath = registered.headers.get("location") ?? "";
+    expect(personalPath).toMatch(/^\/organizations\/\d+$/);
+    const session = mergeCookieHeader("", registered);
+
+    const addCsrf = await fetchCsrfFromPath("/organizations/1", adminSessionCookie);
+    const added = await fetch(`${baseUrl}/organizations/1/members`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: addCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        email,
+        role: "member",
+        _token: addCsrf.token,
+      }),
+    });
+    expect(added.status).toBe(302);
+
+    const show = await fetch(`${baseUrl}/organizations/1`, {
+      headers: { cookie: session, accept: "text/html" },
+    });
+    expect(show.status).toBe(200);
+    const showHtml = await show.text();
+    expect(showHtml).toContain("Leave team");
+    expect(showHtml).not.toContain("Add or invite");
+    expect(showHtml).not.toContain("Update role");
+
+    const personal = await fetch(`${baseUrl}${personalPath}`, {
+      headers: { cookie: session, accept: "text/html" },
+    });
+    expect(await personal.text()).not.toContain("Leave team");
+
+    const leaveCsrf = await fetchCsrfFromPath("/organizations/1", session);
+    const userIdMatch = showHtml.match(/\/organizations\/1\/members\/(\d+)\/leave/);
+    expect(userIdMatch?.[1]).toBeDefined();
+    const left = await fetch(`${baseUrl}/organizations/1/members/${userIdMatch?.[1]}/leave`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: leaveCsrf.cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        _token: leaveCsrf.token,
+      }),
+    });
+    expect(left.status).toBe(302);
+    expect(left.headers.get("location")).toBe(personalPath);
   });
 
   test("GET /reports and /account are available to a signed-in session", async () => {

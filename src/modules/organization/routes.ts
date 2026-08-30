@@ -40,10 +40,7 @@ function createOrganizationRoutes(
         "organizations:members:write",
         memberController.update as unknown as RouteHandler,
       ),
-      DELETE: kernel.wrapAbility(
-        "organizations:members:delete",
-        memberController.destroy as unknown as RouteHandler,
-      ),
+      DELETE: kernel.wrapAuthenticated(memberController.destroy as unknown as RouteHandler),
     },
     "/organizations/:id/invitations": {
       GET: kernel.wrapAuthenticated(memberController.listInvitations as unknown as RouteHandler),

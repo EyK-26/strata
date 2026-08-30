@@ -1,16 +1,32 @@
-import { beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import MembershipService from "@getstrata/core/auth/membershipService";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const membershipService = {
   requireOrgAccess: mock(async () => "admin" as const),
-  listMembersForOrganization: mock(async () => [
+  listMembersForOrganization: mock(async (organizationId: number) => [
     {
       id: 1,
-      organization_id: 5,
+      organization_id: organizationId,
+      user_id: 1,
+      role: "owner" as const,
+      created_at: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    {
+      id: 2,
+      organization_id: organizationId,
       user_id: 2,
       role: "admin" as const,
+      created_at: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    {
+      id: 3,
+      organization_id: organizationId,
+      user_id: 3,
+      role: "member" as const,
       created_at: new Date("2026-01-01T00:00:00.000Z"),
     },
   ]),
@@ -27,6 +43,7 @@ const membershipService = {
       created_at: new Date("2026-01-01T00:00:00.000Z"),
     }),
   ),
+  listOrganizationIdsForUser: mock(async () => [] as number[]),
   removeMember: mock(async () => undefined),
   updateMemberRole: mock(
     async (organizationId: number, userId: number, role: "owner" | "admin" | "member") => ({
@@ -59,6 +76,16 @@ beforeAll(async () => {
   ));
 });
 
+afterAll(() => {
+  const container = new ServiceContainer();
+  container.set("core.membership", new MembershipService());
+  setActiveApplicationContext({
+    container,
+    config: new ConfigStore(),
+    dependencies: createMockDependencies(container, createMockCache()),
+  });
+});
+
 describe("OrganizationMemberController", () => {
   test("index lists members for an organization", async () => {
     const controller = new OrganizationMemberControllerClass({
@@ -78,8 +105,22 @@ describe("OrganizationMemberController", () => {
         {
           id: 1,
           organization_id: 5,
+          user_id: 1,
+          role: "owner",
+          created_at: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: 2,
+          organization_id: 5,
           user_id: 2,
           role: "admin",
+          created_at: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: 3,
+          organization_id: 5,
+          user_id: 3,
+          role: "member",
           created_at: "2026-01-01T00:00:00.000Z",
         },
       ],
@@ -172,14 +213,42 @@ describe("OrganizationMemberController", () => {
       cache: {},
     } as never);
 
-    const response = await controller.destroy(
-      Object.assign(new Request("http://example.test/organizations/5/members/3"), {
-        params: { id: "5", userId: "3" },
-      }),
+    const response = await runWithAuthUser({ id: 1, role: "admin" }, () =>
+      controller.destroy(
+        Object.assign(new Request("http://example.test/organizations/5/members/3"), {
+          params: { id: "5", userId: "3" },
+        }),
+      ),
     );
 
     expect(response.status).toBe(204);
     expect(membershipService.removeMember).toHaveBeenCalledWith(5, 3);
+  });
+
+  test("destroy lets a member leave and rejects the last owner", async () => {
+    const controller = new OrganizationMemberControllerClass({
+      container: {},
+      cache: {},
+    } as never);
+
+    const left = await runWithAuthUser({ id: 3, role: "member" }, () =>
+      controller.destroy(
+        Object.assign(new Request("http://example.test/organizations/5/members/3"), {
+          params: { id: "5", userId: "3" },
+        }),
+      ),
+    );
+    expect(left.status).toBe(204);
+
+    const lastOwner = await runWithAuthUser({ id: 1, role: "member" }, () =>
+      controller.destroy(
+        Object.assign(new Request("http://example.test/organizations/5/members/1"), {
+          params: { id: "5", userId: "1" },
+        }),
+      ),
+    );
+    expect(lastOwner.status).toBe(403);
+    expect(await lastOwner.json()).toEqual({ error: "Cannot leave as the last owner." });
   });
 
   test("update changes a member role", async () => {

@@ -1,6 +1,7 @@
 import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
-import { resolveUserId } from "@getstrata/core/auth/accessControl";
+import { isGlobalAdmin, resolveUserId } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { hasMinimumOrgRole } from "@getstrata/core/auth/membershipContext";
 import { resolveMembershipService } from "@getstrata/core/auth/membershipService";
 import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
@@ -20,9 +21,11 @@ import {
 import { userRepositoryToken } from "../user/provider";
 import type UserRepository from "../user/repository";
 import { type OrganizationInvitationService, resolveInvitationService } from "./invitationService";
+import { removeOrganizationMember } from "./memberActions";
 import { organizationServiceToken } from "./provider";
 import { parseOrganizationListQuery } from "./requests";
 import type OrganizationService from "./service";
+import { personalOrganizationSlug } from "./service";
 import {
   parseWebAddOrganizationMemberPayload,
   parseWebCreateOrganizationBody,
@@ -89,11 +92,27 @@ class OrganizationWebController {
     const organization = await this.service.findByIdOrThrow(organizationId);
     const members = await this.membersForOrganization(organizationId);
     const invitations = await this.pendingInvitationsForAdmin(organizationId);
+    const user = currentAuthUser();
+    const currentUserId = user ? resolveUserId(user) : null;
+    const canManageMembers = Boolean(
+      user && (isGlobalAdmin(user) || hasMinimumOrgRole(organizationId, "admin")),
+    );
+    const owners = members.filter((member) => member.role === "owner");
+    const self = members.find((member) => member.user_id === currentUserId);
+    const canLeave = Boolean(
+      currentUserId &&
+        self &&
+        !(self.role === "owner" && owners.length <= 1) &&
+        organization.slug !== personalOrganizationSlug(currentUserId),
+    );
     const viewData = {
       title: organization.name,
       organization,
       members,
       invitations,
+      currentUserId,
+      canManageMembers,
+      canLeave,
       errors: {},
       old: {},
       ...extras,
@@ -334,9 +353,15 @@ class OrganizationWebController {
     async (request: Request & { params: { id: string; userId: string } }) => {
       const id = Number.parseInt(String(request.params.id), 10);
       const userId = Number.parseInt(String(request.params.userId), 10);
+      const result = await removeOrganizationMember(id, userId);
 
-      await resolveMembershipService().requireOrgAccess(id, "admin");
-      await resolveMembershipService().removeMember(id, userId);
+      if (result.self) {
+        const location = await this.currentOrganization.resolveHomePath(userId);
+        return flashResponse(Response.redirect(location, 302), {
+          level: "success",
+          message: "You left the organization.",
+        });
+      }
 
       if (isHtmxRequest(request)) {
         return await this.renderShow(request, id, { partial: "members" });

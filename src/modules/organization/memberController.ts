@@ -11,6 +11,7 @@ import {
 } from "@getstrata/core/http/response";
 import UserRepository from "../user/repository";
 import { type OrganizationInvitationService, resolveInvitationService } from "./invitationService";
+import { removeOrganizationMember } from "./memberActions";
 
 class OrganizationMemberController {
   constructor(
@@ -84,8 +85,7 @@ class OrganizationMemberController {
       throw new Error("Organization id and user id are required.");
     }
 
-    await resolveMembershipService().requireOrgAccess(organizationId, "admin");
-    await resolveMembershipService().removeMember(organizationId, userId);
+    await removeOrganizationMember(organizationId, userId);
 
     return noContentResponse();
   });

@@ -751,6 +751,58 @@ describe("integration routes with postgres", () => {
     });
   });
 
+  test("DELETE /organizations/:id/members/:userId lets a member leave a team", async () => {
+    const email = `json-leave-${Date.now()}@workhub.test`;
+    const registerResponse = await fetch(api("/auth/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Json Leave",
+        email,
+        password: "password123",
+        password_confirmation: "password123",
+      }),
+    });
+    expect(registerResponse.status).toBe(201);
+    const registered = (await registerResponse.json()) as { token: string };
+    const headers = {
+      authorization: `Bearer ${registered.token}`,
+      "content-type": "application/json",
+    };
+
+    const me = await fetch(api("/auth/me"), { headers });
+    expect(me.status).toBe(200);
+    const profile = (await me.json()) as { id: number };
+    const current = await fetch(api("/users/me/current-organization"), { headers });
+    const personal = (await current.json()) as { organization_id: number };
+
+    const added = await fetch(api("/organizations/1/members"), {
+      method: "POST",
+      headers: adminHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({ user_id: profile.id, role: "member" }),
+    });
+    expect(added.status).toBe(201);
+
+    const blockedPersonal = await fetch(
+      api(`/organizations/${personal.organization_id}/members/${profile.id}`),
+      { method: "DELETE", headers },
+    );
+    expect(blockedPersonal.status).toBe(403);
+
+    const left = await fetch(api(`/organizations/1/members/${profile.id}`), {
+      method: "DELETE",
+      headers,
+    });
+    expect(left.status).toBe(204);
+
+    const members = await fetch(api("/organizations/1/members"), {
+      headers: adminHeaders(),
+    });
+    expect(members.status).toBe(200);
+    const listed = (await members.json()) as { data: Array<{ user_id: number }> };
+    expect(listed.data.some((member) => member.user_id === profile.id)).toBe(false);
+  });
+
   test("POST /organizations returns 409 for duplicate slugs", async () => {
     const response = await fetch(api("/organizations"), {
       method: "POST",

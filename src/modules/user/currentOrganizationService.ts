@@ -53,6 +53,19 @@ class CurrentOrganizationService implements CurrentOrganizationWriter {
     await this.assign(userId, organizationId);
   }
 
+  async clearIfCurrent(userId: number, organizationId: number): Promise<void> {
+    const user = await this.users.findById(userId);
+
+    if (!user || user.current_organization_id !== organizationId) {
+      return;
+    }
+
+    const remaining = await resolveMembershipService().listOrganizationIdsForUser(userId);
+    const next = remaining.find((id) => id !== organizationId);
+
+    await this.users.updateByIdOrThrow(userId, { current_organization_id: next ?? null });
+  }
+
   async currentForUser(userId: number): Promise<CurrentOrganizationResource> {
     const user = await this.users.findByIdOrThrow(userId);
     const organizationId = user.current_organization_id ?? null;

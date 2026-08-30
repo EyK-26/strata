@@ -1,20 +1,38 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import MembershipService from "@getstrata/core/auth/membershipService";
 import { ForbiddenError, NotFoundError } from "@getstrata/core/errors/http";
+import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
+import OrganizationMemberRepository from "../../src/modules/organization/memberRepository";
 import OrganizationRepository from "../../src/modules/organization/repository";
 import {
   CurrentOrganizationService,
   toCurrentOrganizationResource,
 } from "../../src/modules/user/currentOrganizationService";
 import UserRepository from "../../src/modules/user/repository";
-import { defaultTestTenant } from "./testHelpers";
+import { createMockCache, createMockDependencies, defaultTestTenant } from "./testHelpers";
+
+function useRealMembershipService(): void {
+  const container = new ServiceContainer();
+  container.set("core.membership", new MembershipService());
+  setActiveApplicationContext({
+    container,
+    config: new ConfigStore(),
+    dependencies: createMockDependencies(container, createMockCache()),
+  });
+}
 
 function service(): CurrentOrganizationService {
   return new CurrentOrganizationService(new UserRepository(), new OrganizationRepository());
 }
 
 describe("CurrentOrganizationService", () => {
+  beforeEach(() => {
+    useRealMembershipService();
+  });
+
   test("assignIfMissing sets current organization once", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {
       const users = new UserRepository();
@@ -114,6 +132,41 @@ describe("CurrentOrganizationService", () => {
         updated_at: new Date(),
       });
       expect(await current.resolveHomePath(created.id)).toBe("/organizations");
+    });
+  });
+
+  test("clearIfCurrent switches to another membership or clears", async () => {
+    await runWithTenantDatabase(defaultTestTenant, async () => {
+      const users = new UserRepository();
+      const current = service();
+      const created = await users.create({
+        name: "Clear Current Org",
+        email: `clear-current-${Date.now()}@workhub.test`,
+        role: "member",
+        tenant_id: defaultTestTenant.id,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      await current.clearIfCurrent(created.id, 1);
+      expect((await users.findByIdOrThrow(created.id)).current_organization_id).toBeNull();
+
+      await current.assign(created.id, 1);
+      await current.clearIfCurrent(created.id, 2);
+      expect((await users.findByIdOrThrow(created.id)).current_organization_id).toBe(1);
+
+      const members = new OrganizationMemberRepository();
+      await members.addMember({ organizationId: 1, userId: created.id, role: "member" });
+      await members.addMember({ organizationId: 2, userId: created.id, role: "member" });
+      await current.clearIfCurrent(created.id, 1);
+      expect((await users.findByIdOrThrow(created.id)).current_organization_id).toBe(2);
+
+      await members.removeMember(1, created.id);
+      await members.removeMember(2, created.id);
+      await current.clearIfCurrent(created.id, 2);
+      expect((await users.findByIdOrThrow(created.id)).current_organization_id).toBeNull();
+
+      await current.clearIfCurrent(999_999, 1);
     });
   });
 
