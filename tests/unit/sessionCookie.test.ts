@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   clearSessionCookie,
   createSessionCookie,
+  createSessionCookieDetails,
   isSessionInvalidated,
   readSession,
   readSessionUserId,
@@ -78,6 +79,21 @@ describe("sessionCookie", () => {
     const session = readSession(request);
     expect(session?.userId).toBe(42);
     expect(session?.issuedAt).toBeGreaterThan(0);
+  });
+
+  test("createSessionCookieDetails exposes issuedAt and ttl", () => {
+    const details = createSessionCookieDetails(11);
+    const cookiePair = details.header.split(";")[0] ?? "";
+    const session = readSession(
+      new Request("http://example.test/", { headers: { cookie: cookiePair } }),
+    );
+
+    expect(details.userId).toBe(11);
+    expect(details.ttlSeconds).toBe(sessionTtlSeconds());
+    expect(session?.issuedAt).toBe(details.issuedAt);
+
+    const remembered = createSessionCookieDetails(11, { remember: true });
+    expect(remembered.ttlSeconds).toBe(sessionRememberTtlSeconds());
   });
 
   test("rejects tampered session cookies", () => {

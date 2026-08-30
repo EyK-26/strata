@@ -258,9 +258,38 @@
   </table>
   <% } %>
 
+  <div id="browser-sessions">
+    <h3>Browser sessions</h3>
+    <p class="hint">HMAC login writes a <code>sessions</code> row (user agent and IP) so this list can mark This device. Cookie-store sessions from sibling HTMX apps appear here too.</p>
+    <% if (!it.browserSessions?.length) { %>
+    <p class="hint">No active browser sessions recorded yet.</p>
+    <% } else { %>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Browser</th>
+          <th>IP</th>
+          <th>Last active</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const session of it.browserSessions) { %>
+        <tr<%= session.current ? ' data-current-session="1"' : "" %>>
+          <td><%= session.user_agent ?? "Unknown browser" %></td>
+          <td><%= session.ip_address ?? "Unknown IP" %></td>
+          <td><%= session.last_active_at ?? session.expires_at %></td>
+          <td><% if (session.current) { %>This device<% } %></td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+
   <form method="post" action="/account/logout-other-devices" class="stack-form">
     <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
-    <p class="hint">Revoke every API token except the one used by this request (HMAC login has no bearer, so all tokens are revoked). Older HMAC cookies fail <code>SessionGuard</code> after <code>users.session_valid_after</code>; this browser stays signed in because the handler re-issues the session cookie.</p>
+    <p class="hint">Revoke every API token except the one used by this request (HMAC login has no bearer, so all tokens are revoked). Older HMAC cookies fail <code>SessionGuard</code> after <code>users.session_valid_after</code>; this browser stays signed in because the handler re-issues the session cookie and drops other <code>sessions</code> rows.</p>
     <label>
       Current password
       <input type="password" name="password" required />

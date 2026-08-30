@@ -4,7 +4,7 @@ import { resolveAbilitiesForRole } from "@getstrata/core/auth/abilityCatalog";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import { clearPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";
-import { clearSessionCookie, createSessionCookie } from "@getstrata/core/auth/sessionCookie";
+import { clearSessionCookie, readSession } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import {
@@ -28,6 +28,12 @@ import {
   organizationInvitationServiceToken,
 } from "../organization/invitationService";
 import type AuthService from "./authService";
+import {
+  forgetHmacBrowserSession,
+  forgetOtherBrowserSessions,
+  issueHmacBrowserSession,
+  listBrowserSessionsForUser,
+} from "./browserSessions";
 import type OAuthIdentityRepository from "./oauthIdentityRepository";
 import type PasswordResetService from "./passwordResetService";
 import type ProfilePhotoService from "./profilePhotoService";
@@ -107,9 +113,21 @@ class WebAccountController {
     return photos;
   }
 
-  private continueHtmlSession(userId: number, location: string, message: string): Response {
+  private async continueHtmlSession(
+    request: Request,
+    userId: number,
+    location: string,
+    message: string,
+    options: { forgetOthers?: boolean } = {},
+  ): Promise<Response> {
+    const session = await issueHmacBrowserSession(request, userId);
+
+    if (options.forgetOthers) {
+      await forgetOtherBrowserSessions(userId, session.id);
+    }
+
     const headers = new Headers({ Location: location });
-    headers.append("Set-Cookie", createSessionCookie(userId));
+    headers.append("Set-Cookie", session.header);
 
     return flashResponse(
       new Response(null, {
@@ -138,6 +156,7 @@ class WebAccountController {
     user: UserRecord,
     extras: Record<string, unknown> = {},
     status = 200,
+    request?: Request,
   ): Promise<Response> {
     const tokens = Array.isArray(extras.tokens)
       ? (extras.tokens as ApiTokenResource[])
@@ -162,15 +181,17 @@ class WebAccountController {
         ...extras,
         receivedInvitations:
           extras.receivedInvitations ?? (await this.invitations.listPendingForUser(user)),
+        browserSessions:
+          extras.browserSessions ?? (await listBrowserSessionsForUser(user.id, request)),
       }),
       { status },
     );
   }
 
-  readonly show = withErrorHandling(async () => {
+  readonly show = withErrorHandling(async (request?: Request) => {
     const user = await this.users.findByIdOrThrow(this.requireUserId());
 
-    return await this.renderAccount(user);
+    return await this.renderAccount(user, {}, 200, request);
   });
 
   readonly acceptInvitation = withErrorHandling(async (request: Request) => {
@@ -351,11 +372,13 @@ class WebAccountController {
       const revoked = await this.authService.logoutOtherDevices(userId, body.password);
 
       return this.continueHtmlSession(
+        request,
         userId,
         "/account",
         revoked === 1
           ? "Revoked 1 other API token and signed out other browsers."
           : `Revoked ${revoked} other API tokens and signed out other browsers.`,
+        { forgetOthers: true },
       );
     } catch (error) {
       if (error instanceof UnauthorizedError) {
@@ -375,7 +398,7 @@ class WebAccountController {
       const body = await parseWebChangePasswordBody(request);
       await this.authService.changePassword(userId, body.currentPassword, body.password);
 
-      return this.continueHtmlSession(userId, "/account", "Password updated.");
+      return this.continueHtmlSession(request, userId, "/account", "Password updated.");
     } catch (error) {
       if (error instanceof ValidationError) {
         const user = await this.users.findByIdOrThrow(userId);
@@ -552,6 +575,12 @@ class WebAccountController {
 
       await this.tryPhotos()?.deletePhoto(userId);
       await this.tokens.deleteUserAccount(userId);
+
+      const session = readSession(request);
+
+      if (session) {
+        await forgetHmacBrowserSession(session.userId, session.issuedAt);
+      }
 
       const headers = new Headers({ Location: "/login" });
       headers.append("Set-Cookie", clearSessionCookie());

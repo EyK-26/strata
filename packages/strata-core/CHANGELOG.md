@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.86
+
+- `createSessionCookieDetails()` returns the HMAC session header plus `issuedAt` / `ttlSeconds` so apps can persist Jetstream browser-session rows without changing the cookie format.
+
 ## 0.5.85
 
 - `applicationRegistry` prefers the latest `Symbol.for("@getstrata/applicationContext")` on `globalThis` so a stale module-local context cannot hide the bootstrapped app after `build:framework`.

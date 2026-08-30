@@ -171,7 +171,17 @@ function isSessionInvalidated(
   return issuedAt < timestamp;
 }
 
-function createSessionCookie(userId: number, options: CreateSessionCookieOptions = {}): string {
+interface SessionCookieDetails {
+  header: string;
+  userId: number;
+  issuedAt: number;
+  ttlSeconds: number;
+}
+
+function createSessionCookieDetails(
+  userId: number,
+  options: CreateSessionCookieOptions = {},
+): SessionCookieDetails {
   const issuedAt = Date.now();
   const ttlSeconds = options.remember ? sessionRememberTtlSeconds() : sessionTtlSeconds();
   const value = options.remember
@@ -179,7 +189,16 @@ function createSessionCookie(userId: number, options: CreateSessionCookieOptions
     : signSession(userId, issuedAt);
   const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
 
-  return `${sessionCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}${secure}`;
+  return {
+    header: `${sessionCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}${secure}`,
+    userId,
+    issuedAt,
+    ttlSeconds,
+  };
+}
+
+function createSessionCookie(userId: number, options: CreateSessionCookieOptions = {}): string {
+  return createSessionCookieDetails(userId, options).header;
 }
 
 function clearSessionCookie(): string {
@@ -188,10 +207,11 @@ function clearSessionCookie(): string {
   return `${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
-export type { CreateSessionCookieOptions, SignedSession };
+export type { CreateSessionCookieOptions, SessionCookieDetails, SignedSession };
 export {
   clearSessionCookie,
   createSessionCookie,
+  createSessionCookieDetails,
   isSessionInvalidated,
   readSession,
   readSessionUserId,

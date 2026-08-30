@@ -2199,6 +2199,9 @@ describe("web routes with server-htmx frontend", () => {
     expect(accountHtml).toContain("Team invitations");
     expect(accountHtml).toContain('id="team-invitations"');
     expect(accountHtml).toContain("No pending team invitations.");
+    expect(accountHtml).toContain('id="browser-sessions"');
+    expect(accountHtml).toContain("This device");
+    expect(accountHtml).toContain('data-current-session="1"');
     expect(orgReport.status).toBe(200);
     const orgReportHtml = await orgReport.text();
     expect(orgReportHtml).toContain("Acme Labs");

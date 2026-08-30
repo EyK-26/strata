@@ -10,7 +10,7 @@ import {
   clearPasswordConfirmCookie,
   createPasswordConfirmCookie,
 } from "@getstrata/core/auth/passwordConfirmCookie";
-import { clearSessionCookie, createSessionCookie } from "@getstrata/core/auth/sessionCookie";
+import { clearSessionCookie, readSession } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
@@ -28,6 +28,7 @@ import { isFeatureEnabled } from "../../config/features";
 import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
 import type AuthService from "./authService";
+import { forgetHmacBrowserSession, issueHmacBrowserSession } from "./browserSessions";
 import {
   type CurrentOrganizationService,
   currentOrganizationServiceToken,
@@ -191,7 +192,7 @@ class WebAuthController {
       if (isFeatureEnabled("emailVerification")) {
         await this.passwordResets.sendEmailVerification(user);
         const headers = new Headers({ Location: "/email/verify" });
-        headers.append("Set-Cookie", createSessionCookie(user.id));
+        headers.append("Set-Cookie", (await issueHmacBrowserSession(request, user.id)).header);
         const intended = createIntendedUrlCookie(body.redirect ?? "");
 
         if (intended) {
@@ -206,12 +207,13 @@ class WebAuthController {
 
       const home = await this.currentOrganization.resolveHomePath(user.id);
       const location = body.redirect ? sanitizeInternalPath(body.redirect, home) : home;
+      const session = await issueHmacBrowserSession(request, user.id);
 
       return new Response(null, {
         status: 302,
         headers: {
           Location: location,
-          "Set-Cookie": createSessionCookie(user.id),
+          "Set-Cookie": session.header,
         },
       });
     } catch (error) {
@@ -241,12 +243,15 @@ class WebAuthController {
         user.id,
         sanitizeInternalPath(body.redirect ?? "/organizations", "/organizations"),
       );
+      const session = await issueHmacBrowserSession(request, user.id, {
+        remember: Boolean(body.remember),
+      });
 
       return new Response(null, {
         status: 302,
         headers: {
           Location: redirect,
-          "Set-Cookie": createSessionCookie(user.id, { remember: Boolean(body.remember) }),
+          "Set-Cookie": session.header,
         },
       });
     } catch (error) {
@@ -335,7 +340,7 @@ class WebAuthController {
         await this.organizations.createPersonalForUser(user);
         const location = await this.currentOrganization.resolveHomePath(user.id, redirect);
         const headers = new Headers({ Location: location });
-        headers.append("Set-Cookie", createSessionCookie(user.id));
+        headers.append("Set-Cookie", (await issueHmacBrowserSession(request, user.id)).header);
         headers.append("Set-Cookie", clearOAuthStateCookie());
         headers.append("Set-Cookie", clearOAuthLoginRedirectCookie());
 
@@ -348,7 +353,15 @@ class WebAuthController {
     },
   );
 
-  readonly logout = withErrorHandling(async () => {
+  readonly logout = withErrorHandling(async (request?: Request) => {
+    if (request) {
+      const session = readSession(request);
+
+      if (session) {
+        await forgetHmacBrowserSession(session.userId, session.issuedAt);
+      }
+    }
+
     const headers = new Headers({ Location: "/login" });
     headers.append("Set-Cookie", clearSessionCookie());
     headers.append("Set-Cookie", clearPasswordConfirmCookie());
@@ -392,7 +405,10 @@ class WebAuthController {
       const user = await this.authService.verifyMfaChallenge(pending.userId, body.mfaCode);
       const location = await this.currentOrganization.resolveHomePath(user.id, redirect);
       const headers = new Headers({ Location: location });
-      headers.append("Set-Cookie", createSessionCookie(user.id, { remember: pending.remember }));
+      headers.append(
+        "Set-Cookie",
+        (await issueHmacBrowserSession(request, user.id, { remember: pending.remember })).header,
+      );
       headers.append("Set-Cookie", clearMfaChallengeCookie());
 
       return new Response(null, { status: 302, headers });
