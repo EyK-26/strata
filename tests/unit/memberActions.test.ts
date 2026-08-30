@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import MembershipService from "@getstrata/core/auth/membershipService";
+import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { resolveApplicationDependencies } from "@getstrata/core/runtime/applicationRegistry";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { removeOrganizationMember } from "../../src/modules/organization/memberActions";
 import OrganizationMemberRepository from "../../src/modules/organization/memberRepository";
-import OrganizationRepository from "../../src/modules/organization/repository";
 import { personalOrganizationSlug } from "../../src/modules/organization/service";
+import type { OrganizationRecord } from "../../src/modules/organization/types";
 import UserRepository from "../../src/modules/user/repository";
 import { defaultTestTenant } from "./testHelpers";
 
@@ -21,7 +22,6 @@ function useRealMembershipService(): void {
 
 async function createLeaveFixture(slug = `leave-${Date.now()}`) {
   const users = new UserRepository();
-  const organizations = new OrganizationRepository();
   const members = new OrganizationMemberRepository();
   const owner = await users.create({
     name: "Leave Owner",
@@ -39,13 +39,16 @@ async function createLeaveFixture(slug = `leave-${Date.now()}`) {
     created_at: new Date(),
     updated_at: new Date(),
   });
-  const organization = await organizations.create({
-    tenant_id: defaultTestTenant.id,
-    name: "Leave Team",
-    slug,
-    created_at: new Date(),
-    updated_at: new Date(),
-  });
+  const inserted = (await db`
+    INSERT INTO organization (tenant_id, name, slug, created_at, updated_at)
+    VALUES (${defaultTestTenant.id}, ${"Leave Team"}, ${slug}, NOW(), NOW())
+    RETURNING id, tenant_id, name, slug, created_at, updated_at, deleted_at
+  `) as OrganizationRecord[];
+  const organization = inserted[0];
+
+  if (!organization) {
+    throw new Error("Leave-team fixture did not insert an organization.");
+  }
   await members.addMember({ organizationId: organization.id, userId: owner.id, role: "owner" });
   await members.addMember({ organizationId: organization.id, userId: member.id, role: "member" });
 
@@ -119,9 +122,11 @@ describe("removeOrganizationMember", () => {
       ).rejects.toMatchObject({ message: "Cannot remove the last owner." });
 
       const personal = await createLeaveFixture();
-      await new OrganizationRepository().updateByIdOrThrow(personal.organization.id, {
-        slug: personalOrganizationSlug(personal.owner.id),
-      });
+      await db`
+        UPDATE organization
+        SET slug = ${personalOrganizationSlug(personal.owner.id)}
+        WHERE id = ${personal.organization.id}
+      `;
       await personal.members.updateMemberRole(
         personal.organization.id,
         personal.member.id,
