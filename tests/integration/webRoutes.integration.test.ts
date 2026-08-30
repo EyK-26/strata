@@ -2460,18 +2460,20 @@ describe("web routes with server-htmx frontend", () => {
     });
 
     expect(createResponse.status).toBe(302);
+    const createdLocation = createResponse.headers.get("location") ?? "";
+    expect(createdLocation).toMatch(/^\/organizations\/\d+$/);
+    const createdId = createdLocation.split("/").pop();
+    expect(createdId).toBeTruthy();
 
     const list = await fetch(`${baseUrl}/organizations?per_page=100`, {
       headers: { cookie: mergeCookieHeader(csrf.cookies, createResponse) },
     });
     const listHtml = await list.text();
-    const createdId = listHtml.match(
-      new RegExp(
-        `href="/organizations/(\\d+)"[^>]*>\\d+</a>\\s*</td>\\s*<td>Delete Me Org</td>\\s*<td>${slug}</td>`,
-      ),
-    )?.[1];
-
-    expect(createdId).toBeTruthy();
+    expect(listHtml).toContain("Delete Me Org");
+    expect(listHtml).toContain(slug);
+    expect(listHtml).toMatch(
+      new RegExp(`data-organization-id="${createdId}"\\s+data-current-team="true"`),
+    );
 
     const deleteCsrf = await fetchCsrfFromPath(`/organizations/${createdId}`, adminSessionCookie);
     const deleteResponse = await fetch(`${baseUrl}/organizations/${createdId}/delete`, {
