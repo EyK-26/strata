@@ -61,6 +61,7 @@ describe("OrganizationInvitationService", () => {
       expect(member.organization_id).toBe(1);
       expect(member.user_id).toBe(user.id);
       expect(member.role).toBe("admin");
+      expect((await users.findByIdOrThrow(user.id)).current_organization_id).toBe(1);
       expect((await invitations.listPending(1)).some((row) => row.email === email)).toBe(false);
     });
   });
@@ -197,6 +198,7 @@ describe("OrganizationInvitationService", () => {
       const again = await invitations.accept(email, leftover.token, user);
       expect(again.user_id).toBe(first.user_id);
       expect(again.organization_id).toBe(1);
+      expect((await users.findByIdOrThrow(user.id)).current_organization_id).toBe(1);
     });
   });
 
@@ -225,6 +227,7 @@ describe("OrganizationInvitationService", () => {
         WHERE email = ${email}
       `;
       expect(await invitations.acceptPendingForUser(user)).toBe(0);
+      expect((await users.findByIdOrThrow(user.id)).current_organization_id).toBeNull();
 
       await invitations.invite({
         organizationId: 1,
@@ -232,6 +235,7 @@ describe("OrganizationInvitationService", () => {
         invitedByUserId: 1,
       });
       expect(await invitations.acceptPendingForUser(user)).toBe(1);
+      expect((await users.findByIdOrThrow(user.id)).current_organization_id).toBe(1);
       expect(await invitations.acceptPendingForUser(user)).toBe(0);
     });
   });

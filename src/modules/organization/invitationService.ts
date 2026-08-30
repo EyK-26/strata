@@ -11,6 +11,7 @@ import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
 import { emailRule, required, stringRule, validateObject } from "@getstrata/core/validation/rules";
 import { appConfig } from "../../config/app";
+import { CurrentOrganizationService } from "../user/currentOrganizationService";
 import UserRepository from "../user/repository";
 import type { UserRecord } from "../user/types";
 import OrganizationInvitationRepository, {
@@ -210,6 +211,7 @@ If you do not have an account yet, register with **${email}** and this invitatio
 
     const membership = await this.addIfMissing(invitation, user.id);
     await this.invitations.deleteById(invitation.id);
+    await this.switchCurrentOrganization(user.id, invitation.organization_id);
     logSecurityEvent("organization_invitation_accepted", {
       organization_id: invitation.organization_id,
       user_id: user.id,
@@ -221,6 +223,7 @@ If you do not have an account yet, register with **${email}** and this invitatio
   async acceptPendingForUser(user: Pick<UserRecord, "id" | "email">): Promise<number> {
     const pending = await this.invitations.listPendingByEmail(normalizeEmail(user.email));
     let accepted = 0;
+    let currentOrganizationId: number | undefined;
 
     for (const invitation of pending) {
       if (new Date(invitation.expires_at).getTime() <= Date.now()) {
@@ -230,10 +233,12 @@ If you do not have an account yet, register with **${email}** and this invitatio
 
       await this.addIfMissing(invitation, user.id);
       await this.invitations.deleteById(invitation.id);
+      currentOrganizationId = invitation.organization_id;
       accepted += 1;
     }
 
-    if (accepted > 0) {
+    if (accepted > 0 && currentOrganizationId !== undefined) {
+      await this.switchCurrentOrganization(user.id, currentOrganizationId);
       logSecurityEvent("organization_invitation_auto_accepted", {
         user_id: user.id,
         count: accepted,
@@ -258,6 +263,13 @@ If you do not have an account yet, register with **${email}** and this invitatio
       userId,
       role: invitation.role,
     });
+  }
+
+  private async switchCurrentOrganization(userId: number, organizationId: number): Promise<void> {
+    await new CurrentOrganizationService(this.users, this.organizations).assign(
+      userId,
+      organizationId,
+    );
   }
 }
 

@@ -749,6 +749,12 @@ describe("integration routes with postgres", () => {
       organization_id: 1,
       role: "admin",
     });
+
+    const current = await fetch(api("/users/me/current-organization"), {
+      headers: { authorization: `Bearer ${registered.token}` },
+    });
+    expect(current.status).toBe(200);
+    expect(await current.json()).toMatchObject({ organization_id: 1 });
   });
 
   test("DELETE /organizations/:id/members/:userId lets a member leave a team", async () => {
