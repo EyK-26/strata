@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
 
-const PASSWORD_CONFIRM_COOKIE = "workhub_password_confirmed";
+const PASSWORD_CONFIRM_COOKIE = appCookieName("password_confirmed");
 const DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS = 3 * 60 * 60;
 
 function passwordConfirmCookieName(): string {

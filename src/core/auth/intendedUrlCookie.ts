@@ -1,7 +1,7 @@
 import { safeInternalRedirectPath, sanitizeInternalPath } from "../http/safeInternalPath";
 import { appCookieName } from "../runtime/appKeyPrefix";
 
-const INTENDED_URL_COOKIE = "workhub_intended";
+const INTENDED_URL_COOKIE = appCookieName("intended");
 const DEFAULT_INTENDED_URL_TTL_SECONDS = 60 * 60 * 24;
 
 const SKIP_EXACT_PATHS = new Set([

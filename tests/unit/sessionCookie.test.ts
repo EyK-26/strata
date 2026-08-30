@@ -13,6 +13,7 @@ import {
   sessionRememberTtlSeconds,
   sessionTtlSeconds,
 } from "@getstrata/core/auth/sessionCookie";
+import { appCookieName } from "@getstrata/core/runtime/appKeyPrefix";
 
 describe("sessionCookie", () => {
   const originalAppEnv = process.env.APP_ENV;
@@ -213,6 +214,7 @@ describe("sessionCookie", () => {
     delete process.env.SESSION_COOKIE_NAME;
 
     expect(SESSION_COOKIE).toBe("workhub_session");
+    expect(SESSION_COOKIE).toBe(appCookieName("session"));
     expect(sessionCookieName()).toBe("workhub_session");
     expect(createSessionCookie(1)).toContain("workhub_session=");
     expect(clearSessionCookie()).toContain("workhub_session=");

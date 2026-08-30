@@ -5,9 +5,10 @@ import {
   createPasswordConfirmCookie,
   hasFreshPasswordConfirmation,
 } from "@getstrata/core/auth/passwordConfirmCookie";
+import { readSession } from "@getstrata/core/auth/sessionCookie";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
+import { NotFoundError, UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { parseMultipartUpload } from "@getstrata/core/http/parseMultipartUpload";
 import {
   createdResponse,
@@ -31,6 +32,13 @@ import { organizationServiceToken } from "../organization/provider";
 import type OrganizationService from "../organization/service";
 import ApiTokenRepository from "./apiTokenRepository";
 import type AuthService from "./authService";
+import {
+  forgetBrowserSessionById,
+  hmacBrowserSessionId,
+  listBrowserSessionsForUser,
+  parseBrowserSessionId,
+  toBrowserSessionResource,
+} from "./browserSessions";
 import {
   type CurrentOrganizationService,
   currentOrganizationServiceToken,
@@ -414,6 +422,35 @@ class AuthController {
 
       throw error;
     }
+  });
+
+  readonly listBrowserSessions = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const sessions = await listBrowserSessionsForUser(userId, request);
+
+    return jsonResponse({ data: sessions.map(toBrowserSessionResource) });
+  });
+
+  readonly logoutBrowserSession = withErrorHandling(async (request: Request) => {
+    const userId = await this.requireUserId(request);
+    const params = (request as Request & { params?: { id?: string } }).params;
+    const sessionId = parseBrowserSessionId(params?.id);
+    const current = readSession(request);
+    const currentId = current ? hmacBrowserSessionId(current.userId, current.issuedAt) : null;
+
+    if (currentId && sessionId === currentId) {
+      throw new ValidationError("Cannot log out this device.", {
+        session: ["Cannot log out this device."],
+      });
+    }
+
+    const deleted = await forgetBrowserSessionById(userId, sessionId);
+
+    if (!deleted) {
+      throw new NotFoundError("That browser session is no longer active.");
+    }
+
+    return jsonResponse({ logged_out: true });
   });
 
   readonly logoutOtherDevices = withErrorHandling(async (request: Request) => {

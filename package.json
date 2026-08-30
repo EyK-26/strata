@@ -61,6 +61,7 @@
     "@getstrata/bootstrap": "workspace:*",
     "@getstrata/cli": "workspace:*",
     "@getstrata/core": "workspace:*",
-    "eta": "^4.6.0"
+    "eta": "^4.6.0",
+    "uqr": "^0.1.3"
   }
 }

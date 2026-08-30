@@ -73,6 +73,12 @@ function createAuthRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
     "/users/me/password": {
       PUT: kernel.wrapAuthenticated(controller.updatePassword as unknown as RouteHandler),
     },
+    "/users/me/sessions": {
+      GET: kernel.wrapAuthenticated(controller.listBrowserSessions as unknown as RouteHandler),
+    },
+    "/users/me/sessions/:id": {
+      DELETE: kernel.wrapAuthenticated(controller.logoutBrowserSession as unknown as RouteHandler),
+    },
     "/users/me/logout-other-devices": {
       POST: kernel.wrapAuthenticated(controller.logoutOtherDevices as unknown as RouteHandler),
     },

@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { appCookieName, appDevSecret } from "@getstrata/core/runtime/appKeyPrefix";
 
-const MFA_CHALLENGE_COOKIE = "workhub_mfa_pending";
+const MFA_CHALLENGE_COOKIE = appCookieName("mfa_pending");
 const DEFAULT_MFA_CHALLENGE_TTL_SECONDS = 10 * 60;
 
 interface MfaChallenge {

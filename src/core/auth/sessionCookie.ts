@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
 
-const SESSION_COOKIE = "workhub_session";
+const SESSION_COOKIE = appCookieName("session");
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const SESSION_REMEMBER_TTL_SECONDS = 60 * 60 * 24 * 30;
 

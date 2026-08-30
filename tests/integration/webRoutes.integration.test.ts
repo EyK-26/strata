@@ -2193,6 +2193,7 @@ describe("web routes with server-htmx frontend", () => {
     expect(accountHtml).toContain("Update profile");
     expect(accountHtml).toContain("Two-factor authentication");
     expect(accountHtml).toContain("API tokens");
+    expect(accountHtml).toContain("Last used");
     expect(accountHtml).toContain("Export my data");
     expect(accountHtml).toContain("Profile photo");
     expect(accountHtml).toContain("Upload photo");
@@ -2280,7 +2281,7 @@ describe("web routes with server-htmx frontend", () => {
       body: new URLSearchParams({ _token: csrf.token }),
     });
     expect(revoked.status).toBe(302);
-    expect(revoked.headers.get("location")).toBe("/account");
+    expect(revoked.headers.get("location")).toBe("/account#browser-sessions");
 
     const after = await fetch(`${baseUrl}/account`, {
       headers: { cookie: session, accept: "text/html" },
@@ -2885,6 +2886,8 @@ describe("web routes with server-htmx frontend", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain("mfa-secret");
+    expect(html).toContain("data:image/svg+xml");
+    expect(html).toContain("Authenticator QR code");
     const secret = html.match(/class="mfa-secret">([^<]+)/)?.[1]?.trim();
     expect(secret).toBeTruthy();
 

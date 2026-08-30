@@ -8,7 +8,7 @@ Use `@getstrata/cli` (`strata dev|start|migrate|migrate:fresh|run`). Do not inve
 
 ## CookieSessionStore guard
 
-HMAC `SessionGuard` (`@getstrata/core/auth/sessionGuard`) is for WorkHub API/token apps. It reads `${APP_KEY_PREFIX}_session` (default `workhub_session`; override with `SESSION_COOKIE_NAME`) and loads the user through an `AuthUserDirectory`. `appCookieName()` / `appDevSecret()` on `@getstrata/core/runtime/appKeyPrefix` derive cookie names and local secret fallbacks from the same prefix.
+HMAC `SessionGuard` (`@getstrata/core/auth/sessionGuard`) is for WorkHub API/token apps. It reads `${APP_KEY_PREFIX}_session` (default `workhub_session`; override with `SESSION_COOKIE_NAME`) and loads the user through an `AuthUserDirectory`. `appCookieName()` / `appDevSecret()` on `@getstrata/core/runtime/appKeyPrefix` derive cookie names and local secret fallbacks from the same prefix. Exported defaults (`SESSION_COOKIE`, `CSRF_COOKIE`, `FLASH_COOKIE`, `INTENDED_URL_COOKIE`, `PASSWORD_CONFIRM_COOKIE`, `MFA_CHALLENGE_COOKIE`) are `appCookieName(...)` at import time.
 
 Sibling HTMX apps should bind `CookieSessionStore` + the published adapter:
 

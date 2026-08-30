@@ -180,6 +180,9 @@
 
   <% if (it.pendingSecret) { %>
   <p class="hint">Scan this otpauth URL or type the secret into an authenticator app, then confirm with a 6-digit code.</p>
+  <% if (it.otpauthQrDataUri) { %>
+  <p><img class="mfa-qr" src="<%= it.otpauthQrDataUri %>" alt="Authenticator QR code" width="168" height="168" /></p>
+  <% } %>
   <p><code class="mfa-secret"><%= it.pendingSecret %></code></p>
   <p class="hint"><code><%= it.otpauthUrl %></code></p>
   <form method="post" action="/account/mfa/confirm" class="stack-form">
@@ -235,6 +238,7 @@
         <th>Name</th>
         <th>Abilities</th>
         <th>Created</th>
+        <th>Last used</th>
         <th>Expires</th>
         <th></th>
       </tr>
@@ -245,6 +249,7 @@
         <td><%= token.name %></td>
         <td><code><%= (token.abilities ?? []).join(", ") %></code></td>
         <td><%= token.created_at %></td>
+        <td><%= token.last_used_at ?? "Never" %></td>
         <td><%= token.expires_at ?? "Never" %></td>
         <td>
           <form method="post" action="/account/tokens/<%= token.id %>/revoke">

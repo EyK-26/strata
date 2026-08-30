@@ -20,6 +20,35 @@ interface BrowserSessionView extends BrowserSessionRow {
   current: boolean;
 }
 
+interface BrowserSessionResource {
+  id: string;
+  user_agent: string | null;
+  ip_address: string | null;
+  last_active_at: string | null;
+  expires_at: string;
+  current: boolean;
+}
+
+function toIsoString(value: Date | string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+function toBrowserSessionResource(row: BrowserSessionView): BrowserSessionResource {
+  return {
+    id: row.id,
+    user_agent: row.user_agent,
+    ip_address: row.ip_address,
+    last_active_at: toIsoString(row.last_active_at),
+    expires_at:
+      row.expires_at instanceof Date ? row.expires_at.toISOString() : String(row.expires_at),
+    current: row.current,
+  };
+}
+
 function hmacBrowserSessionId(userId: number, issuedAt: number): string {
   return createHash("sha256").update(`hmac:${userId}:${issuedAt}`).digest("hex");
 }
@@ -159,7 +188,7 @@ async function listBrowserSessionsForUser(
   }));
 }
 
-export type { BrowserSessionView };
+export type { BrowserSessionResource, BrowserSessionView };
 export {
   clientIpAddress,
   clientUserAgent,
@@ -172,4 +201,5 @@ export {
   listBrowserSessionsForUser,
   parseBrowserSessionId,
   recordHmacBrowserSession,
+  toBrowserSessionResource,
 };

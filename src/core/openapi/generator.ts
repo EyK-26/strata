@@ -29,6 +29,9 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /users/me/invitations": "List pending team invitations for the signed-in email",
   "POST /users/me/invitations/:id/accept": "Accept a pending team invitation",
   "DELETE /users/me/invitations/:id": "Decline a pending team invitation",
+  "GET /users/me/sessions": "List active browser sessions for the signed-in user",
+  "DELETE /users/me/sessions/:id":
+    "Revoke one browser session (HMAC cookie then fails SessionGuard)",
   "DELETE /users/me": "GDPR account erasure (anonymize user, revoke tokens)",
   "GET /organizations": "List organizations",
   "POST /organizations": "Create organization",

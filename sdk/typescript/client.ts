@@ -325,6 +325,14 @@ export class WorkHubClient {
     return await this.request("/users/me/photo", { ...init, method: "DELETE" });
   }
 
+  async getUsersMeSessions(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/sessions", { ...init, method: "GET" });
+  }
+
+  async deleteUsersMeSessionsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/sessions/{id}", { ...init, method: "DELETE" });
+  }
+
   async getWebhooks(init: RequestInit = {}): Promise<Response> {
     return await this.request("/webhooks", { ...init, method: "GET" });
   }

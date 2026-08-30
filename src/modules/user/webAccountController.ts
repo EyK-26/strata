@@ -38,6 +38,7 @@ import {
   parseBrowserSessionId,
 } from "./browserSessions";
 import type OAuthIdentityRepository from "./oauthIdentityRepository";
+import { otpauthQrDataUri } from "./otpauthQr";
 import type PasswordResetService from "./passwordResetService";
 import type ProfilePhotoService from "./profilePhotoService";
 import { profilePhotoServiceToken } from "./profilePhotoService";
@@ -179,6 +180,7 @@ class WebAccountController {
         mfaFeatureEnabled: isFeatureEnabled("mfa"),
         pendingSecret: null,
         otpauthUrl: null,
+        otpauthQrDataUri: null,
         recoveryCodes: null,
         errors: {},
         ...extras,
@@ -293,6 +295,7 @@ class WebAccountController {
     return await this.renderAccount(user, {
       pendingSecret: setup.secret,
       otpauthUrl: setup.otpauthUrl,
+      otpauthQrDataUri: otpauthQrDataUri(setup.otpauthUrl),
     });
   });
 
@@ -425,7 +428,7 @@ class WebAccountController {
       );
     }
 
-    return flashResponse(Response.redirect("/account", 302), {
+    return flashResponse(Response.redirect("/account#browser-sessions", 302), {
       level: "success",
       message: "Signed out that browser.",
     });

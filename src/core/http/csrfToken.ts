@@ -3,7 +3,7 @@ import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
 import { readRequestCookie } from "./cookies.ts";
 import { currentRequestMeta } from "./requestMetaContext";
 
-const CSRF_COOKIE = "workhub_csrf";
+const CSRF_COOKIE = appCookieName("csrf");
 const CSRF_TTL_MS = 60 * 60 * 1000;
 
 function csrfCookieName(): string {

@@ -7,6 +7,7 @@ import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScop
 import { getDatabase } from "../../src/db/connection";
 import { TEST_ADMIN_API_TOKEN, TEST_MEMBER_API_TOKEN } from "../../src/domain/auth";
 import { TEST_SCIM_BEARER_TOKEN } from "../../src/domain/scim";
+import { recordHmacBrowserSession } from "../../src/modules/user/browserSessions";
 import { webhookServiceToken } from "../../src/modules/webhook/provider";
 import type WebhookService from "../../src/modules/webhook/service";
 import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
@@ -1847,6 +1848,42 @@ describe("integration routes with postgres", () => {
       headers: { authorization: `Bearer ${loggedIn.token}` },
     });
     expect(stillCurrent.status).toBe(200);
+  });
+
+  test("GET and DELETE /users/me/sessions revoke a listed HMAC row", async () => {
+    const issuedAt = Date.now();
+    const id = await recordHmacBrowserSession({
+      userId: 1,
+      issuedAt,
+      ttlSeconds: 600,
+      userAgent: "JsonApiSession/1",
+    });
+    const headers = { authorization: `Bearer ${TEST_ADMIN_API_TOKEN}` };
+    const listed = await fetch(api("/users/me/sessions"), { headers });
+    expect(listed.status).toBe(200);
+    const listedBody = (await listed.json()) as {
+      data: Array<{ id: string; user_agent: string | null }>;
+    };
+    expect(
+      listedBody.data.some((row) => row.id === id && row.user_agent === "JsonApiSession/1"),
+    ).toBe(true);
+
+    const revoked = await fetch(api(`/users/me/sessions/${id}`), {
+      method: "DELETE",
+      headers,
+    });
+    expect(revoked.status).toBe(200);
+    expect(await revoked.json()).toEqual({ logged_out: true });
+
+    const after = await fetch(api("/users/me/sessions"), { headers });
+    const afterBody = (await after.json()) as { data: Array<{ id: string }> };
+    expect(afterBody.data.some((row) => row.id === id)).toBe(false);
+
+    const missing = await fetch(api(`/users/me/sessions/${id}`), {
+      method: "DELETE",
+      headers,
+    });
+    expect(missing.status).toBe(404);
   });
 
   test("POST /users/me/photo uploads and DELETE removes a Jetstream profile photo", async () => {

@@ -898,6 +898,73 @@ describe("AuthController", () => {
     });
   });
 
+  test("listBrowserSessions and logoutBrowserSession manage HMAC rows", async () => {
+    const { createSessionCookieDetails } = await import("@getstrata/core/auth/sessionCookie");
+    const { forgetBrowserSessionById, hmacBrowserSessionId, recordHmacBrowserSession } =
+      await import("../../src/modules/user/browserSessions");
+    const issuedAt = Date.now();
+    const otherId = await recordHmacBrowserSession({
+      userId: 1,
+      issuedAt,
+      ttlSeconds: 600,
+      userAgent: "JsonSession/1",
+    });
+    const controller = createController({});
+    const listed = await controller.listBrowserSessions(
+      new Request("http://example.test/users/me/sessions"),
+    );
+    expect(listed.status).toBe(200);
+    const listedBody = (await listed.json()) as { data: Array<{ id: string; user_agent: string }> };
+    expect(
+      listedBody.data.some((row) => row.id === otherId && row.user_agent === "JsonSession/1"),
+    ).toBe(true);
+
+    const invalid = await controller.logoutBrowserSession(
+      Object.assign(new Request("http://example.test/users/me/sessions/nope"), {
+        params: { id: "nope" },
+      }) as Request & { params?: { id?: string } },
+    );
+    expect(invalid.status).toBe(400);
+
+    const missing = await controller.logoutBrowserSession(
+      Object.assign(new Request("http://example.test/users/me/sessions/missing"), {
+        params: { id: "ab".repeat(32) },
+      }) as Request & { params?: { id?: string } },
+    );
+    expect(missing.status).toBe(404);
+
+    const details = createSessionCookieDetails(1);
+    const currentId = hmacBrowserSessionId(1, details.issuedAt);
+    await recordHmacBrowserSession({
+      userId: 1,
+      issuedAt: details.issuedAt,
+      ttlSeconds: details.ttlSeconds,
+    });
+    const currentCookie = details.header.split(";")[0] ?? "";
+    const self = await controller.logoutBrowserSession(
+      Object.assign(
+        new Request("http://example.test/users/me/sessions/current", {
+          headers: { cookie: currentCookie },
+        }),
+        { params: { id: currentId } },
+      ) as Request & { params?: { id?: string } },
+    );
+    expect(self.status).toBe(422);
+    expect(await self.json()).toEqual({
+      error: "Cannot log out this device.",
+      details: { session: ["Cannot log out this device."] },
+    });
+
+    const revoked = await controller.logoutBrowserSession(
+      Object.assign(new Request("http://example.test/users/me/sessions/other"), {
+        params: { id: otherId },
+      }) as Request & { params?: { id?: string } },
+    );
+    expect(revoked.status).toBe(200);
+    expect(await revoked.json()).toEqual({ logged_out: true });
+    await forgetBrowserSessionById(1, currentId);
+  });
+
   test("confirmPassword sets the confirmation cookie", async () => {
     const confirmCurrentPassword = mock(async () => undefined);
     const controller = createController({

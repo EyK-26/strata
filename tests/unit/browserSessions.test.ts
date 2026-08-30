@@ -13,6 +13,7 @@ import {
   listBrowserSessionsForUser,
   parseBrowserSessionId,
   recordHmacBrowserSession,
+  toBrowserSessionResource,
 } from "../../src/modules/user/browserSessions";
 
 describe("browserSessions", () => {
@@ -167,5 +168,38 @@ describe("browserSessions", () => {
     ids.length = 0;
     expect(await hasActiveHmacBrowserSession(2, issuedAt)).toBe(false);
     expect(await forgetBrowserSessionById(2, id)).toBe(false);
+  });
+
+  test("toBrowserSessionResource serializes dates", () => {
+    const expires = new Date("2026-01-02T00:00:00.000Z");
+    expect(
+      toBrowserSessionResource({
+        id: "a".repeat(64),
+        user_id: 2,
+        expires_at: expires,
+        user_agent: "Agent/1",
+        ip_address: "203.0.113.8",
+        last_active_at: new Date("2026-01-01T00:00:00.000Z"),
+        current: false,
+      }),
+    ).toEqual({
+      id: "a".repeat(64),
+      user_agent: "Agent/1",
+      ip_address: "203.0.113.8",
+      last_active_at: "2026-01-01T00:00:00.000Z",
+      expires_at: "2026-01-02T00:00:00.000Z",
+      current: false,
+    });
+    expect(
+      toBrowserSessionResource({
+        id: "b".repeat(64),
+        user_id: 2,
+        expires_at: "2026-02-02T00:00:00.000Z" as unknown as Date,
+        user_agent: null,
+        ip_address: null,
+        last_active_at: null,
+        current: true,
+      }).expires_at,
+    ).toBe("2026-02-02T00:00:00.000Z");
   });
 });

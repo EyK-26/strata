@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.5.88
+
+- Exported cookie name constants (`SESSION_COOKIE`, `CSRF_COOKIE`, `FLASH_COOKIE`, `INTENDED_URL_COOKIE`, `PASSWORD_CONFIRM_COOKIE`) are `appCookieName(...)` so they match the default prefix instead of a hardcoded `workhub_` string.
+- `@getstrata/core/jobs/dispatchWebhookJob` is a deprecated compatibility re-export of the WorkHub webhook job.
+
 ## 0.5.87
 
 - `AuthUserDirectory.hasActiveBrowserSession?(userId, issuedAt)` is optional. `SessionGuard` calls it after `session_valid_after` and rejects the HMAC cookie when it returns false so WorkHub can revoke a single browser session by deleting the `sessions` row.

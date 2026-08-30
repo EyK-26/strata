@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
 
-const FLASH_COOKIE = "workhub_flash";
+const FLASH_COOKIE = appCookieName("flash");
 const FLASH_TTL_MS = 60 * 1000;
 
 function flashCookieName(): string {
