@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.65
+
+- App listener discovery reads `src/listeners` from `process.cwd()` so a built `@getstrata/bootstrap` bundle still finds WorkHub registrars (`import.meta.dir` after `build:bootstrap` is the package dist). Listener boot calls each registrar every time (registrars are idempotent per `eventBus`).
+
 ## 0.2.64
 
 - `registerDefaultJobs()` no longer registers WorkHub `webhook.dispatch`. Apps that dispatch model webhooks should call `registerWebhookJobs()` (WorkHub’s webhook provider and `queue:work` do).

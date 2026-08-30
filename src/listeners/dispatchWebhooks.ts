@@ -1,4 +1,4 @@
-import { eventBus, modelEventName } from "@getstrata/core/events";
+import { type EventBus, eventBus, modelEventName } from "@getstrata/core/events";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { isFeatureEnabled } from "../config/features";
 import { resolveApplicationDependencies } from "../core/runtime/applicationRegistry";
@@ -7,6 +7,7 @@ import type WebhookService from "../modules/webhook/service";
 
 const MODEL_ACTIONS = ["created", "updated", "deleted"] as const;
 const MODEL_TABLES = ["organization", "project", "task", "comment"] as const;
+const registeredBuses = new WeakSet<EventBus>();
 
 async function dispatchModelWebhook(
   tableName: (typeof MODEL_TABLES)[number],
@@ -32,9 +33,11 @@ async function dispatchModelWebhook(
 }
 
 function registerWebhookDispatchListeners(): void {
-  if (!isFeatureEnabled("webhooks")) {
+  if (!isFeatureEnabled("webhooks") || registeredBuses.has(eventBus)) {
     return;
   }
+
+  registeredBuses.add(eventBus);
 
   for (const tableName of MODEL_TABLES) {
     for (const action of MODEL_ACTIONS) {

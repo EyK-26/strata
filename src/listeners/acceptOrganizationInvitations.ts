@@ -1,6 +1,8 @@
-import { eventBus, modelEventName } from "@getstrata/core/events";
+import { type EventBus, eventBus, modelEventName } from "@getstrata/core/events";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { resolveInvitationService } from "../modules/organization/invitationService";
+
+const registeredBuses = new WeakSet<EventBus>();
 
 async function acceptPendingInvitationsForUser(payload: unknown): Promise<number> {
   const user = payload as { id?: number; email?: string } | null;
@@ -24,6 +26,11 @@ async function acceptPendingInvitationsForUser(payload: unknown): Promise<number
 }
 
 function registerAcceptOrganizationInvitationListeners(): void {
+  if (registeredBuses.has(eventBus)) {
+    return;
+  }
+
+  registeredBuses.add(eventBus);
   eventBus.listen(modelEventName("users", "created"), async (payload) => {
     await acceptPendingInvitationsForUser(payload);
   });

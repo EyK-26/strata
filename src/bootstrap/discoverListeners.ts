@@ -1,17 +1,27 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 type ListenerRegistrar = () => void;
 
+function resolveListenersDirectory(): string {
+  const fromCwd = join(process.cwd(), "src", "listeners");
+
+  if (existsSync(fromCwd)) {
+    return fromCwd;
+  }
+
+  return join(import.meta.dir, "../listeners");
+}
+
 async function loadDiscoveredListeners(): Promise<ListenerRegistrar[]> {
-  const listenersDirectory = join(import.meta.dir, "../listeners");
+  const listenersDirectory = resolveListenersDirectory();
 
   let entries: string[];
 
   try {
     entries = readdirSync(listenersDirectory, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+      .filter((entry) => entry.isFile() && /\.(ts|js)$/.test(entry.name))
       .map((entry) => entry.name);
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {

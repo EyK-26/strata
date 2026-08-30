@@ -20,8 +20,8 @@ const listenersProvider: ServiceProvider = {
       registerInvalidateCacheOnModelWriteListeners();
     });
 
-    for (const [index, registerListener] of discoverListeners().entries()) {
-      registerListenerGroup(`app.listener.${index}`, registerListener);
+    for (const registerListener of discoverListeners()) {
+      registerListener();
     }
   },
 };
