@@ -3,6 +3,7 @@ import {
   installGracefulShutdownSignals,
   registerShutdownHandler,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
+import { assertWorkHubProductionSecrets } from "../config/productionSecrets";
 import { closeDatabase, ensureDatabaseConnection } from "../db/connection";
 import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
 import { appContext } from "./context";
@@ -19,6 +20,7 @@ class App {
     }
 
     assertProductionSecrets();
+    assertWorkHubProductionSecrets();
     void ensureDatabaseConnection();
 
     const port = this.resolvePort();

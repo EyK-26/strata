@@ -34,6 +34,8 @@ describe("assertProductionSecrets", () => {
         SCIM_BEARER_TOKEN: "rotated-scim-token",
         AUTH_DEV_HEADERS: "false",
         FEATURE_FIELD_ENCRYPTION: "true",
+        TOKEN_HASH_PEPPER: "rotated-token-pepper",
+        API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
       }),
     ).toThrow(/KMS_ENCRYPTION_KEY/);
   });
@@ -61,6 +63,7 @@ describe("assertProductionSecrets", () => {
         FEATURE_FIELD_ENCRYPTION: "false",
         FEATURE_BILLING: "true",
         CORS_ALLOWED_ORIGINS: "https://app.example.com",
+        TOKEN_HASH_PEPPER: "rotated-token-pepper",
         API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
       }),
     ).toThrow(/STRIPE_WEBHOOK_SECRET/);
@@ -77,6 +80,7 @@ describe("assertProductionSecrets", () => {
         FEATURE_FIELD_ENCRYPTION: "false",
         FEATURE_BILLING: "false",
         CORS_ALLOWED_ORIGINS: "*",
+        TOKEN_HASH_PEPPER: "rotated-token-pepper",
         API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
       }),
     ).toThrow(/CORS_ALLOWED_ORIGINS/);
@@ -133,6 +137,20 @@ describe("assertProductionSecrets", () => {
         FEATURE_PUBLIC_READS: "false",
         CORS_ALLOWED_ORIGINS: "https://app.example.com",
         OAUTH_STATE_SECRET: "rotated-oauth-state-secret",
+        TOKEN_HASH_PEPPER: "rotated-token-pepper",
+        API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
+        FRONTEND_MODE: "api",
+      }),
+    ).not.toThrow();
+  });
+
+  test("does not require CORS or OAuth secrets just because API tokens exist", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        ADMIN_API_TOKEN: "rotated-admin-token",
+        MEMBER_API_TOKEN: "rotated-member-token",
+        AUTH_DEV_HEADERS: "false",
         TOKEN_HASH_PEPPER: "rotated-token-pepper",
         API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
         FRONTEND_MODE: "api",

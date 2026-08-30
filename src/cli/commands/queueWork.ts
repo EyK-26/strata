@@ -1,6 +1,7 @@
 import { createAppContext } from "@getstrata/bootstrap/context";
 import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
+import { assertWorkHubProductionSecrets } from "../../config/productionSecrets";
 import {
   installGracefulShutdownSignals,
   registerShutdownHandler,
@@ -17,6 +18,7 @@ async function queueWorkCommand(): Promise<void> {
   }
 
   assertProductionSecrets();
+  assertWorkHubProductionSecrets();
   createAppContext();
   registerDefaultJobs();
   registerWebhookJobs();

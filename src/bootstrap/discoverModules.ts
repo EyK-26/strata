@@ -45,7 +45,7 @@ function resolveModulesDirectory(options?: DiscoverModulesOptions): string {
   }
 
   throw new Error(
-    "configureModulesDirectory() must be called before discovering modules. WorkHub and the starter do this from preload.",
+    "configureModulesDirectory() must be called before discovering modules. The app preload (or starter) should call it.",
   );
 }
 
