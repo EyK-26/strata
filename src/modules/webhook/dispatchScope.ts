@@ -17,15 +17,58 @@ function asPositiveInt(value: unknown): number | null {
   return null;
 }
 
+function matchesWebhookEvent(events: unknown, event: string): boolean {
+  const list = webhookEventList(events);
+  return list.includes("*") || list.includes(event);
+}
+
+function webhookEventList(events: unknown): string[] {
+  if (Array.isArray(events)) {
+    return events.filter((item): item is string => typeof item === "string");
+  }
+
+  if (typeof events !== "string") {
+    return [];
+  }
+
+  const trimmed = events.trim();
+
+  if (trimmed === "") {
+    return [];
+  }
+
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === "string");
+      }
+
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [trimmed];
+}
+
 function matchesWebhookOrganization(
-  webhookOrganizationId: number | null,
-  payloadOrganizationId: number | null,
+  webhookOrganizationId: unknown,
+  payloadOrganizationId: unknown,
 ): boolean {
   if (webhookOrganizationId == null) {
     return true;
   }
 
-  return payloadOrganizationId === webhookOrganizationId;
+  const webhookOrg = asPositiveInt(webhookOrganizationId);
+
+  if (webhookOrg === null) {
+    return false;
+  }
+
+  return webhookOrg === asPositiveInt(payloadOrganizationId);
 }
 
 function organizationIdFromWebhookPayload(payload: Record<string, unknown>): number | null {
@@ -105,7 +148,9 @@ async function resolveWebhookOrganizationId(
 }
 
 export {
+  matchesWebhookEvent,
   matchesWebhookOrganization,
   organizationIdFromWebhookPayload,
   resolveWebhookOrganizationId,
+  webhookEventList,
 };

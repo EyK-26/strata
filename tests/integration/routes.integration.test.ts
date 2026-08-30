@@ -1367,6 +1367,8 @@ describe("integration routes with postgres", () => {
 
   test("webhook dispatch delivers team endpoints only for matching organizations", async () => {
     const stamp = Date.now();
+    const sameId = (left: unknown, right: unknown): boolean => Number(left) === Number(right);
+
     const org1Create = await fetch(api("/webhooks"), {
       method: "POST",
       headers: adminHeaders({ "content-type": "application/json" }),
@@ -1379,6 +1381,7 @@ describe("integration routes with postgres", () => {
     });
     expect(org1Create.status).toBe(201);
     const org1Id = ((await org1Create.json()) as { id: number }).id;
+    expect(Number(org1Id)).toBeGreaterThan(0);
 
     const org2Create = await fetch(api("/webhooks"), {
       method: "POST",
@@ -1392,6 +1395,7 @@ describe("integration routes with postgres", () => {
     });
     expect(org2Create.status).toBe(201);
     const org2Id = ((await org2Create.json()) as { id: number }).id;
+    expect(Number(org2Id)).toBeGreaterThan(0);
 
     await runWithMigrationBypass(async () => {
       const db = getDatabase();
@@ -1421,18 +1425,41 @@ describe("integration routes with postgres", () => {
       expect(createdProject.status).toBe(201);
       projectId = ((await createdProject.json()) as { id: number }).id;
 
-      const deliveries = await runWithMigrationBypass(
-        async () =>
-          (await getDatabase()`
-            SELECT webhook_id
-            FROM webhook_delivery
-            WHERE (webhook_id = ${org1Id} OR webhook_id = ${org2Id})
-              AND event = ${"project.created"}
-            ORDER BY webhook_id
-          `) as Array<{ webhook_id: number }>,
-      );
-      expect(deliveries.some((row) => row.webhook_id === org1Id)).toBe(true);
-      expect(deliveries.some((row) => row.webhook_id === org2Id)).toBe(false);
+      const [deliveries, storedHooks, recentDeliveries] = await runWithMigrationBypass(async () => {
+        const db = getDatabase();
+        const scoped = (await db`
+          SELECT webhook_id
+          FROM webhook_delivery
+          WHERE (webhook_id = ${org1Id} OR webhook_id = ${org2Id})
+            AND event = ${"project.created"}
+          ORDER BY webhook_id
+        `) as Array<{ webhook_id: number }>;
+        const hooks = (await db`
+          SELECT id, organization_id, events, active
+          FROM webhook
+          WHERE id = ${org1Id} OR id = ${org2Id}
+          ORDER BY id
+        `) as Array<{
+          id: number;
+          organization_id: number | null;
+          events: unknown;
+          active: boolean;
+        }>;
+        const recent = (await db`
+          SELECT webhook_id, event
+          FROM webhook_delivery
+          ORDER BY id DESC
+          LIMIT 20
+        `) as Array<{ webhook_id: number; event: string }>;
+        return [scoped, hooks, recent] as const;
+      });
+
+      if (!deliveries.some((row) => sameId(row.webhook_id, org1Id))) {
+        throw new Error(
+          `expected delivery for org1 webhook ${org1Id}; deliveries=${JSON.stringify(deliveries)} hooks=${JSON.stringify(storedHooks)} recent=${JSON.stringify(recentDeliveries)}`,
+        );
+      }
+      expect(deliveries.some((row) => sameId(row.webhook_id, org2Id))).toBe(false);
     } finally {
       await runWithMigrationBypass(async () => {
         const db = getDatabase();

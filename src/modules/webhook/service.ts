@@ -5,7 +5,11 @@ import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
 import { assertSafeOutboundUrlResolved } from "@getstrata/core/security/safeUrl";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { appConfig } from "../../config/app";
-import { matchesWebhookOrganization, resolveWebhookOrganizationId } from "./dispatchScope";
+import {
+  matchesWebhookEvent,
+  matchesWebhookOrganization,
+  resolveWebhookOrganizationId,
+} from "./dispatchScope";
 import { DispatchWebhookJob } from "./dispatchWebhookJob";
 import type WebhookRepository from "./repository";
 import type { WebhookDeliveryRecord, WebhookRecord } from "./types";
@@ -112,7 +116,7 @@ class WebhookService {
     const job = createTrackedJob("webhook.dispatch", new DispatchWebhookJob());
 
     for (const webhook of webhooks) {
-      if (!this.matchesEvent(webhook.events, event)) {
+      if (!matchesWebhookEvent(webhook.events, event)) {
         continue;
       }
 
@@ -127,11 +131,6 @@ class WebhookService {
         payload,
       });
     }
-  }
-
-  private matchesEvent(events: unknown, event: string): boolean {
-    const list = Array.isArray(events) ? events.filter((item) => typeof item === "string") : [];
-    return list.includes("*") || list.includes(event);
   }
 }
 

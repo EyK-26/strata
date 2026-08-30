@@ -247,6 +247,11 @@ describe("WebhookService", () => {
             id: 7,
             events: [1, "task.created"] as unknown as string[],
           },
+          {
+            ...sampleWebhook,
+            id: 8,
+            events: '["task.created"]' as unknown as string[],
+          },
         ] as WebhookRecord[],
     );
     const service = new WebhookService(repository as never);
@@ -255,7 +260,34 @@ describe("WebhookService", () => {
 
     expect(dispatched).toEqual([
       { webhookId: 7, tenantId: 1, event: "task.created", payload: { id: 99 } },
+      { webhookId: 8, tenantId: 1, event: "task.created", payload: { id: 99 } },
     ]);
+  });
+
+  test("matches team-scoped webhooks when organization_id is a driver string", async () => {
+    repository.listActive.mockImplementationOnce(
+      async () =>
+        [
+          {
+            ...sampleWebhook,
+            id: 11,
+            organization_id: "7" as unknown as number,
+            events: ["*"],
+          },
+          {
+            ...sampleWebhook,
+            id: 12,
+            organization_id: "8" as unknown as number,
+            events: ["*"],
+          },
+        ] as WebhookRecord[],
+    );
+    const service = new WebhookService(repository as never);
+    const payload = { organization_id: 7, id: 99 };
+
+    await service.dispatch("task.created", payload);
+
+    expect(dispatched).toEqual([{ webhookId: 11, tenantId: 1, event: "task.created", payload }]);
   });
 
   test("dispatches team-scoped webhooks only when the payload org matches", async () => {
