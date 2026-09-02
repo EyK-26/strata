@@ -32,6 +32,11 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.RepositoryQuery).toBe("function");
   });
 
+  test("exports membership lookup used by published bootstrap", () => {
+    expect(typeof core.resolveMembershipLookup).toBe("function");
+    expect(typeof core.runWithMembershipContext).toBe("function");
+  });
+
   test("exports seeder runner helpers", () => {
     expect(typeof core.runSeedersFromDirectory).toBe("function");
     expect(typeof core.loadSeedersFromDirectory).toBe("function");
