@@ -186,9 +186,8 @@ describe("webErrorResponse", () => {
     const response = await webErrorResponse(new Error("connection refused"), request);
     const html = await response?.text();
 
-    expect(response?.status).toBe(500);
+    expect(response?.status).toBe(400);
     expect(html).toContain("connection refused");
-    expect(html).toContain("Server Error");
   });
 
   test("passes through existing HttpError instances", async () => {

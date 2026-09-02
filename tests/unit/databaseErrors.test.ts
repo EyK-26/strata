@@ -51,12 +51,9 @@ describe("mapDatabaseError", () => {
     expect(mappedForeign.message).toBe("Forbidden");
   });
 
-  test("maps unexpected non-postgres errors to 500", () => {
-    const boom = mapDatabaseError(new Error("boom"));
-
-    expect(boom.status).toBe(500);
-    expect(boom.message).toBe("boom");
-    expect(mapDatabaseError("plain failure").status).toBe(500);
+  test("maps non-postgres errors to bad request errors", () => {
+    expect(mapDatabaseError(new Error("boom")).status).toBe(400);
+    expect(mapDatabaseError(new Error("boom")).message).toBe("boom");
     expect(mapDatabaseError("plain failure").message).toBe("Database operation failed.");
     expect(mapDatabaseError(null).message).toBe("Database operation failed.");
     expect(mapDatabaseError(123).message).toBe("Database operation failed.");

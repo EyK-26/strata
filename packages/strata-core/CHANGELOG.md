@@ -3,7 +3,6 @@
 ## 0.5.97
 
 - `mapDatabaseError()` recognizes HTTP errors by `status` + `message`, not only `instanceof HttpError`. Subpath builds duplicate the class, so a thrown `ForbiddenError` was remapped to `400 Bad Request`.
-- Unexpected non-Postgres errors map to HTTP 500 instead of 400.
 
 ## 0.5.92
 
