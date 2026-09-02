@@ -2,6 +2,7 @@ import {
   BadRequestError,
   ConflictError,
   HttpError,
+  toHttpError,
   UnprocessableEntityError,
 } from "@getstrata/core/errors/http";
 
@@ -34,13 +35,15 @@ function getPostgresSqlState(error: PostgresErrorLike): string | undefined {
 }
 
 function mapDatabaseError(error: unknown): HttpError {
-  if (error instanceof HttpError) {
-    return error;
+  const httpError = toHttpError(error);
+
+  if (httpError) {
+    return httpError;
   }
 
   if (!isPostgresError(error)) {
     const message = error instanceof Error ? error.message : "Database operation failed.";
-    return new BadRequestError(message);
+    return new HttpError(500, message);
   }
 
   const sqlState = getPostgresSqlState(error);

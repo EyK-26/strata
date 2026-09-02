@@ -7,6 +7,7 @@ import {
 import {
   BadRequestError,
   ConflictError,
+  ForbiddenError,
   HttpError,
   UnprocessableEntityError,
 } from "@getstrata/core/errors/http";
@@ -26,8 +27,36 @@ describe("mapDatabaseError", () => {
     expect(mapDatabaseError(original)).toBe(original);
   });
 
-  test("maps non-postgres errors to bad request errors", () => {
-    expect(mapDatabaseError(new Error("boom")).message).toBe("boom");
+  test("keeps ForbiddenError as 403 even when instanceof HttpError fails", () => {
+    const fromPublicEntry = new ForbiddenError();
+    const mappedFromPublic = mapDatabaseError(fromPublicEntry);
+
+    expect(mappedFromPublic).toBe(fromPublicEntry);
+    expect(mappedFromPublic.status).toBe(403);
+
+    class ForeignForbidden extends Error {
+      readonly status = 403;
+
+      constructor() {
+        super("Forbidden");
+        this.name = "ForbiddenError";
+      }
+    }
+
+    const foreign = new ForeignForbidden();
+    const mappedForeign = mapDatabaseError(foreign);
+
+    expect(foreign instanceof HttpError).toBe(false);
+    expect(mappedForeign.status).toBe(403);
+    expect(mappedForeign.message).toBe("Forbidden");
+  });
+
+  test("maps unexpected non-postgres errors to 500", () => {
+    const boom = mapDatabaseError(new Error("boom"));
+
+    expect(boom.status).toBe(500);
+    expect(boom.message).toBe("boom");
+    expect(mapDatabaseError("plain failure").status).toBe(500);
     expect(mapDatabaseError("plain failure").message).toBe("Database operation failed.");
     expect(mapDatabaseError(null).message).toBe("Database operation failed.");
     expect(mapDatabaseError(123).message).toBe("Database operation failed.");

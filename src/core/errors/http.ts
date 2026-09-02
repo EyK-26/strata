@@ -64,14 +64,50 @@ class PreconditionFailedError extends HttpError {
   }
 }
 
+interface HttpErrorLike {
+  status: number;
+  message: string;
+  details?: unknown;
+}
+
+function isHttpErrorLike(error: unknown): error is HttpErrorLike {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const candidate = error as { status?: unknown; message?: unknown };
+
+  return (
+    typeof candidate.status === "number" &&
+    Number.isInteger(candidate.status) &&
+    candidate.status >= 400 &&
+    candidate.status < 600 &&
+    typeof candidate.message === "string"
+  );
+}
+
+function toHttpError(error: unknown): HttpError | null {
+  if (error instanceof HttpError) {
+    return error;
+  }
+
+  if (!isHttpErrorLike(error)) {
+    return null;
+  }
+
+  return new HttpError(error.status, error.message, error.details);
+}
+
 export {
   BadRequestError,
   ConflictError,
   ForbiddenError,
   HttpError,
+  isHttpErrorLike,
   NotFoundError,
   PayloadTooLargeError,
   PreconditionFailedError,
+  toHttpError,
   UnauthorizedError,
   UnprocessableEntityError,
   ValidationError,

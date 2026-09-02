@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
-import { ForbiddenError, HttpError } from "@getstrata/core/errors/http";
+import { ForbiddenError, toHttpError } from "@getstrata/core/errors/http";
 import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
 import { runWithMigrationBypass } from "./databaseTenantContext";
 import { resolveTenant } from "./resolveTenant";
@@ -103,8 +103,10 @@ function createTenantMiddleware() {
         });
       });
     } catch (error) {
-      if (error instanceof HttpError) {
-        return Response.json({ error: error.message }, { status: error.status });
+      const httpError = toHttpError(error);
+
+      if (httpError) {
+        return Response.json({ error: httpError.message }, { status: httpError.status });
       }
 
       throw error;

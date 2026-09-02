@@ -1,4 +1,4 @@
-import { HttpError } from "@getstrata/core/errors/http";
+import { toHttpError } from "@getstrata/core/errors/http";
 import { mapDatabaseError } from "../database/errors";
 import { webErrorResponse } from "./webErrorResponse";
 
@@ -18,7 +18,7 @@ function noContentResponse(): Response {
 }
 
 function errorResponse(error: unknown): Response {
-  const mappedError = error instanceof HttpError ? error : mapDatabaseError(error);
+  const mappedError = toHttpError(error) ?? mapDatabaseError(error);
 
   return Response.json(
     {

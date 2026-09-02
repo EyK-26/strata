@@ -1,4 +1,4 @@
-import { HttpError, UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
+import { toHttpError, ValidationError } from "@getstrata/core/errors/http";
 import { mapDatabaseError } from "../database/errors";
 import { isViewsEnabled } from "../runtime/frontendMode";
 import { htmlErrorResponse } from "../view/webErrorView";
@@ -57,14 +57,16 @@ async function webErrorResponse(error: unknown, request?: Request): Promise<Resp
     return null;
   }
 
-  const mappedError = error instanceof HttpError ? error : mapDatabaseError(error);
+  const mappedError = toHttpError(error) ?? mapDatabaseError(error);
 
-  if (mappedError instanceof UnauthorizedError) {
+  if (mappedError.status === 401) {
     return Response.redirect(loginRedirectLocation(request), 302);
   }
 
   const errors =
-    mappedError instanceof ValidationError ? normalizeFieldErrors(mappedError.details) : undefined;
+    mappedError instanceof ValidationError || mappedError.name === "ValidationError"
+      ? normalizeFieldErrors(mappedError.details)
+      : undefined;
 
   return htmlErrorResponse({
     status: mappedError.status,

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   BadRequestError,
+  ForbiddenError,
   HttpError,
   UnauthorizedError,
   ValidationError,
@@ -135,6 +136,46 @@ describe("webErrorResponse", () => {
     expect(html).toContain("Invalid widget");
   });
 
+  test("renders a foreign Forbidden-shaped error as HTTP 403", async () => {
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    class ForeignForbidden extends Error {
+      readonly status = 403;
+
+      constructor() {
+        super("Forbidden");
+        this.name = "ForbiddenError";
+      }
+    }
+
+    const request = new Request("http://example.test/users", {
+      headers: { accept: "text/html" },
+    });
+    const foreign = new ForeignForbidden();
+
+    expect(foreign instanceof HttpError).toBe(false);
+
+    const response = await webErrorResponse(foreign, request);
+    const html = await response?.text();
+
+    expect(response?.status).toBe(403);
+    expect(html).toContain("Forbidden");
+  });
+
+  test("renders ForbiddenError as HTTP 403", async () => {
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    const request = new Request("http://example.test/users", {
+      headers: { accept: "text/html" },
+    });
+
+    const response = await webErrorResponse(new ForbiddenError(), request);
+    const html = await response?.text();
+
+    expect(response?.status).toBe(403);
+    expect(html).toContain("Forbidden");
+  });
+
   test("maps non-http errors through mapDatabaseError", async () => {
     process.env.FRONTEND_MODE = "server-htmx";
 
@@ -145,8 +186,9 @@ describe("webErrorResponse", () => {
     const response = await webErrorResponse(new Error("connection refused"), request);
     const html = await response?.text();
 
-    expect(response?.status).toBe(400);
+    expect(response?.status).toBe(500);
     expect(html).toContain("connection refused");
+    expect(html).toContain("Server Error");
   });
 
   test("passes through existing HttpError instances", async () => {
