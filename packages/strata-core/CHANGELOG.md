@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.92
+
+- Re-export `resolveMembershipLookup` and `runWithMembershipContext` from the public barrel. Shared subpath shims re-export that barrel, so published `@getstrata/bootstrap` can import `@getstrata/core/auth/membershipContext` without a missing-export boot failure.
+
 ## 0.5.91
 
 - `Schedule.command()` accepts any expression `Bun.cron.parse` understands. `dueTasks()` uses the next fire time in the current minute instead of a `*/N` whitelist.

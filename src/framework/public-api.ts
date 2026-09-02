@@ -32,6 +32,8 @@ export {
   currentOrgRole,
   hasMinimumOrgRole,
   hasOrgMembership,
+  resolveMembershipLookup,
+  runWithMembershipContext,
 } from "../core/auth/membershipContext.ts";
 export { createMembershipMiddleware } from "../core/auth/membershipMiddleware.ts";
 export {
