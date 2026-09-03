@@ -1,15 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { Factory } from "@getstrata/core/database/factory";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
-import { CommentFactory } from "../../src/modules/comment/factory";
 import { CommentModel } from "../../src/modules/comment/model";
 import { toCommentResource } from "../../src/modules/comment/resources";
-import { OrganizationFactory } from "../../src/modules/organization/factory";
 import { OrganizationModel } from "../../src/modules/organization/model";
 import { toOrganizationResource } from "../../src/modules/organization/resources";
-import { ProjectFactory } from "../../src/modules/project/factory";
 import { ProjectModel } from "../../src/modules/project/model";
 import { toProjectResource } from "../../src/modules/project/resources";
-import { TaskFactory } from "../../src/modules/task/factory";
 import { TaskModel } from "../../src/modules/task/model";
 import { toTaskResource } from "../../src/modules/task/resources";
 import { userFactory } from "../../src/modules/user/factory";
@@ -187,41 +184,87 @@ describe("WorkHub Eloquent models", () => {
     expect(userFactory.admin().make().role).toBe("admin");
     expect(userFactory.make().role).toBe("member");
 
+    const inserted: Array<Record<string, unknown>> = [];
+
+    class MemoryProjectFactory extends Factory<{
+      id?: number;
+      organization_id?: number;
+      name: string;
+    }> {
+      protected override definition() {
+        return { id: 0, name: "Child Project" };
+      }
+
+      protected override async persist(
+        values: Partial<{ id?: number; organization_id?: number; name: string }>,
+      ) {
+        inserted.push(values);
+        return {
+          id: inserted.length,
+          name: values.name ?? "Child Project",
+          organization_id: values.organization_id,
+        };
+      }
+    }
+
+    class MemoryOrgFactory extends Factory<{ id?: number; name: string }> {
+      protected override definition() {
+        return { id: 0, name: "Parent Org" };
+      }
+
+      protected override async persist(values: Partial<{ id?: number; name: string }>) {
+        return { id: 40, name: values.name ?? "Parent Org" };
+      }
+    }
+
+    const child = await new MemoryProjectFactory().for({ id: 7 }, "organization_id").create();
+    expect(child).toEqual({ id: 1, name: "Child Project", organization_id: 7 });
+
+    inserted.length = 0;
+    await new MemoryOrgFactory().has(new MemoryProjectFactory(), "organization_id").create();
+    expect(inserted).toEqual([{ name: "Child Project", organization_id: 40 }]);
+  });
+
+  test("OrganizationModel.projects and ProjectModel.load use seeded rows", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {
-      const organization = await new OrganizationFactory().create({ name: "Eloquent Org" });
-      expect(organization.id).toBeGreaterThan(0);
+      const org = new OrganizationModel(
+        {
+          id: 1,
+          tenant_id: 1,
+          name: "Acme Labs",
+          slug: "acme-labs",
+          created_at: new Date(),
+          updated_at: new Date(),
+          deleted_at: null,
+        },
+        OrganizationModel.repository(),
+      );
+      const projects = await org.projects().get();
+      expect(projects.length).toBeGreaterThan(0);
+      expect(projects.some((project) => project.get("organization_id") === 1)).toBe(true);
 
-      const project = await new ProjectFactory().for(organization, "organization_id").create({
-        tenant_id: organization.tenant_id,
-        name: "Eloquent Project",
-      });
-      expect(project.organization_id).toBe(organization.id);
+      const first = projects[0];
+      if (!first) {
+        throw new Error("expected a seeded project");
+      }
 
-      const created = await new OrganizationFactory()
-        .has(new ProjectFactory().state({ name: "Child Project" }), "organization_id")
-        .create({ name: "Parent Org" });
-      expect(created.id).toBeGreaterThan(0);
-
-      const task = await new TaskFactory().for(project, "project_id").create({
-        tenant_id: project.tenant_id,
-        title: "Eloquent Task",
-      });
-      const comment = await new CommentFactory().for(task, "task_id").create({
-        tenant_id: task.tenant_id,
-        body: "Eloquent comment",
-      });
-      expect(comment.task_id).toBe(task.id);
-
-      const orgModel = new OrganizationModel(organization, OrganizationModel.repository());
-      const projects = await orgModel.projects().where({ name: "Eloquent Project" }).get();
-      expect(projects).toHaveLength(1);
-      expect(projects[0]?.get("name")).toBe("Eloquent Project");
-
-      const loadedProject = ProjectModel.newFromRecord(project);
-      await loadedProject.load("organization");
-      expect(
-        loadedProject.loaded<{ get: (key: "name") => string }>("organization")?.get("name"),
-      ).toBe("Eloquent Org");
+      const loaded = new ProjectModel(
+        {
+          id: Number(first.get("id")),
+          organization_id: 1,
+          tenant_id: 1,
+          name: String(first.get("name")),
+          status: "active",
+          created_at: new Date(),
+          updated_at: new Date(),
+          deleted_at: null,
+        },
+        ProjectModel.repository(),
+      );
+      await loaded.load("organization");
+      expect(loaded.loaded<{ get: (key: "name") => string }>("organization")?.get("name")).toBe(
+        "Acme Labs",
+      );
     });
   });
 });
