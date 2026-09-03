@@ -571,6 +571,71 @@ describe("Eloquent-style model relations", () => {
     void PositionModel;
   });
 
+  test("relation exists clauses and remaining query helpers", async () => {
+    const connection = new FakeConnection();
+    const { UserModel, ApplicationModel } = createModels(connection);
+    const user = new UserModel({ id: 1, name: "Ada" }, UserModel.repository());
+    const application = new ApplicationModel(
+      { id: 1, user_id: 1, position_id: 4, status_id: 1 },
+      ApplicationModel.repository(),
+    );
+
+    expect(user.applications().toExistsClause("users").sql).toContain("applications");
+    expect(user.position().toExistsClause("users").sql).toContain("positions");
+    expect(user.tags().toExistsClause("users").sql).toContain("user_tag");
+    expect(application.user().toExistsClause("applications").sql).toContain("users");
+    expect(user.tags().hydrateEager({ tags: { id: 1 } }, "tags")).toEqual([]);
+
+    connection.queue([]);
+    expect(await user.applications().orderBy({ id: "ASC" }).limit(2).count()).toBe(0);
+
+    class ImageModel extends Model<
+      { id: number; imageable_type: string; imageable_id: number; url: string },
+      "id"
+    > {
+      static override $timestamps = false;
+      protected override primaryKey(): "id" {
+        return "id";
+      }
+    }
+    const imageTable = defineTable<
+      { id: number; imageable_type: string; imageable_id: number; url: string },
+      "id"
+    >({
+      name: "images",
+      primaryKey: "id",
+      columns: ["id", "imageable_type", "imageable_id", "url"],
+    });
+    class ImageRepository extends BaseRepository<
+      { id: number; imageable_type: string; imageable_id: number; url: string },
+      "id"
+    > {
+      constructor() {
+        super(imageTable, connection);
+      }
+    }
+    registerModelRepository(ImageModel, new ImageRepository());
+    class PicturedUser extends UserModel {
+      images() {
+        return this.morphMany(ImageModel, "imageable");
+      }
+      avatar() {
+        return this.morphOne(ImageModel, "imageable");
+      }
+    }
+    registerModelRepository(PicturedUser, UserModel.repository());
+    const pictured = new PicturedUser({ id: 1, name: "Ada" }, PicturedUser.repository());
+    expect(pictured.images().toExistsClause("users").sql).toContain("imageable_id");
+    expect(pictured.avatar().toExistsClause("users").sql).toContain("imageable_type");
+
+    connection.queue([]);
+    await PicturedUser.has("avatar").get();
+    expect(connection.calls.at(-1)?.query).toContain("EXISTS");
+    connection.queue([]);
+    await UserModel.has("tags").get();
+    expect(connection.calls.at(-1)?.query).toContain("user_tag");
+  });
+
   test("belongsTo orderBy is applied when present", async () => {
     const connection = new FakeConnection();
     const { ApplicationModel } = createModels(connection);
