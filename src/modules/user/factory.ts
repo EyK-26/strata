@@ -20,6 +20,10 @@ class UserFactory extends Factory<UserRecord> {
   protected override persist(values: Partial<UserRecord>): Promise<UserRecord> {
     return new UserRepository().create(values);
   }
+
+  admin() {
+    return this.state({ role: "admin" });
+  }
 }
 
 const userFactory = new UserFactory();

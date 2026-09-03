@@ -25,6 +25,7 @@ const userModule: AppModule = {
 };
 
 export default userModule;
+export { UserFactory, userFactory } from "./factory";
 export { UserModel, userRepository } from "./model";
 export { default as UserRepository } from "./repository";
 export { createAuthRoutes } from "./routes";

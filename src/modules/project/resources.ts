@@ -1,4 +1,5 @@
 import {
+  JsonResource,
   serializeDate,
   toPaginatedResourceCollection,
   toResourceCollection,
@@ -20,16 +21,24 @@ interface ProjectResource {
   };
 }
 
+class ProjectJsonResource extends JsonResource<ProjectWithOrganizationRecord> {
+  override toArray(): Record<string, unknown> {
+    const record = this.resource;
+
+    return {
+      id: record.id,
+      organization_id: record.organization_id,
+      name: record.name,
+      status: record.status,
+      created_at: serializeDate(record.created_at),
+      updated_at: serializeDate(record.updated_at),
+      ...(record.organization ? { organization: record.organization } : {}),
+    };
+  }
+}
+
 function toProjectResource(record: ProjectWithOrganizationRecord): ProjectResource {
-  return {
-    id: record.id,
-    organization_id: record.organization_id,
-    name: record.name,
-    status: record.status,
-    created_at: serializeDate(record.created_at),
-    updated_at: serializeDate(record.updated_at),
-    ...(record.organization ? { organization: record.organization } : {}),
-  };
+  return new ProjectJsonResource(record).toArray() as unknown as ProjectResource;
 }
 
 function toProjectResourceCollection(
@@ -46,4 +55,9 @@ function toProjectPaginatedResourceCollection(
 }
 
 export type { ProjectResource };
-export { toProjectPaginatedResourceCollection, toProjectResource, toProjectResourceCollection };
+export {
+  ProjectJsonResource,
+  toProjectPaginatedResourceCollection,
+  toProjectResource,
+  toProjectResourceCollection,
+};

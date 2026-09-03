@@ -21,6 +21,8 @@ const taskModule: AppModule = {
 };
 
 export default taskModule;
+export { TaskFactory, taskFactory } from "./factory";
+export { TaskModel, taskRepository } from "./model";
 export { taskBelongsToProject } from "./relationships";
 export { default as TaskRepository } from "./repository";
 export {

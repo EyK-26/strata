@@ -1,4 +1,5 @@
 import {
+  JsonResource,
   serializeDate,
   toPaginatedResourceCollection,
   toResourceCollection,
@@ -14,14 +15,22 @@ interface OrganizationResource {
   updated_at: string;
 }
 
+class OrganizationJsonResource extends JsonResource<OrganizationRecord> {
+  override toArray(): Record<string, unknown> {
+    const record = this.resource;
+
+    return {
+      id: record.id,
+      name: record.name,
+      slug: record.slug,
+      created_at: serializeDate(record.created_at),
+      updated_at: serializeDate(record.updated_at),
+    };
+  }
+}
+
 function toOrganizationResource(record: OrganizationRecord): OrganizationResource {
-  return {
-    id: record.id,
-    name: record.name,
-    slug: record.slug,
-    created_at: serializeDate(record.created_at),
-    updated_at: serializeDate(record.updated_at),
-  };
+  return new OrganizationJsonResource(record).toArray() as unknown as OrganizationResource;
 }
 
 function toOrganizationResourceCollection(
@@ -39,6 +48,7 @@ function toOrganizationPaginatedResourceCollection(
 
 export type { OrganizationResource };
 export {
+  OrganizationJsonResource,
   toOrganizationPaginatedResourceCollection,
   toOrganizationResource,
   toOrganizationResourceCollection,

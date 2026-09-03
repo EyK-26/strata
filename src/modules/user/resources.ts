@@ -1,3 +1,4 @@
+import { JsonResource } from "@getstrata/core/http/resources";
 import type { NotificationRecord } from "./notificationTypes";
 import type { UserRecord } from "./types";
 
@@ -18,13 +19,21 @@ interface NotificationResource {
   created_at: string;
 }
 
+class UserJsonResource extends JsonResource<UserRecord> {
+  override toArray(): Record<string, unknown> {
+    const record = this.resource;
+
+    return {
+      id: record.id,
+      name: record.name,
+      email: record.email,
+      role: record.role,
+    };
+  }
+}
+
 function toUserResource(record: UserRecord): UserResource {
-  return {
-    id: record.id,
-    name: record.name,
-    email: record.email,
-    role: record.role,
-  };
+  return new UserJsonResource(record).toArray() as unknown as UserResource;
 }
 
 function toNotificationResource(record: NotificationRecord): NotificationResource {
@@ -40,4 +49,4 @@ function toNotificationResource(record: NotificationRecord): NotificationResourc
 }
 
 export type { NotificationResource, UserResource };
-export { toNotificationResource, toUserResource };
+export { toNotificationResource, toUserResource, UserJsonResource };
