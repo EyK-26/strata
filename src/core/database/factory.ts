@@ -1,3 +1,5 @@
+import { foreignKeyFromTable } from "./inflection.ts";
+
 type FactoryState<TRecord extends object> =
   | Partial<TRecord>
   | ((record: TRecord) => Partial<TRecord>);
@@ -12,12 +14,34 @@ type ParentAssociation<TRecord extends object> = {
 
 type RelatedFactory = {
   factory: Factory<object>;
-  foreignKey: string;
+  foreignKey?: string;
 };
 
 type FactoryMakeResult<TRecord extends object, Counted extends boolean> = Counted extends true
   ? TRecord[]
   : TRecord;
+
+function inferFactoryForeignKey<TRecord extends object>(
+  parent: {
+    getRepository?: () => { getTable(): { name: string } };
+    constructor?: { name?: string };
+  },
+  explicit?: keyof TRecord & string,
+): keyof TRecord & string {
+  if (explicit) {
+    if (explicit.endsWith("_id")) {
+      return explicit;
+    }
+
+    return `${explicit}_id` as keyof TRecord & string;
+  }
+
+  if (typeof parent.getRepository === "function") {
+    return foreignKeyFromTable(parent.getRepository().getTable().name) as keyof TRecord & string;
+  }
+
+  throw new Error("Factory.for() requires a foreign key or a parent Model.");
+}
 
 class Factory<TRecord extends object, Counted extends boolean = false> {
   private quantity = 1;
@@ -29,6 +53,9 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
   private children: RelatedFactory[] = [];
   private afterMakingCallbacks: Array<(record: TRecord) => void> = [];
   private afterCreatingCallbacks: Array<(record: TRecord) => void | Promise<void>> = [];
+  protected model?: {
+    create(attributes: Record<string, unknown>): Promise<{ toObject(): object }>;
+  };
 
   protected definition(): TRecord {
     throw new Error("Factory definition must be implemented by subclass.");
@@ -73,17 +100,24 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     return next;
   }
 
-  for(parent: { id?: unknown }, foreignKey: keyof TRecord & string): Factory<TRecord, Counted> {
+  for(
+    parent: { id?: unknown; getRepository?: () => { getTable(): { name: string } } },
+    foreignKey?: keyof TRecord & string,
+  ): Factory<TRecord, Counted> {
     if (parent.id === undefined || parent.id === null) {
       throw new Error("Factory.for() requires a parent with an id.");
     }
 
+    const key = inferFactoryForeignKey<TRecord>(parent, foreignKey);
     const next = this.clone();
-    next.parentAssociations = [...this.parentAssociations, { foreignKey, value: parent.id }];
+    next.parentAssociations = [...this.parentAssociations, { foreignKey: key, value: parent.id }];
     return next;
   }
 
-  recycle(parent: { id?: unknown }, foreignKey: keyof TRecord & string): Factory<TRecord, Counted> {
+  recycle(
+    parent: { id?: unknown; getRepository?: () => { getTable(): { name: string } } },
+    foreignKey?: keyof TRecord & string,
+  ): Factory<TRecord, Counted> {
     return this.for(parent, foreignKey);
   }
 
@@ -101,7 +135,7 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
 
   has<TRelated extends object, RelatedCounted extends boolean>(
     factory: Factory<TRelated, RelatedCounted>,
-    foreignKey: keyof TRelated & string,
+    foreignKey?: keyof TRelated & string,
   ): Factory<TRecord, Counted> {
     const next = this.clone();
     next.children = [
@@ -192,7 +226,15 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     return values as Partial<TRecord>;
   }
 
-  protected persist(_values: Partial<TRecord>): Promise<TRecord> {
+  protected async persist(values: Partial<TRecord>): Promise<TRecord> {
+    if (this.model) {
+      const created = await this.model.create(values as Record<string, unknown>);
+      if (created && typeof created.toObject === "function") {
+        return created.toObject() as TRecord;
+      }
+      return created as TRecord;
+    }
+
     throw new Error("Factory.persist() must be implemented to use create().");
   }
 }

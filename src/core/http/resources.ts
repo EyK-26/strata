@@ -18,7 +18,7 @@ function whenLoaded<T>(
 
 class JsonResource<T = unknown> {
   static wrap: string | null = "data";
-  private extra: Record<string, unknown> = {};
+  protected extra: Record<string, unknown> = {};
 
   constructor(protected readonly resource: T) {}
 
@@ -74,11 +74,20 @@ class JsonResource<T = unknown> {
 
 class ResourceCollection<T> extends JsonResource<readonly T[]> {
   override toArray(): Record<string, unknown> {
-    return {
-      data: this.resource.map((item) =>
-        item instanceof JsonResource ? item.toArray() : { ...(item as Record<string, unknown>) },
-      ),
-    };
+    const items = this.resource.map((item) =>
+      item instanceof JsonResource ? item.toArray() : { ...(item as Record<string, unknown>) },
+    );
+    const wrap = (this.constructor as typeof JsonResource).wrap;
+
+    if (wrap === null) {
+      return { data: items };
+    }
+
+    return { [wrap]: items };
+  }
+
+  override toResponse(): Record<string, unknown> {
+    return { ...this.toArray(), ...this.extra };
   }
 }
 

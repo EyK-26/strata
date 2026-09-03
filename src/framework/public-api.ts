@@ -105,9 +105,11 @@ export {
   HasOneRelationQuery,
   hydrateValue,
   Model,
+  ModelQuery,
   MorphManyRelationQuery,
   MorphOneRelationQuery,
   MorphToRelationQuery,
+  registerModelClass,
   registerModelRepository,
 } from "../core/database/model.ts";
 export { createDatabaseQueryProxy } from "../core/database/queryProxy.ts";

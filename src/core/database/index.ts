@@ -15,9 +15,11 @@ export {
   HasOneRelationQuery,
   hydrateValue,
   Model,
+  ModelQuery,
   MorphManyRelationQuery,
   MorphOneRelationQuery,
   MorphToRelationQuery,
+  registerModelClass,
   registerModelRepository,
 } from "./model.ts";
 export {

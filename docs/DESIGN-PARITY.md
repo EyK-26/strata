@@ -23,13 +23,17 @@ class User extends Model<UserRecord, "id"> {
   }
 }
 
-const open = await user.applications().where({ status_id: 1 }).get();
+const open = await user.applications();
+const filtered = await user.applications().where({ status_id: 1 }).get();
 await user.applications().create({ position_id: 4, status_id: 1 });
 await user.load("applications");
 user.loaded("applications");
-await User.with("applications").get();
+await Position.with("applications").where({ hiring: true }).get();
+await Application.with("user", "position.department", "status").findOrFail(id);
 
-await User.whereHas("applications", (query) => query.where?.({ status_id: 1 })).get();
+await Application.whereHas("position", (query) =>
+  query.where?.({ name: { ilike: "%Engineer%" } }),
+).get();
 await User.firstOrCreate({ email: "ada@example.com" }, { name: "Ada" });
 
 class Image extends Model<ImageRecord, "id"> {
@@ -39,8 +43,8 @@ class Image extends Model<ImageRecord, "id"> {
 }
 
 await new UserFactory().count(3).state({ role: "admin" }).create();
-await new ApplicationFactory().for(user, "user_id").recycle(user, "user_id").create();
-await new UserFactory().has(new ApplicationFactory(), "user_id").create();
+await new ApplicationFactory().for(user).recycle(position).create();
+await new UserFactory().has(new ApplicationFactory()).create();
 
 class UserResource extends JsonResource<User> {
   override toArray() {
