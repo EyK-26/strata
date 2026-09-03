@@ -52,7 +52,7 @@ class SearchService {
       })
       .where((builder) => {
         builder.whereGroup((group) => {
-          group.where({ name: { ilike: query } }).orWhere({ slug: { ilike: query } });
+          group.where({ name: { ilike: `%${query}%` } }).orWhere({ slug: { ilike: `%${query}%` } });
         });
       })
       .limit(limit)
@@ -75,7 +75,7 @@ class SearchService {
     const projects = await this.projectRepository.findAll({
       where: {
         tenant_id: tenantId,
-        name: { ilike: query },
+        name: { ilike: `%${query}%` },
         ...(organizationId === undefined ? {} : { organization_id: organizationId }),
       },
       limit,
