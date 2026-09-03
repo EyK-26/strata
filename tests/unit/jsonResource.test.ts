@@ -36,5 +36,8 @@ describe("JsonResource", () => {
     expect(collection.toArray()).toEqual({
       data: [{ id: 1 }, { id: 2 }],
     });
+    expect(collection.toResponse()).toEqual({
+      data: [{ id: 1 }, { id: 2 }],
+    });
   });
 });

@@ -163,10 +163,9 @@ describe("Model", () => {
     expect(loaded.widget).toEqual({ id: 1, name: "Alpha" });
   });
 
-  test("default primaryKey throws for misconfigured models", () => {
-    class MisconfiguredModel extends Model<Widget, "id"> {}
-    const model = new MisconfiguredModel({ id: 1, name: "Broken" }, widgetRepository);
-    expect(() => model.toObject()).not.toThrow();
-    expect(() => model.id).toThrow("MisconfiguredModel.primaryKey() is not implemented.");
+  test("default primaryKey uses the table primary key", () => {
+    class TinyModel extends Model<Widget, "id"> {}
+    const model = new TinyModel({ id: 1, name: "Broken" }, widgetRepository);
+    expect(model.id).toBe(1);
   });
 });

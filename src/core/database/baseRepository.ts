@@ -19,8 +19,10 @@ import {
   resolveSoftDeleteColumn,
 } from "./query.ts";
 import {
+  type BelongsToManyRelation,
   type BelongsToRelation,
   type HasManyRelation,
+  indexBelongsToManyRelation,
   indexBelongsToRelation,
   indexHasManyRelation,
   indexMorphManyRelation,
@@ -60,6 +62,11 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     protected readonly table: TableDefinition<TEntity, PrimaryKey>,
     protected readonly connection: DatabaseConnection = repositoryConnection,
   ) {}
+
+  async count(options: ExtendedQueryOptions<TEntity> = {}): Promise<number> {
+    const { whereNodes, where, ...rest } = options;
+    return await this.countWhere(where ?? {}, rest, whereNodes ?? []);
+  }
 
   async findAll(options: ExtendedQueryOptions<TEntity> = {}): Promise<TEntity[]> {
     return await withDatabaseErrorHandling(async () => {
@@ -601,6 +608,57 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
 
     return indexMorphToRelation(children, parentsByType, relation);
+  }
+
+  async loadBelongsToManyForParents<
+    TParent extends object,
+    TRelated extends object,
+    Pivot extends object,
+    ParentKey extends keyof TParent & string,
+    RelatedKey extends keyof TRelated & string,
+    ForeignPivotKey extends keyof Pivot & string,
+    RelatedPivotKey extends keyof Pivot & string,
+  >(
+    parents: readonly TParent[],
+    relation: BelongsToManyRelation<
+      TParent,
+      TRelated,
+      Pivot,
+      ParentKey,
+      RelatedKey,
+      ForeignPivotKey,
+      RelatedPivotKey
+    >,
+    relatedRepository: BaseRepository<TRelated, RelatedKey>,
+    options: Omit<QueryOptions<TRelated>, "where"> = {},
+  ): Promise<Map<TParent[ParentKey], TRelated[]>> {
+    if (parents.length === 0) {
+      return indexBelongsToManyRelation(parents, [], [], relation);
+    }
+
+    const parentIds = [...new Set(parents.map((parent) => parent[relation.parentKey]))];
+    const pivotRows = await this.connection.unsafe<Pivot>(
+      `SELECT * FROM ${relation.pivotTable} WHERE ${String(relation.foreignPivotKey)} = ANY($1)`,
+      [parentIds],
+    );
+
+    if (pivotRows.length === 0) {
+      return indexBelongsToManyRelation(parents, [], [], relation);
+    }
+
+    const relatedIds = [
+      ...new Set(
+        pivotRows.map((row) => row[relation.relatedPivotKey] as unknown as TRelated[RelatedKey]),
+      ),
+    ];
+    const relatedRows = await relatedRepository.withConnection(this.connection).findWhere(
+      {
+        [relation.relatedKey]: relatedIds,
+      } as unknown as QueryWhere<TRelated>,
+      options,
+    );
+
+    return indexBelongsToManyRelation(parents, pivotRows, relatedRows, relation);
   }
 }
 

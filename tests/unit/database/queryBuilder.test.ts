@@ -47,7 +47,7 @@ describe("Phase 3 query builder: orWhere and nested groups", () => {
   test("builds nested where groups from WhereBuilder", () => {
     const builder = new WhereBuilder<Article>();
     builder.where({ status: "published" }).whereGroup((group) => {
-      group.where({ title: { ilike: "query" } }).orWhere({ title: { ilike: "builder" } });
+      group.where({ title: { ilike: "%query%" } }).orWhere({ title: { ilike: "%builder%" } });
     });
 
     const { clause, params } = buildAdvancedWhereClause("article", {}, builder.nodes);

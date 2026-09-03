@@ -2,6 +2,7 @@ import type { PaginatedResult } from "../pagination/index.ts";
 import type BaseRepository from "./baseRepository.ts";
 import { parseQualifiedColumn } from "./query.ts";
 import type {
+  BelongsToManyRelation,
   BelongsToRelation,
   HasManyRelation,
   MorphManyRelation,
@@ -14,11 +15,20 @@ import { WhereBuilder, type WhereNode } from "./whereBuilder.ts";
 type LoadedRow = Record<string, unknown>;
 
 type StoredEagerLoad<TEntity extends object> = {
-  kind: "hasMany" | "belongsTo" | "morphMany" | "morphOne" | "morphTo";
+  kind: "hasMany" | "belongsTo" | "belongsToMany" | "morphMany" | "morphOne" | "morphTo";
   as: string;
   relation:
     | HasManyRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string>
     | BelongsToRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string>
+    | BelongsToManyRelation<
+        TEntity,
+        Record<string, unknown>,
+        Record<string, unknown>,
+        keyof TEntity & string,
+        string,
+        string,
+        string
+      >
     | MorphManyRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string, string>
     | MorphOneRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string, string>
     | MorphToRelation<TEntity, keyof TEntity & string, keyof TEntity & string>;
@@ -231,14 +241,55 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return this;
   }
 
+  withBelongsToMany<
+    TRelated extends object,
+    Pivot extends object,
+    ParentKey extends keyof TEntity & string,
+    RelatedKey extends keyof TRelated & string,
+    ForeignPivotKey extends keyof Pivot & string,
+    RelatedPivotKey extends keyof Pivot & string,
+    Alias extends string,
+  >(
+    as: Alias,
+    relation: BelongsToManyRelation<
+      TEntity,
+      TRelated,
+      Pivot,
+      ParentKey,
+      RelatedKey,
+      ForeignPivotKey,
+      RelatedPivotKey
+    >,
+    relatedRepository: BaseRepository<TRelated, RelatedKey>,
+    options: Omit<QueryOptions<TRelated>, "where"> = {},
+  ): this {
+    this.eagerLoads.push({
+      kind: "belongsToMany",
+      as,
+      relation: relation as StoredEagerLoad<TEntity>["relation"],
+      repository: relatedRepository as unknown as BaseRepository<Record<string, unknown>, "id">,
+      options: options as StoredEagerLoad<TEntity>["options"],
+    });
+    return this;
+  }
+
   async get(): Promise<Array<TEntity & LoadedRow>> {
     const rows = await this.repository.findAll(this.buildOptions());
     return await this.attach(rows);
   }
 
   async first(): Promise<(TEntity & LoadedRow) | null> {
-    const rows = await this.get();
-    return rows[0] ?? null;
+    const rows = await this.repository.findAll({ ...this.buildOptions(), limit: 1 });
+    const attached = await this.attach(rows);
+    return attached[0] ?? null;
+  }
+
+  async count(): Promise<number> {
+    return await this.repository.count(this.buildOptions());
+  }
+
+  async attachToRows(rows: readonly TEntity[]): Promise<Array<TEntity & LoadedRow>> {
+    return await this.attach(rows);
   }
 
   async paginate(options: { page: number; perPage: number }): Promise<PaginatedResult<TEntity>> {
@@ -347,6 +398,29 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
         result = result.map((row) => ({
           ...row,
           [load.as]: grouped.get(row[relation.localKey]),
+        })) as Array<TEntity & LoadedRow>;
+        continue;
+      }
+
+      if (load.kind === "belongsToMany") {
+        const relation = load.relation as BelongsToManyRelation<
+          TEntity,
+          Record<string, unknown>,
+          Record<string, unknown>,
+          keyof TEntity & string,
+          string,
+          string,
+          string
+        >;
+        const grouped = await this.repository.loadBelongsToManyForParents(
+          rows,
+          relation,
+          load.repository as never,
+          load.options,
+        );
+        result = result.map((row) => ({
+          ...row,
+          [load.as]: grouped.get(row[relation.parentKey]) ?? [],
         })) as Array<TEntity & LoadedRow>;
         continue;
       }

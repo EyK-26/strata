@@ -116,7 +116,7 @@ function buildOperatorClauses(
   }
 
   if (operator.ilike !== undefined) {
-    clauses.push(`${column} ILIKE ${pushParam(params, `%${operator.ilike}%`)}`);
+    clauses.push(`${column} ILIKE ${pushParam(params, operator.ilike)}`);
   }
 
   if (operator.tsMatch !== undefined) {

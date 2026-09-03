@@ -181,7 +181,7 @@ describe("Eloquent-style model relations", () => {
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.get("status_id")).toBe(2);
 
-    connection.queue([{ id: 1, user_id: 7, position_id: 4, status_id: 1 }]);
+    connection.queue([{ count: 1 }]);
     expect(await user.applications().count()).toBe(1);
 
     connection.queue([{ id: 3, user_id: 7, position_id: 9, status_id: 1 }]);
@@ -219,14 +219,14 @@ describe("Eloquent-style model relations", () => {
     connection.queue([{ id: 8, user_id: 3, name: "Engineer" }]);
     const position = await user.position().get();
     expect(position?.get("name")).toBe("Engineer");
-    connection.queue([{ id: 8, user_id: 3, name: "Engineer" }]);
+    connection.queue([{ count: 1 }]);
     expect(await user.position().count()).toBe(1);
     connection.queue([{ id: 8, user_id: 3, name: "Engineer" }]);
     expect(await user.position().first()).not.toBeNull();
 
     connection.queue([]);
     expect(await user.position().get()).toBeNull();
-    connection.queue([]);
+    connection.queue([{ count: 0 }]);
     expect(await user.position().count()).toBe(0);
 
     connection.queue([{ id: 9, user_id: 3, name: "Lead" }]);
@@ -370,7 +370,7 @@ describe("Eloquent-style model relations", () => {
     expect(() => UserModel.with("nope")).toThrow("has no relation method nope()");
 
     const tagsRelation = user.tags();
-    tagsRelation.applyEagerLoad(UserModel.query(), "tags");
+    tagsRelation.applyEagerLoad(UserModel.query().query, "tags");
     expect(tagsRelation.hydrateEager({}, "tags")).toEqual([]);
     expect(user.applications().hydrateEager({}, "applications")).toEqual([]);
   });
@@ -470,6 +470,7 @@ describe("Eloquent-style model relations", () => {
     registerModelRepository(ImageModel, new ImageRepository());
 
     class PicturedUser extends UserModel {
+      static override $morphClass = "users";
       images() {
         return this.morphMany(ImageModel, "imageable");
       }
@@ -528,9 +529,9 @@ describe("Eloquent-style model relations", () => {
       id: 1,
     });
 
-    pictured.images().applyEagerLoad(PicturedUser.query(), "images");
-    pictured.avatar().where({ url: "/a.png" }).applyEagerLoad(PicturedUser.query(), "avatar");
-    image.imageable().applyEagerLoad(ImageableModel.query(), "imageable");
+    pictured.images().applyEagerLoad(PicturedUser.query().query, "images");
+    pictured.avatar().where({ url: "/a.png" }).applyEagerLoad(PicturedUser.query().query, "avatar");
+    image.imageable().applyEagerLoad(ImageableModel.query().query, "imageable");
     connection.queue([]);
     expect(await pictured.avatar().get()).toBeNull();
     connection.queue([]);
@@ -547,7 +548,7 @@ describe("Eloquent-style model relations", () => {
     expect(connection.calls.at(-1)?.query).toContain("imageable_type");
 
     connection.queue([{ id: 1, name: "Ada" }]);
-    expect((await UserModel.where({ name: "Ada" }).first())?.name).toBe("Ada");
+    expect((await UserModel.where({ name: "Ada" }).first())?.get("name")).toBe("Ada");
 
     connection.queue([{ id: 1, name: "Ada" }]);
     const found = await UserModel.firstOrCreate({ name: "Ada" }, { name: "Ada" });
@@ -616,6 +617,7 @@ describe("Eloquent-style model relations", () => {
     }
     registerModelRepository(ImageModel, new ImageRepository());
     class PicturedUser extends UserModel {
+      static override $morphClass = "users";
       images() {
         return this.morphMany(ImageModel, "imageable");
       }

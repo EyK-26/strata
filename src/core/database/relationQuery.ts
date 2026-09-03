@@ -60,6 +60,14 @@ function ownerId(owner: { id?: unknown } | RelatedRecord, ownerKey: string): unk
   throw new Error("belongsTo.associate() requires a related model or { id }.");
 }
 
+function thenGet<T>(
+  get: () => Promise<T>,
+  onfulfilled?: ((value: T) => unknown) | null,
+  onrejected?: ((reason: unknown) => unknown) | null,
+): Promise<unknown> {
+  return get().then(onfulfilled ?? undefined, onrejected ?? undefined);
+}
+
 class HasManyRelationQuery<
   TParent extends object,
   ParentKey extends keyof TParent & string,
@@ -142,13 +150,42 @@ class HasManyRelationQuery<
   }
 
   async count(): Promise<number> {
-    return (await this.get()).length;
+    return this.scopedQuery().count();
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  then(
+    onfulfilled?: ((value: RelatedRecord[]) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ): Promise<unknown> {
+    return thenGet(() => this.get(), onfulfilled, onrejected);
   }
 
   async create(attributes: Record<string, unknown> = {}): Promise<RelatedRecord> {
     return this.related.create(attributes, {
       [this.relation.foreignKey]: this.parent.get(this.relation.localKey),
     });
+  }
+
+  async save(
+    related:
+      | RelatedRecord
+      | (Record<string, unknown> & {
+          save?: () => Promise<unknown>;
+          mergeAttributes?: (patch: Record<string, unknown>) => unknown;
+        }),
+  ): Promise<RelatedRecord> {
+    const forced = {
+      [this.relation.foreignKey]: this.parent.get(this.relation.localKey),
+    };
+
+    if (related && typeof related.save === "function") {
+      related.mergeAttributes?.(forced);
+      await related.save();
+      return related as RelatedRecord;
+    }
+
+    return this.create(related as Record<string, unknown>);
   }
 
   async createMany(records: ReadonlyArray<Record<string, unknown>>): Promise<RelatedRecord[]> {
@@ -216,11 +253,23 @@ class HasOneRelationQuery<
   }
 
   async count(): Promise<number> {
-    return (await this.get()) ? 1 : 0;
+    return this.inner.count();
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  then(
+    onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ): Promise<unknown> {
+    return thenGet(() => this.get(), onfulfilled, onrejected);
   }
 
   async create(attributes: Record<string, unknown> = {}): Promise<RelatedRecord> {
     return this.inner.create(attributes);
+  }
+
+  async save(related: RelatedRecord | Record<string, unknown>): Promise<RelatedRecord> {
+    return this.inner.save(related);
   }
 }
 
@@ -231,6 +280,7 @@ class BelongsToRelationQuery<
   ParentKey extends keyof TParent & string,
 > {
   readonly kind: RelationKind = "belongsTo";
+  private extraWhere: QueryWhere<TParent> = {};
   private extraOptions: Omit<QueryOptions<TParent>, "where"> = {};
 
   constructor(
@@ -238,6 +288,11 @@ class BelongsToRelationQuery<
     private readonly related: RelatedModelClass<TParent, ParentKey>,
     readonly relation: BelongsToRelation<TChild, TParent, keyof TChild & string, ParentKey>,
   ) {}
+
+  where(where: QueryWhere<TParent>): this {
+    this.extraWhere = { ...this.extraWhere, ...where };
+    return this;
+  }
 
   orderBy(orderBy: QueryOptions<TParent>["orderBy"]): this {
     this.extraOptions = { ...this.extraOptions, orderBy };
@@ -260,10 +315,10 @@ class BelongsToRelationQuery<
 
   toExistsClause(parentTable: string): ExistsClause {
     const relatedTable = this.related.repository().getTable().name;
-    return {
-      sql: `SELECT 1 FROM ${quoteIdentifier(relatedTable)} WHERE ${qualifyColumn(relatedTable, this.relation.ownerKey)} = ${qualifyColumn(parentTable, this.relation.foreignKey)}`,
-      params: [],
-    };
+    const extra = buildAdvancedWhereClause(relatedTable, this.extraWhere, [], []);
+    const extraSql = extra.clause.replace(/^ WHERE /, "");
+    const sql = `SELECT 1 FROM ${quoteIdentifier(relatedTable)} WHERE ${qualifyColumn(relatedTable, this.relation.ownerKey)} = ${qualifyColumn(parentTable, this.relation.foreignKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    return { sql, params: extra.params };
   }
 
   async get(): Promise<RelatedRecord | null> {
@@ -276,7 +331,9 @@ class BelongsToRelationQuery<
     const repository = this.related
       .repository()
       .withConnection(this.parent.getRepository().getConnection());
-    let query = repository.query(asWhere<TParent>({ [this.relation.ownerKey]: foreign }));
+    let query = repository.query(
+      asWhere<TParent>({ [this.relation.ownerKey]: foreign, ...this.extraWhere }),
+    );
 
     if (this.extraOptions.orderBy) {
       query = query.orderBy(this.extraOptions.orderBy);
@@ -288,6 +345,14 @@ class BelongsToRelationQuery<
 
   async first(): Promise<RelatedRecord | null> {
     return this.get();
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  then(
+    onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ): Promise<unknown> {
+    return thenGet(() => this.get(), onfulfilled, onrejected);
   }
 
   async associate(owner: { id?: unknown } | RelatedRecord): Promise<void> {
@@ -313,6 +378,7 @@ class BelongsToManyRelationQuery<
   readonly kind: RelationKind = "belongsToMany";
   private extraWhere: QueryWhere<TRelated> = {};
   private extraOptions: Omit<QueryOptions<TRelated>, "where"> = {};
+  private pivotValues: Record<string, unknown> = {};
 
   constructor(
     private readonly parent: RelationHost<TParent, ParentKey>,
@@ -338,8 +404,18 @@ class BelongsToManyRelationQuery<
     return this;
   }
 
-  applyEagerLoad(_query: RepositoryQuery<TParent, ParentKey>, _alias: string): void {
-    // Pivot eager-load is applied per parent in Model.with() via get().
+  applyEagerLoad(query: RepositoryQuery<TParent, ParentKey>, alias: string): void {
+    query.withBelongsToMany(
+      alias,
+      this.relation,
+      this.related.repository() as never,
+      this.extraOptions,
+    );
+  }
+
+  withPivotValues(values: Record<string, unknown>): this {
+    this.pivotValues = { ...this.pivotValues, ...values };
+    return this;
   }
 
   hydrateEager(row: Record<string, unknown>, alias: string): unknown {
@@ -396,18 +472,55 @@ class BelongsToManyRelationQuery<
   }
 
   async count(): Promise<number> {
-    return (await this.get()).length;
+    const parentId = this.parent.get(this.relation.parentKey);
+    const rows = await this.connection().unsafe<{ count: number | string }>(
+      `SELECT COUNT(*) AS count FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1`,
+      [parentId],
+    );
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  then(
+    onfulfilled?: ((value: RelatedRecord[]) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ): Promise<unknown> {
+    return thenGet(() => this.get(), onfulfilled, onrejected);
   }
 
   async attach(ids: unknown | readonly unknown[]): Promise<void> {
     const list = Array.isArray(ids) ? ids : [ids];
     const parentId = this.parent.get(this.relation.parentKey);
+    const extraKeys = Object.keys(this.pivotValues);
+    const extraColumns = extraKeys.length > 0 ? `, ${extraKeys.join(", ")}` : "";
+    const extraPlaceholders = extraKeys.map((_, index) => `$${index + 3}`).join(", ");
+    const extraValues = extraKeys.map((key) => this.pivotValues[key]);
 
     for (const id of list) {
       await this.connection().unsafe(
-        `INSERT INTO ${this.relation.pivotTable} (${String(this.relation.foreignPivotKey)}, ${String(this.relation.relatedPivotKey)}) VALUES ($1, $2)`,
+        extraKeys.length > 0
+          ? `INSERT INTO ${this.relation.pivotTable} (${String(this.relation.foreignPivotKey)}, ${String(this.relation.relatedPivotKey)}${extraColumns}) VALUES ($1, $2, ${extraPlaceholders})`
+          : `INSERT INTO ${this.relation.pivotTable} (${String(this.relation.foreignPivotKey)}, ${String(this.relation.relatedPivotKey)}) VALUES ($1, $2)`,
+        [parentId, id, ...extraValues],
+      );
+    }
+  }
+
+  async toggle(ids: unknown | readonly unknown[]): Promise<void> {
+    const list = Array.isArray(ids) ? ids : [ids];
+    const parentId = this.parent.get(this.relation.parentKey);
+
+    for (const id of list) {
+      const existing = await this.connection().unsafe(
+        `SELECT 1 FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1 AND ${String(this.relation.relatedPivotKey)} = $2 LIMIT 1`,
         [parentId, id],
       );
+
+      if (existing.length > 0) {
+        await this.detach(id);
+      } else {
+        await this.attach(id);
+      }
     }
   }
 
@@ -523,6 +636,29 @@ class MorphManyRelationQuery<
     return rows[0] ?? null;
   }
 
+  async count(): Promise<number> {
+    const repository = this.related
+      .repository()
+      .withConnection(this.parent.getRepository().getConnection());
+    return repository
+      .query(
+        asWhere<TChild>({
+          [this.relation.morphTypeKey]: this.relation.morphType,
+          [this.relation.morphIdKey]: this.parent.get(this.relation.localKey),
+          ...this.extraWhere,
+        }),
+      )
+      .count();
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  then(
+    onfulfilled?: ((value: RelatedRecord[]) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ): Promise<unknown> {
+    return thenGet(() => this.get(), onfulfilled, onrejected);
+  }
+
   async create(attributes: Record<string, unknown> = {}): Promise<RelatedRecord> {
     return this.related.create(attributes, {
       [this.relation.morphTypeKey]: this.relation.morphType,
@@ -583,6 +719,22 @@ class MorphOneRelationQuery<
     return this.inner.first();
   }
 
+  async first(): Promise<RelatedRecord | null> {
+    return this.get();
+  }
+
+  async count(): Promise<number> {
+    return this.inner.count();
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  then(
+    onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ): Promise<unknown> {
+    return thenGet(() => this.get(), onfulfilled, onrejected);
+  }
+
   async create(attributes: Record<string, unknown> = {}): Promise<RelatedRecord> {
     return this.inner.create(attributes);
   }
@@ -590,6 +742,7 @@ class MorphOneRelationQuery<
 
 class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild & string> {
   readonly kind: RelationKind = "morphTo";
+  private extraWhere: QueryWhere<Record<string, unknown>> = {};
 
   constructor(
     private readonly parent: RelationHost<TChild, ChildKey>,
@@ -599,6 +752,11 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
     >,
     readonly relation: MorphToRelation<TChild, keyof TChild & string, keyof TChild & string>,
   ) {}
+
+  where(where: QueryWhere<Record<string, unknown>>): this {
+    this.extraWhere = { ...this.extraWhere, ...where };
+    return this;
+  }
 
   applyEagerLoad(query: RepositoryQuery<TChild, ChildKey>, alias: string): void {
     const repositories = new Map(
@@ -622,9 +780,11 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
     }
 
     const relatedTable = related.repository().getTable();
+    const extra = buildAdvancedWhereClause(relatedTable.name, this.extraWhere, [], []);
+    const extraSql = extra.clause.replace(/^ WHERE /, "");
     return {
-      sql: `SELECT 1 FROM ${quoteIdentifier(relatedTable.name)} WHERE ${qualifyColumn(relatedTable.name, relatedTable.primaryKey)} = ${qualifyColumn(parentTable, this.relation.morphIdKey)}`,
-      params: [],
+      sql: `SELECT 1 FROM ${quoteIdentifier(relatedTable.name)} WHERE ${qualifyColumn(relatedTable.name, relatedTable.primaryKey)} = ${qualifyColumn(parentTable, this.relation.morphIdKey)}${extraSql ? ` AND ${extraSql}` : ""}`,
+      params: extra.params,
     };
   }
 
@@ -641,9 +801,17 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
     const row = await related
       .repository()
       .withConnection(this.parent.getRepository().getConnection())
-      .query(asWhere<object>({ [table.primaryKey]: id }))
+      .query(asWhere<object>({ [table.primaryKey]: id, ...this.extraWhere }))
       .first();
     return row ? related.newFromRecord(row) : null;
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  then(
+    onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ): Promise<unknown> {
+    return thenGet(() => this.get(), onfulfilled, onrejected);
   }
 }
 
@@ -654,6 +822,10 @@ type AnyRelationQuery = {
   get(): Promise<unknown>;
   toExistsClause(parentTable: string): ExistsClause;
   where?(where: Record<string, unknown>): unknown;
+  then?: (
+    onfulfilled?: ((value: unknown) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ) => Promise<unknown>;
 };
 
 export type { AnyRelationQuery, RelatedModelClass, RelatedRecord, RelationHost };

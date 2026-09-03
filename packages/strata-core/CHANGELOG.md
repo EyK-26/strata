@@ -1,5 +1,25 @@
 # @getstrata/core changelog
 
+## 0.5.99
+
+HiroApp dogfood of 0.5.98 found lookalike APIs. This release matches Laravel call shape and SQL, not just export names.
+
+- Relation queries are thenable: `await user.applications()` delegates to `get()`.
+- `Model.with()` / `where()` / `whereHas()` return a `ModelQuery` that hydrates models and chains into `where` / `find` / `findOrFail` / `first` / `get`. `first()` / `find()` use `LIMIT` / PK lookup.
+- `belongsTo.where()` threads constraints into `whereHas` EXISTS (HiroApp application search).
+- `{ ilike }` uses the value as-is (Laravel). Pass `%term%` yourself; the operator no longer wraps extra `%`.
+- Morph type defaults to `$morphClass` / class name, not `table.name`. Override with `$morphClass = "App\\Models\\User"` or the last `morphMany` argument. `morphTo()` no longer silently defaults to `imageable_*`.
+- `primaryKey()` defaults to the table PK (`id`).
+- Nested `load("a.b")` / `with("a.b")` skip already-loaded heads and batch the next level.
+- `count()` is `COUNT(*)` (relations and `RepositoryQuery`).
+- `belongsToMany` eager-loads in two queries; `toggle()` and `withPivotValues()` exist. `hasMany.save($model)` sets the FK and saves.
+- Factory `for(parent)` infers `user_id` from a Model parent. Bound `model` uses `Model.create()` so observers fire.
+- `JsonResource.collection().toResponse()` wraps once: `{ data: [...] }`.
+- Observers: `saving` / `saved` / `retrieved`. Integer casts: `integer` / `int`.
+- `hasMany("Application")` / `() => Application` / `registerModelClass()` for ESM cycles.
+
+Still non-conforming (honest): Bun cannot infer `morphTo()` method names (`debug_backtrace` equivalent is empty). `hashed` cast is a no-op (bcrypt is async). `Factory.has()` without a model class still needs an explicit FK.
+
 ## 0.5.98
 
 - Eloquent-shaped relations: `this.hasMany(Related)` returns a relation query (`get`/`where`/`create`/`attach`). `load()` / `loaded()` and `Model.with()` replace PHP `__get`. `whereHas`/`has`/`doesntHave`, morph* methods, and nested `with("a.b")` are supported.
