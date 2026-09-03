@@ -79,6 +79,8 @@ export {
   getDefaultDatabaseQuery,
   registerDefaultDatabasePool,
 } from "../core/database/defaultConnection.ts";
+export { Factory } from "../core/database/factory.ts";
+export { foreignKeyFromTable, pivotTableName, singularize } from "../core/database/inflection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";
 export {
   freshDatabase,
@@ -95,8 +97,12 @@ export type {
 export type { CastType, GlobalScopeFn, ModelConstructor } from "../core/database/model.ts";
 export {
   applyCasts,
+  BelongsToManyRelationQuery,
+  BelongsToRelationQuery,
   dehydrateValue,
   filterMassAssignable,
+  HasManyRelationQuery,
+  HasOneRelationQuery,
   hydrateValue,
   Model,
   registerModelRepository,

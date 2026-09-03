@@ -1,5 +1,11 @@
 # @getstrata/core changelog
 
+## 0.5.98
+
+- Eloquent-shaped relations: `user.applications()` is `this.hasMany(Application)` and returns a relation query (`get`, `where`, `create`, `attach` / `sync`). `load()` / `loaded()` and `Model.with("applications")` replace PHP lazy `__get`.
+- Factory `count()`, `state()`, `sequence()`, `for(parent, foreignKey)`, and `has(factory, foreignKey)`. `count()` is immutable and returns an array.
+- Parity audit reports **design** score separately from the API catalog score. Catalog 100% is not Laravel-identical DX.
+
 ## 0.5.97
 
 - `mapDatabaseError()` recognizes HTTP errors by `status` + `message`, not only `instanceof HttpError`. Subpath builds duplicate the class, so a thrown `ForbiddenError` was remapped to `400 Bad Request`.
