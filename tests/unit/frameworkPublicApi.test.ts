@@ -19,6 +19,12 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.registerModelRepository).toBe("function");
     expect(typeof core.hydrateValue).toBe("function");
     expect(typeof core.filterMassAssignable).toBe("function");
+    expect(typeof core.HasManyRelationQuery).toBe("function");
+    expect(typeof core.HasOneRelationQuery).toBe("function");
+    expect(typeof core.BelongsToRelationQuery).toBe("function");
+    expect(typeof core.BelongsToManyRelationQuery).toBe("function");
+    expect(typeof core.Factory).toBe("function");
+    expect(typeof core.singularize).toBe("function");
   });
 
   test("exposes eager-loading methods on BaseRepository prototype", () => {
@@ -45,6 +51,11 @@ describe("@getstrata/core public API", () => {
   test("exports API resource helpers", () => {
     expect(typeof core.serializeDate).toBe("function");
     expect(typeof core.toResourceCollection).toBe("function");
+    expect(typeof core.JsonResource).toBe("function");
+    expect(typeof core.ResourceCollection).toBe("function");
+    expect(typeof core.whenLoaded).toBe("function");
+    expect(typeof core.MorphManyRelationQuery).toBe("function");
+    expect(typeof core.MorphToRelationQuery).toBe("function");
   });
 
   test("exports scheduler and graceful shutdown helpers", () => {

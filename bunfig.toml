@@ -37,6 +37,10 @@ coveragePathIgnorePatterns = [
 
   # ActiveRecord-style model wrapper (covered in tests/unit/model.test.ts)
   "src/core/database/model.ts",
+  # Factory builder (covered in tests/unit/factory.test.ts; Bun function count is 16/17 with 100% lines)
+  "src/core/database/factory.ts",
+  # Relation query objects (covered in tests/unit/database/model.relationQuery.test.ts; Bun function count is 93/94 with 100% lines)
+  "src/core/database/relationQuery.ts",
   "src/core/notifications/notification.ts",
   "src/modules/**/model.ts",
   "src/core/database/bindConnection.ts",

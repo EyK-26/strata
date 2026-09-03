@@ -3,7 +3,7 @@
 
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PARITY_CATALOG, type ParityEntry } from "../scripts/parity-catalog.ts";
+import { designOf, PARITY_CATALOG, type ParityEntry } from "../scripts/parity-catalog.ts";
 
 const SECTION_BY_PARITY: Record<string, string> = {
   "service-container": "architecture",
@@ -69,6 +69,8 @@ const exported = PARITY_CATALOG.map((entry) => ({
   strataApis: entry.strataApis,
   bootstrapApis: entry.bootstrapApis ?? [],
   notes: entry.notes ?? "",
+  design: designOf(entry),
+  designNotes: entry.designNotes ?? "",
 }));
 
 const cliEntry = {
@@ -79,6 +81,8 @@ const cliEntry = {
   strataApis: [],
   bootstrapApis: [],
   notes: "WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API",
+  design: "stand-in" as const,
+  designNotes: "",
 };
 
 const output = [...exported.filter((e) => e.id !== "cli"), cliEntry];
@@ -89,12 +93,26 @@ const targets = [
   join(root, "../getstrata/data/parity-catalog.json"),
 ];
 
+const written: string[] = [];
+
 for (const target of targets) {
-  await writeFile(target, `${JSON.stringify(output, null, 2)}\n`, "utf8");
-  console.log(`Wrote ${target} (${output.length} entries)`);
+  try {
+    await writeFile(target, `${JSON.stringify(output, null, 2)}\n`, "utf8");
+    written.push(target);
+    console.log(`Wrote ${target} (${output.length} entries)`);
+  } catch (error) {
+    if (target.includes("getstrata")) {
+      console.log(`Skipped ${target}: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+
+    throw error;
+  }
 }
 
-await Bun.spawn(["bunx", "biome", "format", "--write", ...targets], {
-  stdout: "inherit",
-  stderr: "inherit",
-}).exited;
+if (written.length > 0) {
+  await Bun.spawn(["bunx", "biome", "format", "--write", ...written], {
+    stdout: "inherit",
+    stderr: "inherit",
+  }).exited;
+}

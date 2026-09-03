@@ -72,6 +72,16 @@ describe("EventBus", () => {
     await expect(bus.dispatch("missing.event", { id: 1 })).resolves.toBeUndefined();
   });
 
+  test("on/emit are Laravel-shaped aliases for listen/dispatch", async () => {
+    const bus = new EventBus();
+    const seen: unknown[] = [];
+    bus.on("mail.sent", (payload) => {
+      seen.push(payload);
+    });
+    await bus.emit("mail.sent", { to: "ada@example.com" });
+    expect(seen).toEqual([{ to: "ada@example.com" }]);
+  });
+
   test("supports the shared event bus singleton", async () => {
     let count = 0;
     const unsubscribe = eventBus.listen("singleton.event", () => {

@@ -6,7 +6,7 @@
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { PARITY_CATALOG, type ParityEntry, type ParityTier } from "./parity-catalog.ts";
+import { designOf, PARITY_CATALOG, type ParityEntry, type ParityTier } from "./parity-catalog.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const CORE_PUBLIC_API = join(ROOT, "src/framework/public-api.ts");
@@ -148,6 +148,20 @@ function scoreEntries(entries: AuditedEntry[]): number {
   return Math.round((points / core.length) * 1000) / 10;
 }
 
+function scoreDesign(entries: AuditedEntry[]): number {
+  const core = entries.filter((entry) => entry.tier === "core");
+  if (core.length === 0) return 100;
+
+  const points = core.reduce((sum, entry) => {
+    const design = designOf(entry);
+    if (design === "laravel") return sum + 1;
+    if (design === "partial") return sum + 0.5;
+    return sum;
+  }, 0);
+
+  return Math.round((points / core.length) * 1000) / 10;
+}
+
 function statusIcon(status: EntryStatus, tier: ParityTier): string {
   if (tier === "ecosystem") return "⏭️";
   if (status === "covered") return "✅";
@@ -155,38 +169,49 @@ function statusIcon(status: EntryStatus, tier: ParityTier): string {
   return "❌";
 }
 
-function renderMarkdown(entries: AuditedEntry[], score: number): string {
+function renderMarkdown(entries: AuditedEntry[], score: number, designScore: number): string {
   const generatedAt = new Date().toISOString();
   const core = entries.filter((entry) => entry.tier === "core");
   const ecosystem = entries.filter((entry) => entry.tier === "ecosystem");
   const covered = core.filter((entry) => entry.status === "covered").length;
   const partial = core.filter((entry) => entry.status === "partial").length;
   const gaps = core.filter((entry) => entry.status === "gap").length;
+  const designLaravel = core.filter((entry) => designOf(entry) === "laravel").length;
+  const designPartial = core.filter((entry) => designOf(entry) === "partial").length;
+  const designStandIn = core.filter((entry) => designOf(entry) === "stand-in").length;
 
   const lines: string[] = [
     "# Laravel parity audit",
     "",
     `Generated: ${generatedAt}`,
     "",
+    "API catalog score means each Laravel doc section has a Strata export and a test.",
+    "Design score means the call shape matches Laravel, routed to TypeScript/Bun.",
+    "Stand-in is not design-complete. See `docs/DESIGN-PARITY.md`.",
+    "",
     "## Score",
     "",
     `| Metric | Value |`,
     `|--------|-------|`,
-    `| **Core parity score** | **${score}%** |`,
+    `| **API catalog score** | **${score}%** |`,
+    `| **Design parity score** | **${designScore}%** |`,
     `| Core sections | ${core.length} |`,
-    `| Covered | ${covered} |`,
-    `| Partial | ${partial} |`,
-    `| Gaps | ${gaps} |`,
+    `| API covered | ${covered} |`,
+    `| API partial | ${partial} |`,
+    `| API gaps | ${gaps} |`,
+    `| Design laravel | ${designLaravel} |`,
+    `| Design partial | ${designPartial} |`,
+    `| Design stand-in | ${designStandIn} |`,
     ...(ecosystem.length > 0 ? [`| Ecosystem exclusions | ${ecosystem.length} |`] : []),
     "",
     ecosystem.length > 0
-      ? "Target: ≥99% core coverage. Ecosystem items are optional Laravel-package exclusions."
-      : "Target: ≥99% core coverage across all documented Laravel sections.",
+      ? "CI target: ≥99% API catalog score. Design score is the real Laravel-similarity goal."
+      : "CI target: ≥99% API catalog score. Design score is the real Laravel-similarity goal.",
     "",
     "## Core matrix",
     "",
-    "| Status | Laravel section | Strata API | Tests |",
-    "|--------|-----------------|------------|-------|",
+    "| Status | Design | Laravel section | Strata API | Tests |",
+    "|--------|--------|-----------------|------------|-------|",
   ];
 
   for (const entry of core) {
@@ -200,7 +225,7 @@ function renderMarkdown(entries: AuditedEntry[], score: number): string {
         : (entry.notes ?? "—");
     const testCell = entry.testGlobs.length > 0 ? entry.testGlobs[0] : "—";
     lines.push(
-      `| ${statusIcon(entry.status, entry.tier)} ${entry.status} | [${entry.laravelSection}](https://laravel.com/docs/${entry.laravelDocPath}) | ${apiCell} | \`${testCell}\` |`,
+      `| ${statusIcon(entry.status, entry.tier)} ${entry.status} | ${designOf(entry)} | [${entry.laravelSection}](https://laravel.com/docs/${entry.laravelDocPath}) | ${apiCell} | \`${testCell}\` |`,
     );
   }
 
@@ -250,7 +275,8 @@ async function main(): Promise<void> {
     auditEntry(entry, coreExports, bootstrapExports, testFiles),
   );
   const score = scoreEntries(audited);
-  const markdown = renderMarkdown(audited, score);
+  const designScore = scoreDesign(audited);
+  const markdown = renderMarkdown(audited, score, designScore);
 
   if (WRITE_PATH) {
     await writeFile(WRITE_PATH, markdown, "utf8");
@@ -260,7 +286,8 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `\nParity score: ${score}% (${audited.filter((e) => e.tier === "core" && e.status === "covered").length}/${audited.filter((e) => e.tier === "core").length} core sections covered)`,
+    `\nAPI catalog score: ${score}% (${audited.filter((e) => e.tier === "core" && e.status === "covered").length}/${audited.filter((e) => e.tier === "core").length} core sections covered)`,
+    `\nDesign parity score: ${designScore}%`,
   );
 
   if (score < MIN_SCORE) {

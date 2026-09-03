@@ -55,6 +55,14 @@ class ServiceContainer implements ServiceContainerLike {
     return this.get<T>(key);
   }
 
+  make<T>(key: string): T {
+    return this.resolve<T>(key);
+  }
+
+  instance<T>(key: string, value: T): T {
+    return this.set(key, value);
+  }
+
   has(key: string): boolean {
     return this.services.has(key) || this.singletonFactories.has(key) || this.bindings.has(key);
   }

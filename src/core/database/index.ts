@@ -2,13 +2,22 @@ export type { DatabaseConnection } from "./baseRepository.ts";
 export { default as BaseRepository } from "./baseRepository.ts";
 export { createDatabaseConnection } from "./connection.ts";
 export { mapDatabaseError, withDatabaseErrorHandling } from "./errors.ts";
+export { Factory } from "./factory.ts";
+export { foreignKeyFromTable, pivotTableName, singularize } from "./inflection.ts";
 export type { CastType, GlobalScopeFn, ModelConstructor } from "./model.ts";
 export {
   applyCasts,
+  BelongsToManyRelationQuery,
+  BelongsToRelationQuery,
   dehydrateValue,
   filterMassAssignable,
+  HasManyRelationQuery,
+  HasOneRelationQuery,
   hydrateValue,
   Model,
+  MorphManyRelationQuery,
+  MorphOneRelationQuery,
+  MorphToRelationQuery,
   registerModelRepository,
 } from "./model.ts";
 export {

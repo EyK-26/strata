@@ -79,6 +79,8 @@ export {
   getDefaultDatabaseQuery,
   registerDefaultDatabasePool,
 } from "../core/database/defaultConnection.ts";
+export { Factory } from "../core/database/factory.ts";
+export { foreignKeyFromTable, pivotTableName, singularize } from "../core/database/inflection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";
 export {
   freshDatabase,
@@ -95,10 +97,17 @@ export type {
 export type { CastType, GlobalScopeFn, ModelConstructor } from "../core/database/model.ts";
 export {
   applyCasts,
+  BelongsToManyRelationQuery,
+  BelongsToRelationQuery,
   dehydrateValue,
   filterMassAssignable,
+  HasManyRelationQuery,
+  HasOneRelationQuery,
   hydrateValue,
   Model,
+  MorphManyRelationQuery,
+  MorphOneRelationQuery,
+  MorphToRelationQuery,
   registerModelRepository,
 } from "../core/database/model.ts";
 export { createDatabaseQueryProxy } from "../core/database/queryProxy.ts";
@@ -272,9 +281,12 @@ export { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddl
 export { createRequireGlobalAdminMiddleware } from "../core/http/requireGlobalAdminMiddleware.ts";
 export { createRequireWebAuthMiddleware } from "../core/http/requireWebAuthMiddleware.ts";
 export {
+  JsonResource,
+  ResourceCollection,
   serializeDate,
   toPaginatedResourceCollection,
   toResourceCollection,
+  whenLoaded,
 } from "../core/http/resources.ts";
 export {
   createdResponse,

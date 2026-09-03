@@ -5,6 +5,10 @@ class EventBus {
 
   private readonly listeners = new Map<string, Set<EventListener>>();
 
+  on(event: string, listener: EventListener): () => void {
+    return this.listen(event, listener);
+  }
+
   listen(event: string, listener: EventListener): () => void {
     const handlers = this.listeners.get(event) ?? new Set<EventListener>();
     handlers.add(listener);
@@ -17,6 +21,10 @@ class EventBus {
         this.listeners.delete(event);
       }
     };
+  }
+
+  async emit(event: string, payload: unknown): Promise<void> {
+    await this.dispatch(event, payload);
   }
 
   async dispatch(event: string, payload: unknown): Promise<void> {

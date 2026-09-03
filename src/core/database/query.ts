@@ -176,11 +176,22 @@ function buildWhereClause<TEntity extends object>(
   };
 }
 
+function remapExistsSql(sql: string, existsParams: readonly unknown[], params: unknown[]): string {
+  const offset = params.length;
+  params.push(...existsParams);
+  return sql.replace(/\$(\d+)/g, (_match, index: string) => `$${offset + Number(index)}`);
+}
+
 function buildWhereNodeClause<TEntity extends object>(
   tableName: string,
   node: WhereNode<TEntity>,
   params: unknown[],
 ): string {
+  if ("exists" in node) {
+    const body = remapExistsSql(node.exists.sql, node.exists.params, params);
+    return `${node.exists.not ? "NOT " : ""}EXISTS (${body})`;
+  }
+
   if ("where" in node) {
     return appendWhereParts(tableName, node.where, params);
   }
