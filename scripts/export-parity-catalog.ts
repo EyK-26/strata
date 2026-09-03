@@ -69,6 +69,8 @@ const exported = PARITY_CATALOG.map((entry) => ({
   strataApis: entry.strataApis,
   bootstrapApis: entry.bootstrapApis ?? [],
   notes: entry.notes ?? "",
+  design: entry.design ?? "stand-in",
+  designNotes: entry.designNotes ?? "",
 }));
 
 const cliEntry = {
@@ -89,12 +91,26 @@ const targets = [
   join(root, "../getstrata/data/parity-catalog.json"),
 ];
 
+const written: string[] = [];
+
 for (const target of targets) {
-  await writeFile(target, `${JSON.stringify(output, null, 2)}\n`, "utf8");
-  console.log(`Wrote ${target} (${output.length} entries)`);
+  try {
+    await writeFile(target, `${JSON.stringify(output, null, 2)}\n`, "utf8");
+    written.push(target);
+    console.log(`Wrote ${target} (${output.length} entries)`);
+  } catch (error) {
+    if (target.includes("getstrata")) {
+      console.log(`Skipped ${target}: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+
+    throw error;
+  }
 }
 
-await Bun.spawn(["bunx", "biome", "format", "--write", ...targets], {
-  stdout: "inherit",
-  stderr: "inherit",
-}).exited;
+if (written.length > 0) {
+  await Bun.spawn(["bunx", "biome", "format", "--write", ...written], {
+    stdout: "inherit",
+    stderr: "inherit",
+  }).exited;
+}

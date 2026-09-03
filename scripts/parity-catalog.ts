@@ -4,6 +4,7 @@
  */
 
 export type ParityTier = "core" | "ecosystem";
+export type DesignParity = "laravel" | "partial" | "stand-in";
 
 export interface ParityEntry {
   id: string;
@@ -14,6 +15,9 @@ export interface ParityEntry {
   testGlobs: string[];
   tier: ParityTier;
   notes?: string;
+  /** Laravel call-shape / design match. Defaults to stand-in (API exists, not Laravel-shaped). */
+  design?: DesignParity;
+  designNotes?: string;
 }
 
 /** Laravel doc sections → Strata API → tests. */
@@ -217,14 +221,36 @@ export const PARITY_CATALOG: ParityEntry[] = [
     ],
     testGlobs: ["unit/database/model.test.ts", "unit/model.test.ts"],
     tier: "core",
+    design: "partial",
+    designNotes:
+      "Model.create/find/save/query match Eloquent persistence. No $hidden, $appends, or observers.",
   },
   {
     id: "eloquent-relationships",
     laravelSection: "Eloquent: Relationships",
     laravelDocPath: "eloquent-relationships",
-    strataApis: ["hasMany", "hasOne", "belongsTo", "belongsToMany", "indexHasManyRelation"],
-    testGlobs: ["unit/database/model.relationships.test.ts", "unit/belongsTo.test.ts"],
+    strataApis: [
+      "hasMany",
+      "hasOne",
+      "belongsTo",
+      "belongsToMany",
+      "indexHasManyRelation",
+      "HasManyRelationQuery",
+      "HasOneRelationQuery",
+      "BelongsToRelationQuery",
+      "BelongsToManyRelationQuery",
+    ],
+    testGlobs: [
+      "unit/database/model.relationships.test.ts",
+      "unit/database/model.relationQuery.test.ts",
+      "unit/belongsTo.test.ts",
+    ],
     tier: "core",
+    design: "partial",
+    notes:
+      "user.applications() returns a relation query (get/where/create). JS uses applications() + load()/loaded(); no PHP __get lazy property.",
+    designNotes:
+      "hasMany/hasOne/belongsTo/belongsToMany on Model. No whereHas, morph* methods, or nested with('a.b').",
   },
   {
     id: "eloquent-soft-deletes",
@@ -248,11 +274,14 @@ export const PARITY_CATALOG: ParityEntry[] = [
     id: "factories",
     laravelSection: "Eloquent: Factories",
     laravelDocPath: "eloquent-factories",
-    strataApis: [],
+    strataApis: ["Factory"],
     testGlobs: ["unit/factory.test.ts"],
     tier: "core",
+    design: "partial",
     notes:
-      "Factory.make() merges in-memory defaults. Factory.create() persists make() via persist() and strips id 0. No states, sequences, or relationships.",
+      "Factory.make/create plus count/state/sequence/for/has. count() returns an array; a bare create() still returns one record.",
+    designNotes:
+      "No recycle(), afterCreating(), or factory relationship methods inferred from model relations.",
   },
   {
     id: "authorization",

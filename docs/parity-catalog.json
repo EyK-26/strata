@@ -6,7 +6,9 @@
     "tier": "core",
     "strataApis": ["ServiceContainer", "resolveService"],
     "bootstrapApis": ["ServiceContainer", "resolveService"],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "service-providers",
@@ -18,9 +20,16 @@
       "ServiceProvider",
       "runProviderPhase",
       "collectProviders",
-      "createAppContext"
+      "createAppContext",
+      "discoverModules",
+      "configureModulesDirectory",
+      "ensureModulesLoaded",
+      "buildModuleRoutes",
+      "buildWebModuleRoutes"
     ],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "facades",
@@ -39,7 +48,9 @@
       "policyGate"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "routing",
@@ -48,7 +59,9 @@
     "tier": "core",
     "strataApis": ["applyMiddlewareToRoutes", "withMiddleware", "composeMiddleware"],
     "bootstrapApis": ["createHttpKernel", "createWebRoutes"],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "middleware",
@@ -63,7 +76,9 @@
       "createAuthorizeMiddleware"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "csrf",
@@ -72,7 +87,9 @@
     "tier": "core",
     "strataApis": ["createCsrfMiddleware"],
     "bootstrapApis": ["createCsrfProtection"],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "controllers",
@@ -81,7 +98,9 @@
     "tier": "core",
     "strataApis": ["withErrorHandling", "jsonResponse", "RouteHandler"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "form-requests",
@@ -90,16 +109,25 @@
     "tier": "core",
     "strataApis": ["FormRequest", "WebFormRequest", "validateObject", "required", "emailRule"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "views",
     "title": "Views",
     "sectionSlug": "views",
     "tier": "core",
-    "strataApis": ["EtaViewEngine", "htmlResponse", "resolveWebLayoutData"],
+    "strataApis": [
+      "EtaViewEngine",
+      "htmlResponse",
+      "resolveWebLayoutData",
+      "configureWebErrorView"
+    ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "validation",
@@ -108,16 +136,26 @@
     "tier": "core",
     "strataApis": ["ValidationError", "validateObject", "minLength", "maxLength", "stringRule"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "errors",
     "title": "Error Handling",
     "sectionSlug": "routing-http",
     "tier": "core",
-    "strataApis": ["NotFoundError", "ForbiddenError", "UnauthorizedError", "BadRequestError"],
+    "strataApis": [
+      "NotFoundError",
+      "ForbiddenError",
+      "UnauthorizedError",
+      "BadRequestError",
+      "configureWebErrorView"
+    ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "database",
@@ -130,7 +168,9 @@
       "runWithDatabaseConnection"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "query-builder",
@@ -139,7 +179,9 @@
     "tier": "core",
     "strataApis": ["RepositoryQuery", "WhereBuilder", "BaseRepository"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "pagination",
@@ -148,7 +190,9 @@
     "tier": "core",
     "strataApis": ["paginatedResponse", "parsePaginationQuery", "toPaginatedResourceCollection"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "migrations",
@@ -163,7 +207,9 @@
       "withMigrationLock"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "schema-blueprint",
@@ -172,7 +218,9 @@
     "tier": "core",
     "strataApis": ["Schema", "Blueprint", "defineTable", "createSchemaBuilder", "PostgresGrammar"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "seeders",
@@ -181,7 +229,9 @@
     "tier": "core",
     "strataApis": ["runSeedersFromDirectory", "loadSeedersFromDirectory"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "eloquent-model",
@@ -196,16 +246,30 @@
       "applyCasts"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "partial",
+    "designNotes": "Model.create/find/save/query match Eloquent persistence. No $hidden, $appends, or observers."
   },
   {
     "id": "eloquent-relationships",
     "title": "Relationships",
     "sectionSlug": "orm",
     "tier": "core",
-    "strataApis": ["hasMany", "hasOne", "belongsTo", "belongsToMany", "indexHasManyRelation"],
+    "strataApis": [
+      "hasMany",
+      "hasOne",
+      "belongsTo",
+      "belongsToMany",
+      "indexHasManyRelation",
+      "HasManyRelationQuery",
+      "HasOneRelationQuery",
+      "BelongsToRelationQuery",
+      "BelongsToManyRelationQuery"
+    ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "user.applications() returns a relation query (get/where/create). JS uses applications() + load()/loaded(); no PHP __get lazy property.",
+    "design": "partial",
+    "designNotes": "hasMany/hasOne/belongsTo/belongsToMany on Model. No whereHas, morph* methods, or nested with('a.b')."
   },
   {
     "id": "eloquent-soft-deletes",
@@ -214,7 +278,9 @@
     "tier": "core",
     "strataApis": ["Model"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "api-resources",
@@ -223,16 +289,20 @@
     "tier": "core",
     "strataApis": ["toResourceCollection", "serializeDate", "toPaginatedResourceCollection"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "toResourceCollection is items.map(transformer). Not JsonResource, whenLoaded, or wrapping.",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "factories",
     "title": "Factories",
     "sectionSlug": "database",
     "tier": "core",
-    "strataApis": [],
+    "strataApis": ["Factory"],
     "bootstrapApis": [],
-    "notes": "Exported via @getstrata/core/database/factory subpath"
+    "notes": "Factory.make/create plus count/state/sequence/for/has. count() returns an array; a bare create() still returns one record.",
+    "design": "partial",
+    "designNotes": "No recycle(), afterCreating(), or factory relationship methods inferred from model relations."
   },
   {
     "id": "authorization",
@@ -241,7 +311,9 @@
     "tier": "core",
     "strataApis": ["Policy", "PolicyGate", "createAuthorizeMiddleware"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "authentication",
@@ -250,7 +322,9 @@
     "tier": "core",
     "strataApis": ["createAuthMiddleware", "createRequireAuthMiddleware", "currentAuthUser"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "route-model-binding",
@@ -258,8 +332,27 @@
     "sectionSlug": "auth",
     "tier": "core",
     "strataApis": ["securedBindRouteModel", "securedBindRouteModelByKey"],
+    "bootstrapApis": ["securedBindRouteModel", "securedBindRouteModelByKey"],
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
+  },
+  {
+    "id": "signed-urls",
+    "title": "URLs",
+    "sectionSlug": "architecture",
+    "tier": "core",
+    "strataApis": [
+      "temporarySignedUrl",
+      "signedUrl",
+      "hasValidSignature",
+      "assertValidSignature",
+      "absoluteTemporarySignedUrl"
+    ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "events",
@@ -268,7 +361,9 @@
     "tier": "core",
     "strataApis": ["EventBus", "events"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "queues",
@@ -283,8 +378,10 @@
       "createProductionQueue",
       "SyncQueue"
     ],
-    "bootstrapApis": [],
-    "notes": ""
+    "bootstrapApis": ["registerDefaultJobs"],
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "failed-jobs",
@@ -293,7 +390,9 @@
     "tier": "core",
     "strataApis": ["FailedJobService", "FailedJobRepository", "createFailedJobService"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "scheduler",
@@ -302,7 +401,9 @@
     "tier": "core",
     "strataApis": ["Schedule", "appSchedule", "runDueScheduledTasks"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "dueTasks() uses Bun.cron.parse for the current minute. Laravel withoutOverlapping/timezone/onOneServer are not implemented.",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "cache",
@@ -310,8 +411,10 @@
     "sectionSlug": "cache-storage",
     "tier": "core",
     "strataApis": ["CacheRepository", "CACHE_TAGS"],
-    "bootstrapApis": [],
-    "notes": ""
+    "bootstrapApis": ["cacheTagsForModelWrite", "discoverModelTableNames"],
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "rate-limiting",
@@ -324,7 +427,9 @@
       "createLoginThrottleMiddleware"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "file-storage",
@@ -333,7 +438,9 @@
     "tier": "core",
     "strataApis": ["StorageManager", "LocalStorageDriver", "storage"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "mail",
@@ -342,7 +449,9 @@
     "tier": "core",
     "strataApis": ["Mailer", "LogMailDriver", "mailer", "mail"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "transactions",
@@ -351,7 +460,9 @@
     "tier": "core",
     "strataApis": ["runInTransaction"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "graceful-shutdown",
@@ -364,7 +475,9 @@
       "runGracefulShutdown"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "metrics",
@@ -373,7 +486,9 @@
     "tier": "core",
     "strataApis": ["PrometheusRegistry", "prometheusRegistry", "createMetricsMiddleware"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "etag",
@@ -382,7 +497,9 @@
     "tier": "core",
     "strataApis": ["assertIfMatch", "etagFromResource", "isEtagEnabled"],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "web-session",
@@ -391,7 +508,9 @@
     "tier": "core",
     "strataApis": [],
     "bootstrapApis": ["CookieSessionStore", "createWebServer"],
-    "notes": ""
+    "notes": "Two session models: HMAC SessionGuard (API/token apps) and CookieSessionStore (sibling HTMX). Not a Laravel session bag.",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "chunk-cursor",
@@ -400,7 +519,9 @@
     "tier": "core",
     "strataApis": ["BaseRepository"],
     "bootstrapApis": [],
-    "notes": "chunk() and cursorPaginate() on BaseRepository"
+    "notes": "chunk() and cursorPaginate() on BaseRepository",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "stripe-webhooks",
@@ -409,7 +530,9 @@
     "tier": "core",
     "strataApis": [],
     "bootstrapApis": [],
-    "notes": "verifyStripeWebhook via @getstrata/core/security/stripeWebhook subpath"
+    "notes": "verifyStripeWebhook via @getstrata/core/security/stripeWebhook subpath",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "morph-relations",
@@ -425,7 +548,9 @@
       "indexMorphToRelation"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "notifications",
@@ -434,7 +559,9 @@
     "tier": "core",
     "strataApis": ["Notification", "NotificationDispatcher", "createNotificationDispatcher"],
     "bootstrapApis": [],
-    "notes": "Mail and database channels; Slack/SMS remain app-level integrations"
+    "notes": "Mail and database channels only. Not Laravel Notifications (no Slack/SMS/broadcast, no Notifiable trait).",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "mail-markdown",
@@ -448,11 +575,13 @@
       "markdownToHtml"
     ],
     "bootstrapApis": [],
-    "notes": ""
+    "notes": "",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "horizon",
-    "title": "Queue dashboard ((queue dashboard)",
+    "title": "Queue dashboard (not Laravel Horizon)",
     "sectionSlug": "integrations",
     "tier": "core",
     "strataApis": [
@@ -462,16 +591,20 @@
       "createFailedJobService"
     ],
     "bootstrapApis": [],
-    "notes": "Horizon-lite admin queue monitor at /admin/queue with HTMX polling, retry, and delete"
+    "notes": "WorkHub /admin/queue: depth snapshot, failed-job list, retry/delete. Not Horizon workers, tags, or balancing.",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "nova",
-    "title": "Admin resources ((admin panel)",
+    "title": "Admin resources (not Laravel Nova)",
     "sectionSlug": "integrations",
     "tier": "core",
     "strataApis": ["AdminResourceRegistry", "formatAdminValue"],
     "bootstrapApis": [],
-    "notes": "WorkHub admin module with resource browser at /admin/resources"
+    "notes": "Read-only AdminResourceRegistry + /admin/resources. Not Nova fields, filters, actions, or lenses.",
+    "design": "stand-in",
+    "designNotes": ""
   },
   {
     "id": "cli",
