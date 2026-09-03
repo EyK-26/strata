@@ -370,7 +370,7 @@ describe("Eloquent-style model relations", () => {
     expect(() => UserModel.with("nope")).toThrow("has no relation method nope()");
 
     const tagsRelation = user.tags();
-    tagsRelation.applyEagerLoad(UserModel.query().query, "tags");
+    tagsRelation.applyEagerLoad(UserModel.query().query as never, "tags");
     expect(tagsRelation.hydrateEager({}, "tags")).toEqual([]);
     expect(user.applications().hydrateEager({}, "applications")).toEqual([]);
   });
@@ -529,9 +529,12 @@ describe("Eloquent-style model relations", () => {
       id: 1,
     });
 
-    pictured.images().applyEagerLoad(PicturedUser.query().query, "images");
-    pictured.avatar().where({ url: "/a.png" }).applyEagerLoad(PicturedUser.query().query, "avatar");
-    image.imageable().applyEagerLoad(ImageableModel.query().query, "imageable");
+    pictured.images().applyEagerLoad(PicturedUser.query().query as never, "images");
+    pictured
+      .avatar()
+      .where({ url: "/a.png" })
+      .applyEagerLoad(PicturedUser.query().query as never, "avatar");
+    image.imageable().applyEagerLoad(ImageableModel.query().query as never, "imageable");
     connection.queue([]);
     expect(await pictured.avatar().get()).toBeNull();
     connection.queue([]);

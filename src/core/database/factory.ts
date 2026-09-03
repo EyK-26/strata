@@ -54,7 +54,7 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
   private afterMakingCallbacks: Array<(record: TRecord) => void> = [];
   private afterCreatingCallbacks: Array<(record: TRecord) => void | Promise<void>> = [];
   protected model?: {
-    create(attributes: Record<string, unknown>): Promise<{ toObject?: () => TRecord } & TRecord>;
+    create(attributes: Record<string, unknown>): Promise<{ toObject(): object }>;
   };
 
   protected definition(): TRecord {
@@ -230,7 +230,7 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     if (this.model) {
       const created = await this.model.create(values as Record<string, unknown>);
       if (created && typeof created.toObject === "function") {
-        return created.toObject();
+        return created.toObject() as TRecord;
       }
       return created as TRecord;
     }

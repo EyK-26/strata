@@ -156,16 +156,23 @@ async function eagerLoadOnModels(
 
     if (unloaded.length > 0) {
       const first = unloaded[0];
+      if (!first) {
+        continue;
+      }
       const method = (first as unknown as Record<string, unknown>)[head];
 
       if (typeof method !== "function") {
-        throw new Error(`${first.constructor.name} has no relation method ${head}().`);
+        throw new Error(
+          `${(first.constructor as { name: string }).name} has no relation method ${head}().`,
+        );
       }
 
       const relationQuery = method.call(first) as AnyRelationQuery;
       const query = first.getRepository().query();
       relationQuery.applyEagerLoad(query, head);
-      const attached = await query.attachToRows(unloaded.map((model) => model.toObject()));
+      const attached = await query.attachToRows(
+        unloaded.map((model) => model.toObject() as Record<string, unknown>),
+      );
 
       for (const [index, model] of unloaded.entries()) {
         const row = attached[index] ?? model.toObject();
@@ -224,7 +231,10 @@ function resolveRelated<TRelated extends object, RelatedKey extends keyof TRelat
     return found as RelatedModelClass<TRelated, RelatedKey>;
   }
 
-  if (typeof related === "function" && typeof related.repository !== "function") {
+  if (
+    typeof related === "function" &&
+    typeof (related as unknown as RelatedModelClass<TRelated, RelatedKey>).repository !== "function"
+  ) {
     return (related as () => RelatedModelClass<TRelated, RelatedKey>)();
   }
 
@@ -430,8 +440,7 @@ class ModelQuery {
   with(...relations: string[]): this {
     const statics = modelStatics(this.modelClass);
     ensureBooted(this.modelClass);
-    const repository = resolveModelRepository(this.modelClass);
-    const dummy = statics.fromRecord({} as never, repository as never, false);
+    const dummy = statics.newFromRecord({}, false);
 
     for (const path of relations) {
       const name = path.split(".")[0] ?? path;
@@ -564,12 +573,11 @@ class ModelQuery {
 
   async get(): Promise<Array<Model<Record<string, unknown>, "id">>> {
     const statics = modelStatics(this.modelClass);
-    const repository = resolveModelRepository(this.modelClass);
     const rows = await this.query.get();
     const models: Array<Model<Record<string, unknown>, "id">> = [];
 
     for (const row of rows) {
-      const model = statics.fromRecord(row, repository, true) as AnyModel;
+      const model = statics.newFromRecord(row, true) as AnyModel;
       await runObservers(model, "retrieved");
 
       for (const { name, relationQuery } of this.eager) {
@@ -592,7 +600,7 @@ class ModelQuery {
 
   async find(id: unknown): Promise<Model<Record<string, unknown>, "id"> | null> {
     const primaryKey = resolveModelRepository(this.modelClass).getTable().primaryKey;
-    return this.where({ [primaryKey]: id }).first();
+    return this.where({ [primaryKey]: id } as QueryWhere<object>).first();
   }
 
   async findOrFail(
@@ -1385,7 +1393,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   async load(...names: string[]): Promise<this> {
     for (const name of names) {
       if (name.includes(".")) {
-        await loadNested(this, name);
+        await loadNested(this as never, name);
         continue;
       }
 

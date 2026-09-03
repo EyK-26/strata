@@ -179,9 +179,13 @@ class HasManyRelationQuery<
       [this.relation.foreignKey]: this.parent.get(this.relation.localKey),
     };
 
-    if (related && typeof related.save === "function") {
-      related.mergeAttributes?.(forced);
-      await related.save();
+    const savable = related as {
+      save?: () => Promise<unknown>;
+      mergeAttributes?: (patch: Record<string, unknown>) => unknown;
+    };
+    if (typeof savable.save === "function") {
+      savable.mergeAttributes?.(forced);
+      await savable.save();
       return related as RelatedRecord;
     }
 
