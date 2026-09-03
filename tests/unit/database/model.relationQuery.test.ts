@@ -428,6 +428,16 @@ describe("Eloquent-style model relations", () => {
     await UserModel.whereDoesntHave("position").get();
     expect(connection.calls.at(-1)?.query).toContain("NOT EXISTS");
 
+    connection.queue([]);
+    await ApplicationModel.has("user").get();
+    expect(connection.calls.at(-1)?.query).toContain("EXISTS");
+
+    connection.queue([]);
+    await UserModel.whereHas("tags", (query) => {
+      query.where?.({ name: "bun" });
+    }).get();
+    expect(connection.calls.at(-1)?.query).toContain("user_tag");
+
     expect(() => UserModel.has("missing")).toThrow("has no relation method missing()");
 
     class ImageModel extends Model<
@@ -529,6 +539,12 @@ describe("Eloquent-style model relations", () => {
     connection.queue([]);
     await ImageableModel.has("imageable").get();
     expect(connection.calls.at(-1)?.query).toContain("EXISTS");
+
+    connection.queue([]);
+    await PicturedUser.whereHas("images", (query) => {
+      query.where?.({ url: "/a.png" });
+    }).get();
+    expect(connection.calls.at(-1)?.query).toContain("imageable_type");
 
     connection.queue([{ id: 1, name: "Ada" }]);
     expect((await UserModel.where({ name: "Ada" }).first())?.name).toBe("Ada");
