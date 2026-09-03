@@ -22,9 +22,11 @@ describe("@getstrata/core contracts", () => {
     });
 
     expect(container.resolve<{ marker: number }>("singleton")).toEqual({ marker: 1 });
-    expect(container.resolve<{ marker: number }>("singleton")).toEqual({ marker: 1 });
+    expect(container.make<{ marker: number }>("singleton")).toEqual({ marker: 1 });
     expect(container.resolve<{ marker: number }>("transient")).toEqual({ marker: 1 });
     expect(container.resolve<{ marker: number }>("transient")).toEqual({ marker: 2 });
+    expect(container.instance("demo", "value")).toBe("value");
+    expect(container.make<string>("demo")).toBe("value");
   });
 
   test("assertAppDependenciesComplete requires cache and storage", () => {

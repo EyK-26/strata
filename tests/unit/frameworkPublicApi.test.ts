@@ -51,6 +51,11 @@ describe("@getstrata/core public API", () => {
   test("exports API resource helpers", () => {
     expect(typeof core.serializeDate).toBe("function");
     expect(typeof core.toResourceCollection).toBe("function");
+    expect(typeof core.JsonResource).toBe("function");
+    expect(typeof core.ResourceCollection).toBe("function");
+    expect(typeof core.whenLoaded).toBe("function");
+    expect(typeof core.MorphManyRelationQuery).toBe("function");
+    expect(typeof core.MorphToRelationQuery).toBe("function");
   });
 
   test("exports scheduler and graceful shutdown helpers", () => {

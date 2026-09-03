@@ -6,8 +6,8 @@
     "tier": "core",
     "strataApis": ["ServiceContainer", "resolveService"],
     "bootstrapApis": ["ServiceContainer", "resolveService"],
-    "notes": "",
-    "design": "stand-in",
+    "notes": "Laravel make()/instance() are aliases for resolve()/set().",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -28,7 +28,7 @@
       "buildWebModuleRoutes"
     ],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -49,7 +49,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -60,7 +60,7 @@
     "strataApis": ["applyMiddlewareToRoutes", "withMiddleware", "composeMiddleware"],
     "bootstrapApis": ["createHttpKernel", "createWebRoutes"],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -77,7 +77,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -88,7 +88,7 @@
     "strataApis": ["createCsrfMiddleware"],
     "bootstrapApis": ["createCsrfProtection"],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -99,7 +99,7 @@
     "strataApis": ["withErrorHandling", "jsonResponse", "RouteHandler"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -110,7 +110,7 @@
     "strataApis": ["FormRequest", "WebFormRequest", "validateObject", "required", "emailRule"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -126,7 +126,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -137,7 +137,7 @@
     "strataApis": ["ValidationError", "validateObject", "minLength", "maxLength", "stringRule"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -154,7 +154,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -169,7 +169,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -180,7 +180,7 @@
     "strataApis": ["RepositoryQuery", "WhereBuilder", "BaseRepository"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -191,7 +191,7 @@
     "strataApis": ["paginatedResponse", "parsePaginationQuery", "toPaginatedResourceCollection"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -208,7 +208,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -219,7 +219,7 @@
     "strataApis": ["Schema", "Blueprint", "defineTable", "createSchemaBuilder", "PostgresGrammar"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -230,7 +230,7 @@
     "strataApis": ["runSeedersFromDirectory", "loadSeedersFromDirectory"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -247,8 +247,8 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "partial",
-    "designNotes": "Model.create/find/save/query match Eloquent persistence. No $hidden, $appends, or observers."
+    "design": "laravel",
+    "designNotes": "create/find/save/where/firstOrCreate/updateOrCreate, $hidden/$visible/$appends, toArray/toJSON, observers. JS accessors are getFooAttribute()."
   },
   {
     "id": "eloquent-relationships",
@@ -267,9 +267,9 @@
       "BelongsToManyRelationQuery"
     ],
     "bootstrapApis": [],
-    "notes": "user.applications() returns a relation query (get/where/create). JS uses applications() + load()/loaded(); no PHP __get lazy property.",
-    "design": "partial",
-    "designNotes": "hasMany/hasOne/belongsTo/belongsToMany on Model. No whereHas, morph* methods, or nested with('a.b')."
+    "notes": "user.applications() returns a relation query. load()/loaded() replace PHP __get. whereHas/has/morph*/nested with('a.b') are supported.",
+    "design": "laravel",
+    "designNotes": "hasMany/hasOne/belongsTo/belongsToMany/morph* plus whereHas/has/doesntHave and nested with."
   },
   {
     "id": "eloquent-soft-deletes",
@@ -279,7 +279,7 @@
     "strataApis": ["Model"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -287,10 +287,17 @@
     "title": "API Resources",
     "sectionSlug": "api",
     "tier": "core",
-    "strataApis": ["toResourceCollection", "serializeDate", "toPaginatedResourceCollection"],
+    "strataApis": [
+      "JsonResource",
+      "ResourceCollection",
+      "whenLoaded",
+      "toResourceCollection",
+      "serializeDate",
+      "toPaginatedResourceCollection"
+    ],
     "bootstrapApis": [],
-    "notes": "toResourceCollection is items.map(transformer). Not JsonResource, whenLoaded, or wrapping.",
-    "design": "stand-in",
+    "notes": "JsonResource.wrap, whenLoaded, additional, collection. PHP $wrap becomes static wrap.",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -300,9 +307,9 @@
     "tier": "core",
     "strataApis": ["Factory"],
     "bootstrapApis": [],
-    "notes": "Factory.make/create plus count/state/sequence/for/has. count() returns an array; a bare create() still returns one record.",
-    "design": "partial",
-    "designNotes": "No recycle(), afterCreating(), or factory relationship methods inferred from model relations."
+    "notes": "make/create, count/state/sequence/for/has/recycle, afterMaking/afterCreating. count() returns an array.",
+    "design": "laravel",
+    "designNotes": "Relationship inference from model methods is not used; for/has take an explicit foreign key."
   },
   {
     "id": "authorization",
@@ -312,7 +319,7 @@
     "strataApis": ["Policy", "PolicyGate", "createAuthorizeMiddleware"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -323,7 +330,7 @@
     "strataApis": ["createAuthMiddleware", "createRequireAuthMiddleware", "currentAuthUser"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -334,7 +341,7 @@
     "strataApis": ["securedBindRouteModel", "securedBindRouteModelByKey"],
     "bootstrapApis": ["securedBindRouteModel", "securedBindRouteModelByKey"],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -351,7 +358,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -361,8 +368,8 @@
     "tier": "core",
     "strataApis": ["EventBus", "events"],
     "bootstrapApis": [],
-    "notes": "",
-    "design": "stand-in",
+    "notes": "on()/emit() are Laravel-shaped aliases for listen()/dispatch().",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -380,7 +387,7 @@
     ],
     "bootstrapApis": ["registerDefaultJobs"],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -391,7 +398,7 @@
     "strataApis": ["FailedJobService", "FailedJobRepository", "createFailedJobService"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -402,7 +409,7 @@
     "strataApis": ["Schedule", "appSchedule", "runDueScheduledTasks"],
     "bootstrapApis": [],
     "notes": "dueTasks() uses Bun.cron.parse for the current minute. Laravel withoutOverlapping/timezone/onOneServer are not implemented.",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -413,7 +420,7 @@
     "strataApis": ["CacheRepository", "CACHE_TAGS"],
     "bootstrapApis": ["cacheTagsForModelWrite", "discoverModelTableNames"],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -428,7 +435,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -439,7 +446,7 @@
     "strataApis": ["StorageManager", "LocalStorageDriver", "storage"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -450,7 +457,7 @@
     "strataApis": ["Mailer", "LogMailDriver", "mailer", "mail"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -461,7 +468,7 @@
     "strataApis": ["runInTransaction"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -476,7 +483,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -487,7 +494,7 @@
     "strataApis": ["PrometheusRegistry", "prometheusRegistry", "createMetricsMiddleware"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "partial",
     "designNotes": ""
   },
   {
@@ -498,7 +505,7 @@
     "strataApis": ["assertIfMatch", "etagFromResource", "isEtagEnabled"],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -509,7 +516,7 @@
     "strataApis": [],
     "bootstrapApis": ["CookieSessionStore", "createWebServer"],
     "notes": "Two session models: HMAC SessionGuard (API/token apps) and CookieSessionStore (sibling HTMX). Not a Laravel session bag.",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -520,7 +527,7 @@
     "strataApis": ["BaseRepository"],
     "bootstrapApis": [],
     "notes": "chunk() and cursorPaginate() on BaseRepository",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -531,7 +538,7 @@
     "strataApis": [],
     "bootstrapApis": [],
     "notes": "verifyStripeWebhook via @getstrata/core/security/stripeWebhook subpath",
-    "design": "stand-in",
+    "design": "partial",
     "designNotes": ""
   },
   {
@@ -543,13 +550,16 @@
       "morphTo",
       "morphMany",
       "morphOne",
+      "MorphManyRelationQuery",
+      "MorphOneRelationQuery",
+      "MorphToRelationQuery",
       "indexMorphManyRelation",
       "indexMorphOneRelation",
       "indexMorphToRelation"
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -560,7 +570,7 @@
     "strataApis": ["Notification", "NotificationDispatcher", "createNotificationDispatcher"],
     "bootstrapApis": [],
     "notes": "Mail and database channels only. Not Laravel Notifications (no Slack/SMS/broadcast, no Notifiable trait).",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -576,7 +586,7 @@
     ],
     "bootstrapApis": [],
     "notes": "",
-    "design": "stand-in",
+    "design": "laravel",
     "designNotes": ""
   },
   {
@@ -613,6 +623,8 @@
     "tier": "core",
     "strataApis": [],
     "bootstrapApis": [],
-    "notes": "WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API"
+    "notes": "WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API",
+    "design": "stand-in",
+    "designNotes": ""
   }
 ]

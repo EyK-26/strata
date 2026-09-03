@@ -27,6 +27,8 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
   private sequenceItems: Array<FactorySequence<TRecord>> = [];
   private parentAssociations: Array<ParentAssociation<TRecord>> = [];
   private children: RelatedFactory[] = [];
+  private afterMakingCallbacks: Array<(record: TRecord) => void> = [];
+  private afterCreatingCallbacks: Array<(record: TRecord) => void | Promise<void>> = [];
 
   protected definition(): TRecord {
     throw new Error("Factory definition must be implemented by subclass.");
@@ -39,6 +41,8 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     next.sequenceItems = [...this.sequenceItems];
     next.parentAssociations = [...this.parentAssociations];
     next.children = [...this.children];
+    next.afterMakingCallbacks = [...this.afterMakingCallbacks];
+    next.afterCreatingCallbacks = [...this.afterCreatingCallbacks];
     return next;
   }
 
@@ -76,6 +80,22 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
 
     const next = this.clone();
     next.parentAssociations = [...this.parentAssociations, { foreignKey, value: parent.id }];
+    return next;
+  }
+
+  recycle(parent: { id?: unknown }, foreignKey: keyof TRecord & string): Factory<TRecord, Counted> {
+    return this.for(parent, foreignKey);
+  }
+
+  afterMaking(callback: (record: TRecord) => void): Factory<TRecord, Counted> {
+    const next = this.clone();
+    next.afterMakingCallbacks = [...this.afterMakingCallbacks, callback];
+    return next;
+  }
+
+  afterCreating(callback: (record: TRecord) => void | Promise<void>): Factory<TRecord, Counted> {
+    const next = this.clone();
+    next.afterCreatingCallbacks = [...this.afterCreatingCallbacks, callback];
     return next;
   }
 
@@ -134,10 +154,16 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
       (record as Record<string, unknown>)[association.foreignKey] = association.value;
     }
 
-    return {
+    const made = {
       ...record,
       ...overrides,
     };
+
+    for (const callback of this.afterMakingCallbacks) {
+      callback(made);
+    }
+
+    return made;
   }
 
   protected async createOne(overrides: Partial<TRecord> = {}): Promise<TRecord> {
@@ -147,6 +173,10 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
       await (child.factory as Factory<Record<string, unknown>>)
         .for(created as { id?: unknown }, child.foreignKey)
         .create();
+    }
+
+    for (const callback of this.afterCreatingCallbacks) {
+      await callback(created);
     }
 
     return created;

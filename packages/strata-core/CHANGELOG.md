@@ -2,9 +2,13 @@
 
 ## 0.5.98
 
-- Eloquent-shaped relations: `user.applications()` is `this.hasMany(Application)` and returns a relation query (`get`, `where`, `create`, `attach` / `sync`). `load()` / `loaded()` and `Model.with("applications")` replace PHP lazy `__get`.
-- Factory `count()`, `state()`, `sequence()`, `for(parent, foreignKey)`, and `has(factory, foreignKey)`. `count()` is immutable and returns an array.
-- Parity audit reports **design** score separately from the API catalog score. Catalog 100% is not Laravel-identical DX.
+- Eloquent-shaped relations: `this.hasMany(Related)` returns a relation query (`get`/`where`/`create`/`attach`). `load()` / `loaded()` and `Model.with()` replace PHP `__get`. `whereHas`/`has`/`doesntHave`, morph* methods, and nested `with("a.b")` are supported.
+- Model `$hidden`/`$visible`/`$appends`, `toArray()`/`toJSON()`, `makeHidden`/`makeVisible`/`append`, and `observe()`.
+- `Model.where()`, `firstOrNew()`, `firstOrCreate()`, and `updateOrCreate()`.
+- Factory `count`/`state`/`sequence`/`for`/`has`/`recycle` plus `afterMaking`/`afterCreating`.
+- `JsonResource` (`wrap`, `whenLoaded`, `additional`, `collection`).
+- Laravel aliases: container `make`/`instance`, EventBus `on`/`emit`, query `whereNull`/`whereIn`/`whereExists`.
+- Parity audit reports design score separately. Horizon/Nova/CLI stay Bun-native stand-ins.
 
 ## 0.5.97
 

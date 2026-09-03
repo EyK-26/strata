@@ -8,6 +8,9 @@ import {
   BelongsToRelationQuery,
   HasManyRelationQuery,
   HasOneRelationQuery,
+  MorphManyRelationQuery,
+  MorphOneRelationQuery,
+  MorphToRelationQuery,
 } from "./relationQuery.ts";
 import type {
   BelongsToManyRelation,
@@ -21,6 +24,9 @@ import {
   hasMany,
   hasOne,
   indexBelongsToManyRelation,
+  morphMany,
+  morphOne,
+  morphTo,
 } from "./relationships.ts";
 import type { RepositoryQuery } from "./repositoryQuery.ts";
 import type { MutationValues, QueryOptions, QueryWhere, UpdateValues } from "./types.ts";
@@ -57,7 +63,101 @@ interface ModelConstructor<
 
 const modelRepositories = new WeakMap<object, BaseRepository<Record<string, unknown>, "id">>();
 const modelGlobalScopes = new WeakMap<object, GlobalScopeFn<Record<string, unknown>, "id">[]>();
+const modelObservers = new WeakMap<object, ModelObserver[]>();
 const modelBooted = new WeakSet<object>();
+
+type AnyModel = Model<Record<string, unknown>, "id">;
+
+type ModelObserver = {
+  creating?: (model: AnyModel) => unknown;
+  created?: (model: AnyModel) => unknown;
+  updating?: (model: AnyModel) => unknown;
+  updated?: (model: AnyModel) => unknown;
+  deleting?: (model: AnyModel) => unknown;
+  deleted?: (model: AnyModel) => unknown;
+};
+
+async function runObservers(model: AnyModel, hook: keyof ModelObserver): Promise<boolean> {
+  const observers = modelObservers.get(model.constructor) ?? [];
+
+  for (const observer of observers) {
+    const handler = observer[hook];
+
+    if (handler && (await handler(model)) === false) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function accessorName(key: string): string {
+  const pascal = key.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+  return `get${pascal.charAt(0).toUpperCase()}${pascal.slice(1)}Attribute`;
+}
+
+function constrainRelationExists(
+  model: object,
+  name: string,
+  constrain: ((query: AnyRelationQuery) => void) | undefined,
+  not: boolean,
+): RepositoryQuery<Record<string, unknown>, "id"> {
+  const statics = modelStatics(model);
+  ensureBooted(model);
+  const repository = resolveModelRepository(model);
+  const dummy = statics.newFromRecord({});
+  const method = (dummy as unknown as Record<string, unknown>)[name];
+
+  if (typeof method !== "function") {
+    throw new Error(`${(model as { name: string }).name} has no relation method ${name}().`);
+  }
+
+  const relationQuery = method.call(dummy) as AnyRelationQuery;
+  constrain?.(relationQuery);
+  const exists = relationQuery.toExistsClause(repository.getTable().name);
+  const query = (
+    Model.query as (this: object) => RepositoryQuery<Record<string, unknown>, "id">
+  ).call(model);
+  return not
+    ? query.whereNotExists(exists.sql, exists.params)
+    : query.whereExists(exists.sql, exists.params);
+}
+
+async function loadNested(
+  model: { load: (...names: string[]) => Promise<unknown>; loaded: (name: string) => unknown },
+  path: string,
+): Promise<void> {
+  const [head, ...rest] = path.split(".");
+
+  if (!head) {
+    return;
+  }
+
+  await model.load(head);
+
+  if (rest.length === 0) {
+    return;
+  }
+
+  const loaded = model.loaded(head);
+  const children = Array.isArray(loaded) ? loaded : loaded ? [loaded] : [];
+
+  for (const child of children) {
+    if (
+      child &&
+      typeof child === "object" &&
+      typeof (child as { load?: unknown }).load === "function"
+    ) {
+      await loadNested(
+        child as {
+          load: (...names: string[]) => Promise<unknown>;
+          loaded: (name: string) => unknown;
+        },
+        rest.join("."),
+      );
+    }
+  }
+}
 
 function resolveModelRepository(model: object): BaseRepository<Record<string, unknown>, "id"> {
   const repository = modelRepositories.get(model);
@@ -216,9 +316,15 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   static $guarded?: readonly string[] | true;
   static $casts: ModelCasts = {};
   static $timestamps = true;
+  static $hidden?: readonly string[];
+  static $visible?: readonly string[];
+  static $appends?: readonly string[];
 
   private _exists: boolean;
   private readonly loadedRelations: Record<string, unknown> = {};
+  private hiddenOverrides: string[] = [];
+  private visibleOverrides: string[] = [];
+  private appended: string[] = [];
 
   constructor(
     protected attributes: TEntity,
@@ -246,6 +352,62 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   toObject(): TEntity {
     return { ...this.attributes };
+  }
+
+  toArray(): Record<string, unknown> {
+    const ModelClass = modelStatics(this.constructor);
+    const hidden = new Set([...(ModelClass.$hidden ?? []), ...this.hiddenOverrides]);
+    const visible = this.visibleOverrides.length > 0 ? this.visibleOverrides : ModelClass.$visible;
+    const data: Record<string, unknown> = { ...(this.attributes as LoadedAttributes) };
+
+    if (visible && visible.length > 0) {
+      for (const key of Object.keys(data)) {
+        if (!visible.includes(key)) {
+          delete data[key];
+        }
+      }
+    }
+
+    for (const key of hidden) {
+      delete data[key];
+    }
+
+    for (const key of [...(ModelClass.$appends ?? []), ...this.appended]) {
+      const accessor = (this as unknown as Record<string, unknown>)[accessorName(key)];
+      if (typeof accessor === "function") {
+        data[key] = (accessor as () => unknown).call(this);
+      }
+    }
+
+    for (const [name, value] of Object.entries(this.loadedRelations)) {
+      if (
+        !hidden.has(name) &&
+        (!visible || visible.includes(name) || this.appended.includes(name))
+      ) {
+        data[name] = value;
+      }
+    }
+
+    return data;
+  }
+
+  toJSON(): Record<string, unknown> {
+    return this.toArray();
+  }
+
+  makeHidden(...keys: string[]): this {
+    this.hiddenOverrides.push(...keys);
+    return this;
+  }
+
+  makeVisible(...keys: string[]): this {
+    this.visibleOverrides.push(...keys);
+    return this;
+  }
+
+  append(...keys: string[]): this {
+    this.appended.push(...keys);
+    return this;
   }
 
   protected primaryKey(): PrimaryKey {
@@ -284,6 +446,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   static boot(): void {}
+
+  static observe(this: object, observer: ModelObserver): void {
+    const existing = modelObservers.get(this) ?? [];
+    modelObservers.set(this, [...existing, observer]);
+  }
 
   static addGlobalScope<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
     this: object,
@@ -350,8 +517,16 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     };
     const withTimestamps = applyTimestampsOnCreate(table.columns, assignable, timestamps);
     const payload = statics.dehydrateAttributes(withTimestamps);
+    const pending = statics.newFromRecord({ ...payload }, false) as AnyModel;
+
+    if ((await runObservers(pending, "creating")) === false) {
+      throw new Error(`${(this as { name: string }).name}.create() was cancelled by an observer.`);
+    }
+
     const record = await repository.create(payload as MutationValues<object>);
-    return statics.fromRecord(record, repository, true);
+    const created = statics.fromRecord(record, repository, true) as AnyModel;
+    await runObservers(created, "created");
+    return created;
   }
 
   static with(
@@ -365,7 +540,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     ensureBooted(this);
     const repository = resolveModelRepository(this);
     const dummy = statics.fromRecord({} as never, repository as never, false);
-    const resolved = relations.map((name) => {
+    const resolved = relations.map((path) => {
+      const name = path.split(".")[0] ?? path;
       const method = (dummy as unknown as Record<string, unknown>)[name];
 
       if (typeof method !== "function") {
@@ -373,7 +549,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       }
 
       const relationQuery = method.call(dummy) as AnyRelationQuery;
-      return { name, relationQuery };
+      return { name, path, relationQuery };
     });
 
     const query = (
@@ -394,13 +570,18 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
         for (const row of rows) {
           const model = statics.fromRecord(row, repository, true);
 
-          for (const { name, relationQuery } of resolved) {
+          for (const { name, path, relationQuery } of resolved) {
             if (relationQuery.kind === "belongsToMany") {
-              await model.load(name);
+              await model.load(path.includes(".") ? path : name);
               continue;
             }
 
             model.setLoaded(name, relationQuery.hydrateEager(row, name));
+            const nested = path.split(".").slice(1).join(".");
+
+            if (nested) {
+              await loadNested(model, path);
+            }
           }
 
           models.push(model);
@@ -413,6 +594,30 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
         return model ?? null;
       },
     };
+  }
+
+  static whereHas(
+    this: object,
+    name: string,
+    constrain?: (query: AnyRelationQuery) => void,
+  ): RepositoryQuery<Record<string, unknown>, "id"> {
+    return constrainRelationExists(this, name, constrain, false);
+  }
+
+  static has(this: object, name: string): RepositoryQuery<Record<string, unknown>, "id"> {
+    return constrainRelationExists(this, name, undefined, false);
+  }
+
+  static doesntHave(this: object, name: string): RepositoryQuery<Record<string, unknown>, "id"> {
+    return constrainRelationExists(this, name, undefined, true);
+  }
+
+  static whereDoesntHave(
+    this: object,
+    name: string,
+    constrain?: (query: AnyRelationQuery) => void,
+  ): RepositoryQuery<Record<string, unknown>, "id"> {
+    return constrainRelationExists(this, name, constrain, true);
   }
 
   static async find(
@@ -476,6 +681,15 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return rows.map((row) => statics.fromRecord(row, repository, true));
   }
 
+  static where(
+    this: object,
+    where: QueryWhere<object>,
+  ): RepositoryQuery<Record<string, unknown>, "id"> {
+    return (Model.query as (this: object) => RepositoryQuery<Record<string, unknown>, "id">)
+      .call(this)
+      .where(where);
+  }
+
   static async firstWhere(
     this: object,
     where: QueryWhere<object>,
@@ -495,13 +709,85 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return record ? statics.fromRecord(record, repository, true) : null;
   }
 
+  static async firstOrNew(
+    this: object,
+    where: QueryWhere<object>,
+    values: Record<string, unknown> = {},
+  ): Promise<Model<Record<string, unknown>, "id">> {
+    const existing = await (
+      Model.firstWhere as (
+        this: object,
+        filter: QueryWhere<object>,
+      ) => Promise<Model<Record<string, unknown>, "id"> | null>
+    ).call(this, where);
+
+    if (existing) {
+      return existing;
+    }
+
+    return modelStatics(this).newFromRecord({ ...where, ...values }, false);
+  }
+
+  static async firstOrCreate(
+    this: object,
+    where: QueryWhere<object>,
+    values: Record<string, unknown> = {},
+  ): Promise<Model<Record<string, unknown>, "id">> {
+    const existing = await (
+      Model.firstWhere as (
+        this: object,
+        filter: QueryWhere<object>,
+      ) => Promise<Model<Record<string, unknown>, "id"> | null>
+    ).call(this, where);
+
+    if (existing) {
+      return existing;
+    }
+
+    return (
+      Model.create as (
+        this: object,
+        attributes: Record<string, unknown>,
+      ) => Promise<Model<Record<string, unknown>, "id">>
+    ).call(this, { ...where, ...values });
+  }
+
+  static async updateOrCreate(
+    this: object,
+    where: QueryWhere<object>,
+    values: Record<string, unknown> = {},
+  ): Promise<Model<Record<string, unknown>, "id">> {
+    const existing = await (
+      Model.firstWhere as (
+        this: object,
+        filter: QueryWhere<object>,
+      ) => Promise<Model<Record<string, unknown>, "id"> | null>
+    ).call(this, where);
+
+    if (existing) {
+      return existing.update(values);
+    }
+
+    return (
+      Model.create as (
+        this: object,
+        attributes: Record<string, unknown>,
+      ) => Promise<Model<Record<string, unknown>, "id">>
+    ).call(this, { ...where, ...values });
+  }
+
   async save(): Promise<this> {
     const ModelClass = modelStatics(this.constructor);
     const timestamps = ModelClass.$timestamps ?? true;
     const casts = ModelClass.$casts ?? {};
     const table = this.repository.getTable();
+    const updating = this.$exists;
 
-    if (this.$exists) {
+    if ((await runObservers(this as never, updating ? "updating" : "creating")) === false) {
+      return this;
+    }
+
+    if (updating) {
       const changes = applyTimestampsOnUpdate(
         table.columns,
         applyCasts(this.attributes as LoadedAttributes, casts, "dehydrate"),
@@ -509,6 +795,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       ) as UpdateValues<TEntity, PrimaryKey>;
       const record = await this.repository.updateByIdOrThrow(this.id, changes);
       this.attributes = ModelClass.hydrateAttributes(record);
+      await runObservers(this as never, "updated");
       return this;
     }
 
@@ -522,6 +809,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     const record = await this.repository.create(payload);
     this.attributes = ModelClass.hydrateAttributes(record);
     this._exists = true;
+    await runObservers(this as never, "created");
     return this;
   }
 
@@ -537,11 +825,19 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   async delete(): Promise<boolean> {
-    if (resolveSoftDeleteColumn(this.repository.getTable())) {
-      return await this.repository.deleteById(this.id);
+    if ((await runObservers(this as never, "deleting")) === false) {
+      return false;
     }
 
-    return await this.repository.forceDeleteById(this.id);
+    const deleted = resolveSoftDeleteColumn(this.repository.getTable())
+      ? await this.repository.deleteById(this.id)
+      : await this.repository.forceDeleteById(this.id);
+
+    if (deleted) {
+      await runObservers(this as never, "deleted");
+    }
+
+    return deleted;
   }
 
   async forceDelete(): Promise<boolean> {
@@ -749,8 +1045,70 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  morphMany<TRelated extends object, RelatedKey extends keyof TRelated & string>(
+    related: RelatedModelClass<TRelated, RelatedKey>,
+    morphName: string,
+    typeKey?: keyof TRelated & string,
+    idKey?: keyof TRelated & string,
+  ): MorphManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+    const table = this.repository.getTable();
+    return new MorphManyRelationQuery(
+      this,
+      related,
+      morphMany({
+        name: morphName,
+        localKey: table.primaryKey,
+        morphTypeKey: typeKey ?? (`${morphName}_type` as keyof TRelated & string),
+        morphIdKey: idKey ?? (`${morphName}_id` as keyof TRelated & string),
+        morphType: table.name,
+      }),
+    );
+  }
+
+  morphOne<TRelated extends object, RelatedKey extends keyof TRelated & string>(
+    related: RelatedModelClass<TRelated, RelatedKey>,
+    morphName: string,
+    typeKey?: keyof TRelated & string,
+    idKey?: keyof TRelated & string,
+  ): MorphOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+    const table = this.repository.getTable();
+    return new MorphOneRelationQuery(
+      this,
+      related,
+      morphOne({
+        name: morphName,
+        localKey: table.primaryKey,
+        morphTypeKey: typeKey ?? (`${morphName}_type` as keyof TRelated & string),
+        morphIdKey: idKey ?? (`${morphName}_id` as keyof TRelated & string),
+        morphType: table.name,
+      }),
+    );
+  }
+
+  morphTo(
+    relatedByType: Record<string, RelatedModelClass<Record<string, unknown>, "id">>,
+    morphName = "imageable",
+    typeKey?: keyof TEntity & string,
+    idKey?: keyof TEntity & string,
+  ): MorphToRelationQuery<TEntity, PrimaryKey> {
+    return new MorphToRelationQuery(
+      this,
+      relatedByType,
+      morphTo({
+        name: morphName,
+        morphTypeKey: typeKey ?? (`${morphName}_type` as keyof TEntity & string),
+        morphIdKey: idKey ?? (`${morphName}_id` as keyof TEntity & string),
+      }),
+    );
+  }
+
   async load(...names: string[]): Promise<this> {
     for (const name of names) {
+      if (name.includes(".")) {
+        await loadNested(this, name);
+        continue;
+      }
+
       const method = (this as unknown as Record<string, unknown>)[name];
 
       if (typeof method !== "function") {
@@ -793,6 +1151,9 @@ export {
   BelongsToRelationQuery,
   HasManyRelationQuery,
   HasOneRelationQuery,
+  MorphManyRelationQuery,
+  MorphOneRelationQuery,
+  MorphToRelationQuery,
 } from "./relationQuery.ts";
 export type { CastType, GlobalScopeFn, ModelClassType, ModelConstructor };
 export {

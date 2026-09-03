@@ -6,12 +6,7 @@
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import {
-  type DesignParity,
-  PARITY_CATALOG,
-  type ParityEntry,
-  type ParityTier,
-} from "./parity-catalog.ts";
+import { designOf, PARITY_CATALOG, type ParityEntry, type ParityTier } from "./parity-catalog.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const CORE_PUBLIC_API = join(ROOT, "src/framework/public-api.ts");
@@ -151,10 +146,6 @@ function scoreEntries(entries: AuditedEntry[]): number {
   }, 0);
 
   return Math.round((points / core.length) * 1000) / 10;
-}
-
-function designOf(entry: ParityEntry): DesignParity {
-  return entry.design ?? "stand-in";
 }
 
 function scoreDesign(entries: AuditedEntry[]): number {

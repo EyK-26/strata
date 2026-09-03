@@ -75,6 +75,28 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return this;
   }
 
+  whereNull(column: keyof TEntity & string): this {
+    return this.where({ [column]: null } as QueryWhere<TEntity>);
+  }
+
+  whereNotNull(column: keyof TEntity & string): this {
+    return this.where({ [column]: { isNull: false } } as QueryWhere<TEntity>);
+  }
+
+  whereIn(column: keyof TEntity & string, values: readonly unknown[]): this {
+    return this.where({ [column]: values } as QueryWhere<TEntity>);
+  }
+
+  whereExists(sql: string, params: readonly unknown[] = []): this {
+    this.whereNodes.push({ kind: "and", exists: { sql, params } });
+    return this;
+  }
+
+  whereNotExists(sql: string, params: readonly unknown[] = []): this {
+    this.whereNodes.push({ kind: "and", exists: { sql, params, not: true } });
+    return this;
+  }
+
   offset(offset: number): this {
     this.queryOptions = { ...this.queryOptions, offset };
     return this;

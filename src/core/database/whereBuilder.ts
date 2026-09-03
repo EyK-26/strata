@@ -1,8 +1,15 @@
 import type { QueryWhere } from "./types.ts";
 
+type ExistsClause = {
+  sql: string;
+  params: readonly unknown[];
+  not?: boolean;
+};
+
 type WhereNode<TEntity extends object> =
   | { kind: "and" | "or"; where: QueryWhere<TEntity> }
-  | { kind: "and" | "or"; group: WhereNode<TEntity>[] };
+  | { kind: "and" | "or"; group: WhereNode<TEntity>[] }
+  | { kind: "and" | "or"; exists: ExistsClause };
 
 class WhereBuilder<TEntity extends object> {
   readonly nodes: WhereNode<TEntity>[] = [];
@@ -40,5 +47,5 @@ class WhereBuilder<TEntity extends object> {
   }
 }
 
-export type { WhereNode };
+export type { ExistsClause, WhereNode };
 export { WhereBuilder };

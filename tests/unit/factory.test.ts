@@ -143,6 +143,26 @@ describe("Factory", () => {
     expect(() => new AuthorFactory().sequence()).toThrow("at least one");
     expect(() => new PostFactory().for({}, "user_id")).toThrow("parent with an id");
     expect(() => new PostFactory().for({ id: null }, "user_id")).toThrow("parent with an id");
+
+    const made: string[] = [];
+    const created: string[] = [];
+    new AuthorFactory()
+      .afterMaking((record) => {
+        made.push(record.name);
+      })
+      .make();
+    expect(made).toEqual(["Author"]);
+    await new AuthorFactory()
+      .afterCreating((record) => {
+        created.push(record.name);
+      })
+      .create();
+    expect(created).toEqual(["Author"]);
+    expect(new PostFactory().recycle({ id: 3 }, "user_id").make()).toEqual({
+      id: 0,
+      title: "Draft",
+      user_id: 3,
+    });
   });
 
   test("count() does not mutate the original factory singleton", () => {

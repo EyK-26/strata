@@ -242,7 +242,13 @@ describe("Eloquent-style model relations", () => {
     await user.position().where({ name: "Engineer" }).orderBy({ name: "ASC" }).get();
 
     const relation = user.position();
-    expect(relation.hydrateEager({ position: { id: 8 } }, "position")).toEqual({ id: 8 });
+    expect(
+      (
+        relation.hydrateEager({ position: [{ id: 8, user_id: 3, name: "X" }] }, "position") as {
+          id: number;
+        }
+      )?.id,
+    ).toBe(8);
     expect(relation.hydrateEager({ position: [] }, "position")).toBeUndefined();
   });
 
@@ -367,6 +373,186 @@ describe("Eloquent-style model relations", () => {
     tagsRelation.applyEagerLoad(UserModel.query(), "tags");
     expect(tagsRelation.hydrateEager({}, "tags")).toEqual([]);
     expect(user.applications().hydrateEager({}, "applications")).toEqual([]);
+  });
+
+  test("toArray, observers, whereHas, morph, and nested load", async () => {
+    const connection = new FakeConnection();
+    const { UserModel, ApplicationModel, PositionModel } = createModels(connection);
+
+    class VisibleUser extends UserModel {
+      static override $hidden = ["name"];
+      getInitialAttribute() {
+        return "A";
+      }
+    }
+    registerModelRepository(VisibleUser, UserModel.repository());
+
+    const user = new VisibleUser({ id: 1, name: "Ada" }, VisibleUser.repository());
+    expect(user.toArray()).toEqual({ id: 1 });
+    user.append("initial").makeVisible("name");
+    expect(user.toJSON().initial).toBe("A");
+    user.makeHidden("id");
+    expect(user.toArray().id).toBeUndefined();
+
+    const hooks: string[] = [];
+    UserModel.observe({
+      creating: () => {
+        hooks.push("creating");
+      },
+      created: () => {
+        hooks.push("created");
+      },
+      deleting: () => false,
+    });
+    connection.queue([{ id: 9, name: "New" }]);
+    await UserModel.create({ name: "New" });
+    expect(hooks).toEqual(["creating", "created"]);
+    const doomed = new UserModel({ id: 1, name: "Ada" }, UserModel.repository());
+    expect(await doomed.delete()).toBeFalse();
+
+    connection.queue([]);
+    await UserModel.whereHas("applications", (query) => {
+      query.where?.({ status_id: 1 });
+    }).get();
+    expect(connection.calls.at(-1)?.query).toContain("EXISTS");
+
+    connection.queue([]);
+    await UserModel.has("applications").get();
+    expect(connection.calls.at(-1)?.query).toContain("EXISTS");
+
+    connection.queue([]);
+    await UserModel.doesntHave("applications").get();
+    expect(connection.calls.at(-1)?.query).toContain("NOT EXISTS");
+
+    connection.queue([]);
+    await UserModel.whereDoesntHave("position").get();
+    expect(connection.calls.at(-1)?.query).toContain("NOT EXISTS");
+
+    expect(() => UserModel.has("missing")).toThrow("has no relation method missing()");
+
+    class ImageModel extends Model<
+      { id: number; imageable_type: string; imageable_id: number; url: string },
+      "id"
+    > {
+      static override $timestamps = false;
+      static override $fillable = ["imageable_type", "imageable_id", "url"] as const;
+      protected override primaryKey(): "id" {
+        return "id";
+      }
+    }
+
+    const imageTable = defineTable<
+      { id: number; imageable_type: string; imageable_id: number; url: string },
+      "id"
+    >({
+      name: "images",
+      primaryKey: "id",
+      columns: ["id", "imageable_type", "imageable_id", "url"],
+    });
+    class ImageRepository extends BaseRepository<
+      { id: number; imageable_type: string; imageable_id: number; url: string },
+      "id"
+    > {
+      constructor() {
+        super(imageTable, connection);
+      }
+    }
+    registerModelRepository(ImageModel, new ImageRepository());
+
+    class PicturedUser extends UserModel {
+      images() {
+        return this.morphMany(ImageModel, "imageable");
+      }
+      avatar() {
+        return this.morphOne(ImageModel, "imageable");
+      }
+    }
+    registerModelRepository(PicturedUser, UserModel.repository());
+
+    const pictured = new PicturedUser({ id: 4, name: "Ada" }, PicturedUser.repository());
+    connection.queue([{ id: 1, imageable_type: "users", imageable_id: 4, url: "/a.png" }]);
+    const images = await pictured.images().get();
+    expect(images[0]?.get("url")).toBe("/a.png");
+    connection.queue([{ id: 2, imageable_type: "users", imageable_id: 4, url: "/b.png" }]);
+    expect((await pictured.avatar().create({ url: "/b.png" })).get("url")).toBe("/b.png");
+
+    connection.queue([{ id: 1, user_id: 1, position_id: 4, status_id: 1 }]);
+    connection.queue([{ id: 4, user_id: 1, name: "Engineer" }]);
+    await user.load("applications.position");
+    expect(user.loaded<unknown[]>("applications")).toHaveLength(1);
+
+    class ImageableModel extends ImageModel {
+      imageable() {
+        return this.morphTo({ users: PicturedUser }, "imageable");
+      }
+    }
+    registerModelRepository(ImageableModel, ImageModel.repository());
+
+    const image = new ImageableModel(
+      { id: 3, imageable_type: "users", imageable_id: 4, url: "/c.png" },
+      ImageableModel.repository(),
+    );
+    connection.queue([{ id: 4, name: "Ada" }]);
+    expect((await image.imageable().get())?.get("name")).toBe("Ada");
+
+    const missingType = new ImageableModel(
+      { id: 4, imageable_type: "unknown", imageable_id: 4, url: "/d.png" },
+      ImageableModel.repository(),
+    );
+    expect(await missingType.imageable().get()).toBeNull();
+    expect(missingType.imageable().toExistsClause("images").sql).toContain("1 = 0");
+
+    const missingId = new ImageableModel(
+      { id: 5, imageable_type: "users", imageable_id: null as unknown as number, url: "/e.png" },
+      ImageableModel.repository(),
+    );
+    expect(await missingId.imageable().get()).toBeNull();
+
+    connection.queue([{ id: 4, name: "Ada" }]);
+    connection.queue([{ id: 1, imageable_type: "users", imageable_id: 4, url: "/a.png" }]);
+    const withImages = await PicturedUser.with("images").get();
+    expect(withImages[0]?.loaded<unknown[]>("images")).toHaveLength(1);
+    expect(pictured.images().hydrateEager({}, "images")).toEqual([]);
+    expect(pictured.avatar().hydrateEager({}, "avatar")).toBeUndefined();
+    expect(image.imageable().hydrateEager({ reactable: { id: 1 } }, "reactable")).toEqual({
+      id: 1,
+    });
+
+    pictured.images().applyEagerLoad(PicturedUser.query(), "images");
+    pictured.avatar().where({ url: "/a.png" }).applyEagerLoad(PicturedUser.query(), "avatar");
+    image.imageable().applyEagerLoad(ImageableModel.query(), "imageable");
+    connection.queue([]);
+    expect(await pictured.avatar().get()).toBeNull();
+    connection.queue([]);
+    expect(await pictured.images().first()).toBeNull();
+
+    connection.queue([]);
+    await ImageableModel.has("imageable").get();
+    expect(connection.calls.at(-1)?.query).toContain("EXISTS");
+
+    connection.queue([{ id: 1, name: "Ada" }]);
+    expect((await UserModel.where({ name: "Ada" }).first())?.name).toBe("Ada");
+
+    connection.queue([{ id: 1, name: "Ada" }]);
+    const found = await UserModel.firstOrCreate({ name: "Ada" }, { name: "Ada" });
+    expect(found.get("name")).toBe("Ada");
+
+    connection.queue([]);
+    connection.queue([{ id: 12, name: "New" }]);
+    const created = await UserModel.firstOrCreate({ name: "New" });
+    expect(created.get("name")).toBe("New");
+
+    connection.queue([]);
+    const unsaved = await UserModel.firstOrNew({ name: "Ghost" });
+    expect(unsaved.get("name")).toBe("Ghost");
+
+    connection.queue([{ id: 1, name: "Ada" }]);
+    connection.queue([{ id: 1, name: "Updated" }]);
+    const updated = await UserModel.updateOrCreate({ name: "Ada" }, { name: "Updated" });
+    expect(updated.get("name")).toBe("Updated");
+
+    void ApplicationModel;
+    void PositionModel;
   });
 
   test("belongsTo orderBy is applied when present", async () => {

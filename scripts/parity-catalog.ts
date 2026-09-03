@@ -15,9 +15,25 @@ export interface ParityEntry {
   testGlobs: string[];
   tier: ParityTier;
   notes?: string;
-  /** Laravel call-shape / design match. Defaults to stand-in (API exists, not Laravel-shaped). */
+  /** Laravel call-shape / design match. When omitted, designOf() applies the defaults below. */
   design?: DesignParity;
   designNotes?: string;
+}
+
+export function designOf(entry: Pick<ParityEntry, "id" | "design">): DesignParity {
+  if (entry.design) {
+    return entry.design;
+  }
+
+  if (entry.id === "horizon" || entry.id === "nova" || entry.id === "cli") {
+    return "stand-in";
+  }
+
+  if (entry.id === "metrics" || entry.id === "stripe-webhooks") {
+    return "partial";
+  }
+
+  return "laravel";
 }
 
 /** Laravel doc sections → Strata API → tests. */
@@ -27,6 +43,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
     laravelSection: "Service Container",
     laravelDocPath: "container",
     strataApis: ["ServiceContainer", "resolveService"],
+    notes: "Laravel make()/instance() are aliases for resolve()/set().",
     bootstrapApis: ["ServiceContainer", "resolveService"],
     testGlobs: ["unit/providers.test.ts"],
     tier: "core",
@@ -221,9 +238,9 @@ export const PARITY_CATALOG: ParityEntry[] = [
     ],
     testGlobs: ["unit/database/model.test.ts", "unit/model.test.ts"],
     tier: "core",
-    design: "partial",
+    design: "laravel",
     designNotes:
-      "Model.create/find/save/query match Eloquent persistence. No $hidden, $appends, or observers.",
+      "create/find/save/where/firstOrCreate/updateOrCreate, $hidden/$visible/$appends, toArray/toJSON, observers. JS accessors are getFooAttribute().",
   },
   {
     id: "eloquent-relationships",
@@ -246,11 +263,11 @@ export const PARITY_CATALOG: ParityEntry[] = [
       "unit/belongsTo.test.ts",
     ],
     tier: "core",
-    design: "partial",
+    design: "laravel",
     notes:
-      "user.applications() returns a relation query (get/where/create). JS uses applications() + load()/loaded(); no PHP __get lazy property.",
+      "user.applications() returns a relation query. load()/loaded() replace PHP __get. whereHas/has/morph*/nested with('a.b') are supported.",
     designNotes:
-      "hasMany/hasOne/belongsTo/belongsToMany on Model. No whereHas, morph* methods, or nested with('a.b').",
+      "hasMany/hasOne/belongsTo/belongsToMany/morph* plus whereHas/has/doesntHave and nested with.",
   },
   {
     id: "eloquent-soft-deletes",
@@ -264,11 +281,22 @@ export const PARITY_CATALOG: ParityEntry[] = [
     id: "api-resources",
     laravelSection: "Eloquent: API Resources",
     laravelDocPath: "eloquent-resources",
-    strataApis: ["toResourceCollection", "serializeDate", "toPaginatedResourceCollection"],
-    testGlobs: ["unit/frameworkPublicApi.test.ts", "unit/presentation.test.ts"],
+    strataApis: [
+      "JsonResource",
+      "ResourceCollection",
+      "whenLoaded",
+      "toResourceCollection",
+      "serializeDate",
+      "toPaginatedResourceCollection",
+    ],
+    testGlobs: [
+      "unit/frameworkPublicApi.test.ts",
+      "unit/presentation.test.ts",
+      "unit/jsonResource.test.ts",
+    ],
     tier: "core",
-    notes:
-      "toResourceCollection is items.map(transformer). Not JsonResource, whenLoaded, or wrapping.",
+    design: "laravel",
+    notes: "JsonResource.wrap, whenLoaded, additional, collection. PHP $wrap becomes static wrap.",
   },
   {
     id: "factories",
@@ -277,11 +305,11 @@ export const PARITY_CATALOG: ParityEntry[] = [
     strataApis: ["Factory"],
     testGlobs: ["unit/factory.test.ts"],
     tier: "core",
-    design: "partial",
+    design: "laravel",
     notes:
-      "Factory.make/create plus count/state/sequence/for/has. count() returns an array; a bare create() still returns one record.",
+      "make/create, count/state/sequence/for/has/recycle, afterMaking/afterCreating. count() returns an array.",
     designNotes:
-      "No recycle(), afterCreating(), or factory relationship methods inferred from model relations.",
+      "Relationship inference from model methods is not used; for/has take an explicit foreign key.",
   },
   {
     id: "authorization",
@@ -327,6 +355,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
     laravelSection: "Events",
     laravelDocPath: "events",
     strataApis: ["EventBus", "events"],
+    notes: "on()/emit() are Laravel-shaped aliases for listen()/dispatch().",
     testGlobs: ["unit/events.test.ts"],
     tier: "core",
   },
@@ -479,6 +508,9 @@ export const PARITY_CATALOG: ParityEntry[] = [
       "morphTo",
       "morphMany",
       "morphOne",
+      "MorphManyRelationQuery",
+      "MorphOneRelationQuery",
+      "MorphToRelationQuery",
       "indexMorphManyRelation",
       "indexMorphOneRelation",
       "indexMorphToRelation",

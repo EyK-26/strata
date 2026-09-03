@@ -3,7 +3,7 @@
 
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PARITY_CATALOG, type ParityEntry } from "../scripts/parity-catalog.ts";
+import { designOf, PARITY_CATALOG, type ParityEntry } from "../scripts/parity-catalog.ts";
 
 const SECTION_BY_PARITY: Record<string, string> = {
   "service-container": "architecture",
@@ -69,7 +69,7 @@ const exported = PARITY_CATALOG.map((entry) => ({
   strataApis: entry.strataApis,
   bootstrapApis: entry.bootstrapApis ?? [],
   notes: entry.notes ?? "",
-  design: entry.design ?? "stand-in",
+  design: designOf(entry),
   designNotes: entry.designNotes ?? "",
 }));
 
@@ -81,6 +81,8 @@ const cliEntry = {
   strataApis: [],
   bootstrapApis: [],
   notes: "WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API",
+  design: "stand-in" as const,
+  designNotes: "",
 };
 
 const output = [...exported.filter((e) => e.id !== "cli"), cliEntry];

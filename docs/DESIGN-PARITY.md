@@ -12,6 +12,8 @@ The API catalog score in `docs/PARITY-AUDIT.md` only checks that a Laravel doc s
 
 WorkHub, HiroApp, and published starters are how gaps get found. Fix `@getstrata/core` (and bootstrap/cli when needed). Do not paper over a missing design with an app-only workaround.
 
+Horizon, Nova, and the Artisan CLI stay Bun-native stand-ins. Stripe webhooks and Prometheus metrics are partial: they cover the job, not Laravel Cashier/Telescope.
+
 ## Current Eloquent shape
 
 ```ts
@@ -27,7 +29,22 @@ await user.load("applications");
 user.loaded("applications");
 await User.with("applications").get();
 
+await User.whereHas("applications", (query) => query.where?.({ status_id: 1 })).get();
+await User.firstOrCreate({ email: "ada@example.com" }, { name: "Ada" });
+
+class Image extends Model<ImageRecord, "id"> {
+  imageable() {
+    return this.morphTo({ users: User }, "imageable");
+  }
+}
+
 await new UserFactory().count(3).state({ role: "admin" }).create();
-await new ApplicationFactory().for(user, "user_id").create();
+await new ApplicationFactory().for(user, "user_id").recycle(user, "user_id").create();
 await new UserFactory().has(new ApplicationFactory(), "user_id").create();
+
+class UserResource extends JsonResource<User> {
+  override toArray() {
+    return { name: this.resource.get("name"), role: this.whenLoaded("role") };
+  }
+}
 ```

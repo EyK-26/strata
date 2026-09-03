@@ -146,4 +146,38 @@ describe("RepositoryQuery", () => {
     expect(page.data).toHaveLength(1);
     expect(connection.calls.length).toBeGreaterThanOrEqual(2);
   });
+
+  test("whereNull, whereNotNull, whereIn, and whereExists compile Laravel-style filters", async () => {
+    const connection = new FakeConnection();
+    const squads = new SquadRepository(connection);
+
+    connection.queue([]);
+    await squads.query().whereNull("label").get();
+    expect(connection.calls.at(-1)?.query).toContain("IS NULL");
+
+    connection.queue([]);
+    await squads.query().whereNotNull("label").get();
+    expect(connection.calls.at(-1)?.query).toContain("IS NOT NULL");
+
+    connection.queue([]);
+    await squads.query().whereIn("id", [1, 2]).get();
+    expect(connection.calls.at(-1)?.query).toContain("IN");
+
+    connection.queue([]);
+    await squads
+      .query()
+      .whereExists("SELECT 1 FROM member WHERE member.squad_id = squad.id", [])
+      .get();
+    expect(connection.calls.at(-1)?.query).toContain("EXISTS");
+
+    connection.queue([]);
+    await squads
+      .query()
+      .whereNotExists(
+        "SELECT 1 FROM member WHERE member.squad_id = squad.id AND member.id = $1",
+        [9],
+      )
+      .get();
+    expect(connection.calls.at(-1)?.query).toContain("NOT EXISTS");
+  });
 });

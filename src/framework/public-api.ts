@@ -105,6 +105,9 @@ export {
   HasOneRelationQuery,
   hydrateValue,
   Model,
+  MorphManyRelationQuery,
+  MorphOneRelationQuery,
+  MorphToRelationQuery,
   registerModelRepository,
 } from "../core/database/model.ts";
 export { createDatabaseQueryProxy } from "../core/database/queryProxy.ts";
@@ -278,9 +281,12 @@ export { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddl
 export { createRequireGlobalAdminMiddleware } from "../core/http/requireGlobalAdminMiddleware.ts";
 export { createRequireWebAuthMiddleware } from "../core/http/requireWebAuthMiddleware.ts";
 export {
+  JsonResource,
+  ResourceCollection,
   serializeDate,
   toPaginatedResourceCollection,
   toResourceCollection,
+  whenLoaded,
 } from "../core/http/resources.ts";
 export {
   createdResponse,

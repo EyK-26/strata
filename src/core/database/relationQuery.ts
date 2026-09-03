@@ -1,9 +1,13 @@
 import type BaseRepository from "./baseRepository.ts";
+import { buildAdvancedWhereClause, qualifyColumn, quoteIdentifier } from "./query.ts";
 import type {
   BelongsToManyRelation,
   BelongsToRelation,
   HasManyRelation,
   HasOneRelation,
+  MorphManyRelation,
+  MorphOneRelation,
+  MorphToRelation,
 } from "./relationships.ts";
 import type { RepositoryQuery } from "./repositoryQuery.ts";
 import type { QueryOptions, QueryWhere } from "./types.ts";
@@ -29,7 +33,16 @@ interface RelationHost<TEntity extends object, PrimaryKey extends keyof TEntity 
   getRepository(): BaseRepository<TEntity, PrimaryKey>;
 }
 
-type RelationKind = "hasMany" | "hasOne" | "belongsTo" | "belongsToMany";
+type RelationKind =
+  | "hasMany"
+  | "hasOne"
+  | "belongsTo"
+  | "belongsToMany"
+  | "morphMany"
+  | "morphOne"
+  | "morphTo";
+
+type ExistsClause = { sql: string; params: unknown[] };
 
 function asWhere<T extends object>(where: Record<string, unknown>): QueryWhere<T> {
   return where as QueryWhere<T>;
@@ -83,7 +96,17 @@ class HasManyRelationQuery<
   }
 
   hydrateEager(row: Record<string, unknown>, alias: string): unknown {
-    return row[alias] ?? [];
+    const value = row[alias] ?? [];
+    const rows = Array.isArray(value) ? value : [];
+    return rows.map((item) => this.related.newFromRecord(item as TChild));
+  }
+
+  toExistsClause(parentTable: string): ExistsClause {
+    const childTable = this.related.repository().getTable().name;
+    const extra = buildAdvancedWhereClause(childTable, this.extraWhere, [], []);
+    const extraSql = extra.clause.replace(/^ WHERE /, "");
+    const sql = `SELECT 1 FROM ${quoteIdentifier(childTable)} WHERE ${qualifyColumn(childTable, this.relation.foreignKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    return { sql, params: extra.params };
   }
 
   private scopedQuery(): RepositoryQuery<TChild, ChildKey> {
@@ -176,8 +199,12 @@ class HasOneRelationQuery<
   }
 
   hydrateEager(row: Record<string, unknown>, alias: string): unknown {
-    const value = row[alias];
-    return Array.isArray(value) ? (value[0] ?? undefined) : value;
+    const hydrated = this.inner.hydrateEager(row, alias) as RelatedRecord[];
+    return hydrated[0];
+  }
+
+  toExistsClause(parentTable: string): ExistsClause {
+    return this.inner.toExistsClause(parentTable);
   }
 
   async get(): Promise<RelatedRecord | null> {
@@ -227,7 +254,16 @@ class BelongsToRelationQuery<
   }
 
   hydrateEager(row: Record<string, unknown>, alias: string): unknown {
-    return row[alias];
+    const value = row[alias];
+    return value ? this.related.newFromRecord(value as TParent) : value;
+  }
+
+  toExistsClause(parentTable: string): ExistsClause {
+    const relatedTable = this.related.repository().getTable().name;
+    return {
+      sql: `SELECT 1 FROM ${quoteIdentifier(relatedTable)} WHERE ${qualifyColumn(relatedTable, this.relation.ownerKey)} = ${qualifyColumn(parentTable, this.relation.foreignKey)}`,
+      params: [],
+    };
   }
 
   async get(): Promise<RelatedRecord | null> {
@@ -307,7 +343,17 @@ class BelongsToManyRelationQuery<
   }
 
   hydrateEager(row: Record<string, unknown>, alias: string): unknown {
-    return row[alias] ?? [];
+    const value = row[alias] ?? [];
+    const rows = Array.isArray(value) ? value : [];
+    return rows.map((item) => this.related.newFromRecord(item as TRelated));
+  }
+
+  toExistsClause(parentTable: string): ExistsClause {
+    const relatedTable = this.related.repository().getTable().name;
+    const extra = buildAdvancedWhereClause(relatedTable, this.extraWhere, [], []);
+    const extraSql = extra.clause.replace(/^ WHERE /, "");
+    const sql = `SELECT 1 FROM ${quoteIdentifier(relatedTable)} INNER JOIN ${quoteIdentifier(this.relation.pivotTable)} ON ${qualifyColumn(this.relation.pivotTable, this.relation.relatedPivotKey)} = ${qualifyColumn(relatedTable, this.relation.relatedKey)} WHERE ${qualifyColumn(this.relation.pivotTable, this.relation.foreignPivotKey)} = ${qualifyColumn(parentTable, this.relation.parentKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    return { sql, params: extra.params };
   }
 
   private connection() {
@@ -398,11 +444,216 @@ class BelongsToManyRelationQuery<
   }
 }
 
+class MorphManyRelationQuery<
+  TParent extends object,
+  ParentKey extends keyof TParent & string,
+  TChild extends object,
+  ChildKey extends keyof TChild & string,
+> {
+  readonly kind: RelationKind = "morphMany";
+  private extraWhere: QueryWhere<TChild> = {};
+  private extraOptions: Omit<QueryOptions<TChild>, "where"> = {};
+
+  constructor(
+    private readonly parent: RelationHost<TParent, ParentKey>,
+    private readonly related: RelatedModelClass<TChild, ChildKey>,
+    readonly relation: MorphManyRelation<
+      TParent,
+      TChild,
+      ParentKey,
+      keyof TChild & string,
+      keyof TChild & string
+    >,
+  ) {}
+
+  where(where: QueryWhere<TChild>): this {
+    this.extraWhere = { ...this.extraWhere, ...where };
+    return this;
+  }
+
+  applyEagerLoad(query: RepositoryQuery<TParent, ParentKey>, alias: string): void {
+    query.withMorphMany(
+      alias,
+      this.relation,
+      this.related.repository() as never,
+      this.extraOptions,
+    );
+  }
+
+  hydrateEager(row: Record<string, unknown>, alias: string): unknown {
+    const value = row[alias] ?? [];
+    const rows = Array.isArray(value) ? value : [];
+    return rows.map((item) => this.related.newFromRecord(item as TChild));
+  }
+
+  toExistsClause(parentTable: string): ExistsClause {
+    const childTable = this.related.repository().getTable().name;
+    const extra = buildAdvancedWhereClause(
+      childTable,
+      {
+        [this.relation.morphTypeKey]: this.relation.morphType,
+        ...this.extraWhere,
+      } as QueryWhere<TChild>,
+      [],
+      [],
+    );
+    const extraSql = extra.clause.replace(/^ WHERE /, "");
+    const sql = `SELECT 1 FROM ${quoteIdentifier(childTable)} WHERE ${qualifyColumn(childTable, this.relation.morphIdKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    return { sql, params: extra.params };
+  }
+
+  async get(): Promise<RelatedRecord[]> {
+    const repository = this.related
+      .repository()
+      .withConnection(this.parent.getRepository().getConnection());
+    const rows = await repository
+      .query(
+        asWhere<TChild>({
+          [this.relation.morphTypeKey]: this.relation.morphType,
+          [this.relation.morphIdKey]: this.parent.get(this.relation.localKey),
+          ...this.extraWhere,
+        }),
+      )
+      .get();
+    return rows.map((row) => this.related.newFromRecord(row as TChild));
+  }
+
+  async first(): Promise<RelatedRecord | null> {
+    const rows = await this.get();
+    return rows[0] ?? null;
+  }
+
+  async create(attributes: Record<string, unknown> = {}): Promise<RelatedRecord> {
+    return this.related.create(attributes, {
+      [this.relation.morphTypeKey]: this.relation.morphType,
+      [this.relation.morphIdKey]: this.parent.get(this.relation.localKey),
+    });
+  }
+}
+
+class MorphOneRelationQuery<
+  TParent extends object,
+  ParentKey extends keyof TParent & string,
+  TChild extends object,
+  ChildKey extends keyof TChild & string,
+> {
+  readonly kind: RelationKind = "morphOne";
+  private readonly inner: MorphManyRelationQuery<TParent, ParentKey, TChild, ChildKey>;
+
+  constructor(
+    parent: RelationHost<TParent, ParentKey>,
+    related: RelatedModelClass<TChild, ChildKey>,
+    readonly relation: MorphOneRelation<
+      TParent,
+      TChild,
+      ParentKey,
+      keyof TChild & string,
+      keyof TChild & string
+    >,
+  ) {
+    this.inner = new MorphManyRelationQuery(parent, related, {
+      type: "morphMany",
+      name: relation.name,
+      localKey: relation.localKey,
+      morphTypeKey: relation.morphTypeKey,
+      morphIdKey: relation.morphIdKey,
+      morphType: relation.morphType,
+    });
+  }
+
+  where(where: QueryWhere<TChild>): this {
+    this.inner.where(where);
+    return this;
+  }
+
+  applyEagerLoad(query: RepositoryQuery<TParent, ParentKey>, alias: string): void {
+    this.inner.applyEagerLoad(query, alias);
+  }
+
+  hydrateEager(row: Record<string, unknown>, alias: string): unknown {
+    const hydrated = this.inner.hydrateEager(row, alias) as RelatedRecord[];
+    return hydrated[0];
+  }
+
+  toExistsClause(parentTable: string): ExistsClause {
+    return this.inner.toExistsClause(parentTable);
+  }
+
+  async get(): Promise<RelatedRecord | null> {
+    return this.inner.first();
+  }
+
+  async create(attributes: Record<string, unknown> = {}): Promise<RelatedRecord> {
+    return this.inner.create(attributes);
+  }
+}
+
+class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild & string> {
+  readonly kind: RelationKind = "morphTo";
+
+  constructor(
+    private readonly parent: RelationHost<TChild, ChildKey>,
+    private readonly relatedByType: Record<
+      string,
+      RelatedModelClass<Record<string, unknown>, "id">
+    >,
+    readonly relation: MorphToRelation<TChild, keyof TChild & string, keyof TChild & string>,
+  ) {}
+
+  applyEagerLoad(query: RepositoryQuery<TChild, ChildKey>, alias: string): void {
+    const repositories = new Map(
+      Object.entries(this.relatedByType).map(([type, model]) => [
+        type,
+        model.repository() as never,
+      ]),
+    );
+    query.withMorphTo(alias, this.relation, repositories);
+  }
+
+  hydrateEager(row: Record<string, unknown>, alias: string): unknown {
+    return row[alias];
+  }
+
+  toExistsClause(parentTable: string): ExistsClause {
+    const type = String(this.parent.get(this.relation.morphTypeKey) ?? "");
+    const related = this.relatedByType[type];
+    if (!related) {
+      return { sql: "SELECT 1 WHERE 1 = 0", params: [] };
+    }
+
+    const relatedTable = related.repository().getTable();
+    return {
+      sql: `SELECT 1 FROM ${quoteIdentifier(relatedTable.name)} WHERE ${qualifyColumn(relatedTable.name, relatedTable.primaryKey)} = ${qualifyColumn(parentTable, this.relation.morphIdKey)}`,
+      params: [],
+    };
+  }
+
+  async get(): Promise<RelatedRecord | null> {
+    const type = String(this.parent.get(this.relation.morphTypeKey) ?? "");
+    const id = this.parent.get(this.relation.morphIdKey);
+    const related = this.relatedByType[type];
+
+    if (!related || id === null || id === undefined) {
+      return null;
+    }
+
+    const table = related.repository().getTable();
+    const row = await related
+      .repository()
+      .withConnection(this.parent.getRepository().getConnection())
+      .query(asWhere<object>({ [table.primaryKey]: id }))
+      .first();
+    return row ? related.newFromRecord(row) : null;
+  }
+}
+
 type AnyRelationQuery = {
   kind: RelationKind;
   applyEagerLoad(query: unknown, alias: string): void;
   hydrateEager(row: Record<string, unknown>, alias: string): unknown;
   get(): Promise<unknown>;
+  toExistsClause(parentTable: string): ExistsClause;
+  where?(where: Record<string, unknown>): unknown;
 };
 
 export type { AnyRelationQuery, RelatedModelClass, RelatedRecord, RelationHost };
@@ -411,4 +662,7 @@ export {
   BelongsToRelationQuery,
   HasManyRelationQuery,
   HasOneRelationQuery,
+  MorphManyRelationQuery,
+  MorphOneRelationQuery,
+  MorphToRelationQuery,
 };
