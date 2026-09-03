@@ -21,6 +21,8 @@ const projectModule: AppModule = {
 };
 
 export default projectModule;
+export { ProjectFactory, projectFactory } from "./factory";
+export { ProjectModel, projectRepository } from "./model";
 export { projectBelongsToOrganization } from "./relationships";
 export { default as ProjectRepository } from "./repository";
 export {

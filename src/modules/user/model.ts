@@ -1,4 +1,5 @@
 import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { OrganizationModel } from "../organization/model";
 import UserRepository from "./repository";
 import type { UserRecord } from "./types";
 
@@ -44,6 +45,10 @@ class UserModelClass extends Model<UserRecord, "id"> {
 
   get tenantId() {
     return this.get("tenant_id");
+  }
+
+  currentOrganization() {
+    return this.belongsTo(OrganizationModel, "current_organization_id");
   }
 }
 

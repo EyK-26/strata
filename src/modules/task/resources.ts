@@ -1,4 +1,5 @@
 import {
+  JsonResource,
   serializeDate,
   toPaginatedResourceCollection,
   toResourceCollection,
@@ -21,17 +22,25 @@ interface TaskResource {
   };
 }
 
+class TaskJsonResource extends JsonResource<TaskWithProjectRecord> {
+  override toArray(): Record<string, unknown> {
+    const record = this.resource;
+
+    return {
+      id: record.id,
+      project_id: record.project_id,
+      title: record.title,
+      status: record.status,
+      priority: record.priority,
+      created_at: serializeDate(record.created_at),
+      updated_at: serializeDate(record.updated_at),
+      ...(record.project ? { project: record.project } : {}),
+    };
+  }
+}
+
 function toTaskResource(record: TaskWithProjectRecord): TaskResource {
-  return {
-    id: record.id,
-    project_id: record.project_id,
-    title: record.title,
-    status: record.status,
-    priority: record.priority,
-    created_at: serializeDate(record.created_at),
-    updated_at: serializeDate(record.updated_at),
-    ...(record.project ? { project: record.project } : {}),
-  };
+  return new TaskJsonResource(record).toArray() as unknown as TaskResource;
 }
 
 function toTaskResourceCollection(records: readonly TaskWithProjectRecord[]): TaskResource[] {
@@ -46,4 +55,9 @@ function toTaskPaginatedResourceCollection(
 }
 
 export type { TaskResource };
-export { toTaskPaginatedResourceCollection, toTaskResource, toTaskResourceCollection };
+export {
+  TaskJsonResource,
+  toTaskPaginatedResourceCollection,
+  toTaskResource,
+  toTaskResourceCollection,
+};

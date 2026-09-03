@@ -1,4 +1,5 @@
 import {
+  JsonResource,
   serializeDate,
   toPaginatedResourceCollection,
   toResourceCollection,
@@ -13,13 +14,21 @@ interface CommentResource {
   created_at: string;
 }
 
+class CommentJsonResource extends JsonResource<CommentRecord> {
+  override toArray(): Record<string, unknown> {
+    const record = this.resource;
+
+    return {
+      id: record.id,
+      task_id: record.task_id,
+      body: record.body,
+      created_at: serializeDate(record.created_at),
+    };
+  }
+}
+
 function toCommentResource(record: CommentRecord): CommentResource {
-  return {
-    id: record.id,
-    task_id: record.task_id,
-    body: record.body,
-    created_at: serializeDate(record.created_at),
-  };
+  return new CommentJsonResource(record).toArray() as unknown as CommentResource;
 }
 
 function toCommentResourceCollection(records: readonly CommentRecord[]): CommentResource[] {
@@ -34,4 +43,9 @@ function toCommentPaginatedResourceCollection(
 }
 
 export type { CommentResource };
-export { toCommentPaginatedResourceCollection, toCommentResource, toCommentResourceCollection };
+export {
+  CommentJsonResource,
+  toCommentPaginatedResourceCollection,
+  toCommentResource,
+  toCommentResourceCollection,
+};

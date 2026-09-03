@@ -25,6 +25,8 @@ const organizationModule: AppModule = {
 };
 
 export default organizationModule;
+export { OrganizationFactory, organizationFactory } from "./factory";
+export { OrganizationModel, organizationRepository } from "./model";
 export { default as OrganizationRepository } from "./repository";
 export {
   parseCreateOrganizationBody,

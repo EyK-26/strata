@@ -21,6 +21,8 @@ const commentModule: AppModule = {
 };
 
 export default commentModule;
+export { CommentFactory, commentFactory } from "./factory";
+export { CommentModel, commentRepository } from "./model";
 export { commentBelongsToTask } from "./relationships";
 export { default as CommentRepository } from "./repository";
 export {
