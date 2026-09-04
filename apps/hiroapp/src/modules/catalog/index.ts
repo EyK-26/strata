@@ -1,10 +1,11 @@
 import type { AppModule } from "@getstrata/bootstrap/contracts";
+import { catalogRoutes } from "./routes.ts";
 
 const catalogModule: AppModule = {
   name: "catalog",
   order: 5,
-  routes() {
-    return {};
+  routes({ dependencies }) {
+    return catalogRoutes(dependencies);
   },
 };
 

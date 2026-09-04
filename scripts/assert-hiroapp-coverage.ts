@@ -28,7 +28,7 @@ const ignore = [
   /\/serialize\.ts$/,
   /\/presenters\.ts$/,
   /\/loaders\.ts$/,
-  /\/catalog\//,
+  /\/tables\.ts$/,
 ];
 
 function isIgnored(file: string): boolean {
