@@ -19,7 +19,7 @@ The barrel file is `src/framework/public-api.ts`. The workspace package `package
 | Package | Version | Role |
 |---------|---------|------|
 | `@getstrata/core` | 0.5.100 | Framework runtime and HTTP/database/auth primitives |
-| `@getstrata/bootstrap` | 0.2.66 | HttpKernel, providers, web session helpers |
+| `@getstrata/bootstrap` | 0.2.67 | HttpKernel, providers, web session helpers |
 | `@getstrata/cli` | 0.2.0 | `strata` CLI (`dev`, `start`, `migrate`, `run`, plus app-registered commands) |
 | `@getstrata/starter` | 0.1.4 | `bun create strata` app scaffold |
 

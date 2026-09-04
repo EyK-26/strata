@@ -13,20 +13,76 @@ import {
 } from "@getstrata/core/database/boundConnection";
 
 function createFakeSql(user: SessionUser) {
-  const sessions = new Map<string, { userId: number; expiresAt: Date }>();
+  const sessions = new Map<
+    string,
+    {
+      userId: number;
+      expiresAt: Date;
+      userAgent: string | null;
+      ipAddress: string | null;
+      lastActiveAt: Date | null;
+    }
+  >();
 
   return {
     sessions,
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
       if (query.includes("INSERT INTO sessions")) {
-        const [id, userId, expires] = params as [string, number, Date];
-        sessions.set(id, { userId, expiresAt: expires });
+        const [id, userId, expires, userAgent, ipAddress] = params as [
+          string,
+          number,
+          Date,
+          string | null | undefined,
+          string | null | undefined,
+        ];
+        sessions.set(id, {
+          userId,
+          expiresAt: expires,
+          userAgent: userAgent ?? null,
+          ipAddress: ipAddress ?? null,
+          lastActiveAt: new Date(),
+        });
+        return [] as T[];
+      }
+
+      if (query.includes("DELETE FROM sessions") && query.includes("user_id")) {
+        const userId = Number(params[0]);
+        const keepId = String(params[1]);
+        for (const [id, session] of [...sessions.entries()]) {
+          if (session.userId === userId && id !== keepId) {
+            sessions.delete(id);
+          }
+        }
         return [] as T[];
       }
 
       if (query.includes("DELETE FROM sessions")) {
         sessions.delete(String(params[0]));
         return [] as T[];
+      }
+
+      if (query.includes("UPDATE sessions SET last_active_at")) {
+        const session = sessions.get(String(params[0]));
+        if (session) {
+          session.lastActiveAt = new Date();
+        }
+        return [] as T[];
+      }
+
+      if (query.includes("FROM sessions") && query.includes("user_id = $1")) {
+        const userId = Number(params[0]);
+        return [...sessions.entries()]
+          .filter(
+            ([, session]) => session.userId === userId && session.expiresAt.getTime() > Date.now(),
+          )
+          .map(([id, session]) => ({
+            id,
+            user_id: session.userId,
+            user_agent: session.userAgent,
+            ip_address: session.ipAddress,
+            last_active_at: session.lastActiveAt,
+            expires_at: session.expiresAt,
+          })) as T[];
       }
 
       if (query.includes("FROM sessions")) {
@@ -237,5 +293,42 @@ describe("CookieSessionGuard", () => {
     const result = await auth.signOut(new Request("http://example.test/"));
     expect(result.setCookie).toContain("Max-Age=0");
     expect(sql.sessions.size).toBe(0);
+  });
+
+  test("create stores browser metadata and listForUser returns live sessions", async () => {
+    const user: SessionUser = {
+      id: 11,
+      name: "Meta",
+      email: "meta@example.test",
+    };
+    const sql = createFakeSql(user);
+    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
+    const sessionId = await store.create(user, {
+      userAgent: "HiroAppTest/1.0",
+      ipAddress: "203.0.113.10",
+    });
+    const listed = await store.listForUser(11);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.id).toBe(sessionId);
+    expect(listed[0]?.user_agent).toBe("HiroAppTest/1.0");
+    expect(listed[0]?.ip_address).toBe("203.0.113.10");
+    await store.touch(sessionId);
+    expect(sql.sessions.get(sessionId)?.lastActiveAt).toBeInstanceOf(Date);
+  });
+
+  test("destroyOtherSessions keeps the current cookie row", async () => {
+    const user: SessionUser = {
+      id: 14,
+      name: "Keep",
+      email: "keep@example.test",
+    };
+    const sql = createFakeSql(user);
+    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
+    const keep = await store.create(user, { userAgent: "ThisDevice/1.0" });
+    const other = await store.create(user, { userAgent: "OtherDevice/1.0" });
+    await store.destroyOtherSessions(14, keep);
+    expect(sql.sessions.has(keep)).toBe(true);
+    expect(sql.sessions.has(other)).toBe(false);
+    expect(await store.listForUser(14)).toHaveLength(1);
   });
 });

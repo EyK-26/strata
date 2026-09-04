@@ -1,5 +1,11 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.67
+
+- `CookieSessionStore.create()` records optional browser metadata (`userAgent`, `ipAddress`, `last_active_at`).
+- `CookieSessionStore` can list live sessions, touch `last_active_at`, and destroy every session except the current cookie (`listForUser`, `touch`, `destroyOtherSessions`).
+- `CookieSessionAuthManager.signIn()` / `signInRedirect()` accept the same metadata. Apps that use cookie sessions (HiroApp) must have `user_agent`, `ip_address`, and `last_active_at` on `sessions`.
+
 ## 0.2.66
 
 - `assertProductionSecrets()` is feature-gated for every app. API tokens no longer imply WorkHub’s encryption/CORS/OAuth/public-read checklist. Published test token strings are still denied. WorkHub’s extra production profile lives in the app (`src/config/productionSecrets.ts`).

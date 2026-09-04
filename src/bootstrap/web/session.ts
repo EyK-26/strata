@@ -31,6 +31,20 @@ type SqlSource = SqlClient | (() => SqlClient);
 
 export type LoadSessionUser = (sql: SqlClient, sessionId: string) => Promise<SessionUser | null>;
 
+export interface SessionCreateMeta {
+  userAgent?: string | null;
+  ipAddress?: string | null;
+}
+
+export interface BrowserSessionRecord {
+  id: string;
+  user_id: number;
+  user_agent: string | null;
+  ip_address: string | null;
+  last_active_at: Date | string | null;
+  expires_at: Date | string;
+}
+
 function isSqlClient(value: SqlSource): value is SqlClient {
   return typeof (value as SqlClient).unsafe === "function";
 }
@@ -142,19 +156,42 @@ export class CookieSessionStore {
     return resolveSql(this.sqlSource);
   }
 
-  async create(user: SessionUser): Promise<string> {
+  async create(user: SessionUser, meta: SessionCreateMeta = {}): Promise<string> {
     const id = randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + this.maxAgeSeconds * 1000);
-    await this.sql().unsafe(`INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)`, [
-      id,
-      user.id,
-      expires,
-    ]);
+    await this.sql().unsafe(
+      `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [id, user.id, expires, meta.userAgent ?? null, meta.ipAddress ?? null],
+    );
     return id;
   }
 
   async destroy(sessionId: string): Promise<void> {
     await this.sql().unsafe(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
+  }
+
+  async destroyOtherSessions(userId: number, keepSessionId: string): Promise<void> {
+    await this.sql().unsafe(`DELETE FROM sessions WHERE user_id = $1 AND id <> $2`, [
+      userId,
+      keepSessionId,
+    ]);
+  }
+
+  async listForUser(userId: number): Promise<BrowserSessionRecord[]> {
+    return this.sql().unsafe<BrowserSessionRecord>(
+      `SELECT id, user_id, user_agent, ip_address, last_active_at, expires_at
+       FROM sessions
+       WHERE user_id = $1 AND expires_at > NOW()
+       ORDER BY last_active_at DESC NULLS LAST, expires_at DESC`,
+      [userId],
+    );
+  }
+
+  async touch(sessionId: string): Promise<void> {
+    await this.sql().unsafe(`UPDATE sessions SET last_active_at = NOW() WHERE id = $1`, [
+      sessionId,
+    ]);
   }
 
   async read(request: Request): Promise<SessionUser | null> {
@@ -194,8 +231,11 @@ export class CookieSessionAuthManager extends AuthManager {
     super(new CookieSessionGuard(store, mapUser));
   }
 
-  async signIn(user: SessionUser): Promise<{ sessionId: string; setCookie: string }> {
-    const sessionId = await this.store.create(user);
+  async signIn(
+    user: SessionUser,
+    meta: SessionCreateMeta = {},
+  ): Promise<{ sessionId: string; setCookie: string }> {
+    const sessionId = await this.store.create(user, meta);
     return { sessionId, setCookie: this.store.cookieHeader(user, sessionId) };
   }
 
@@ -208,8 +248,13 @@ export class CookieSessionAuthManager extends AuthManager {
     return { setCookie: this.store.clearCookieHeader() };
   }
 
-  async signInRedirect(user: SessionUser, location: string, status = 302): Promise<Response> {
-    const { setCookie } = await this.signIn(user);
+  async signInRedirect(
+    user: SessionUser,
+    location: string,
+    status = 302,
+    meta: SessionCreateMeta = {},
+  ): Promise<Response> {
+    const { setCookie } = await this.signIn(user, meta);
     return redirectWithCookie(location, setCookie, status);
   }
 
