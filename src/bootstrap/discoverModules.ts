@@ -30,7 +30,14 @@ function readDiscoverModulesState(): DiscoverModulesState {
 }
 
 function configureModulesDirectory(modulesDir: string): void {
-  readDiscoverModulesState().configuredModulesDir = modulesDir;
+  const state = readDiscoverModulesState();
+
+  if (state.configuredModulesDir !== modulesDir) {
+    state.appModules.length = 0;
+    state.modulesReady = undefined;
+  }
+
+  state.configuredModulesDir = modulesDir;
 }
 
 function resolveModulesDirectory(options?: DiscoverModulesOptions): string {

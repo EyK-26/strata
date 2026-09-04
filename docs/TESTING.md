@@ -1,53 +1,39 @@
-# Testing WorkHub
+# Testing
 
-WorkHub supports three frontend modes (`FRONTEND_MODE`):
+HiroApp is the in-repo dogfood app. Frontend modes (`FRONTEND_MODE`):
 
 | Mode | Value | What runs |
 |------|-------|-----------|
-| JSON API only | `api` | `/api/v1/*` routes |
-| Server HTMX | `server-htmx` | HTML views under `/organizations` (members + pending invitations), `/projects`, `/tasks`, `/search`, `/reports`, `/account` (current team, received team invitations, profile name/email + Jetstream profile photo, password + MFA + QR + recovery codes + API token last used + browser sessions + per-session log out + logout other devices), `/confirm-password` (export/delete), `/two-factor-challenge` (Fortify 2FA), `/notifications`, `/billing`, `/webhooks` (create and list default to the current team plus tenant-wide endpoints; `?all=1` lists every team; `WebhookService` is constructed with the app queue and scopes dispatch to that team, coercing driver-string org ids / jsonb events), `/forgot-password`, etc. |
+| JSON API only | `api` | `/api/*` HiroApp routes |
+| Server HTMX | `server-htmx` | HTML views under HiroApp |
 | SPA + API | `spa-react` | React app at `/app/*` plus the JSON API |
 
 Set the mode in `.env` or export it before starting the server.
 
 ## Seeded users
 
-After `bun run cli migrate:fresh --seed` (or integration test setup), these accounts exist:
+After `bun run hiroapp:fresh` (or HiroApp test setup):
 
 | Email | Password | Role |
 |-------|----------|------|
-| `admin@workhub.test` | `password` | Global admin |
-| `member@workhub.test` | `password` | Member |
-
-## Bearer tokens (API / SPA)
-
-1. `POST /api/v1/auth/login` with `{ "email", "password" }`, or `POST /api/v1/auth/register` with `{ "name", "email", "password", "password_confirmation" }` (register also creates `{name}'s workspace` with slug `personal-{userId}`; a blocked existing webhook URL does not fail that write).
-2. Use the returned token as `Authorization: Bearer <token>`.
-
-Forgot / reset (JSON): `POST /api/v1/auth/forgot-password` with `{ "email" }`, then `POST /api/v1/auth/reset-password` with `{ "email", "token", "password", "password_confirmation" }`. Resend verify: `POST /api/v1/auth/email/verification-notification` with `{ "email" }`. Profile: `PATCH /api/v1/users/me` with `{ "name", "email" }` (Fortify UpdateProfileInformation; email change + `FEATURE_EMAIL_VERIFICATION=true` clears verification and sends a new link). Password: `PUT /api/v1/users/me/password` with `{ "current_password", "password", "password_confirmation" }` (revokes other API tokens). Logout other devices: `POST /api/v1/users/me/logout-other-devices` `{ "password" }` or HTML `POST /account/logout-other-devices` (revokes other API tokens, deletes `sessions` rows, and sets `users.session_valid_after`; the HTML handler then re-issues `workhub_session` and a new `sessions` row). HTML `POST /account/sessions/:id/logout` deletes one other `sessions` row and redirects to `/account#browser-sessions`; JSON is `GET /users/me/sessions` and `DELETE /users/me/sessions/:id`. `SessionGuard` then rejects that HMAC cookie because `TokenService.hasActiveBrowserSession` no longer finds it. HTML `GET/POST /register` honors a same-origin `redirect` (Fortify intended URL). When `FEATURE_EMAIL_VERIFICATION=true`, register still goes to `/email/verify` and stashes the path on `workhub_intended` so signed `GET /verify-email` can restore it; Laravel `verified` HTML redirects do the same for GET/HEAD. Profile photo: `POST /api/v1/users/me/photo` multipart field `photo`, `GET /api/v1/users/me/photo`, `DELETE /api/v1/users/me/photo`, or HTML `POST /account/photo`, `GET /account/photo`, `POST /account/photo/delete`. Confirm password: `POST /api/v1/users/me/confirm-password` `{ "password" }` then `GET /api/v1/users/me/confirmed-password-status`. JSON MFA: `POST /api/v1/users/me/mfa` (secret + otpauth URL; HTML also shows a QR), `POST /api/v1/users/me/mfa/confirm` `{ "mfa_code" }` (returns recovery codes), `POST /api/v1/users/me/mfa/recovery-codes` `{ "password" }`, `DELETE /api/v1/users/me/mfa` `{ "password" }`. When `FEATURE_MFA=true`, `POST /api/v1/auth/login` without `mfa_code` returns 401 `{ two_factor: true, mfa_pending }`; finish with `POST /api/v1/auth/two-factor-challenge`. HTML notice: `GET /email/verify` (`FEATURE_EMAIL_VERIFICATION=true`; Laravel `verified` sends unverified sessions there). Jetstream leave-team: HTML `POST /organizations/:id/members/:userId/leave` or JSON `DELETE /organizations/:id/members/:userId` (self; last owner and personal workspace cannot leave). Jetstream org invitations: `POST /api/v1/organizations/:id/invitations` `{ email, role }`, `GET /api/v1/organizations/:id/invitations`, `DELETE /api/v1/organizations/:id/invitations/:invitationId`, `POST /api/v1/organizations/:id/invitations/:invitationId/resend` (rotates the token), `POST /api/v1/invitations/accept` `{ token }`. HTML pending invitations show Resend / Cancel. Expired pending invites are pruned from team and inbox lists. Received inbox: `GET /api/v1/users/me/invitations`, `POST /api/v1/users/me/invitations/:id/accept` (joins without the mail token and sets current team), `DELETE /api/v1/users/me/invitations/:id` (HTML is `/account`). HTML `POST /organizations/:id/members` always emails a signed `GET /invitations/accept` link (existing accounts stay pending until accept). JSON `POST /organizations/:id/members` `{ user_id }` still adds immediately. Register with that email auto-joins. Guests hitting the signed accept URL go to `/login?redirect=`. A signed-in invitee `GET /invitations/accept` joins and sets the current team (same as JSON `POST /invitations/accept`). HTML register and OAuth default home then `resolveHomePath()` so an invited current team wins over the personal workspace show URL. Members can create extra organizations (`organizations:create` on `MEMBER_ABILITIES`; HTML `POST /organizations` and JSON `POST /organizations`). Jetstream current team: `GET/PUT /api/v1/users/me/current-organization` `{ organization_id }` and HTML `POST /current-organization` (nav Team switcher; no inline `onchange`). Signed-in HTML `/organizations` shows a Current badge on that team. Organization show does the same, or offers “Switch to this team” (`POST /current-organization`) when the viewer is a member of a different current team. Signed-in HTML `GET /projects` and `GET /tasks` list that team's projects and tasks (override `?organizationId=`; guests stay unscoped; JSON project and task lists stay unscoped). Signed-in HTML `GET /search` scopes hits to the current team (JSON search stays tenant-wide). Signed-in HTML `GET /reports` redirects to the current team report (`?all=1` is the tenant summary). Creating an organization assigns current; register `assignIfMissing` on the personal workspace. HTML login / MFA complete / verify-email (no intended URL) / HTML register (no intended URL) / OAuth default home resolve `/organizations` to `/organizations/{current_organization_id}` via `resolveHomePath()`. Signed-in `GET /` and signed-in `GET /login` / `/register` / `/forgot-password` (`wrapWebGuest`) use the same home path; guests still go to `/organizations`. HTML `POST /organizations` redirects to the new team's show page. HTML `POST /account/tokens` can select abilities (`ability:<name>=1`); JSON `POST /auth/tokens` `{ abilities }` is scoped to the granter token (members cannot mint `organizations:delete`). JSON `DELETE /auth/tokens/:id` is `auth:tokens:delete` (on `MEMBER_ABILITIES`; disposable members can revoke their own tokens).
-
-Integration tests and the SPA client use `cache: 'no-store'` on API fetches.
-
-## HTMX session login
-
-1. `GET /login` — read `csrf-token` meta and `workhub_csrf` cookie.
-2. `POST /login` with form fields `email`, `password`, `redirect`, `_token`, and optional `remember=1` (30-day HMAC session; `SESSION_REMEMBER_TTL_SECONDS`). Optional `mfa_code` completes MFA in one step; otherwise `FEATURE_MFA=true` accounts go to `GET/POST /two-factor-challenge` (`workhub_mfa_pending`).
-3. Follow `workhub_session` cookie on subsequent requests.
-4. Sensitive HTML (`GET /account/export`, `POST /account/delete`) requires a recent `POST /confirm-password` (`workhub_password_confirmed` cookie).
-
-HTMX mutating requests send `X-CSRF-Token` automatically (see `resources/views/layouts/app.eta`).
+| `admin@hiroapp.com` | `password` | Admin (`role_id=1`) |
+| `recruiter@hiroapp.com` | `password` | Recruiter (`role_id=3`) |
+| `candidate@hiroapp.com` | `password` | Candidate (`role_id=2`) |
 
 ## Running tests
 
 ```bash
-# Unit tests
+# Framework/core unit tests
 bun run unit
 
-# Integration tests (requires DATABASE_URL, run via Docker in CI)
+# Redis / queue integration tests
 QUEUE_DRIVER=sync bun run integration
 
-# Full suite with scoped 100% coverage gate — see docs/COVERAGE.md
+# Framework/core 100% coverage gate — see docs/COVERAGE.md
 bun run test:coverage
+
+# HiroApp domain coverage gate
+bun run test:hiroapp:coverage
 
 # CI parity (Docker)
 docker compose run --rm -e QUEUE_DRIVER=sync -e WORKHUB_SKIP_TEST_BOOTSTRAP=1 app bun run validate:ci
@@ -60,10 +46,10 @@ bun run validate:host
 
 Postgres row-level security reads `app.tenant_id` from the connection that executes each query. With a pooled connection (`DB_POOL_MAX > 1`), session-level `SET app.tenant_id` is not reliable.
 
-Use `runWithTenantDatabase()` from `src/core/tenant/tenantDatabaseScope.ts` whenever code talks to tenant-isolated tables outside the HTTP middleware stack (unit tests, scripts, background jobs):
+Use `runWithTenantDatabase()` from `@getstrata/core/tenant/tenantDatabaseScope` whenever code talks to tenant-isolated tables outside the HTTP middleware stack (unit tests, scripts, background jobs):
 
 ```typescript
-import { runWithTenantDatabase } from "../../src/core/tenant/tenantDatabaseScope";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 
 await runWithTenantDatabase(tenant, async () => {
   // ALS tenant context + pinned transaction with SET LOCAL app.tenant_id
@@ -72,11 +58,11 @@ await runWithTenantDatabase(tenant, async () => {
 
 HTTP middleware (`createTenantMiddleware`, SCIM auth) uses the same helper so production and tests share one code path. Background jobs that touch RLS tables must do the same — see [TENANCY.md](./TENANCY.md).
 
-For migration/seed/bootstrap queries that must read across tenants, use `runWithMigrationBypass()` from `src/core/tenant/databaseTenantContext.ts`.
+For migration/seed/bootstrap queries that must read across tenants, use `runWithMigrationBypass()` from `@getstrata/core/tenant/databaseTenantContext`.
 
 For HTMX integration tests, set `FRONTEND_MODE=server-htmx`.
 
-CI runs `migrate:fresh --seed` before the test suite and sets `WORKHUB_SKIP_TEST_BOOTSTRAP=1` so the Bun preload does not reset the database a second time. Local `bun test` without a prior migrate uses `tests/globalSetup.ts` to seed once at startup. That reset refuses `APP_ENV=production` and non-test `DATABASE_URL` values unless `WORKHUB_ALLOW_TEST_DB_RESET=1`.
+CI runs leftover WorkHub `src/db` migrate/seed (for core tests that inspect `tenant` RLS) plus HiroApp `migrate:fresh --seed` before the suite, and sets `WORKHUB_SKIP_TEST_BOOTSTRAP=1` so the Bun preload does not reset the leftover schema a second time. Local `bun test` without a prior migrate uses `tests/globalSetup.ts` to seed the leftover schema once at startup. That reset refuses `APP_ENV=production` and non-test `DATABASE_URL` values unless `WORKHUB_ALLOW_TEST_DB_RESET=1`.
 
 Coverage exclusions and rationale: [COVERAGE.md](./COVERAGE.md).
 
@@ -85,8 +71,8 @@ Coverage exclusions and rationale: [COVERAGE.md](./COVERAGE.md).
 ```typescript
 import { createTestApp } from "../../src/testing/createTestApp";
 
-const app = createTestApp();
-const response = await app.fetch(new Request("http://localhost/api/v1/organizations"));
+const app = await createTestApp();
+const response = await fetch(`${app.baseUrl}/health`);
 ```
 
 Pass env vars (`DATABASE_URL`, `QUEUE_DRIVER=sync`, etc.) before importing bootstrap modules.
@@ -94,25 +80,17 @@ Pass env vars (`DATABASE_URL`, `QUEUE_DRIVER=sync`, etc.) before importing boots
 ## Local development
 
 ```bash
-# Host-native against Docker-published ports (recommended on the machine)
-bun run dev:host
-
-# Inside Docker Compose app container
-docker compose up
-
-# Manual host env
+bun run hiroapp:dev:htmx
 bun run dev
 ```
-
-`bun run dev` watches `src/bootstrap/server.ts` and reloads on change.
 
 ## Frontend (SPA)
 
 ```bash
 cd frontend
 bun install
-bun run dev    # Bun HTML/HMR server (proxies /api to the WorkHub API)
-bun run test   # bun test
+bun run dev
+bun run test
 ```
 
 Build for production: `bun run build:frontend` from the repo root.

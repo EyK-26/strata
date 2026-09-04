@@ -4,14 +4,9 @@ import {
   ensureModulesLoaded,
 } from "@getstrata/bootstrap/discoverModules";
 import { runCli } from "@getstrata/cli";
-import { readDogfoodApp } from "../bootstrap/dogfoodApp.ts";
 import { commands } from "./register.ts";
 
-configureModulesDirectory(
-  readDogfoodApp() === "hiroapp"
-    ? join(import.meta.dir, "../../apps/hiroapp/src/modules")
-    : join(import.meta.dir, "../modules"),
-);
+configureModulesDirectory(join(import.meta.dir, "../../apps/hiroapp/src/modules"));
 await ensureModulesLoaded();
 
 await runCli({

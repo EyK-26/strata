@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { migrateFreshCommand } from "../../../src/cli/commands/migrateFresh";
 import * as migrationRunner from "../../../src/db/migrations/runner";
 
@@ -7,7 +7,18 @@ afterAll(() => {
 });
 
 describe("migrateFreshCommand", () => {
+  const previousDogfood = process.env.DOGFOOD_APP;
+
+  afterEach(() => {
+    if (previousDogfood === undefined) {
+      delete process.env.DOGFOOD_APP;
+    } else {
+      process.env.DOGFOOD_APP = previousDogfood;
+    }
+  });
+
   test("calls freshDatabase without seed by default", async () => {
+    process.env.DOGFOOD_APP = "workhub";
     const freshDatabase = spyOn(migrationRunner, "freshDatabase").mockResolvedValue(undefined);
 
     await migrateFreshCommand();
@@ -17,6 +28,7 @@ describe("migrateFreshCommand", () => {
   });
 
   test("passes seed option when --seed is provided", async () => {
+    process.env.DOGFOOD_APP = "workhub";
     const freshDatabase = spyOn(migrationRunner, "freshDatabase").mockResolvedValue(undefined);
 
     await migrateFreshCommand("--seed");

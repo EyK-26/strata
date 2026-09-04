@@ -55,6 +55,7 @@ export {
   resolveService,
   ServiceContainer,
 } from "./contracts.ts";
+export type { CreateWebRoutesOptions } from "./createWebRoutes.ts";
 export { createWebRoutes, mergeWebRoutes } from "./createWebRoutes.ts";
 export { createAppDependencies } from "./dependencies.ts";
 export type { DiscoverModulesOptions } from "./discoverModules.ts";

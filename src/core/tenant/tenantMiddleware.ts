@@ -57,14 +57,29 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
           throw new ForbiddenError("Tenant header does not match your account.");
         }
 
-        return (await resolveTenant(userTenantId)) ?? DEFAULT_TENANT;
+        const memberTenant = await resolveTenant(userTenantId);
+        if (memberTenant) {
+          return memberTenant;
+        }
+
+        return DEFAULT_TENANT;
       }
 
       if (Number.isInteger(parsedHeader) && parsedHeader > 0) {
-        return (await resolveTenant(parsedHeader)) ?? DEFAULT_TENANT;
+        const headerTenant = await resolveTenant(parsedHeader);
+        if (headerTenant) {
+          return headerTenant;
+        }
+
+        return DEFAULT_TENANT;
       }
 
-      return (await resolveTenant(userTenantId)) ?? DEFAULT_TENANT;
+      const adminTenant = await resolveTenant(userTenantId);
+      if (adminTenant) {
+        return adminTenant;
+      }
+
+      return DEFAULT_TENANT;
     }
   }
 
@@ -73,7 +88,12 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
   const headerTenantId = Number.isInteger(parsedHeader) && parsedHeader > 0 ? parsedHeader : null;
   const tenantId =
     isPublicReadsEnabled() && headerTenantId !== null ? headerTenantId : DEFAULT_TENANT.id;
-  return (await resolveTenant(tenantId)) ?? DEFAULT_TENANT;
+  const guestTenant = await resolveTenant(tenantId);
+  if (guestTenant) {
+    return guestTenant;
+  }
+
+  return DEFAULT_TENANT;
 }
 
 function createTenantMiddleware() {

@@ -7,7 +7,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-const WORKHUB_MODULES = join(import.meta.dir, "../src/modules");
 const HIROAPP_ROOT = join(import.meta.dir, "../apps/hiroapp/src");
 const violations: string[] = [];
 
@@ -33,21 +32,6 @@ function record(fullPath: string, index: number, line: string) {
   violations.push(
     `${relative(join(import.meta.dir, ".."), fullPath)}:${index + 1}: ${line.trim()}`,
   );
-}
-
-for (const filePath of await walk(WORKHUB_MODULES)) {
-  const lines = (await readFile(filePath, "utf8")).split("\n");
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? "";
-    if (
-      line.includes('from "../../core/') ||
-      line.includes('from "../../bootstrap/') ||
-      line.includes("from '../../core/") ||
-      line.includes("from '../../bootstrap/")
-    ) {
-      record(filePath, index, line);
-    }
-  }
 }
 
 try {

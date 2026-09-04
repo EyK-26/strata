@@ -1,22 +1,29 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
 } from "@getstrata/bootstrap/config";
+import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
+import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { SyncQueue } from "@getstrata/core/queue";
-import { appConfig } from "../../src/config/app";
-import { reportServiceToken } from "../../src/modules/report/provider";
-import { tokenServiceToken } from "../../src/modules/user/provider";
 import { createMockDependencies } from "./testHelpers";
+
+const fixtureModule: AppModule = {
+  name: "reports",
+  routes() {
+    return {
+      "/reports/summary": async () => Response.json({ ok: true }),
+    };
+  },
+};
 
 function createTestDependencies() {
   const container = new ServiceContainer();
@@ -28,50 +35,34 @@ function createTestDependencies() {
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
-  dependencies.container.set(tokenServiceToken, {
+  dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {
     requireAbility: () => undefined,
     tokenCan: () => true,
-  });
-  dependencies.container.set(reportServiceToken, {
-    getSummary: async () => ({
-      organization_count: 0,
-      project_count: 0,
-      task_count: 0,
-      comment_count: 0,
-      projects_by_status: {},
-      tasks_by_status: {},
-    }),
-    getOrganizationReport: async () => ({
-      organization: { id: 1, name: "Acme", slug: "acme" },
-      project_count: 0,
-      task_count: 0,
-      comment_count: 0,
-      projects_by_status: {},
-      tasks_by_status: {},
-    }),
   });
 
   return dependencies;
 }
 
 describe("buildModuleRoutes", () => {
-  beforeAll(async () => {
-    await ensureModulesLoaded();
-  });
-
-  test("builds prefixed module routes from discovered modules", () => {
+  test("builds prefixed module routes from supplied modules", () => {
     const dependencies = createTestDependencies();
-    const routes = buildModuleRoutes(dependencies, { apiPrefix: appConfig.apiPrefix });
-    const summaryPath = `${appConfig.apiPrefix}/reports/summary`;
+    const routes = buildModuleRoutes(dependencies, {
+      apiPrefix: "/api",
+      modules: [fixtureModule],
+    });
 
-    expect(typeof routes[summaryPath]).toBe("function");
+    expect(typeof routes["/api/reports/summary"]).toBe("function");
   });
 
   test("can append routes without clearing the OpenAPI registry", () => {
     const dependencies = createTestDependencies();
-    const firstCount = buildModuleRoutes(dependencies, { apiPrefix: appConfig.apiPrefix });
+    const firstCount = buildModuleRoutes(dependencies, {
+      apiPrefix: "/api",
+      modules: [fixtureModule],
+    });
     const secondCount = buildModuleRoutes(dependencies, {
-      apiPrefix: appConfig.apiPrefix,
+      apiPrefix: "/api",
+      modules: [fixtureModule],
       clearRegistry: false,
     });
 

@@ -3,11 +3,8 @@ import { join } from "node:path";
 type DogfoodApp = "workhub" | "hiroapp";
 
 function readDogfoodApp(): DogfoodApp {
-  // Unset env stays WorkHub so CI, coverage, and `strata start` without a wrapper
-  // cannot run HiroApp migrations against the WorkHub schema. `bun run dev` sets
-  // DOGFOOD_APP=hiroapp explicitly (Wave 5). Use `bun run workhub:dev` for Jetstream/SCIM/RLS.
-  const value = (process.env.DOGFOOD_APP ?? "workhub").trim().toLowerCase();
-  return value === "hiroapp" ? "hiroapp" : "workhub";
+  const value = (process.env.DOGFOOD_APP ?? "hiroapp").trim().toLowerCase();
+  return value === "workhub" ? "workhub" : "hiroapp";
 }
 
 function isHiroappDogfood(): boolean {

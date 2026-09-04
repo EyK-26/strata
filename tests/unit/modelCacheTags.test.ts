@@ -1,12 +1,22 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import {
   cacheTagsForModelWrite,
   discoverModelTableNames,
 } from "@getstrata/bootstrap/cache/modelCacheTags";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import {
+  configureModulesDirectory,
+  ensureModulesLoaded,
+  resetDiscoverModulesForTests,
+} from "@getstrata/bootstrap/discoverModules";
 import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 
+const FIXTURE_MODULES = join(import.meta.dir, "../fixtures/discover-modules");
+const EMPTY_MODULES = join(import.meta.dir, "../fixtures/empty-modules");
+
 beforeAll(async () => {
+  resetDiscoverModulesForTests();
+  configureModulesDirectory(FIXTURE_MODULES);
   await ensureModulesLoaded();
 });
 
@@ -36,16 +46,17 @@ describe("cacheTagsForModelWrite", () => {
 });
 
 describe("discoverModelTableNames", () => {
-  test("discovers WorkHub model tables from module metadata", () => {
-    expect(discoverModelTableNames()).toEqual([
-      "users",
-      "organization",
-      "project",
-      "comment",
-      "task",
-      "task_attachment",
-      "audit_log",
-      "webhook",
-    ]);
+  test("discovers model tables from module metadata", () => {
+    expect(discoverModelTableNames()).toEqual(["organization", "audit_log"]);
+  });
+
+  test("returns an empty list when no modules expose tableName", async () => {
+    resetDiscoverModulesForTests();
+    configureModulesDirectory(EMPTY_MODULES);
+    await ensureModulesLoaded();
+    expect(discoverModelTableNames()).toEqual([]);
+    resetDiscoverModulesForTests();
+    configureModulesDirectory(FIXTURE_MODULES);
+    await ensureModulesLoaded();
   });
 });

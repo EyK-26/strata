@@ -1,6 +1,6 @@
-# WorkHub
+# Strata
 
-**Docker-first** Bun + PostgreSQL + Redis reference application built on **Strata**, a modular TypeScript framework for web apps, with the WorkHub domain (organizations → projects → tasks → comments, attachments, reports, and optional enterprise modules).
+**Docker-first** Bun + PostgreSQL + Redis framework monorepo. **HiroApp** (`apps/hiroapp`) is the in-repo dogfood app (hiring domain, Laravel-shaped Eloquent / HTTP, staff Fortify/Jetstream). WorkHub `src/modules` has been removed.
 
 Published packages (import **subpaths**, not the root barrel):
 
@@ -11,7 +11,7 @@ Published packages (import **subpaths**, not the root barrel):
 | `@getstrata/cli` | `strata` CLI |
 | `@getstrata/starter` | `bun create strata` |
 
-In-repo apps: **HiroApp** (`apps/hiroapp`) is the `bun run dev` default (hiring + Eloquent). **WorkHub** (`src/modules`) stays the Jetstream / SCIM / RLS dogfood and the CI coverage gate (`bun run workhub:dev`). See [docs/DOGFOOD.md](docs/DOGFOOD.md).
+In-repo dogfood: **HiroApp** (`apps/hiroapp`) is the `bun run dev` default. See [docs/DOGFOOD.md](docs/DOGFOOD.md).
 
 CI blocks root `@getstrata/core` imports (`scripts/verify-no-root-imports.ts`).
 
@@ -22,10 +22,7 @@ Pinned versions:
 - Adminer `5.4.2`
 - TypeScript `5.9` via `tsc` for typechecking and declaration emit (the experimental native TypeScript compiler is not used yet; see below)
 
-The database source of truth is:
-
-- `src/db/migrations`
-- `src/db/seeders`
+The leftover schema for core tests is `src/db/migrations` and `src/db/seeders`. HiroApp’s product schema is `apps/hiroapp/src/db`.
 
 ### Bun 1.4
 
@@ -38,7 +35,7 @@ We run CI and Docker on **Bun 1.4.0**. Notable changes from 1.3:
 
 Strata mail uses **`Bun.markdown.html()`** plus an allowlist sanitizer (`sanitizeMailHtml`). Do not add `marked` or `sanitize-html` unless a consumer needs them.
 
-Built-in adoption in Strata / WorkHub:
+Built-in adoption in Strata / HiroApp:
 
 | Bun 1.4 API | Usage |
 |-------------|--------|
@@ -104,7 +101,7 @@ See [docs/TESTING.md](docs/TESTING.md) and `.env.host.example`.
 
 ## Framework overview
 
-The app boots through **service providers** and **auto-discovered modules** under `src/modules/`. Each module can register DI bindings, policies, and HTTP routes.
+The app boots through **service providers** and **auto-discovered modules** under `apps/hiroapp/src/modules/`. Each module can register DI bindings, policies, and HTTP routes.
 
 Import stable framework types from `@getstrata/core/<subpath>` (see [docs/PACKAGING.md](docs/PACKAGING.md)). Build locally with `bun run verify:framework`.
 
@@ -136,7 +133,7 @@ strata new --frontend=spa-react
 strata new --frontend=api
 ```
 
-Server mode adds a parallel **`web` middleware group** with cookie sessions (WorkHub HMAC `SessionGuard`; sibling HTMX apps use `CookieSessionStore` + the WorkHub `sessions` table), HTML form validation (`WebFormRequest`), and optional `webRoutes()` on modules. Generate web scaffolding with:
+Server mode adds a parallel **`web` middleware group** with cookie sessions (`CookieSessionStore` for HiroApp HTML; HMAC `SessionGuard` remains available for leftover core tests), HTML form validation (`WebFormRequest`), and optional `webRoutes()` on modules. Generate web scaffolding with:
 
 ```bash
 strata make:module widget --with-web
@@ -175,23 +172,19 @@ Feature flags (`FEATURE_*`) disable optional modules without removing code. See 
 - Disaster recovery: [docs/DR.md](docs/DR.md)
 - Operations: [RUNBOOK.md](RUNBOOK.md), [DEPLOY.md](DEPLOY.md)
 
-Seeded API tokens after `migrate:fresh --seed`:
-
-| Token | Abilities | Use case |
-|-------|-----------|----------|
-| `workhub-admin-test-token` | `*` | Full access |
-| `workhub-member-test-token` | read scopes | Scoped member demo |
-
-Seeded password users (HTMX login or `POST /api/v1/auth/login`):
+HiroApp seeded password users after `bun run hiroapp:fresh` (see [apps/hiroapp/README.md](apps/hiroapp/README.md)):
 
 | Email | Password | Role |
 |-------|----------|------|
-| `admin@workhub.test` | `password` | Global admin |
-| `member@workhub.test` | `password` | Member |
+| `admin@hiroapp.com` | `password` | Admin (`role_id=1`) |
+| `recruiter@hiroapp.com` | `password` | Recruiter (`role_id=3`) |
+| `candidate@hiroapp.com` | `password` | Candidate (`role_id=2`) |
+
+Leftover `src/db` seeds (`DOGFOOD_APP=workhub migrate:fresh --seed`) still create `admin@workhub.test` / `member@workhub.test` and `workhub-*-test-token` so core tenant/RLS tests have a schema. They are not a second product app.
 
 ### API prefix
 
-WorkHub domain routes are served under **`/api/v1`** by default (`API_PREFIX`). Operational probes stay at the root:
+HiroApp JSON routes live under **`/api`** (`API_PREFIX=/api`). Operational probes stay at the root:
 
 - `GET /health`
 - `GET /ready`
@@ -199,29 +192,24 @@ WorkHub domain routes are served under **`/api/v1`** by default (`API_PREFIX`). 
 
 ### Model-aware authorization
 
-Policies are registered per resource (`organization`, `project`, …). Route handlers use `securedBindRouteModel()` to resolve a model from the URL, then authorize the action against that instance before running the handler.
+Policies are registered per HiroApp resource (`departments`, `positions`, `applications`, …). Route handlers use `securedBindRouteModel()` to resolve a model from the URL, then authorize the action against that instance before running the handler.
 
 ### Admin dashboard (server-htmx)
 
-When `FRONTEND_MODE=server-htmx`, global admins (`role: admin`) can use the web admin UI:
+When `FRONTEND_MODE=server-htmx`, HiroApp staff (`role_id=1` admin, `role_id=3` recruiter) use cookie sessions (`CookieSessionStore`). Sign in as `admin@hiroapp.com` / `password`.
 
 | Route | Purpose |
 |-------|---------|
-| `/admin` | Platform stats, queue summary, resource links |
-| `/admin/queue` | Queue monitor with HTMX polling; retry or delete failed jobs |
-| `/admin/audit` | Paginated audit log |
-| `/admin/resources` | Read-only resource browser (users, organizations, projects, tasks) |
-| `/search` | HTMX search scoped to the current team (`?organizationId=` overrides; JSON stays tenant-wide) |
-| `/notifications` | Session inbox (nav bell polls every 30s) |
-| `/billing` | Current tenant subscription |
-| `/webhooks` | Outbound webhook admin: create (defaults to current team; dispatch is scoped to that team), deactivate, delete, retry delivery |
-| `/reports`, `/reports/organizations/:id` | Current-team report (signed-in `/reports` redirects); tenant summary at `/reports?all=1` |
-| `/account` | Session profile (name/email), current team, received team invitations, API tokens (Last used), GDPR export/delete, email verification, TOTP MFA + QR + recovery codes, browser sessions (This device + Log out) |
-| `/confirm-password` | Laravel `password.confirm` — recent password gate for export and account delete |
-| `/two-factor-challenge` | Fortify 2FA challenge after password login (`FEATURE_MFA=true`) |
-| `/forgot-password`, `/reset-password`, `/verify-email` | Signed-URL password reset and email verification |
+| `/` | Role home (admin hiring board, recruiter home, candidate applications) |
+| `/users` | Staff directory (admin) |
+| `/account` | Staff profile, department team, invitations, API tokens, TOTP MFA, browser sessions |
+| `/confirm-password` | Laravel `password.confirm` gate |
+| `/two-factor-challenge` | Fortify 2FA after password login |
+| `/billing` | Current tenant subscription (staff) |
+| `/webhooks` | Outbound webhook admin (staff) |
+| `/login` | HTMX cookie login |
 
-Sign in as `admin@workhub.test` / `password` to access these routes. Core exports: `AdminResourceRegistry`, `formatAdminValue`, `FailedJobService.delete()`, `runQueueJob`, `temporarySignedUrl`.
+Candidates stay applicants — not team members, not SCIM employees, not org tokens. Core exports: `AdminResourceRegistry`, `formatAdminValue`, `FailedJobService.delete()`, `runQueueJob`, `temporarySignedUrl`.
 
 ### Cache, events, and queues
 
@@ -233,42 +221,13 @@ Sign in as `admin@workhub.test` / `password` to access these routes. Core export
 
 ### Auth and API tokens
 
-Production auth uses database-backed bearer tokens. Seeded tokens after `migrate:fresh --seed`:
+HiroApp HTML uses `CookieSessionStore` (`hiroapp_session`). Staff can mint bearer tokens from `/account`. JSON login is `POST /api/auth/login` with `{ "email", "password" }` (seeded password is `password`). MFA for staff uses `/two-factor-challenge` and `POST /api/auth/two-factor-challenge`.
 
-```bash
-Authorization: Bearer workhub-admin-test-token
-Authorization: Bearer workhub-member-test-token
-```
+Set `AUTH_DEV_HEADERS=false` in production and rely on cookie sessions or bearer tokens.
 
-Token lifecycle endpoints (authenticated):
+### Audit log and webhooks
 
-- `GET /api/v1/auth/me`: current user
-- `GET /api/v1/auth/tokens`: list tokens (requires `auth:tokens:read` or `*`)
-- `POST /api/v1/auth/tokens`: create token (`name`, optional `abilities`, `expires_in_days`; abilities are scoped to the granter)
-- `DELETE /api/v1/auth/tokens/:id`: revoke a token (requires `auth:tokens:delete`; on `MEMBER_ABILITIES`)
-
-Protected mutations require both authentication and a matching ability (for example `projects:delete`, `organizations:update`). The seeded admin token uses `["*"]`; login/register member tokens use `MEMBER_ABILITIES` (including `organizations:create` and `auth:tokens:delete`). Create scoped tokens via `POST /auth/tokens` or HTML `/account/tokens` (ability checkboxes). Grants cannot exceed the issuer's abilities.
-
-Set `AUTH_DEV_HEADERS=false` in production and rely on bearer tokens only.
-
-Password and OAuth login:
-
-- `POST /api/v1/auth/login`: `{ "email": "...", "password": "..." }` returns a bearer token (seeded users use password `password`). When `FEATURE_MFA=true` and the account has MFA, omitting `mfa_code` returns 401 `{ two_factor: true, mfa_pending }` plus `workhub_mfa_pending`; complete with `POST /api/v1/auth/two-factor-challenge` `{ code | mfa_code | recovery_code, mfa_pending? }`. One-step login still accepts TOTP or a recovery code on the same request.
-- `POST /api/v1/auth/register`: `{ "name", "email", "password", "password_confirmation" }` creates a member, a personal workspace (`{name}'s workspace`, slug `personal-{userId}`), and returns a bearer token (`FEATURE_REGISTRATION`, default on). When `FEATURE_EMAIL_VERIFICATION=true` the response is `{ user }` only and a verify email is sent (the workspace still exists so it is ready after verify). Members can create extra organizations (`organizations:create` is on `MEMBER_ABILITIES`). Jetstream current team is `users.current_organization_id` (`GET/PUT /users/me/current-organization`, HTML `POST /current-organization`). Received team invitations are `GET /users/me/invitations`, `POST /users/me/invitations/:id/accept`, and `DELETE /users/me/invitations/:id` (HTML is `/account`). Creating an organization switches current team; register sets it to the personal workspace. HTML login, MFA complete, and verify-email (no intended URL) send `/organizations` to `/organizations/{current_organization_id}`. Signed-in `GET /` uses that home path; HTML create redirects to the new team show page. Register and organization creates still succeed when an existing webhook URL is blocked (`http://127.0.0.1/…`); the delivery is recorded and the write is not failed.
-- `POST /api/v1/auth/forgot-password`: `{ "email" }` always returns a generic success message (does not leak whether the account exists)
-- `POST /api/v1/auth/reset-password`: `{ "email", "token", "password", "password_confirmation" }` updates the password from the emailed token
-- `POST /api/v1/auth/email/verification-notification`: `{ "email" }` always returns a generic success message (does not leak whether the account exists or still needs verification)
-- `GET /api/v1/auth/oauth/:provider`: redirect to provider (GitHub when configured; `mock` in non-production)
-- `GET /api/v1/auth/oauth/:provider/callback?code=...`: exchange OAuth code for a bearer token
-- HTMX: `GET /oauth/:provider` and `GET /oauth/:provider/callback` set `workhub_session` (no API token) and ensure a personal workspace. Login lists registered providers. `POST /login` accepts `remember=1` for a 30-day HMAC session (`SESSION_REMEMBER_TTL_SECONDS`). When `FEATURE_MFA=true` and the account has MFA, omitting `mfa_code` sets `workhub_mfa_pending` and redirects to `/two-factor-challenge` (TOTP or recovery code). JSON login can send `mfa_code` on `POST /auth/login` or complete Fortify `POST /auth/two-factor-challenge`.
-
-### Audit log, webhooks, and search
-
-- `GET /api/v1/audit-logs`: recent model change audit entries (`audit:read`)
-- `GET/POST /api/v1/webhooks`: register outbound webhook endpoints (`webhooks:read`, `webhooks:write`). Lifecycle: `POST /api/v1/webhooks/:id/deactivate`, `POST /api/v1/webhooks/:id/activate`, `DELETE /api/v1/webhooks/:id`, `POST /api/v1/webhooks/deliveries/:id/retry`
-- `GET /api/v1/search?q=registry`: PostgreSQL full-text search across tasks and comments, plus organization/project name matches
-
-Model writes automatically append audit log entries and dispatch signed webhook payloads (`x-workhub-signature` HMAC). Team-scoped webhooks (`organization_id` set) only receive events whose payload org matches; `organization_id` null stays tenant-wide. Dispatch coerces driver-string org ids and jsonb `events`, and queues `url`/`secret` on the job so delivery does not depend on an RLS `SELECT` of `webhook`. App listeners are discovered from `src/listeners` via `process.cwd()`. Blocked or invalid webhook URLs are recorded as failed deliveries and do not fail the originating request (`DispatchWebhookJob` swallows `BadRequestError` from `assertSafeOutboundUrl`; the listener also swallows dispatch failures).
+HiroApp staff surfaces: `GET /api/audit-logs`, `GET/POST /api/webhooks`, HTML `/billing` and `/webhooks`. Model writes append audit rows and dispatch signed webhook payloads. App-specific listeners live under `apps/hiroapp/src/listeners` (HiroApp’s listener provider loads them; leftover `src/listeners` is gone).
 
 ### OpenAPI and SDK generation
 
@@ -338,7 +297,7 @@ registerShutdownHandler("database", async () => closeDatabase());
 ### Production Docker image
 
 ```bash
-docker build -t workhub-app .
+docker build -t hiroapp-app .
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
@@ -351,14 +310,14 @@ The production compose overlay sets `APP_ENV=production`, disables dev auth head
 | `DATABASE_URL` | Postgres connection string (required) |
 | `PORT` | HTTP port (default `3000`) |
 | `APP_ENV`, `APP_DEBUG`, `APP_URL` | Application metadata |
-| `API_PREFIX` | API route prefix (default `/api/v1`) |
+| `API_PREFIX` | API route prefix (HiroApp uses `/api`) |
 | `CACHE_DRIVER` | `array` or `redis` |
 | `CACHE_TTL_MS`, `CACHE_MAX_ENTRIES` | In-memory cache limits |
 | `REDIS_URL` | Redis for cache, throttling, and queues |
 | `QUEUE_DRIVER` | `sync`, `async`, or `redis` (app defaults to `redis` in Docker) |
 | `QUEUE_MAX_ATTEMPTS`, `QUEUE_BACKOFF_MS` | Job retry settings |
 | `AUTH_DEV_HEADERS` | Allow `x-authenticated-user-*` headers (default `true`; set `false` in production) |
-| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Seed tokens for WorkHub users |
+| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Seed tokens for leftover `src/db` WorkHub schema tests |
 | `CORS_ALLOWED_ORIGINS` | CORS allowlist (`*` in development) |
 | `RATE_LIMIT_PER_MINUTE` | Per-token/user/IP limit (default `120`) |
 | `STORAGE_PATH` | Local storage root (default `storage`) |
@@ -516,7 +475,7 @@ Write endpoints accept JSON bodies:
 Verify auth:
 
 ```bash
-curl -H "Authorization: Bearer workhub-admin-test-token" http://localhost:3000/api/v1/auth/me
+curl -H "Authorization: Bearer <staff-token>" http://localhost:3000/api/auth/me
 ```
 
 Open:

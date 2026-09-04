@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { Factory } from "@getstrata/core/database/factory";
-import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
-import { userFactory } from "../../src/modules/user/factory";
-import UserRepository from "../../src/modules/user/repository";
-import { defaultTestTenant } from "./testHelpers";
 
 class WidgetFactory extends Factory<{ id: number; name: string }> {
   protected override definition() {
@@ -181,31 +177,5 @@ describe("Factory", () => {
     await expect(new MemoryOnlyFactory().create()).rejects.toThrow(
       "Factory.persist() must be implemented to use create().",
     );
-  });
-});
-
-describe("UserFactory", () => {
-  test("builds overridable user records", () => {
-    const user = userFactory.make({
-      name: "Taylor",
-      role: "admin",
-    });
-
-    expect(user.name).toBe("Taylor");
-    expect(user.role).toBe("admin");
-    expect(user.email).toContain("@workhub.test");
-  });
-
-  test("create persists an insertable user row", async () => {
-    await runWithTenantDatabase(defaultTestTenant, async () => {
-      const created = await userFactory.create({ name: "Persisted Factory User" });
-
-      expect(created.id).toBeGreaterThan(0);
-      expect(created.name).toBe("Persisted Factory User");
-      expect(created.email).toContain("@workhub.test");
-
-      const found = await new UserRepository().findById(created.id);
-      expect(found?.name).toBe("Persisted Factory User");
-    });
   });
 });

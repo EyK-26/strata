@@ -1,6 +1,6 @@
 # Integration Stubs
 
-WorkHub ships **integration points** for enterprise services. Core routes and jobs exist; **provider SDKs and IdP-specific behavior are yours to wire** via environment variables and small adapter extensions.
+HiroApp ships **integration points** for enterprise services. Core routes and jobs exist; **provider SDKs and IdP-specific behavior are yours to wire** via environment variables and small adapter extensions.
 
 Production checklist: [PRODUCTION.md](./PRODUCTION.md)  
 Validate env: `APP_ENV=production bun run cli secrets:check`
@@ -26,7 +26,7 @@ Validate env: `APP_ENV=production bun run cli secrets:check`
 3. In Okta / Azure AD / Google Workspace, set SCIM base URL to `https://your-host/scim/v2`, bearer auth.
 4. Run `bun run cli secrets:check` with `APP_ENV=production`.
 
-**Extend:** `src/modules/scim/service.ts` — filters, deprovisioning, custom group CRUD.
+**Extend:** `apps/hiroapp/src/modules/scim/service.ts` — filters, deprovisioning, custom group CRUD. Staff only; candidates are ignored.
 
 ---
 
@@ -36,8 +36,8 @@ Validate env: `APP_ENV=production bun run cli secrets:check`
 
 | Endpoint | Notes |
 |----------|-------|
-| `GET /api/v1/billing/subscription` | Current tenant subscription |
-| `POST /api/v1/billing/webhooks/stripe` | Webhook receiver |
+| `GET /api/billing/subscription` | Current tenant subscription |
+| `POST /api/billing/webhooks/stripe` | Webhook receiver |
 
 ### Production setup
 
@@ -48,7 +48,7 @@ Validate env: `APP_ENV=production bun run cli secrets:check`
 
 **Extend:**
 
-- `src/modules/billing/service.ts` — plan sync, usage metering
+- `apps/hiroapp/src/modules/billing/service.ts` — plan sync, usage metering
 - New `src/core/billing/stripeClient.ts` (or module-local adapter) — Stripe SDK
 
 ---
@@ -81,7 +81,7 @@ OAUTH_REDIRECT_URI=https://your-host/api/v1/auth/oauth/github/callback
 OAUTH_STATE_SECRET=...   # required in production
 ```
 
-Register the HTMX callback (`https://your-host/oauth/github/callback`) as an additional authorized redirect URI on the GitHub app. WorkHub sends that URI for `/oauth/:provider` and keeps `OAUTH_REDIRECT_URI` for the API bearer flow.
+Register the HTMX callback (`https://your-host/oauth/github/callback`) as an additional authorized redirect URI on the GitHub app. HiroApp sends that URI for `/oauth/:provider` and keeps `OAUTH_REDIRECT_URI` for the API bearer flow.
 
 ### Production setup — OIDC (Azure AD, Okta, etc.)
 
@@ -98,7 +98,7 @@ OAUTH_REDIRECT_URI=https://your-host/api/v1/auth/oauth/oidc/callback
 2. Replace stub in `src/core/auth/oauth/samlProvider.ts` with `@node-saml/node-saml` or your IdP SDK.
 3. Add ACS/callback routes in the user module as needed.
 
-**Extend:** `src/core/auth/oauth/oidcProvider.ts`, `samlProvider.ts`, `src/modules/user/provider.ts` (provider registration).
+**Extend:** `src/core/auth/oauth/oidcProvider.ts`, `samlProvider.ts`, `apps/hiroapp/src/modules/auth` (provider registration).
 
 ---
 
@@ -108,4 +108,4 @@ OAUTH_REDIRECT_URI=https://your-host/api/v1/auth/oauth/oidc/callback
 2. Register adapters in module `provider.ts` `boot()` phase.
 3. Gate routes with `isFeatureEnabled()` in module `index.ts`.
 4. Document env vars in `.env.example`, [PRODUCTION.md](./PRODUCTION.md), and `DEPLOY.md`.
-5. Add integration tests with mocked HTTP (see `tests/unit/billingController.test.ts`, `tests/unit/exportAuditLogs.test.ts`).
+5. Add integration tests with mocked HTTP (see `apps/hiroapp/src/tests/enterprise.test.ts`, `tests/unit/exportAuditLogs.test.ts`).

@@ -1,51 +1,43 @@
-import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { isSpaEnabled, isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
 import index from "../../index.html";
 import { appConfig } from "../config/app";
-import { isFeatureEnabled } from "../config/features";
-import { buildModuleRoutes, registerOpenApiRouteMap } from "./buildModuleRoutes";
+import { buildModuleRoutes } from "./buildModuleRoutes";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 import { mergeSpaRoutes } from "./createSpaRoutes";
 import { mergeWebRoutes } from "./createWebRoutes";
+import { isHiroappDogfood } from "./dogfoodApp";
 import { createHealthRoutes } from "./health";
-import { createHttpKernel } from "./httpKernel";
 import { createMetricsRoutes } from "./metricsRoutes";
 import { routeRegistry } from "./routeRegistry";
-import { createScimRoutes } from "./scimRoutes";
 
 function registerRoute(method: string, path: string, middleware: string[]): void {
   routeRegistry.register({ method, path, middleware });
 }
 
 function createRoutes(dependencies: AppDependencies): AppRouteMap {
-  const kernel = createHttpKernel(dependencies);
+  const apiPrefix = isHiroappDogfood() ? "" : appConfig.apiPrefix;
   const wrappedModuleRoutes = buildModuleRoutes(dependencies, {
-    apiPrefix: appConfig.apiPrefix,
+    apiPrefix,
     clearRegistry: true,
+    modules: [],
   });
 
   const healthRoutes = createHealthRoutes(dependencies);
   const metricsRoutes = createMetricsRoutes();
-  const scimRoutes = isFeatureEnabled("scim")
-    ? applyMiddlewareToRoutes(
-        registerOpenApiRouteMap(createScimRoutes(dependencies), ["global", "scim"]),
-        kernel.globalMiddleware(),
-      )
-    : {};
   registerRoute("GET", "/health", []);
   registerRoute("GET", "/ready", []);
   registerRoute("GET", "/metrics", []);
 
+  const notFoundApiPath = `${apiPrefix || "/api"}/*`;
   const baseRoutes: AppRouteMap = {
     ...healthRoutes,
     ...metricsRoutes,
-    ...scimRoutes,
     ...(isViewsEnabled() || isSpaEnabled() ? {} : { "/": index }),
     ...wrappedModuleRoutes,
-    [`${appConfig.apiPrefix}/*`]: async () => {
-      registerRoute("GET", `${appConfig.apiPrefix}/*`, ["global", "api"]);
+    [notFoundApiPath]: async () => {
+      registerRoute("GET", notFoundApiPath, ["global", "api"]);
       return jsonResponse({ error: "Not Found" }, { status: 404 });
     },
     "/*": async () => {

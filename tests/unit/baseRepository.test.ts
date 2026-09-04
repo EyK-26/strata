@@ -51,6 +51,22 @@ class CrewRepository extends BaseRepository<CrewMember, "id"> {
   async loadBySquads(squads: readonly Squad[]): Promise<Map<number, CrewMember[]>> {
     return await this.loadHasManyForParents(squads, squadHasManyCrewMembers);
   }
+
+  averageSquad(where: Partial<CrewMember> = {}): Promise<number> {
+    return this.averageColumn("squad_id", where);
+  }
+
+  pluckSquadIds(): Promise<number[]> {
+    return this.pluckNumberValues('"crew_member"."squad_id"', "value");
+  }
+
+  groupedBySquad(): Promise<Array<{ value: number | null; count: number }>> {
+    return this.countGroupedBy("squad_id");
+  }
+
+  bySquad(squadId: number): Promise<CrewMember[]> {
+    return this.findByHasManyRelation(squadHasManyCrewMembers, squadId);
+  }
 }
 
 describe("base repository", () => {
@@ -355,5 +371,45 @@ describe("base repository", () => {
     connection.queue([]);
     await repository.loadHasManyThroughForParents([{ id: 1 }], relation, { onlyTrashed: true });
     expect(connection.calls.at(-1)?.query).toContain('"applications"."deleted_at" IS NOT NULL');
+  });
+
+  test("findByIdOrThrow uses the default missing-record error", async () => {
+    const connection = new FakeConnection();
+    const repository = new CrewRepository(connection);
+    connection.queue([]);
+
+    await expect(repository.findByIdOrThrow(404)).rejects.toThrow("crew_member 404 was not found.");
+  });
+
+  test("findByIds returns unique matching rows and skips empty id lists", async () => {
+    const connection = new FakeConnection();
+    const repository = new CrewRepository(connection);
+
+    expect(await repository.findByIds([])).toEqual([]);
+    expect(connection.calls).toHaveLength(0);
+
+    connection.queue([{ id: 1, name: "Arthur", squad_id: 1, is_active: true }]);
+    const rows = await repository.findByIds([1, 1]);
+    expect(rows).toHaveLength(1);
+    expect(connection.calls[0]?.query).toContain("IN");
+  });
+
+  test("projects averages, plucked numbers, grouped counts, and hasMany lookups", async () => {
+    const connection = new FakeConnection();
+    const repository = new CrewRepository(connection);
+
+    connection.queue([{ value: "2.4" }]);
+    expect(await repository.averageSquad()).toBe(2);
+
+    connection.queue([{ value: 1 }, { value: null }, { value: 3 }]);
+    expect(await repository.pluckSquadIds()).toEqual([1, 3]);
+
+    connection.queue([{ value: 1, count: "2" }]);
+    expect(await repository.groupedBySquad()).toEqual([{ value: 1, count: 2 }]);
+
+    connection.queue([{ id: 1, name: "Arthur", squad_id: 1, is_active: true }]);
+    expect(await repository.bySquad(1)).toEqual([
+      { id: 1, name: "Arthur", squad_id: 1, is_active: true },
+    ]);
   });
 });

@@ -5,10 +5,9 @@ import { join } from "node:path";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
-import { createAppContext } from "../../../src/bootstrap/context";
-import { createRoutes } from "../../../src/bootstrap/createRoutes";
 import { openapiCheckCommand } from "../../../src/cli/commands/openapiCheck";
 import { openapiValidateCommand } from "../../../src/cli/commands/openapiValidate";
+import { registerOpenApiRoutes } from "../../../src/cli/commands/registerOpenApiRoutes";
 import { captureConsole, mockProcessExit } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -62,8 +61,7 @@ describe("openapiValidateCommand", () => {
 
 describe("openapiCheckCommand", () => {
   test("passes when committed OpenAPI file matches generated spec", async () => {
-    const { dependencies } = createAppContext();
-    createRoutes(dependencies);
+    await registerOpenApiRoutes();
     const generated = renderOpenApiDocument(generateOpenApiSpec(routeRegistry.list()));
 
     const output = captureConsole();
@@ -138,8 +136,7 @@ describe("openapi CLI validation failures", () => {
   });
 
   test("openapiCheckCommand fails when generated OpenAPI spec is invalid", async () => {
-    const { dependencies } = createAppContext();
-    createRoutes(dependencies);
+    await registerOpenApiRoutes();
     const generated = renderOpenApiDocument(generateOpenApiSpec(routeRegistry.list()));
 
     const output = captureConsole();

@@ -1,12 +1,27 @@
 import { describe, expect, test } from "bun:test";
+import type { AbilityChecker } from "@getstrata/core/auth/abilityChecker";
+import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbilityMiddleware";
-import TokenService from "../../src/modules/user/tokenService";
+
+function hasAbility(user: AuthUser | null, ability: string): boolean {
+  const abilities = user?.abilities ?? [];
+  return abilities.includes("*") || abilities.includes(ability);
+}
+
+const abilityChecker: AbilityChecker = {
+  tokenCan: hasAbility,
+  requireAbility(user, ability) {
+    if (!hasAbility(user, ability)) {
+      throw new ForbiddenError("Token ability required.");
+    }
+  },
+};
 
 describe("createRequireAbilityMiddleware", () => {
   test("allows users with the required ability", async () => {
-    const tokenService = new TokenService({} as never, {} as never);
-    const middleware = createRequireAbilityMiddleware(tokenService)("projects:delete");
+    const middleware = createRequireAbilityMiddleware(abilityChecker)("projects:delete");
 
     const response = await runWithAuthUser(
       { id: 1, abilities: ["projects:delete"] },
@@ -20,8 +35,7 @@ describe("createRequireAbilityMiddleware", () => {
   });
 
   test("rejects users missing the required ability", async () => {
-    const tokenService = new TokenService({} as never, {} as never);
-    const middleware = createRequireAbilityMiddleware(tokenService)("projects:delete");
+    const middleware = createRequireAbilityMiddleware(abilityChecker)("projects:delete");
 
     const response = await runWithAuthUser(
       { id: 1, abilities: ["projects:read"] },
@@ -36,8 +50,7 @@ describe("createRequireAbilityMiddleware", () => {
   });
 
   test("allows wildcard abilities", async () => {
-    const tokenService = new TokenService({} as never, {} as never);
-    const middleware = createRequireAbilityMiddleware(tokenService)("organizations:delete");
+    const middleware = createRequireAbilityMiddleware(abilityChecker)("organizations:delete");
 
     const response = await runWithAuthUser(
       { id: 1, abilities: ["*"] },

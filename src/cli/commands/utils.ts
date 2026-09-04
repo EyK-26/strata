@@ -43,11 +43,11 @@ async function ensureDirectory(path: string): Promise<void> {
 }
 
 function moduleDirectory(name: string): string {
-  return join(import.meta.dir, "..", "..", "modules", toKebabCase(name));
+  return join(import.meta.dir, "../../../apps/hiroapp/src/modules", toKebabCase(name));
 }
 
 function migrationDirectory(): string {
-  return join(import.meta.dir, "..", "..", "db", "migrations");
+  return join(import.meta.dir, "../../../apps/hiroapp/src/db/migrations");
 }
 
 export {

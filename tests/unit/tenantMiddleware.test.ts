@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("createTenantMiddleware", () => {
@@ -80,6 +82,20 @@ describe("createTenantMiddleware", () => {
     expect(response.headers.get("x-tenant-id")).toBeNull();
   });
 
+  test("uses the member account tenant when no header is sent", async () => {
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+
+    await runWithAuthUser({ id: 2, role: "member" }, async () => {
+      const response = await middleware(new Request("http://example.test/tasks"), async () =>
+        Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-tenant-id")).toBe("1");
+    });
+  });
+
   test("uses the authenticated user tenant and rejects mismatched headers", async () => {
     const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
     const middleware = createTenantMiddleware();
@@ -114,6 +130,145 @@ describe("createTenantMiddleware", () => {
       expect(response.status).toBe(200);
       expect(response.headers.get("x-tenant-id")).toBe("1");
     });
+  });
+
+  test("uses the admin account tenant when no override header is sent", async () => {
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
+    const middleware = createTenantMiddleware();
+
+    await runWithAuthUser({ id: 1, role: "admin" }, async () => {
+      const response = await middleware(new Request("http://example.test/tasks"), async () =>
+        Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-tenant-id")).toBe("1");
+    });
+  });
+
+  test("falls back to the default tenant when an admin header tenant is missing", async () => {
+    const { createTenantMiddleware, DEFAULT_TENANT } = await import(
+      "@getstrata/core/tenant/tenantMiddleware"
+    );
+    const middleware = createTenantMiddleware();
+
+    await runWithAuthUser({ id: 1, role: "admin" }, async () => {
+      const response = await middleware(
+        new Request("http://example.test/tasks", {
+          headers: { "x-tenant-id": "999" },
+        }),
+        async () => Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+    });
+  });
+
+  test("falls back to the default tenant when a public-read guest header tenant is missing", async () => {
+    const previous = process.env.FEATURE_PUBLIC_READS;
+    process.env.FEATURE_PUBLIC_READS = "true";
+
+    try {
+      const { createTenantMiddleware, DEFAULT_TENANT } = await import(
+        "@getstrata/core/tenant/tenantMiddleware"
+      );
+      const middleware = createTenantMiddleware();
+
+      const response = await middleware(
+        new Request("http://example.test/tasks", {
+          headers: { "x-tenant-id": "999" },
+        }),
+        async () => Response.json({ ok: true }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+    } finally {
+      restoreEnvVar("FEATURE_PUBLIC_READS", previous);
+    }
+  });
+
+  test("falls back to the default tenant when a member account tenant is missing", async () => {
+    const { createTenantMiddleware, DEFAULT_TENANT } = await import(
+      "@getstrata/core/tenant/tenantMiddleware"
+    );
+    const middleware = createTenantMiddleware();
+    const email = `ghost-member-${Date.now()}@workhub.test`;
+
+    const userId = await runWithMigrationBypass(async () => {
+      await db`SET session_replication_role = replica`;
+      try {
+        const rows = (await db`
+          INSERT INTO users (name, email, email_lookup, role, tenant_id, password_hash)
+          VALUES ('Ghost Member', ${email}, ${email}, 'member', 99999, 'x')
+          RETURNING id
+        `) as Array<{ id: number }>;
+        return rows[0]?.id;
+      } finally {
+        await db`SET session_replication_role = origin`;
+      }
+    });
+
+    if (typeof userId !== "number") {
+      throw new Error("expected inserted member id");
+    }
+
+    try {
+      await runWithAuthUser({ id: userId, role: "member" }, async () => {
+        const response = await middleware(new Request("http://example.test/tasks"), async () =>
+          Response.json({ ok: true }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+      });
+    } finally {
+      await runWithMigrationBypass(async () => {
+        await db`DELETE FROM users WHERE id = ${userId}`;
+      });
+    }
+  });
+
+  test("falls back to the default tenant when an admin account tenant is missing", async () => {
+    const { createTenantMiddleware, DEFAULT_TENANT } = await import(
+      "@getstrata/core/tenant/tenantMiddleware"
+    );
+    const middleware = createTenantMiddleware();
+    const email = `ghost-admin-${Date.now()}@workhub.test`;
+
+    const userId = await runWithMigrationBypass(async () => {
+      await db`SET session_replication_role = replica`;
+      try {
+        const rows = (await db`
+          INSERT INTO users (name, email, email_lookup, role, tenant_id, password_hash)
+          VALUES ('Ghost Admin', ${email}, ${email}, 'admin', 99999, 'x')
+          RETURNING id
+        `) as Array<{ id: number }>;
+        return rows[0]?.id;
+      } finally {
+        await db`SET session_replication_role = origin`;
+      }
+    });
+
+    if (typeof userId !== "number") {
+      throw new Error("expected inserted admin id");
+    }
+
+    try {
+      await runWithAuthUser({ id: userId, role: "admin" }, async () => {
+        const response = await middleware(new Request("http://example.test/tasks"), async () =>
+          Response.json({ ok: true }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+      });
+    } finally {
+      await runWithMigrationBypass(async () => {
+        await db`DELETE FROM users WHERE id = ${userId}`;
+      });
+    }
   });
 
   test("falls back to default tenant for invalid user ids", async () => {

@@ -59,7 +59,7 @@ export default ${policyClass};
 
   console.log(`Created policy in: ${policyPath}`);
   console.log(
-    `Register it in src/modules/${moduleSlug}/provider.ts boot() via gate.register("${moduleSlug}", container.resolve(${policyVariable})).`,
+    `Register it in apps/hiroapp/src/modules/${moduleSlug}/provider.ts boot() via gate.register("${moduleSlug}", container.resolve(${policyVariable})).`,
   );
 }
 

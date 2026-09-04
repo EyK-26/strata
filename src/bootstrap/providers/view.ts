@@ -1,4 +1,3 @@
-import { resolveMembershipLookup } from "@getstrata/core/auth/membershipContext";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { appDisplayName } from "@getstrata/core/runtime/appKeyPrefix";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
@@ -10,8 +9,6 @@ import {
   errorTemplateName,
   resolveWebLayoutData,
 } from "@getstrata/core/view";
-import OrganizationRepository from "../../modules/organization/repository";
-import UserRepository from "../../modules/user/repository";
 import type { ServiceProvider } from "../contracts";
 
 const CORE_VIEW_TOKEN = "core.view";
@@ -32,37 +29,11 @@ const viewProvider: ServiceProvider = {
     );
     container.set(CORE_VIEW_TOKEN, engine);
     configureWebLayoutData({
-      extra: async (user) => {
-        const appName = appDisplayName();
-
-        if (!user || typeof user.id !== "number") {
-          return { appName, currentOrganization: null, organizations: [] };
-        }
-
-        try {
-          const record = await new UserRepository().findByIdOrThrow(user.id);
-          const memberships = await resolveMembershipLookup().listForUser(record.id);
-          const organizationsRepo = new OrganizationRepository();
-          const organizations = (
-            await Promise.all(
-              memberships.map((membership) =>
-                organizationsRepo.findById(membership.organization_id),
-              ),
-            )
-          ).filter((organization): organization is NonNullable<typeof organization> =>
-            Boolean(organization && !organization.deleted_at),
-          );
-          const currentId = record.current_organization_id ?? null;
-          const currentOrganization =
-            organizations.find((organization) => organization.id === currentId) ??
-            organizations[0] ??
-            null;
-
-          return { appName, currentOrganization, organizations };
-        } catch {
-          return { appName, currentOrganization: null, organizations: [] };
-        }
-      },
+      extra: async () => ({
+        appName: appDisplayName(),
+        currentOrganization: null,
+        organizations: [],
+      }),
     });
     configureWebErrorView({
       render: async (input) =>

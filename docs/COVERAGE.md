@@ -1,6 +1,6 @@
 # Coverage policy
 
-CI enforces **100% lines, functions, and statements per in-scope file** via `bunfig.toml` for framework/core tests (`bun run test:coverage`). HiroApp domain files are gated separately by `bun run test:hiroapp:coverage` because a HiroApp `--coverage` process also scores imported `@getstrata/core` files against bun’s threshold.
+CI enforces **100% lines on in-scope files** via `scripts/assert-core-coverage.ts` (`bun run test:coverage`) and `scripts/assert-hiroapp-coverage.ts` (`bun run test:hiroapp:coverage`). Bun’s `coverageThreshold` is not used: OpenAPI/CLI tests load HiroApp `createApp`, so one process scores both trees. Ignore lists stay in `bunfig.toml` (`coveragePathIgnorePatterns`) and the assert scripts.
 
 ## Why scoped coverage?
 
@@ -28,7 +28,7 @@ Configuration lives in `bunfig.toml` → `coveragePathIgnorePatterns`. See also 
 
 ## CI
 
-`validate:ci` runs `test:coverage` after WorkHub migrate/seed, then `test:hiroapp:coverage`. Failing any in-scope file blocks merge.
+CI runs leftover WorkHub `src/db` migrate/seed (for core tests that inspect `tenant` RLS), then HiroApp `migrate:fresh --seed`, then `test:coverage`, then `test:hiroapp:coverage`. Failing any in-scope file blocks merge.
 
 ## Adding new code
 

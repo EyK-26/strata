@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import {
   configureWebLayoutData,
   resetWebLayoutDataConfigForTests,
   resolveWebLayoutData,
 } from "@getstrata/core/view/webLayoutData";
-import { tokenServiceToken } from "../../src/modules/user/provider";
 
 describe("resolveWebLayoutData", () => {
   afterEach(() => {
@@ -27,11 +27,11 @@ describe("resolveWebLayoutData", () => {
 
   test("returns email for the authenticated session user", async () => {
     const container = {
-      has: (token: string) => token === tokenServiceToken,
+      has: (token: string) => token === CORE_TOKEN_SERVICE_TOKEN,
       resolve: () => ({
         findByIdOrThrow: async (id: number) => ({
           id,
-          email: "admin@workhub.test",
+          email: "admin@hiroapp.com",
           role: "admin",
         }),
       }),
@@ -43,7 +43,7 @@ describe("resolveWebLayoutData", () => {
 
     expect(data.authUser).toEqual({
       id: 7,
-      email: "admin@workhub.test",
+      email: "admin@hiroapp.com",
       role: "admin",
     });
   });

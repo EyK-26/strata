@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { membershipContext } from "@getstrata/core/auth/membershipContext";
 import { assertOrganizationReadable } from "@getstrata/core/auth/membershipScope";
+import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
 import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 import {
   clearSessionCookie,
@@ -18,6 +19,7 @@ import {
 import { Factory } from "@getstrata/core/database/factory";
 import { buildWhereClause } from "@getstrata/core/database/query";
 import { EventBus } from "@getstrata/core/events";
+import { Job } from "@getstrata/core/queue";
 import { FailedJobService } from "@getstrata/core/queue/failedJobService";
 import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 import {
@@ -25,8 +27,10 @@ import {
   createOAuthStateCookie,
   verifyOAuthState,
 } from "@getstrata/core/security/oauthState";
+import { guestCanViewResource, isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
 import { assertSafeOutboundUrl, isBlockedHostname } from "@getstrata/core/security/safeUrl";
 import { parseScimTenantTokens } from "@getstrata/core/security/scimTenantTokens";
+import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 import {
   emailRule,
@@ -34,24 +38,11 @@ import {
   integerRange,
   integerRule,
   maxLength,
+  minLength,
   pattern,
   positiveIntegerRule,
   stringRule,
 } from "@getstrata/core/validation/rules";
-import AttachmentPolicy from "../../src/modules/attachment/policy";
-import BillingService from "../../src/modules/billing/service";
-import CommentPolicy from "../../src/modules/comment/policy";
-import CommentRepository from "../../src/modules/comment/repository";
-import OrganizationPolicy from "../../src/modules/organization/policy";
-import OrganizationRepository from "../../src/modules/organization/repository";
-import ProjectPolicy from "../../src/modules/project/policy";
-import ProjectRepository from "../../src/modules/project/repository";
-import SearchService from "../../src/modules/search/service";
-import TaskPolicy from "../../src/modules/task/policy";
-import TaskRepository from "../../src/modules/task/repository";
-import NotificationService from "../../src/modules/user/notificationService";
-import TokenService from "../../src/modules/user/tokenService";
-import { DispatchWebhookJob } from "../../src/modules/webhook/dispatchWebhookJob";
 
 class WidgetFactory extends Factory<{ name: string }> {
   protected override definition() {
@@ -60,6 +51,10 @@ class WidgetFactory extends Factory<{ name: string }> {
 }
 
 class DefaultPolicy extends Policy {}
+
+class CoverageJob extends Job<{ ok?: boolean }> {
+  override async handle(): Promise<void> {}
+}
 
 describe("coverage gap helpers", () => {
   const originalAppEnv = process.env.APP_ENV;
@@ -198,7 +193,7 @@ describe("coverage gap helpers", () => {
     expect(valueClause).toContain("=");
   });
 
-  test("covers event bus cleanup, job registry names, and webhook job metadata", async () => {
+  test("covers event bus cleanup and job registry names", async () => {
     const bus = new EventBus();
     let firstCount = 0;
     let secondCount = 0;
@@ -217,20 +212,16 @@ describe("coverage gap helpers", () => {
     unsubscribe();
 
     const registry = new JobRegistry();
-    registry.register("demo.job", () => new DispatchWebhookJob());
+    registry.register("demo.job", () => new CoverageJob());
     expect(registry.names()).toEqual(["demo.job"]);
     expect(registry.create("missing.job")).toBeUndefined();
 
     const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
-    const { registerDefaultJobs } = await import("../../src/bootstrap/queue/defaultJobs");
-    const { registerWebhookJobs } = await import("../../src/modules/webhook/registerWebhookJobs");
+    const { registerDefaultJobs } = await import("@getstrata/bootstrap/queue/defaultJobs");
     registerDefaultJobs();
-    registerWebhookJobs();
-    expect(jobRegistry.create("webhook.dispatch")).toBeInstanceOf(DispatchWebhookJob);
-
-    const job = new DispatchWebhookJob();
-    expect(job.maxAttempts).toBe(3);
-    expect(job.backoffMs).toBe(2_000);
+    const job = new CoverageJob();
+    jobRegistry.track("coverage.job", job);
+    expect(jobRegistry.resolveName(job)).toBe("coverage.job");
   });
 
   test("covers stripe webhook signature length mismatch", () => {
@@ -243,82 +234,6 @@ describe("coverage gap helpers", () => {
     );
   });
 
-  test("covers policy update branches for module policies", () => {
-    const attachmentPolicy = new AttachmentPolicy();
-    expect(attachmentPolicy.update({ id: 1, role: "admin" }, { organization_id: 5 } as never)).toBe(
-      false,
-    );
-
-    const attachmentGate = new PolicyGate();
-    attachmentGate.register("attachment", attachmentPolicy);
-    expect(attachmentGate.allows("attachment", "update", { id: 1, role: "admin" })).toBe(false);
-
-    const commentGate = new PolicyGate();
-    commentGate.register("comment", new CommentPolicy());
-    expect(commentGate.allows("comment", "update", null)).toBe(false);
-
-    const projectGate = new PolicyGate();
-    projectGate.register("project", new ProjectPolicy());
-    expect(projectGate.allows("project", "update", null)).toBe(false);
-
-    const taskGate = new PolicyGate();
-    taskGate.register("task", new TaskPolicy());
-    expect(taskGate.allows("task", "update", null)).toBe(false);
-
-    const organizationGate = new PolicyGate();
-    organizationGate.register("organization", new OrganizationPolicy());
-    expect(organizationGate.allows("organization", "update", null)).toBe(false);
-  });
-
-  test("covers token, notification, billing, and search service branches", async () => {
-    const tokenService = new TokenService(
-      {
-        findByIdOrThrow: async (id: number) => ({ id, role: "member", email: "a@b.com" }),
-        findById: async () => null,
-      } as never,
-      {
-        findByTokenHash: async () => ({
-          id: 1,
-          user_id: 2,
-          abilities: ["*"],
-          expires_at: null,
-        }),
-        touchLastUsedAt: async () => undefined,
-      } as never,
-    );
-
-    expect(await tokenService.resolveUserFromToken("plain-token")).toBeNull();
-    await expect(tokenService.findByIdOrThrow(9)).resolves.toMatchObject({ id: 9 });
-
-    const revokeService = new TokenService(
-      { findByIdOrThrow: async () => ({ id: 1 }) } as never,
-      {
-        findById: async () => ({ id: 1, user_id: 2 }),
-        deleteById: async () => false,
-      } as never,
-    );
-
-    await expect(revokeService.revokeToken(1, 1)).rejects.toThrow("API token 1 not found.");
-
-    const notificationService = new NotificationService({
-      findByIdOrThrow: async (_id: number, onMissing: (id: number) => Error) => {
-        throw onMissing(1);
-      },
-    } as never);
-    await expect(notificationService.markRead(1, 1)).rejects.toThrow("Notification 1 not found.");
-
-    const billingService = new BillingService();
-    await expect(billingService.getSubscriptionForTenant(999_999)).resolves.toBeNull();
-
-    const searchService = new SearchService(
-      new TaskRepository(),
-      new CommentRepository(),
-      new OrganizationRepository(),
-      new ProjectRepository(),
-    );
-    await expect(searchService.search("no-match-query-xyz", { limit: 5 })).resolves.toEqual([]);
-  });
-
   test("covers failed job service listRecent default limit", async () => {
     const service = new FailedJobService({
       findAll: async () => [],
@@ -329,18 +244,6 @@ describe("coverage gap helpers", () => {
 
     await expect(service.listRecent()).resolves.toEqual([]);
     await expect(service.retry(404)).rejects.toThrow("Failed job 404 not found.");
-  });
-
-  test("covers organization policy delete branch for missing users", () => {
-    const gate = new PolicyGate();
-    gate.register("organization", new OrganizationPolicy());
-
-    expect(
-      gate.allows("organization", "delete", null, {
-        id: 1,
-        slug: "regular-org",
-      } as never),
-    ).toBe(false);
   });
 
   test("covers membership scope organization readable early return for admins", () => {
@@ -357,7 +260,7 @@ describe("coverage gap helpers", () => {
     });
   });
 
-  test("covers remaining security, queue, and module policy branches", async () => {
+  test("covers remaining security, queue, and policy branches", async () => {
     const { eventBus } = await import("@getstrata/core/events/eventBus");
     let singletonCount = 0;
     const unsubscribe = eventBus.listen("singleton.event", () => {
@@ -367,11 +270,6 @@ describe("coverage gap helpers", () => {
     unsubscribe();
     expect(singletonCount).toBe(1);
     await expect(eventBus.dispatch("unused.event", {})).resolves.toBeUndefined();
-
-    const registry = new JobRegistry();
-    const job = new DispatchWebhookJob();
-    registry.track("tracked.job", job);
-    expect(registry.resolveName(job)).toBe("tracked.job");
 
     const failedService = new FailedJobService({
       create: async (input: {
@@ -388,8 +286,23 @@ describe("coverage gap helpers", () => {
     expect(new DefaultPolicy().update()).toBe(false);
 
     expect(enumRule(["a"])("field", 1, {})).toBeUndefined();
+    expect(enumRule(["a"])("field", "a", {})).toBeUndefined();
     expect(emailRule()("field", 1, {})).toBeUndefined();
     expect(integerRule()("field", "", {})).toBeUndefined();
+    expect(stringRule()("name", null, {})).toBeUndefined();
+    expect(minLength(2)("name", 1, {})).toBeUndefined();
+    expect(maxLength(2)("name", 1, {})).toBeUndefined();
+    expect(integerRange(1, 3)("count", 2, {})).toBeUndefined();
+    expect(positiveIntegerRule()("count", 3, {})).toBeUndefined();
+
+    expect(isPublicReadsEnabled()).toBeTypeOf("boolean");
+    expect(guestCanViewResource()).toBe(isPublicReadsEnabled());
+    logSecurityEvent("coverage.ping", { ok: true });
+
+    const hashed = await hashPassword("password");
+    expect(hashed.length).toBeGreaterThan(10);
+    expect(await verifyPassword("password", hashed)).toBe(true);
+    expect(await verifyPassword("nope", hashed)).toBe(false);
 
     expect(isBlockedHostname("999.999.999.999")).toBe(true);
     expect(isBlockedHostname("127.0.0.2")).toBe(true);

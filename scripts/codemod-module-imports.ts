@@ -46,5 +46,13 @@ async function walk(dir: string): Promise<number> {
   return changed;
 }
 
-const changed = await walk(MODULES_DIR);
-console.log(`Updated imports in ${changed} module file(s).`);
+try {
+  const changed = await walk(MODULES_DIR);
+  console.log(`Updated imports in ${changed} module file(s).`);
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    console.log("No src/modules directory; nothing to codemod.");
+  } else {
+    throw error;
+  }
+}

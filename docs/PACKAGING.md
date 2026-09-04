@@ -1,6 +1,6 @@
 # Framework packaging
 
-**Strata** is the framework; **WorkHub** is the reference application in this monorepo. Framework code lives in `src/core/` and `src/bootstrap/`; application code lives in `src/modules/`. Extraction to a separate repository is optional and documented below.
+**Strata** is the framework; **HiroApp** is the in-repo reference application. Framework code lives in `src/core/` and `src/bootstrap/`; HiroApp lives in `apps/hiroapp`. Extraction to a separate repository is optional and documented below.
 
 ## Public API
 
@@ -64,7 +64,7 @@ npm deprecate @eyk-workhub/framework@"<0.2.0" "Renamed to @getstrata/core — ht
 | **Framework core (Strata)** | `src/core/`, `src/bootstrap/` (kernel, providers) | Reusable infrastructure |
 | **Public barrel** | `src/framework/public-api.ts` | Supported import surface |
 | **Workspace package** | `packages/strata-core/` | Build artifact + npm publish |
-| **Application (WorkHub)** | `src/modules/`, `src/domain/` | Reference SaaS app |
+| **Application (HiroApp)** | `apps/hiroapp/` | Reference hiring app |
 | **Infrastructure** | `infra/`, `docker-compose*.yml` | Deploy tooling |
 
 Do **not** import deep paths from other modules when a public export exists — add to `public-api.ts` instead.
@@ -74,7 +74,7 @@ Do **not** import deep paths from other modules when a public export exists — 
 To split framework code into its own repository later:
 
 1. Move `src/core` and framework bootstrap into `packages/strata-core/src`
-2. Keep WorkHub modules in this repo or a separate `@getstrata/bench` package
+2. Keep HiroApp in this repo or a separate app package
 3. Run the full test suite against the extracted package
 
 No breaking move is required until you split repositories. The current workspace package is the supported path for npm consumers.

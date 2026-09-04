@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+const previousDogfood = process.env.DOGFOOD_APP;
+
 afterEach(() => {
   mock.restore();
+  if (previousDogfood === undefined) {
+    delete process.env.DOGFOOD_APP;
+  } else {
+    process.env.DOGFOOD_APP = previousDogfood;
+  }
 });
 
 describe("migrateCommand", () => {
   test("delegates to migrateDatabase", async () => {
+    process.env.DOGFOOD_APP = "workhub";
     let called = false;
 
     mock.module("../../../src/db/migrations/runner", () => ({
@@ -40,6 +48,7 @@ describe("rollbackCommand", () => {
 
 describe("seedCommand", () => {
   test("delegates to seedDatabase", async () => {
+    process.env.DOGFOOD_APP = "workhub";
     let called = false;
 
     mock.module("../../../src/db/seeders/runner", () => ({

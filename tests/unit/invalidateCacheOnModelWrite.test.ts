@@ -1,5 +1,10 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import { join } from "node:path";
+import {
+  configureModulesDirectory,
+  ensureModulesLoaded,
+  resetDiscoverModulesForTests,
+} from "@getstrata/bootstrap/discoverModules";
 import { registerInvalidateCacheOnModelWriteListeners } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
@@ -8,7 +13,11 @@ import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 import { EventBus } from "@getstrata/core/events";
 import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTagsJob";
 
+const FIXTURE_MODULES = join(import.meta.dir, "../fixtures/discover-modules");
+
 beforeAll(async () => {
+  resetDiscoverModulesForTests();
+  configureModulesDirectory(FIXTURE_MODULES);
   await ensureModulesLoaded();
 });
 

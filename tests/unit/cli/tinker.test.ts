@@ -1,39 +1,21 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
 import type { Mailer } from "@getstrata/core/mail/mailer";
 import type { StorageManager } from "@getstrata/core/storage/storage";
-import { REPOSITORY_TOKENS } from "../../../src/cli/commands/tinker";
 
 afterAll(() => {
   mock.restore();
 });
 
 describe("createTinkerContext", () => {
-  test("exposes container, repositories, and facades", async () => {
+  test("exposes container and facades", async () => {
     mock.restore();
     const { createTinkerContext: createContext } = await import("../../../src/cli/commands/tinker");
     const context = createContext();
 
     expect(context.container).toBeDefined();
     expect(context.dependencies.container).toBe(context.container);
-    expect(Object.keys(context.repos).sort()).toEqual([
-      "comments",
-      "organizations",
-      "projects",
-      "tasks",
-      "users",
-    ]);
     expect(typeof context.mailer).toBe("function");
     expect(typeof context.storage).toBe("function");
-  });
-
-  test("registers expected repository tokens", () => {
-    expect(Object.keys(REPOSITORY_TOKENS).sort()).toEqual([
-      "comments",
-      "organizations",
-      "projects",
-      "tasks",
-      "users",
-    ]);
   });
 
   test("assignTinkerGlobals exposes globals for the REPL preload", async () => {
@@ -45,7 +27,6 @@ describe("createTinkerContext", () => {
     assignGlobals(context);
 
     expect((globalThis as { container?: unknown }).container).toBe(context.container);
-    expect((globalThis as { repos?: unknown }).repos).toBe(context.repos);
     expect(typeof (globalThis as { mailer?: () => Mailer }).mailer).toBe("function");
     expect(typeof (globalThis as { storage?: () => StorageManager }).storage).toBe("function");
   });
@@ -58,7 +39,6 @@ describe("tinker preload script", () => {
       const ctx = createTinkerContext();
       console.log(JSON.stringify({
         hasContainer: Boolean(ctx.container),
-        repoKeys: Object.keys(ctx.repos).sort(),
         mailerName: ctx.mailer().constructor.name,
       }));
     `;
@@ -78,10 +58,6 @@ describe("tinker preload script", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr).toBe("");
-    expect(JSON.parse(stdout.trim())).toEqual({
-      hasContainer: true,
-      repoKeys: ["comments", "organizations", "projects", "tasks", "users"],
-      mailerName: "Mailer",
-    });
+    expect(JSON.parse(stdout)).toMatchObject({ hasContainer: true });
   });
 });

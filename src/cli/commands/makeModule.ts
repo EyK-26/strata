@@ -573,7 +573,7 @@ export { create${moduleName}WebRoutes };
   if (withWeb) {
     console.log(`Created web view scaffold in: resources/views/${pluralSlug}/`);
   }
-  console.log(`Module will be auto-discovered from src/modules/${moduleSlug}/`);
+  console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
   console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
 }
 

@@ -13,9 +13,9 @@ import { createPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfir
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
+import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
-import { tokenServiceToken } from "../../src/modules/user/provider";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 import { createMockDependencies } from "./testHelpers";
@@ -346,7 +346,7 @@ describe("HttpKernel", () => {
 
   test("wrapAbility rejects guests before ability checks", async () => {
     const dependencies = createKernelDependencies();
-    dependencies.container.set(tokenServiceToken, {
+    dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {
       requireAbility: () => {
         throw new ForbiddenError("Token ability required.");
       },

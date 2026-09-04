@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   APP_PORT_CONFIG_KEY,
   CACHE_MAX_ENTRIES_CONFIG_KEY,
@@ -7,12 +7,6 @@ import {
 } from "@getstrata/bootstrap/config";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createAppContext } from "@getstrata/bootstrap/dependencies";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
-import { commentServiceToken } from "../../src/modules/comment/provider";
-import { organizationServiceToken } from "../../src/modules/organization/provider";
-import { projectServiceToken } from "../../src/modules/project/provider";
-import { reportServiceToken } from "../../src/modules/report/provider";
-import { taskServiceToken } from "../../src/modules/task/provider";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("service container", () => {
@@ -47,10 +41,6 @@ describe("config store", () => {
 });
 
 describe("app providers", () => {
-  beforeAll(async () => {
-    await ensureModulesLoaded();
-  });
-
   test("does not run WorkHub production secret gates", () => {
     const previous = process.env.APP_ENV;
     process.env.APP_ENV = "production";
@@ -78,11 +68,6 @@ describe("app providers", () => {
       expect(context.config.require<number>(CACHE_TTL_MS_CONFIG_KEY)).toBe(2500);
       expect(context.config.require<number>(CACHE_MAX_ENTRIES_CONFIG_KEY)).toBe(25);
       expect(context.dependencies.cache).toBe(context.container.resolve(CORE_CACHE_TOKEN));
-      expect(context.dependencies.container.resolve(organizationServiceToken)).toBeDefined();
-      expect(context.dependencies.container.resolve(projectServiceToken)).toBeDefined();
-      expect(context.dependencies.container.resolve(taskServiceToken)).toBeDefined();
-      expect(context.dependencies.container.resolve(commentServiceToken)).toBeDefined();
-      expect(context.dependencies.container.resolve(reportServiceToken)).toBeDefined();
     } finally {
       restoreEnvVar("PORT", previousPort);
       restoreEnvVar("CACHE_TTL_MS", previousTtl);

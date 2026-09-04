@@ -1,6 +1,6 @@
 # Laravel parity audit
 
-Generated: 2026-09-03T10:35:49.037Z
+Generated: 2026-09-04T16:25:50.200Z
 
 API catalog score means each Laravel doc section has a Strata export and a test.
 Design score means the call shape matches Laravel, routed to TypeScript/Bun.
@@ -32,7 +32,7 @@ CI target: ≥99% API catalog score. Design score is the real Laravel-similarity
 | ✅ covered | laravel | [Routing](https://laravel.com/docs/routing) | applyMiddlewareToRoutes, withMiddleware, composeMiddleware… | `unit/httpKernel.test.ts` |
 | ✅ covered | laravel | [Middleware](https://laravel.com/docs/middleware) | createCsrfMiddleware, createSecurityHeadersMiddleware, createBodySizeLimitMiddleware… | `unit/csrf.test.ts` |
 | ✅ covered | laravel | [CSRF Protection](https://laravel.com/docs/csrf) | createCsrfMiddleware, @getstrata/bootstrap:createCsrfProtection | `unit/csrf.test.ts` |
-| ✅ covered | laravel | [Controllers](https://laravel.com/docs/controllers) | withErrorHandling, jsonResponse, RouteHandler | `integration/routes.integration.test.ts` |
+| ✅ covered | laravel | [Controllers](https://laravel.com/docs/controllers) | withErrorHandling, jsonResponse, RouteHandler | `unit/httpKernel.test.ts` |
 | ✅ covered | laravel | [Form Requests](https://laravel.com/docs/validation#form-request-validation) | FormRequest, WebFormRequest, validateObject… | `unit/formRequest.test.ts` |
 | ✅ covered | laravel | [Views](https://laravel.com/docs/views) | EtaViewEngine, htmlResponse, resolveWebLayoutData… | `unit/etaViewEngine.test.ts` |
 | ✅ covered | laravel | [Validation](https://laravel.com/docs/validation) | ValidationError, validateObject, minLength… | `unit/validationRules.test.ts` |
@@ -49,7 +49,7 @@ CI target: ≥99% API catalog score. Design score is the real Laravel-similarity
 | ✅ covered | laravel | [Eloquent: API Resources](https://laravel.com/docs/eloquent-resources) | JsonResource, ResourceCollection, whenLoaded… | `unit/frameworkPublicApi.test.ts` |
 | ✅ covered | laravel | [Eloquent: Factories](https://laravel.com/docs/eloquent-factories) | Factory | `unit/factory.test.ts` |
 | ✅ covered | laravel | [Authorization](https://laravel.com/docs/authorization) | Policy, PolicyGate, createAuthorizeMiddleware | `unit/policy.test.ts` |
-| ✅ covered | laravel | [Authentication](https://laravel.com/docs/authentication) | createAuthMiddleware, createRequireAuthMiddleware, currentAuthUser | `unit/authService.test.ts` |
+| ✅ covered | laravel | [Authentication](https://laravel.com/docs/authentication) | createAuthMiddleware, createRequireAuthMiddleware, currentAuthUser | `unit/authMiddleware.test.ts` |
 | ✅ covered | laravel | [Route Model Binding](https://laravel.com/docs/routing#route-model-binding) | securedBindRouteModel, securedBindRouteModelByKey, @getstrata/bootstrap:securedBindRouteModel… | `unit/securedRouteModelBinding.test.ts` |
 | ✅ covered | laravel | [URLs](https://laravel.com/docs/urls#signed-urls) | temporarySignedUrl, signedUrl, hasValidSignature… | `unit/signedUrl.test.ts` |
 | ✅ covered | laravel | [Events](https://laravel.com/docs/events) | EventBus, events | `unit/events.test.ts` |
@@ -70,6 +70,6 @@ CI target: ≥99% API catalog score. Design score is the real Laravel-similarity
 | ✅ covered | laravel | [Eloquent: Polymorphic Relations](https://laravel.com/docs/eloquent-relationships#polymorphic-relationships) | morphTo, morphMany, morphOne… | `unit/database/morphRelations.test.ts` |
 | ✅ covered | laravel | [Notifications](https://laravel.com/docs/notifications) | Notification, NotificationDispatcher, createNotificationDispatcher | `unit/notifications.test.ts` |
 | ✅ covered | laravel | [Mail: Markdown Templates](https://laravel.com/docs/mail#markdown-mailables) | renderMarkdownMail, buildMarkdownMailMessage, sendMarkdownMail… | `unit/markdownMail.test.ts` |
-| ✅ covered | stand-in | [Queue dashboard (not Laravel Horizon)](https://laravel.com/docs/horizon) | collectQueueMetrics, FailedJobService, FailedJobRepository… | `unit/adminServiceMetrics.test.ts` |
+| ✅ covered | stand-in | [Queue dashboard (not Laravel Horizon)](https://laravel.com/docs/horizon) | collectQueueMetrics, FailedJobService, FailedJobRepository… | `unit/queueMetrics.test.ts` |
 | ✅ covered | stand-in | [Admin resources (not Laravel Nova)](https://laravel.com/docs/nova) | AdminResourceRegistry, formatAdminValue | `unit/adminRegistry.test.ts` |
-| ✅ covered | stand-in | [Artisan Console](https://laravel.com/docs/artisan) | WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API | `unit/bootstrapSchedule.test.ts` |
+| ✅ covered | stand-in | [Artisan Console](https://laravel.com/docs/artisan) | Strata CLI schedule:run — not part of the @getstrata/bootstrap public API | `unit/bootstrapSchedule.test.ts` |

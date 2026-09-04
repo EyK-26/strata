@@ -8,14 +8,10 @@ import { restoreEnvVar } from "../helpers/restoreEnv";
 import { defaultTestTenant } from "./testHelpers";
 
 describe("runWithTenantDatabase", () => {
-  test("sets application tenant context and can read seeded users", async () => {
+  test("sets application tenant context for the callback", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {
       expect(currentTenant()).toEqual(defaultTestTenant);
       expect(currentTenantId()).toBe(1);
-
-      const UserRepository = (await import("../../src/modules/user/repository")).default;
-      const admin = await new UserRepository().findByEmail("admin@workhub.test");
-      expect(admin?.email).toBe("admin@workhub.test");
     });
 
     expect(currentTenant()).toBeNull();

@@ -1,20 +1,29 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
 import {
   CORE_AUTH_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
 } from "@getstrata/bootstrap/config";
+import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
+import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { SyncQueue } from "@getstrata/core/queue";
-import { tokenServiceToken } from "../../src/modules/user/provider";
 import { createMockDependencies } from "./testHelpers";
+
+const fixtureModule: AppModule = {
+  name: "pages",
+  webRoutes() {
+    return {
+      "/home": async () => new Response("home"),
+    };
+  },
+};
 
 function createTestDependencies() {
   const container = new ServiceContainer();
@@ -26,7 +35,7 @@ function createTestDependencies() {
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
-  dependencies.container.set(tokenServiceToken, {
+  dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {
     requireAbility: () => undefined,
     tokenCan: () => true,
   });
@@ -35,14 +44,13 @@ function createTestDependencies() {
 }
 
 describe("buildWebModuleRoutes", () => {
-  beforeAll(async () => {
-    await ensureModulesLoaded();
-  });
-
-  test("builds web routes from discovered module webRoutes hooks", () => {
+  test("builds web routes from supplied module webRoutes hooks", () => {
     const dependencies = createTestDependencies();
-    const routes = buildWebModuleRoutes(dependencies, { clearRegistry: true });
+    const routes = buildWebModuleRoutes(dependencies, {
+      clearRegistry: true,
+      modules: [fixtureModule],
+    });
 
-    expect(routes["/organizations"]).toBeDefined();
+    expect(routes["/home"]).toBeDefined();
   });
 });

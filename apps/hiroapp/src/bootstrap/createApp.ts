@@ -7,7 +7,10 @@ import {
   assertAppDependenciesComplete,
   type MutableAppDependencies,
 } from "@getstrata/bootstrap/contracts";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import {
+  configureModulesDirectory,
+  ensureModulesLoaded,
+} from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
@@ -29,12 +32,14 @@ export async function createApp(): Promise<{ context: AppContext; routes: AppRou
   await ensureHiroappDatabase();
   bindDatabase();
 
+  configureModulesDirectory(join(import.meta.dir, "../modules"));
+  const modules = await ensureModulesLoaded();
+
   const container = new ServiceContainer();
   const config = new ConfigStore();
   const dependencies: MutableAppDependencies = { container };
   const providerContext = { container, config, dependencies };
 
-  const modules = await ensureModulesLoaded();
   const providers = [
     configProvider,
     cacheProvider,

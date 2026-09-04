@@ -122,7 +122,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
     laravelSection: "Controllers",
     laravelDocPath: "controllers",
     strataApis: ["withErrorHandling", "jsonResponse", "RouteHandler"],
-    testGlobs: ["integration/routes.integration.test.ts"],
+    testGlobs: ["unit/httpKernel.test.ts"],
     tier: "core",
   },
   {
@@ -324,7 +324,7 @@ export const PARITY_CATALOG: ParityEntry[] = [
     laravelSection: "Authentication",
     laravelDocPath: "authentication",
     strataApis: ["createAuthMiddleware", "createRequireAuthMiddleware", "currentAuthUser"],
-    testGlobs: ["unit/authService.test.ts", "unit/authMiddleware.test.ts"],
+    testGlobs: ["unit/authMiddleware.test.ts", "unit/cookieSessionGuard.test.ts"],
     tier: "core",
   },
   {
@@ -551,25 +551,16 @@ export const PARITY_CATALOG: ParityEntry[] = [
       "FailedJobRepository",
       "createFailedJobService",
     ],
-    testGlobs: [
-      "unit/adminServiceMetrics.test.ts",
-      "unit/adminService.test.ts",
-      "integration/webRoutes.integration.test.ts",
-    ],
+    testGlobs: ["unit/queueMetrics.test.ts", "unit/failedJobService.test.ts"],
     tier: "core",
-    notes:
-      "WorkHub /admin/queue: depth snapshot, failed-job list, retry/delete. Not Horizon workers, tags, or balancing.",
+    notes: "Bun-native queue metrics and failed-job APIs. Not Horizon workers, tags, or balancing.",
   },
   {
     id: "nova",
     laravelSection: "Admin resources (not Laravel Nova)",
     laravelDocPath: "nova",
     strataApis: ["AdminResourceRegistry", "formatAdminValue"],
-    testGlobs: [
-      "unit/adminRegistry.test.ts",
-      "unit/adminService.test.ts",
-      "integration/webRoutes.integration.test.ts",
-    ],
+    testGlobs: ["unit/adminRegistry.test.ts"],
     tier: "core",
     notes:
       "Read-only AdminResourceRegistry + /admin/resources. Not Nova fields, filters, actions, or lenses.",
@@ -582,6 +573,6 @@ export const PARITY_CATALOG: ParityEntry[] = [
     bootstrapApis: [],
     testGlobs: ["unit/bootstrapSchedule.test.ts", "unit/cli/scheduleRun.test.ts"],
     tier: "core",
-    notes: "WorkHub CLI schedule:run — not part of the @getstrata/bootstrap public API",
+    notes: "Strata CLI schedule:run — not part of the @getstrata/bootstrap public API",
   },
 ];

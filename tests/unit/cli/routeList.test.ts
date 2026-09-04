@@ -14,6 +14,8 @@ describe("routeListCommand", () => {
 
     expect(output.logs.length).toBeGreaterThan(0);
     expect(output.logs.some((line) => line.includes("GET") && line.includes("/health"))).toBe(true);
-    expect(output.logs.some((line) => line.includes("/api/v1"))).toBe(true);
+    expect(output.logs.some((line) => line.includes("/api/") || line.includes("/api/v1"))).toBe(
+      true,
+    );
   });
 });
