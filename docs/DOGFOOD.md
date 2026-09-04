@@ -20,7 +20,7 @@ bun run dev                      # HiroApp
 bun run hiroapp:dev:htmx         # HiroApp HTML skin
 ```
 
-`scripts/with-host-env.sh` defaults `DOGFOOD_APP=hiroapp`. Host validate still refreshes the leftover WorkHub schema (`DOGFOOD_APP=workhub migrate:fresh --seed`) so core tests that query `tenant` / RLS inventory keep a database, then refreshes HiroApp and runs `validate:ci`.
+`bun run validate:host` builds `@getstrata/core` and `@getstrata/bootstrap` first so HiroApp `migrate:fresh` can import package subpaths on a clean checkout.
 
 `bun run test:coverage` is the framework/core 100% gate. `bun run test:hiroapp:coverage` is the HiroApp domain gate.
 
