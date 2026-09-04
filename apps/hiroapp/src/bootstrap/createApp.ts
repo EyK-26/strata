@@ -8,8 +8,11 @@ import {
   type MutableAppDependencies,
 } from "@getstrata/bootstrap/contracts";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import { createHealthRoutes } from "@getstrata/bootstrap/health";
+import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
 import { isSpaEnabled, isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
+import { ensureHiroappDatabase } from "../db/ensureDatabase.ts";
 import { bindHttpContainer } from "../http/currentUser.ts";
 import { wrapSpaDocument } from "../http/wrap.ts";
 import { bindDatabase } from "./database.ts";
@@ -23,6 +26,7 @@ import { storageProvider } from "./providers/storage.ts";
 import { viewProvider } from "./providers/view.ts";
 
 export async function createApp(): Promise<{ context: AppContext; routes: AppRouteMap }> {
+  await ensureHiroappDatabase();
   bindDatabase();
 
   const container = new ServiceContainer();
@@ -52,7 +56,10 @@ export async function createApp(): Promise<{ context: AppContext; routes: AppRou
 
   const { createHttpKernel } = await import("@getstrata/bootstrap/httpKernel");
   const kernel = createHttpKernel(dependencies);
-  const routes: AppRouteMap = {};
+  const routes: AppRouteMap = {
+    ...createHealthRoutes(dependencies),
+    ...createMetricsRoutes(),
+  };
 
   for (const module of modules) {
     Object.assign(

@@ -77,6 +77,12 @@ jobs:
         run: bun run build:frontend
 
       - name: Start app for smoke tests
+        env:
+          DOGFOOD_APP: hiroapp
+          FRONTEND_MODE: server-htmx
+          APP_KEY_PREFIX: hiroapp
+          APP_NAME: HiroApp
+          API_PREFIX: /api
         run: |
           scripts/with-host-env.sh sh -c "bun run start" &
           for i in $(seq 1 30); do
@@ -92,6 +98,8 @@ jobs:
       - name: Run smoke tests
         env:
           BASE_URL: http://localhost:3000
+          APP_URL: http://localhost:3000
+          FRONTEND_MODE: server-htmx
         run: |
           bun run smoke
           bun run deps:audit || true

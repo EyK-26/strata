@@ -1,12 +1,10 @@
-import { createAppContext } from "@getstrata/bootstrap/context";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createRoutes } from "../../bootstrap/createRoutes";
 import { generateOpenApiSpec } from "../../core/openapi/generator";
 import { validateOpenApiSpec } from "../../core/openapi/validate";
+import { registerOpenApiRoutes } from "./registerOpenApiRoutes";
 
 async function openapiValidateCommand(): Promise<void> {
-  const { dependencies } = createAppContext();
-  createRoutes(dependencies);
+  await registerOpenApiRoutes();
 
   const spec = generateOpenApiSpec(routeRegistry.list());
   const errors = validateOpenApiSpec(spec);

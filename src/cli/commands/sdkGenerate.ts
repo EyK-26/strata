@@ -1,21 +1,19 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createAppContext } from "@getstrata/bootstrap/context";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createRoutes } from "../../bootstrap/createRoutes";
-import { appConfig } from "../../config/app";
 import { generateOpenApiSpec, renderTypeScriptSdk } from "../../core/openapi/generator";
+import { apiPrefix } from "../../core/runtime/appKeyPrefix";
+import { registerOpenApiRoutes } from "./registerOpenApiRoutes";
 
 async function sdkGenerateCommand(): Promise<void> {
-  const { dependencies } = createAppContext();
-  createRoutes(dependencies);
+  await registerOpenApiRoutes();
 
   const spec = generateOpenApiSpec(routeRegistry.list());
   const outputDirectory = join(process.cwd(), "sdk/typescript");
   const outputPath = join(outputDirectory, "client.ts");
 
   await mkdir(outputDirectory, { recursive: true });
-  await writeFile(outputPath, renderTypeScriptSdk(spec, appConfig.apiPrefix), "utf8");
+  await writeFile(outputPath, renderTypeScriptSdk(spec, apiPrefix()), "utf8");
 
   console.log(`TypeScript SDK written to ${outputPath}.`);
 }

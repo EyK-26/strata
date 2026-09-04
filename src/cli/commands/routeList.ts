@@ -1,10 +1,8 @@
-import { createAppContext } from "@getstrata/bootstrap/context";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createRoutes } from "../../bootstrap/createRoutes";
+import { registerOpenApiRoutes } from "./registerOpenApiRoutes";
 
-function routeListCommand(): void {
-  const { dependencies } = createAppContext();
-  createRoutes(dependencies);
+async function routeListCommand(): Promise<void> {
+  await registerOpenApiRoutes();
 
   const routes = routeRegistry.list();
 

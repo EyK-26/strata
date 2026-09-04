@@ -1,6 +1,6 @@
 # Coverage policy
 
-WorkHub enforces **100% lines, functions, and statements per in-scope file** via `bunfig.toml`. This is a **scoped** gate — not every file under `src/` is included.
+CI enforces **100% lines, functions, and statements per in-scope file** via `bunfig.toml` for framework/core tests (`bun run test:coverage`). HiroApp domain files are gated separately by `bun run test:hiroapp:coverage` because a HiroApp `--coverage` process also scores imported `@getstrata/core` files against bun’s threshold.
 
 ## Why scoped coverage?
 
@@ -18,6 +18,7 @@ WorkHub enforces **100% lines, functions, and statements per in-scope file** via
 ```bash
 # Full gated suite (matches CI)
 bun run test:coverage
+bun run test:hiroapp:coverage
 
 # Find in-scope files below 100%
 bun test --coverage 2>&1 | rg "^\s+src/" | rg -v "100\.00 \|  100\.00"
@@ -27,7 +28,7 @@ Configuration lives in `bunfig.toml` → `coveragePathIgnorePatterns`. See also 
 
 ## CI
 
-`validate:ci` runs `test:coverage` after migrate/seed. Failing any in-scope file blocks merge.
+`validate:ci` runs `test:coverage` after WorkHub migrate/seed, then `test:hiroapp:coverage`. Failing any in-scope file blocks merge.
 
 ## Adding new code
 

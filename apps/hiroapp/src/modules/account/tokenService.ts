@@ -18,7 +18,7 @@ export interface CreatedApiToken {
   plainTextToken: string;
 }
 
-function normalizeAbilities(value: unknown): string[] {
+export function normalizeAbilities(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map(String);
   }

@@ -1,14 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createAppContext } from "@getstrata/bootstrap/context";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createRoutes } from "../../bootstrap/createRoutes";
 import { generateOpenApiSpec, renderOpenApiDocument } from "../../core/openapi/generator";
 import { validateOpenApiSpec } from "../../core/openapi/validate";
+import { registerOpenApiRoutes } from "./registerOpenApiRoutes";
 
 async function openapiCheckCommand(): Promise<void> {
-  const { dependencies } = createAppContext();
-  createRoutes(dependencies);
+  await registerOpenApiRoutes();
 
   const spec = generateOpenApiSpec(routeRegistry.list());
   const errors = validateOpenApiSpec(spec);

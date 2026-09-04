@@ -15,10 +15,10 @@ Wave 5 retires WorkHub as the **developer default**. `bun run dev` starts HiroAp
 
 Wave 5 does **not**:
 
-- Delete WorkHub
-- Port Jetstream teams, SCIM, or tenant RLS onto HiroApp
-- Flip `readDogfoodApp()` when `DOGFOOD_APP` is unset
-- Change CI, `validate:ci`, coverage, or smoke — those stay WorkHub-gated
+- Delete WorkHub (Wave 10 delete step does)
+- Port Jetstream teams, SCIM, or tenant RLS onto HiroApp (Waves 7–9 did)
+- Flip `readDogfoodApp()` when `DOGFOOD_APP` is unset (until WorkHub tests are removed)
+- Change CI, `validate:ci`, coverage, or smoke — Wave 10 now points those at HiroApp
 
 ## Wave 6
 
@@ -40,6 +40,14 @@ HiroApp hiring tables carry `tenant_id` with Postgres RLS (`TENANCY_DRIVER=rls`)
 
 Staff get SCIM, hiring webhooks, audit, and billing. SCIM Users provision admin/recruiter accounts only — candidate-shaped payloads are ignored. SCIM Groups map to departments. Webhooks fire hiring events (`application.submitted`, `application.hired`, `application.ended`, `team.invited`) with `tenant_id`, not WorkHub `organization_id`. Candidates are not SCIM employees and are not billed as seats.
 
+## Wave 10
+
+Wave 10 points CI at HiroApp: OpenAPI, smoke, and the HiroApp domain coverage gate (`bun run test:hiroapp:coverage`). WorkHub `src/modules` remains in the tree until the delete step so WorkHub unit/integration tests can still cover core.
+
+`bun run test:coverage` is still the WorkHub/core 100% gate. HiroApp domain files are gated separately because bun’s `coverageThreshold` also scores imported `@getstrata/core` files in the same process.
+
+`scripts/with-host-env.sh` still defaults `DOGFOOD_APP=workhub` for that WorkHub coverage suite. CI `strata start` and `bun run smoke` set `DOGFOOD_APP=hiroapp`.
+
 ## Commands
 
 ```bash
@@ -52,9 +60,9 @@ bun run workhub:dev              # Jetstream / SCIM / RLS
 bun run workhub:dev:htmx
 ```
 
-`scripts/with-host-env.sh` sets `DOGFOOD_APP=workhub` so `validate:host`, `dev:host`, and CI `strata start` keep the WorkHub schema and smoke tokens.
+`scripts/with-host-env.sh` still defaults `DOGFOOD_APP=workhub` so `validate:host` and WorkHub `test:coverage` keep the WorkHub schema. CI `strata start` and `bun run smoke` override to HiroApp.
 
-`bun run test:coverage` is the WorkHub 100% gate. `bun run test:hiroapp` runs after it in `validate:ci` and does not enter that gate.
+`bun run test:coverage` is the WorkHub/core 100% gate. `bun run test:hiroapp:coverage` is the HiroApp domain gate and replaces a bare `test:hiroapp` in `validate:ci`.
 
 ## Ports
 

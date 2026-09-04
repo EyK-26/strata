@@ -5,7 +5,7 @@ import { mailer } from "@getstrata/core/mail/mailer";
 import { sendMarkdownMail } from "@getstrata/core/mail/markdownMailable";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import { recordHiringEvent } from "../../lib/hiringEvents.ts";
-import { isAdmin, isCandidate, isStaff } from "../../lib/roles.ts";
+import { isCandidate, isStaff } from "../../lib/roles.ts";
 import { iso } from "../../lib/serialize.ts";
 import { canManageTeam, requireStaffDepartmentAccess } from "../../lib/staffTeam.ts";
 import { departments } from "../departments/repository.ts";
@@ -237,12 +237,6 @@ export class TeamService {
 
   async switchCurrentDepartment(user: UserRecord, departmentId: number) {
     await requireStaffDepartmentAccess(user, departmentId);
-    if (
-      !isAdmin(user.role_id) &&
-      !(await departmentMembers.findMembership(departmentId, user.id))
-    ) {
-      throw new ForbiddenError("You are not a member of this hiring team.");
-    }
     return users.updateByIdOrThrow(user.id, { current_department_id: departmentId });
   }
 }

@@ -1,6 +1,6 @@
 [test]
 preload = ["./tests/preloadEnv.ts", "./tests/globalSetup.ts"]
-coveragePath = ["src"]
+coveragePath = ["src", "apps/hiroapp/src"]
 coverageThreshold = { lines = 1.0, functions = 1.0, statements = 1.0 }
 
 # Scoped gate: 100% per file on product logic. Exclusions are bootstrap, glue, and
@@ -8,6 +8,35 @@ coverageThreshold = { lines = 1.0, functions = 1.0, statements = 1.0 }
 coveragePathIgnorePatterns = [
   "tests/**",
   "packages/**",
+
+  # Wave 10: WorkHub app domain is retired from the gate. HiroApp domain files
+  # under apps/hiroapp/src remain in scope (service/repository/jobs/lib).
+  "src/modules/**",
+
+  # HiroApp glue: bootstrap, HTTP, routes, views, schema, tests
+  "apps/hiroapp/src/bootstrap/**",
+  "apps/hiroapp/src/db/**",
+  "apps/hiroapp/src/http/**",
+  "apps/hiroapp/src/tests/**",
+  "apps/hiroapp/src/models/**",
+  "apps/hiroapp/src/scripts/**",
+  "apps/hiroapp/src/jobs/**",
+  "apps/hiroapp/src/schedule.ts",
+  "apps/hiroapp/src/observers/**",
+  "apps/hiroapp/src/listeners/**",
+  "apps/hiroapp/src/events/**",
+  "apps/hiroapp/src/modules/**/index.ts",
+  "apps/hiroapp/src/modules/**/routes.ts",
+  "apps/hiroapp/src/modules/**/web.ts",
+  "apps/hiroapp/src/modules/**/requests.ts",
+  "apps/hiroapp/src/modules/**/table.ts",
+  "apps/hiroapp/src/modules/**/*Table.ts",
+  "apps/hiroapp/src/modules/**/policy.ts",
+  "apps/hiroapp/src/modules/**/schemas.ts",
+  "apps/hiroapp/src/lib/serialize.ts",
+  "apps/hiroapp/src/lib/presenters.ts",
+  "apps/hiroapp/src/lib/loaders.ts",
+  "apps/hiroapp/src/modules/catalog/**",
 
   # Process entrypoints, REPL, and code generators
   "src/cli/**",
