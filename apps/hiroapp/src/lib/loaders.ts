@@ -15,6 +15,8 @@ import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
 import { offers } from "../modules/offers/repository.ts";
 import { serializeOffer } from "../modules/offers/service.ts";
+import { applicationRejections, rejectionReasons } from "../modules/rejections/repository.ts";
+import { serializeReason, serializeRejection } from "../modules/rejections/service.ts";
 import type { UserRecord } from "../modules/users/repository.ts";
 
 async function inboxFor(user: User | UserRecord) {
@@ -140,6 +142,9 @@ export async function loadApplicationDetail(applicationId: number) {
 
   const comments = await application.comments();
   const interviewRows = await interviews.forApplication(applicationId);
+  const reasonRows = await rejectionReasons.ordered();
+  const reasonName = new Map(reasonRows.map((row) => [Number(row.id), row.name]));
+  const rejectionRows = await applicationRejections.forApplication(applicationId);
   return {
     application: mergeResource(new ApplicationResource(application), {
       user: user ? new UserResource(user).toArray() : null,
@@ -151,6 +156,11 @@ export async function loadApplicationDetail(applicationId: number) {
     comments: comments.map((row) => row.toArray()),
     interviews: interviewRows.map(serializeInterview),
     offers: (await offers.forApplication(applicationId)).map(serializeOffer),
+    rejections: rejectionRows.map((row) => ({
+      ...serializeRejection(row),
+      reason_name: reasonName.get(Number(row.reason_id)) ?? null,
+    })),
+    rejection_reasons: reasonRows.map(serializeReason),
     all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
 }

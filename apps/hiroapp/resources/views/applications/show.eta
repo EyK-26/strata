@@ -105,6 +105,27 @@
           <button type="submit">Save draft offer</button>
         </form>
       <% } %>
+      <% if ((it.rejections ?? []).length) { %>
+        <h3>Rejection reasons</h3>
+        <% it.rejections.forEach((rejection) => { %>
+          <p><%= rejection.reason_name %> · <%= rejection.notes %></p>
+        <% }) %>
+      <% } %>
+      <% if (it.roleId !== 2 && it.application.status_id < 6) { %>
+        <form class="RejectForm" action="/applications/<%= it.application.id %>/reject" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+          <label>Reason
+            <select name="reason_id">
+              <% (it.rejection_reasons ?? []).forEach((reason) => { %>
+                <option value="<%= reason.id %>"><%= reason.name %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label>Notes <textarea name="notes"></textarea></label>
+          <button type="submit">Reject with reason</button>
+        </form>
+      <% } %>
     </div>
   </div>
   <div class="comments">

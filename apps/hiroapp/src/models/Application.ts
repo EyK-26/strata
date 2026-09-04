@@ -1,6 +1,7 @@
 import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { applications } from "../modules/applications/repository.ts";
 import type { ApplicationRecord } from "../modules/applications/table.ts";
+import { ApplicationRejection } from "./ApplicationRejection.ts";
 import { Comment } from "./Comment.ts";
 import { Interview } from "./Interview.ts";
 import { Offer } from "./Offer.ts";
@@ -47,6 +48,10 @@ export class Application extends Model<ApplicationRecord, "id"> {
 
   offers() {
     return this.hasMany(() => Offer);
+  }
+
+  rejections() {
+    return this.hasMany(() => ApplicationRejection);
   }
 }
 
