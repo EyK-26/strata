@@ -1740,6 +1740,76 @@
             "description": "Validation Error"
           }
         }
+      },
+      "post": {
+        "summary": "POST /api/positions/:id",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
+    "/api/positions/{id}/close": {
+      "post": {
+        "summary": "POST /api/positions/:id/close",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
       }
     },
     "/api/positions/{id}/comments": {
@@ -1911,6 +1981,42 @@
     "/api/positions/{id}/match": {
       "get": {
         "summary": "GET /api/positions/:id/match",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
+    "/api/positions/{id}/reopen": {
+      "post": {
+        "summary": "POST /api/positions/:id/reopen",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"

@@ -41,6 +41,45 @@ export class CreatePositionRequest extends FormRequest<CreatePositionPayload> {
   }
 }
 
+export class UpdatePositionRequest extends FormRequest<{
+  name?: string;
+  description?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  pay_grade?: number;
+}> {
+  protected parse(payload: unknown) {
+    const body = expectObject(payload);
+    const emptyToNull = (value: unknown) => {
+      if (typeof value !== "string" || value.trim() === "") return null;
+      return value.trim();
+    };
+    const result: {
+      name?: string;
+      description?: string | null;
+      start_date?: string | null;
+      end_date?: string | null;
+      pay_grade?: number;
+    } = {};
+    if ("name" in body) {
+      result.name = typeof body.name === "string" ? body.name : "";
+    }
+    if ("description" in body) {
+      result.description = emptyToNull(body.description);
+    }
+    if ("start_date" in body) {
+      result.start_date = emptyToNull(body.start_date);
+    }
+    if ("end_date" in body) {
+      result.end_date = emptyToNull(body.end_date);
+    }
+    if ("pay_grade" in body) {
+      result.pay_grade = Number(body.pay_grade);
+    }
+    return result;
+  }
+}
+
 export class PositionIndexRequest extends QueryFormRequest<{ search: string; department: number }> {
   protected parseQuery(request?: Request) {
     const params = getQueryParams(request);

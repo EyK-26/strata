@@ -3,10 +3,22 @@
   <p><%= it.position.description %></p>
   <p>Department: <%= it.position.department?.name %></p>
   <p>Grade: <%= it.position.grade?.name %></p>
+  <% if (it.currentUser?.role_id !== 2 && it.position.hiring) { %>
+    <form action="/positions/<%= it.position.id %>/close" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <button type="submit">Stop hiring</button>
+    </form>
+  <% } %>
+  <% if (it.currentUser?.role_id !== 2 && !it.position.hiring && !it.position.user_id) { %>
+    <form action="/positions/<%= it.position.id %>/reopen" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <button type="submit">Reopen hiring</button>
+    </form>
+  <% } %>
   <% if (it.currentUser?.role_id === 1) { %>
     <form action="/positions/<%= it.position.id %>/delete" method="post">
       <%~ include("../partials/csrf.eta") %>
-      <button type="submit">Close position</button>
+      <button type="submit">Delete position</button>
     </form>
   <% } %>
   <% if (it.currentUser?.role_id !== 2) { %>

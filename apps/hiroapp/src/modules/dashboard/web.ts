@@ -40,6 +40,7 @@ import {
   notifyUser,
 } from "../notifications/service.ts";
 import { positions } from "../positions/repository.ts";
+import { positionService } from "../positions/service.ts";
 import { users } from "../users/repository.ts";
 
 function serializeLoadedApplication(application: Application) {
@@ -225,6 +226,34 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
         ),
       ),
     },
+    "/positions/:id/close": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const actor = await authorize(request, "positions", "update");
+            await positionService.close(actor, position);
+            return redirectResponse(`/positions/${position.id}`);
+          },
+        ),
+      ),
+    },
+    "/positions/:id/reopen": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const actor = await authorize(request, "positions", "update");
+            await positionService.reopen(actor, position);
+            return redirectResponse(`/positions/${position.id}`);
+          },
+        ),
+      ),
+    },
     "/positions/:id/delete": {
       POST: wrapWebAuthenticated(
         dependencies,
@@ -232,10 +261,8 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
           "id",
           (id) => Position.findOrFail(id),
           async (request, position) => {
-            await authorize(request, "positions", "delete");
-            const id = Number(position.id);
-            await applications.deleteForPosition(id);
-            await position.delete();
+            const actor = await authorize(request, "positions", "delete");
+            await positionService.remove(actor, position);
             return redirectResponse("/positions");
           },
         ),
@@ -252,18 +279,13 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await authorize(request, "positions", "create");
         const { fields } = await parseFormBody(request);
-        const departmentId = isRecruiter(user.role_id)
-          ? Number((await resolveStaffDepartmentId(user)) ?? fields.department_id)
-          : Number(fields.department_id);
-        const created = await positions.create({
-          user_id: null,
-          department_id: departmentId,
-          grade_id: Number(fields.pay_grade),
-          name: fields.name,
+        const created = await positionService.create(user, {
+          name: fields.name ?? "",
           description: fields.description || null,
-          hiring: true,
-          start_date: fields.start_date ? new Date(fields.start_date) : null,
-          end_date: fields.end_date ? new Date(fields.end_date) : null,
+          start_date: fields.start_date || null,
+          end_date: fields.end_date || null,
+          pay_grade: Number(fields.pay_grade),
+          department_id: Number(fields.department_id),
         });
         return redirectResponse(`/positions/${created.id}`);
       }),

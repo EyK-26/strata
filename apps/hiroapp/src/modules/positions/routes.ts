@@ -1,18 +1,18 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
-import { ForbiddenError, NotFoundError } from "@getstrata/core/errors/http";
+import { NotFoundError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { bindModel } from "../../http/bind.ts";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { ApplicationResource, mergeResource, PositionResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { loadCandidatePosition, loadPositionWithApplications } from "../../lib/loaders.ts";
-import { isCandidate, isRecruiter } from "../../lib/roles.ts";
-import { resolveStaffDepartmentId } from "../../lib/staffTeam.ts";
+import { isCandidate } from "../../lib/roles.ts";
 import { Department } from "../../models/Department.ts";
 import { Position } from "../../models/Position.ts";
 import { applications } from "../applications/repository.ts";
 import { positions } from "./repository.ts";
-import { CreatePositionRequest, PositionIndexRequest } from "./requests.ts";
+import { CreatePositionRequest, PositionIndexRequest, UpdatePositionRequest } from "./requests.ts";
+import { positionService } from "./service.ts";
 
 export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
@@ -20,17 +20,9 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
       GET: wrapApi(dependencies, async (request) => {
         const user = await authorize(request, "positions", "view");
         const query = new PositionIndexRequest().validate(request);
-        let departmentId = query.department || undefined;
-        if (isRecruiter(user.role_id)) {
-          const departmentIdFromTeam = await resolveStaffDepartmentId(user);
-          if (!departmentIdFromTeam) {
-            throw new ForbiddenError("Recruiter has no hiring team.");
-          }
-          departmentId = departmentIdFromTeam;
-        }
-        const rows = await positions.hiring({
-          search: isRecruiter(user.role_id) ? undefined : query.search,
-          departmentId,
+        const rows = await positionService.listHiringForActor(user, {
+          search: query.search,
+          department_id: query.department || undefined,
         });
         const payload = await Promise.all(
           rows.map(async (position) =>
@@ -46,20 +38,8 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: wrapApi(dependencies, async (request) => {
         const user = await authorize(request, "positions", "create");
         const payload = await new CreatePositionRequest().validate(request);
-        const departmentId = isRecruiter(user.role_id)
-          ? Number((await resolveStaffDepartmentId(user)) ?? payload.department_id)
-          : payload.department_id;
-        const created = await positions.create({
-          user_id: null,
-          department_id: departmentId,
-          grade_id: payload.pay_grade,
-          name: payload.name,
-          description: payload.description,
-          hiring: true,
-          start_date: payload.start_date ? new Date(payload.start_date) : null,
-          end_date: payload.end_date ? new Date(payload.end_date) : null,
-        });
-        return jsonResponse({ message: "succes", id: created.id });
+        const created = await positionService.create(user, payload);
+        return jsonResponse({ message: "success", id: created.id });
       }),
     },
     "/api/positions/all": {
@@ -100,6 +80,47 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
           },
         ),
       ),
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const actor = await authorize(request, "positions", "update");
+            const payload = await new UpdatePositionRequest().validate(request);
+            const updated = await positionService.update(actor, position, payload);
+            return jsonResponse(new PositionResource(updated).toArray());
+          },
+        ),
+      ),
+    },
+    "/api/positions/:id/close": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const actor = await authorize(request, "positions", "update");
+            const updated = await positionService.close(actor, position);
+            return jsonResponse(new PositionResource(updated).toArray());
+          },
+        ),
+      ),
+    },
+    "/api/positions/:id/reopen": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const actor = await authorize(request, "positions", "update");
+            const updated = await positionService.reopen(actor, position);
+            return jsonResponse(new PositionResource(updated).toArray());
+          },
+        ),
+      ),
     },
     "/api/positions/:id/delete": {
       POST: wrapApi(
@@ -108,13 +129,8 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
           "id",
           (id) => Position.findOrFail(id),
           async (request, position) => {
-            await authorize(request, "positions", "delete");
-            const id = Number(position.id);
-            await applications.deleteForPosition(id);
-            await position.delete();
-            return new Response("success", {
-              headers: { "Content-Type": "text/plain; charset=utf-8" },
-            });
+            const actor = await authorize(request, "positions", "delete");
+            return jsonResponse(await positionService.remove(actor, position));
           },
         ),
       ),
@@ -132,9 +148,9 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
             return position;
           },
           async (request, position) => {
-            await authorize(request, "positions", "delete");
-            await position.restore();
-            return jsonResponse({ restored: true, id: Number(position.id) });
+            const actor = await authorize(request, "positions", "delete");
+            const restored = await positionService.restore(actor, position);
+            return jsonResponse({ restored: true, id: Number(restored.id) });
           },
         ),
       ),
