@@ -86,6 +86,8 @@ jobs:
           APP_KEY_PREFIX: hiroapp
           APP_NAME: HiroApp
           API_PREFIX: /api
+          REDIS_URL: redis://localhost:6379
+          DATABASE_URL: postgresql://postgres:postgres@localhost:54329/bun_testing_test
         run: |
           scripts/with-host-env.sh sh -c "bun run start" &
           for i in $(seq 1 30); do

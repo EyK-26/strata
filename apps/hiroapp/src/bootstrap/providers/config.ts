@@ -12,7 +12,7 @@ export const configProvider: ServiceProvider = {
     config.set("cache.driver", env.CACHE_DRIVER ?? "array");
     config.set("cache.ttlMs", 3_600_000);
     config.set("cache.maxEntries", 100);
-    config.set("cache.redisUrl", "");
+    config.set("cache.redisUrl", process.env.REDIS_URL ?? "");
     config.set("app.name", env.APP_NAME ?? "HiroApp");
     config.set("app.env", env.APP_ENV ?? "local");
     config.set("app.url", env.APP_URL ?? "http://localhost:3000");
