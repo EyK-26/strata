@@ -11,7 +11,7 @@ In-repo dogfood app for Strata. One domain, two skins:
 
 ```bash
 bun run hiroapp:fresh
-DOGFOOD_APP=hiroapp FRONTEND_MODE=server-htmx bun run dev
+bun run dev
 # or
 bun run hiroapp:dev:htmx
 ```
