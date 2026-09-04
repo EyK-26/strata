@@ -6,8 +6,6 @@ import {
   parseOptionalBooleanQueryParam,
   parsePositiveIntParam,
 } from "@getstrata/core/http/validation";
-import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/queue/createAppQueue";
-import type FailedJobService from "@getstrata/core/queue/failedJobService";
 import { authorize, denyUnless, requireCurrentUser } from "../../http/currentUser.ts";
 import {
   ApplicationResource,
@@ -19,9 +17,10 @@ import {
 import { wrapApi } from "../../http/wrap.ts";
 import { isAdmin } from "../../lib/roles.ts";
 import { reportingService } from "../applications/reporting.ts";
-import { statuses } from "../catalog/repository.ts";
+import { catalogService } from "../catalog/service.ts";
 import { positions } from "../positions/repository.ts";
 import { users } from "../users/repository.ts";
+import { failedJobsAdmin } from "./failedJobs.ts";
 
 async function dashboardRows(request: Request) {
   const params = getQueryParams(request);
@@ -54,7 +53,7 @@ export function dashboardRoutes(dependencies: AppDependencies): AppRouteMap {
             const position = application.position_id
               ? await positions.findById(application.position_id)
               : null;
-            const status = await statuses.findById(application.status_id);
+            const status = await catalogService.statusById(application.status_id);
             return mergeResource(new ApplicationResource(application), {
               user: user ? new UserResource(user).toArray() : null,
               position: position ? new PositionResource(position).toArray() : null,
@@ -69,16 +68,7 @@ export function dashboardRoutes(dependencies: AppDependencies): AppRouteMap {
       GET: wrapApi(dependencies, async (request) => {
         const user = await requireCurrentUser(request);
         denyUnless(isAdmin(user.role_id));
-        const failedJobs =
-          dependencies.container.resolve<FailedJobService>(FAILED_JOB_SERVICE_TOKEN);
-        return jsonResponse(
-          (await failedJobs.listRecent(50)).map((job) => ({
-            id: Number(job.id),
-            job_name: job.job_name,
-            exception: job.exception,
-            failed_at: job.failed_at,
-          })),
-        );
+        return jsonResponse(await failedJobsAdmin.list());
       }),
     },
     "/api/failed-jobs/:id/retry": {
@@ -86,10 +76,7 @@ export function dashboardRoutes(dependencies: AppDependencies): AppRouteMap {
         const user = await requireCurrentUser(request);
         denyUnless(isAdmin(user.role_id));
         const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const failedJobs =
-          dependencies.container.resolve<FailedJobService>(FAILED_JOB_SERVICE_TOKEN);
-        const retried = await failedJobs.retry(id);
-        return jsonResponse({ retried: true, id: Number(retried.id), job_name: retried.job_name });
+        return jsonResponse(await failedJobsAdmin.retry(id));
       }),
     },
   };

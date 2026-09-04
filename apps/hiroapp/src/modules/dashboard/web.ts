@@ -3,8 +3,6 @@ import { parseFormBody } from "@getstrata/bootstrap/web/forms";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { parsePositiveIntParam } from "@getstrata/core/http/validation";
-import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/queue/createAppQueue";
-import type FailedJobService from "@getstrata/core/queue/failedJobService";
 import { redirectResponse } from "@getstrata/core/view";
 import { bindModel } from "../../http/bind.ts";
 import { authorize, denyUnless, requireCurrentUser } from "../../http/currentUser.ts";
@@ -40,6 +38,7 @@ import { interviewerService } from "../positions/interviewers.ts";
 import { positions } from "../positions/repository.ts";
 import { positionService } from "../positions/service.ts";
 import { users } from "../users/repository.ts";
+import { failedJobsAdmin } from "./failedJobs.ts";
 
 function serializeLoadedApplication(application: Application) {
   const position = application.loaded<Position>("position");
@@ -475,15 +474,8 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await requireCurrentUser(request);
         denyUnless(isAdmin(user.role_id));
-        const failedJobs =
-          dependencies.container.resolve<FailedJobService>(FAILED_JOB_SERVICE_TOKEN);
         return renderPage(request, "admin/failed-jobs", {
-          jobs: (await failedJobs.listRecent(50)).map((job) => ({
-            id: Number(job.id),
-            job_name: job.job_name,
-            exception: job.exception,
-            failed_at: job.failed_at,
-          })),
+          jobs: await failedJobsAdmin.list(),
         });
       }),
     },
@@ -492,9 +484,7 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
         const user = await requireCurrentUser(request);
         denyUnless(isAdmin(user.role_id));
         const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const failedJobs =
-          dependencies.container.resolve<FailedJobService>(FAILED_JOB_SERVICE_TOKEN);
-        await failedJobs.retry(id);
+        await failedJobsAdmin.retry(id);
         return redirectResponse("/failed-jobs");
       }),
     },
