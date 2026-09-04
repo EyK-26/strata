@@ -1,31 +1,15 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { parseFormBody } from "@getstrata/bootstrap/web/forms";
 import { verifyPassword } from "@getstrata/core/auth/password";
-import { ValidationError } from "@getstrata/core/errors/http";
 import { redirectResponse } from "@getstrata/core/view";
-import type { HiroSessionUser } from "../../bootstrap/providers/auth.ts";
+import { redirectWithCookies, sessionMetaFromRequest } from "../../http/cookies.ts";
 import { authManager } from "../../http/currentUser.ts";
 import { renderPage } from "../../http/view.ts";
 import { wrapWebAuthenticated, wrapWebGuest } from "../../http/wrap.ts";
+import { toSessionUser } from "../../lib/sessionUser.ts";
+import { createMfaChallengeCookie } from "../account/mfaChallenge.ts";
+import { accountService } from "../account/service.ts";
 import { users } from "../users/repository.ts";
-
-function toSessionUser(user: {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  role_id: number;
-}): HiroSessionUser {
-  return {
-    id: user.id,
-    name: `${user.first_name} ${user.last_name}`,
-    email: user.email,
-    first_name: user.first_name,
-    last_name: user.last_name,
-    role_id: user.role_id,
-    is_admin: user.role_id === 1,
-  };
-}
 
 export function authWebRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
@@ -53,7 +37,15 @@ export function authWebRoutes(dependencies: AppDependencies): AppRouteMap {
             false,
           );
         }
-        return authManager().signInRedirect(toSessionUser(user), "/", 302);
+        if (accountService.staffRequiresMfa(user)) {
+          return redirectWithCookies("/two-factor-challenge", [createMfaChallengeCookie(user.id)]);
+        }
+        return authManager().signInRedirect(
+          toSessionUser(user),
+          "/",
+          302,
+          sessionMetaFromRequest(request),
+        );
       }),
     },
     "/logout": {
@@ -64,5 +56,4 @@ export function authWebRoutes(dependencies: AppDependencies): AppRouteMap {
   };
 }
 
-void ValidationError;
 void redirectResponse;

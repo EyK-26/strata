@@ -48,6 +48,7 @@ export function serializeUser(
         last_name: string;
         email: string;
         role_id: number;
+        email_verified_at?: Date | string | null;
         created_at?: Date | string | null;
         updated_at?: Date | string | null;
       }
@@ -58,6 +59,7 @@ export function serializeUser(
           last_name: string;
           email: string;
           role_id: number;
+          email_verified_at?: Date | string | null;
           created_at?: Date | string | null;
           updated_at?: Date | string | null;
         };
@@ -70,7 +72,7 @@ export function serializeUser(
     first_name: user.first_name,
     last_name: user.last_name,
     email: user.email,
-    email_verified_at: null,
+    email_verified_at: iso(user.email_verified_at),
     role_id: id(user.role_id),
     ...serializeTimestamps(user),
     ...extras,

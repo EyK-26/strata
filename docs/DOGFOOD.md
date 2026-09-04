@@ -4,8 +4,8 @@ Strata keeps two in-repo reference apps. They do not share a database.
 
 | App | Path | What it dogfoods | How to run |
 |-----|------|------------------|------------|
-| HiroApp | `apps/hiroapp` | Hiring domain and Laravel-shaped Eloquent / HTTP (Waves 1–4) | `bun run dev` or `bun run hiroapp:dev:htmx` |
-| WorkHub | `src/modules` | Jetstream / Fortify, SCIM, tenant RLS, billing, webhooks | `bun run workhub:dev` |
+| HiroApp | `apps/hiroapp` | Hiring domain, Laravel-shaped Eloquent / HTTP, and staff Fortify/Jetstream identity (Wave 6) | `bun run dev` or `bun run hiroapp:dev:htmx` |
+| WorkHub | `src/modules` | Teams, SCIM, tenant RLS, billing, webhooks (until Waves 7–10 land on HiroApp) | `bun run workhub:dev` |
 
 WorkHub and HiroApp both have `users`, `sessions`, and `notifications` with **different schemas**. HiroApp rewrites `DATABASE_URL` to `hiroapp_test` (or `HIROAPP_DATABASE_URL`). Do not point both apps at one database.
 
@@ -16,11 +16,15 @@ Wave 5 retires WorkHub as the **developer default**. `bun run dev` starts HiroAp
 Wave 5 does **not**:
 
 - Delete WorkHub
-- Port Jetstream teams, personal access tokens, 2FA, SCIM, or tenant RLS onto HiroApp
+- Port Jetstream teams, SCIM, or tenant RLS onto HiroApp
 - Flip `readDogfoodApp()` when `DOGFOOD_APP` is unset
 - Change CI, `validate:ci`, coverage, or smoke — those stay WorkHub-gated
 
-HiroApp identity is `User` + `role_id` (admin / recruiter / candidate). A candidate is a `User` with `role_id = 2`. That does not map onto WorkHub’s team + `tenant_id` model. Jetstream / SCIM / RLS stay WorkHub-only until a later, explicit product decision.
+## Wave 6
+
+Staff (admin `role_id=1`, recruiter `role_id=3`) get Fortify/Jetstream account surfaces on HiroApp cookie sessions: profile, password, MFA, PATs, browser sessions, and logout-other-devices. Candidates (`role_id=2`) may change profile and password only.
+
+HiroApp identity is `User` + `role_id` (admin / recruiter / candidate). A candidate is a `User` with `role_id = 2`. That does not map onto WorkHub’s team + `tenant_id` model. Teams / SCIM / RLS stay WorkHub-only until Waves 7–9.
 
 `notifiable_type` stays `App\Models\User`.
 

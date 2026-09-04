@@ -7,6 +7,12 @@ export interface UserRecord {
   email: string;
   password: string;
   role_id: number;
+  email_verified_at?: Date | null;
+  mfa_secret?: string | null;
+  mfa_enabled?: boolean;
+  mfa_recovery_codes?: string | null;
+  profile_photo_path?: string | null;
+  session_valid_after?: Date | null;
   created_at: Date | null;
   updated_at: Date | null;
 }
@@ -21,6 +27,12 @@ export const userTable = defineTable<UserRecord, "id">({
     "email",
     "password",
     "role_id",
+    "email_verified_at",
+    "mfa_secret",
+    "mfa_enabled",
+    "mfa_recovery_codes",
+    "profile_photo_path",
+    "session_valid_after",
     "created_at",
     "updated_at",
   ],

@@ -49,6 +49,8 @@ class UserResource extends JsonResource {
       last_name: string;
       email: string;
       role_id: unknown;
+      email_verified_at?: Date | string | null;
+      mfa_enabled?: boolean;
       created_at?: Date | string | null;
       updated_at?: Date | string | null;
     }>(this.resource as never);
@@ -57,7 +59,8 @@ class UserResource extends JsonResource {
       first_name: raw.first_name,
       last_name: raw.last_name,
       email: raw.email,
-      email_verified_at: null,
+      email_verified_at: iso(raw.email_verified_at),
+      mfa_enabled: Boolean(raw.mfa_enabled),
       role_id: id(raw.role_id),
       ...serializeTimestamps(raw),
     };

@@ -1,13 +1,15 @@
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel, type HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
 import { CORE_AUTH_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ValidationError } from "@getstrata/core/errors/http";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
-import type { RouteHandler } from "@getstrata/core/http/middleware";
+import type { Middleware, RouteHandler } from "@getstrata/core/http/middleware";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
+import { authManager } from "./currentUser.ts";
 
 function formatJsonError(error: unknown) {
   if (error instanceof ValidationError) {
@@ -43,6 +45,21 @@ function csrfWhenNeeded(): ReturnType<typeof createCsrfMiddleware>[] {
   return [createCsrfMiddleware()];
 }
 
+function touchCookieSession(): Middleware {
+  return async (request, next) => {
+    try {
+      const auth = authManager() as CookieSessionAuthManager;
+      const sessionId = auth.store.sessionIdFromRequest(request);
+      if (sessionId) {
+        await auth.store.touch(sessionId);
+      }
+    } catch {
+      // Guest paths and boot can run before the HTTP container is bound.
+    }
+    return next();
+  };
+}
+
 export function createKernel(dependencies: AppDependencies): HttpKernel {
   return createHttpKernel(dependencies);
 }
@@ -53,6 +70,7 @@ export function wrapApi(dependencies: AppDependencies, handler: RouteHandler): R
   return withMiddleware(
     ...csrfWhenNeeded(),
     createAuthMiddleware(auth),
+    touchCookieSession(),
     ...kernel.group("api"),
     ...kernel.group("authenticated"),
   )(wrapJson(handler));
@@ -85,7 +103,22 @@ export function wrapWebAuthenticated(
 ): RouteHandler {
   const kernel = createKernel(dependencies);
   const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
-  return withMiddleware(createAuthMiddleware(auth))(kernel.wrapWebAuthenticated(handler));
+  return withMiddleware(
+    createAuthMiddleware(auth),
+    touchCookieSession(),
+  )(kernel.wrapWebAuthenticated(handler));
+}
+
+export function wrapWebPasswordConfirm(
+  dependencies: AppDependencies,
+  handler: RouteHandler,
+): RouteHandler {
+  const kernel = createKernel(dependencies);
+  const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
+  return withMiddleware(
+    createAuthMiddleware(auth),
+    touchCookieSession(),
+  )(kernel.wrapWebPasswordConfirm(handler));
 }
 
 export function wrapSpaDocument(handler: RouteHandler): RouteHandler {

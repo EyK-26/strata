@@ -9,12 +9,15 @@ import { Skill } from "./Skill.ts";
 
 export class User extends Model<UserRecord, "id"> {
   static $fillable = ["first_name", "last_name", "email", "password", "role_id"] as const;
-  static $hidden = ["password"] as const;
+  static $hidden = ["password", "mfa_secret", "mfa_recovery_codes"] as const;
   static $guarded = [] as const;
   static $morphClass = "App\\Models\\User";
   static $casts = {
     id: "integer",
     role_id: "integer",
+    mfa_enabled: "bool",
+    email_verified_at: "datetime",
+    session_valid_after: "datetime",
   } as const;
 
   role() {
