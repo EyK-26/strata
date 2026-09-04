@@ -54,8 +54,8 @@ export function tagWebRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, tag) => {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
-            const removed = await tagService.remove(actor, tag);
-            return redirectResponse(returnTo(fields, `/tags`));
+            await tagService.remove(actor, tag);
+            return redirectResponse(returnTo(fields, "/tags"));
           },
         ),
       ),
