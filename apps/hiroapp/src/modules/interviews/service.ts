@@ -22,6 +22,12 @@ export type ScheduleInterviewInput = {
   text?: string;
 };
 
+export type RescheduleInterviewInput = {
+  scheduled_at: string;
+  place?: string | null;
+  text?: string;
+};
+
 function asStatus(value: unknown): InterviewStatus {
   if (
     value === "scheduled" ||
@@ -199,6 +205,47 @@ export class InterviewService {
       { interview_id: updated.id, application_id: updated.application_id },
       { type: "interview", id: updated.id },
     );
+    return updated;
+  }
+
+  async reschedule(actor: UserRecord, interview: Interview, input: RescheduleInterviewInput) {
+    if (!isStaff(actor.role_id)) {
+      throw new ForbiddenError("Only staff can reschedule interviews.");
+    }
+    const status = asStatus(interview.get("status"));
+    if (status !== "scheduled" && status !== "confirmed") {
+      throw new ForbiddenError("Interview cannot be rescheduled.");
+    }
+    const scheduledAt = parseScheduleDate(input.scheduled_at);
+    const changes: { scheduled_at: Date; place?: string | null } = { scheduled_at: scheduledAt };
+    if (input.place !== undefined) {
+      changes.place = input.place?.trim() || null;
+    }
+    const updated = await interviews.updateByIdOrThrow(Number(interview.id), changes);
+    await recordHiringEvent(
+      "interview.rescheduled",
+      {
+        interview_id: updated.id,
+        application_id: updated.application_id,
+        scheduled_at: iso(scheduledAt),
+        place: updated.place,
+      },
+      { type: "interview", id: updated.id },
+    );
+    const application = await requireApplication(updated.application_id);
+    const applicant = await users.findByIdOrThrow(Number(application.get("user_id")));
+    const message = interviewNotification({
+      text: `${input.text ?? "Your interview has been rescheduled."}`.trim(),
+      datetime: input.scheduled_at,
+      place: updated.place ?? "",
+      sender: {
+        first_name: actor.first_name,
+        last_name: actor.last_name,
+        email: actor.email,
+      },
+      to: applicant.email,
+    });
+    await notifyUser({ userId: applicant.id, ...message });
     return updated;
   }
 }

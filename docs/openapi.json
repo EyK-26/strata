@@ -344,6 +344,73 @@
         }
       }
     },
+    "/api/applications/{id}/reject": {
+      "post": {
+        "summary": "POST /api/applications/:id/reject",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
+    "/api/applications/{id}/rejections": {
+      "get": {
+        "summary": "GET /api/applications/:id/rejections",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
     "/api/applications/{id}/restore": {
       "post": {
         "summary": "POST /api/applications/:id/restore",
@@ -1378,6 +1445,42 @@
         }
       }
     },
+    "/api/interviews/{id}/reschedule": {
+      "post": {
+        "summary": "POST /api/interviews/:id/reschedule",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
     "/api/interviews/{id}/scorecards": {
       "get": {
         "summary": "GET /api/interviews/:id/scorecards",
@@ -2314,6 +2417,71 @@
         }
       }
     },
+    "/api/positions/{id}/referrals": {
+      "get": {
+        "summary": "GET /api/positions/:id/referrals",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /api/positions/:id/referrals",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
     "/api/positions/{id}/reopen": {
       "post": {
         "summary": "POST /api/positions/:id/reopen",
@@ -2490,6 +2658,104 @@
     "/api/positions/all": {
       "get": {
         "summary": "GET /api/positions/all",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
+    "/api/referrals": {
+      "get": {
+        "summary": "GET /api/referrals",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
+    "/api/referrals/{id}/close": {
+      "post": {
+        "summary": "POST /api/referrals/:id/close",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
+    "/api/rejection-reasons": {
+      "get": {
+        "summary": "GET /api/rejection-reasons",
         "responses": {
           "200": {
             "description": "OK"

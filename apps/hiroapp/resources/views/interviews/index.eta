@@ -25,6 +25,16 @@
           <label>Notes <textarea name="notes"></textarea></label>
           <button>Save scorecard</button>
         </form>
+        <% if (interview.status === "scheduled" || interview.status === "confirmed") { %>
+          <form action="/interviews/<%= interview.id %>/reschedule" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/interviews" />
+            <label>When <input type="datetime-local" name="scheduled_at" value="<%= interview.scheduled_at?.slice(0, 16) %>" /></label>
+            <label>Where <input type="text" name="place" value="<%= interview.place ?? "" %>" /></label>
+            <label>Message <textarea name="text">Your interview has been rescheduled.</textarea></label>
+            <button>Reschedule</button>
+          </form>
+        <% } %>
       <% } %>
     </div>
   <% }) %>

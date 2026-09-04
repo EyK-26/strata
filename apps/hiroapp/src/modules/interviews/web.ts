@@ -66,5 +66,19 @@ export function interviewWebRoutes(dependencies: AppDependencies): AppRouteMap {
         return redirectResponse("/interviews");
       }),
     },
+    "/interviews/:id/reschedule": {
+      POST: wrapWebAuthenticated(dependencies, async (request) => {
+        const actor = await authorize(request, "applications", "update");
+        const id = parsePositiveIntParam(routeParams(request).id, "id");
+        const { fields } = await parseFormBody(request);
+        const interview = await Interview.findOrFail(id);
+        await interviewService.reschedule(actor, interview, {
+          scheduled_at: fields.datetime || fields.scheduled_at || "",
+          place: Object.hasOwn(fields, "place") ? fields.place : undefined,
+          text: fields.text,
+        });
+        return redirectResponse(fields.return_to || "/interviews");
+      }),
+    },
   };
 }

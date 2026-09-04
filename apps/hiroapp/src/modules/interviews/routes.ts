@@ -6,7 +6,11 @@ import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { Application } from "../../models/Application.ts";
 import { Interview } from "../../models/Interview.ts";
-import { CompleteInterviewRequest, ScheduleInterviewRequest } from "./requests.ts";
+import {
+  CompleteInterviewRequest,
+  RescheduleInterviewRequest,
+  ScheduleInterviewRequest,
+} from "./requests.ts";
 import { interviewService, serializeInterview } from "./service.ts";
 
 export function interviewRoutes(dependencies: AppDependencies): AppRouteMap {
@@ -92,6 +96,21 @@ export function interviewRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, interview) => {
             const actor = await authorize(request, "applications", "update");
             const updated = await interviewService.cancel(actor, interview);
+            return jsonResponse(serializeInterview(updated));
+          },
+        ),
+      ),
+    },
+    "/api/interviews/:id/reschedule": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Interview.findOrFail(id),
+          async (request, interview) => {
+            const actor = await authorize(request, "applications", "update");
+            const payload = await new RescheduleInterviewRequest().validate(request);
+            const updated = await interviewService.reschedule(actor, interview, payload);
             return jsonResponse(serializeInterview(updated));
           },
         ),
