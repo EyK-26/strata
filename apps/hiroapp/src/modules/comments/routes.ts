@@ -6,6 +6,7 @@ import { wrapApi } from "../../http/wrap.ts";
 import { Application } from "../../models/Application.ts";
 import { Position } from "../../models/Position.ts";
 import { CreateCommentRequest } from "../skills/requests.ts";
+import { commentService } from "./service.ts";
 
 export function commentRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
@@ -17,7 +18,8 @@ export function commentRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Application.findOrFail(id),
           async (request, application) => {
             await authorize(request, "applications", "view", application);
-            return jsonResponse((await application.comments()).map((row) => row.toArray()));
+            const rows = await commentService.forApplication(application);
+            return jsonResponse(rows.map((row) => row.toArray()));
           },
         ),
       ),
@@ -30,10 +32,7 @@ export function commentRoutes(dependencies: AppDependencies): AppRouteMap {
             const user = await requireCurrentUser(request);
             await authorize(request, "applications", "view", application);
             const payload = await new CreateCommentRequest().validate(request);
-            const created = await application.comments().create({
-              user_id: user.id,
-              body: payload.body,
-            });
+            const created = await commentService.addToApplication(user, application, payload.body);
             return jsonResponse(created.toArray());
           },
         ),
@@ -47,7 +46,8 @@ export function commentRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Position.findOrFail(id),
           async (request, position) => {
             await authorize(request, "positions", "view");
-            return jsonResponse((await position.comments()).map((row) => row.toArray()));
+            const rows = await commentService.forPosition(position);
+            return jsonResponse(rows.map((row) => row.toArray()));
           },
         ),
       ),
@@ -60,10 +60,7 @@ export function commentRoutes(dependencies: AppDependencies): AppRouteMap {
             const user = await requireCurrentUser(request);
             await authorize(request, "positions", "view");
             const payload = await new CreateCommentRequest().validate(request);
-            const created = await position.comments().create({
-              user_id: user.id,
-              body: payload.body,
-            });
+            const created = await commentService.addToPosition(user, position, payload.body);
             return jsonResponse(created.toArray());
           },
         ),

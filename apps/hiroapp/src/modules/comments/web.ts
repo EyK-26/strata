@@ -6,6 +6,7 @@ import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
 import { Application } from "../../models/Application.ts";
 import { Position } from "../../models/Position.ts";
+import { commentService } from "./service.ts";
 
 export function commentWebRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
@@ -21,10 +22,7 @@ export function commentWebRoutes(dependencies: AppDependencies): AppRouteMap {
             const { fields } = await parseFormBody(request);
             const body = String(fields.body ?? "").trim();
             if (body) {
-              await application.comments().create({
-                user_id: user.id,
-                body,
-              });
+              await commentService.addToApplication(user, application, body);
             }
             return redirectResponse(`/applications/${application.id}`);
           },
@@ -43,10 +41,7 @@ export function commentWebRoutes(dependencies: AppDependencies): AppRouteMap {
             const { fields } = await parseFormBody(request);
             const body = String(fields.body ?? "").trim();
             if (body) {
-              await position.comments().create({
-                user_id: user.id,
-                body,
-              });
+              await commentService.addToPosition(user, position, body);
             }
             return redirectResponse(`/positions/${position.id}`);
           },
