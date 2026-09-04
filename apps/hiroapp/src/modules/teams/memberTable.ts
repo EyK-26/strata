@@ -8,11 +8,12 @@ export interface DepartmentMemberRecord {
   user_id: number;
   role: TeamRole | string;
   created_at: Date | string | null;
+  tenant_id?: number | null;
 }
 
 export const departmentMemberTable = defineTable<DepartmentMemberRecord, "id">({
   name: "department_members",
   primaryKey: "id",
-  columns: ["id", "department_id", "user_id", "role", "created_at"],
+  columns: ["id", "department_id", "user_id", "role", "created_at", "tenant_id"],
   defaultOrderBy: { column: "id", direction: "ASC" },
 });

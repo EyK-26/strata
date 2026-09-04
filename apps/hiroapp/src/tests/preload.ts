@@ -19,6 +19,7 @@ process.env.MAIL_DRIVER ??= "log";
 process.env.CACHE_DRIVER ??= "array";
 process.env.HIROAPP_SEED_SCALE ??= "demo";
 process.env.FEATURE_ETAG ??= "true";
+process.env.TENANCY_DRIVER ??= "rls";
 
 await ensureHiroappDatabase();
 assertSafeTestDatabaseReset();

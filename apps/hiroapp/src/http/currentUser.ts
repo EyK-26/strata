@@ -4,6 +4,8 @@ import type { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 import type { ServiceContainer } from "@getstrata/core/contracts/container";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ForbiddenError, UnauthorizedError } from "@getstrata/core/errors/http";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import { runWithoutTenantScope } from "../lib/tenantRepository.ts";
 import { type UserRecord, users } from "../modules/users/repository.ts";
 
 let container: ServiceContainer | undefined;
@@ -32,7 +34,9 @@ export async function resolveCurrentUser(request: Request): Promise<UserRecord |
   if (!authUser) {
     return null;
   }
-  return users.findById(Number(authUser.id));
+  return runWithoutTenantScope(() =>
+    runWithMigrationBypass(() => users.findById(Number(authUser.id))),
+  );
 }
 
 export async function requireCurrentUser(request: Request): Promise<UserRecord> {

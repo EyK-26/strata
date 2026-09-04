@@ -10,6 +10,7 @@ export interface ApplicationRecord {
   created_at: Date | null;
   updated_at: Date | null;
   deleted_at: Date | null;
+  tenant_id?: number | null;
 }
 
 export const applicationTable = defineTable<ApplicationRecord, "id">({
@@ -25,6 +26,7 @@ export const applicationTable = defineTable<ApplicationRecord, "id">({
     "created_at",
     "updated_at",
     "deleted_at",
+    "tenant_id",
   ],
   defaultOrderBy: { column: "id", direction: "ASC" },
   softDeletes: true,

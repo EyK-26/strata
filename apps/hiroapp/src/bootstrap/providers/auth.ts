@@ -7,6 +7,7 @@ import {
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { CORE_AUTH_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { appCookieName } from "@getstrata/core/runtime/appKeyPrefix";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { roleName } from "../../lib/roles.ts";
 
 export type HiroSessionUser = SessionUser & {
@@ -16,20 +17,22 @@ export type HiroSessionUser = SessionUser & {
 };
 
 const loadSessionUser: LoadSessionUser = async (sql, sessionId) => {
-  const rows = await sql.unsafe<
-    Array<{
-      user_id: number;
-      first_name: string;
-      last_name: string;
-      email: string;
-      role_id: number;
-    }>
-  >(
-    `SELECT s.user_id, u.first_name, u.last_name, u.email, u.role_id
-     FROM sessions s
-     INNER JOIN users u ON u.id = s.user_id
-     WHERE s.id = $1 AND s.expires_at > NOW()`,
-    [sessionId],
+  const rows = await runWithMigrationBypass(() =>
+    sql.unsafe<
+      Array<{
+        user_id: number;
+        first_name: string;
+        last_name: string;
+        email: string;
+        role_id: number;
+      }>
+    >(
+      `SELECT s.user_id, u.first_name, u.last_name, u.email, u.role_id
+       FROM sessions s
+       INNER JOIN users u ON u.id = s.user_id
+       WHERE s.id = $1 AND s.expires_at > NOW()`,
+      [sessionId],
+    ),
   );
   const row = rows[0];
   if (!row) {

@@ -1,7 +1,7 @@
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { TenantRepository } from "../../lib/tenantRepository.ts";
 import { type DepartmentInvitationRecord, departmentInvitationTable } from "./invitationTable.ts";
 
-class DepartmentInvitationRepository extends BaseRepository<DepartmentInvitationRecord, "id"> {
+class DepartmentInvitationRepository extends TenantRepository<DepartmentInvitationRecord, "id"> {
   constructor() {
     super(departmentInvitationTable);
   }

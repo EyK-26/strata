@@ -8,6 +8,7 @@ export interface CommentRecord {
   commentable_id: number;
   created_at: Date | null;
   updated_at: Date | null;
+  tenant_id?: number | null;
 }
 
 export const commentTable = defineTable<CommentRecord, "id">({
@@ -21,6 +22,7 @@ export const commentTable = defineTable<CommentRecord, "id">({
     "commentable_id",
     "created_at",
     "updated_at",
+    "tenant_id",
   ],
   defaultOrderBy: { column: "id", direction: "ASC" },
 });

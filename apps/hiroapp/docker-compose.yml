@@ -30,7 +30,7 @@ services:
       APP_URL: http://localhost:3000
       APP_KEY_PREFIX: hiroapp
       FRONTEND_MODE: server-htmx
-      TENANCY_DRIVER: none
+      TENANCY_DRIVER: rls
       QUEUE_DRIVER: sync
       MAIL_DRIVER: log
       CACHE_DRIVER: array

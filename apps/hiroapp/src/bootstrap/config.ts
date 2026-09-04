@@ -15,7 +15,7 @@ export const envSchema = defineEnvSchema({
   APP_URL: { default: "http://localhost:3000" },
   APP_KEY_PREFIX: { default: "hiroapp" },
   FRONTEND_MODE: { default: "spa-react", pattern: /^(spa-react|server-htmx|api)$/ },
-  TENANCY_DRIVER: { default: "none", pattern: /^(none|rls)$/ },
+  TENANCY_DRIVER: { default: "rls", pattern: /^(none|rls)$/ },
   QUEUE_DRIVER: { default: "sync", pattern: /^(sync|async|redis)$/ },
   MAIL_DRIVER: { default: "log", pattern: /^(log|smtp)$/ },
   CACHE_DRIVER: { default: "array", pattern: /^(array|redis)$/ },
@@ -29,7 +29,11 @@ export function loadEnv() {
   process.env.DATABASE_URL = resolveHiroappDatabaseUrl();
   process.env.APP_KEY_PREFIX ??= "hiroapp";
   process.env.APP_NAME ??= "HiroApp";
-  return validateEnv(envSchema);
+  const env = validateEnv(envSchema);
+  if (env.TENANCY_DRIVER) {
+    process.env.TENANCY_DRIVER = env.TENANCY_DRIVER;
+  }
+  return env;
 }
 
 export function sessionCookieName() {

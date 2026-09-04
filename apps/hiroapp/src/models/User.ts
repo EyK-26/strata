@@ -19,6 +19,7 @@ export class User extends Model<UserRecord, "id"> {
     mfa_enabled: "bool",
     email_verified_at: "datetime",
     session_valid_after: "datetime",
+    tenant_id: "integer",
   } as const;
 
   role() {

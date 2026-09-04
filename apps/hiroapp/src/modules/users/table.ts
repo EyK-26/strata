@@ -14,6 +14,7 @@ export interface UserRecord {
   profile_photo_path?: string | null;
   session_valid_after?: Date | null;
   current_department_id?: number | null;
+  tenant_id?: number | null;
   created_at: Date | null;
   updated_at: Date | null;
 }
@@ -35,6 +36,7 @@ export const userTable = defineTable<UserRecord, "id">({
     "profile_photo_path",
     "session_valid_after",
     "current_department_id",
+    "tenant_id",
     "created_at",
     "updated_at",
   ],

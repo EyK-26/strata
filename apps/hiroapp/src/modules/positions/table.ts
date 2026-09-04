@@ -13,6 +13,7 @@ export interface PositionRecord {
   created_at: Date | null;
   updated_at: Date | null;
   deleted_at: Date | null;
+  tenant_id?: number | null;
 }
 
 export const positionTable = defineTable<PositionRecord, "id">({
@@ -31,6 +32,7 @@ export const positionTable = defineTable<PositionRecord, "id">({
     "created_at",
     "updated_at",
     "deleted_at",
+    "tenant_id",
   ],
   defaultOrderBy: { column: "id", direction: "ASC" },
   softDeletes: true,

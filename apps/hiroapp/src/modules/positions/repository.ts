@@ -1,7 +1,8 @@
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { currentTenant, currentTenantId } from "@getstrata/core/tenant/tenantContext";
+import { TenantRepository } from "../../lib/tenantRepository.ts";
 import { type PositionRecord, positionTable } from "./table.ts";
 
-class PositionRepository extends BaseRepository<PositionRecord, "id"> {
+class PositionRepository extends TenantRepository<PositionRecord, "id"> {
   constructor() {
     super(positionTable);
   }
@@ -18,8 +19,9 @@ class PositionRepository extends BaseRepository<PositionRecord, "id"> {
   }
 
   async distinctNames() {
+    const tenantFilter = currentTenant() ? `WHERE tenant_id = ${Number(currentTenantId())}` : "";
     const rows = await this.getConnection().unsafe<Array<{ name: string }>>(
-      `SELECT DISTINCT name FROM positions ORDER BY name ASC`,
+      `SELECT DISTINCT name FROM positions ${tenantFilter} ORDER BY name ASC`,
     );
     return rows;
   }

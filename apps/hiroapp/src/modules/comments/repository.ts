@@ -1,7 +1,7 @@
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { TenantRepository } from "../../lib/tenantRepository.ts";
 import { type CommentRecord, commentTable } from "./table.ts";
 
-class CommentRepository extends BaseRepository<CommentRecord, "id"> {
+class CommentRepository extends TenantRepository<CommentRecord, "id"> {
   constructor() {
     super(commentTable);
   }

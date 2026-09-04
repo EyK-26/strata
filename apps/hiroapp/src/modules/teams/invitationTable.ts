@@ -10,6 +10,7 @@ export interface DepartmentInvitationRecord {
   token_hash: string;
   expires_at: Date | string;
   created_at: Date | string;
+  tenant_id?: number | null;
 }
 
 export const departmentInvitationTable = defineTable<DepartmentInvitationRecord, "id">({
@@ -24,6 +25,7 @@ export const departmentInvitationTable = defineTable<DepartmentInvitationRecord,
     "token_hash",
     "expires_at",
     "created_at",
+    "tenant_id",
   ],
   defaultOrderBy: { column: "created_at", direction: "DESC" },
 });

@@ -9,6 +9,7 @@ export interface ApiTokenRecord {
   last_used_at: Date | string | null;
   expires_at: Date | string | null;
   created_at: Date | string;
+  tenant_id?: number | null;
 }
 
 export const apiTokenTable = defineTable<ApiTokenRecord, "id">({
@@ -23,6 +24,7 @@ export const apiTokenTable = defineTable<ApiTokenRecord, "id">({
     "last_used_at",
     "expires_at",
     "created_at",
+    "tenant_id",
   ],
   defaultOrderBy: { column: "created_at", direction: "DESC" },
 });

@@ -9,6 +9,7 @@ export interface NotificationRecord {
   read_at: Date | null;
   created_at: Date | null;
   updated_at: Date | null;
+  tenant_id?: number | null;
 }
 
 export const notificationTable = defineTable<NotificationRecord, "id">({
@@ -23,6 +24,7 @@ export const notificationTable = defineTable<NotificationRecord, "id">({
     "read_at",
     "created_at",
     "updated_at",
+    "tenant_id",
   ],
   defaultOrderBy: { column: "created_at", direction: "DESC" },
 });

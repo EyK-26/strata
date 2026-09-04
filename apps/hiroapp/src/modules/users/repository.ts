@@ -1,13 +1,16 @@
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import { runWithoutTenantScope, TenantRepository } from "../../lib/tenantRepository.ts";
 import { type UserRecord, userTable } from "./table.ts";
 
-class UserRepository extends BaseRepository<UserRecord, "id"> {
+class UserRepository extends TenantRepository<UserRecord, "id"> {
   constructor() {
     super(userTable);
   }
 
   async findByEmail(email: string) {
-    return this.firstOrNull({ email: email.toLowerCase() });
+    return runWithoutTenantScope(() =>
+      runWithMigrationBypass(() => this.firstOrNull({ email: email.toLowerCase() })),
+    );
   }
 
   async search(search: string, ids?: number[]) {
@@ -42,7 +45,9 @@ class UserRepository extends BaseRepository<UserRecord, "id"> {
   }
 
   async countByEmailPrefix(prefix: string) {
-    return this.countWhere({ email: { ilike: `${prefix}%` } });
+    return runWithoutTenantScope(() =>
+      runWithMigrationBypass(() => this.countWhere({ email: { ilike: `${prefix}%` } })),
+    );
   }
 
   async findWherePublic(

@@ -32,6 +32,10 @@ HiroApp identity is `User` + `role_id` (admin / recruiter / candidate). A candid
 
 Staff membership lives on departments (`department_members`, `department_invitations`, `users.current_department_id`). Recruiter “my department” is current team membership, with occupied-position as a fallback. Candidates stay applicants: they cannot inspect teams or be invited onto a hiring team.
 
+## Wave 8
+
+HiroApp hiring tables carry `tenant_id` with Postgres RLS (`TENANCY_DRIVER=rls`). Staff requests are scoped to the signed-in user’s tenant. Admins may switch with `x-tenant-id`; recruiters cannot spoof it. Candidates stay tenant-scoped applicants, not org members. Cookie-session identity lookups bypass tenant scope so an admin can still load their own `users` row after switching tenants.
+
 ## Commands
 
 ```bash

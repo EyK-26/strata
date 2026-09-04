@@ -6,9 +6,13 @@ import { ValidationError } from "@getstrata/core/errors/http";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import type { Middleware, RouteHandler } from "@getstrata/core/http/middleware";
+import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
+import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
+import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
+import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { authManager } from "./currentUser.ts";
 
 function formatJsonError(error: unknown) {
@@ -71,8 +75,9 @@ export function wrapApi(dependencies: AppDependencies, handler: RouteHandler): R
     ...csrfWhenNeeded(),
     createAuthMiddleware(auth),
     touchCookieSession(),
-    ...kernel.group("api"),
     ...kernel.group("authenticated"),
+    createTenantMiddleware(),
+    ...kernel.group("api"),
   )(wrapJson(handler));
 }
 
@@ -82,6 +87,7 @@ export function wrapGuestApi(dependencies: AppDependencies, handler: RouteHandle
   return withMiddleware(
     ...csrfWhenNeeded(),
     createAuthMiddleware(auth),
+    createTenantMiddleware(),
     ...kernel.group("api"),
   )(wrapJson(handler));
 }
@@ -89,12 +95,19 @@ export function wrapGuestApi(dependencies: AppDependencies, handler: RouteHandle
 export function wrapWeb(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
   const kernel = createKernel(dependencies);
   const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
-  return withMiddleware(createAuthMiddleware(auth))(kernel.wrapWeb(handler));
+  return withMiddleware(
+    createAuthMiddleware(auth),
+    createTenantMiddleware(),
+  )(kernel.wrapWeb(handler));
 }
 
 export function wrapWebGuest(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
   const kernel = createKernel(dependencies);
-  return kernel.wrapWebGuest(handler);
+  const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
+  return withMiddleware(
+    createAuthMiddleware(auth),
+    createTenantMiddleware(),
+  )(kernel.wrapWebGuest(handler));
 }
 
 export function wrapWebAuthenticated(
@@ -106,7 +119,10 @@ export function wrapWebAuthenticated(
   return withMiddleware(
     createAuthMiddleware(auth),
     touchCookieSession(),
-  )(kernel.wrapWebAuthenticated(handler));
+    createRequireWebAuthMiddleware(auth),
+    createRequireVerifiedMiddleware(auth),
+    createTenantMiddleware(),
+  )(kernel.wrapWeb(handler));
 }
 
 export function wrapWebPasswordConfirm(
@@ -118,7 +134,11 @@ export function wrapWebPasswordConfirm(
   return withMiddleware(
     createAuthMiddleware(auth),
     touchCookieSession(),
-  )(kernel.wrapWebPasswordConfirm(handler));
+    createRequireWebAuthMiddleware(auth),
+    createRequireVerifiedMiddleware(auth),
+    createRequirePasswordConfirmMiddleware(),
+    createTenantMiddleware(),
+  )(kernel.wrapWeb(handler));
 }
 
 export function wrapSpaDocument(handler: RouteHandler): RouteHandler {

@@ -1,7 +1,7 @@
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { TenantRepository } from "../../lib/tenantRepository.ts";
 import { type ApiTokenRecord, apiTokenTable } from "./tokenTable.ts";
 
-class ApiTokenRepository extends BaseRepository<ApiTokenRecord, "id"> {
+class ApiTokenRepository extends TenantRepository<ApiTokenRecord, "id"> {
   constructor() {
     super(apiTokenTable);
   }
