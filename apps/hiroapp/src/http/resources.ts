@@ -1,26 +1,49 @@
 import { JsonResource } from "@getstrata/core/http/resources";
-import { serializeNamed, serializePosition } from "../lib/serialize.ts";
-import type { Position } from "../models/Position.ts";
+import { dateOnly, hiringFlag, iso, serializeTimestamps } from "../lib/serialize.ts";
+
+function asRaw<T extends Record<string, unknown>>(value: {
+  toArray?: () => T;
+  toObject?: () => T;
+}): T {
+  if (typeof value.toArray === "function") {
+    return value.toArray();
+  }
+  if (typeof value.toObject === "function") {
+    return value.toObject();
+  }
+  return value as T;
+}
+
+function id(value: unknown) {
+  return Number(value);
+}
+
+export function mergeResource(
+  resource: JsonResource,
+  extras: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return { ...resource.toArray(), ...extras };
+}
 
 class NamedResource extends JsonResource {
   override toArray(): Record<string, unknown> {
-    const record = this.resource as {
+    const raw = asRaw<{
       id: unknown;
       name: string;
-      toArray?: () => Record<string, unknown>;
-    };
-    const raw = typeof record.toArray === "function" ? record.toArray() : record;
+      created_at?: Date | string | null;
+      updated_at?: Date | string | null;
+    }>(this.resource as never);
     return {
-      id: Number(raw.id),
+      id: id(raw.id),
       name: raw.name,
+      ...serializeTimestamps(raw),
     };
   }
 }
 
 class UserResource extends JsonResource {
   override toArray(): Record<string, unknown> {
-    const user = this.resource as {
-      toArray?: () => Record<string, unknown>;
+    const raw = asRaw<{
       id: unknown;
       first_name: string;
       last_name: string;
@@ -28,24 +51,22 @@ class UserResource extends JsonResource {
       role_id: unknown;
       created_at?: Date | string | null;
       updated_at?: Date | string | null;
-    };
-    const raw = typeof user.toArray === "function" ? user.toArray() : user;
+    }>(this.resource as never);
     return {
-      id: Number(raw.id),
+      id: id(raw.id),
       first_name: raw.first_name,
       last_name: raw.last_name,
       email: raw.email,
-      role_id: Number(raw.role_id),
-      created_at: raw.created_at ?? null,
-      updated_at: raw.updated_at ?? null,
+      email_verified_at: null,
+      role_id: id(raw.role_id),
+      ...serializeTimestamps(raw),
     };
   }
 }
 
 class PositionResource extends JsonResource {
   override toArray(): Record<string, unknown> {
-    const position = this.resource as {
-      toArray?: () => Record<string, unknown>;
+    const raw = asRaw<{
       id: unknown;
       user_id: unknown;
       department_id: unknown;
@@ -55,55 +76,84 @@ class PositionResource extends JsonResource {
       hiring: boolean | number;
       start_date?: Date | string | null;
       end_date?: Date | string | null;
-    };
-    const raw = typeof position.toArray === "function" ? position.toArray() : position;
+      created_at?: Date | string | null;
+      updated_at?: Date | string | null;
+    }>(this.resource as never);
     return {
-      id: Number(raw.id),
-      user_id: raw.user_id === null || raw.user_id === undefined ? null : Number(raw.user_id),
-      department_id: Number(raw.department_id),
-      grade_id: Number(raw.grade_id),
+      id: id(raw.id),
+      user_id: raw.user_id === null || raw.user_id === undefined ? null : id(raw.user_id),
+      department_id: id(raw.department_id),
+      grade_id: id(raw.grade_id),
       name: raw.name,
       description: raw.description,
-      hiring: raw.hiring === true || raw.hiring === 1 ? 1 : 0,
-      start_date: raw.start_date ?? null,
-      end_date: raw.end_date ?? null,
+      hiring: hiringFlag(raw.hiring),
+      start_date: dateOnly(raw.start_date),
+      end_date: dateOnly(raw.end_date),
+      ...serializeTimestamps(raw),
     };
   }
 }
 
 class ApplicationResource extends JsonResource {
   override toArray(): Record<string, unknown> {
-    const application = this.resource as {
-      toArray?: () => Record<string, unknown>;
+    const raw = asRaw<{
       id: unknown;
       user_id: unknown;
       position_id: unknown;
       status_id: unknown;
       attachment_text: string | null;
       attachment_file: string | null;
-    };
-    const raw = typeof application.toArray === "function" ? application.toArray() : application;
+      created_at?: Date | string | null;
+      updated_at?: Date | string | null;
+    }>(this.resource as never);
     const payload: Record<string, unknown> = {
-      id: Number(raw.id),
-      user_id: Number(raw.user_id),
+      id: id(raw.id),
+      user_id: id(raw.user_id),
       position_id:
-        raw.position_id === null || raw.position_id === undefined ? null : Number(raw.position_id),
-      status_id: Number(raw.status_id),
+        raw.position_id === null || raw.position_id === undefined ? null : id(raw.position_id),
+      status_id: id(raw.status_id),
       attachment_text: raw.attachment_text,
       attachment_file: raw.attachment_file,
+      ...serializeTimestamps(raw),
     };
-    const position = this.whenLoaded("position", (value) => serializePosition(value as Position));
-    const status = this.whenLoaded("status", (value) =>
-      serializeNamed(value as { id: number; name: string }),
-    );
+    const position = this.whenLoaded("position", (value) => new PositionResource(value).toArray());
+    const status = this.whenLoaded("status", (value) => new NamedResource(value).toArray());
+    const user = this.whenLoaded("user", (value) => new UserResource(value).toArray());
     if (position !== undefined) {
       payload.position = position;
     }
     if (status !== undefined) {
       payload.status = status;
     }
+    if (user !== undefined) {
+      payload.user = user;
+    }
     return payload;
   }
 }
 
-export { ApplicationResource, NamedResource, PositionResource, UserResource };
+class NotificationResource extends JsonResource {
+  override toArray(): Record<string, unknown> {
+    const raw = asRaw<{
+      id: string;
+      type: string;
+      notifiable_type: string;
+      notifiable_id: unknown;
+      data: unknown;
+      read_at: Date | string | null;
+      created_at?: Date | string | null;
+      updated_at?: Date | string | null;
+    }>(this.resource as never);
+    return {
+      id: raw.id,
+      type: raw.type,
+      notifiable_type: raw.notifiable_type,
+      notifiable_id: id(raw.notifiable_id),
+      data: typeof raw.data === "string" ? JSON.parse(raw.data) : raw.data,
+      read_at: iso(raw.read_at),
+      ...serializeTimestamps(raw),
+    };
+  }
+}
+
+export { ApplicationResource, NamedResource, NotificationResource, PositionResource, UserResource };

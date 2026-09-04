@@ -5,14 +5,14 @@ function asRecord<T extends object>(value: T | { toObject: () => T }): T {
   return value as T;
 }
 
-function iso(value: Date | string | null | undefined) {
+export function iso(value: Date | string | null | undefined) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
 }
 
-function dateOnly(value: Date | string | null | undefined) {
+export function dateOnly(value: Date | string | null | undefined) {
   if (!value) return null;
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return value;
@@ -22,7 +22,7 @@ function dateOnly(value: Date | string | null | undefined) {
   return date.toISOString().slice(0, 10);
 }
 
-function hiringFlag(value: boolean | number | string | null | undefined) {
+export function hiringFlag(value: boolean | number | string | null | undefined) {
   return value === true || value === 1 || value === "1" ? 1 : 0;
 }
 

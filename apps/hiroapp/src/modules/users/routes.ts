@@ -4,10 +4,9 @@ import { NotFoundError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { bindModel } from "../../http/bind.ts";
 import { authorize } from "../../http/currentUser.ts";
-import { UserResource } from "../../http/resources.ts";
+import { mergeResource, NamedResource, UserResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { loadUserDetail } from "../../lib/loaders.ts";
-import { serializeNamed } from "../../lib/serialize.ts";
 import type { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
 import { positions } from "../positions/repository.ts";
@@ -48,18 +47,15 @@ export function userRoutes(dependencies: AppDependencies): AppRouteMap {
               created_at: Date | null;
               updated_at: Date | null;
             }>("department");
-            return {
-              ...new UserResource(user).toArray(),
+            return mergeResource(new UserResource(user), {
               position: position
                 ? {
                     id: position.id,
                     name: position.get("name"),
-                    department: department
-                      ? serializeNamed(department as { id: number; name: string })
-                      : null,
+                    department: department ? new NamedResource(department).toArray() : null,
                   }
                 : null,
-            };
+            });
           }),
         );
         return jsonResponse(details);

@@ -1,16 +1,17 @@
+import {
+  ApplicationResource,
+  mergeResource,
+  NamedResource,
+  NotificationResource,
+  PositionResource,
+  UserResource,
+} from "../http/resources.ts";
 import { Application } from "../models/Application.ts";
 import type { Notification } from "../models/Notification.ts";
 import { Position } from "../models/Position.ts";
 import { User } from "../models/User.ts";
 import { statuses } from "../modules/catalog/repository.ts";
 import type { UserRecord } from "../modules/users/repository.ts";
-import {
-  serializeApplication,
-  serializeNamed,
-  serializeNotification,
-  serializePosition,
-  serializeUser,
-} from "./serialize.ts";
 
 async function inboxFor(user: User | UserRecord) {
   const model = user instanceof User ? user : User.newFromRecord(user);
@@ -32,8 +33,8 @@ export async function loadUserGraph(user: UserRecord) {
   return {
     notifications: inbox,
     position: position
-      ? serializePosition(position.toObject(), {
-          department: department ? serializeNamed(department) : null,
+      ? mergeResource(new PositionResource(position), {
+          department: department ? new NamedResource(department).toArray() : null,
         })
       : null,
   };
@@ -61,8 +62,8 @@ export async function loadPositionWithApplications(positionId: number) {
 
   const comments = await position.comments();
   return {
-    position: serializePosition(position.toObject(), {
-      grade: grade ? serializeNamed(grade) : null,
+    position: mergeResource(new PositionResource(position), {
+      grade: grade ? new NamedResource(grade).toArray() : null,
       user: occupant
         ? {
             id: occupant.id,
@@ -70,7 +71,7 @@ export async function loadPositionWithApplications(positionId: number) {
             last_name: occupant.get("last_name"),
           }
         : null,
-      department: department ? serializeNamed(department) : null,
+      department: department ? new NamedResource(department).toArray() : null,
     }),
     comments: comments.map((row) => row.toArray()),
     applications: apps.map((application) => {
@@ -81,7 +82,7 @@ export async function loadPositionWithApplications(positionId: number) {
         created_at: Date | null;
         updated_at: Date | null;
       }>("status");
-      return serializeApplication(application.toObject(), {
+      return mergeResource(new ApplicationResource(application), {
         user: applicant
           ? {
               id: applicant.id,
@@ -89,7 +90,7 @@ export async function loadPositionWithApplications(positionId: number) {
               last_name: applicant.get("last_name"),
             }
           : null,
-        status: status ? serializeNamed(status) : null,
+        status: status ? new NamedResource(status).toArray() : null,
       });
     }),
   };
@@ -110,9 +111,9 @@ export async function loadCandidatePosition(positionId: number) {
     created_at: Date | null;
     updated_at: Date | null;
   }>("grade");
-  return serializePosition(position.toObject(), {
-    department: department ? serializeNamed(department) : null,
-    grade: grade ? serializeNamed(grade) : null,
+  return mergeResource(new PositionResource(position), {
+    department: department ? new NamedResource(department).toArray() : null,
+    grade: grade ? new NamedResource(grade).toArray() : null,
   });
 }
 
@@ -135,15 +136,15 @@ export async function loadApplicationDetail(applicationId: number) {
 
   const comments = await application.comments();
   return {
-    application: serializeApplication(application.toObject(), {
-      user: user ? serializeUser(user.toObject()) : null,
+    application: mergeResource(new ApplicationResource(application), {
+      user: user ? new UserResource(user).toArray() : null,
       position: position
         ? { name: position.get("name"), department: department ? { name: department.name } : null }
         : null,
-      status: status ? serializeNamed(status) : null,
+      status: status ? new NamedResource(status).toArray() : null,
     }),
     comments: comments.map((row) => row.toArray()),
-    all_statuses: (await statuses.all()).map(serializeNamed),
+    all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
 }
 
@@ -154,8 +155,8 @@ export async function loadUserDetail(userId: number) {
   const position = user.loaded<Position>("position");
   const department = position?.loaded<{ name: string }>("department");
   return {
-    user: serializeUser(user.toObject()),
-    notifications: inbox.map(serializeNotification),
+    user: new UserResource(user).toArray(),
+    notifications: inbox.map((row) => new NotificationResource(row).toArray()),
     position_name: position?.get("name") ?? null,
     department_name: department?.name ?? null,
   };

@@ -1,8 +1,8 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { requireCurrentUser } from "../../http/currentUser.ts";
+import { NamedResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
-import { serializeNamed } from "../../lib/serialize.ts";
 import { departments } from "./repository.ts";
 
 export function departmentRoutes(dependencies: AppDependencies): AppRouteMap {
@@ -11,7 +11,7 @@ export function departmentRoutes(dependencies: AppDependencies): AppRouteMap {
       GET: wrapApi(dependencies, async (request) => {
         await requireCurrentUser(request);
         const rows = await departments.ordered();
-        return jsonResponse(rows.map(serializeNamed));
+        return jsonResponse(rows.map((row) => new NamedResource(row).toArray()));
       }),
     },
   };

@@ -9,14 +9,15 @@ import {
 import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/queue/createAppQueue";
 import type FailedJobService from "@getstrata/core/queue/failedJobService";
 import { authorize, denyUnless, requireCurrentUser } from "../../http/currentUser.ts";
+import {
+  ApplicationResource,
+  mergeResource,
+  NamedResource,
+  PositionResource,
+  UserResource,
+} from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { isAdmin, STATUS } from "../../lib/roles.ts";
-import {
-  serializeApplication,
-  serializeNamed,
-  serializePosition,
-  serializeUser,
-} from "../../lib/serialize.ts";
 import { applications } from "../applications/repository.ts";
 import { statuses } from "../catalog/repository.ts";
 import { positions } from "../positions/repository.ts";
@@ -63,10 +64,10 @@ export function dashboardRoutes(dependencies: AppDependencies): AppRouteMap {
               ? await positions.findById(application.position_id)
               : null;
             const status = await statuses.findById(application.status_id);
-            return serializeApplication(application, {
-              user: user ? serializeUser(user) : null,
-              position: position ? serializePosition(position) : null,
-              status: status ? serializeNamed(status) : null,
+            return mergeResource(new ApplicationResource(application), {
+              user: user ? new UserResource(user).toArray() : null,
+              position: position ? new PositionResource(position).toArray() : null,
+              status: status ? new NamedResource(status).toArray() : null,
             });
           }),
         );
