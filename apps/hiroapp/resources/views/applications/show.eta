@@ -137,6 +137,36 @@
           <button type="submit">Save source</button>
         </form>
       <% } %>
+      <% if (it.background_check) { %>
+        <h3>Background check</h3>
+        <p><%= it.background_check.vendor %> · <%= it.background_check.status %> · <%= it.background_check.notes %></p>
+        <% if (it.roleId !== 2 && it.background_check.status === "requested") { %>
+          <form action="/background-checks/<%= it.background_check.id %>/clear" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+            <button type="submit">Mark clear</button>
+          </form>
+          <form action="/background-checks/<%= it.background_check.id %>/flag" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+            <button type="submit">Mark flagged</button>
+          </form>
+          <form action="/background-checks/<%= it.background_check.id %>/cancel" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+            <button type="submit">Cancel check</button>
+          </form>
+        <% } %>
+      <% } %>
+      <% if (it.roleId !== 2 && (!it.background_check || it.background_check.status === "cancelled")) { %>
+        <form class="BackgroundCheckForm" action="/applications/<%= it.application.id %>/background-check" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+          <label>Vendor <input name="vendor" /></label>
+          <label>Notes <textarea name="notes"></textarea></label>
+          <button type="submit">Request background check</button>
+        </form>
+      <% } %>
       <% if (it.roleId !== 2 && it.talent_pool && it.talent_pool.status === "active") { %>
         <p>In talent pool</p>
         <form action="/talent-pool/<%= it.talent_pool.id %>/release" method="post">

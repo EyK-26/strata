@@ -11,6 +11,8 @@ import type { Notification } from "../models/Notification.ts";
 import { Position } from "../models/Position.ts";
 import { User } from "../models/User.ts";
 import { statuses } from "../modules/catalog/repository.ts";
+import { backgroundChecks } from "../modules/checks/repository.ts";
+import { serializeBackgroundCheck } from "../modules/checks/service.ts";
 import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
 import { offers } from "../modules/offers/repository.ts";
@@ -161,6 +163,7 @@ export async function loadApplicationDetail(applicationId: number) {
   const sourceName = new Map(sourceRows.map((row) => [Number(row.id), row.name]));
   const attribution = await applicationAttributions.forApplication(applicationId);
   const poolEntry = await talentPool.findByUser(Number(application.get("user_id")));
+  const backgroundCheck = await backgroundChecks.forApplication(applicationId);
   return {
     application: mergeResource(new ApplicationResource(application), {
       user: user ? new UserResource(user).toArray() : null,
@@ -186,6 +189,7 @@ export async function loadApplicationDetail(applicationId: number) {
     application_sources: sourceRows.map(serializeSource),
     talent_pool: poolEntry ? serializePoolEntry(poolEntry) : null,
     offer_templates: (await offerTemplates.ordered()).map(serializeOfferTemplate),
+    background_check: backgroundCheck ? serializeBackgroundCheck(backgroundCheck) : null,
     all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
 }
