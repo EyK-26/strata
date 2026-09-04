@@ -1,6 +1,7 @@
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel, type HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
+import { createScimAuthMiddleware } from "@getstrata/core/auth/scimAuthMiddleware";
 import { CORE_AUTH_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ValidationError } from "@getstrata/core/errors/http";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
@@ -11,6 +12,7 @@ import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVer
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
+import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { authManager } from "./currentUser.ts";
@@ -146,4 +148,20 @@ export function wrapSpaDocument(handler: RouteHandler): RouteHandler {
     return handler;
   }
   return withMiddleware(...csrfWhenNeeded())(handler);
+}
+
+export function wrapScim(handler: RouteHandler): RouteHandler {
+  const redisUrl = process.env.REDIS_URL?.trim() ?? "";
+  return withMiddleware(
+    createScimThrottleMiddleware({
+      redisUrl: redisUrl || undefined,
+      maxAttempts: Number(process.env.SCIM_RATE_LIMIT_PER_MINUTE ?? "60"),
+      decaySeconds: 60,
+    }),
+    createScimAuthMiddleware(),
+  )(wrapJson(handler));
+}
+
+export function wrapPublic(handler: RouteHandler): RouteHandler {
+  return wrapJson(handler);
 }

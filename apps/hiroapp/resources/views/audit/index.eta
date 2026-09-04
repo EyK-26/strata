@@ -1,0 +1,15 @@
+<h1>Audit log</h1>
+<table>
+  <thead>
+    <tr><th>When</th><th>Action</th><th>Subject</th></tr>
+  </thead>
+  <tbody>
+    <% for (const row of it.logs ?? []) { %>
+      <tr>
+        <td><%= row.created_at %></td>
+        <td><%= row.action %></td>
+        <td><%= row.subject_type %> #<%= row.subject_id %></td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>

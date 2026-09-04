@@ -1,0 +1,31 @@
+<h1>Hiring webhooks</h1>
+<% if (it.error) { %>
+  <p class="hint"><%= it.error %></p>
+<% } %>
+<form method="post" action="/webhooks">
+  <%~ include("../partials/csrf.eta") %>
+  <label>URL <input name="url" type="url" required /></label>
+  <label>Secret <input name="secret" required /></label>
+  <label>Events <input name="events" value="*" /></label>
+  <button type="submit">Create webhook</button>
+</form>
+<table>
+  <thead>
+    <tr><th>URL</th><th>Events</th><th>Active</th></tr>
+  </thead>
+  <tbody>
+    <% for (const row of it.webhooks ?? []) { %>
+      <tr>
+        <td><%= row.url %></td>
+        <td><%= row.events %></td>
+        <td><%= row.active ? "yes" : "no" %></td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>
+<h2>Recent deliveries</h2>
+<ul>
+  <% for (const row of it.deliveries ?? []) { %>
+    <li><%= row.event %> <%= row.status ?? "error" %> <%= row.created_at %></li>
+  <% } %>
+</ul>

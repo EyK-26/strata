@@ -1,6 +1,7 @@
 import { Job } from "@getstrata/core/queue";
 import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { DISPATCH_WEBHOOK_JOB, DispatchWebhookJob } from "./dispatchWebhook.ts";
 
 export const SEND_NOTIFICATION_JOB = "hiroapp.notification.send";
 
@@ -23,6 +24,9 @@ export class SendNotificationJob extends Job<SendNotificationPayload> {
 export function registerHiroappJobs() {
   if (!jobRegistry.names().includes(SEND_NOTIFICATION_JOB)) {
     jobRegistry.register(SEND_NOTIFICATION_JOB, () => new SendNotificationJob());
+  }
+  if (!jobRegistry.names().includes(DISPATCH_WEBHOOK_JOB)) {
+    jobRegistry.register(DISPATCH_WEBHOOK_JOB, () => new DispatchWebhookJob());
   }
 }
 

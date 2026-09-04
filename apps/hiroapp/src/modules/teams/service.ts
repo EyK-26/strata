@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from "@getstrata/core/
 import { mailer } from "@getstrata/core/mail/mailer";
 import { sendMarkdownMail } from "@getstrata/core/mail/markdownMailable";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
+import { recordHiringEvent } from "../../lib/hiringEvents.ts";
 import { isAdmin, isCandidate, isStaff } from "../../lib/roles.ts";
 import { iso } from "../../lib/serialize.ts";
 import { canManageTeam, requireStaffDepartmentAccess } from "../../lib/staffTeam.ts";
@@ -144,6 +145,11 @@ export class TeamService {
       department_id: departmentId,
       email: normalized,
     });
+    await recordHiringEvent(
+      "team.invited",
+      { department_id: departmentId, email: normalized, role: invitation.role },
+      { type: "department_invitation", id: Number(invitation.id) },
+    );
     return {
       invitation: {
         id: Number(invitation.id),

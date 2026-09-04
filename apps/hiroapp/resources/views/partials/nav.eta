@@ -4,6 +4,9 @@
     <a href="/">Home</a>
     <a href="/account">Account</a>
     <a href="/users/create">Create New User</a>
+    <a href="/webhooks">Webhooks</a>
+    <a href="/audit-logs">Audit</a>
+    <a href="/billing">Billing</a>
     <a href="/failed-jobs">Failed Jobs</a>
   <% } else if (role === 2) { %>
     <a href="/">Home</a>
@@ -17,5 +20,7 @@
     <a href="/account">Account</a>
     <a href="/position/create">Create New Position</a>
     <a href="/skills">Skills</a>
+    <a href="/webhooks">Webhooks</a>
+    <a href="/billing">Billing</a>
   <% } %>
 </nav>

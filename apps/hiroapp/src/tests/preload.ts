@@ -10,6 +10,7 @@ import { ensureHiroappDatabase } from "../db/ensureDatabase.ts";
 import { runAppSeeders } from "../db/seeder.ts";
 
 process.env.HIROAPP_TEST = "1";
+process.env.APP_ENV ??= "testing";
 process.env.DOGFOOD_APP = "hiroapp";
 process.env.APP_KEY_PREFIX = "hiroapp";
 process.env.APP_NAME = "HiroApp";
@@ -20,6 +21,8 @@ process.env.CACHE_DRIVER ??= "array";
 process.env.HIROAPP_SEED_SCALE ??= "demo";
 process.env.FEATURE_ETAG ??= "true";
 process.env.TENANCY_DRIVER ??= "rls";
+process.env.SCIM_BEARER_TOKEN ??= "hiroapp-scim-test-token";
+process.env.STRIPE_WEBHOOK_SECRET ??= "whsec_hiroapp_test";
 
 await ensureHiroappDatabase();
 assertSafeTestDatabaseReset();

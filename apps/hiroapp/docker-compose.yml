@@ -37,6 +37,8 @@ services:
       AUTH_DEV_HEADERS: "false"
       SESSION_SECRET: hiroapp-dev-session-secret-change-me
       HIROAPP_SEED_SCALE: demo
+      SCIM_BEARER_TOKEN: hiroapp-scim-test-token
+      STRIPE_WEBHOOK_SECRET: whsec_hiroapp_test
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hiroapp
       PORT: 3000
     depends_on:

@@ -21,6 +21,10 @@ function requireContainer() {
   return container;
 }
 
+export function appContainer() {
+  return requireContainer();
+}
+
 export function authManager() {
   return requireContainer().resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
 }

@@ -36,6 +36,10 @@ Staff membership lives on departments (`department_members`, `department_invitat
 
 HiroApp hiring tables carry `tenant_id` with Postgres RLS (`TENANCY_DRIVER=rls`). Staff requests are scoped to the signed-in user’s tenant. Admins may switch with `x-tenant-id`; recruiters cannot spoof it. Candidates stay tenant-scoped applicants, not org members. Cookie-session identity lookups bypass tenant scope so an admin can still load their own `users` row after switching tenants.
 
+## Wave 9
+
+Staff get SCIM, hiring webhooks, audit, and billing. SCIM Users provision admin/recruiter accounts only — candidate-shaped payloads are ignored. SCIM Groups map to departments. Webhooks fire hiring events (`application.submitted`, `application.hired`, `application.ended`, `team.invited`) with `tenant_id`, not WorkHub `organization_id`. Candidates are not SCIM employees and are not billed as seats.
+
 ## Commands
 
 ```bash

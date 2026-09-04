@@ -15,6 +15,7 @@ import { bindModel } from "../../http/bind.ts";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { ApplicationResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
+import { recordHiringEvent } from "../../lib/hiringEvents.ts";
 import { loadApplicationDetail } from "../../lib/loaders.ts";
 import { isCandidate, STATUS } from "../../lib/roles.ts";
 import { Application } from "../../models/Application.ts";
@@ -159,6 +160,15 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
               throw new ForbiddenError("Application is already ended.");
             }
             await applications.updateById(Number(application.id), { status_id: STATUS.ENDED });
+            await recordHiringEvent(
+              "application.ended",
+              {
+                application_id: Number(application.id),
+                user_id: Number(application.get("user_id")),
+                position_id: Number(application.get("position_id")),
+              },
+              { type: "application", id: Number(application.id) },
+            );
             if (!isCandidate(actor.role_id)) {
               const applicant = await users.findByIdOrThrow(Number(application.get("user_id")));
               const relatedPosition = await application.position();
@@ -198,6 +208,15 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
 
             await runInTransaction(async () => {
               await applications.updateById(id, { status_id: STATUS.HIRED });
+              await recordHiringEvent(
+                "application.hired",
+                {
+                  application_id: id,
+                  user_id: Number(application.get("user_id")),
+                  position_id: Number(application.get("position_id")),
+                },
+                { type: "application", id },
+              );
               const position = await application.position().first();
               if (!position) {
                 throw new UnprocessableEntityError("Application has no position.");
