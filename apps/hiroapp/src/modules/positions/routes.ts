@@ -1,15 +1,13 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
-import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { ForbiddenError, NotFoundError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { bindModel } from "../../http/bind.ts";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
-import { PositionResource } from "../../http/resources.ts";
+import { ApplicationResource, mergeResource, PositionResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { loadCandidatePosition, loadPositionWithApplications } from "../../lib/loaders.ts";
 import { isCandidate, isRecruiter } from "../../lib/roles.ts";
-import { serializeApplication } from "../../lib/serialize.ts";
+import { Department } from "../../models/Department.ts";
 import { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
 import { applications } from "../applications/repository.ts";
@@ -35,12 +33,13 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
           departmentId,
         });
         const payload = await Promise.all(
-          rows.map(async (position) => ({
-            ...new PositionResource(position).toArray(),
-            applications: (await applications.forPosition(position.id)).map((row) =>
-              serializeApplication(row),
-            ),
-          })),
+          rows.map(async (position) =>
+            mergeResource(new PositionResource(position), {
+              applications: (await applications.forPosition(position.id)).map((row) =>
+                new ApplicationResource(row).toArray(),
+              ),
+            }),
+          ),
         );
         return jsonResponse(payload);
       }),
@@ -73,12 +72,18 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/api/positions-dep/:department": {
-      GET: wrapApi(dependencies, async (request) => {
-        await requireCurrentUser(request);
-        const departmentId = parsePositiveIntParam(routeParams(request).department, "department");
-        const rows = await positions.hiringInDepartment(departmentId);
-        return jsonResponse(rows.map((row) => ({ name: row.name, id: Number(row.id) })));
-      }),
+      GET: wrapApi(
+        dependencies,
+        bindModel(
+          "department",
+          (id) => Department.findOrFail(id),
+          async (request, department) => {
+            await requireCurrentUser(request);
+            const rows = await positions.hiringInDepartment(Number(department.id));
+            return jsonResponse(rows.map((row) => ({ name: row.name, id: Number(row.id) })));
+          },
+        ),
+      ),
     },
     "/api/positions/:id": {
       GET: wrapApi(

@@ -65,8 +65,7 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
           meta: { page: pagination.page, per_page: pagination.perPage },
         });
       }),
-      POST: withMiddleware(
-        applyThrottle,
+      POST: withMiddleware(applyThrottle)(
         wrapApi(dependencies, async (request) => {
           const user = await authorize(request, "applications", "create");
           const payload = await new CreateApplicationRequest().validate(request);

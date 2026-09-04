@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { resetMemoryThrottleForTests } from "@getstrata/core/http/memoryThrottleMiddleware";
 import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/queue/createAppQueue";
 import type FailedJobService from "@getstrata/core/queue/failedJobService";
 import { STATUS } from "../lib/roles.ts";
@@ -320,6 +321,45 @@ describe.skipIf(!enabled)("Waves 1-4 HTTP + HTMX", () => {
   test("bindRouteModel 404s a missing application id", async () => {
     const missing = await jsonRequest("/api/applications/999999", { cookies: candidateCookies });
     expect(missing.response.status).toBe(404);
+  });
+
+  test("HTMX bindRouteModel 404s a missing application id", async () => {
+    const missing = await request("/applications/999999", { cookies: candidateCookies });
+    expect(missing.response.status).toBe(404);
+  });
+
+  test("GET /api/user returns a UserResource payload", async () => {
+    const { response, body } = await jsonRequest("/api/user", { cookies: candidateCookies });
+    expect(response.status).toBe(200);
+    expect(body.email).toBe("candidate@hiroapp.com");
+    expect(body.email_verified_at).toBeNull();
+    expect(Array.isArray(body.notifications)).toBe(true);
+    expect(body).not.toHaveProperty("data");
+  });
+
+  test("POST /api/applications is throttled after 8 attempts", async () => {
+    resetMemoryThrottleForTests();
+    const invalidBody = JSON.stringify({});
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const { response } = await jsonRequest("/api/applications", {
+        cookies: candidateCookies,
+        method: "POST",
+        body: invalidBody,
+      });
+      lastStatus = response.status;
+      expect(response.status).not.toBe(429);
+    }
+    expect(lastStatus).toBe(422);
+    const blocked = await jsonRequest("/api/applications", {
+      cookies: candidateCookies,
+      method: "POST",
+      body: invalidBody,
+    });
+    expect(blocked.response.status).toBe(429);
+    expect(blocked.body).toEqual({ error: "Too many requests." });
+    expect(blocked.response.headers.get("retry-after")).toBe("60");
+    resetMemoryThrottleForTests();
   });
 
   test("GET /api/applications paginates with meta", async () => {

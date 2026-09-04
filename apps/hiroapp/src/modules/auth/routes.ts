@@ -5,9 +5,9 @@ import { jsonResponse } from "@getstrata/core/http/response";
 import { isSpaEnabled } from "@getstrata/core/runtime/frontendMode";
 import type { HiroSessionUser } from "../../bootstrap/providers/auth.ts";
 import { authManager, requireCurrentUser } from "../../http/currentUser.ts";
+import { mergeResource, NotificationResource, UserResource } from "../../http/resources.ts";
 import { wrapApi, wrapGuestApi } from "../../http/wrap.ts";
 import { loadUserGraph } from "../../lib/loaders.ts";
-import { serializeNotification, serializeUser } from "../../lib/serialize.ts";
 import { users } from "../users/repository.ts";
 import { LoginRequest } from "./requests.ts";
 
@@ -18,8 +18,10 @@ export function authRoutes(dependencies: AppDependencies): AppRouteMap {
         const user = await requireCurrentUser(request);
         const graph = await loadUserGraph(user);
         return jsonResponse(
-          serializeUser(user, {
-            notifications: graph.notifications.map(serializeNotification),
+          mergeResource(new UserResource(user), {
+            notifications: graph.notifications.map((row) =>
+              new NotificationResource(row).toArray(),
+            ),
             position: graph.position,
           }),
         );
@@ -51,8 +53,8 @@ export function authRoutes(dependencies: AppDependencies): AppRouteMap {
       };
       const { setCookie } = await authManager().signIn(sessionUser);
       const graph = await loadUserGraph(user);
-      const body = serializeUser(user, {
-        notifications: graph.notifications.map(serializeNotification),
+      const body = mergeResource(new UserResource(user), {
+        notifications: graph.notifications.map((row) => new NotificationResource(row).toArray()),
         position: graph.position,
       });
       return jsonResponse(body, {

@@ -2,9 +2,9 @@ import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contract
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
+import { NotificationResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { isStaff } from "../../lib/roles.ts";
-import { serializeNotification } from "../../lib/serialize.ts";
 import type { Notification } from "../../models/Notification.ts";
 import { User } from "../../models/User.ts";
 import { users } from "../users/repository.ts";
@@ -38,7 +38,7 @@ export function notificationRoutes(dependencies: AppDependencies): AppRouteMap {
         await authorize(request, "notifications", "view");
         const user = await requireCurrentUser(request);
         const rows = (await User.newFromRecord(user).notifications()) as Notification[];
-        return jsonResponse(rows.map((row) => serializeNotification(row.toObject())));
+        return jsonResponse(rows.map((row) => new NotificationResource(row).toArray()));
       }),
     },
     "/api/notify/markasread": {
