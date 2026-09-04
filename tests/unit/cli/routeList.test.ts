@@ -3,11 +3,11 @@ import { routeListCommand } from "../../../src/cli/commands/routeList";
 import { captureConsole } from "./helpers";
 
 describe("routeListCommand", () => {
-  test("lists registered application routes", () => {
+  test("lists registered application routes", async () => {
     const output = captureConsole();
 
     try {
-      routeListCommand();
+      await routeListCommand();
     } finally {
       output.restore();
     }
