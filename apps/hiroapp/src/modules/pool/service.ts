@@ -2,6 +2,7 @@ import {
   ConflictError,
   ForbiddenError,
   UnprocessableEntityError,
+  ValidationError,
 } from "@getstrata/core/errors/http";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { recordHiringEvent } from "../../lib/hiringEvents.ts";
@@ -10,6 +11,7 @@ import { iso } from "../../lib/serialize.ts";
 import type { Application } from "../../models/Application.ts";
 import type { TalentPoolEntry } from "../../models/TalentPoolEntry.ts";
 import { applications } from "../applications/repository.ts";
+import { contactUserNotification, notifyUser } from "../notifications/service.ts";
 import { users } from "../users/repository.ts";
 import type { UserRecord } from "../users/table.ts";
 import { talentPool } from "./repository.ts";
@@ -19,6 +21,11 @@ export type AddPoolInput = {
   user_id: number;
   notes?: string | null;
   application_id?: number | null;
+};
+
+export type ReachOutInput = {
+  subject?: string | null;
+  text: string;
 };
 
 function asPoolStatus(value: unknown): TalentPoolStatus {
@@ -150,6 +157,34 @@ export class TalentPoolService {
       { type: "talent_pool_entry", id: updated.id },
     );
     return updated;
+  }
+
+  async reachOut(actor: UserRecord, entry: TalentPoolEntry, input: ReachOutInput) {
+    assertStaff(actor);
+    if (asPoolStatus(entry.get("status")) !== "active") {
+      throw new ForbiddenError("This candidate is not in the talent pool.");
+    }
+    const text = input.text.trim();
+    if (!text) {
+      throw new ValidationError("The given data was invalid.", {
+        text: ["The message field is required."],
+      });
+    }
+    const subject = input.subject?.trim() || "Talent pool outreach";
+    const candidate = await users.findByIdOrThrow(Number(entry.get("user_id")));
+    const message = contactUserNotification(actor.email, candidate.email, subject, text);
+    await notifyUser({ userId: candidate.id, ...message });
+    await recordHiringEvent(
+      "talent_pool.reached_out",
+      {
+        talent_pool_id: Number(entry.id),
+        user_id: candidate.id,
+        subject,
+        created_by: actor.id,
+      },
+      { type: "talent_pool_entry", id: Number(entry.id) },
+    );
+    return { sent: true as const, user_id: candidate.id, subject };
   }
 }
 

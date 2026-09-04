@@ -33,6 +33,24 @@ export function talentPoolWebRoutes(dependencies: AppDependencies): AppRouteMap 
         return redirectResponse(returnTo(fields, "/talent-pool"));
       }),
     },
+    "/talent-pool/:id/reach-out": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => TalentPoolEntry.findOrFail(id),
+          async (request, entry) => {
+            const actor = await requireCurrentUser(request);
+            const { fields } = await parseFormBody(request);
+            await talentPoolService.reachOut(actor, entry, {
+              subject: fields.subject || null,
+              text: fields.text ?? "",
+            });
+            return redirectResponse(returnTo(fields, "/talent-pool"));
+          },
+        ),
+      ),
+    },
     "/talent-pool/:id/release": {
       POST: wrapWebAuthenticated(
         dependencies,

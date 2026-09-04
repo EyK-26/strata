@@ -5,7 +5,7 @@ import { requireCurrentUser } from "../../http/currentUser.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { Application } from "../../models/Application.ts";
 import { TalentPoolEntry } from "../../models/TalentPoolEntry.ts";
-import { AddPoolFromApplicationRequest, AddPoolRequest } from "./requests.ts";
+import { AddPoolFromApplicationRequest, AddPoolRequest, ReachOutRequest } from "./requests.ts";
 import { serializePoolEntry, talentPoolService } from "./service.ts";
 
 export function talentPoolRoutes(dependencies: AppDependencies): AppRouteMap {
@@ -21,6 +21,21 @@ export function talentPoolRoutes(dependencies: AppDependencies): AppRouteMap {
         const created = await talentPoolService.add(actor, payload);
         return jsonResponse(serializePoolEntry(created));
       }),
+    },
+    "/api/talent-pool/:id/reach-out": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => TalentPoolEntry.findOrFail(id),
+          async (request, entry) => {
+            const actor = await requireCurrentUser(request);
+            const payload = await new ReachOutRequest().validate(request);
+            const result = await talentPoolService.reachOut(actor, entry, payload);
+            return jsonResponse(result);
+          },
+        ),
+      ),
     },
     "/api/talent-pool/:id/release": {
       POST: wrapApi(

@@ -4,12 +4,14 @@ import {
   ConflictError,
   ForbiddenError,
   UnprocessableEntityError,
+  ValidationError,
 } from "@getstrata/core/errors/http";
 import { ROLE, STATUS } from "../lib/roles.ts";
 import { Application } from "../models/Application.ts";
 import { Position } from "../models/Position.ts";
 import { TalentPoolEntry } from "../models/TalentPoolEntry.ts";
 import { User } from "../models/User.ts";
+import { inboxService } from "../modules/notifications/inbox.ts";
 import { serializePoolEntry, talentPoolService } from "../modules/pool/service.ts";
 import { users } from "../modules/users/repository.ts";
 import {
@@ -305,5 +307,97 @@ describe.skipIf(!enabled)("Wave 31 talent pool", () => {
       body: `notes=keep+from+html&return_to=/applications/${htmlApp.id}`,
     });
     expect([302, 303].includes(htmlFromApp.response.status)).toBe(true);
+  });
+
+  test("staff reach out to an active talent-pool candidate", async () => {
+    const candidate = await makeCandidate("outreach");
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+    const created = await talentPoolService.add(recruiter, { user_id: candidate.id });
+
+    await expect(
+      talentPoolService.reachOut(candidate, await TalentPoolEntry.findOrFail(created.id), {
+        text: "hello",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      talentPoolService.reachOut(recruiter, await TalentPoolEntry.findOrFail(created.id), {
+        text: "   ",
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    const sent = await talentPoolService.reachOut(
+      recruiter,
+      await TalentPoolEntry.findOrFail(created.id),
+      { text: "We have a new seat." },
+    );
+    expect(sent.sent).toBe(true);
+    expect(sent.subject).toBe("Talent pool outreach");
+    const inbox = await inboxService.list(candidate);
+    expect(
+      inbox.some((row) => {
+        const data = row.get("data") as { subject?: string; text?: string };
+        return data?.subject === "Talent pool outreach" && data?.text === "We have a new seat.";
+      }),
+    ).toBe(true);
+
+    const named = await talentPoolService.reachOut(
+      recruiter,
+      await TalentPoolEntry.findOrFail(created.id),
+      { subject: "  Next role  ", text: "Are you free next month?" },
+    );
+    expect(named.subject).toBe("Next role");
+
+    await talentPoolService.release(recruiter, await TalentPoolEntry.findOrFail(created.id));
+    await expect(
+      talentPoolService.reachOut(recruiter, await TalentPoolEntry.findOrFail(created.id), {
+        text: "too late",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    const httpCandidate = await makeCandidate("http-out");
+    const httpEntry = await talentPoolService.add(recruiter, { user_id: httpCandidate.id });
+    const forbiddenHttp = await jsonRequest(`/api/talent-pool/${httpEntry.id}/reach-out`, {
+      cookies: candidateCookies,
+      method: "POST",
+      body: JSON.stringify({ text: "nope" }),
+    });
+    expect(forbiddenHttp.response.status).toBe(403);
+    const httpOk = await jsonRequest(`/api/talent-pool/${httpEntry.id}/reach-out`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ subject: "HTTP outreach", text: "Please apply." }),
+    });
+    expect(httpOk.response.status).toBe(200);
+    expect(httpOk.body.sent).toBe(true);
+    expect(httpOk.body.subject).toBe("HTTP outreach");
+    const missingText = await jsonRequest(`/api/talent-pool/${httpEntry.id}/reach-out`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ subject: "empty" }),
+    });
+    expect(missingText.response.status).toBe(422);
+
+    const htmlCandidate = await makeCandidate("html-out");
+    const htmlEntry = await talentPoolService.add(recruiter, { user_id: htmlCandidate.id });
+    const page = await request("/talent-pool", { cookies: recruiterCookies });
+    expect(page.response.status).toBe(200);
+    expect(page.text).toContain("Reach out");
+    const html = await request(`/talent-pool/${htmlEntry.id}/reach-out`, {
+      cookies: page.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(page.cookies),
+      },
+      body: `subject=HTML+outreach&text=Come+back&return_to=/talent-pool`,
+    });
+    expect([302, 303].includes(html.response.status)).toBe(true);
+    const htmlInbox = await inboxService.list(htmlCandidate);
+    expect(
+      htmlInbox.some((row) => {
+        const data = row.get("data") as { subject?: string };
+        return data?.subject === "HTML outreach";
+      }),
+    ).toBe(true);
   });
 });

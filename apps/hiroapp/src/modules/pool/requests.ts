@@ -43,3 +43,22 @@ export class AddPoolFromApplicationRequest extends FormRequest<{
     };
   }
 }
+
+export class ReachOutRequest extends FormRequest<{
+  subject: string | null;
+  text: string;
+}> {
+  protected parse(payload: unknown) {
+    const body = expectObject(payload);
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (!text) {
+      throw new ValidationError("The given data was invalid.", {
+        text: ["The message field is required."],
+      });
+    }
+    return {
+      subject: typeof body.subject === "string" ? body.subject : null,
+      text,
+    };
+  }
+}
