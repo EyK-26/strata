@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { Factory } from "@getstrata/core/database/factory";
-import { Model, registerModelClass, registerModelRepository } from "@getstrata/core/database/model";
+import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 import { JsonResource } from "@getstrata/core/http/resources";
 
@@ -157,7 +157,6 @@ function createGraph(connection: FakeConnection) {
       }
     })(),
   );
-  registerModelClass("PositionModel", PositionModel);
 
   return { UserModel, ApplicationModel, PositionModel, NotificationModel, ApplicationFactory };
 }
@@ -290,6 +289,19 @@ describe("HiroApp-shaped Eloquent parity", () => {
     expect(created.position_id).toBe(4);
 
     expect(JsonResource.collection([{ a: 1 }]).toResponse()).toEqual({ data: [{ a: 1 }] });
+  });
+
+  test("registerModelRepository names the class; registerModelClass is not required", async () => {
+    const connection = new FakeConnection();
+    const { ApplicationModel } = createGraph(connection);
+
+    connection.queue([{ id: 4, name: "Office", hiring: true, user_id: 7 }]);
+    const application = new ApplicationModel(
+      { id: 1, user_id: 7, position_id: 4 },
+      ApplicationModel.repository(),
+    );
+    const position = await application.position();
+    expect(position?.get("name")).toBe("Office");
   });
 
   test("primaryKey defaults to id without an override", () => {

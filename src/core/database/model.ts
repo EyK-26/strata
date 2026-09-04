@@ -217,6 +217,7 @@ function resolveModelRepository(model: object): BaseRepository<Record<string, un
   return repository;
 }
 
+/** Alias for `hasMany("Name")` when `Name` is not `constructor.name` or `$morphClass`. */
 function registerModelClass(name: string, model: object): void {
   namedModels.set(name, model);
 }
@@ -1426,6 +1427,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 }
 
+/** Binds a Model class to its table/connection and names it for `hasMany("User")`. */
 function registerModelRepository<TModelClass>(model: TModelClass, repository: object): TModelClass {
   modelRepositories.set(
     model as object,

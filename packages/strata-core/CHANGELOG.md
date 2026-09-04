@@ -6,6 +6,7 @@ HiroApp dogfood of 0.5.99: eager `with()` / nested `load("a.b")` missed related 
 
 - Relation indexers and eager attach compare keys with `relationMatchKey` (`1`, `1n`, `"1"` match).
 - Sequential `load("position")` / `application.position()` already used SQL `get()` and were unaffected.
+- `registerModelRepository(User, users)` already names `User` and `$morphClass`. Do not also call `registerModelClass("User", User)`. `registerModelClass` is only for an alias that is neither `constructor.name` nor `$morphClass`.
 
 Still non-conforming (honest): Bun cannot infer `morphTo()` method names. `hashed` cast is a no-op. `Factory.has()` without a bound model still needs an explicit FK.
 
