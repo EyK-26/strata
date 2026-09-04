@@ -6,6 +6,7 @@ import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/queue/createAppQueue";
 import type FailedJobService from "@getstrata/core/queue/failedJobService";
 import { redirectResponse } from "@getstrata/core/view";
+import { bindModel } from "../../http/bind.ts";
 import { authorize, denyUnless, requireCurrentUser } from "../../http/currentUser.ts";
 import { renderPage } from "../../http/view.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
@@ -24,7 +25,7 @@ import {
   serializeUser,
 } from "../../lib/serialize.ts";
 import { Application } from "../../models/Application.ts";
-import type { Position } from "../../models/Position.ts";
+import { Position } from "../../models/Position.ts";
 import type { Status } from "../../models/Status.ts";
 import { User } from "../../models/User.ts";
 import { applications } from "../applications/repository.ts";
@@ -154,21 +155,33 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/users/:id": {
-      GET: wrapWebAuthenticated(dependencies, async (request) => {
-        await authorize(request, "users", "view");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        return renderPage(request, "users/show", await loadUserDetail(id));
-      }),
+      GET: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => User.findOrFail(id),
+          async (request, user) => {
+            await authorize(request, "users", "view");
+            return renderPage(request, "users/show", await loadUserDetail(Number(user.id)));
+          },
+        ),
+      ),
     },
     "/users/:id/delete": {
-      POST: wrapWebAuthenticated(dependencies, async (request) => {
-        await authorize(request, "users", "delete");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const seat = await User.find(id).then((model) => model?.position().first() ?? null);
-        if (seat) await positions.updateById(seat.id, { user_id: null });
-        await users.deleteById(id);
-        return redirectResponse("/users");
-      }),
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => User.findOrFail(id),
+          async (request, target) => {
+            await authorize(request, "users", "delete");
+            const seat = await target.position().first();
+            if (seat) await positions.updateById(Number(seat.id), { user_id: null });
+            await users.deleteById(Number(target.id));
+            return redirectResponse("/users");
+          },
+        ),
+      ),
     },
     "/positions": {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
@@ -192,25 +205,39 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/positions/:id": {
-      GET: wrapWebAuthenticated(dependencies, async (request) => {
-        const user = await authorize(request, "positions", "view");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        if (isCandidate(user.role_id)) {
-          return renderPage(request, "positions/show-candidate", {
-            position: await loadCandidatePosition(id),
-          });
-        }
-        return renderPage(request, "positions/show", await loadPositionWithApplications(id));
-      }),
+      GET: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const user = await authorize(request, "positions", "view");
+            const id = Number(position.id);
+            if (isCandidate(user.role_id)) {
+              return renderPage(request, "positions/show-candidate", {
+                position: await loadCandidatePosition(id),
+              });
+            }
+            return renderPage(request, "positions/show", await loadPositionWithApplications(id));
+          },
+        ),
+      ),
     },
     "/positions/:id/delete": {
-      POST: wrapWebAuthenticated(dependencies, async (request) => {
-        await authorize(request, "positions", "delete");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        await applications.deleteForPosition(id);
-        await positions.deleteById(id);
-        return redirectResponse("/positions");
-      }),
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            await authorize(request, "positions", "delete");
+            const id = Number(position.id);
+            await applications.deleteForPosition(id);
+            await position.delete();
+            return redirectResponse("/positions");
+          },
+        ),
+      ),
     },
     "/position/create": {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
@@ -256,85 +283,107 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/applications/:id": {
-      GET: wrapWebAuthenticated(dependencies, async (request) => {
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const application = await applications.findByIdOrThrow(id);
-        const user = await authorize(request, "applications", "view", application);
-        return renderPage(request, "applications/show", {
-          ...(await loadApplicationDetail(id)),
-          roleId: user.role_id,
-        });
-      }),
+      GET: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Application.findOrFail(id),
+          async (request, application) => {
+            const user = await authorize(request, "applications", "view", application.toObject());
+            return renderPage(request, "applications/show", {
+              ...(await loadApplicationDetail(Number(application.id))),
+              roleId: user.role_id,
+            });
+          },
+        ),
+      ),
     },
     "/applications/:id/move": {
-      POST: wrapWebAuthenticated(dependencies, async (request) => {
-        const actor = await authorize(request, "applications", "update");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const application = await applications.findByIdOrThrow(id);
-        const statusId = Number(application.status_id);
-        if (statusId < STATUS.FEEDBACK) {
-          await applications.updateById(id, { status_id: statusId + 1 });
-        } else if (statusId === STATUS.FEEDBACK && application.position_id) {
-          await applications.updateById(id, { status_id: STATUS.HIRED });
-          const position = await positions.findByIdOrThrow(application.position_id);
-          const oldSeat = await positions.findByUserId(application.user_id);
-          if (oldSeat) await positions.updateById(oldSeat.id, { user_id: null });
-          await positions.updateById(position.id, { user_id: application.user_id, hiring: false });
-          const hired = await users.findByIdOrThrow(application.user_id);
-          await notifyUser({
-            userId: hired.id,
-            ...hiredNotification({
-              firstName: hired.first_name,
-              positionName: position.name,
-              recruiter: actor,
-              to: hired.email,
-            }),
-          });
-          for (const sibling of await applications.forPosition(position.id)) {
-            if (Number(sibling.id) === Number(application.id)) continue;
-            await applications.updateById(sibling.id, { status_id: STATUS.ENDED });
-            const rejected = await users.findById(sibling.user_id);
-            if (!rejected) continue;
-            await notifyUser({
-              userId: rejected.id,
-              ...endedNotification({
-                firstName: rejected.first_name,
-                positionName: position.name,
-                recruiter: actor,
-                to: rejected.email,
-              }),
-            });
-          }
-        }
-        return redirectResponse(`/applications/${id}`);
-      }),
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Application.findOrFail(id),
+          async (request, bound) => {
+            const actor = await authorize(request, "applications", "update");
+            const id = Number(bound.id);
+            const application = await applications.findByIdOrThrow(id);
+            const statusId = Number(application.status_id);
+            if (statusId < STATUS.FEEDBACK) {
+              await applications.updateById(id, { status_id: statusId + 1 });
+            } else if (statusId === STATUS.FEEDBACK && application.position_id) {
+              await applications.updateById(id, { status_id: STATUS.HIRED });
+              const position = await positions.findByIdOrThrow(application.position_id);
+              const oldSeat = await positions.findByUserId(application.user_id);
+              if (oldSeat) await positions.updateById(oldSeat.id, { user_id: null });
+              await positions.updateById(position.id, {
+                user_id: application.user_id,
+                hiring: false,
+              });
+              const hired = await users.findByIdOrThrow(application.user_id);
+              await notifyUser({
+                userId: hired.id,
+                ...hiredNotification({
+                  firstName: hired.first_name,
+                  positionName: position.name,
+                  recruiter: actor,
+                  to: hired.email,
+                }),
+              });
+              for (const sibling of await applications.forPosition(position.id)) {
+                if (Number(sibling.id) === Number(application.id)) continue;
+                await applications.updateById(sibling.id, { status_id: STATUS.ENDED });
+                const rejected = await users.findById(sibling.user_id);
+                if (!rejected) continue;
+                await notifyUser({
+                  userId: rejected.id,
+                  ...endedNotification({
+                    firstName: rejected.first_name,
+                    positionName: position.name,
+                    recruiter: actor,
+                    to: rejected.email,
+                  }),
+                });
+              }
+            }
+            return redirectResponse(`/applications/${id}`);
+          },
+        ),
+      ),
     },
     "/applications/:id/end": {
-      POST: wrapWebAuthenticated(dependencies, async (request) => {
-        const actor = await requireCurrentUser(request);
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const application = await applications.findByIdOrThrow(id);
-        await authorize(request, "applications", "delete", application);
-        if (Number(application.status_id) !== STATUS.ENDED) {
-          await applications.updateById(id, { status_id: STATUS.ENDED });
-          if (!isCandidate(actor.role_id)) {
-            const applicant = await users.findByIdOrThrow(application.user_id);
-            const position = application.position_id
-              ? await positions.findById(application.position_id)
-              : null;
-            await notifyUser({
-              userId: applicant.id,
-              ...endedNotification({
-                firstName: applicant.first_name,
-                positionName: position?.name ?? "this position",
-                recruiter: actor,
-                to: applicant.email,
-              }),
-            });
-          }
-        }
-        return redirectResponse(`/applications/${id}`);
-      }),
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Application.findOrFail(id),
+          async (request, bound) => {
+            const actor = await requireCurrentUser(request);
+            const id = Number(bound.id);
+            const application = await applications.findByIdOrThrow(id);
+            await authorize(request, "applications", "delete", application);
+            if (Number(application.status_id) !== STATUS.ENDED) {
+              await applications.updateById(id, { status_id: STATUS.ENDED });
+              if (!isCandidate(actor.role_id)) {
+                const applicant = await users.findByIdOrThrow(application.user_id);
+                const position = application.position_id
+                  ? await positions.findById(application.position_id)
+                  : null;
+                await notifyUser({
+                  userId: applicant.id,
+                  ...endedNotification({
+                    firstName: applicant.first_name,
+                    positionName: position?.name ?? "this position",
+                    recruiter: actor,
+                    to: applicant.email,
+                  }),
+                });
+              }
+            }
+            return redirectResponse(`/applications/${id}`);
+          },
+        ),
+      ),
     },
     "/applications/notify": {
       POST: wrapWebAuthenticated(dependencies, async (request) => {
@@ -359,14 +408,20 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/apply/:id": {
-      GET: wrapWebAuthenticated(dependencies, async (request) => {
-        const user = await requireCurrentUser(request);
-        if (user.role_id !== ROLE.CANDIDATE) {
-          return redirectResponse("/");
-        }
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        return renderPage(request, "applications/apply", { position_id: id });
-      }),
+      GET: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const user = await requireCurrentUser(request);
+            if (user.role_id !== ROLE.CANDIDATE) {
+              return redirectResponse("/");
+            }
+            return renderPage(request, "applications/apply", { position_id: Number(position.id) });
+          },
+        ),
+      ),
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await authorize(request, "applications", "create");
         const { fields } = await parseFormBody(request);
@@ -429,13 +484,18 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/applications/:id/withdraw": {
-      POST: wrapWebAuthenticated(dependencies, async (request) => {
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const application = await Application.findOrFail(id);
-        await authorize(request, "applications", "delete", application.toObject());
-        await application.delete();
-        return redirectResponse("/applications");
-      }),
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Application.findOrFail(id),
+          async (request, application) => {
+            await authorize(request, "applications", "delete", application.toObject());
+            await application.delete();
+            return redirectResponse("/applications");
+          },
+        ),
+      ),
     },
     "/failed-jobs": {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
