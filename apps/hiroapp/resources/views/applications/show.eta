@@ -67,6 +67,44 @@
           <p><%= interview.scheduled_at %> · <%= interview.place %> · <%= interview.status %></p>
         <% }) %>
       <% } %>
+      <% if ((it.offers ?? []).length) { %>
+        <h3>Offers</h3>
+        <% it.offers.forEach((offer) => { %>
+          <p><%= offer.salary %> · <%= offer.starts_on %> · <%= offer.status %></p>
+          <% if (it.roleId !== 2 && (offer.status === "draft" || offer.status === "sent")) { %>
+            <% if (offer.status === "draft") { %>
+              <form action="/offers/<%= offer.id %>/send" method="post">
+                <%~ include("../partials/csrf.eta") %>
+                <button type="submit">Send offer</button>
+              </form>
+            <% } %>
+            <form action="/offers/<%= offer.id %>/withdraw" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <button type="submit">Withdraw offer</button>
+            </form>
+          <% } %>
+          <% if (it.roleId === 2 && offer.status === "sent") { %>
+            <form action="/offers/<%= offer.id %>/accept" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <button type="submit">Accept offer</button>
+            </form>
+            <form action="/offers/<%= offer.id %>/decline" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <button type="submit">Decline offer</button>
+            </form>
+          <% } %>
+        <% }) %>
+      <% } %>
+      <% if (it.roleId !== 2 && it.application.status_id >= 4 && it.application.status_id < 6) { %>
+        <form class="OfferForm" action="/applications/<%= it.application.id %>/offers" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+          <label>Salary <input type="number" name="salary" min="1" /></label>
+          <label>Starts <input type="date" name="starts_on" /></label>
+          <label>Notes <textarea name="notes"></textarea></label>
+          <button type="submit">Save draft offer</button>
+        </form>
+      <% } %>
     </div>
   </div>
   <div class="comments">

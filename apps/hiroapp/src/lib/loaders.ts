@@ -13,6 +13,8 @@ import { User } from "../models/User.ts";
 import { statuses } from "../modules/catalog/repository.ts";
 import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
+import { offers } from "../modules/offers/repository.ts";
+import { serializeOffer } from "../modules/offers/service.ts";
 import type { UserRecord } from "../modules/users/repository.ts";
 
 async function inboxFor(user: User | UserRecord) {
@@ -148,6 +150,7 @@ export async function loadApplicationDetail(applicationId: number) {
     }),
     comments: comments.map((row) => row.toArray()),
     interviews: interviewRows.map(serializeInterview),
+    offers: (await offers.forApplication(applicationId)).map(serializeOffer),
     all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
 }
