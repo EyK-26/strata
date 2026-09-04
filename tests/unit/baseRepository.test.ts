@@ -231,7 +231,8 @@ describe("base repository", () => {
     expect(grouped.get(2)).toEqual([{ id: 11, position_id: 5, title: "B" }]);
     expect(grouped.get(3)).toEqual([]);
     expect(connection.calls[0]?.query).toContain('INNER JOIN "positions"');
-    expect(connection.calls[0]?.params).toEqual([[1, 2, 3]]);
+    expect(connection.calls[0]?.query).toContain('"positions"."department_id" IN ($1, $2, $3)');
+    expect(connection.calls[0]?.params).toEqual([1, 2, 3]);
   });
 
   test("findHasManyThrough returns the matching far rows for one parent", async () => {
@@ -270,7 +271,8 @@ describe("base repository", () => {
 
     expect(rows).toEqual([{ id: 10, position_id: 4, title: "A" }]);
     expect(connection.calls[0]?.query).toContain('"applications"."title" = $2');
-    expect(connection.calls[0]?.params).toEqual([[1], "A"]);
+    expect(connection.calls[0]?.query).toContain('"positions"."department_id" IN ($1)');
+    expect(connection.calls[0]?.params).toEqual([1, "A"]);
   });
 
   test("loadHasManyThroughForParents returns an empty map without querying", async () => {

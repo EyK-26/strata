@@ -542,9 +542,10 @@ class BelongsToManyRelationQuery<
     }
 
     const list = Array.isArray(ids) ? ids : [ids];
+    const placeholders = list.map((_, index) => `$${index + 2}`).join(", ");
     await this.connection().unsafe(
-      `DELETE FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1 AND ${String(this.relation.relatedPivotKey)} = ANY($2)`,
-      [parentId, list],
+      `DELETE FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1 AND ${String(this.relation.relatedPivotKey)} IN (${placeholders})`,
+      [parentId, ...list],
     );
   }
 

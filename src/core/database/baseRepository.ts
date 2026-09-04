@@ -532,12 +532,16 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     const columns = this.table.columns
       .map((column) => `${qualifyColumn(farTable, column)}`)
       .join(", ");
-    const { text: extraWhere, params: extraParams } = this.buildThroughWhere(options);
+    const placeholders = parentIds.map((_, index) => `$${index + 1}`).join(", ");
+    const { text: extraWhere, params: extraParams } = this.buildThroughWhere(
+      options,
+      parentIds.length,
+    );
     const softDelete = this.throughSoftDeleteClause(options);
-    const sql = `SELECT ${columns}, ${qualifyColumn(relation.throughTable, relation.firstKey)} AS ${throughParentKey} FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(relation.throughTable)} ON ${qualifyColumn(relation.throughTable, relation.secondLocalKey)} = ${qualifyColumn(farTable, relation.secondKey)} WHERE ${qualifyColumn(relation.throughTable, relation.firstKey)} = ANY($1)${softDelete}${extraWhere}`;
+    const sql = `SELECT ${columns}, ${qualifyColumn(relation.throughTable, relation.firstKey)} AS ${throughParentKey} FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(relation.throughTable)} ON ${qualifyColumn(relation.throughTable, relation.secondLocalKey)} = ${qualifyColumn(farTable, relation.secondKey)} WHERE ${qualifyColumn(relation.throughTable, relation.firstKey)} IN (${placeholders})${softDelete}${extraWhere}`;
 
     const children = await this.connection.unsafe<TEntity & Record<string, unknown>>(sql, [
-      parentIds,
+      ...parentIds,
       ...extraParams,
     ]);
 
@@ -559,7 +563,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     return ` AND ${qualified} IS NULL`;
   }
 
-  private buildThroughWhere(options: QueryOptions<TEntity>): { text: string; params: unknown[] } {
+  private buildThroughWhere(
+    options: QueryOptions<TEntity>,
+    paramOffset = 1,
+  ): { text: string; params: unknown[] } {
     const where = options.where ?? {};
     const entries = Object.entries(where);
     if (entries.length === 0) {
@@ -569,7 +576,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     const params: unknown[] = [];
     const clauses = entries.map(([column, value], index) => {
       params.push(value);
-      return `${qualifyColumn(this.table.name, column)} = $${index + 2}`;
+      return `${qualifyColumn(this.table.name, column)} = $${paramOffset + index + 1}`;
     });
     return { text: ` AND ${clauses.join(" AND ")}`, params };
   }
@@ -738,9 +745,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
 
     const parentIds = [...new Set(parents.map((parent) => parent[relation.parentKey]))];
+    const placeholders = parentIds.map((_, index) => `$${index + 1}`).join(", ");
     const pivotRows = await this.connection.unsafe<Pivot>(
-      `SELECT * FROM ${relation.pivotTable} WHERE ${String(relation.foreignPivotKey)} = ANY($1)`,
-      [parentIds],
+      `SELECT * FROM ${relation.pivotTable} WHERE ${String(relation.foreignPivotKey)} IN (${placeholders})`,
+      parentIds,
     );
 
     if (pivotRows.length === 0) {

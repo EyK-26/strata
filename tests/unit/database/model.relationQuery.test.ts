@@ -320,7 +320,7 @@ describe("Eloquent-style model relations", () => {
     await user.tags().detach();
     expect(connection.calls.at(-1)?.query).toContain("DELETE");
     await user.tags().detach(30);
-    expect(connection.calls.at(-1)?.query).toContain("ANY");
+    expect(connection.calls.at(-1)?.query).toContain("IN ($2)");
     await user.tags().detach([31]);
 
     await user.tags().sync([]);
