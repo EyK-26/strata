@@ -15,6 +15,8 @@ import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
 import { offers } from "../modules/offers/repository.ts";
 import { serializeOffer } from "../modules/offers/service.ts";
+import { talentPool } from "../modules/pool/repository.ts";
+import { serializePoolEntry } from "../modules/pool/service.ts";
 import { referrals } from "../modules/referrals/repository.ts";
 import { serializeReferral } from "../modules/referrals/service.ts";
 import { applicationRejections, rejectionReasons } from "../modules/rejections/repository.ts";
@@ -156,6 +158,7 @@ export async function loadApplicationDetail(applicationId: number) {
   const sourceRows = await applicationSources.ordered();
   const sourceName = new Map(sourceRows.map((row) => [Number(row.id), row.name]));
   const attribution = await applicationAttributions.forApplication(applicationId);
+  const poolEntry = await talentPool.findByUser(Number(application.get("user_id")));
   return {
     application: mergeResource(new ApplicationResource(application), {
       user: user ? new UserResource(user).toArray() : null,
@@ -179,6 +182,7 @@ export async function loadApplicationDetail(applicationId: number) {
         }
       : null,
     application_sources: sourceRows.map(serializeSource),
+    talent_pool: poolEntry ? serializePoolEntry(poolEntry) : null,
     all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
 }

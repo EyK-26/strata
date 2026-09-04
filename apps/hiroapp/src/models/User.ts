@@ -7,6 +7,7 @@ import { Notification } from "./Notification.ts";
 import { Position } from "./Position.ts";
 import { Role } from "./Role.ts";
 import { Skill } from "./Skill.ts";
+import { TalentPoolEntry } from "./TalentPoolEntry.ts";
 
 export class User extends Model<UserRecord, "id"> {
   static $fillable = ["first_name", "last_name", "email", "password", "role_id"] as const;
@@ -48,6 +49,10 @@ export class User extends Model<UserRecord, "id"> {
 
   departments() {
     return this.belongsToMany(() => Department, "department_members", "user_id", "department_id");
+  }
+
+  talentPoolEntries() {
+    return this.hasMany(() => TalentPoolEntry);
   }
 }
 
