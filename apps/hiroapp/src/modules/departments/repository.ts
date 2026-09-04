@@ -9,6 +9,10 @@ class DepartmentRepository extends TenantRepository<DepartmentRecord, "id"> {
   async ordered() {
     return this.findAll({ orderBy: { column: "name", direction: "ASC" } });
   }
+
+  async findByName(name: string) {
+    return this.firstOrNull({ name });
+  }
 }
 
 export const departments = new DepartmentRepository();

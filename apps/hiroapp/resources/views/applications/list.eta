@@ -1,7 +1,10 @@
 <div class="Applications">
-  <h2>Your Applications</h2>
+  <h2><%= it.title ?? "Your Applications" %></h2>
   <% (it.applications ?? []).forEach((application) => { %>
     <a class="list-item" href="/applications/<%= application.id %>">
+      <% if (application.user) { %>
+        <span><%= application.user.first_name %> <%= application.user.last_name %></span>
+      <% } %>
       <span><%= application.position?.name %></span>
       <span><%= application.status?.name %></span>
     </a>

@@ -1,0 +1,16 @@
+<div class="Interviews">
+  <h2>Interviews</h2>
+  <% (it.interviews ?? []).forEach((interview) => { %>
+    <div class="list-item">
+      <span><%= interview.scheduled_at %></span>
+      <span><%= interview.place %></span>
+      <span><%= interview.status %></span>
+      <% if (it.currentUser?.role_id === 2 && interview.status === "scheduled") { %>
+        <form action="/interviews/<%= interview.id %>/confirm" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <button>Confirm</button>
+        </form>
+      <% } %>
+    </div>
+  <% }) %>
+</div>

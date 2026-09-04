@@ -2,6 +2,7 @@ import { Application } from "./Application.ts";
 import { Comment } from "./Comment.ts";
 import { Department } from "./Department.ts";
 import { Grade } from "./Grade.ts";
+import { Interview } from "./Interview.ts";
 import { Notification } from "./Notification.ts";
 import { Position } from "./Position.ts";
 import { Role } from "./Role.ts";
@@ -23,6 +24,7 @@ export {
   Comment,
   Department,
   Grade,
+  Interview,
   Notification,
   Position,
   Role,

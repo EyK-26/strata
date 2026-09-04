@@ -1,5 +1,6 @@
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { departmentRoutes } from "./routes.ts";
+import { departmentWebRoutes } from "./web.ts";
 
 const departmentsModule: AppModule = {
   name: "departments",
@@ -7,6 +8,9 @@ const departmentsModule: AppModule = {
   tableName: "departments",
   routes({ dependencies }) {
     return departmentRoutes(dependencies);
+  },
+  webRoutes({ dependencies }) {
+    return departmentWebRoutes(dependencies);
   },
 };
 

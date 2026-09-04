@@ -32,6 +32,10 @@ class ApplicationRepository extends TenantRepository<ApplicationRecord, "id"> {
   async findPair(userId: number, positionId: number) {
     return this.firstOrNull({ user_id: userId, position_id: positionId });
   }
+
+  async forUser(userId: number) {
+    return this.findWhere({ user_id: userId });
+  }
 }
 
 export const applications = new ApplicationRepository();

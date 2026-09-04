@@ -6,9 +6,11 @@ WorkHub `src/modules` has been removed. Leftover `src/db` migrations still exist
 
 HiroApp rewrites `DATABASE_URL` to `hiroapp_test` (or `HIROAPP_DATABASE_URL`). Do not point leftover `src/db` tests and HiroApp at one database.
 
-## Waves 5–10
+## Waves 5–14
 
-Wave 5 made HiroApp the developer default (`bun run dev`). Waves 6–9 ported staff identity, teams, RLS, SCIM, webhooks, audit, and billing onto HiroApp. Wave 10 points CI at HiroApp (OpenAPI, smoke, `bun run test:hiroapp:coverage`) and deletes the WorkHub application tree.
+Wave 5 made HiroApp the developer default (`bun run dev`). Waves 6–9 ported staff identity, teams, RLS, SCIM, webhooks, audit, and billing onto HiroApp. Wave 10 points CI at HiroApp (OpenAPI, smoke, `bun run test:hiroapp:coverage`) and deletes the WorkHub application tree. Waves 11–14 add the staff hiring pipeline, department CRUD, candidate apply/restore, and first-class interviews.
+
+`hiroapp:fresh` (and CI `DOGFOOD_APP=hiroapp bun run cli migrate:fresh`) creates the `hiroapp_test` database if it is missing.
 
 Candidates (`role_id=2`) stay applicants — not team members, not SCIM employees, not org tokens. `notifiable_type` stays `App\Models\User`.
 

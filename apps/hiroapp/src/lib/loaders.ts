@@ -11,6 +11,8 @@ import type { Notification } from "../models/Notification.ts";
 import { Position } from "../models/Position.ts";
 import { User } from "../models/User.ts";
 import { statuses } from "../modules/catalog/repository.ts";
+import { interviews } from "../modules/interviews/repository.ts";
+import { serializeInterview } from "../modules/interviews/service.ts";
 import type { UserRecord } from "../modules/users/repository.ts";
 
 async function inboxFor(user: User | UserRecord) {
@@ -135,6 +137,7 @@ export async function loadApplicationDetail(applicationId: number) {
   }>("status");
 
   const comments = await application.comments();
+  const interviewRows = await interviews.forApplication(applicationId);
   return {
     application: mergeResource(new ApplicationResource(application), {
       user: user ? new UserResource(user).toArray() : null,
@@ -144,6 +147,7 @@ export async function loadApplicationDetail(applicationId: number) {
       status: status ? new NamedResource(status).toArray() : null,
     }),
     comments: comments.map((row) => row.toArray()),
+    interviews: interviewRows.map(serializeInterview),
     all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
 }

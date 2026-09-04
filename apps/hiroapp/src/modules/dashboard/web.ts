@@ -17,7 +17,7 @@ import {
   loadUserDetail,
   loadUserGraph,
 } from "../../lib/loaders.ts";
-import { isAdmin, isCandidate, isRecruiter, ROLE, STATUS } from "../../lib/roles.ts";
+import { isAdmin, isCandidate, isRecruiter, ROLE } from "../../lib/roles.ts";
 import {
   serializeApplication,
   serializeNamed,
@@ -30,30 +30,26 @@ import { Position } from "../../models/Position.ts";
 import type { Status } from "../../models/Status.ts";
 import { User } from "../../models/User.ts";
 import { applications } from "../applications/repository.ts";
+import { ApplicationIndexRequest } from "../applications/requests.ts";
+import { applicationService } from "../applications/service.ts";
 import { statuses } from "../catalog/repository.ts";
 import { departments } from "../departments/repository.ts";
 import {
   contactUserNotification,
-  endedNotification,
-  hiredNotification,
   interviewNotification,
   notifyUser,
 } from "../notifications/service.ts";
 import { positions } from "../positions/repository.ts";
 import { users } from "../users/repository.ts";
 
-async function loadUserApplications(user: Parameters<typeof User.newFromRecord>[0]) {
-  const rows = await User.newFromRecord(user).applications();
-  await Promise.all(rows.map((row) => row.load("position", "status")));
-  return rows;
-}
-
 function serializeLoadedApplication(application: Application) {
   const position = application.loaded<Position>("position");
   const status = application.loaded<Status>("status");
+  const applicant = application.loaded<User>("user");
   return serializeApplication(application, {
     position: position ? serializePosition(position) : null,
     status: status ? serializeNamed(status) : null,
+    user: applicant ? serializeUser(applicant) : null,
   });
 }
 
@@ -80,9 +76,15 @@ async function homeFor(request: Request) {
     return renderPage(request, "admin/home", { positions: openPayload, users: userPayload });
   }
   if (isRecruiter(user.role_id)) {
-    return renderPage(request, "recruiter/home", {});
+    const summary = await applicationService.summaryForActor(user);
+    const recent = await applicationService.listForActor(user, {}, { page: 1, perPage: 20 });
+    return renderPage(request, "recruiter/home", {
+      summary,
+      applications: recent.map((application) => serializeLoadedApplication(application)),
+      title: "Hiring pipeline",
+    });
   }
-  const apps = await loadUserApplications(user);
+  const apps = await applicationService.listForActor(user, {}, { page: 1, perPage: 50 });
   const open = await positions.hiring();
   const appPayload = apps.map((application) =>
     serializeLoadedApplication(application as Application),
@@ -269,11 +271,13 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
     "/applications": {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await requireCurrentUser(request);
-        const rows = await loadUserApplications(user);
-        const payload = rows.map((application) =>
-          serializeLoadedApplication(application as Application),
-        );
-        return renderPage(request, "applications/index", { applications: payload });
+        const query = new ApplicationIndexRequest().validate(request);
+        const rows = await applicationService.listForActor(user, query, { page: 1, perPage: 50 });
+        const payload = rows.map((application) => serializeLoadedApplication(application));
+        return renderPage(request, "applications/index", {
+          applications: payload,
+          title: isCandidate(user.role_id) ? "Your Applications" : "Hiring pipeline",
+        });
       }),
     },
     "/applications/:id": {
@@ -300,47 +304,8 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Application.findOrFail(id),
           async (request, bound) => {
             const actor = await authorize(request, "applications", "update");
-            const id = Number(bound.id);
-            const application = await applications.findByIdOrThrow(id);
-            const statusId = Number(application.status_id);
-            if (statusId < STATUS.FEEDBACK) {
-              await applications.updateById(id, { status_id: statusId + 1 });
-            } else if (statusId === STATUS.FEEDBACK && application.position_id) {
-              await applications.updateById(id, { status_id: STATUS.HIRED });
-              const position = await positions.findByIdOrThrow(application.position_id);
-              const oldSeat = await positions.findByUserId(application.user_id);
-              if (oldSeat) await positions.updateById(oldSeat.id, { user_id: null });
-              await positions.updateById(position.id, {
-                user_id: application.user_id,
-                hiring: false,
-              });
-              const hired = await users.findByIdOrThrow(application.user_id);
-              await notifyUser({
-                userId: hired.id,
-                ...hiredNotification({
-                  firstName: hired.first_name,
-                  positionName: position.name,
-                  recruiter: actor,
-                  to: hired.email,
-                }),
-              });
-              for (const sibling of await applications.forPosition(position.id)) {
-                if (Number(sibling.id) === Number(application.id)) continue;
-                await applications.updateById(sibling.id, { status_id: STATUS.ENDED });
-                const rejected = await users.findById(sibling.user_id);
-                if (!rejected) continue;
-                await notifyUser({
-                  userId: rejected.id,
-                  ...endedNotification({
-                    firstName: rejected.first_name,
-                    positionName: position.name,
-                    recruiter: actor,
-                    to: rejected.email,
-                  }),
-                });
-              }
-            }
-            return redirectResponse(`/applications/${id}`);
+            await applicationService.move(actor, bound);
+            return redirectResponse(`/applications/${bound.id}`);
           },
         ),
       ),
@@ -353,28 +318,9 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Application.findOrFail(id),
           async (request, bound) => {
             const actor = await requireCurrentUser(request);
-            const id = Number(bound.id);
-            const application = await applications.findByIdOrThrow(id);
-            await authorize(request, "applications", "delete", application);
-            if (Number(application.status_id) !== STATUS.ENDED) {
-              await applications.updateById(id, { status_id: STATUS.ENDED });
-              if (!isCandidate(actor.role_id)) {
-                const applicant = await users.findByIdOrThrow(application.user_id);
-                const position = application.position_id
-                  ? await positions.findById(application.position_id)
-                  : null;
-                await notifyUser({
-                  userId: applicant.id,
-                  ...endedNotification({
-                    firstName: applicant.first_name,
-                    positionName: position?.name ?? "this position",
-                    recruiter: actor,
-                    to: applicant.email,
-                  }),
-                });
-              }
-            }
-            return redirectResponse(`/applications/${id}`);
+            await authorize(request, "applications", "delete", bound.toObject());
+            await applicationService.end(actor, bound);
+            return redirectResponse(`/applications/${bound.id}`);
           },
         ),
       ),
@@ -419,14 +365,11 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await authorize(request, "applications", "create");
         const { fields } = await parseFormBody(request);
-        const created = await User.newFromRecord(user)
-          .applications()
-          .create({
-            position_id: Number(fields.position_id),
-            status_id: STATUS.APPLIED,
-            attachment_text: fields.attachment_text || null,
-            attachment_file: fields.attachment_file || null,
-          });
+        const created = await applicationService.apply(user, {
+          position_id: Number(fields.position_id),
+          attachment_text: fields.attachment_text || null,
+          attachment_file: fields.attachment_file || null,
+        });
         return redirectResponse(`/applications/${created.id}`);
       }),
     },

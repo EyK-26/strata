@@ -25,9 +25,21 @@ export class CreateApplicationRequest extends FormRequest<CreateApplicationPaylo
   }
 }
 
-export class ApplicationIndexRequest extends QueryFormRequest<{ search: string }> {
+export class ApplicationIndexRequest extends QueryFormRequest<{
+  search: string;
+  status_id?: number;
+  department_id?: number;
+}> {
   protected parseQuery(request?: Request) {
-    return { search: getQueryParams(request).get("search") ?? "" };
+    const params = getQueryParams(request);
+    const statusRaw = Number(params.get("status_id") ?? 0);
+    const departmentRaw = Number(params.get("department_id") ?? 0);
+    return {
+      search: params.get("search") ?? "",
+      status_id: Number.isInteger(statusRaw) && statusRaw > 0 ? statusRaw : undefined,
+      department_id:
+        Number.isInteger(departmentRaw) && departmentRaw > 0 ? departmentRaw : undefined,
+    };
   }
 }
 

@@ -3,6 +3,10 @@
   <% if (role === 1) { %>
     <a href="/">Home</a>
     <a href="/account">Account</a>
+    <a href="/applications">Pipeline</a>
+    <a href="/interviews">Interviews</a>
+    <a href="/positions">Positions</a>
+    <a href="/departments">Departments</a>
     <a href="/users/create">Create New User</a>
     <a href="/webhooks">Webhooks</a>
     <a href="/audit-logs">Audit</a>
@@ -12,12 +16,16 @@
     <a href="/">Home</a>
     <a href="/account">Account</a>
     <a href="/applications">Your Applications</a>
+    <a href="/interviews">Interviews</a>
     <a href="/positions">Positions</a>
     <a href="/skills">Skills</a>
     <a href="/watching">Watchlist</a>
   <% } else if (role === 3) { %>
     <a href="/">Home</a>
     <a href="/account">Account</a>
+    <a href="/applications">Pipeline</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/interviews">Interviews</a>
     <a href="/position/create">Create New Position</a>
     <a href="/skills">Skills</a>
     <a href="/webhooks">Webhooks</a>

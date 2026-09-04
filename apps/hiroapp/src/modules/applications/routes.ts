@@ -1,10 +1,5 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
-import { runInTransaction } from "@getstrata/core/database/transaction";
-import {
-  ConflictError,
-  ForbiddenError,
-  UnprocessableEntityError,
-} from "@getstrata/core/errors/http";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import { applyConditionalGet, etagFromResource, isEtagEnabled } from "@getstrata/core/http/etag";
 import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
 import { parsePaginationQuery } from "@getstrata/core/http/pagination";
@@ -15,25 +10,16 @@ import { bindModel } from "../../http/bind.ts";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { ApplicationResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
-import { recordHiringEvent } from "../../lib/hiringEvents.ts";
 import { loadApplicationDetail } from "../../lib/loaders.ts";
-import { isCandidate, STATUS } from "../../lib/roles.ts";
 import { Application } from "../../models/Application.ts";
-import { User } from "../../models/User.ts";
-import {
-  endedNotification,
-  hiredNotification,
-  interviewNotification,
-  notifyUser,
-} from "../notifications/service.ts";
-import { positions } from "../positions/repository.ts";
+import { interviewNotification, notifyUser } from "../notifications/service.ts";
 import { users } from "../users/repository.ts";
-import { applications } from "./repository.ts";
 import {
   ApplicationIndexRequest,
   CreateApplicationRequest,
   InterviewNotifyRequest,
 } from "./requests.ts";
+import { applicationService } from "./service.ts";
 
 const applyThrottle = createMemoryThrottleMiddleware({
   maxAttempts: 8,
@@ -48,18 +34,7 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
         const user = await requireCurrentUser(request);
         const query = new ApplicationIndexRequest().validate(request);
         const pagination = parsePaginationQuery(request);
-        const search = query.search.trim();
-        let builder = Application.where({ user_id: user.id });
-        if (search) {
-          builder = builder.whereHas("position", (related) => {
-            related.where?.({ name: { ilike: `%${search}%` } });
-          });
-        }
-        const page = await builder
-          .limit(pagination.perPage)
-          .offset((pagination.page - 1) * pagination.perPage)
-          .get();
-        await Promise.all(page.map((application) => application.load("position", "status")));
+        const page = await applicationService.listForActor(user, query, pagination);
         const payload = page.map((application) => new ApplicationResource(application).toArray());
         return jsonResponse({
           data: payload,
@@ -70,10 +45,6 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
         wrapApi(dependencies, async (request) => {
           const user = await authorize(request, "applications", "create");
           const payload = await new CreateApplicationRequest().validate(request);
-          const existing = await applications.findPair(user.id, payload.position_id);
-          if (existing) {
-            throw new ConflictError("You have already applied to this position.");
-          }
           let storedPath = payload.attachment_file;
           if (payload.attachment_text && dependencies.storage) {
             storedPath = await dependencies.storage.put(
@@ -81,15 +52,20 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
               payload.attachment_text,
             );
           }
-          const created = await User.newFromRecord(user).applications().create({
-            position_id: payload.position_id,
-            status_id: STATUS.APPLIED,
-            attachment_text: payload.attachment_text,
+          const created = await applicationService.apply(user, {
+            ...payload,
             attachment_file: storedPath,
           });
           return jsonResponse(new ApplicationResource(created).toResponse());
         }),
       ),
+    },
+    "/api/pipeline/summary": {
+      GET: wrapApi(dependencies, async (request) => {
+        const user = await requireCurrentUser(request);
+        const query = new ApplicationIndexRequest().validate(request);
+        return jsonResponse(await applicationService.summaryForActor(user, query.department_id));
+      }),
     },
     "/api/applications/:id": {
       GET: wrapApi(
@@ -156,30 +132,7 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, application) => {
             const actor = await requireCurrentUser(request);
             await authorize(request, "applications", "delete", application);
-            if (Number(application.get("status_id")) === STATUS.ENDED) {
-              throw new ForbiddenError("Application is already ended.");
-            }
-            await applications.updateById(Number(application.id), { status_id: STATUS.ENDED });
-            await recordHiringEvent(
-              "application.ended",
-              {
-                application_id: Number(application.id),
-                user_id: Number(application.get("user_id")),
-                position_id: Number(application.get("position_id")),
-              },
-              { type: "application", id: Number(application.id) },
-            );
-            if (!isCandidate(actor.role_id)) {
-              const applicant = await users.findByIdOrThrow(Number(application.get("user_id")));
-              const relatedPosition = await application.position();
-              const message = endedNotification({
-                firstName: applicant.first_name,
-                positionName: relatedPosition?.get("name") ?? "this position",
-                recruiter: actor,
-                to: applicant.email,
-              });
-              await notifyUser({ userId: applicant.id, ...message });
-            }
+            await applicationService.end(actor, application);
             return jsonResponse(null);
           },
         ),
@@ -193,76 +146,7 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Application.findOrFail(id),
           async (request, application) => {
             const actor = await authorize(request, "applications", "update");
-            const id = Number(application.id);
-            const statusId = Number(application.get("status_id"));
-            if (statusId < STATUS.FEEDBACK) {
-              await applications.updateById(id, { status_id: statusId + 1 });
-              return jsonResponse(null);
-            }
-            if (statusId !== STATUS.FEEDBACK) {
-              throw new ForbiddenError("Application cannot be moved further.");
-            }
-            if (!application.get("position_id")) {
-              throw new UnprocessableEntityError("Application has no position.");
-            }
-
-            await runInTransaction(async () => {
-              await applications.updateById(id, { status_id: STATUS.HIRED });
-              await recordHiringEvent(
-                "application.hired",
-                {
-                  application_id: id,
-                  user_id: Number(application.get("user_id")),
-                  position_id: Number(application.get("position_id")),
-                },
-                { type: "application", id },
-              );
-              const position = await application.position().first();
-              if (!position) {
-                throw new UnprocessableEntityError("Application has no position.");
-              }
-              const userId = Number(application.get("user_id"));
-              const oldSeat = await positions.findByUserId(userId);
-              if (oldSeat) {
-                await positions.updateById(oldSeat.id, { user_id: null });
-              }
-              await position.update({ user_id: userId, hiring: false });
-
-              const siblings = await position.applications();
-              const rejectedIds: number[] = [];
-              for (const sibling of siblings) {
-                const siblingId = Number(sibling.id);
-                if (siblingId !== id && Number(sibling.get("status_id")) !== STATUS.ENDED) {
-                  await applications.updateById(siblingId, { status_id: STATUS.ENDED });
-                  rejectedIds.push(Number(sibling.get("user_id")));
-                }
-              }
-
-              const hired = await users.findByIdOrThrow(userId);
-              const positionName = String(position.get("name"));
-              await notifyUser({
-                userId: hired.id,
-                ...hiredNotification({
-                  firstName: hired.first_name,
-                  positionName,
-                  recruiter: actor,
-                  to: hired.email,
-                }),
-              });
-              for (const rejectedId of rejectedIds) {
-                const rejected = await users.findById(rejectedId);
-                if (!rejected) continue;
-                await notifyUser({
-                  userId: rejected.id,
-                  ...endedNotification({
-                    firstName: rejected.first_name,
-                    positionName,
-                    recruiter: actor,
-                    to: rejected.email,
-                  }),
-                });
-              }
-            });
+            await applicationService.move(actor, application);
             return jsonResponse(null);
           },
         ),

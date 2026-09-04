@@ -1,0 +1,9 @@
+<div class="Departments">
+  <h2>Departments</h2>
+  <% if (it.currentUser?.role_id === 1) { %>
+    <p><a href="/departments/create">Create department</a></p>
+  <% } %>
+  <% (it.departments ?? []).forEach((department) => { %>
+    <div class="list-item"><%= department.name %></div>
+  <% }) %>
+</div>

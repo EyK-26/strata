@@ -2,6 +2,7 @@ import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { applications } from "../modules/applications/repository.ts";
 import type { ApplicationRecord } from "../modules/applications/table.ts";
 import { Comment } from "./Comment.ts";
+import { Interview } from "./Interview.ts";
 import { Position } from "./Position.ts";
 import { Status } from "./Status.ts";
 import { User } from "./User.ts";
@@ -37,6 +38,10 @@ export class Application extends Model<ApplicationRecord, "id"> {
 
   comments() {
     return this.morphMany(() => Comment, "commentable");
+  }
+
+  interviews() {
+    return this.hasMany(() => Interview);
   }
 }
 

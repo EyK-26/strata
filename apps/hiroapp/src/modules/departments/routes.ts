@@ -1,18 +1,55 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { requireCurrentUser } from "../../http/currentUser.ts";
+import { bindModel } from "../../http/bind.ts";
+import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { NamedResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
-import { departments } from "./repository.ts";
+import { Department } from "../../models/Department.ts";
+import { DepartmentNameRequest } from "./requests.ts";
+import { departmentService } from "./service.ts";
 
 export function departmentRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
     "/api/departments": {
       GET: wrapApi(dependencies, async (request) => {
         await requireCurrentUser(request);
-        const rows = await departments.ordered();
+        const rows = await departmentService.ordered();
         return jsonResponse(rows.map((row) => new NamedResource(row).toArray()));
       }),
+      POST: wrapApi(dependencies, async (request) => {
+        await authorize(request, "departments", "create");
+        const payload = await new DepartmentNameRequest().validate(request);
+        const created = await departmentService.create(payload.name);
+        return jsonResponse(new NamedResource(created).toArray());
+      }),
+    },
+    "/api/departments/:id": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Department.findOrFail(id),
+          async (request, department) => {
+            await authorize(request, "departments", "update");
+            const payload = await new DepartmentNameRequest().validate(request);
+            const updated = await departmentService.rename(Number(department.id), payload.name);
+            return jsonResponse(new NamedResource(updated).toArray());
+          },
+        ),
+      ),
+    },
+    "/api/departments/:id/delete": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Department.findOrFail(id),
+          async (request, department) => {
+            await authorize(request, "departments", "delete");
+            return jsonResponse(await departmentService.remove(Number(department.id)));
+          },
+        ),
+      ),
     },
   };
 }

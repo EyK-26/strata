@@ -63,3 +63,11 @@ export async function signInCookie(email: string) {
   });
   return { user, cookies: [setCookie] };
 }
+
+export async function seededUser(email: string) {
+  const user = await users.findByEmail(email);
+  if (!user) {
+    throw new Error(`Missing seeded user ${email}`);
+  }
+  return user;
+}

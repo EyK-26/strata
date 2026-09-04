@@ -1,0 +1,9 @@
+<div class="CreateDepartment">
+  <h2>Create department</h2>
+  <a href="/departments"><button type="button">back</button></a>
+  <form action="/departments/create" method="post">
+    <%~ include("../partials/csrf.eta") %>
+    <label>Name: <input type="text" name="name" required /></label>
+    <button>Create</button>
+  </form>
+</div>
