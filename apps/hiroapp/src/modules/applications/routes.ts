@@ -14,6 +14,7 @@ import { loadApplicationDetail } from "../../lib/loaders.ts";
 import { Application } from "../../models/Application.ts";
 import { interviewNotification, notifyUser } from "../notifications/service.ts";
 import { users } from "../users/repository.ts";
+import { reportingService } from "./reporting.ts";
 import {
   ApplicationIndexRequest,
   CreateApplicationRequest,
@@ -186,23 +187,8 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
     },
     "/api/export/applications": {
       GET: wrapApi(dependencies, async (request) => {
-        await authorize(request, "applications", "update");
-        const rows: Array<Record<string, unknown>> = [];
-        await Application.chunk(50, async (batch) => {
-          for (const application of batch) {
-            rows.push(application.toArray());
-          }
-        });
-        const cursor = await Application.cursorPaginate({ perPage: 50 });
-        return jsonResponse({
-          count: rows.length,
-          data: rows,
-          cursor: {
-            count: cursor.data.length,
-            has_more: cursor.meta.has_more,
-            next_cursor: cursor.meta.next_cursor,
-          },
-        });
+        const actor = await authorize(request, "applications", "update");
+        return jsonResponse(await reportingService.exportAll(actor));
       }),
     },
   };

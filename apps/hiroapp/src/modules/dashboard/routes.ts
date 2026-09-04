@@ -17,31 +17,22 @@ import {
   UserResource,
 } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
-import { isAdmin, STATUS } from "../../lib/roles.ts";
-import { applications } from "../applications/repository.ts";
+import { isAdmin } from "../../lib/roles.ts";
+import { reportingService } from "../applications/reporting.ts";
 import { statuses } from "../catalog/repository.ts";
 import { positions } from "../positions/repository.ts";
 import { users } from "../users/repository.ts";
 
 async function dashboardRows(request: Request) {
   const params = getQueryParams(request);
-  const departmentId = Number(params.get("department_id") ?? 0);
-  const positionIds = departmentId ? await positions.idsInDepartment(departmentId) : [];
-  const extra: Record<string, unknown> = {};
-  if (parseOptionalBooleanQueryParam(params, "isFeedbackRestricted"))
-    extra.status_id = STATUS.FEEDBACK;
-  if (parseOptionalBooleanQueryParam(params, "isHiredRestricted")) extra.status_id = STATUS.HIRED;
-  if (parseOptionalBooleanQueryParam(params, "isRejectedRestricted"))
-    extra.status_id = STATUS.ENDED;
-  if (parseOptionalBooleanQueryParam(params, "isInterviewRestricted"))
-    extra.status_id = STATUS.INTERVIEW;
-  if (parseOptionalBooleanQueryParam(params, "isMonthRestricted")) {
-    const start = new Date();
-    start.setUTCDate(1);
-    start.setUTCHours(0, 0, 0, 0);
-    extra.created_at = { gte: start };
-  }
-  return applications.forPositions(positionIds, extra);
+  return reportingService.dashboard({
+    department_id: Number(params.get("department_id") ?? 0) || undefined,
+    feedback: parseOptionalBooleanQueryParam(params, "isFeedbackRestricted") === true,
+    hired: parseOptionalBooleanQueryParam(params, "isHiredRestricted") === true,
+    rejected: parseOptionalBooleanQueryParam(params, "isRejectedRestricted") === true,
+    interview: parseOptionalBooleanQueryParam(params, "isInterviewRestricted") === true,
+    month: parseOptionalBooleanQueryParam(params, "isMonthRestricted") === true,
+  });
 }
 
 export function dashboardRoutes(dependencies: AppDependencies): AppRouteMap {
