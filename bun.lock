@@ -5,7 +5,7 @@
     "": {
       "name": "bun",
       "dependencies": {
-        "@faker-js/faker": "^9.9.0",
+        "@faker-js/faker": "^10.6.0",
         "@getstrata/bootstrap": "workspace:*",
         "@getstrata/cli": "workspace:*",
         "@getstrata/core": "workspace:*",
@@ -22,7 +22,7 @@
     "apps/hiroapp": {
       "name": "hiroapp",
       "dependencies": {
-        "@faker-js/faker": "^9.9.0",
+        "@faker-js/faker": "^10.5.0",
         "@getstrata/bootstrap": "workspace:*",
         "@getstrata/cli": "workspace:*",
         "@getstrata/core": "workspace:*",
@@ -80,7 +80,7 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.7", "", { "os": "win32", "cpu": "x64" }, "sha512-V+0wu/nrj2S+MhP4EQ0uHNolP0IALEsz45pg0WoKkHfDeh0+ItHwP/p7bX5RPoMOl9NkpHYWdYPhIcy2mACHvQ=="],
 
-    "@faker-js/faker": ["@faker-js/faker@9.9.0", "", {}, "sha512-OEl393iCOoo/z8bMezRlJu+GlRGlsKbUAN7jKB6LhnKoqKve5DXRpalbItIIcwnCjs1k/FOPjFzcA6Qn+H+YbA=="],
+    "@faker-js/faker": ["@faker-js/faker@10.6.0", "", {}, "sha512-3RQHgEtvL1Frl/d1cSreo7qhJ3Gk1OdNUai/CtZ8G+wYeRQnJih3s9xJ9/kgYekPQRdwgh0HXRPqMlzWGwivIQ=="],
 
     "@getstrata/bootstrap": ["@getstrata/bootstrap@workspace:packages/strata-bootstrap"],
 

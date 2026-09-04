@@ -63,7 +63,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@faker-js/faker": "^9.9.0",
+    "@faker-js/faker": "^10.6.0",
     "@getstrata/bootstrap": "workspace:*",
     "@getstrata/cli": "workspace:*",
     "@getstrata/core": "workspace:*",
