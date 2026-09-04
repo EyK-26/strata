@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { resolveApplicationQueue } from "@getstrata/bootstrap/applicationRegistry";
 import { mailer } from "@getstrata/core/mail/mailer";
+import { trackedSendNotificationJob } from "../../jobs/sendNotification.ts";
 import type { Notification } from "../../models/Notification.ts";
 import { User } from "../../models/User.ts";
 
-export async function notifyUser(input: {
+export async function deliverNotification(input: {
   userId: number;
   type: string;
   data: Record<string, unknown>;
@@ -27,6 +29,21 @@ export async function notifyUser(input: {
   }
 
   return row;
+}
+
+export async function notifyUser(input: {
+  userId: number;
+  type: string;
+  data: Record<string, unknown>;
+  email?: { to: string; subject: string; body: string };
+}) {
+  const job = trackedSendNotificationJob();
+  try {
+    await resolveApplicationQueue().dispatch(job, input);
+  } catch {
+    await job.handle(input);
+  }
+  return input;
 }
 
 export function contactUserNotification(from: string, to: string, subject: string, text: string) {

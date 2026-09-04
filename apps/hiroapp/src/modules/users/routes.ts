@@ -1,13 +1,13 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
-import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { NotFoundError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { parsePositiveIntParam } from "@getstrata/core/http/validation";
+import { bindModel } from "../../http/bind.ts";
 import { authorize } from "../../http/currentUser.ts";
+import { UserResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { loadUserDetail } from "../../lib/loaders.ts";
-import { serializeNamed, serializeUser } from "../../lib/serialize.ts";
+import { serializeNamed } from "../../lib/serialize.ts";
 import type { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
 import { positions } from "../positions/repository.ts";
@@ -48,7 +48,8 @@ export function userRoutes(dependencies: AppDependencies): AppRouteMap {
               created_at: Date | null;
               updated_at: Date | null;
             }>("department");
-            return serializeUser(user, {
+            return {
+              ...new UserResource(user).toArray(),
               position: position
                 ? {
                     id: position.id,
@@ -58,7 +59,7 @@ export function userRoutes(dependencies: AppDependencies): AppRouteMap {
                       : null,
                   }
                 : null,
-            });
+            };
           }),
         );
         return jsonResponse(details);
@@ -83,24 +84,35 @@ export function userRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/api/users/:id": {
-      GET: wrapApi(dependencies, async (request) => {
-        await authorize(request, "users", "view");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        return jsonResponse(await loadUserDetail(id));
-      }),
+      GET: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => User.findOrFail(id),
+          async (request, user) => {
+            await authorize(request, "users", "view");
+            return jsonResponse(await loadUserDetail(Number(user.id)));
+          },
+        ),
+      ),
     },
     "/api/users/:id/delete": {
-      POST: wrapApi(dependencies, async (request) => {
-        await authorize(request, "users", "delete");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const target = await User.find(id);
-        const seat = target ? await target.position().first() : null;
-        if (seat) {
-          await seat.update({ user_id: null });
-        }
-        await users.deleteById(id);
-        return jsonResponse({ message: "User has been deleted" });
-      }),
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => User.findOrFail(id),
+          async (request, target) => {
+            await authorize(request, "users", "delete");
+            const seat = await target.position().first();
+            if (seat) {
+              await seat.update({ user_id: null });
+            }
+            await users.deleteById(Number(target.id));
+            return jsonResponse({ message: "User has been deleted" });
+          },
+        ),
+      ),
     },
   };
 }

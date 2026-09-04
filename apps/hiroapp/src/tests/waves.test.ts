@@ -309,10 +309,94 @@ describe.skipIf(!enabled)("Waves 1-4 HTTP + HTMX", () => {
     expect(retried.body.retried).toBe(true);
   });
 
-  test("export applications uses chunk", async () => {
+  test("export applications uses chunk and cursorPaginate", async () => {
     const exported = await jsonRequest("/api/export/applications", { cookies: recruiterCookies });
     expect(exported.response.status).toBe(200);
     expect(exported.body.count).toBeGreaterThan(0);
+    expect(exported.body.cursor.count).toBeGreaterThan(0);
+    expect(typeof exported.body.cursor.has_more).toBe("boolean");
+  });
+
+  test("bindRouteModel 404s a missing application id", async () => {
+    const missing = await jsonRequest("/api/applications/999999", { cookies: candidateCookies });
+    expect(missing.response.status).toBe(404);
+  });
+
+  test("GET /api/applications paginates with meta", async () => {
+    const { response, body } = await jsonRequest("/api/applications?page=1&per_page=1", {
+      cookies: candidateCookies,
+    });
+    expect(response.status).toBe(200);
+    expect(body.meta.page).toBe(1);
+    expect(body.meta.per_page).toBe(1);
+    expect(body.data.length).toBeLessThanOrEqual(1);
+  });
+
+  test("application show supports ETags", async () => {
+    const candidate = await users.findByEmail("candidate@hiroapp.com");
+    const apps = await User.newFromRecord(candidate!).applications();
+    const first = await jsonRequest(`/api/applications/${apps[0]!.id}`, {
+      cookies: candidateCookies,
+    });
+    expect(first.response.status).toBe(200);
+    const etag = first.response.headers.get("etag");
+    expect(etag).toBeTruthy();
+    const again = await jsonRequest(`/api/applications/${apps[0]!.id}`, {
+      cookies: candidateCookies,
+      headers: { "if-none-match": etag ?? "" },
+    });
+    expect(again.response.status).toBe(304);
+  });
+
+  test("signed interview confirm URL works for the applicant", async () => {
+    const candidate = await users.findByEmail("candidate@hiroapp.com");
+    const notified = await jsonRequest("/api/applications/notify", {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({
+        applicant_id: candidate!.id,
+        text: "panel",
+        datetime: "2026-09-10T10:00",
+        place: "Office",
+        sender: {},
+      }),
+    });
+    expect(notified.response.status).toBe(200);
+    expect(typeof notified.body.confirm_url).toBe("string");
+    const confirmed = await jsonRequest(notified.body.confirm_url, {
+      cookies: candidateCookies,
+    });
+    expect(confirmed.response.status).toBe(200);
+    expect(confirmed.body.confirmed).toBe(true);
+  });
+
+  test("comments API creates a morph comment on a position", async () => {
+    const hiring = await positions.hiring();
+    const created = await jsonRequest(`/api/positions/${hiring[0]!.id}/comments`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ body: "position comment" }),
+    });
+    expect(created.response.status).toBe(200);
+    expect(created.body.body).toBe("position comment");
+    expect(created.body.commentable_type).toBe("App\\Models\\Position");
+  });
+
+  test("notifyUser dispatches the queued notification job", async () => {
+    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+    expect(jobRegistry.names()).toContain("hiroapp.notification.send");
+    const candidate = await users.findByEmail("candidate@hiroapp.com");
+    const before = ((await User.newFromRecord(candidate!).notifications()) as { id: string }[])
+      .length;
+    const { notifyUser } = await import("../modules/notifications/service.ts");
+    await notifyUser({
+      userId: candidate!.id,
+      type: "App\\Notifications\\ContactUser",
+      data: { from: "HiroApp", subject: "queued" },
+    });
+    const after = ((await User.newFromRecord(candidate!).notifications()) as { id: string }[])
+      .length;
+    expect(after).toBeGreaterThan(before);
   });
 
   test("candidate home HTML includes applications", async () => {

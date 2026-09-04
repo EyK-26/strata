@@ -7,12 +7,22 @@ function asUser(user: unknown): UserRecord | null {
   return typeof user === "object" && user && "role_id" in user ? (user as UserRecord) : null;
 }
 
+function asApplication(resource: unknown): ApplicationRecord | undefined {
+  if (!resource || typeof resource !== "object") {
+    return undefined;
+  }
+  if (typeof (resource as { toObject?: unknown }).toObject === "function") {
+    return (resource as { toObject: () => ApplicationRecord }).toObject();
+  }
+  return resource as ApplicationRecord;
+}
+
 export class ApplicationPolicy extends Policy {
   view(user?: unknown, resource?: unknown) {
     const actor = asUser(user);
     if (!actor) return false;
     if (isStaff(actor.role_id)) return true;
-    const application = resource as ApplicationRecord | undefined;
+    const application = asApplication(resource);
     return Boolean(application && Number(application.user_id) === Number(actor.id));
   }
 
@@ -30,7 +40,7 @@ export class ApplicationPolicy extends Policy {
     const actor = asUser(user);
     if (!actor) return false;
     if (isStaff(actor.role_id)) return true;
-    const application = resource as ApplicationRecord | undefined;
+    const application = asApplication(resource);
     return Boolean(application && Number(application.user_id) === Number(actor.id));
   }
 }

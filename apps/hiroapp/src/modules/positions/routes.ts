@@ -3,11 +3,14 @@ import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { ForbiddenError, NotFoundError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { parsePositiveIntParam } from "@getstrata/core/http/validation";
+import { bindModel } from "../../http/bind.ts";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
+import { PositionResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { loadCandidatePosition, loadPositionWithApplications } from "../../lib/loaders.ts";
 import { isCandidate, isRecruiter } from "../../lib/roles.ts";
-import { serializeApplication, serializePosition } from "../../lib/serialize.ts";
+import { serializeApplication } from "../../lib/serialize.ts";
+import { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
 import { applications } from "../applications/repository.ts";
 import { positions } from "./repository.ts";
@@ -32,13 +35,12 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
           departmentId,
         });
         const payload = await Promise.all(
-          rows.map(async (position) =>
-            serializePosition(position, {
-              applications: (await applications.forPosition(position.id)).map((row) =>
-                serializeApplication(row),
-              ),
-            }),
-          ),
+          rows.map(async (position) => ({
+            ...new PositionResource(position).toArray(),
+            applications: (await applications.forPosition(position.id)).map((row) =>
+              serializeApplication(row),
+            ),
+          })),
         );
         return jsonResponse(payload);
       }),
@@ -79,27 +81,61 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/api/positions/:id": {
-      GET: wrapApi(dependencies, async (request) => {
-        const user = await authorize(request, "positions", "view");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        if (isCandidate(user.role_id)) {
-          const position = await loadCandidatePosition(id);
-          if (!position) throw new NotFoundError("Position not found.");
-          return jsonResponse(position);
-        }
-        return jsonResponse(await loadPositionWithApplications(id));
-      }),
+      GET: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const user = await authorize(request, "positions", "view");
+            const id = Number(position.id);
+            if (isCandidate(user.role_id)) {
+              const detail = await loadCandidatePosition(id);
+              if (!detail) throw new NotFoundError("Position not found.");
+              return jsonResponse(detail);
+            }
+            return jsonResponse(await loadPositionWithApplications(id));
+          },
+        ),
+      ),
     },
     "/api/positions/:id/delete": {
-      POST: wrapApi(dependencies, async (request) => {
-        await authorize(request, "positions", "delete");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        await applications.deleteForPosition(id);
-        await positions.deleteById(id);
-        return new Response("success", {
-          headers: { "Content-Type": "text/plain; charset=utf-8" },
-        });
-      }),
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            await authorize(request, "positions", "delete");
+            const id = Number(position.id);
+            await applications.deleteForPosition(id);
+            await position.delete();
+            return new Response("success", {
+              headers: { "Content-Type": "text/plain; charset=utf-8" },
+            });
+          },
+        ),
+      ),
+    },
+    "/api/positions/:id/restore": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          async (id) => {
+            const position = await Position.onlyTrashed().where({ id }).first();
+            if (!position) {
+              throw new NotFoundError("No deleted position to restore.");
+            }
+            return position;
+          },
+          async (request, position) => {
+            await authorize(request, "positions", "delete");
+            await position.restore();
+            return jsonResponse({ restored: true, id: Number(position.id) });
+          },
+        ),
+      ),
     },
   };
 }

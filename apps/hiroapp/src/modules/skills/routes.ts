@@ -1,7 +1,6 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
-import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { parsePositiveIntParam } from "@getstrata/core/http/validation";
+import { bindModel } from "../../http/bind.ts";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { NamedResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
@@ -55,89 +54,124 @@ export function skillRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/api/positions/:id/watch": {
-      POST: wrapApi(dependencies, async (request) => {
-        const user = await requireCurrentUser(request);
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const position = await Position.findOrFail(id);
-        await User.newFromRecord(user).watching().toggle(position.id);
-        return jsonResponse({ watching: await User.newFromRecord(user).watching().count() });
-      }),
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const user = await requireCurrentUser(request);
+            await User.newFromRecord(user).watching().toggle(position.id);
+            return jsonResponse({ watching: await User.newFromRecord(user).watching().count() });
+          },
+        ),
+      ),
     },
     "/api/positions/:id/skills": {
-      GET: wrapApi(dependencies, async (request) => {
-        await authorize(request, "skills", "view");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const position = await Position.findOrFail(id);
-        return jsonResponse(namedCollection(await position.skills()));
-      }),
-      POST: wrapApi(dependencies, async (request) => {
-        await authorize(request, "skills", "update");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const payload = await new SyncPositionSkillsRequest().validate(request);
-        const position = await Position.findOrFail(id);
-        await position.skills().detach();
-        for (const skill of payload.skills) {
-          await position
-            .skills()
-            .withPivotValues({ required: skill.required, weight: skill.weight })
-            .attach(skill.skill_id);
-        }
-        return jsonResponse(namedCollection(await position.skills()));
-      }),
+      GET: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            await authorize(request, "skills", "view");
+            return jsonResponse(namedCollection(await position.skills()));
+          },
+        ),
+      ),
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            await authorize(request, "skills", "update");
+            const payload = await new SyncPositionSkillsRequest().validate(request);
+            await position.skills().detach();
+            for (const skill of payload.skills) {
+              await position
+                .skills()
+                .withPivotValues({ required: skill.required, weight: skill.weight })
+                .attach(skill.skill_id);
+            }
+            return jsonResponse(namedCollection(await position.skills()));
+          },
+        ),
+      ),
     },
     "/api/positions/:id/match": {
-      GET: wrapApi(dependencies, async (request) => {
-        await authorize(request, "skills", "update");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const position = await Position.findOrFail(id);
-        const required = await position.skills();
-        const requiredIds = new Set(required.map((skill) => Number(skill.id)));
-        const candidates = await User.where({ role_id: ROLE.CANDIDATE }).get();
-        const matches = [];
-        for (const candidate of candidates) {
-          const owned = await candidate.skills();
-          const ownedIds = new Set(owned.map((skill) => Number(skill.id)));
-          const hit = [...requiredIds].filter((skillId) => ownedIds.has(skillId)).length;
-          matches.push({
-            user: candidate.toArray(),
-            matched: hit,
-            required: requiredIds.size,
-          });
-        }
-        matches.sort((left, right) => right.matched - left.matched);
-        return jsonResponse(matches);
-      }),
+      GET: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            await authorize(request, "skills", "update");
+            const required = await position.skills();
+            const requiredIds = new Set(required.map((skill) => Number(skill.id)));
+            const candidates = await User.where({ role_id: ROLE.CANDIDATE }).get();
+            const matches = [];
+            for (const candidate of candidates) {
+              const owned = await candidate.skills();
+              const ownedIds = new Set(owned.map((skill) => Number(skill.id)));
+              const hit = [...requiredIds].filter((skillId) => ownedIds.has(skillId)).length;
+              matches.push({
+                user: candidate.toArray(),
+                matched: hit,
+                required: requiredIds.size,
+              });
+            }
+            matches.sort((left, right) => right.matched - left.matched);
+            return jsonResponse(matches);
+          },
+        ),
+      ),
     },
     "/api/positions/:id/interviewers": {
-      GET: wrapApi(dependencies, async (request) => {
-        await authorize(request, "skills", "view");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const position = await Position.findOrFail(id);
-        return jsonResponse((await position.interviewers()).map((row) => row.toArray()));
-      }),
-      POST: wrapApi(dependencies, async (request) => {
-        await authorize(request, "skills", "update");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const payload = await new InterviewersRequest().validate(request);
-        const position = await Position.findOrFail(id);
-        await position
-          .interviewers()
-          .withPivotValues({ role: payload.role })
-          .sync(payload.user_ids);
-        return jsonResponse((await position.interviewers()).map((row) => row.toArray()));
-      }),
+      GET: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            await authorize(request, "skills", "view");
+            return jsonResponse((await position.interviewers()).map((row) => row.toArray()));
+          },
+        ),
+      ),
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            await authorize(request, "skills", "update");
+            const payload = await new InterviewersRequest().validate(request);
+            await position
+              .interviewers()
+              .withPivotValues({ role: payload.role })
+              .sync(payload.user_ids);
+            return jsonResponse((await position.interviewers()).map((row) => row.toArray()));
+          },
+        ),
+      ),
     },
     "/api/departments/:id/applications": {
-      GET: wrapApi(dependencies, async (request) => {
-        await authorize(request, "skills", "view");
-        const id = parsePositiveIntParam(routeParams(request).id, "id");
-        const department = await Department.findOrFail(id);
-        const rows = await department.applications();
-        return jsonResponse({
-          count: rows.length,
-          data: rows.map((row) => row.toArray()),
-        });
-      }),
+      GET: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Department.findOrFail(id),
+          async (request, department) => {
+            await authorize(request, "skills", "view");
+            const rows = await department.applications();
+            return jsonResponse({
+              count: rows.length,
+              data: rows.map((row) => row.toArray()),
+            });
+          },
+        ),
+      ),
     },
   };
 }
