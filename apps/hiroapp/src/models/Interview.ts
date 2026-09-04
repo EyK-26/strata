@@ -2,6 +2,7 @@ import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { interviews } from "../modules/interviews/repository.ts";
 import type { InterviewRecord } from "../modules/interviews/table.ts";
 import { Application } from "./Application.ts";
+import { Scorecard } from "./Scorecard.ts";
 import { User } from "./User.ts";
 
 export class Interview extends Model<InterviewRecord, "id"> {
@@ -28,6 +29,10 @@ export class Interview extends Model<InterviewRecord, "id"> {
 
   creator() {
     return this.belongsTo(() => User, "created_by");
+  }
+
+  scorecards() {
+    return this.hasMany(() => Scorecard);
   }
 }
 

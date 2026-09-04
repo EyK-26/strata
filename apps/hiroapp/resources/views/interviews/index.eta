@@ -11,6 +11,21 @@
           <button>Confirm</button>
         </form>
       <% } %>
+      <% if (it.currentUser?.role_id !== 2) { %>
+        <form action="/interviews/<%= interview.id %>/scorecards" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <label>Score <input type="number" name="overall_score" min="1" max="5" /></label>
+          <label>Recommendation
+            <select name="recommendation">
+              <option value="hire">Hire</option>
+              <option value="hold">Hold</option>
+              <option value="no_hire">No hire</option>
+            </select>
+          </label>
+          <label>Notes <textarea name="notes"></textarea></label>
+          <button>Save scorecard</button>
+        </form>
+      <% } %>
     </div>
   <% }) %>
 </div>
