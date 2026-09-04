@@ -95,6 +95,7 @@ describe.skipIf(!enabled)("Wave 39 candidate tags", () => {
 
     expect(await tagService.listForUser(recruiter, candidateModel)).toEqual([]);
     expect(await tagService.listForUser(candidate, candidateModel)).toEqual([]);
+    await expect(tagService.list(candidate)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(tagService.listForUser(other, candidateModel)).rejects.toBeInstanceOf(
       ForbiddenError,
     );
@@ -124,6 +125,7 @@ describe.skipIf(!enabled)("Wave 39 candidate tags", () => {
 
     const listed = await tagService.listForUser(candidate, candidateModel);
     expect(listed.some((row) => row.id === created.id && row.label === "senior")).toBe(true);
+    expect((await tagService.list(recruiter)).some((row) => row.id === created.id)).toBe(true);
 
     const removed = await tagService.remove(recruiter, await CandidateTag.findOrFail(created.id));
     expect(removed.label).toBe("senior");
@@ -179,5 +181,20 @@ describe.skipIf(!enabled)("Wave 39 candidate tags", () => {
     });
     expect([302, 303].includes(htmlDelete.response.status)).toBe(true);
     expect(await tagService.listForUser(recruiter, otherModel)).toEqual([]);
+
+    const indexUser = await makeCandidate("index");
+    const tagsPage = await request("/tags", { cookies: recruiterCookies });
+    expect(tagsPage.response.status).toBe(200);
+    expect(tagsPage.text.includes("Candidate tags")).toBe(true);
+    const htmlIndexAdd = await request("/tags", {
+      cookies: tagsPage.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(tagsPage.cookies),
+      },
+      body: `user_id=${indexUser.id}&label=board&return_to=/tags`,
+    });
+    expect([302, 303].includes(htmlIndexAdd.response.status)).toBe(true);
   });
 });

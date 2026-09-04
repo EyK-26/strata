@@ -1,10 +1,20 @@
-<h1>Candidate merges</h1>
-<form class="MergeForm" method="post" action="/merges">
-  <%~ include("../partials/csrf.eta") %>
-  <label>Source user id <input name="source_id" /></label>
-  <label>Target user id <input name="target_id" /></label>
-  <button type="submit">Merge into target</button>
-</form>
-<% (it.merges ?? []).forEach((row) => { %>
-  <p><%= row.source_user_id %> → <%= row.target_user_id %> · moved <%= row.applications_moved %> · skipped <%= row.applications_skipped %> · <%= row.pool_action %></p>
-<% }) %>
+<div class="Page">
+  <h1>Candidate merges</h1>
+  <form class="MergeForm" method="post" action="/merges">
+    <%~ include("../partials/csrf.eta") %>
+    <p>
+      <label for="merge-source">Source user id
+        <input id="merge-source" name="source_id" />
+      </label>
+    </p>
+    <p>
+      <label for="merge-target">Target user id
+        <input id="merge-target" name="target_id" />
+      </label>
+    </p>
+    <button type="submit">Merge into target</button>
+  </form>
+  <% (it.merges ?? []).forEach((row) => { %>
+    <p><%= row.source_user_id %> → <%= row.target_user_id %> · moved <%= row.applications_moved %> · skipped <%= row.applications_skipped %> · <%= row.pool_action %></p>
+  <% }) %>
+</div>

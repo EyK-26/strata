@@ -3,6 +3,7 @@ import { parseFormBody } from "@getstrata/bootstrap/web/forms";
 import { redirectResponse } from "@getstrata/core/view";
 import { bindModel } from "../../http/bind.ts";
 import { requireCurrentUser } from "../../http/currentUser.ts";
+import { renderPage } from "../../http/view.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
 import { CandidateTag } from "../../models/CandidateTag.ts";
 import { User } from "../../models/User.ts";
@@ -14,6 +15,21 @@ function returnTo(fields: Record<string, string>, fallback: string) {
 
 export function tagWebRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
+    "/tags": {
+      GET: wrapWebAuthenticated(dependencies, async (request) => {
+        const actor = await requireCurrentUser(request);
+        return renderPage(request, "tags/index", {
+          tags: await tagService.list(actor),
+        });
+      }),
+      POST: wrapWebAuthenticated(dependencies, async (request) => {
+        const actor = await requireCurrentUser(request);
+        const { fields } = await parseFormBody(request);
+        const user = await User.findOrFail(Number(fields.user_id));
+        await tagService.add(actor, user, { label: fields.label || "" });
+        return redirectResponse(returnTo(fields, "/tags"));
+      }),
+    },
     "/users/:id/tags": {
       POST: wrapWebAuthenticated(
         dependencies,
@@ -39,7 +55,7 @@ export function tagWebRoutes(dependencies: AppDependencies): AppRouteMap {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
             const removed = await tagService.remove(actor, tag);
-            return redirectResponse(returnTo(fields, `/users/${removed.user_id}`));
+            return redirectResponse(returnTo(fields, `/tags`));
           },
         ),
       ),

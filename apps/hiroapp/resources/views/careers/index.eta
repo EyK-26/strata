@@ -1,4 +1,9 @@
-<h1>Careers</h1>
-<% (it.postings ?? []).forEach((posting) => { %>
-  <p><a href="/careers/<%= posting.id %>"><%= posting.name %></a></p>
-<% }) %>
+<div class="Page">
+  <h1>Careers</h1>
+  <% if (!(it.postings ?? []).length) { %>
+    <p>No published jobs.</p>
+  <% } %>
+  <% (it.postings ?? []).forEach((posting) => { %>
+    <p><a href="/careers/<%= posting.id %>"><%= posting.name %></a></p>
+  <% }) %>
+</div>

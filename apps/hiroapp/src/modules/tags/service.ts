@@ -56,6 +56,14 @@ export function serializeTag(row: CandidateTag | CandidateTagRecord) {
 }
 
 export class CandidateTagService {
+  async list(actor: UserRecord) {
+    assertStaff(actor);
+    const rows = await candidateTags.findAll({
+      orderBy: { column: "created_at", direction: "DESC" },
+    });
+    return rows.map(serializeTag);
+  }
+
   async listForUser(actor: UserRecord, user: User) {
     await assertCanView(actor, Number(user.id));
     const rows = await candidateTags.forUser(Number(user.id));
