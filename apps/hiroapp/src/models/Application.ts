@@ -7,6 +7,7 @@ import { BackgroundCheck } from "./BackgroundCheck.ts";
 import { Comment } from "./Comment.ts";
 import { Interview } from "./Interview.ts";
 import { Offer } from "./Offer.ts";
+import { OnboardingItem } from "./OnboardingItem.ts";
 import { Position } from "./Position.ts";
 import { Status } from "./Status.ts";
 import { User } from "./User.ts";
@@ -62,6 +63,10 @@ export class Application extends Model<ApplicationRecord, "id"> {
 
   backgroundCheck() {
     return this.hasOne(() => BackgroundCheck);
+  }
+
+  onboardingItems() {
+    return this.hasMany(() => OnboardingItem);
   }
 }
 

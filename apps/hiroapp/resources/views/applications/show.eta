@@ -183,6 +183,28 @@
           <button type="submit">Keep in talent pool</button>
         </form>
       <% } %>
+      <% if ((it.onboarding ?? []).length) { %>
+        <h3>Onboarding</h3>
+        <% it.onboarding.forEach((item) => { %>
+          <p><%= item.title %> · <%= item.status %> · <%= item.notes %></p>
+          <% if (item.status === "open") { %>
+            <form action="/onboarding/<%= item.id %>/complete" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+              <button type="submit">Mark done</button>
+            </form>
+          <% } %>
+        <% }) %>
+      <% } %>
+      <% if (it.roleId !== 2 && it.application.status_id === 5) { %>
+        <form class="OnboardingForm" action="/applications/<%= it.application.id %>/onboarding" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+          <label>Title <input name="title" /></label>
+          <label>Notes <textarea name="notes"></textarea></label>
+          <button type="submit">Add onboarding item</button>
+        </form>
+      <% } %>
       <% if (it.roleId !== 2 && it.application.status_id < 6) { %>
         <form class="RejectForm" action="/applications/<%= it.application.id %>/reject" method="post">
           <%~ include("../partials/csrf.eta") %>
