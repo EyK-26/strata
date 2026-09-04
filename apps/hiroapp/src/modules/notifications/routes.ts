@@ -5,11 +5,8 @@ import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { NotificationResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { isStaff } from "../../lib/roles.ts";
-import type { Notification } from "../../models/Notification.ts";
-import { User } from "../../models/User.ts";
-import { users } from "../users/repository.ts";
+import { inboxService } from "./inbox.ts";
 import { ContactUserRequest, MarkReadRequest } from "./requests.ts";
-import { contactUserNotification, notifyUser } from "./service.ts";
 
 export function notificationRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
@@ -20,16 +17,7 @@ export function notificationRoutes(dependencies: AppDependencies): AppRouteMap {
           throw new ForbiddenError();
         }
         const payload = await new ContactUserRequest().validate(request);
-        const recipient = await users.findByEmail(payload.to);
-        if (recipient) {
-          const message = contactUserNotification(
-            payload.from,
-            payload.to,
-            payload.subject,
-            payload.text,
-          );
-          await notifyUser({ userId: recipient.id, ...message });
-        }
+        await inboxService.contact(payload);
         return jsonResponse(null);
       }),
     },
@@ -37,7 +25,7 @@ export function notificationRoutes(dependencies: AppDependencies): AppRouteMap {
       GET: wrapApi(dependencies, async (request) => {
         await authorize(request, "notifications", "view");
         const user = await requireCurrentUser(request);
-        const rows = (await User.newFromRecord(user).notifications()) as Notification[];
+        const rows = await inboxService.list(user);
         return jsonResponse(rows.map((row) => new NotificationResource(row).toArray()));
       }),
     },
@@ -45,15 +33,8 @@ export function notificationRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: wrapApi(dependencies, async (request) => {
         const user = await authorize(request, "notifications", "update");
         const payload = await new MarkReadRequest().validate(request);
-        const row = (await User.newFromRecord(user)
-          .notifications()
-          .where({ id: payload.id })
-          .first()) as Notification | null;
-        if (!row || row.get("read_at")) {
-          return jsonResponse({ message: "error" });
-        }
-        await row.update({ read_at: new Date() });
-        return jsonResponse({ message: "success" });
+        const result = await inboxService.markRead(user, payload.id);
+        return jsonResponse({ message: result.ok ? "success" : "error" });
       }),
     },
   };

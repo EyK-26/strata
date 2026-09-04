@@ -34,11 +34,8 @@ import { ApplicationIndexRequest } from "../applications/requests.ts";
 import { applicationService } from "../applications/service.ts";
 import { statuses } from "../catalog/repository.ts";
 import { departments } from "../departments/repository.ts";
-import {
-  contactUserNotification,
-  interviewNotification,
-  notifyUser,
-} from "../notifications/service.ts";
+import { inboxService } from "../notifications/inbox.ts";
+import { interviewNotification, notifyUser } from "../notifications/service.ts";
 import { interviewerService } from "../positions/interviewers.ts";
 import { positions } from "../positions/repository.ts";
 import { positionService } from "../positions/service.ts";
@@ -504,18 +501,12 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
     "/notify": {
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const { fields } = await parseFormBody(request);
-        const recipient = await users.findByEmail(fields.to ?? "");
-        if (recipient) {
-          await notifyUser({
-            userId: recipient.id,
-            ...contactUserNotification(
-              fields.from ?? "",
-              fields.to ?? "",
-              fields.subject ?? "",
-              fields.text ?? "",
-            ),
-          });
-        }
+        await inboxService.contact({
+          to: fields.to ?? "",
+          from: fields.from ?? "",
+          subject: fields.subject ?? "",
+          text: fields.text ?? "",
+        });
         return redirectResponse(fields.return_to || "/");
       }),
     },
