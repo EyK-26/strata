@@ -1,6 +1,12 @@
 import { defineTable } from "@getstrata/core/database/table";
 
-export type InterviewStatus = "scheduled" | "confirmed" | "completed" | "cancelled" | "no_show";
+export type InterviewStatus =
+  | "scheduled"
+  | "confirmed"
+  | "completed"
+  | "cancelled"
+  | "no_show"
+  | "declined";
 
 export interface InterviewRecord {
   id: number;

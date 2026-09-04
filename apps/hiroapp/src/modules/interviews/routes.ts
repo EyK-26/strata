@@ -101,6 +101,20 @@ export function interviewRoutes(dependencies: AppDependencies): AppRouteMap {
         ),
       ),
     },
+    "/api/interviews/:id/decline": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Interview.findOrFail(id),
+          async (request, interview) => {
+            const actor = await requireCurrentUser(request);
+            const updated = await interviewService.decline(actor, interview);
+            return jsonResponse(serializeInterview(updated));
+          },
+        ),
+      ),
+    },
     "/api/interviews/:id/no-show": {
       POST: wrapApi(
         dependencies,

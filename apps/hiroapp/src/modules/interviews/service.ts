@@ -34,7 +34,8 @@ function asStatus(value: unknown): InterviewStatus {
     value === "confirmed" ||
     value === "completed" ||
     value === "cancelled" ||
-    value === "no_show"
+    value === "no_show" ||
+    value === "declined"
   ) {
     return value;
   }
@@ -204,6 +205,26 @@ export class InterviewService {
     await recordHiringEvent(
       "interview.cancelled",
       { interview_id: updated.id, application_id: updated.application_id },
+      { type: "interview", id: updated.id },
+    );
+    return updated;
+  }
+
+  async decline(actor: UserRecord, interview: Interview) {
+    const application = await requireApplication(Number(interview.get("application_id")));
+    if (Number(application.get("user_id")) !== Number(actor.id)) {
+      throw new ForbiddenError("Only the applicant can decline this interview.");
+    }
+    const status = asStatus(interview.get("status"));
+    if (status !== "scheduled" && status !== "confirmed") {
+      throw new ForbiddenError("Interview cannot be declined.");
+    }
+    const updated = await interviews.updateByIdOrThrow(Number(interview.id), {
+      status: "declined",
+    });
+    await recordHiringEvent(
+      "interview.declined",
+      { interview_id: updated.id, application_id: updated.application_id, user_id: actor.id },
       { type: "interview", id: updated.id },
     );
     return updated;

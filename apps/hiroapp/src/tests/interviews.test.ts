@@ -496,4 +496,130 @@ describe.skipIf(!enabled)("Wave 13 interviews", () => {
     });
     expect([302, 303].includes(appHtml.response.status)).toBe(true);
   });
+
+  test("candidate declines scheduled and confirmed interviews", async () => {
+    const candidate = await seededUser("candidate@hiroapp.com");
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+
+    const seat = await Position.create({
+      user_id: null,
+      department_id: 1,
+      grade_id: 1,
+      name: `Decline Seat ${Date.now()}`,
+      description: "panel",
+      hiring: true,
+      start_date: null,
+      end_date: null,
+    });
+    const application = await Application.create({
+      user_id: candidate.id,
+      position_id: Number(seat.id),
+      status_id: STATUS.IN_PROGRESS,
+      attachment_text: null,
+      attachment_file: null,
+    });
+
+    const scheduled = await interviewService.schedule(recruiter, {
+      application_id: Number(application.id),
+      scheduled_at: "2026-11-01T10:00",
+    });
+    await expect(
+      interviewService.decline(recruiter, await Interview.findOrFail(scheduled.interview.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    const declined = await interviewService.decline(
+      candidate,
+      await Interview.findOrFail(scheduled.interview.id),
+    );
+    expect(declined.status).toBe("declined");
+    expect(serializeInterview(declined).status).toBe("declined");
+    await expect(
+      interviewService.decline(candidate, await Interview.findOrFail(declined.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      interviewService.confirm(candidate, await Interview.findOrFail(declined.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      interviewService.noShow(recruiter, await Interview.findOrFail(declined.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    const confirmedTarget = await interviewService.schedule(recruiter, {
+      application_id: Number(application.id),
+      scheduled_at: "2026-11-02T10:00",
+    });
+    await interviewService.confirm(
+      candidate,
+      await Interview.findOrFail(confirmedTarget.interview.id),
+    );
+    const confirmedDeclined = await interviewService.decline(
+      candidate,
+      await Interview.findOrFail(confirmedTarget.interview.id),
+    );
+    expect(confirmedDeclined.status).toBe("declined");
+
+    const completedTarget = await interviewService.schedule(recruiter, {
+      application_id: Number(application.id),
+      scheduled_at: "2026-11-03T10:00",
+    });
+    await interviewService.complete(
+      recruiter,
+      await Interview.findOrFail(completedTarget.interview.id),
+    );
+    await expect(
+      interviewService.decline(candidate, await Interview.findOrFail(completedTarget.interview.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    const httpTarget = await interviewService.schedule(recruiter, {
+      application_id: Number(application.id),
+      scheduled_at: "2026-11-04T10:00",
+    });
+    const forbiddenHttp = await jsonRequest(`/api/interviews/${httpTarget.interview.id}/decline`, {
+      cookies: recruiterCookies,
+      method: "POST",
+    });
+    expect(forbiddenHttp.response.status).toBe(403);
+    const httpOk = await jsonRequest(`/api/interviews/${httpTarget.interview.id}/decline`, {
+      cookies: candidateCookies,
+      method: "POST",
+    });
+    expect(httpOk.response.status).toBe(200);
+    expect(httpOk.body.status).toBe("declined");
+
+    const htmlTarget = await interviewService.schedule(recruiter, {
+      application_id: Number(application.id),
+      scheduled_at: "2026-11-05T10:00",
+    });
+    const primed = await request("/interviews", { cookies: candidateCookies });
+    expect(primed.response.status).toBe(200);
+    expect(primed.text).toContain("Decline interview");
+    const html = await request(`/interviews/${htmlTarget.interview.id}/decline`, {
+      cookies: primed.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(primed.cookies),
+      },
+      body: "return_to=/interviews",
+    });
+    expect([302, 303].includes(html.response.status)).toBe(true);
+    const htmlRow = await Interview.findOrFail(htmlTarget.interview.id);
+    expect(htmlRow.get("status")).toBe("declined");
+
+    const appHtmlTarget = await interviewService.schedule(recruiter, {
+      application_id: Number(application.id),
+      scheduled_at: "2026-11-06T10:00",
+    });
+    const appPage = await request(`/applications/${application.id}`, { cookies: candidateCookies });
+    expect(appPage.response.status).toBe(200);
+    expect(appPage.text).toContain("Decline interview");
+    const appHtml = await request(`/interviews/${appHtmlTarget.interview.id}/decline`, {
+      cookies: appPage.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(appPage.cookies),
+      },
+      body: `return_to=/applications/${application.id}`,
+    });
+    expect([302, 303].includes(appHtml.response.status)).toBe(true);
+  });
 });

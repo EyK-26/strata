@@ -11,6 +11,13 @@
           <button>Confirm</button>
         </form>
       <% } %>
+      <% if (it.currentUser?.role_id === 2 && (interview.status === "scheduled" || interview.status === "confirmed")) { %>
+        <form action="/interviews/<%= interview.id %>/decline" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/interviews" />
+          <button type="submit">Decline interview</button>
+        </form>
+      <% } %>
       <% if (it.currentUser?.role_id !== 2) { %>
         <form action="/interviews/<%= interview.id %>/scorecards" method="post">
           <%~ include("../partials/csrf.eta") %>

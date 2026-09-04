@@ -66,6 +66,16 @@ export function interviewWebRoutes(dependencies: AppDependencies): AppRouteMap {
         return redirectResponse("/interviews");
       }),
     },
+    "/interviews/:id/decline": {
+      POST: wrapWebAuthenticated(dependencies, async (request) => {
+        const actor = await requireCurrentUser(request);
+        const id = parsePositiveIntParam(routeParams(request).id, "id");
+        const { fields } = await parseFormBody(request);
+        const interview = await Interview.findOrFail(id);
+        await interviewService.decline(actor, interview);
+        return redirectResponse(fields.return_to || "/interviews");
+      }),
+    },
     "/interviews/:id/no-show": {
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const actor = await authorize(request, "applications", "update");

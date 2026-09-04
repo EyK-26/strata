@@ -65,6 +65,13 @@
         <h3>Interviews</h3>
         <% it.interviews.forEach((interview) => { %>
           <p><%= interview.scheduled_at %> · <%= interview.place %> · <%= interview.status %></p>
+          <% if (it.currentUser?.role_id === 2 && (interview.status === "scheduled" || interview.status === "confirmed")) { %>
+            <form action="/interviews/<%= interview.id %>/decline" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+              <button type="submit">Decline interview</button>
+            </form>
+          <% } %>
           <% if (it.roleId !== 2 && (interview.status === "scheduled" || interview.status === "confirmed")) { %>
             <form action="/interviews/<%= interview.id %>/no-show" method="post">
               <%~ include("../partials/csrf.eta") %>
