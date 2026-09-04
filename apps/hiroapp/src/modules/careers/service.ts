@@ -12,6 +12,7 @@ import type { CareerPosting } from "../../models/CareerPosting.ts";
 import type { Position } from "../../models/Position.ts";
 import { departmentService } from "../departments/service.ts";
 import { positions } from "../positions/repository.ts";
+import { watchlistService } from "../positions/watchlist.ts";
 import type { UserRecord } from "../users/table.ts";
 import { careerPostings } from "./repository.ts";
 import type { CareerPostingRecord, CareerPostingStatus } from "./table.ts";
@@ -113,6 +114,7 @@ export class CareerService {
       { career_posting_id: saved.id, position_id: saved.position_id, published_by: actor.id },
       { type: "career_posting", id: saved.id },
     );
+    await watchlistService.alertPublished(position, saved.id);
     return saved;
   }
 

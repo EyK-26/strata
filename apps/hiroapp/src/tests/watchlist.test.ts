@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Position } from "../models/Position.ts";
+import { careerService } from "../modules/careers/service.ts";
+import { inboxService } from "../modules/notifications/inbox.ts";
 import { watchlistService } from "../modules/positions/watchlist.ts";
 import {
   bootHiroapp,
@@ -16,12 +18,14 @@ describe.skipIf(!enabled)("Wave 17 watchlist", () => {
   let server: ReturnType<typeof Bun.serve>;
   let baseUrl = "";
   let candidateCookies: string[] = [];
+  let recruiterCookies: string[] = [];
 
   beforeAll(async () => {
     const boot = await bootHiroapp();
     server = boot.server;
     baseUrl = boot.baseUrl;
     candidateCookies = (await signInCookie("candidate@hiroapp.com")).cookies;
+    recruiterCookies = (await signInCookie("recruiter@hiroapp.com")).cookies;
   });
 
   afterAll(() => {
@@ -114,5 +118,91 @@ describe.skipIf(!enabled)("Wave 17 watchlist", () => {
     const page = await request("/watching", { cookies: candidateCookies });
     expect(page.response.status).toBe(200);
     expect(page.text).toContain("Watchlist");
+    expect(page.text).toContain("Inbox alerts when a watched seat is published to careers.");
+  });
+
+  test("publishing a career alerts watchers", async () => {
+    const candidate = await seededUser("candidate@hiroapp.com");
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+    const emptySeat = await Position.create({
+      user_id: null,
+      department_id: 1,
+      grade_id: 1,
+      name: `Alert Empty ${Date.now()}`,
+      description: null,
+      hiring: true,
+      start_date: null,
+      end_date: null,
+    });
+    expect((await watchlistService.alertPublished(emptySeat, 0)).count).toBe(0);
+
+    const seat = await Position.create({
+      user_id: null,
+      department_id: 1,
+      grade_id: 1,
+      name: `Alert Seat ${Date.now()}`,
+      description: "watched",
+      hiring: true,
+      start_date: null,
+      end_date: null,
+    });
+    await watchlistService.toggle(candidate, seat);
+    const published = await careerService.publish(recruiter, seat);
+    const inbox = await inboxService.list(candidate);
+    expect(
+      inbox.some((row) => row.get("type") === "App\\Notifications\\WatchlistCareerPublished"),
+    ).toBe(true);
+    expect(published.status).toBe("published");
+
+    const httpSeat = await Position.create({
+      user_id: null,
+      department_id: 1,
+      grade_id: 1,
+      name: `Alert Http ${Date.now()}`,
+      description: null,
+      hiring: true,
+      start_date: null,
+      end_date: null,
+    });
+    await watchlistService.toggle(candidate, httpSeat);
+    const httpPublished = await jsonRequest(`/api/positions/${httpSeat.id}/career`, {
+      cookies: recruiterCookies,
+      method: "POST",
+    });
+    expect(httpPublished.body.status).toBe("published");
+    const notes = await jsonRequest("/api/notify/get", { cookies: candidateCookies });
+    expect(
+      notes.body.some(
+        (row: { data?: { position_id?: number; subject?: string } }) =>
+          Number(row.data?.position_id) === Number(httpSeat.id) &&
+          row.data?.subject === "Watched role published",
+      ),
+    ).toBe(true);
+
+    const htmlSeat = await Position.create({
+      user_id: null,
+      department_id: 1,
+      grade_id: 1,
+      name: `Alert Html ${Date.now()}`,
+      description: null,
+      hiring: true,
+      start_date: null,
+      end_date: null,
+    });
+    await watchlistService.toggle(candidate, htmlSeat);
+    const page = await request(`/positions/${htmlSeat.id}`, { cookies: recruiterCookies });
+    const htmlPublish = await request(`/positions/${htmlSeat.id}/career`, {
+      cookies: page.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(page.cookies),
+      },
+      body: `return_to=/positions/${htmlSeat.id}`,
+    });
+    expect([302, 303].includes(htmlPublish.response.status)).toBe(true);
+    const home = await request("/", { cookies: candidateCookies });
+    expect(home.response.status).toBe(200);
+    expect(home.text).toContain("Watched role published");
   });
 });

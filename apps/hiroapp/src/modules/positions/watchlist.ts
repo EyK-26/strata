@@ -1,6 +1,7 @@
 import { recordHiringEvent } from "../../lib/hiringEvents.ts";
 import type { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
+import { notifyUser } from "../notifications/service.ts";
 import type { UserRecord } from "../users/table.ts";
 
 export class WatchlistService {
@@ -27,6 +28,34 @@ export class WatchlistService {
       { type: "position", id: Number(position.id) },
     );
     return { watching, count: ids.length, ids };
+  }
+
+  async alertPublished(position: Position, postingId: number) {
+    const watchers = await position.watchers();
+    const name = String(position.get("name") ?? "");
+    for (const watcher of watchers) {
+      await notifyUser({
+        userId: Number(watcher.id),
+        type: "App\\Notifications\\WatchlistCareerPublished",
+        data: {
+          from: "HiroApp",
+          subject: "Watched role published",
+          text: `${name} is now on the careers board.`,
+          position_id: Number(position.id),
+          career_posting_id: postingId,
+        },
+      });
+    }
+    await recordHiringEvent(
+      "watchlist.alerted",
+      {
+        position_id: Number(position.id),
+        career_posting_id: postingId,
+        count: watchers.length,
+      },
+      { type: "position", id: Number(position.id) },
+    );
+    return { count: watchers.length };
   }
 }
 
