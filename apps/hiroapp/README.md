@@ -37,3 +37,4 @@ HiroApp tests run after WorkHub `test:coverage` in `validate:ci`. They do not en
 - `src/db` — migrations, factories, seeders
 - `frontend` — React SPA
 - `resources/views` — Eta templates
+- `public` — HTMX static assets (`/assets/app.css`), served from this app directory even when the process starts at the monorepo root

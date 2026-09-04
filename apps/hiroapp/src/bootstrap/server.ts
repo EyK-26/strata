@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { APP_PORT_CONFIG_KEY } from "./config.ts";
 import { createApp } from "./createApp.ts";
@@ -8,7 +9,7 @@ const port = Number(context.config.get(APP_PORT_CONFIG_KEY) ?? process.env.PORT 
 createWebServer({
   port,
   routes,
-  publicDir: "./public",
+  publicDir: join(import.meta.dir, "../../public"),
 });
 
 console.log(`${process.env.APP_NAME ?? "HiroApp"} listening on http://localhost:${port}`);

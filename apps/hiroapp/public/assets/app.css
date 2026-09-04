@@ -1,0 +1,898 @@
+html {
+  box-sizing: border-box;
+}
+
+*,
+*:before,
+*:after {
+  box-sizing: inherit;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial;
+  line-height: 1.6;
+}
+
+::-webkit-scrollbar {
+  width: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: none;
+}
+
+::-webkit-scrollbar-track:hover {
+  background: #262626;
+}
+
+::-webkit-scrollbar-thumb {
+  background: darkgray;
+  border-radius: 2em;
+  width: 1px;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #334155;
+}
+
+h1 {
+  margin: 0;
+  padding: 0;
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 2.5em;
+  color: #e5e7eb;
+}
+
+a {
+  text-decoration: none;
+  font-weight: bolder;
+  color: #e5e7eb;
+  transition: color 0.5s ease;
+}
+a:hover {
+  color: #155f90;
+}
+
+input {
+  border-radius: 1em;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  background-color: #cbd5e1;
+  border: none;
+}
+input:focus {
+  outline: none;
+}
+
+button {
+  padding: 0.3em;
+  border-radius: 0.3em;
+  background-color: #334155;
+  color: #e5e7eb;
+  transition: background-color 0.3s ease;
+  border: none;
+  box-shadow: 0 3px 2px rgba(0, 0, 0, 0.4);
+}
+button:hover {
+  background-color: #155f90;
+}
+
+select {
+  border-radius: 0.5em;
+  width: 25em;
+  background-color: #cbd5e1;
+  padding: 0.2em;
+}
+
+span {
+  color: #1f2937;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 0;
+}
+
+.container {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+}
+.container .Login {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #9ca3af;
+  color: #1f2937;
+  margin: auto;
+  border-radius: 1em;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+.container .Login h1 {
+  padding-top: 1em;
+}
+.container .Login form {
+  padding: 3em 2em;
+}
+.container .Login form label {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1.6em;
+}
+.container .Login form label input {
+  padding: 0.6em;
+  width: 26em;
+}
+.container .Login form button {
+  width: 100%;
+  padding: 0.8em;
+}
+.container .errors {
+  display: flex;
+  flex-direction: column;
+  padding-left: 2em;
+  padding-top: 1em;
+}
+.container .errors span {
+  color: #f97316;
+}
+
+.footer {
+  width: 100%;
+  background-color: #9ca3af;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 0.4em 1em;
+  display: flex;
+  justify-content: end;
+  align-items: center;
+}
+
+.Header {
+  position: fixed;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 1em 2em;
+  background-color: #9ca3af;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.Header .Navigation {
+  width: 24em;
+  display: flex;
+  justify-content: space-evenly;
+}
+.Header .profile {
+  color: #155f90;
+}
+.Header .profile:hover {
+  color: #e5e7eb;
+  cursor: pointer;
+}
+.Header .UserProfile .NavigationMobile {
+  display: none;
+}
+.Header .UserProfile {
+  position: absolute;
+  background-color: #9ca3af;
+  display: flex;
+  flex-direction: column;
+  right: 0;
+  top: 3.6rem;
+  padding: 1.2em;
+  min-width: 30em;
+  max-width: 40em;
+  line-height: 2;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 0 0 0 0.6em;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.Header .UserProfile span {
+  line-height: 1.4;
+  padding-bottom: 0.4em;
+}
+.Header .UserProfile .username {
+  font-weight: bold;
+}
+.Header .UserProfile .department {
+  font-size: smaller;
+}
+
+.inbox .message {
+  width: 35em;
+  min-height: 20em;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #9ca3af;
+  z-index: 10;
+  padding: 2em 4em;
+  border-radius: 1em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+.inbox .message-header {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 2em;
+}
+.inbox .message-body {
+  padding-bottom: 2em;
+}
+.inbox .notification_preview {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+.inbox .notification_preview span {
+  color: #334155;
+  font-weight: bold;
+}
+.inbox .notification_preview.message_read span {
+  color: #475569;
+  font-weight: normal;
+}
+
+.main {
+  margin-top: 6em;
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  width: 80%;
+}
+.main > div {
+  min-height: 30em;
+  width: 100%;
+  background-color: #475569;
+  margin: 2em;
+  padding: 2em;
+  border-radius: 1em;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+.main > div .searchbar {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 1em;
+}
+.main > div .searchbar input {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  background-color: #cbd5e1;
+  flex-grow: 1;
+  border-radius: 0.5em;
+  margin-right: 1em;
+}
+.main > div .searchbar .search-button {
+  width: 5em;
+}
+.main > div .searchbar .search-button button {
+  width: 100%;
+}
+.main > div .Pagination {
+  display: flex;
+  justify-content: space-between;
+  padding: 1em 0;
+  width: 100%;
+}
+.main > div .Pagination .buttons {
+  width: 5em;
+  display: flex;
+  justify-content: space-between;
+}
+.main > div .Pagination .buttons button {
+  width: 100%;
+}
+.main > div .list .status-ended span {
+  color: #334155;
+}
+.main > div .list .status-hired span {
+  color: #059669;
+}
+.main > div .list-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 1em;
+}
+.main > div .list-item:hover {
+  transition: background-color 0.3s ease;
+  background-color: #9ca3af;
+  border-radius: 0.2em;
+  transform: scale(1.05);
+}
+.main > div .list-item:hover span {
+  color: #334155;
+}
+.main > div .list-item span {
+  font-size: 1.2em;
+  color: #94a3b8;
+}
+
+.detail-header {
+  padding: 2em;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.detail-header button {
+  padding: 0.3em 1em;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.detail-info {
+  overflow: auto;
+  max-height: 60vh;
+  padding: 2em;
+  display: flex;
+  flex-direction: column;
+}
+.detail-info span {
+  font-size: 1.2em;
+  color: #94a3b8;
+}
+
+.CreateApplication form {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 20em;
+  font-size: 1.4em;
+  color: #94a3b8;
+}
+.CreateApplication form label {
+  display: flex;
+  flex-direction: column;
+}
+.CreateApplication form textarea {
+  resize: none;
+  border-radius: 1em;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  padding: 1em;
+}
+.CreateApplication form textarea:focus {
+  outline: none;
+}
+.CreateApplication form textarea {
+  max-width: 30rem;
+  height: 10rem;
+  background-color: #cbd5e1;
+}
+.CreateApplication form input {
+  border-radius: 0.5em;
+  padding: 0.5em 1em;
+  max-width: 30rem;
+}
+.CreateApplication form button {
+  width: 5em;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.ApplicationDetail .body {
+  display: flex;
+  justify-content: space-between;
+  padding: 2em;
+}
+.ApplicationDetail > span {
+  color: #059669;
+}
+.ApplicationDetailDetails {
+  display: flex;
+  flex-direction: column;
+  max-width: 30rem;
+}
+.ApplicationDetailDetails .info-details {
+  display: flex;
+  flex-direction: column;
+}
+.ApplicationDetailDetails .info-details .info-text {
+  padding-left: 1em;
+  overflow: auto;
+  max-height: 15em;
+  padding: 0.5em 0;
+}
+.ApplicationDetailDetails .info-name {
+  font-weight: bold;
+  color: #cbd5e1;
+  padding: 0.5em 0;
+}
+.ApplicationDetailDetails span {
+  font-size: 1.2em;
+  color: #94a3b8;
+  padding: 0.5em 0;
+}
+.ApplicationDetailDetails .pageType,
+.ApplicationDetailDetails .SubmittedInformation {
+  font-size: 1.6em;
+  font-weight: bold;
+  color: #cbd5e1;
+}
+.ApplicationDetailStatus {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: end;
+}
+.ApplicationDetailStatus .topPart {
+  height: 4em;
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+}
+.ApplicationDetailStatus .topPart .processing {
+  font-size: 1.2em;
+  color: #f97316;
+}
+.ApplicationDetailStatus .interactivePart {
+  min-height: 7em;
+  max-width: 30em;
+  margin-bottom: 1em;
+}
+.ApplicationDetailStatus .interactivePart .Reject,
+.ApplicationDetailStatus .interactivePart .Hire {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.ApplicationDetailStatus .interactivePart .Reject .text,
+.ApplicationDetailStatus .interactivePart .Hire .text {
+  width: 100%;
+}
+.ApplicationDetailStatus .interactivePart .Reject .buttons,
+.ApplicationDetailStatus .interactivePart .Hire .buttons {
+  padding-top: 1em;
+  width: 7.5em;
+  display: flex;
+  justify-content: space-between;
+}
+.ApplicationDetailStatus .progress span {
+  font-size: 1.2em;
+  color: #94a3b8;
+}
+.ApplicationDetailStatus .progress {
+  width: 13em;
+}
+.ApplicationDetailStatus .progress.hasButton {
+  width: 20em;
+}
+.ApplicationDetailStatus .progress {
+  display: flex;
+  flex-direction: column;
+}
+.ApplicationDetailStatus .progress .status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2em 0.5em 0.2em 1em;
+}
+.ApplicationDetailStatus .progress .status .circle {
+  width: 1.2em;
+  height: 1.2em;
+  border-radius: 50%;
+  border: none;
+  z-index: 2;
+}
+.ApplicationDetailStatus .progress .status .line {
+  position: absolute;
+  width: 0.4em;
+  height: 2.34em;
+  border: none;
+  transform: translate(0.4em, 0);
+  z-index: 1;
+}
+.ApplicationDetailStatus .progress .status .first {
+  transform: translate(0.4em, 0);
+  height: 4em;
+  z-index: 0;
+}
+.ApplicationDetailStatus .progress .status .last {
+  transform: translate(0.4em, -1em);
+  z-index: 0;
+}
+.ApplicationDetailStatus .progress .status-ended span {
+  color: #334155;
+}
+.ApplicationDetailStatus .progress .status-ended .circle,
+.ApplicationDetailStatus .progress .status-ended .line {
+  background-color: #334155;
+}
+.ApplicationDetailStatus .progress .status-done span {
+  color: #334155;
+}
+.ApplicationDetailStatus .progress .status-done .circle,
+.ApplicationDetailStatus .progress .status-done .line {
+  background-color: #334155;
+}
+.ApplicationDetailStatus .progress .status-active span {
+  color: #047857;
+  font-weight: bold;
+}
+.ApplicationDetailStatus .progress .status-active {
+  background-color: #059669;
+  border-radius: 1em;
+}
+.ApplicationDetailStatus .progress .status-active .circle,
+.ApplicationDetailStatus .progress .status-active .line {
+  background-color: #047857;
+}
+.ApplicationDetailStatus .progress .status-active.ended {
+  background-color: #823442;
+}
+.ApplicationDetailStatus .progress .status-active.ended .circle {
+  background-color: #3f161e;
+}
+.ApplicationDetailStatus .progress .status-active.ended span {
+  color: #3f161e;
+  font-weight: bold;
+}
+.ApplicationDetailStatus .progress .status-future .circle,
+.ApplicationDetailStatus .progress .status-future .line {
+  background-color: #94a3b8;
+}
+
+.InterviewForm {
+  width: 50em;
+  min-height: 25em;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #9ca3af;
+  z-index: 10;
+  padding: 2em 4em;
+  border-radius: 0.5em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.InterviewForm form {
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+}
+.InterviewForm form label {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 1em;
+}
+.InterviewForm form label input,
+.InterviewForm form label select {
+  border-radius: 0.5em;
+  width: 25em;
+  background-color: #cbd5e1;
+  padding: 0.2em;
+}
+.InterviewForm form label textarea {
+  resize: none;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  padding: 1em;
+  font-size: 1.2em;
+  border-radius: 0.5em;
+}
+.InterviewForm form label textarea:focus {
+  outline: none;
+}
+.InterviewForm form label textarea {
+  background-color: #cbd5e1;
+}
+.InterviewForm form .buttons {
+  width: 7.5em;
+  display: flex;
+  justify-content: space-between;
+}
+
+.dropdown-search {
+  display: flex;
+  flex-direction: column;
+  min-width: none 100%;
+}
+.dropdown-search .dropdown {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  background-color: #cbd5e1;
+  flex-grow: 1;
+  border-radius: 0.5em;
+  margin-right: 1em;
+}
+
+.btn-hidden {
+  opacity: 0;
+}
+
+.contact-user {
+  margin-left: 2rem;
+}
+
+.delete-user {
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  padding-top: 0.9em;
+}
+.delete-user .delete {
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  max-width: 30em;
+  margin-top: 1em;
+}
+.delete-user .delete .text {
+  width: 100%;
+}
+.delete-user .delete .buttons {
+  padding-top: 1em;
+  width: 15em;
+  justify-content: space-between;
+  display: flex;
+  flex-direction: row;
+}
+.delete-user .delete .buttons .button {
+  margin: 0.2em;
+}
+
+.HomeRecruiter {
+  display: flex;
+  flex-direction: column;
+}
+.HomeRecruiter .HomeRecruiter_links {
+  display: flex;
+  justify-content: space-between;
+}
+
+.YourHirings {
+  padding: 4em;
+  border-radius: 2em;
+  box-shadow: 0 0 2em rgba(0, 0, 0, 0.1);
+}
+.YourHirings h2 {
+  text-align: center;
+  color: #333;
+}
+.YourHirings button {
+  font-size: 1em;
+  margin-bottom: 2em;
+}
+.YourHirings .hirings_container {
+  display: grid;
+  gap: 1.6em;
+  max-height: 50vh;
+  overflow: auto;
+}
+.YourHirings .hirings_container div {
+  background-color: #94a3b8;
+  padding: 1em;
+  border-radius: 1em;
+  margin-right: 1em;
+}
+.YourHirings .hirings_container div h4 {
+  margin: 0;
+  color: #333;
+}
+.YourHirings .hirings_container div p {
+  margin: 5px 0;
+  color: #666;
+}
+.YourHirings .hirings_container div a:hover {
+  text-decoration: underline;
+}
+
+.CreatePosition {
+  border-radius: 2em;
+  box-shadow: 0 0 2em rgba(0, 0, 0, 0.1);
+}
+.CreatePosition h2 {
+  text-align: center;
+  color: #333;
+}
+.CreatePosition button {
+  font-size: 1em;
+  margin-bottom: 2em;
+}
+.CreatePosition form {
+  display: flex;
+  flex-direction: column;
+}
+.CreatePosition form label {
+  margin: 0.8em 0;
+  display: flex;
+  flex-direction: column;
+}
+.CreatePosition form label select,
+.CreatePosition form label textarea,
+.CreatePosition form label input {
+  padding: 8px;
+  margin-top: 5px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  resize: none;
+}
+
+.TotalApplicants {
+  border-radius: 2em;
+}
+.TotalApplicants h3 {
+  color: #333;
+}
+.TotalApplicants div {
+  margin-top: 2em;
+  display: flex;
+  align-items: center;
+}
+
+.Dashboard .Dashboard_close {
+  margin: 1em;
+  font-size: 1em;
+}
+.Dashboard .Applicants {
+  border-radius: 1em;
+  margin-top: 1em;
+  background-color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.Dashboard .Applicants .dashboard_number {
+  font-size: 2.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.Dashboard .Applicants h3 {
+  color: #333;
+  margin-bottom: 0;
+}
+.Dashboard .Applicants .ApplicantDetail_container {
+  max-height: 50vh;
+  overflow: auto;
+  padding: 1em;
+  width: 80%;
+}
+.Dashboard .Applicants .ApplicantDetail_container .ApplicantsDetail {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin-bottom: 1em;
+  background-color: #475569;
+  border-radius: 8px;
+  padding: 1em;
+}
+.Dashboard .Applicants .ApplicantDetail_container .ApplicantsDetail .ApplicantDetail_candidate {
+  display: flex;
+  justify-content: space-between;
+}
+
+.UserDetail {
+  display: flex;
+  flex-direction: column;
+}
+.UserDetail span {
+  color: #e5e7eb;
+}
+
+.ContactUser {
+  width: 50em;
+  min-height: 25em;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #9ca3af;
+  z-index: 10;
+  padding: 2em 4em;
+  border-radius: 0.5em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.ContactUser form {
+  display: flex;
+  flex-direction: column;
+}
+.ContactUser form button,
+.ContactUser form input {
+  margin: 0.5em;
+}
+.ContactUser textarea {
+  resize: none;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  padding: 1em;
+  font-size: 1.2em;
+  border-radius: 0.5em;
+}
+.ContactUser textarea:focus {
+  outline: none;
+}
+.ContactUser textarea {
+  background-color: #cbd5e1;
+}
+
+.CreateUser {
+  padding: 2em;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+.CreateUser h2 {
+  text-align: center;
+  color: #333;
+}
+.CreateUser form {
+  display: flex;
+  flex-direction: column;
+}
+.CreateUser form label {
+  margin: 0.2em;
+  display: flex;
+  flex-direction: column;
+}
+.CreateUser form label span {
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+.CreateUser form label input,
+.CreateUser form label select {
+  margin-bottom: 0.4em;
+}
+
+@media only screen and (max-width: 450px) {
+  .detail-header {
+    flex-direction: column;
+  }
+}
+@media only screen and (max-width: 390px) {
+  .searchbar,
+  .list-item {
+    flex-direction: column;
+  }
+  h2 {
+    font-size: 1.5em;
+  }
+}
+@media only screen and (max-width: 700px) {
+  .Header > .Navigation {
+    display: none;
+  }
+  .NavigationMobile {
+    display: block !important;
+  }
+  .NavigationMobile .Navigation {
+    flex-direction: column;
+  }
+  .main {
+    width: 100%;
+  }
+  h2 {
+    font-size: 2em;
+  }
+}
+@media only screen and (max-width: 1100px) {
+  .main {
+    flex-wrap: wrap;
+  }
+  .ApplicationDetail > .body {
+    flex-wrap: wrap;
+  }
+  .ApplicationDetail > .body .ApplicationDetailStatus {
+    width: 100%;
+  }
+}
