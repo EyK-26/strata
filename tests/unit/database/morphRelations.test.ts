@@ -79,6 +79,24 @@ describe("morph relation indexing", () => {
     expect(grouped.get(2)).toHaveLength(1);
   });
 
+  test("indexMorphManyRelation matches int4 parent ids to int8 morph ids", () => {
+    const grouped = indexMorphManyRelation(
+      [{ id: 1, title: "Thread" }],
+      [
+        {
+          id: 10,
+          user_id: 1,
+          reactable_type: "forum_thread",
+          reactable_id: 1n as unknown as number,
+          kind: "like",
+        },
+      ],
+      threadHasReactions,
+    );
+
+    expect(grouped.get(1)).toHaveLength(1);
+  });
+
   test("indexMorphOneRelation returns first child", () => {
     const relation = morphOne<Thread, Reaction, "id", "reactable_type", "reactable_id">({
       name: "featured_reaction",

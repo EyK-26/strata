@@ -197,6 +197,29 @@ describe("HiroApp-shaped Eloquent parity", () => {
     expect(connection.calls.some((call) => call.query.toLowerCase().includes("limit"))).toBe(true);
   });
 
+  test("with() and nested load match int4 PKs to int8 FKs", async () => {
+    const connection = new FakeConnection();
+    const { ApplicationModel, UserModel } = createGraph(connection);
+
+    connection.queue([{ id: 1, user_id: 7n, position_id: 4n }]);
+    connection.queue([{ id: 4, name: "Office", hiring: true, user_id: 7 }]);
+    const apps = await ApplicationModel.with("position").get();
+    expect(apps[0]?.loaded<{ get: (key: string) => unknown }>("position")?.get("name")).toBe(
+      "Office",
+    );
+
+    connection.queue([{ id: 7, name: "Ada", role_id: 2 }]);
+    connection.queue([{ id: 1, user_id: 7n, position_id: 4n }]);
+    connection.queue([{ id: 4, name: "Office", hiring: true, user_id: 7 }]);
+    const users = await UserModel.with("applications.position").get();
+    const nestedApps =
+      users[0]?.loaded<
+        Array<{ loaded: (name: string) => { get: (key: string) => unknown } | undefined }>
+      >("applications");
+    expect(nestedApps).toHaveLength(1);
+    expect(nestedApps?.[0]?.loaded("position")?.get("name")).toBe("Office");
+  });
+
   test("belongsTo whereHas threads extra constraints into EXISTS", async () => {
     const connection = new FakeConnection();
     const { ApplicationModel } = createGraph(connection);

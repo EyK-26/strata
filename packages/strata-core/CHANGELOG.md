@@ -1,5 +1,14 @@
 # @getstrata/core changelog
 
+## 0.5.100
+
+HiroApp dogfood of 0.5.99: eager `with()` / nested `load("a.b")` missed related rows when a Postgres int4 PK arrived as a JS `number` and an int8 FK as a `bigint`. Map matching used `===`.
+
+- Relation indexers and eager attach compare keys with `relationMatchKey` (`1`, `1n`, `"1"` match).
+- Sequential `load("position")` / `application.position()` already used SQL `get()` and were unaffected.
+
+Still non-conforming (honest): Bun cannot infer `morphTo()` method names. `hashed` cast is a no-op. `Factory.has()` without a bound model still needs an explicit FK.
+
 ## 0.5.99
 
 HiroApp dogfood of 0.5.98 found lookalike APIs. This release matches Laravel call shape and SQL, not just export names.

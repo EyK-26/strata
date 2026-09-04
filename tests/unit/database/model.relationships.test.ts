@@ -30,6 +30,25 @@ describe("hasOne indexing", () => {
     expect(indexed.get(1)).toEqual({ id: 10, parent_id: 1, label: "first" });
     expect(indexed.get(2)).toEqual({ id: 20, parent_id: 2, label: "only" });
   });
+
+  test("matches int4 parent keys to int8 child foreign keys", () => {
+    type Parent = { id: number };
+    type Child = { id: number; parent_id: bigint; label: string };
+
+    const relation = hasOne<Parent, Child, "id", "parent_id">({
+      name: "profile",
+      localKey: "id",
+      foreignKey: "parent_id",
+    });
+
+    const indexed = indexHasOneRelation(
+      [{ id: 1 }],
+      [{ id: 10, parent_id: 1n, label: "first" }],
+      relation,
+    );
+
+    expect(indexed.get(1)).toEqual({ id: 10, parent_id: 1n, label: "first" });
+  });
 });
 
 describe("belongsToMany indexing", () => {
@@ -64,5 +83,29 @@ describe("belongsToMany indexing", () => {
       { id: 10, name: "bun" },
       { id: 20, name: "typescript" },
     ]);
+  });
+
+  test("matches int4 keys to int8 pivot ids", () => {
+    type Tag = { id: number; name: string };
+    type Post = { id: number; title: string };
+    type Pivot = { post_id: bigint; tag_id: bigint };
+
+    const relation = belongsToMany<Post, Tag, Pivot, "id", "id", "post_id", "tag_id">({
+      name: "tags",
+      pivotTable: "post_tag",
+      parentKey: "id",
+      relatedKey: "id",
+      foreignPivotKey: "post_id",
+      relatedPivotKey: "tag_id",
+    });
+
+    const grouped = indexBelongsToManyRelation(
+      [{ id: 1, title: "Hello" }],
+      [{ post_id: 1n, tag_id: 10n }],
+      [{ id: 10, name: "bun" }],
+      relation,
+    );
+
+    expect(grouped.get(1)).toEqual([{ id: 10, name: "bun" }]);
   });
 });

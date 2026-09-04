@@ -9,6 +9,7 @@ import type {
   MorphOneRelation,
   MorphToRelation,
 } from "./relationships.ts";
+import { getByRelationKey } from "./relationships.ts";
 import type { QueryJoin, QueryOptions, QueryWhere } from "./types.ts";
 import { WhereBuilder, type WhereNode } from "./whereBuilder.ts";
 
@@ -361,7 +362,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
           .loadHasManyForParents(rows, relation, load.options);
         result = result.map((row) => ({
           ...row,
-          [load.as]: grouped.get(row[relation.localKey]) ?? [],
+          [load.as]: getByRelationKey(grouped, row[relation.localKey]) ?? [],
         })) as Array<TEntity & LoadedRow>;
         continue;
       }
@@ -379,7 +380,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
           .loadMorphManyForParents(rows, relation, load.options);
         result = result.map((row) => ({
           ...row,
-          [load.as]: grouped.get(row[relation.localKey]) ?? [],
+          [load.as]: getByRelationKey(grouped, row[relation.localKey]) ?? [],
         })) as Array<TEntity & LoadedRow>;
         continue;
       }
@@ -397,7 +398,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
           .loadMorphOneForParents(rows, relation, load.options);
         result = result.map((row) => ({
           ...row,
-          [load.as]: grouped.get(row[relation.localKey]),
+          [load.as]: getByRelationKey(grouped, row[relation.localKey]),
         })) as Array<TEntity & LoadedRow>;
         continue;
       }
@@ -420,7 +421,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
         );
         result = result.map((row) => ({
           ...row,
-          [load.as]: grouped.get(row[relation.parentKey]) ?? [],
+          [load.as]: getByRelationKey(grouped, row[relation.parentKey]) ?? [],
         })) as Array<TEntity & LoadedRow>;
         continue;
       }
@@ -439,7 +440,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
         );
         result = result.map((row) => ({
           ...row,
-          [load.as]: grouped.get(row[relation.morphIdKey as keyof TEntity] as never),
+          [load.as]: getByRelationKey(grouped, row[relation.morphIdKey as keyof TEntity]),
         })) as Array<TEntity & LoadedRow>;
         continue;
       }
@@ -458,7 +459,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       );
       result = result.map((row) => ({
         ...row,
-        [load.as]: grouped.get(row[relation.foreignKey as keyof TEntity] as never),
+        [load.as]: getByRelationKey(grouped, row[relation.foreignKey as keyof TEntity]),
       })) as Array<TEntity & LoadedRow>;
     }
 

@@ -130,6 +130,46 @@ function belongsToMany<
   };
 }
 
+function relationMatchKey(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (typeof value === "string" && /^-?\d+$/.test(value)) {
+    return BigInt(value).toString();
+  }
+
+  return String(value);
+}
+
+function getByRelationKey<K, V>(map: ReadonlyMap<K, V>, key: unknown): V | undefined {
+  if (map.has(key as K)) {
+    return map.get(key as K);
+  }
+
+  const want = relationMatchKey(key);
+
+  if (want === "") {
+    return undefined;
+  }
+
+  for (const [existing, value] of map) {
+    if (relationMatchKey(existing) === want) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function indexHasManyRelation<
   TParent,
   TChild,
@@ -140,15 +180,19 @@ function indexHasManyRelation<
   children: readonly TChild[],
   relation: HasManyRelation<TParent, TChild, LocalKey, ForeignKey>,
 ): Map<TParent[LocalKey], TChild[]> {
-  const groups = new Map<TParent[LocalKey], TChild[]>();
+  const groups = new Map<string, TChild[]>();
+  const originalKeys = new Map<string, TParent[LocalKey]>();
 
   for (const parent of parents) {
-    groups.set(parent[relation.localKey], []);
+    const key = relationMatchKey(parent[relation.localKey]);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      originalKeys.set(key, parent[relation.localKey]);
+    }
   }
 
   for (const child of children) {
-    const key = child[relation.foreignKey] as unknown as TParent[LocalKey];
-    const group = groups.get(key);
+    const group = groups.get(relationMatchKey(child[relation.foreignKey]));
 
     if (!group) {
       continue;
@@ -157,7 +201,16 @@ function indexHasManyRelation<
     group.push(child);
   }
 
-  return groups;
+  const result = new Map<TParent[LocalKey], TChild[]>();
+
+  for (const [key, group] of groups) {
+    const original = originalKeys.get(key);
+    if (original !== undefined) {
+      result.set(original, group);
+    }
+  }
+
+  return result;
 }
 
 function indexHasOneRelation<
@@ -179,7 +232,7 @@ function indexHasOneRelation<
   const result = new Map<TParent[LocalKey], TChild | undefined>();
 
   for (const parent of parents) {
-    const matches = grouped.get(parent[relation.localKey]) ?? [];
+    const matches = getByRelationKey(grouped, parent[relation.localKey]) ?? [];
     result.set(parent[relation.localKey], matches[0]);
   }
 
@@ -196,17 +249,17 @@ function indexBelongsToRelation<
   parents: readonly TParent[],
   relation: BelongsToRelation<TChild, TParent, ForeignKey, OwnerKey>,
 ): Map<TChild[ForeignKey], TParent> {
-  const parentsById = new Map<TParent[OwnerKey], TParent>();
+  const parentsById = new Map<string, TParent>();
 
   for (const parent of parents) {
-    parentsById.set(parent[relation.ownerKey], parent);
+    parentsById.set(relationMatchKey(parent[relation.ownerKey]), parent);
   }
 
   const result = new Map<TChild[ForeignKey], TParent>();
 
   for (const child of children) {
     const foreignKey = child[relation.foreignKey];
-    const parent = parentsById.get(foreignKey as unknown as TParent[OwnerKey]);
+    const parent = parentsById.get(relationMatchKey(foreignKey));
 
     if (parent) {
       result.set(foreignKey, parent);
@@ -238,23 +291,26 @@ function indexBelongsToManyRelation<
     RelatedPivotKey
   >,
 ): Map<TParent[ParentKey], TRelated[]> {
-  const relatedById = new Map<TRelated[RelatedKey], TRelated>();
+  const relatedById = new Map<string, TRelated>();
 
   for (const related of relatedRows) {
-    relatedById.set(related[relation.relatedKey], related);
+    relatedById.set(relationMatchKey(related[relation.relatedKey]), related);
   }
 
-  const groups = new Map<TParent[ParentKey], TRelated[]>();
+  const groups = new Map<string, TRelated[]>();
+  const originalKeys = new Map<string, TParent[ParentKey]>();
 
   for (const parent of parents) {
-    groups.set(parent[relation.parentKey], []);
+    const key = relationMatchKey(parent[relation.parentKey]);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      originalKeys.set(key, parent[relation.parentKey]);
+    }
   }
 
   for (const pivot of pivotRows) {
-    const parentId = pivot[relation.foreignPivotKey] as unknown as TParent[ParentKey];
-    const relatedId = pivot[relation.relatedPivotKey] as unknown as TRelated[RelatedKey];
-    const group = groups.get(parentId);
-    const related = relatedById.get(relatedId);
+    const group = groups.get(relationMatchKey(pivot[relation.foreignPivotKey]));
+    const related = relatedById.get(relationMatchKey(pivot[relation.relatedPivotKey]));
 
     if (!group || !related) {
       continue;
@@ -263,7 +319,16 @@ function indexBelongsToManyRelation<
     group.push(related);
   }
 
-  return groups;
+  const result = new Map<TParent[ParentKey], TRelated[]>();
+
+  for (const [key, group] of groups) {
+    const original = originalKeys.get(key);
+    if (original !== undefined) {
+      result.set(original, group);
+    }
+  }
+
+  return result;
 }
 
 interface MorphManyRelation<
@@ -371,10 +436,15 @@ function indexMorphManyRelation<
   children: readonly TChild[],
   relation: MorphManyRelation<TParent, TChild, LocalKey, MorphTypeKey, MorphIdKey>,
 ): Map<TParent[LocalKey], TChild[]> {
-  const groups = new Map<TParent[LocalKey], TChild[]>();
+  const groups = new Map<string, TChild[]>();
+  const originalKeys = new Map<string, TParent[LocalKey]>();
 
   for (const parent of parents) {
-    groups.set(parent[relation.localKey], []);
+    const key = relationMatchKey(parent[relation.localKey]);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      originalKeys.set(key, parent[relation.localKey]);
+    }
   }
 
   for (const child of children) {
@@ -382,8 +452,7 @@ function indexMorphManyRelation<
       continue;
     }
 
-    const key = child[relation.morphIdKey] as unknown as TParent[LocalKey];
-    const group = groups.get(key);
+    const group = groups.get(relationMatchKey(child[relation.morphIdKey]));
 
     if (!group) {
       continue;
@@ -392,7 +461,16 @@ function indexMorphManyRelation<
     group.push(child);
   }
 
-  return groups;
+  const result = new Map<TParent[LocalKey], TChild[]>();
+
+  for (const [key, group] of groups) {
+    const original = originalKeys.get(key);
+    if (original !== undefined) {
+      result.set(original, group);
+    }
+  }
+
+  return result;
 }
 
 function indexMorphOneRelation<
@@ -414,7 +492,7 @@ function indexMorphOneRelation<
   const result = new Map<TParent[LocalKey], TChild | undefined>();
 
   for (const parent of parents) {
-    const matches = grouped.get(parent[relation.localKey]) ?? [];
+    const matches = getByRelationKey(grouped, parent[relation.localKey]) ?? [];
     result.set(parent[relation.localKey], matches[0]);
   }
 
@@ -426,10 +504,10 @@ function indexMorphToRelation<
   TParent extends object,
   MorphTypeKey extends keyof TChild & string,
   MorphIdKey extends keyof TChild & string,
-  OwnerKey extends keyof TParent & string,
+  _OwnerKey extends keyof TParent & string = keyof TParent & string,
 >(
   children: readonly TChild[],
-  parentsByType: ReadonlyMap<string, ReadonlyMap<TParent[OwnerKey], TParent>>,
+  parentsByType: ReadonlyMap<string, ReadonlyMap<unknown, TParent>>,
   relation: MorphToRelation<TChild, MorphTypeKey, MorphIdKey>,
 ): Map<TChild[MorphIdKey], TParent> {
   const result = new Map<TChild[MorphIdKey], TParent>();
@@ -442,7 +520,7 @@ function indexMorphToRelation<
       continue;
     }
 
-    const parent = parents.get(child[relation.morphIdKey] as unknown as TParent[OwnerKey]);
+    const parent = getByRelationKey(parents, child[relation.morphIdKey]);
 
     if (parent) {
       result.set(child[relation.morphIdKey], parent);
@@ -464,6 +542,7 @@ export type {
 export {
   belongsTo,
   belongsToMany,
+  getByRelationKey,
   hasMany,
   hasOne,
   indexBelongsToManyRelation,
@@ -476,4 +555,5 @@ export {
   morphMany,
   morphOne,
   morphTo,
+  relationMatchKey,
 };
