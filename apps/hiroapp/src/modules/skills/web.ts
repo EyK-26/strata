@@ -10,6 +10,7 @@ import { serializeNamed, serializePosition } from "../../lib/serialize.ts";
 import { Department } from "../../models/Department.ts";
 import { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
+import { watchlistService } from "../positions/watchlist.ts";
 import { skills } from "./repository.ts";
 
 export function skillWebRoutes(dependencies: AppDependencies): AppRouteMap {
@@ -43,7 +44,7 @@ export function skillWebRoutes(dependencies: AppDependencies): AppRouteMap {
     "/watching": {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await requireCurrentUser(request);
-        const rows = await User.newFromRecord(user).watching();
+        const rows = await watchlistService.list(user);
         return renderPage(request, "skills/watching", {
           positions: rows.map((row) => serializePosition(row)),
         });
@@ -57,7 +58,7 @@ export function skillWebRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Position.findOrFail(id),
           async (request, position) => {
             const user = await requireCurrentUser(request);
-            await User.newFromRecord(user).watching().toggle(position.id);
+            await watchlistService.toggle(user, position);
             return redirectResponse(`/positions/${position.id}`);
           },
         ),

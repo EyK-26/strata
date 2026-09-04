@@ -9,6 +9,7 @@ import { Department } from "../../models/Department.ts";
 import { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
 import { interviewerService } from "../positions/interviewers.ts";
+import { watchlistService } from "../positions/watchlist.ts";
 import { skills } from "./repository.ts";
 import {
   InterviewersRequest,
@@ -50,7 +51,7 @@ export function skillRoutes(dependencies: AppDependencies): AppRouteMap {
     "/api/me/watching": {
       GET: wrapApi(dependencies, async (request) => {
         const user = await requireCurrentUser(request);
-        const rows = await User.newFromRecord(user).watching();
+        const rows = await watchlistService.list(user);
         return jsonResponse(rows.map((row) => row.toArray()));
       }),
     },
@@ -62,8 +63,8 @@ export function skillRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Position.findOrFail(id),
           async (request, position) => {
             const user = await requireCurrentUser(request);
-            await User.newFromRecord(user).watching().toggle(position.id);
-            return jsonResponse({ watching: await User.newFromRecord(user).watching().count() });
+            const result = await watchlistService.toggle(user, position);
+            return jsonResponse({ watching: result.count });
           },
         ),
       ),
