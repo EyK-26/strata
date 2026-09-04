@@ -3,6 +3,7 @@ import { departments } from "../modules/departments/repository.ts";
 import type { DepartmentRecord } from "../modules/departments/table.ts";
 import { Application } from "./Application.ts";
 import { Position } from "./Position.ts";
+import { User } from "./User.ts";
 
 export class Department extends Model<DepartmentRecord, "id"> {
   static $fillable = ["name"] as const;
@@ -18,6 +19,10 @@ export class Department extends Model<DepartmentRecord, "id"> {
       () => Application,
       () => Position,
     );
+  }
+
+  members() {
+    return this.belongsToMany(() => User, "department_members", "department_id", "user_id");
   }
 }
 

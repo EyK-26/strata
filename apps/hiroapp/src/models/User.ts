@@ -2,6 +2,7 @@ import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { users } from "../modules/users/repository.ts";
 import type { UserRecord } from "../modules/users/table.ts";
 import { Application } from "./Application.ts";
+import { Department } from "./Department.ts";
 import { Notification } from "./Notification.ts";
 import { Position } from "./Position.ts";
 import { Role } from "./Role.ts";
@@ -42,6 +43,10 @@ export class User extends Model<UserRecord, "id"> {
 
   watching() {
     return this.belongsToMany(() => Position, "position_watchers", "user_id", "position_id");
+  }
+
+  departments() {
+    return this.belongsToMany(() => Department, "department_members", "user_id", "department_id");
   }
 }
 

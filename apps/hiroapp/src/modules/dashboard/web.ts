@@ -24,6 +24,7 @@ import {
   serializePosition,
   serializeUser,
 } from "../../lib/serialize.ts";
+import { resolveStaffDepartmentId } from "../../lib/staffTeam.ts";
 import { Application } from "../../models/Application.ts";
 import { Position } from "../../models/Position.ts";
 import type { Status } from "../../models/Status.ts";
@@ -188,8 +189,7 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
         const user = await authorize(request, "positions", "view");
         let departmentId: number | undefined;
         if (isRecruiter(user.role_id)) {
-          const seat = await User.newFromRecord(user).position().first();
-          departmentId = seat ? Number(seat.get("department_id")) : undefined;
+          departmentId = (await resolveStaffDepartmentId(user)) ?? undefined;
         }
         const rows = await positions.hiring({ departmentId });
         const payload = await Promise.all(
@@ -244,20 +244,14 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
         const user = await authorize(request, "positions", "create");
         return renderPage(request, "positions/create", {
           names: await positions.distinctNames(),
-          department_id:
-            Number(
-              (await User.newFromRecord(user).position().first())?.get("department_id") ?? "",
-            ) || "",
+          department_id: (await resolveStaffDepartmentId(user)) ?? "",
         });
       }),
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await authorize(request, "positions", "create");
         const { fields } = await parseFormBody(request);
         const departmentId = isRecruiter(user.role_id)
-          ? Number(
-              (await User.newFromRecord(user).position().first())?.get("department_id") ??
-                fields.department_id,
-            )
+          ? Number((await resolveStaffDepartmentId(user)) ?? fields.department_id)
           : Number(fields.department_id);
         const created = await positions.create({
           user_id: null,
@@ -439,10 +433,8 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
     "/hirings": {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await requireCurrentUser(request);
-        const seat = await User.newFromRecord(user).position().first();
-        const rows = seat
-          ? await positions.hiring({ departmentId: Number(seat.get("department_id")) })
-          : [];
+        const departmentId = await resolveStaffDepartmentId(user);
+        const rows = departmentId ? await positions.hiring({ departmentId }) : [];
         const payload = await Promise.all(
           rows.map(async (position) =>
             serializePosition(position, {
@@ -459,10 +451,8 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
         await authorize(request, "dashboard", "view");
         const user = await requireCurrentUser(request);
-        const seat = await User.newFromRecord(user).position().first();
-        const positionIds = seat
-          ? await positions.idsInDepartment(Number(seat.get("department_id")))
-          : [];
+        const departmentId = await resolveStaffDepartmentId(user);
+        const positionIds = departmentId ? await positions.idsInDepartment(departmentId) : [];
         const rows = await applications.forPositions(positionIds);
         return renderPage(request, "recruiter/dashboard", {
           count: rows.length,

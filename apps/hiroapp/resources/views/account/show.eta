@@ -31,6 +31,51 @@
   </form>
 </section>
 
+<% if (it.staff) { %>
+<section class="card" id="team">
+  <h2>Hiring team</h2>
+  <% if (!it.memberships?.length) { %>
+    <p class="hint">You are not on a hiring team yet.</p>
+  <% } else { %>
+    <ul>
+      <% for (const membership of it.memberships) { %>
+        <li>
+          <%= membership.name %> (<%= membership.role %>)
+          <% if (membership.current) { %><strong>Current</strong><% } %>
+          <% if (!membership.current) { %>
+            <form method="post" action="/account/current-department">
+              <%~ include("../partials/csrf.eta") %>
+              <input type="hidden" name="department_id" value="<%= membership.department_id %>" />
+              <button type="submit">Switch</button>
+            </form>
+          <% } %>
+        </li>
+      <% } %>
+    </ul>
+  <% } %>
+  <h3>Invitations</h3>
+  <% if (!it.invitations?.length) { %>
+    <p class="hint">No pending hiring-team invitations.</p>
+  <% } else { %>
+    <ul>
+      <% for (const invitation of it.invitations) { %>
+        <li>
+          <%= invitation.department?.name ?? invitation.department_id %> as <%= invitation.role %>
+          <form method="post" action="/account/invitations/<%= invitation.id %>/accept">
+            <%~ include("../partials/csrf.eta") %>
+            <button type="submit">Accept</button>
+          </form>
+          <form method="post" action="/account/invitations/<%= invitation.id %>/decline">
+            <%~ include("../partials/csrf.eta") %>
+            <button type="submit">Decline</button>
+          </form>
+        </li>
+      <% } %>
+    </ul>
+  <% } %>
+</section>
+<% } %>
+
 <section class="card" id="password">
   <h2>Password</h2>
   <form method="post" action="/account/password" class="stack-form">

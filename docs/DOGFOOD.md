@@ -28,6 +28,10 @@ HiroApp identity is `User` + `role_id` (admin / recruiter / candidate). A candid
 
 `notifiable_type` stays `App\Models\User`.
 
+## Wave 7
+
+Staff membership lives on departments (`department_members`, `department_invitations`, `users.current_department_id`). Recruiter “my department” is current team membership, with occupied-position as a fallback. Candidates stay applicants: they cannot inspect teams or be invited onto a hiring team.
+
 ## Commands
 
 ```bash

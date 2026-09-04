@@ -7,9 +7,9 @@ import { ApplicationResource, mergeResource, PositionResource } from "../../http
 import { wrapApi } from "../../http/wrap.ts";
 import { loadCandidatePosition, loadPositionWithApplications } from "../../lib/loaders.ts";
 import { isCandidate, isRecruiter } from "../../lib/roles.ts";
+import { resolveStaffDepartmentId } from "../../lib/staffTeam.ts";
 import { Department } from "../../models/Department.ts";
 import { Position } from "../../models/Position.ts";
-import { User } from "../../models/User.ts";
 import { applications } from "../applications/repository.ts";
 import { positions } from "./repository.ts";
 import { CreatePositionRequest, PositionIndexRequest } from "./requests.ts";
@@ -22,11 +22,11 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
         const query = new PositionIndexRequest().validate(request);
         let departmentId = query.department || undefined;
         if (isRecruiter(user.role_id)) {
-          const seat = await User.newFromRecord(user).position().first();
-          if (!seat) {
-            throw new ForbiddenError("Recruiter has no assigned position.");
+          const departmentIdFromTeam = await resolveStaffDepartmentId(user);
+          if (!departmentIdFromTeam) {
+            throw new ForbiddenError("Recruiter has no hiring team.");
           }
-          departmentId = Number(seat.get("department_id"));
+          departmentId = departmentIdFromTeam;
         }
         const rows = await positions.hiring({
           search: isRecruiter(user.role_id) ? undefined : query.search,
@@ -47,10 +47,7 @@ export function positionRoutes(dependencies: AppDependencies): AppRouteMap {
         const user = await authorize(request, "positions", "create");
         const payload = await new CreatePositionRequest().validate(request);
         const departmentId = isRecruiter(user.role_id)
-          ? Number(
-              (await User.newFromRecord(user).position().first())?.get("department_id") ??
-                payload.department_id,
-            )
+          ? Number((await resolveStaffDepartmentId(user)) ?? payload.department_id)
           : payload.department_id;
         const created = await positions.create({
           user_id: null,

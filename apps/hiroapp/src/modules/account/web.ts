@@ -15,6 +15,9 @@ import { wrapWebAuthenticated, wrapWebGuest, wrapWebPasswordConfirm } from "../.
 import { isStaff } from "../../lib/roles.ts";
 import { iso } from "../../lib/serialize.ts";
 import { toSessionUser } from "../../lib/sessionUser.ts";
+import { membershipsFor } from "../../lib/staffTeam.ts";
+import { departments } from "../departments/repository.ts";
+import { teamService } from "../teams/service.ts";
 import { clearMfaChallengeCookie, readMfaChallenge } from "./mfaChallenge.ts";
 import { otpauthQrDataUri } from "./otpauthQr.ts";
 import { accountService } from "./service.ts";
@@ -35,11 +38,28 @@ async function accountPage(request: Request, extras: Record<string, unknown> = {
       }))
     : [];
   const tokens = staff ? await tokenService.listTokens(user.id) : [];
+  const memberships = staff
+    ? await Promise.all(
+        (await membershipsFor(user.id)).map(async (row) => {
+          const department = await departments.findById(row.department_id);
+          return {
+            id: Number(row.id),
+            role: row.role,
+            department_id: Number(row.department_id),
+            name: department?.name ?? `Department ${row.department_id}`,
+            current: Number(row.department_id) === Number(user.current_department_id),
+          };
+        }),
+      )
+    : [];
+  const invitations = staff ? await teamService.receivedInvitations(user) : [];
   return renderPage(request, "account/show", {
     user,
     staff,
     sessions,
     tokens,
+    memberships,
+    invitations,
     mfaEnabled: Boolean(user.mfa_enabled),
     passwordConfirmed: hasFreshPasswordConfirmation(request, user.id),
     ...extras,
@@ -195,6 +215,38 @@ export function accountWebRoutes(dependencies: AppDependencies): AppRouteMap {
         return flashResponse(redirectResponse("/account#tokens"), {
           level: "success",
           message: "Token revoked.",
+        });
+      }),
+    },
+    "/account/current-department": {
+      POST: wrapWebAuthenticated(dependencies, async (request) => {
+        const user = await requireCurrentUser(request);
+        denyUnless(isStaff(user.role_id), "Staff only.");
+        const { fields } = await parseFormBody(request);
+        await teamService.switchCurrentDepartment(user, Number(fields.department_id));
+        return flashResponse(redirectResponse("/account#team"), {
+          level: "success",
+          message: "Current hiring team updated.",
+        });
+      }),
+    },
+    "/account/invitations/:id/accept": {
+      POST: wrapWebAuthenticated(dependencies, async (request) => {
+        const user = await requireCurrentUser(request);
+        await teamService.acceptInvitation(user, Number(routeParams(request).id));
+        return flashResponse(redirectResponse("/account#team"), {
+          level: "success",
+          message: "Invitation accepted.",
+        });
+      }),
+    },
+    "/account/invitations/:id/decline": {
+      POST: wrapWebAuthenticated(dependencies, async (request) => {
+        const user = await requireCurrentUser(request);
+        await teamService.declineInvitation(user, Number(routeParams(request).id));
+        return flashResponse(redirectResponse("/account#team"), {
+          level: "success",
+          message: "Invitation declined.",
         });
       }),
     },
