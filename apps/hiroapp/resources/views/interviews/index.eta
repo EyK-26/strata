@@ -34,6 +34,11 @@
             <label>Message <textarea name="text">Your interview has been rescheduled.</textarea></label>
             <button>Reschedule</button>
           </form>
+          <form action="/interviews/<%= interview.id %>/no-show" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/interviews" />
+            <button type="submit">Mark no-show</button>
+          </form>
         <% } %>
       <% } %>
     </div>

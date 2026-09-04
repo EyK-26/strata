@@ -33,7 +33,8 @@ function asStatus(value: unknown): InterviewStatus {
     value === "scheduled" ||
     value === "confirmed" ||
     value === "completed" ||
-    value === "cancelled"
+    value === "cancelled" ||
+    value === "no_show"
   ) {
     return value;
   }
@@ -202,6 +203,25 @@ export class InterviewService {
     });
     await recordHiringEvent(
       "interview.cancelled",
+      { interview_id: updated.id, application_id: updated.application_id },
+      { type: "interview", id: updated.id },
+    );
+    return updated;
+  }
+
+  async noShow(actor: UserRecord, interview: Interview) {
+    if (!isStaff(actor.role_id)) {
+      throw new ForbiddenError("Only staff can mark an interview as a no-show.");
+    }
+    const status = asStatus(interview.get("status"));
+    if (status !== "scheduled" && status !== "confirmed") {
+      throw new ForbiddenError("Interview cannot be marked as a no-show.");
+    }
+    const updated = await interviews.updateByIdOrThrow(Number(interview.id), {
+      status: "no_show",
+    });
+    await recordHiringEvent(
+      "interview.no_show",
       { interview_id: updated.id, application_id: updated.application_id },
       { type: "interview", id: updated.id },
     );
