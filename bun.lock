@@ -5,6 +5,7 @@
     "": {
       "name": "bun",
       "dependencies": {
+        "@faker-js/faker": "^10.6.0",
         "@getstrata/bootstrap": "workspace:*",
         "@getstrata/cli": "workspace:*",
         "@getstrata/core": "workspace:*",
@@ -18,11 +19,20 @@
         "typescript": "^5.9.2",
       },
     },
+    "apps/hiroapp": {
+      "name": "hiroapp",
+      "dependencies": {
+        "@faker-js/faker": "^10.5.0",
+        "@getstrata/bootstrap": "workspace:*",
+        "@getstrata/cli": "workspace:*",
+        "@getstrata/core": "workspace:*",
+      },
+    },
     "packages/strata-bootstrap": {
       "name": "@getstrata/bootstrap",
-      "version": "0.2.65",
+      "version": "0.2.66",
       "peerDependencies": {
-        "@getstrata/core": "^0.5.59",
+        "@getstrata/core": "^0.5.75",
         "typescript": "^5.9.0",
       },
     },
@@ -35,7 +45,7 @@
     },
     "packages/strata-core": {
       "name": "@getstrata/core",
-      "version": "0.5.87",
+      "version": "0.5.100",
       "dependencies": {
         "eta": "^4.6.0",
       },
@@ -70,6 +80,8 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.7", "", { "os": "win32", "cpu": "x64" }, "sha512-V+0wu/nrj2S+MhP4EQ0uHNolP0IALEsz45pg0WoKkHfDeh0+ItHwP/p7bX5RPoMOl9NkpHYWdYPhIcy2mACHvQ=="],
 
+    "@faker-js/faker": ["@faker-js/faker@10.6.0", "", {}, "sha512-3RQHgEtvL1Frl/d1cSreo7qhJ3Gk1OdNUai/CtZ8G+wYeRQnJih3s9xJ9/kgYekPQRdwgh0HXRPqMlzWGwivIQ=="],
+
     "@getstrata/bootstrap": ["@getstrata/bootstrap@workspace:packages/strata-bootstrap"],
 
     "@getstrata/cli": ["@getstrata/cli@workspace:packages/strata-cli"],
@@ -85,6 +97,8 @@
     "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "eta": ["eta@4.6.0", "", {}, "sha512-lW6is4T1NFOYnmqGZIfvixqj7A7sSvScF+DN8EK6K58xI5MZ5UvYe0GjopxOXQtZvUn4eDdVuZ8XSoYWTMEKwA=="],
+
+    "hiroapp": ["hiroapp@workspace:apps/hiroapp"],
 
     "lefthook": ["lefthook@2.1.10", "", { "optionalDependencies": { "lefthook-darwin-arm64": "2.1.10", "lefthook-darwin-x64": "2.1.10", "lefthook-freebsd-arm64": "2.1.10", "lefthook-freebsd-x64": "2.1.10", "lefthook-linux-arm64": "2.1.10", "lefthook-linux-x64": "2.1.10", "lefthook-openbsd-arm64": "2.1.10", "lefthook-openbsd-x64": "2.1.10", "lefthook-windows-arm64": "2.1.10", "lefthook-windows-x64": "2.1.10" }, "bin": { "lefthook": "bin/index.js" } }, "sha512-K7mM4WoqMwqfXYK11EHy+lSH1uW8XHni3Yn/bSqyerPkUPygGdf3xn18JoV5HyA06xuQL3ofGAOjG01QX9oJ4w=="],
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { belongsTo, hasMany } from "@getstrata/core/database/relationships";
+import { belongsTo, hasMany, hasManyThrough } from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
 
 type Squad = { id: number; label: string };
@@ -179,5 +179,71 @@ describe("RepositoryQuery", () => {
       )
       .get();
     expect(connection.calls.at(-1)?.query).toContain("NOT EXISTS");
+  });
+
+  test("withHasManyThrough attaches far rows through an intermediate table", async () => {
+    type Department = { id: number; name: string };
+    type Application = { id: number; position_id: number; title: string };
+    const departmentTable = defineTable<Department, "id">({
+      name: "departments",
+      primaryKey: "id",
+      columns: ["id", "name"],
+    });
+    const applicationTable = defineTable<Application, "id">({
+      name: "applications",
+      primaryKey: "id",
+      columns: ["id", "position_id", "title"],
+    });
+    const relation = hasManyThrough<
+      Department,
+      Application,
+      "id",
+      "department_id",
+      "id",
+      "position_id"
+    >({
+      name: "applications",
+      throughTable: "positions",
+      localKey: "id",
+      firstKey: "department_id",
+      secondLocalKey: "id",
+      secondKey: "position_id",
+    });
+    const connection = new FakeConnection();
+    class DepartmentRepository extends BaseRepository<Department, "id"> {
+      constructor() {
+        super(departmentTable, connection);
+      }
+    }
+    class ApplicationRepository extends BaseRepository<Application, "id"> {
+      constructor() {
+        super(applicationTable, connection);
+      }
+    }
+    const departments = new DepartmentRepository();
+    const applications = new ApplicationRepository();
+
+    connection.queue([{ id: 1, name: "Engineering" }]);
+    connection.queue([{ id: 10, position_id: 4, title: "A", __through_parent_id: 1 }]);
+
+    const rows = await departments
+      .query()
+      .withHasManyThrough("applications", relation, applications)
+      .get();
+
+    expect(rows[0]?.applications).toEqual([{ id: 10, position_id: 4, title: "A" }]);
+  });
+
+  test("withTrashed and onlyTrashed pass soft-delete options to findAll", async () => {
+    const connection = new FakeConnection();
+    const squads = new SquadRepository(connection);
+
+    connection.queue([]);
+    await squads.query().withTrashed().get();
+    expect(connection.calls.at(-1)?.query).not.toContain("deleted_at");
+
+    connection.queue([]);
+    await squads.query().onlyTrashed().get();
+    expect(connection.calls.at(-1)?.query).not.toContain("deleted_at");
   });
 });

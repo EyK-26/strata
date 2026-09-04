@@ -1,0 +1,76 @@
+<div class="ApplicationDetail">
+  <div class="ApplicationDetailHeader">
+    <h2><%= it.application.user?.first_name %> <%= it.application.user?.last_name %></h2>
+  </div>
+  <div class="body">
+    <div class="ApplicationDetailDetails">
+      <p><%= it.application.position?.name %></p>
+      <p><%= it.application.position?.department?.name %></p>
+      <p><%= it.application.attachment_text %></p>
+      <% if (it.application.attachment_file) { %>
+        <p><a href="<%= it.application.attachment_file %>"><%= it.application.attachment_file %></a></p>
+      <% } %>
+    </div>
+    <div class="ApplicationDetailStatus">
+      <div class="topPart">
+        <% if (it.application.status_id < 5) { %>
+          <form action="/applications/<%= it.application.id %>/end" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <button type="submit"><%= it.roleId === 2 ? "Retrieve Your Application" : "Reject" %></button>
+          </form>
+        <% } %>
+      </div>
+      <div class="<%= it.roleId !== 2 ? 'progress hasButton' : 'progress' %>">
+        <% it.all_statuses.forEach((status) => { %>
+          <% let className = "status" %>
+          <% if (status.id === 6) { className += " ended" } %>
+          <% if (status.id < it.application.status_id) { className += " status-done" } else if (status.id === it.application.status_id) { className += " status-active" } else { className += " status-future" } %>
+          <div class="<%= className %>">
+            <div class="circle"></div>
+            <span><%= status.name %></span>
+            <% if (it.roleId !== 2 && status.id === it.application.status_id && it.application.status_id < 4) { %>
+              <form action="/applications/<%= it.application.id %>/move" method="post">
+                <%~ include("../partials/csrf.eta") %>
+                <button type="submit">Move To Next Stage</button>
+              </form>
+            <% } %>
+            <% if (it.roleId !== 2 && status.id === it.application.status_id && it.application.status_id === 4) { %>
+              <form action="/applications/<%= it.application.id %>/move" method="post">
+                <%~ include("../partials/csrf.eta") %>
+                <button type="submit">Hire</button>
+              </form>
+            <% } %>
+          </div>
+        <% }) %>
+      </div>
+      <% if (it.roleId === 2 && it.application.status_id < 5) { %>
+        <form action="/applications/<%= it.application.id %>/withdraw" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <button type="submit">Withdraw application</button>
+        </form>
+      <% } %>
+      <% if (it.roleId !== 2 && it.application.status_id === 2) { %>
+        <form class="InterviewForm" action="/applications/notify" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="applicant_id" value="<%= it.application.user_id %>" />
+          <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+          <label>Message <textarea name="text"></textarea></label>
+          <label>When <input type="datetime-local" name="datetime" /></label>
+          <label>Where <input type="text" name="place" /></label>
+          <button>Send interview invite</button>
+        </form>
+      <% } %>
+    </div>
+  </div>
+  <div class="comments">
+    <h3>Comments</h3>
+    <% (it.comments ?? []).forEach((comment) => { %>
+      <p><%= comment.body %></p>
+    <% }) %>
+    <form action="/applications/<%= it.application.id %>/comments" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <label>Add comment <textarea name="body"></textarea></label>
+      <button type="submit">Save comment</button>
+    </form>
+  </div>
+</div>

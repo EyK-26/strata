@@ -7,7 +7,13 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!!**/docs/openapi.json", "!!**/sdk/typescript/client.ts"]
+    "includes": [
+      "**",
+      "!!**/docs/openapi.json",
+      "!!**/sdk/typescript/client.ts",
+      "!!**/apps/hiroapp/frontend",
+      "!!**/apps/hiroapp/public"
+    ]
   },
   "formatter": {
     "enabled": true,

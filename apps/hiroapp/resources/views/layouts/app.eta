@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HiroApp</title>
+    <link rel="stylesheet" href="/assets/app.css" />
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  </head>
+  <body>
+    <header class="Header">
+      <span class="page_title">HiroApp</span>
+      <%~ include("../partials/nav.eta") %>
+      <% if (it.currentUser) { %>
+        <div>
+          <span class="profile"><%= it.currentUser.first_name %> <%= it.currentUser.last_name %></span>
+        </div>
+      <% } %>
+    </header>
+    <div class="main">
+      <%~ include("../partials/profile.eta") %>
+      <%~ it.body %>
+    </div>
+    <div class="footer">&copy; HiroApp <%= new Date().getFullYear() %></div>
+  </body>
+</html>

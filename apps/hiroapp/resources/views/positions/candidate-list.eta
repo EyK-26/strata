@@ -1,0 +1,8 @@
+<div class="Positions">
+  <h2>Open Positions</h2>
+  <% (it.positions ?? []).forEach((position) => { %>
+    <a class="list-item" href="/positions/<%= position.id %>">
+      <span><%= position.name %></span>
+    </a>
+  <% }) %>
+</div>

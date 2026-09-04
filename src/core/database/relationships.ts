@@ -52,6 +52,24 @@ interface BelongsToManyRelation<
   relatedPivotKey: RelatedPivotKey;
 }
 
+interface HasManyThroughRelation<
+  TParent,
+  TFar,
+  LocalKey extends keyof TParent & string = keyof TParent & string,
+  FirstKey extends string = string,
+  SecondLocalKey extends string = string,
+  SecondKey extends keyof TFar & string = keyof TFar & string,
+> {
+  type: "hasManyThrough";
+  name: string;
+  throughTable: string;
+  localKey: LocalKey;
+  firstKey: FirstKey;
+  secondLocalKey: SecondLocalKey;
+  secondKey: SecondKey;
+  throughParentKey?: string;
+}
+
 function hasMany<
   TParent,
   TChild,
@@ -96,6 +114,29 @@ function belongsTo<
 }): BelongsToRelation<TChild, TParent, ForeignKey, OwnerKey> {
   return {
     type: "belongsTo",
+    ...definition,
+  };
+}
+
+function hasManyThrough<
+  TParent,
+  TFar,
+  LocalKey extends keyof TParent & string = keyof TParent & string,
+  FirstKey extends string = string,
+  SecondLocalKey extends string = string,
+  SecondKey extends keyof TFar & string = keyof TFar & string,
+>(definition: {
+  name: string;
+  throughTable: string;
+  localKey: LocalKey;
+  firstKey: FirstKey;
+  secondLocalKey: SecondLocalKey;
+  secondKey: SecondKey;
+  throughParentKey?: string;
+}): HasManyThroughRelation<TParent, TFar, LocalKey, FirstKey, SecondLocalKey, SecondKey> {
+  return {
+    type: "hasManyThrough",
+    throughParentKey: "__through_parent_id",
     ...definition,
   };
 }
@@ -499,6 +540,41 @@ function indexMorphOneRelation<
   return result;
 }
 
+function indexHasManyThroughRelation<
+  TParent,
+  TFar,
+  LocalKey extends keyof TParent & string,
+  FirstKey extends string,
+  SecondLocalKey extends string,
+  SecondKey extends keyof TFar & string,
+>(
+  parents: readonly TParent[],
+  children: readonly (TFar & Record<string, unknown>)[],
+  relation: HasManyThroughRelation<TParent, TFar, LocalKey, FirstKey, SecondLocalKey, SecondKey>,
+): Map<TParent[LocalKey], TFar[]> {
+  const throughKey = relation.throughParentKey ?? "__through_parent_id";
+  const grouped = new Map<string, TFar[]>();
+
+  for (const child of children) {
+    const key = relationMatchKey(child[throughKey]);
+    if (key === "") {
+      continue;
+    }
+    const existing = grouped.get(key) ?? [];
+    const { [throughKey]: _through, ...far } = child;
+    existing.push(far as TFar);
+    grouped.set(key, existing);
+  }
+
+  const result = new Map<TParent[LocalKey], TFar[]>();
+  for (const parent of parents) {
+    const key = relationMatchKey(parent[relation.localKey]);
+    result.set(parent[relation.localKey], grouped.get(key) ?? []);
+  }
+
+  return result;
+}
+
 function indexMorphToRelation<
   TChild,
   TParent extends object,
@@ -534,6 +610,7 @@ export type {
   BelongsToManyRelation,
   BelongsToRelation,
   HasManyRelation,
+  HasManyThroughRelation,
   HasOneRelation,
   MorphManyRelation,
   MorphOneRelation,
@@ -544,10 +621,12 @@ export {
   belongsToMany,
   getByRelationKey,
   hasMany,
+  hasManyThrough,
   hasOne,
   indexBelongsToManyRelation,
   indexBelongsToRelation,
   indexHasManyRelation,
+  indexHasManyThroughRelation,
   indexHasOneRelation,
   indexMorphManyRelation,
   indexMorphOneRelation,

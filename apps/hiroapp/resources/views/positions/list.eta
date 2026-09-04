@@ -1,0 +1,12 @@
+<div class="OpenPositions">
+  <h2>Open Positions</h2>
+  <% (it.positions ?? []).forEach((position) => { %>
+    <div>
+      <a class="list-item" href="/positions/<%= position.id %>">
+        <span><%= position.name %></span>
+        <span>(<%= (position.applications ?? []).length %>)</span>
+      </a>
+      <span>Due:<%= position.start_date ? position.start_date : "Not determined" %></span>
+    </div>
+  <% }) %>
+</div>

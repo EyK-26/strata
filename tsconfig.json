@@ -28,5 +28,5 @@
     }
   },
   "include": ["src", "tests", "scripts"],
-  "exclude": ["templates", "frontend"]
+  "exclude": ["templates", "frontend", "apps/hiroapp"]
 }

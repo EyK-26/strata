@@ -1,0 +1,30 @@
+<div class="CreatePosition">
+  <h2>Create new position</h2>
+  <a href="/"><button type="button">back</button></a>
+  <form action="/position/create" method="post">
+    <%~ include("../partials/csrf.eta") %>
+    <input type="hidden" name="department_id" value="<%= it.department_id %>" />
+    <label>
+      Name:
+      <select name="name" required>
+        <option value="" disabled selected>Select the position</option>
+        <% it.names.forEach((position) => { %>
+          <option value="<%= position.name %>"><%= position.name %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>Description: <textarea name="description"></textarea></label>
+    <label>Start date: <input type="date" name="start_date" /></label>
+    <label>End date: <input type="date" name="end_date" /></label>
+    <label>
+      Pay grade:
+      <select name="pay_grade" required>
+        <option value="" disabled selected>Select the pay grade</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </label>
+    <button>Create</button>
+  </form>
+</div>

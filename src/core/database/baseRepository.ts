@@ -16,6 +16,7 @@ import {
   buildSoftDeleteByIdQuery,
   buildUpdateQuery,
   qualifyColumn,
+  quoteIdentifier,
   resolveSoftDeleteColumn,
 } from "./query.ts";
 import {
@@ -23,9 +24,11 @@ import {
   type BelongsToRelation,
   getByRelationKey,
   type HasManyRelation,
+  type HasManyThroughRelation,
   indexBelongsToManyRelation,
   indexBelongsToRelation,
   indexHasManyRelation,
+  indexHasManyThroughRelation,
   indexMorphManyRelation,
   indexMorphToRelation,
   type MorphManyRelation,
@@ -475,6 +478,109 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     return indexHasManyRelation(parents, children, relation);
   }
 
+  async findHasManyThrough<
+    TParent extends object,
+    LocalKey extends keyof TParent & string,
+    FirstKey extends string,
+    SecondLocalKey extends string,
+    SecondKey extends keyof TEntity & string,
+  >(
+    parentId: unknown,
+    relation: HasManyThroughRelation<
+      TParent,
+      TEntity,
+      LocalKey,
+      FirstKey,
+      SecondLocalKey,
+      SecondKey
+    >,
+    options: QueryOptions<TEntity> = {},
+  ): Promise<TEntity[]> {
+    const grouped = await this.loadHasManyThroughForParents(
+      [{ [relation.localKey]: parentId } as TParent],
+      relation,
+      options,
+    );
+    return getByRelationKey(grouped, parentId) ?? [];
+  }
+
+  async loadHasManyThroughForParents<
+    TParent extends object,
+    LocalKey extends keyof TParent & string,
+    FirstKey extends string,
+    SecondLocalKey extends string,
+    SecondKey extends keyof TEntity & string,
+  >(
+    parents: readonly TParent[],
+    relation: HasManyThroughRelation<
+      TParent,
+      TEntity,
+      LocalKey,
+      FirstKey,
+      SecondLocalKey,
+      SecondKey
+    >,
+    options: QueryOptions<TEntity> = {},
+  ): Promise<Map<TParent[LocalKey], TEntity[]>> {
+    if (parents.length === 0) {
+      return indexHasManyThroughRelation(parents, [], relation);
+    }
+
+    const parentIds = [...new Set(parents.map((parent) => parent[relation.localKey]))];
+    const throughParentKey = relation.throughParentKey ?? "__through_parent_id";
+    const farTable = this.table.name;
+    const columns = this.table.columns
+      .map((column) => `${qualifyColumn(farTable, column)}`)
+      .join(", ");
+    const placeholders = parentIds.map((_, index) => `$${index + 1}`).join(", ");
+    const { text: extraWhere, params: extraParams } = this.buildThroughWhere(
+      options,
+      parentIds.length,
+    );
+    const softDelete = this.throughSoftDeleteClause(options);
+    const sql = `SELECT ${columns}, ${qualifyColumn(relation.throughTable, relation.firstKey)} AS ${throughParentKey} FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(relation.throughTable)} ON ${qualifyColumn(relation.throughTable, relation.secondLocalKey)} = ${qualifyColumn(farTable, relation.secondKey)} WHERE ${qualifyColumn(relation.throughTable, relation.firstKey)} IN (${placeholders})${softDelete}${extraWhere}`;
+
+    const children = await this.connection.unsafe<TEntity & Record<string, unknown>>(sql, [
+      ...parentIds,
+      ...extraParams,
+    ]);
+
+    return indexHasManyThroughRelation(parents, children, relation);
+  }
+
+  private throughSoftDeleteClause(options: QueryOptions<TEntity>): string {
+    const column = resolveSoftDeleteColumn(this.table);
+    if (!column) {
+      return "";
+    }
+    const qualified = qualifyColumn(this.table.name, column);
+    if (options.onlyTrashed) {
+      return ` AND ${qualified} IS NOT NULL`;
+    }
+    if (options.withTrashed) {
+      return "";
+    }
+    return ` AND ${qualified} IS NULL`;
+  }
+
+  private buildThroughWhere(
+    options: QueryOptions<TEntity>,
+    paramOffset = 1,
+  ): { text: string; params: unknown[] } {
+    const where = options.where ?? {};
+    const entries = Object.entries(where);
+    if (entries.length === 0) {
+      return { text: "", params: [] };
+    }
+
+    const params: unknown[] = [];
+    const clauses = entries.map(([column, value], index) => {
+      params.push(value);
+      return `${qualifyColumn(this.table.name, column)} = $${paramOffset + index + 1}`;
+    });
+    return { text: ` AND ${clauses.join(" AND ")}`, params };
+  }
+
   async loadBelongsToForParents<
     TChild extends object,
     TParent extends object,
@@ -639,9 +745,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
 
     const parentIds = [...new Set(parents.map((parent) => parent[relation.parentKey]))];
+    const placeholders = parentIds.map((_, index) => `$${index + 1}`).join(", ");
     const pivotRows = await this.connection.unsafe<Pivot>(
-      `SELECT * FROM ${relation.pivotTable} WHERE ${String(relation.foreignPivotKey)} = ANY($1)`,
-      [parentIds],
+      `SELECT * FROM ${relation.pivotTable} WHERE ${String(relation.foreignPivotKey)} IN (${placeholders})`,
+      parentIds,
     );
 
     if (pivotRows.length === 0) {

@@ -7,6 +7,7 @@ import {
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
   HasManyRelationQuery,
+  HasManyThroughRelationQuery,
   HasOneRelationQuery,
   MorphManyRelationQuery,
   MorphOneRelationQuery,
@@ -23,6 +24,7 @@ import {
   belongsToMany,
   getByRelationKey,
   hasMany,
+  hasManyThrough,
   hasOne,
   indexBelongsToManyRelation,
   morphMany,
@@ -573,6 +575,23 @@ class ModelQuery {
     return this;
   }
 
+  withHasManyThrough(
+    ...args: Parameters<RepositoryQuery<Record<string, unknown>, "id">["withHasManyThrough"]>
+  ): this {
+    this.query.withHasManyThrough(...args);
+    return this;
+  }
+
+  withTrashed(): this {
+    this.query.withTrashed();
+    return this;
+  }
+
+  onlyTrashed(): this {
+    this.query.onlyTrashed();
+    return this;
+  }
+
   async get(): Promise<Array<Model<Record<string, unknown>, "id">>> {
     const statics = modelStatics(this.modelClass);
     const rows = await this.query.get();
@@ -877,6 +896,49 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static with(this: object, ...relations: string[]): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).with(...relations);
+  }
+
+  static withTrashed(this: object): ModelQuery {
+    return (Model.query as (this: object) => ModelQuery).call(this).withTrashed();
+  }
+
+  static onlyTrashed(this: object): ModelQuery {
+    return (Model.query as (this: object) => ModelQuery).call(this).onlyTrashed();
+  }
+
+  static async chunk(
+    this: object,
+    count: number,
+    callback: (models: Array<Model<Record<string, unknown>, "id">>) => Promise<boolean | void>,
+  ): Promise<void> {
+    const statics = modelStatics(this);
+    ensureBooted(this);
+    await resolveModelRepository(this).chunk(count, async (rows) => {
+      return await callback(
+        rows.map((row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">),
+      );
+    });
+  }
+
+  static async cursorPaginate(
+    this: object,
+    options: { perPage: number; cursor?: unknown },
+  ): Promise<{
+    data: Array<Model<Record<string, unknown>, "id">>;
+    meta: { per_page: number; next_cursor: unknown; prev_cursor: unknown; has_more: boolean };
+  }> {
+    const statics = modelStatics(this);
+    ensureBooted(this);
+    const page = await resolveModelRepository(this).cursorPaginate({
+      perPage: options.perPage,
+      cursor: options.cursor as never,
+    });
+    return {
+      data: page.data.map(
+        (row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">,
+      ),
+      meta: page.meta,
+    };
   }
 
   static whereHas(
@@ -1290,6 +1352,37 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  hasManyThrough<
+    TRelated extends object,
+    TThrough extends object,
+    RelatedKey extends keyof TRelated & string,
+    ThroughKey extends keyof TThrough & string,
+  >(
+    related: RelatedRef<TRelated, RelatedKey>,
+    through: RelatedRef<TThrough, ThroughKey>,
+    firstKey?: string,
+    secondKey?: keyof TRelated & string,
+    localKey?: PrimaryKey,
+    secondLocalKey?: ThroughKey,
+  ): HasManyThroughRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+    const table = this.repository.getTable();
+    const relatedClass = resolveRelated(related);
+    const throughClass = resolveRelated(through);
+    const throughTable = throughClass.repository().getTable();
+    return new HasManyThroughRelationQuery(
+      this,
+      relatedClass,
+      hasManyThrough({
+        name: relatedClass.repository().getTable().name,
+        throughTable: throughTable.name,
+        localKey: localKey ?? table.primaryKey,
+        firstKey: firstKey ?? (foreignKeyFromTable(table.name) as string),
+        secondLocalKey: (secondLocalKey ?? throughTable.primaryKey) as ThroughKey,
+        secondKey: secondKey ?? (foreignKeyFromTable(throughTable.name) as keyof TRelated & string),
+      }),
+    );
+  }
+
   belongsToMany<
     TRelated extends object,
     RelatedKey extends keyof TRelated & string,
@@ -1449,6 +1542,7 @@ export {
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
   HasManyRelationQuery,
+  HasManyThroughRelationQuery,
   HasOneRelationQuery,
   MorphManyRelationQuery,
   MorphOneRelationQuery,

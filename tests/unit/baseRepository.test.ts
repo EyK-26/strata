@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { hasMany } from "@getstrata/core/database/relationships";
+import { hasMany, hasManyThrough } from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
 import { NotFoundError } from "@getstrata/core/errors/http";
 
@@ -185,5 +185,175 @@ describe("base repository", () => {
         'SELECT "crew_member"."id", "crew_member"."name", "crew_member"."squad_id", "crew_member"."is_active" FROM "crew_member" WHERE "crew_member"."squad_id" IN ($1, $2) ORDER BY "crew_member"."id" ASC',
       params: [1, 2],
     });
+  });
+
+  test("loads hasManyThrough rows through an intermediate table", async () => {
+    type Department = { id: number };
+    type Application = { id: number; position_id: number; title: string };
+    const applicationTable = defineTable<Application, "id">({
+      name: "applications",
+      primaryKey: "id",
+      columns: ["id", "position_id", "title"],
+    });
+    const relation = hasManyThrough<
+      Department,
+      Application,
+      "id",
+      "department_id",
+      "id",
+      "position_id"
+    >({
+      name: "applications",
+      throughTable: "positions",
+      localKey: "id",
+      firstKey: "department_id",
+      secondLocalKey: "id",
+      secondKey: "position_id",
+    });
+    const connection = new FakeConnection();
+    class ApplicationRepository extends BaseRepository<Application, "id"> {
+      constructor() {
+        super(applicationTable, connection);
+      }
+    }
+    const repository = new ApplicationRepository();
+    connection.queue([
+      { id: 10, position_id: 4, title: "A", __through_parent_id: 1 },
+      { id: 11, position_id: 5, title: "B", __through_parent_id: 2 },
+    ]);
+
+    const grouped = await repository.loadHasManyThroughForParents(
+      [{ id: 1 }, { id: 2 }, { id: 3 }],
+      relation,
+    );
+
+    expect(grouped.get(1)).toEqual([{ id: 10, position_id: 4, title: "A" }]);
+    expect(grouped.get(2)).toEqual([{ id: 11, position_id: 5, title: "B" }]);
+    expect(grouped.get(3)).toEqual([]);
+    expect(connection.calls[0]?.query).toContain('INNER JOIN "positions"');
+    expect(connection.calls[0]?.query).toContain('"positions"."department_id" IN ($1, $2, $3)');
+    expect(connection.calls[0]?.params).toEqual([1, 2, 3]);
+  });
+
+  test("findHasManyThrough returns the matching far rows for one parent", async () => {
+    type Department = { id: number };
+    type Application = { id: number; position_id: number; title: string };
+    const applicationTable = defineTable<Application, "id">({
+      name: "applications",
+      primaryKey: "id",
+      columns: ["id", "position_id", "title"],
+    });
+    const relation = hasManyThrough<
+      Department,
+      Application,
+      "id",
+      "department_id",
+      "id",
+      "position_id"
+    >({
+      name: "applications",
+      throughTable: "positions",
+      localKey: "id",
+      firstKey: "department_id",
+      secondLocalKey: "id",
+      secondKey: "position_id",
+    });
+    const connection = new FakeConnection();
+    class ApplicationRepository extends BaseRepository<Application, "id"> {
+      constructor() {
+        super(applicationTable, connection);
+      }
+    }
+    const repository = new ApplicationRepository();
+    connection.queue([{ id: 10, position_id: 4, title: "A", __through_parent_id: 1 }]);
+
+    const rows = await repository.findHasManyThrough(1, relation, { where: { title: "A" } });
+
+    expect(rows).toEqual([{ id: 10, position_id: 4, title: "A" }]);
+    expect(connection.calls[0]?.query).toContain('"applications"."title" = $2');
+    expect(connection.calls[0]?.query).toContain('"positions"."department_id" IN ($1)');
+    expect(connection.calls[0]?.params).toEqual([1, "A"]);
+  });
+
+  test("loadHasManyThroughForParents returns an empty map without querying", async () => {
+    type Department = { id: number };
+    type Application = { id: number; position_id: number; title: string };
+    const applicationTable = defineTable<Application, "id">({
+      name: "applications",
+      primaryKey: "id",
+      columns: ["id", "position_id", "title"],
+    });
+    const relation = hasManyThrough<
+      Department,
+      Application,
+      "id",
+      "department_id",
+      "id",
+      "position_id"
+    >({
+      name: "applications",
+      throughTable: "positions",
+      localKey: "id",
+      firstKey: "department_id",
+      secondLocalKey: "id",
+      secondKey: "position_id",
+    });
+    const connection = new FakeConnection();
+    class ApplicationRepository extends BaseRepository<Application, "id"> {
+      constructor() {
+        super(applicationTable, connection);
+      }
+    }
+
+    const grouped = await new ApplicationRepository().loadHasManyThroughForParents([], relation);
+
+    expect(grouped.size).toBe(0);
+    expect(connection.calls).toHaveLength(0);
+  });
+
+  test("hasManyThrough respects soft-delete scopes", async () => {
+    type Department = { id: number };
+    type Application = { id: number; position_id: number; title: string; deleted_at: Date | null };
+    const applicationTable = defineTable<Application, "id">({
+      name: "applications",
+      primaryKey: "id",
+      columns: ["id", "position_id", "title", "deleted_at"],
+      softDeletes: true,
+    });
+    const relation = hasManyThrough<
+      Department,
+      Application,
+      "id",
+      "department_id",
+      "id",
+      "position_id"
+    >({
+      name: "applications",
+      throughTable: "positions",
+      localKey: "id",
+      firstKey: "department_id",
+      secondLocalKey: "id",
+      secondKey: "position_id",
+    });
+    const connection = new FakeConnection();
+    class ApplicationRepository extends BaseRepository<Application, "id"> {
+      constructor() {
+        super(applicationTable, connection);
+      }
+    }
+    const repository = new ApplicationRepository();
+
+    connection.queue([]);
+    await repository.loadHasManyThroughForParents([{ id: 1 }], relation);
+    expect(connection.calls.at(-1)?.query).toContain('"applications"."deleted_at" IS NULL');
+
+    connection.queue([]);
+    await repository.loadHasManyThroughForParents([{ id: 1 }], relation, { withTrashed: true });
+    expect(connection.calls.at(-1)?.query).not.toContain("IS NULL");
+    expect(connection.calls.at(-1)?.query).not.toContain("IS NOT NULL");
+
+    connection.queue([]);
+    await repository.loadHasManyThroughForParents([{ id: 1 }], relation, { onlyTrashed: true });
+    expect(connection.calls.at(-1)?.query).toContain('"applications"."deleted_at" IS NOT NULL');
   });
 });

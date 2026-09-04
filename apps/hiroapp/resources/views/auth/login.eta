@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HiroApp</title>
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="Login">
+        <h1>Welcome To HiroApp</h1>
+        <small>Hire someone, make a change!</small>
+        <form action="/login" method="post">
+          <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+          <label>
+            Email
+            <input type="email" name="email" value="<%= it.email ?? '' %>" />
+          </label>
+          <label>
+            Password
+            <input type="password" name="password" />
+          </label>
+          <button>Login</button>
+        </form>
+      </div>
+      <div class="errors">
+        <% if (it.errors?.email) { %><span><%= it.errors.email %></span><% } %>
+        <% if (it.errors?.password) { %><span><%= it.errors.password %></span><% } %>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,4 @@
+<div class="YourHirings">
+  <h2>Your hirings</h2>
+  <%~ include("../positions/list.eta") %>
+</div>

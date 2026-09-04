@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   belongsToMany,
   getByRelationKey,
+  hasManyThrough,
   hasOne,
   indexBelongsToManyRelation,
+  indexHasManyThroughRelation,
   indexHasOneRelation,
   relationMatchKey,
 } from "@getstrata/core/database/relationships";
@@ -132,5 +134,73 @@ describe("belongsToMany indexing", () => {
     );
 
     expect(grouped.get(1)).toEqual([{ id: 10, name: "bun" }]);
+  });
+});
+
+describe("hasManyThrough indexing", () => {
+  type Department = { id: number };
+  type Application = { id: number; position_id: number; title: string };
+
+  const relation = hasManyThrough<
+    Department,
+    Application,
+    "id",
+    "department_id",
+    "id",
+    "position_id"
+  >({
+    name: "applications",
+    throughTable: "positions",
+    localKey: "id",
+    firstKey: "department_id",
+    secondLocalKey: "id",
+    secondKey: "position_id",
+  });
+
+  test("groups far rows by the through parent key", () => {
+    const grouped = indexHasManyThroughRelation(
+      [{ id: 1 }, { id: 2 }, { id: 3 }],
+      [
+        { id: 10, position_id: 4, title: "A", __through_parent_id: 1 },
+        { id: 11, position_id: 5, title: "B", __through_parent_id: 1n },
+        { id: 20, position_id: 6, title: "C", __through_parent_id: "2" },
+        { id: 99, position_id: 7, title: "skip", __through_parent_id: null },
+      ],
+      relation,
+    );
+
+    expect(grouped.get(1)).toEqual([
+      { id: 10, position_id: 4, title: "A" },
+      { id: 11, position_id: 5, title: "B" },
+    ]);
+    expect(grouped.get(2)).toEqual([{ id: 20, position_id: 6, title: "C" }]);
+    expect(grouped.get(3)).toEqual([]);
+  });
+
+  test("uses a custom throughParentKey when provided", () => {
+    const custom = hasManyThrough<
+      Department,
+      Application,
+      "id",
+      "department_id",
+      "id",
+      "position_id"
+    >({
+      name: "applications",
+      throughTable: "positions",
+      localKey: "id",
+      firstKey: "department_id",
+      secondLocalKey: "id",
+      secondKey: "position_id",
+      throughParentKey: "department_id",
+    });
+
+    const grouped = indexHasManyThroughRelation(
+      [{ id: 8 }],
+      [{ id: 1, position_id: 2, title: "X", department_id: 8 }],
+      custom,
+    );
+
+    expect(grouped.get(8)).toEqual([{ id: 1, position_id: 2, title: "X" }]);
   });
 });

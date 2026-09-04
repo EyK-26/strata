@@ -1,0 +1,18 @@
+<nav class="Navigation">
+  <% const role = it.currentUser?.role_id %>
+  <% if (role === 1) { %>
+    <a href="/">Home</a>
+    <a href="/users/create">Create New User</a>
+    <a href="/failed-jobs">Failed Jobs</a>
+  <% } else if (role === 2) { %>
+    <a href="/">Home</a>
+    <a href="/applications">Your Applications</a>
+    <a href="/positions">Positions</a>
+    <a href="/skills">Skills</a>
+    <a href="/watching">Watchlist</a>
+  <% } else if (role === 3) { %>
+    <a href="/">Home</a>
+    <a href="/position/create">Create New Position</a>
+    <a href="/skills">Skills</a>
+  <% } %>
+</nav>
