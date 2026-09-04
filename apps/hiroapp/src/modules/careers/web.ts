@@ -44,7 +44,7 @@ export function careerWebRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, position) => {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
-            await careerService.publish(actor, position);
+            await careerService.publish(actor, position, { expires_at: fields.expires_at || null });
             return redirectResponse(returnTo(fields, `/positions/${position.id}`));
           },
         ),
@@ -60,6 +60,21 @@ export function careerWebRoutes(dependencies: AppDependencies): AppRouteMap {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
             await careerService.unpublish(actor, posting);
+            return redirectResponse(returnTo(fields, `/positions/${posting.get("position_id")}`));
+          },
+        ),
+      ),
+    },
+    "/careers/:id/expire": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => CareerPosting.findOrFail(id),
+          async (request, posting) => {
+            const actor = await requireCurrentUser(request);
+            const { fields } = await parseFormBody(request);
+            await careerService.expire(actor, posting);
             return redirectResponse(returnTo(fields, `/positions/${posting.get("position_id")}`));
           },
         ),

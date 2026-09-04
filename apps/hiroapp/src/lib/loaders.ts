@@ -10,8 +10,7 @@ import { Application } from "../models/Application.ts";
 import type { Notification } from "../models/Notification.ts";
 import { Position } from "../models/Position.ts";
 import { User } from "../models/User.ts";
-import { careerPostings } from "../modules/careers/repository.ts";
-import { serializeCareerPosting } from "../modules/careers/service.ts";
+import { careerService } from "../modules/careers/service.ts";
 import { statuses } from "../modules/catalog/repository.ts";
 import { backgroundChecks } from "../modules/checks/repository.ts";
 import { serializeBackgroundCheck } from "../modules/checks/service.ts";
@@ -89,7 +88,7 @@ export async function loadPositionWithApplications(positionId: number) {
 
   const comments = await position.comments();
   const requisition = await requisitions.forPosition(positionId);
-  const career = await careerPostings.forPosition(positionId);
+  const career = await careerService.serializedForPosition(positionId);
   return {
     position: mergeResource(new PositionResource(position), {
       grade: grade ? new NamedResource(grade).toArray() : null,
@@ -106,7 +105,7 @@ export async function loadPositionWithApplications(positionId: number) {
     referrals: (await referrals.forPosition(positionId)).map(serializeReferral),
     slots: (await slots.forPosition(positionId)).map(serializeSlot),
     requisition: requisition ? serializeRequisition(requisition) : null,
-    career: career ? serializeCareerPosting(career) : null,
+    career,
     applications: apps.map((application) => {
       const applicant = application.loaded<User>("user");
       const status = application.loaded<{

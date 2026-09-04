@@ -153,6 +153,7 @@ describe.skipIf(!enabled)("Wave 36 public careers", () => {
     const httpPublished = await jsonRequest(`/api/positions/${httpSeat.id}/career`, {
       cookies: recruiterCookies,
       method: "POST",
+      body: JSON.stringify({}),
     });
     expect(httpPublished.body.status).toBe("published");
     const publicHttp = await request("/api/careers");
@@ -201,5 +202,111 @@ describe.skipIf(!enabled)("Wave 36 public careers", () => {
       body: `return_to=/positions/${htmlSeat.id}`,
     });
     expect([302, 303].includes(htmlUnpublish.response.status)).toBe(true);
+  });
+
+  test("staff expire published careers; past deadlines auto-expire", async () => {
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+    const candidate = await seededUser("candidate@hiroapp.com");
+    const { careerPostings } = await import("../modules/careers/repository.ts");
+
+    const unpublishedSeat = await openSeat();
+    const unpublished = await careerService.publish(recruiter, unpublishedSeat);
+    await careerService.unpublish(recruiter, await CareerPosting.findOrFail(unpublished.id));
+    await expect(
+      careerService.expire(candidate, await CareerPosting.findOrFail(unpublished.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      careerService.expire(recruiter, await CareerPosting.findOrFail(unpublished.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    const seat = await openSeat();
+    await expect(
+      careerService.publish(recruiter, seat, { expires_at: "not-a-date" }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    await expect(
+      careerService.publish(recruiter, seat, { expires_at: "2020-01-01T00:00:00Z" }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+
+    const created = await careerService.publish(recruiter, seat, {
+      expires_at: "2026-12-01T12:00:00Z",
+    });
+    expect(created.status).toBe("published");
+    expect(serializeCareerPosting(created).expires_at).toBe("2026-12-01T12:00:00.000Z");
+    expect(serializeCareerPosting(created).status).toBe("published");
+    const listedFuture = await careerService.listPublic();
+    expect(listedFuture.some((row) => row.id === created.id)).toBe(true);
+
+    const expired = await careerService.expire(
+      recruiter,
+      await CareerPosting.findOrFail(created.id),
+    );
+    expect(expired.status).toBe("expired");
+    expect(serializeCareerPosting(expired).status).toBe("expired");
+    await expect(
+      careerService.expire(recruiter, await CareerPosting.findOrFail(expired.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      careerService.showPublic(await CareerPosting.findOrFail(expired.id)),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect((await careerService.listPublic()).some((row) => row.id === created.id)).toBe(false);
+
+    const republished = await careerService.publish(recruiter, seat, { expires_at: "  " });
+    expect(republished.id).toBe(created.id);
+    expect(republished.status).toBe("published");
+    expect(serializeCareerPosting(republished).expires_at).toBeNull();
+
+    const staleSeat = await openSeat();
+    const stale = await careerService.publish(recruiter, staleSeat, {
+      expires_at: "2026-12-15T00:00:00Z",
+    });
+    await careerPostings.updateByIdOrThrow(stale.id, {
+      expires_at: new Date("2020-01-01T00:00:00Z"),
+    });
+    await expect(
+      careerService.showPublic(await CareerPosting.findOrFail(stale.id)),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(serializeCareerPosting(await CareerPosting.findOrFail(stale.id)).status).toBe("expired");
+    expect((await careerService.listPublic()).some((row) => row.id === stale.id)).toBe(false);
+    expect((await careerService.forPosition(recruiter, staleSeat))?.status).toBe("expired");
+
+    const httpSeat = await openSeat();
+    const httpPublished = await jsonRequest(`/api/positions/${httpSeat.id}/career`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ expires_at: "2026-12-20T00:00:00Z" }),
+    });
+    expect(httpPublished.body.status).toBe("published");
+    const forbiddenHttp = await jsonRequest(`/api/careers/${httpPublished.body.id}/expire`, {
+      cookies: candidateCookies,
+      method: "POST",
+    });
+    expect(forbiddenHttp.response.status).toBe(403);
+    const httpExpired = await jsonRequest(`/api/careers/${httpPublished.body.id}/expire`, {
+      cookies: recruiterCookies,
+      method: "POST",
+    });
+    expect(httpExpired.response.status).toBe(200);
+    expect(httpExpired.body.status).toBe("expired");
+
+    const htmlSeat = await openSeat();
+    await careerService.publish(recruiter, htmlSeat);
+    const page = await request(`/positions/${htmlSeat.id}`, { cookies: recruiterCookies });
+    expect(page.response.status).toBe(200);
+    expect(page.text).toContain("Expire from careers");
+    const htmlPosting = await careerService.forPosition(recruiter, htmlSeat);
+    if (!htmlPosting) {
+      throw new Error("missing html career posting");
+    }
+    const html = await request(`/careers/${htmlPosting.id}/expire`, {
+      cookies: page.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(page.cookies),
+      },
+      body: `return_to=/positions/${htmlSeat.id}`,
+    });
+    expect([302, 303].includes(html.response.status)).toBe(true);
+    expect((await CareerPosting.findOrFail(htmlPosting.id)).get("status")).toBe("expired");
   });
 });

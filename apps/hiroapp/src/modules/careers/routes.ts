@@ -5,6 +5,7 @@ import { requireCurrentUser } from "../../http/currentUser.ts";
 import { wrapApi, wrapPublic } from "../../http/wrap.ts";
 import { CareerPosting } from "../../models/CareerPosting.ts";
 import { Position } from "../../models/Position.ts";
+import { PublishCareerRequest } from "./requests.ts";
 import { careerService, serializeCareerPosting } from "./service.ts";
 
 export function careerRoutes(dependencies: AppDependencies): AppRouteMap {
@@ -40,7 +41,8 @@ export function careerRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Position.findOrFail(id),
           async (request, position) => {
             const actor = await requireCurrentUser(request);
-            const created = await careerService.publish(actor, position);
+            const payload = await new PublishCareerRequest().validate(request);
+            const created = await careerService.publish(actor, position, payload);
             return jsonResponse(serializeCareerPosting(created));
           },
         ),
@@ -57,6 +59,19 @@ export function careerRoutes(dependencies: AppDependencies): AppRouteMap {
             return jsonResponse(
               serializeCareerPosting(await careerService.unpublish(actor, posting)),
             );
+          },
+        ),
+      ),
+    },
+    "/api/careers/:id/expire": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => CareerPosting.findOrFail(id),
+          async (request, posting) => {
+            const actor = await requireCurrentUser(request);
+            return jsonResponse(serializeCareerPosting(await careerService.expire(actor, posting)));
           },
         ),
       ),

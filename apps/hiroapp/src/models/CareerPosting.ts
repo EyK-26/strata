@@ -5,13 +5,14 @@ import { Position } from "./Position.ts";
 import { User } from "./User.ts";
 
 export class CareerPosting extends Model<CareerPostingRecord, "id"> {
-  static $fillable = ["position_id", "published_by", "status", "tenant_id"] as const;
+  static $fillable = ["position_id", "published_by", "status", "tenant_id", "expires_at"] as const;
   static $guarded = [] as const;
   static $morphClass = "App\\Models\\CareerPosting";
   static $casts = {
     id: "integer",
     position_id: "integer",
     published_by: "integer",
+    expires_at: "datetime",
   } as const;
 
   position() {
