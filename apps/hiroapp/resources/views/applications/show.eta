@@ -137,6 +137,25 @@
           <button type="submit">Save source</button>
         </form>
       <% } %>
+      <% if (it.hold && it.hold.status === "holding") { %>
+        <h3>Hold</h3>
+        <p><%= it.hold.status %> · <%= it.hold.notes %></p>
+        <% if (it.roleId !== 2) { %>
+          <form action="/holds/<%= it.hold.id %>/release" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+            <button type="submit">Release hold</button>
+          </form>
+        <% } %>
+      <% } %>
+      <% if (it.roleId !== 2 && (!it.hold || it.hold.status === "released")) { %>
+        <form class="HoldForm" action="/applications/<%= it.application.id %>/hold" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+          <label>Hold notes <textarea name="notes"></textarea></label>
+          <button type="submit">Put on hold</button>
+        </form>
+      <% } %>
       <% if (it.background_check) { %>
         <h3>Background check</h3>
         <p><%= it.background_check.vendor %> · <%= it.background_check.status %> · <%= it.background_check.notes %></p>

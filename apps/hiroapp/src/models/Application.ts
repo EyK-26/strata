@@ -2,6 +2,7 @@ import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { applications } from "../modules/applications/repository.ts";
 import type { ApplicationRecord } from "../modules/applications/table.ts";
 import { ApplicationAttribution } from "./ApplicationAttribution.ts";
+import { ApplicationHold } from "./ApplicationHold.ts";
 import { ApplicationRejection } from "./ApplicationRejection.ts";
 import { BackgroundCheck } from "./BackgroundCheck.ts";
 import { Comment } from "./Comment.ts";
@@ -63,6 +64,10 @@ export class Application extends Model<ApplicationRecord, "id"> {
 
   backgroundCheck() {
     return this.hasOne(() => BackgroundCheck);
+  }
+
+  hold() {
+    return this.hasOne(() => ApplicationHold);
   }
 
   onboardingItems() {
