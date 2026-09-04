@@ -17,6 +17,26 @@ import { bootHiroapp, collectCookies, cookieHeader, csrfFrom, signInCookie } fro
 
 const enabled = process.env.HIROAPP_TEST === "1";
 
+async function unusedHiringPosition(userId: number) {
+  const applied = await Application.withTrashed().where({ user_id: userId }).get();
+  const used = new Set(applied.map((row) => Number(row.get("position_id"))));
+  const hiring = await Position.where({ hiring: true }).get();
+  const open = hiring.find((row) => !used.has(Number(row.id)));
+  if (open) {
+    return open;
+  }
+  return Position.create({
+    user_id: null,
+    department_id: 1,
+    grade_id: 1,
+    name: `Parity Open ${Date.now()}`,
+    description: "unused hiring seat",
+    hiring: true,
+    start_date: null,
+    end_date: null,
+  });
+}
+
 describe.skipIf(!enabled)("Wave 2 model graph", () => {
   test("User.skills() and Position.skills() are belongsToMany with pivot values", async () => {
     const candidate = await users.findByEmail("candidate@hiroapp.com");
@@ -68,9 +88,9 @@ describe.skipIf(!enabled)("Wave 2 model graph", () => {
 
   test("soft delete withdraws an application and restore brings it back", async () => {
     const candidate = await users.findByEmail("candidate@hiroapp.com");
-    const hiring = await Position.where({ hiring: true }).first();
+    const hiring = await unusedHiringPosition(candidate!.id);
     const created = await User.newFromRecord(candidate!).applications().create({
-      position_id: hiring!.id,
+      position_id: hiring.id,
       status_id: STATUS.APPLIED,
       attachment_text: "soft-delete",
       attachment_file: null,
@@ -87,9 +107,9 @@ describe.skipIf(!enabled)("Wave 2 model graph", () => {
   test("interview panel syncs belongsToMany users", async () => {
     const recruiter = await users.findByEmail("recruiter@hiroapp.com");
     const hiring = await Position.where({ hiring: true }).first();
-    const position = Position.newFromRecord(hiring!);
-    await position.interviewers().withPivotValues({ role: "panel" }).sync([recruiter!.id]);
-    const panel = await position.interviewers();
+    expect(hiring).toBeTruthy();
+    await hiring!.interviewers().withPivotValues({ role: "panel" }).sync([recruiter!.id]);
+    const panel = await hiring!.interviewers();
     expect(panel.some((row) => Number(row.id) === recruiter!.id)).toBe(true);
   });
 });
@@ -99,11 +119,11 @@ describe.skipIf(!enabled)("Wave 4 observers, schedule, chunk", () => {
     Application.observe(applicationObserver);
     await import("../listeners/sendApplicationSubmitted.ts");
     const candidate = await users.findByEmail("candidate@hiroapp.com");
-    const hiring = await Position.where({ hiring: true }).first();
+    const hiring = await unusedHiringPosition(candidate!.id);
     const before = ((await User.newFromRecord(candidate!).notifications()) as { id: string }[])
       .length;
     const created = await User.newFromRecord(candidate!).applications().create({
-      position_id: hiring!.id,
+      position_id: hiring.id,
       status_id: STATUS.APPLIED,
       attachment_text: "observer",
       attachment_file: null,

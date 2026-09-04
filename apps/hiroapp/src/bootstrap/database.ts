@@ -1,11 +1,14 @@
+import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
 import { bindBunSql, createBunSqlPool } from "@getstrata/core/database/bunSql";
+import { registerDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { registerHiroModels } from "../models/register.ts";
 import { loadEnv } from "./config.ts";
 
 export function bindDatabase() {
   const existing = getBoundDatabaseConnection();
   if (existing) {
+    registerDefaultDatabasePool(existing as SqlDatabaseConnection);
     registerHiroModels();
     return existing;
   }
