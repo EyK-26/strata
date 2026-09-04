@@ -39,6 +39,7 @@ import {
   interviewNotification,
   notifyUser,
 } from "../notifications/service.ts";
+import { interviewerService } from "../positions/interviewers.ts";
 import { positions } from "../positions/repository.ts";
 import { positionService } from "../positions/service.ts";
 import { users } from "../users/repository.ts";
@@ -235,6 +236,27 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, position) => {
             const actor = await authorize(request, "positions", "update");
             await positionService.close(actor, position);
+            return redirectResponse(`/positions/${position.id}`);
+          },
+        ),
+      ),
+    },
+    "/positions/:id/interviewers": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Position.findOrFail(id),
+          async (request, position) => {
+            const actor = await authorize(request, "positions", "update");
+            const { fields } = await parseFormBody(request);
+            const userIds = String(fields.user_ids ?? "")
+              .split(",")
+              .map((value) => Number(value.trim()));
+            await interviewerService.sync(actor, position, {
+              user_ids: userIds,
+              role: fields.role,
+            });
             return redirectResponse(`/positions/${position.id}`);
           },
         ),

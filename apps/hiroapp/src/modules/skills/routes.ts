@@ -8,6 +8,7 @@ import { ROLE } from "../../lib/roles.ts";
 import { Department } from "../../models/Department.ts";
 import { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
+import { interviewerService } from "../positions/interviewers.ts";
 import { skills } from "./repository.ts";
 import {
   InterviewersRequest,
@@ -135,7 +136,8 @@ export function skillRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Position.findOrFail(id),
           async (request, position) => {
             await authorize(request, "skills", "view");
-            return jsonResponse((await position.interviewers()).map((row) => row.toArray()));
+            const rows = await interviewerService.list(position);
+            return jsonResponse(rows.map((row) => row.toArray()));
           },
         ),
       ),
@@ -145,13 +147,10 @@ export function skillRoutes(dependencies: AppDependencies): AppRouteMap {
           "id",
           (id) => Position.findOrFail(id),
           async (request, position) => {
-            await authorize(request, "skills", "update");
+            const actor = await authorize(request, "skills", "update");
             const payload = await new InterviewersRequest().validate(request);
-            await position
-              .interviewers()
-              .withPivotValues({ role: payload.role })
-              .sync(payload.user_ids);
-            return jsonResponse((await position.interviewers()).map((row) => row.toArray()));
+            const rows = await interviewerService.sync(actor, position, payload);
+            return jsonResponse(rows.map((row) => row.toArray()));
           },
         ),
       ),

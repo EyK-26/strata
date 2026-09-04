@@ -26,6 +26,11 @@
     <% if (it.position.department_id) { %>
       <p><a href="/departments/<%= it.position.department_id %>/applications">Department applications</a></p>
     <% } %>
+    <form action="/positions/<%= it.position.id %>/interviewers" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <label>Interviewer user ids <input type="text" name="user_ids" placeholder="3,1" /></label>
+      <button type="submit">Assign interviewers</button>
+    </form>
   <% } %>
   <form action="/positions/<%= it.position.id %>/watch" method="post">
     <%~ include("../partials/csrf.eta") %>
