@@ -1,10 +1,35 @@
 import { describe, expect, test } from "bun:test";
 import {
   belongsToMany,
+  getByRelationKey,
   hasOne,
   indexBelongsToManyRelation,
   indexHasOneRelation,
+  relationMatchKey,
 } from "@getstrata/core/database/relationships";
+
+describe("relation key matching", () => {
+  test("normalizes number, bigint, and numeric string to the same key", () => {
+    expect(relationMatchKey(10)).toBe("10");
+    expect(relationMatchKey(10n)).toBe("10");
+    expect(relationMatchKey("10")).toBe("10");
+    expect(relationMatchKey("01")).toBe("1");
+    expect(relationMatchKey(null)).toBe("");
+    expect(relationMatchKey(undefined)).toBe("");
+    expect(relationMatchKey("office")).toBe("office");
+    expect(relationMatchKey(Number.NaN)).toBe("NaN");
+  });
+
+  test("looks up Map values across int4/int8/string keys", () => {
+    const byNumber = new Map<number, string>([[10, "alpha"]]);
+
+    expect(getByRelationKey(byNumber, 10)).toBe("alpha");
+    expect(getByRelationKey(byNumber, 10n)).toBe("alpha");
+    expect(getByRelationKey(byNumber, "10")).toBe("alpha");
+    expect(getByRelationKey(byNumber, null)).toBeUndefined();
+    expect(getByRelationKey(byNumber, 99)).toBeUndefined();
+  });
+});
 
 describe("hasOne indexing", () => {
   test("returns the first child per parent", () => {
