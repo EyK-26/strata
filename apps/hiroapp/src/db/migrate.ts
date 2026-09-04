@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import { loadMigrationsFromDirectory, migrateDatabase } from "@getstrata/core/database/migrations";
-import { bindDatabase } from "../bootstrap/database.ts";
+import { connectHiroappDatabase } from "./connect.ts";
 
-const db = bindDatabase();
+const db = await connectHiroappDatabase();
 const migrations = await loadMigrationsFromDirectory(join(import.meta.dir, "migrations"));
 const count = await migrateDatabase(db, migrations, {
   advisoryLock: true,

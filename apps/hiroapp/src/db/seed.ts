@@ -1,5 +1,5 @@
-import { bindDatabase } from "../bootstrap/database.ts";
+import { connectHiroappDatabase } from "./connect.ts";
 import { runAppSeeders } from "./seeder.ts";
 
-bindDatabase();
+await connectHiroappDatabase();
 await runAppSeeders();
