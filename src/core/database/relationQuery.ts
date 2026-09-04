@@ -4,6 +4,7 @@ import type {
   BelongsToManyRelation,
   BelongsToRelation,
   HasManyRelation,
+  HasManyThroughRelation,
   HasOneRelation,
   MorphManyRelation,
   MorphOneRelation,
@@ -38,6 +39,7 @@ type RelationKind =
   | "hasOne"
   | "belongsTo"
   | "belongsToMany"
+  | "hasManyThrough"
   | "morphMany"
   | "morphOne"
   | "morphTo";
@@ -819,6 +821,97 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
   }
 }
 
+class HasManyThroughRelationQuery<
+  TParent extends object,
+  ParentKey extends keyof TParent & string,
+  TFar extends object,
+  FarKey extends keyof TFar & string,
+> {
+  readonly kind: RelationKind = "hasManyThrough";
+  private extraWhere: QueryWhere<TFar> = {};
+  private extraOptions: Omit<QueryOptions<TFar>, "where"> = {};
+
+  constructor(
+    private readonly parent: RelationHost<TParent, ParentKey>,
+    private readonly related: RelatedModelClass<TFar, FarKey>,
+    readonly relation: HasManyThroughRelation<
+      TParent,
+      TFar,
+      ParentKey,
+      string,
+      string,
+      keyof TFar & string
+    >,
+  ) {}
+
+  where(where: QueryWhere<TFar>): this {
+    this.extraWhere = { ...this.extraWhere, ...where };
+    return this;
+  }
+
+  orderBy(orderBy: QueryOptions<TFar>["orderBy"]): this {
+    this.extraOptions = { ...this.extraOptions, orderBy };
+    return this;
+  }
+
+  limit(limit: number): this {
+    this.extraOptions = { ...this.extraOptions, limit };
+    return this;
+  }
+
+  applyEagerLoad(query: RepositoryQuery<TParent, ParentKey>, alias: string): void {
+    query.withHasManyThrough(
+      alias,
+      this.relation,
+      this.related.repository() as never,
+      this.extraOptions,
+    );
+  }
+
+  hydrateEager(row: Record<string, unknown>, alias: string): unknown {
+    const value = row[alias] ?? [];
+    const rows = Array.isArray(value) ? value : [];
+    return rows.map((item) => this.related.newFromRecord(item as TFar));
+  }
+
+  toExistsClause(parentTable: string): ExistsClause {
+    const farTable = this.related.repository().getTable().name;
+    const extra = buildAdvancedWhereClause(farTable, this.extraWhere, [], []);
+    const extraSql = extra.clause.replace(/^ WHERE /, "");
+    const sql = `SELECT 1 FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(this.relation.throughTable)} ON ${qualifyColumn(this.relation.throughTable, this.relation.secondLocalKey)} = ${qualifyColumn(farTable, this.relation.secondKey)} WHERE ${qualifyColumn(this.relation.throughTable, this.relation.firstKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    return { sql, params: extra.params };
+  }
+
+  async get(): Promise<RelatedRecord[]> {
+    const rows = await this.related
+      .repository()
+      .withConnection(this.parent.getRepository().getConnection())
+      .findHasManyThrough(this.parent.get(this.relation.localKey), this.relation, {
+        ...this.extraOptions,
+        where: this.extraWhere,
+      });
+    return rows.map((row) => this.related.newFromRecord(row as TFar));
+  }
+
+  async first(): Promise<RelatedRecord | null> {
+    const rows = await this.limit(1).get();
+    return rows[0] ?? null;
+  }
+
+  async count(): Promise<number> {
+    const rows = await this.get();
+    return rows.length;
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $department->applications()`).
+  then(
+    onfulfilled?: ((value: RelatedRecord[]) => unknown) | null,
+    onrejected?: ((reason: unknown) => unknown) | null,
+  ): Promise<unknown> {
+    return thenGet(() => this.get(), onfulfilled, onrejected);
+  }
+}
+
 type AnyRelationQuery = {
   kind: RelationKind;
   applyEagerLoad(query: unknown, alias: string): void;
@@ -837,6 +930,7 @@ export {
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
   HasManyRelationQuery,
+  HasManyThroughRelationQuery,
   HasOneRelationQuery,
   MorphManyRelationQuery,
   MorphOneRelationQuery,

@@ -5,6 +5,7 @@ import type {
   BelongsToManyRelation,
   BelongsToRelation,
   HasManyRelation,
+  HasManyThroughRelation,
   MorphManyRelation,
   MorphOneRelation,
   MorphToRelation,
@@ -16,7 +17,14 @@ import { WhereBuilder, type WhereNode } from "./whereBuilder.ts";
 type LoadedRow = Record<string, unknown>;
 
 type StoredEagerLoad<TEntity extends object> = {
-  kind: "hasMany" | "belongsTo" | "belongsToMany" | "morphMany" | "morphOne" | "morphTo";
+  kind:
+    | "hasMany"
+    | "belongsTo"
+    | "belongsToMany"
+    | "hasManyThrough"
+    | "morphMany"
+    | "morphOne"
+    | "morphTo";
   as: string;
   relation:
     | HasManyRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string>
@@ -24,6 +32,14 @@ type StoredEagerLoad<TEntity extends object> = {
     | BelongsToManyRelation<
         TEntity,
         Record<string, unknown>,
+        Record<string, unknown>,
+        keyof TEntity & string,
+        string,
+        string,
+        string
+      >
+    | HasManyThroughRelation<
+        TEntity,
         Record<string, unknown>,
         keyof TEntity & string,
         string,
@@ -274,6 +290,37 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return this;
   }
 
+  withHasManyThrough<
+    TFar extends object,
+    LocalKey extends keyof TEntity & string,
+    SecondKey extends keyof TFar & string,
+    Alias extends string,
+  >(
+    as: Alias,
+    relation: HasManyThroughRelation<TEntity, TFar, LocalKey, string, string, SecondKey>,
+    farRepository: BaseRepository<TFar, keyof TFar & string>,
+    options: Omit<QueryOptions<TFar>, "where"> = {},
+  ): this {
+    this.eagerLoads.push({
+      kind: "hasManyThrough",
+      as,
+      relation: relation as StoredEagerLoad<TEntity>["relation"],
+      repository: farRepository as unknown as BaseRepository<Record<string, unknown>, "id">,
+      options: options as StoredEagerLoad<TEntity>["options"],
+    });
+    return this;
+  }
+
+  withTrashed(): this {
+    this.queryOptions = { ...this.queryOptions, withTrashed: true };
+    return this;
+  }
+
+  onlyTrashed(): this {
+    this.queryOptions = { ...this.queryOptions, onlyTrashed: true };
+    return this;
+  }
+
   async get(): Promise<Array<TEntity & LoadedRow>> {
     const rows = await this.repository.findAll(this.buildOptions());
     return await this.attach(rows);
@@ -399,6 +446,25 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
         result = result.map((row) => ({
           ...row,
           [load.as]: getByRelationKey(grouped, row[relation.localKey]),
+        })) as Array<TEntity & LoadedRow>;
+        continue;
+      }
+
+      if (load.kind === "hasManyThrough") {
+        const relation = load.relation as HasManyThroughRelation<
+          TEntity,
+          Record<string, unknown>,
+          keyof TEntity & string,
+          string,
+          string,
+          string
+        >;
+        const grouped = await load.repository
+          .withConnection(this.repository.getConnection())
+          .loadHasManyThroughForParents(rows, relation, load.options);
+        result = result.map((row) => ({
+          ...row,
+          [load.as]: getByRelationKey(grouped, row[relation.localKey]) ?? [],
         })) as Array<TEntity & LoadedRow>;
         continue;
       }
