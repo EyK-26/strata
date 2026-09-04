@@ -6,6 +6,7 @@ import { Comment } from "./Comment.ts";
 import { Department } from "./Department.ts";
 import { Grade } from "./Grade.ts";
 import { Referral } from "./Referral.ts";
+import { Requisition } from "./Requisition.ts";
 import { Skill } from "./Skill.ts";
 import { Slot } from "./Slot.ts";
 import { User } from "./User.ts";
@@ -69,6 +70,10 @@ export class Position extends Model<PositionRecord, "id"> {
 
   slots() {
     return this.hasMany(() => Slot);
+  }
+
+  requisition() {
+    return this.hasOne(() => Requisition);
   }
 }
 

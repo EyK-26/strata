@@ -44,6 +44,33 @@
     </a>
   <% }) %>
   <% if (it.currentUser?.role_id !== 2) { %>
+    <h3>Requisition</h3>
+    <% if (it.requisition) { %>
+      <p><%= it.requisition.status %> · <%= it.requisition.notes %></p>
+      <% if (it.currentUser?.role_id === 1 && it.requisition.status === "submitted") { %>
+        <form action="/requisitions/<%= it.requisition.id %>/approve" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+          <button type="submit">Approve requisition</button>
+        </form>
+        <form action="/requisitions/<%= it.requisition.id %>/reject" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+          <label>Notes <textarea name="notes"></textarea></label>
+          <button type="submit">Reject requisition</button>
+        </form>
+      <% } %>
+    <% } %>
+    <% if (!it.requisition || it.requisition.status === "rejected") { %>
+      <form class="RequisitionForm" action="/positions/<%= it.position.id %>/requisition" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+        <label>Notes <textarea name="notes"></textarea></label>
+        <button type="submit">Submit requisition</button>
+      </form>
+    <% } %>
+  <% } %>
+  <% if (it.currentUser?.role_id !== 2) { %>
     <h3>Referrals</h3>
     <% (it.referrals ?? []).forEach((referral) => { %>
       <p><%= referral.name %> · <%= referral.email %> · <%= referral.status %></p>
