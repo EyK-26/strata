@@ -10,6 +10,7 @@ export class Offer extends Model<OfferRecord, "id"> {
     "created_by",
     "salary",
     "starts_on",
+    "expires_at",
     "status",
     "notes",
     "tenant_id",

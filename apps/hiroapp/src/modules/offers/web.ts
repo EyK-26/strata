@@ -43,7 +43,7 @@ export function offerWebRoutes(dependencies: AppDependencies): AppRouteMap {
             });
             if (fields.send === "1") {
               const model = await Offer.findOrFail(created.id);
-              await offerService.send(actor, model);
+              await offerService.send(actor, model, { expires_at: fields.expires_at || null });
             }
             return redirectResponse(returnTo(fields, `/applications/${application.id}`));
           },
@@ -59,7 +59,7 @@ export function offerWebRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, offer) => {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
-            await offerService.send(actor, offer);
+            await offerService.send(actor, offer, { expires_at: fields.expires_at || null });
             return redirectResponse(
               returnTo(fields, `/applications/${offer.get("application_id")}`),
             );
@@ -77,6 +77,23 @@ export function offerWebRoutes(dependencies: AppDependencies): AppRouteMap {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
             await offerService.withdraw(actor, offer);
+            return redirectResponse(
+              returnTo(fields, `/applications/${offer.get("application_id")}`),
+            );
+          },
+        ),
+      ),
+    },
+    "/offers/:id/expire": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Offer.findOrFail(id),
+          async (request, offer) => {
+            const actor = await requireCurrentUser(request);
+            const { fields } = await parseFormBody(request);
+            await offerService.expire(actor, offer);
             return redirectResponse(
               returnTo(fields, `/applications/${offer.get("application_id")}`),
             );

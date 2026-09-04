@@ -196,6 +196,7 @@ describe.skipIf(!enabled)("Wave 25 application offers", () => {
     const sentHttp = await jsonRequest(`/api/offers/${created.body.id}/send`, {
       cookies: recruiterCookies,
       method: "POST",
+      body: JSON.stringify({}),
     });
     expect(sentHttp.body.status).toBe("sent");
     const acceptedHttp = await jsonRequest(`/api/offers/${created.body.id}/accept`, {
@@ -216,5 +217,111 @@ describe.skipIf(!enabled)("Wave 25 application offers", () => {
       body: "salary=77000&starts_on=2026-11-01&notes=html",
     });
     expect([302, 303].includes(html.response.status)).toBe(true);
+  });
+
+  test("staff expire sent offers; past deadlines auto-expire", async () => {
+    const candidate = await seededUser("candidate@hiroapp.com");
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+    const application = await openApplication(candidate.id);
+
+    const draft = await offerService.create(recruiter, application, { salary: 110_000 });
+    await expect(
+      offerService.expire(candidate, await Offer.findOrFail(draft.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      offerService.expire(recruiter, await Offer.findOrFail(draft.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      offerService.send(recruiter, await Offer.findOrFail(draft.id), { expires_at: "not-a-date" }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    await expect(
+      offerService.send(recruiter, await Offer.findOrFail(draft.id), {
+        expires_at: "2020-01-01T00:00:00Z",
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+
+    const sent = await offerService.send(recruiter, await Offer.findOrFail(draft.id), {
+      expires_at: "2026-12-01T12:00:00Z",
+    });
+    expect(sent.status).toBe("sent");
+    expect(serializeOffer(sent).expires_at).toBe("2026-12-01T12:00:00.000Z");
+    expect(serializeOffer(sent).status).toBe("sent");
+    const listedFuture = await offerService.listForApplication(recruiter, application);
+    expect(listedFuture[0]?.status).toBe("sent");
+
+    const expired = await offerService.expire(recruiter, await Offer.findOrFail(sent.id));
+    expect(expired.status).toBe("expired");
+    expect(serializeOffer(expired).status).toBe("expired");
+    await expect(
+      offerService.expire(recruiter, await Offer.findOrFail(expired.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      offerService.accept(candidate, await Offer.findOrFail(expired.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      offerService.withdraw(recruiter, await Offer.findOrFail(expired.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    const replacement = await offerService.create(recruiter, application, { salary: 115_000 });
+    expect(replacement.status).toBe("draft");
+    await offerService.send(recruiter, await Offer.findOrFail(replacement.id), {
+      expires_at: "  ",
+    });
+
+    const staleApp = await openApplication(candidate.id);
+    const staleDraft = await offerService.create(recruiter, staleApp, { salary: 90_000 });
+    const staleSent = await offerService.send(recruiter, await Offer.findOrFail(staleDraft.id), {
+      expires_at: "2026-12-15T00:00:00Z",
+    });
+    const { offers } = await import("../modules/offers/repository.ts");
+    await offers.updateByIdOrThrow(staleSent.id, { expires_at: new Date("2020-01-01T00:00:00Z") });
+    await expect(
+      offerService.accept(candidate, await Offer.findOrFail(staleSent.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(serializeOffer(await Offer.findOrFail(staleSent.id)).status).toBe("expired");
+    const listedStale = await offerService.listForApplication(recruiter, staleApp);
+    expect(listedStale[0]?.status).toBe("expired");
+
+    const httpApp = await openApplication(candidate.id);
+    const httpDraft = await jsonRequest(`/api/applications/${httpApp.id}/offers`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ salary: 88_000 }),
+    });
+    const forbiddenHttp = await jsonRequest(`/api/offers/${httpDraft.body.id}/expire`, {
+      cookies: candidateCookies,
+      method: "POST",
+    });
+    expect(forbiddenHttp.response.status).toBe(403);
+    const httpSent = await jsonRequest(`/api/offers/${httpDraft.body.id}/send`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ expires_at: "2026-12-20T00:00:00Z" }),
+    });
+    expect(httpSent.body.status).toBe("sent");
+    const httpExpired = await jsonRequest(`/api/offers/${httpDraft.body.id}/expire`, {
+      cookies: recruiterCookies,
+      method: "POST",
+    });
+    expect(httpExpired.response.status).toBe(200);
+    expect(httpExpired.body.status).toBe("expired");
+
+    const htmlApp = await openApplication(candidate.id);
+    const htmlDraft = await offerService.create(recruiter, htmlApp, { salary: 70_000 });
+    await offerService.send(recruiter, await Offer.findOrFail(htmlDraft.id));
+    const page = await request(`/applications/${htmlApp.id}`, { cookies: recruiterCookies });
+    expect(page.response.status).toBe(200);
+    expect(page.text).toContain("Expire offer");
+    const html = await request(`/offers/${htmlDraft.id}/expire`, {
+      cookies: page.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(page.cookies),
+      },
+      body: `return_to=/applications/${htmlApp.id}`,
+    });
+    expect([302, 303].includes(html.response.status)).toBe(true);
+    expect((await Offer.findOrFail(htmlDraft.id)).get("status")).toBe("expired");
   });
 });

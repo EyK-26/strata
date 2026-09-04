@@ -22,3 +22,12 @@ export class CreateOfferRequest extends FormRequest<{
     };
   }
 }
+
+export class SendOfferRequest extends FormRequest<{ expires_at: string | null }> {
+  protected parse(payload: unknown) {
+    const body = expectObject(payload);
+    return {
+      expires_at: typeof body.expires_at === "string" ? body.expires_at : null,
+    };
+  }
+}

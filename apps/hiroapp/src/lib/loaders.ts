@@ -19,8 +19,7 @@ import { applicationHolds } from "../modules/holds/repository.ts";
 import { serializeHold } from "../modules/holds/service.ts";
 import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
-import { offers } from "../modules/offers/repository.ts";
-import { serializeOffer } from "../modules/offers/service.ts";
+import { offerService } from "../modules/offers/service.ts";
 import { offerTemplates } from "../modules/offerTemplates/repository.ts";
 import { serializeOfferTemplate } from "../modules/offerTemplates/service.ts";
 import { onboardingItems } from "../modules/onboarding/repository.ts";
@@ -189,7 +188,7 @@ export async function loadApplicationDetail(applicationId: number) {
     }),
     comments: comments.map((row) => row.toArray()),
     interviews: interviewRows.map(serializeInterview),
-    offers: (await offers.forApplication(applicationId)).map(serializeOffer),
+    offers: await offerService.serializedForApplication(applicationId),
     rejections: rejectionRows.map((row) => ({
       ...serializeRejection(row),
       reason_name: reasonName.get(Number(row.reason_id)) ?? null,

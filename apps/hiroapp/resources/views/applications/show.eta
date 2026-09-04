@@ -77,12 +77,20 @@
       <% if ((it.offers ?? []).length) { %>
         <h3>Offers</h3>
         <% it.offers.forEach((offer) => { %>
-          <p><%= offer.salary %> · <%= offer.starts_on %> · <%= offer.status %></p>
+          <p><%= offer.salary %> · <%= offer.starts_on %> · <%= offer.status %><% if (offer.expires_at) { %> · expires <%= offer.expires_at %><% } %></p>
           <% if (it.roleId !== 2 && (offer.status === "draft" || offer.status === "sent")) { %>
             <% if (offer.status === "draft") { %>
               <form action="/offers/<%= offer.id %>/send" method="post">
                 <%~ include("../partials/csrf.eta") %>
+                <label>Expires <input type="datetime-local" name="expires_at" /></label>
                 <button type="submit">Send offer</button>
+              </form>
+            <% } %>
+            <% if (offer.status === "sent") { %>
+              <form action="/offers/<%= offer.id %>/expire" method="post">
+                <%~ include("../partials/csrf.eta") %>
+                <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+                <button type="submit">Expire offer</button>
               </form>
             <% } %>
             <form action="/offers/<%= offer.id %>/withdraw" method="post">

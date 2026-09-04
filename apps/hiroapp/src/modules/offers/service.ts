@@ -27,7 +27,8 @@ function asOfferStatus(value: unknown): OfferStatus {
     value === "sent" ||
     value === "accepted" ||
     value === "declined" ||
-    value === "withdrawn"
+    value === "withdrawn" ||
+    value === "expired"
   ) {
     return value;
   }
@@ -68,6 +69,21 @@ function parseStartsOn(value: string | null | undefined) {
   return startsOn;
 }
 
+function parseExpiresAt(value: string | null | undefined) {
+  const raw = value?.trim() ?? "";
+  if (!raw) {
+    return null;
+  }
+  const expiresAt = new Date(raw);
+  if (Number.isNaN(expiresAt.getTime())) {
+    throw new UnprocessableEntityError("The expiry date is invalid.");
+  }
+  if (expiresAt.getTime() <= Date.now()) {
+    throw new UnprocessableEntityError("The expiry must be in the future.");
+  }
+  return expiresAt;
+}
+
 export function serializeOffer(row: Offer | OfferRecord) {
   const record =
     typeof (row as Offer).toObject === "function"
@@ -79,6 +95,7 @@ export function serializeOffer(row: Offer | OfferRecord) {
     created_by: Number(record.created_by),
     salary: Number(record.salary),
     starts_on: dateOnly(record.starts_on),
+    expires_at: iso(record.expires_at),
     status: asOfferStatus(record.status),
     notes: record.notes,
     created_at: iso(record.created_at),
@@ -87,10 +104,38 @@ export function serializeOffer(row: Offer | OfferRecord) {
 }
 
 export class OfferService {
+  private async expireIfDue(row: OfferRecord): Promise<OfferRecord> {
+    if (asOfferStatus(row.status) !== "sent") {
+      return row;
+    }
+    if (!row.expires_at) {
+      return row;
+    }
+    const expiresAt = new Date(row.expires_at);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() > Date.now()) {
+      return row;
+    }
+    const updated = await offers.updateByIdOrThrow(row.id, { status: "expired" });
+    await recordHiringEvent(
+      "offer.expired",
+      { offer_id: updated.id, application_id: updated.application_id },
+      { type: "offer", id: updated.id },
+    );
+    return updated;
+  }
+
+  async serializedForApplication(applicationId: number) {
+    const rows = await offers.forApplication(applicationId);
+    const fresh: OfferRecord[] = [];
+    for (const row of rows) {
+      fresh.push(await this.expireIfDue(row));
+    }
+    return fresh.map(serializeOffer);
+  }
+
   async listForApplication(actor: UserRecord, application: Application) {
     await assertCanView(actor, application);
-    const rows = await offers.forApplication(Number(application.id));
-    return rows.map(serializeOffer);
+    return this.serializedForApplication(Number(application.id));
   }
 
   async create(actor: UserRecord, application: Application, input: CreateOfferInput) {
@@ -98,6 +143,7 @@ export class OfferService {
     const salary = parseSalary(Number(input.salary));
     const startsOn = parseStartsOn(input.starts_on);
     const notes = input.notes?.trim() || null;
+    await this.serializedForApplication(Number(application.id));
     const active = await offers.activeForApplication(Number(application.id));
     if (active) {
       throw new ConflictError("This application already has an active offer.");
@@ -108,6 +154,7 @@ export class OfferService {
       tenant_id: currentTenantId(),
       salary,
       starts_on: startsOn,
+      expires_at: null,
       status: "draft",
       notes,
     });
@@ -119,12 +166,16 @@ export class OfferService {
     return created;
   }
 
-  async send(actor: UserRecord, offer: Offer) {
+  async send(actor: UserRecord, offer: Offer, input: { expires_at?: string | null } = {}) {
     assertStaff(actor);
     if (asOfferStatus(offer.get("status")) !== "draft") {
       throw new ForbiddenError("Only a draft offer can be sent.");
     }
-    const updated = await offers.updateByIdOrThrow(Number(offer.id), { status: "sent" });
+    const expiresAt = parseExpiresAt(input.expires_at);
+    const updated = await offers.updateByIdOrThrow(Number(offer.id), {
+      status: "sent",
+      expires_at: expiresAt,
+    });
     const application = await Application.findOrFail(updated.application_id);
     const applicant = await users.findByIdOrThrow(Number(application.get("user_id")));
     await notifyUser({
@@ -151,13 +202,29 @@ export class OfferService {
 
   async withdraw(actor: UserRecord, offer: Offer) {
     assertStaff(actor);
-    const status = asOfferStatus(offer.get("status"));
+    const current = await this.expireIfDue(offer.toObject());
+    const status = asOfferStatus(current.status);
     if (status !== "draft" && status !== "sent") {
       throw new ForbiddenError("This offer cannot be withdrawn.");
     }
     const updated = await offers.updateByIdOrThrow(Number(offer.id), { status: "withdrawn" });
     await recordHiringEvent(
       "offer.withdrawn",
+      { offer_id: updated.id, application_id: updated.application_id },
+      { type: "offer", id: updated.id },
+    );
+    return updated;
+  }
+
+  async expire(actor: UserRecord, offer: Offer) {
+    assertStaff(actor);
+    const current = await this.expireIfDue(offer.toObject());
+    if (asOfferStatus(current.status) !== "sent") {
+      throw new ForbiddenError("Only a sent offer can be expired.");
+    }
+    const updated = await offers.updateByIdOrThrow(Number(offer.id), { status: "expired" });
+    await recordHiringEvent(
+      "offer.expired",
       { offer_id: updated.id, application_id: updated.application_id },
       { type: "offer", id: updated.id },
     );
@@ -172,7 +239,11 @@ export class OfferService {
     if (Number(application.get("user_id")) !== Number(actor.id)) {
       throw new ForbiddenError("This offer belongs to another candidate.");
     }
-    if (asOfferStatus(offer.get("status")) !== "sent") {
+    const current = await this.expireIfDue(offer.toObject());
+    if (asOfferStatus(current.status) === "expired") {
+      throw new ForbiddenError("This offer has expired.");
+    }
+    if (asOfferStatus(current.status) !== "sent") {
       throw new ForbiddenError("Only a sent offer can be accepted or declined.");
     }
     const updated = await offers.updateByIdOrThrow(Number(offer.id), { status: decision });

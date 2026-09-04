@@ -2792,6 +2792,42 @@
         }
       }
     },
+    "/api/offers/{id}/expire": {
+      "post": {
+        "summary": "POST /api/offers/:id/expire",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
     "/api/offers/{id}/send": {
       "post": {
         "summary": "POST /api/offers/:id/send",

@@ -1,6 +1,6 @@
 import { defineTable } from "@getstrata/core/database/table";
 
-export type OfferStatus = "draft" | "sent" | "accepted" | "declined" | "withdrawn";
+export type OfferStatus = "draft" | "sent" | "accepted" | "declined" | "withdrawn" | "expired";
 
 export interface OfferRecord {
   id: number;
@@ -9,6 +9,7 @@ export interface OfferRecord {
   tenant_id?: number | null;
   salary: number;
   starts_on: Date | null;
+  expires_at: Date | null;
   status: OfferStatus;
   notes: string | null;
   created_at: Date | null;
@@ -25,6 +26,7 @@ export const offerTable = defineTable<OfferRecord, "id">({
     "tenant_id",
     "salary",
     "starts_on",
+    "expires_at",
     "status",
     "notes",
     "created_at",

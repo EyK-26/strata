@@ -5,7 +5,7 @@ import { requireCurrentUser } from "../../http/currentUser.ts";
 import { wrapApi } from "../../http/wrap.ts";
 import { Application } from "../../models/Application.ts";
 import { Offer } from "../../models/Offer.ts";
-import { CreateOfferRequest } from "./requests.ts";
+import { CreateOfferRequest, SendOfferRequest } from "./requests.ts";
 import { offerService, serializeOffer } from "./service.ts";
 
 export function offerRoutes(dependencies: AppDependencies): AppRouteMap {
@@ -44,7 +44,8 @@ export function offerRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Offer.findOrFail(id),
           async (request, offer) => {
             const actor = await requireCurrentUser(request);
-            return jsonResponse(serializeOffer(await offerService.send(actor, offer)));
+            const payload = await new SendOfferRequest().validate(request);
+            return jsonResponse(serializeOffer(await offerService.send(actor, offer, payload)));
           },
         ),
       ),
@@ -58,6 +59,19 @@ export function offerRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, offer) => {
             const actor = await requireCurrentUser(request);
             return jsonResponse(serializeOffer(await offerService.withdraw(actor, offer)));
+          },
+        ),
+      ),
+    },
+    "/api/offers/:id/expire": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Offer.findOrFail(id),
+          async (request, offer) => {
+            const actor = await requireCurrentUser(request);
+            return jsonResponse(serializeOffer(await offerService.expire(actor, offer)));
           },
         ),
       ),
