@@ -8,6 +8,7 @@
     <a href="/talent-pool">Talent pool</a>
     <a href="/offer-templates">Offer templates</a>
     <a href="/positions">Positions</a>
+    <a href="/careers">Careers</a>
     <a href="/departments">Departments</a>
     <a href="/users/create">Create New User</a>
     <a href="/webhooks">Webhooks</a>
@@ -22,6 +23,7 @@
     <a href="/positions">Positions</a>
     <a href="/skills">Skills</a>
     <a href="/watching">Watchlist</a>
+    <a href="/careers">Careers</a>
   <% } else if (role === 3) { %>
     <a href="/">Home</a>
     <a href="/account">Account</a>
@@ -34,5 +36,8 @@
     <a href="/skills">Skills</a>
     <a href="/webhooks">Webhooks</a>
     <a href="/billing">Billing</a>
+    <a href="/careers">Careers</a>
+  <% } else { %>
+    <a href="/careers">Careers</a>
   <% } %>
 </nav>

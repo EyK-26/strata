@@ -1,0 +1,4 @@
+<h1>Careers</h1>
+<% (it.postings ?? []).forEach((posting) => { %>
+  <p><a href="/careers/<%= posting.id %>"><%= posting.name %></a></p>
+<% }) %>

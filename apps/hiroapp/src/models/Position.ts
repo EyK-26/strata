@@ -2,6 +2,7 @@ import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { positions } from "../modules/positions/repository.ts";
 import type { PositionRecord } from "../modules/positions/table.ts";
 import { Application } from "./Application.ts";
+import { CareerPosting } from "./CareerPosting.ts";
 import { Comment } from "./Comment.ts";
 import { Department } from "./Department.ts";
 import { Grade } from "./Grade.ts";
@@ -74,6 +75,10 @@ export class Position extends Model<PositionRecord, "id"> {
 
   requisition() {
     return this.hasOne(() => Requisition);
+  }
+
+  careerPosting() {
+    return this.hasOne(() => CareerPosting);
   }
 }
 
