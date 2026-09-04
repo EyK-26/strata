@@ -67,6 +67,8 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bun dedupe
+          bun run build:framework
+          bun run build:bootstrap
           scripts/with-host-env.sh sh -c "
             DOGFOOD_APP=workhub bun run cli migrate:fresh --seed &&
             DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&

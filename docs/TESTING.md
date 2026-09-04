@@ -62,7 +62,7 @@ For migration/seed/bootstrap queries that must read across tenants, use `runWith
 
 For HTMX integration tests, set `FRONTEND_MODE=server-htmx`.
 
-CI runs leftover WorkHub `src/db` migrate/seed (for core tests that inspect `tenant` RLS) plus HiroApp `migrate:fresh --seed` before the suite, and sets `WORKHUB_SKIP_TEST_BOOTSTRAP=1` so the Bun preload does not reset the leftover schema a second time. Local `bun test` without a prior migrate uses `tests/globalSetup.ts` to seed the leftover schema once at startup. That reset refuses `APP_ENV=production` and non-test `DATABASE_URL` values unless `WORKHUB_ALLOW_TEST_DB_RESET=1`.
+CI runs leftover WorkHub `src/db` migrate/seed (for core tests that inspect `tenant` RLS) plus HiroApp `migrate:fresh --seed` before the suite, and sets `WORKHUB_SKIP_TEST_BOOTSTRAP=1` so the Bun preload does not reset the leftover schema a second time. A clean checkout must `bun run build:framework` before HiroApp migrate because `apps/hiroapp` imports `@getstrata/core/*` subpaths from `packages/strata-core/dist`. Local `bun test` without a prior migrate uses `tests/globalSetup.ts` to seed the leftover schema once at startup. That reset refuses `APP_ENV=production` and non-test `DATABASE_URL` values unless `WORKHUB_ALLOW_TEST_DB_RESET=1`.
 
 Coverage exclusions and rationale: [COVERAGE.md](./COVERAGE.md).
 

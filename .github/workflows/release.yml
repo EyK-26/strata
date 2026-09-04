@@ -121,6 +121,8 @@ jobs:
           MEMBER_API_TOKEN: workhub-member-test-token
         run: |
           scripts/with-host-env.sh sh -c "
+            bun run build:framework &&
+            bun run build:bootstrap &&
             DOGFOOD_APP=workhub bun run cli migrate:fresh --seed &&
             DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
             bun run validate:ci
