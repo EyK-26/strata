@@ -99,6 +99,14 @@
         <form class="OfferForm" action="/applications/<%= it.application.id %>/offers" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+          <label>Template
+            <select name="template_id">
+              <option value="">None</option>
+              <% (it.offer_templates ?? []).forEach((template) => { %>
+                <option value="<%= template.id %>"><%= template.name %></option>
+              <% }) %>
+            </select>
+          </label>
           <label>Salary <input type="number" name="salary" min="1" /></label>
           <label>Starts <input type="date" name="starts_on" /></label>
           <label>Notes <textarea name="notes"></textarea></label>

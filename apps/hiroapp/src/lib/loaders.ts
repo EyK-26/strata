@@ -15,6 +15,8 @@ import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
 import { offers } from "../modules/offers/repository.ts";
 import { serializeOffer } from "../modules/offers/service.ts";
+import { offerTemplates } from "../modules/offerTemplates/repository.ts";
+import { serializeOfferTemplate } from "../modules/offerTemplates/service.ts";
 import { talentPool } from "../modules/pool/repository.ts";
 import { serializePoolEntry } from "../modules/pool/service.ts";
 import { referrals } from "../modules/referrals/repository.ts";
@@ -183,6 +185,7 @@ export async function loadApplicationDetail(applicationId: number) {
       : null,
     application_sources: sourceRows.map(serializeSource),
     talent_pool: poolEntry ? serializePoolEntry(poolEntry) : null,
+    offer_templates: (await offerTemplates.ordered()).map(serializeOfferTemplate),
     all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
 }

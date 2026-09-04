@@ -6,6 +6,8 @@ import { requireCurrentUser } from "../../http/currentUser.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
 import { Application } from "../../models/Application.ts";
 import { Offer } from "../../models/Offer.ts";
+import { OfferTemplate } from "../../models/OfferTemplate.ts";
+import { offerTemplateService } from "../offerTemplates/service.ts";
 import { offerService } from "./service.ts";
 
 function returnTo(fields: Record<string, string>, fallback: string) {
@@ -23,10 +25,21 @@ export function offerWebRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, application) => {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
+            let salary = Number(fields.salary);
+            let notes = fields.notes || null;
+            if (fields.template_id) {
+              const template = await OfferTemplate.findOrFail(Number(fields.template_id));
+              const materialized = await offerTemplateService.materialize(actor, template, {
+                salary: fields.salary ? Number(fields.salary) : null,
+                notes: fields.notes || null,
+              });
+              salary = materialized.salary;
+              notes = materialized.notes;
+            }
             const created = await offerService.create(actor, application, {
-              salary: Number(fields.salary),
+              salary,
               starts_on: fields.starts_on || null,
-              notes: fields.notes || null,
+              notes,
             });
             if (fields.send === "1") {
               const model = await Offer.findOrFail(created.id);
