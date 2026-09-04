@@ -21,6 +21,7 @@ import {
 import {
   type BelongsToManyRelation,
   type BelongsToRelation,
+  getByRelationKey,
   type HasManyRelation,
   indexBelongsToManyRelation,
   indexBelongsToRelation,
@@ -30,6 +31,7 @@ import {
   type MorphManyRelation,
   type MorphOneRelation,
   type MorphToRelation,
+  relationMatchKey,
 } from "./relationships.ts";
 import { repositoryConnection } from "./repositoryConnection";
 import { RepositoryQuery } from "./repositoryQuery.ts";
@@ -549,7 +551,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     const result = new Map<TParent[LocalKey], TEntity | undefined>();
 
     for (const parent of parents) {
-      const matches = grouped.get(parent[relation.localKey]) ?? [];
+      const matches = getByRelationKey(grouped, parent[relation.localKey]) ?? [];
       result.set(parent[relation.localKey], matches[0]);
     }
 
@@ -582,7 +584,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       idsByType.set(morphType, ids);
     }
 
-    const parentsByType = new Map<string, Map<TParent[OwnerKey], TParent>>();
+    const parentsByType = new Map<string, Map<string, TParent>>();
 
     for (const [morphType, ids] of idsByType) {
       const repository = repositoriesByType.get(morphType);
@@ -598,10 +600,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         } as unknown as QueryWhere<TParent>,
         options,
       );
-      const indexed = new Map<TParent[OwnerKey], TParent>();
+      const indexed = new Map<string, TParent>();
 
       for (const parent of parents) {
-        indexed.set(parent[ownerKey], parent);
+        indexed.set(relationMatchKey(parent[ownerKey]), parent);
       }
 
       parentsByType.set(morphType, indexed);

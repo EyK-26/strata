@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { Factory } from "@getstrata/core/database/factory";
-import { Model, registerModelClass, registerModelRepository } from "@getstrata/core/database/model";
+import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 import { JsonResource } from "@getstrata/core/http/resources";
 
@@ -157,7 +157,6 @@ function createGraph(connection: FakeConnection) {
       }
     })(),
   );
-  registerModelClass("PositionModel", PositionModel);
 
   return { UserModel, ApplicationModel, PositionModel, NotificationModel, ApplicationFactory };
 }
@@ -195,6 +194,29 @@ describe("HiroApp-shaped Eloquent parity", () => {
     const one = await ApplicationModel.with("user", "position").findOrFail(1);
     expect(one.get("id")).toBe(1);
     expect(connection.calls.some((call) => call.query.toLowerCase().includes("limit"))).toBe(true);
+  });
+
+  test("with() and nested load match int4 PKs to int8 FKs", async () => {
+    const connection = new FakeConnection();
+    const { ApplicationModel, UserModel } = createGraph(connection);
+
+    connection.queue([{ id: 1, user_id: 7n, position_id: 4n }]);
+    connection.queue([{ id: 4, name: "Office", hiring: true, user_id: 7 }]);
+    const apps = await ApplicationModel.with("position").get();
+    expect(apps[0]?.loaded<{ get: (key: string) => unknown }>("position")?.get("name")).toBe(
+      "Office",
+    );
+
+    connection.queue([{ id: 7, name: "Ada", role_id: 2 }]);
+    connection.queue([{ id: 1, user_id: 7n, position_id: 4n }]);
+    connection.queue([{ id: 4, name: "Office", hiring: true, user_id: 7 }]);
+    const users = await UserModel.with("applications.position").get();
+    const nestedApps =
+      users[0]?.loaded<
+        Array<{ loaded: (name: string) => { get: (key: string) => unknown } | undefined }>
+      >("applications");
+    expect(nestedApps).toHaveLength(1);
+    expect(nestedApps?.[0]?.loaded("position")?.get("name")).toBe("Office");
   });
 
   test("belongsTo whereHas threads extra constraints into EXISTS", async () => {
@@ -267,6 +289,19 @@ describe("HiroApp-shaped Eloquent parity", () => {
     expect(created.position_id).toBe(4);
 
     expect(JsonResource.collection([{ a: 1 }]).toResponse()).toEqual({ data: [{ a: 1 }] });
+  });
+
+  test("registerModelRepository names the class; registerModelClass is not required", async () => {
+    const connection = new FakeConnection();
+    const { ApplicationModel } = createGraph(connection);
+
+    connection.queue([{ id: 4, name: "Office", hiring: true, user_id: 7 }]);
+    const application = new ApplicationModel(
+      { id: 1, user_id: 7, position_id: 4 },
+      ApplicationModel.repository(),
+    );
+    const position = await application.position();
+    expect(position?.get("name")).toBe("Office");
   });
 
   test("primaryKey defaults to id without an override", () => {

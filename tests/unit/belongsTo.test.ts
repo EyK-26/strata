@@ -119,6 +119,20 @@ describe("belongsTo eager loading", () => {
 
     expect(indexed.get(10)).toEqual({ id: 10, label: "Alpha" });
   });
+
+  test("matches int4 owner keys to int8 foreign keys", () => {
+    const members = [{ id: 1, name: "Ripley", squad_id: 10n as unknown as number }];
+    const squads = [{ id: 10, label: "Alpha" }];
+
+    const indexed = indexBelongsToRelation(members, squads, {
+      type: "belongsTo",
+      name: "squad",
+      foreignKey: "squad_id",
+      ownerKey: "id",
+    });
+
+    expect(indexed.get(10n as unknown as number)).toEqual({ id: 10, label: "Alpha" });
+  });
 });
 
 describe("hasMany eager loading", () => {
@@ -136,5 +150,19 @@ describe("hasMany eager loading", () => {
 
     expect(grouped.get(10)).toEqual([]);
     expect(grouped.get(20)).toEqual([]);
+  });
+
+  test("matches int4 parent keys to int8 child foreign keys", async () => {
+    const connection = new FakeConnection();
+    const crewRepository = new CrewRepository(connection);
+    const squads: Squad[] = [{ id: 10, label: "Alpha" }];
+
+    connection.queue([{ id: 1, name: "Ripley", squad_id: 10n }]);
+
+    const grouped = await crewRepository.loadBySquads(squads);
+
+    expect(grouped.get(10)).toEqual([
+      { id: 1, name: "Ripley", squad_id: 10n as unknown as number },
+    ]);
   });
 });

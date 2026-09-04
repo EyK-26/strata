@@ -21,6 +21,7 @@ import type {
 import {
   belongsTo,
   belongsToMany,
+  getByRelationKey,
   hasMany,
   hasOne,
   indexBelongsToManyRelation,
@@ -216,6 +217,7 @@ function resolveModelRepository(model: object): BaseRepository<Record<string, un
   return repository;
 }
 
+/** Alias for `hasMany("Name")` when `Name` is not `constructor.name` or `$morphClass`. */
 function registerModelClass(name: string, model: object): void {
   namedModels.set(name, model);
 }
@@ -1138,7 +1140,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     const grouped = await childRepository
       .withConnection(this.repository.getConnection())
       .loadHasManyForParents([this.attributes], relation, options);
-    const loaded = grouped.get(this.attributes[relation.localKey]) ?? [];
+    const loaded = getByRelationKey(grouped, this.attributes[relation.localKey]) ?? [];
     return Object.assign(this, { [as]: loaded }) as this & Record<Alias, TChild[]>;
   }
 
@@ -1180,7 +1182,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       parentRepository,
       options,
     );
-    const loaded = grouped.get(this.attributes[relation.foreignKey as keyof TEntity] as never);
+    const loaded = getByRelationKey(grouped, this.attributes[relation.foreignKey as keyof TEntity]);
     return Object.assign(this, { [as]: loaded }) as this & Record<Alias, TParent | undefined>;
   }
 
@@ -1229,7 +1231,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       } as never,
     });
     const grouped = indexBelongsToManyRelation([this.attributes], pivotRows, relatedRows, relation);
-    const loaded = grouped.get(parentId) ?? [];
+    const loaded = getByRelationKey(grouped, parentId) ?? [];
     return Object.assign(this, { [as]: loaded }) as this & Record<Alias, TRelated[]>;
   }
 
@@ -1425,6 +1427,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 }
 
+/** Binds a Model class to its table/connection and names it for `hasMany("User")`. */
 function registerModelRepository<TModelClass>(model: TModelClass, repository: object): TModelClass {
   modelRepositories.set(
     model as object,
