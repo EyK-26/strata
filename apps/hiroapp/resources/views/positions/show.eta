@@ -64,6 +64,33 @@
       <button type="submit">Add referral</button>
     </form>
   <% } %>
+  <h3>Interview slots</h3>
+  <% (it.slots ?? []).forEach((slot) => { %>
+    <p><%= slot.starts_at %> – <%= slot.ends_at %> · <%= slot.status %></p>
+    <% if (it.currentUser?.role_id !== 2 && slot.status === "open") { %>
+      <form action="/slots/<%= slot.id %>/cancel" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+        <button type="submit">Cancel slot</button>
+      </form>
+    <% } %>
+    <% if (it.currentUser?.role_id === 2 && slot.status === "open") { %>
+      <form action="/slots/<%= slot.id %>/book" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+        <button type="submit">Book slot</button>
+      </form>
+    <% } %>
+  <% }) %>
+  <% if (it.currentUser?.role_id !== 2) { %>
+    <form class="SlotForm" action="/positions/<%= it.position.id %>/slots" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+      <label>Starts <input type="datetime-local" name="starts_at" /></label>
+      <label>Ends <input type="datetime-local" name="ends_at" /></label>
+      <button type="submit">Add slot</button>
+    </form>
+  <% } %>
   <div class="comments">
     <h3>Comments</h3>
     <% (it.comments ?? []).forEach((comment) => { %>

@@ -19,6 +19,8 @@ import { referrals } from "../modules/referrals/repository.ts";
 import { serializeReferral } from "../modules/referrals/service.ts";
 import { applicationRejections, rejectionReasons } from "../modules/rejections/repository.ts";
 import { serializeReason, serializeRejection } from "../modules/rejections/service.ts";
+import { slots } from "../modules/slots/repository.ts";
+import { serializeSlot } from "../modules/slots/service.ts";
 import { applicationAttributions, applicationSources } from "../modules/sources/repository.ts";
 import { serializeAttribution, serializeSource } from "../modules/sources/service.ts";
 import type { UserRecord } from "../modules/users/repository.ts";
@@ -85,6 +87,7 @@ export async function loadPositionWithApplications(positionId: number) {
     }),
     comments: comments.map((row) => row.toArray()),
     referrals: (await referrals.forPosition(positionId)).map(serializeReferral),
+    slots: (await slots.forPosition(positionId)).map(serializeSlot),
     applications: apps.map((application) => {
       const applicant = application.loaded<User>("user");
       const status = application.loaded<{

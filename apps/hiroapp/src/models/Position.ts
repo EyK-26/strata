@@ -7,6 +7,7 @@ import { Department } from "./Department.ts";
 import { Grade } from "./Grade.ts";
 import { Referral } from "./Referral.ts";
 import { Skill } from "./Skill.ts";
+import { Slot } from "./Slot.ts";
 import { User } from "./User.ts";
 
 export class Position extends Model<PositionRecord, "id"> {
@@ -64,6 +65,10 @@ export class Position extends Model<PositionRecord, "id"> {
 
   referrals() {
     return this.hasMany(() => Referral);
+  }
+
+  slots() {
+    return this.hasMany(() => Slot);
   }
 }
 
