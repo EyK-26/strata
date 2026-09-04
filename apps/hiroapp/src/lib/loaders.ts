@@ -37,6 +37,8 @@ import { slots } from "../modules/slots/repository.ts";
 import { serializeSlot } from "../modules/slots/service.ts";
 import { applicationAttributions, applicationSources } from "../modules/sources/repository.ts";
 import { serializeAttribution, serializeSource } from "../modules/sources/service.ts";
+import { candidateTags } from "../modules/tags/repository.ts";
+import { serializeTag } from "../modules/tags/service.ts";
 import type { UserRecord } from "../modules/users/repository.ts";
 
 async function inboxFor(user: User | UserRecord) {
@@ -220,5 +222,6 @@ export async function loadUserDetail(userId: number) {
     notifications: inbox.map((row) => new NotificationResource(row).toArray()),
     position_name: position?.get("name") ?? null,
     department_name: department?.name ?? null,
+    tags: (await candidateTags.forUser(userId)).map(serializeTag),
   };
 }

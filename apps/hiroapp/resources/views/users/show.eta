@@ -9,6 +9,21 @@
     </form>
   <% } %>
   <% if (it.currentUser?.role_id !== 2) { %>
+    <h3>Tags</h3>
+    <% (it.tags ?? []).forEach((tag) => { %>
+      <p><%= tag.label %></p>
+      <form action="/tags/<%= tag.id %>/delete" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <input type="hidden" name="return_to" value="/users/<%= it.user.id %>" />
+        <button type="submit">Remove tag</button>
+      </form>
+    <% }) %>
+    <form class="TagForm" action="/users/<%= it.user.id %>/tags" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <input type="hidden" name="return_to" value="/users/<%= it.user.id %>" />
+      <label>Label <input name="label" /></label>
+      <button type="submit">Add tag</button>
+    </form>
     <form class="ContactUser" action="/notify" method="post">
       <%~ include("../partials/csrf.eta") %>
       <input type="hidden" name="to" value="<%= it.user.email %>" />

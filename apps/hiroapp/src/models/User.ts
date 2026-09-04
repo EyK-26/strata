@@ -3,6 +3,7 @@ import { users } from "../modules/users/repository.ts";
 import type { UserRecord } from "../modules/users/table.ts";
 import { Application } from "./Application.ts";
 import { CandidateMerge } from "./CandidateMerge.ts";
+import { CandidateTag } from "./CandidateTag.ts";
 import { Department } from "./Department.ts";
 import { Notification } from "./Notification.ts";
 import { Position } from "./Position.ts";
@@ -58,6 +59,10 @@ export class User extends Model<UserRecord, "id"> {
 
   candidateMerges() {
     return this.hasMany(() => CandidateMerge, "target_user_id");
+  }
+
+  candidateTags() {
+    return this.hasMany(() => CandidateTag);
   }
 }
 
