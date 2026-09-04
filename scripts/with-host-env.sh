@@ -9,5 +9,6 @@ export CACHE_DRIVER="${CACHE_DRIVER:-redis}"
 export QUEUE_DRIVER="${QUEUE_DRIVER:-sync}"
 export APP_KEY_PREFIX="${APP_KEY_PREFIX:-workhub}"
 export APP_NAME="${APP_NAME:-WorkHub}"
+export DOGFOOD_APP="${DOGFOOD_APP:-workhub}"
 
 exec "$@"

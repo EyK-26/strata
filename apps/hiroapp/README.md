@@ -5,7 +5,7 @@ In-repo dogfood app for Strata. One domain, two skins:
 - `FRONTEND_MODE=spa-react` — React SPA (`frontend/`)
 - `FRONTEND_MODE=server-htmx` — HTMX + Eta (`resources/views/`)
 
-WorkHub stays the default dogfood app. HiroApp uses an isolated Postgres database (`hiroapp_test`) so the two schemas never share a `users` table.
+`bun run dev` starts HiroApp (Wave 5). WorkHub stays the Jetstream / SCIM / RLS dogfood (`bun run workhub:dev`) and the CI coverage gate. HiroApp uses an isolated Postgres database (`hiroapp_test`) so the two schemas never share a `users` table. See [docs/DOGFOOD.md](../../docs/DOGFOOD.md).
 
 ## Run
 

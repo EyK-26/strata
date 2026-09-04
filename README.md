@@ -11,7 +11,9 @@ Published packages (import **subpaths**, not the root barrel):
 | `@getstrata/cli` | `strata` CLI |
 | `@getstrata/starter` | `bun create strata` |
 
-Application code is under `src/modules/`. CI blocks root `@getstrata/core` imports (`scripts/verify-no-root-imports.ts`).
+In-repo apps: **HiroApp** (`apps/hiroapp`) is the `bun run dev` default (hiring + Eloquent). **WorkHub** (`src/modules`) stays the Jetstream / SCIM / RLS dogfood and the CI coverage gate (`bun run workhub:dev`). See [docs/DOGFOOD.md](docs/DOGFOOD.md).
+
+CI blocks root `@getstrata/core` imports (`scripts/verify-no-root-imports.ts`).
 
 Pinned versions:
 

@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "start": "strata start",
-    "dev": "strata dev",
+    "dev": "DOGFOOD_APP=hiroapp strata dev",
     "check": "tsc --noEmit",
     "lint": "biome check .",
     "lint:ci": "biome ci .",
@@ -46,6 +46,9 @@
     "hiroapp:fresh": "DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed",
     "hiroapp:dev": "DOGFOOD_APP=hiroapp bun run dev",
     "hiroapp:dev:htmx": "DOGFOOD_APP=hiroapp FRONTEND_MODE=server-htmx bun run dev",
+    "workhub:fresh": "DOGFOOD_APP=workhub bun run cli migrate:fresh --seed",
+    "workhub:dev": "DOGFOOD_APP=workhub strata dev",
+    "workhub:dev:htmx": "DOGFOOD_APP=workhub FRONTEND_MODE=server-htmx strata dev",
     "test:parallel": "scripts/test-parallel.sh",
     "deps:dedupe": "bun dedupe",
     "deps:audit": "bun audit",
