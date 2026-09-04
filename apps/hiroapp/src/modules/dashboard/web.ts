@@ -37,6 +37,7 @@ import { interviewNotification, notifyUser } from "../notifications/service.ts";
 import { interviewerService } from "../positions/interviewers.ts";
 import { positions } from "../positions/repository.ts";
 import { positionService } from "../positions/service.ts";
+import { sourceService } from "../sources/service.ts";
 import { users } from "../users/repository.ts";
 import { failedJobsAdmin } from "./failedJobs.ts";
 
@@ -398,7 +399,10 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
             if (user.role_id !== ROLE.CANDIDATE) {
               return redirectResponse("/");
             }
-            return renderPage(request, "applications/apply", { position_id: Number(position.id) });
+            return renderPage(request, "applications/apply", {
+              position_id: Number(position.id),
+              application_sources: await sourceService.list(),
+            });
           },
         ),
       ),
@@ -409,6 +413,7 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
           position_id: Number(fields.position_id),
           attachment_text: fields.attachment_text || null,
           attachment_file: fields.attachment_file || null,
+          source_id: fields.source_id ? Number(fields.source_id) : null,
         });
         return redirectResponse(`/applications/${created.id}`);
       }),

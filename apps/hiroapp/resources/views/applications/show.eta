@@ -111,6 +111,24 @@
           <p><%= rejection.reason_name %> · <%= rejection.notes %></p>
         <% }) %>
       <% } %>
+      <% if (it.source) { %>
+        <p>Source: <%= it.source.source_name %></p>
+      <% } %>
+      <% if (it.roleId !== 2) { %>
+        <form class="SourceForm" action="/applications/<%= it.application.id %>/source" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+          <label>Source
+            <select name="source_id">
+              <% (it.application_sources ?? []).forEach((source) => { %>
+                <option value="<%= source.id %>"><%= source.name %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label>Notes <textarea name="notes"></textarea></label>
+          <button type="submit">Save source</button>
+        </form>
+      <% } %>
       <% if (it.roleId !== 2 && it.application.status_id < 6) { %>
         <form class="RejectForm" action="/applications/<%= it.application.id %>/reject" method="post">
           <%~ include("../partials/csrf.eta") %>

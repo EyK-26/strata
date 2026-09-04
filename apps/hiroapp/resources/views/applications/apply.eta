@@ -10,6 +10,15 @@
       Please share the link to your talent profile:
       <input type="url" name="attachment_file" />
     </label>
+    <label>
+      How did you hear about this role?
+      <select name="source_id">
+        <option value="">Prefer not to say</option>
+        <% (it.application_sources ?? []).forEach((source) => { %>
+          <option value="<%= source.id %>"><%= source.name %></option>
+        <% }) %>
+      </select>
+    </label>
     <button>Apply</button>
   </form>
 </div>

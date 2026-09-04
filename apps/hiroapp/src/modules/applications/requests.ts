@@ -6,6 +6,7 @@ export interface CreateApplicationPayload {
   position_id: number;
   attachment_text: string | null;
   attachment_file: string | null;
+  source_id: number | null;
 }
 
 export class CreateApplicationRequest extends FormRequest<CreateApplicationPayload> {
@@ -21,6 +22,10 @@ export class CreateApplicationRequest extends FormRequest<CreateApplicationPaylo
       position_id,
       attachment_text: typeof body.attachment_text === "string" ? body.attachment_text : null,
       attachment_file: typeof body.attachment_file === "string" ? body.attachment_file : null,
+      source_id:
+        body.source_id === undefined || body.source_id === null || body.source_id === ""
+          ? null
+          : Number(body.source_id),
     };
   }
 }

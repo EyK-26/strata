@@ -13,6 +13,7 @@ import { User } from "../../models/User.ts";
 import { endedNotification, hiredNotification, notifyUser } from "../notifications/service.ts";
 import { positions } from "../positions/repository.ts";
 import { referralService } from "../referrals/service.ts";
+import { sourceService } from "../sources/service.ts";
 import { users } from "../users/repository.ts";
 import type { UserRecord } from "../users/table.ts";
 import { applications } from "./repository.ts";
@@ -37,6 +38,7 @@ export type ApplyPayload = {
   position_id: number;
   attachment_text: string | null;
   attachment_file: string | null;
+  source_id?: number | null;
 };
 
 function emptyCounts(): PipelineCounts {
@@ -158,6 +160,9 @@ export class ApplicationService {
     if (!position || hiringFlag(position.hiring) !== 1) {
       throw new UnprocessableEntityError("Position is not open for applications.");
     }
+    if (payload.source_id != null) {
+      await sourceService.assertKnown(Number(payload.source_id));
+    }
     const existing = await Application.withTrashed()
       .where({ user_id: user.id, position_id: payload.position_id })
       .first();
@@ -182,6 +187,9 @@ export class ApplicationService {
       });
     }
     await referralService.markApplied(user.email, payload.position_id);
+    if (payload.source_id != null) {
+      await sourceService.record(user, application, { source_id: Number(payload.source_id) });
+    }
     return application;
   }
 

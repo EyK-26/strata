@@ -19,6 +19,8 @@ import { referrals } from "../modules/referrals/repository.ts";
 import { serializeReferral } from "../modules/referrals/service.ts";
 import { applicationRejections, rejectionReasons } from "../modules/rejections/repository.ts";
 import { serializeReason, serializeRejection } from "../modules/rejections/service.ts";
+import { applicationAttributions, applicationSources } from "../modules/sources/repository.ts";
+import { serializeAttribution, serializeSource } from "../modules/sources/service.ts";
 import type { UserRecord } from "../modules/users/repository.ts";
 
 async function inboxFor(user: User | UserRecord) {
@@ -148,6 +150,9 @@ export async function loadApplicationDetail(applicationId: number) {
   const reasonRows = await rejectionReasons.ordered();
   const reasonName = new Map(reasonRows.map((row) => [Number(row.id), row.name]));
   const rejectionRows = await applicationRejections.forApplication(applicationId);
+  const sourceRows = await applicationSources.ordered();
+  const sourceName = new Map(sourceRows.map((row) => [Number(row.id), row.name]));
+  const attribution = await applicationAttributions.forApplication(applicationId);
   return {
     application: mergeResource(new ApplicationResource(application), {
       user: user ? new UserResource(user).toArray() : null,
@@ -164,6 +169,13 @@ export async function loadApplicationDetail(applicationId: number) {
       reason_name: reasonName.get(Number(row.reason_id)) ?? null,
     })),
     rejection_reasons: reasonRows.map(serializeReason),
+    source: attribution
+      ? {
+          ...serializeAttribution(attribution),
+          source_name: sourceName.get(Number(attribution.source_id)) ?? null,
+        }
+      : null,
+    application_sources: sourceRows.map(serializeSource),
     all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
 }
