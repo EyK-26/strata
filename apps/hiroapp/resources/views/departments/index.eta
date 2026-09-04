@@ -4,6 +4,24 @@
     <p><a href="/departments/create">Create department</a></p>
   <% } %>
   <% (it.departments ?? []).forEach((department) => { %>
-    <div class="list-item"><%= department.name %></div>
+    <div class="list-item">
+      <span><%= department.name %></span>
+      <span><%= department.hiring_frozen ? "frozen" : "hiring" %></span>
+      <% if (it.currentUser?.role_id === 1) { %>
+        <% if (department.hiring_frozen) { %>
+          <form action="/departments/<%= department.id %>/unfreeze" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/departments" />
+            <button type="submit">Unfreeze hiring</button>
+          </form>
+        <% } else { %>
+          <form action="/departments/<%= department.id %>/freeze" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/departments" />
+            <button type="submit">Freeze hiring</button>
+          </form>
+        <% } %>
+      <% } %>
+    </div>
   <% }) %>
 </div>

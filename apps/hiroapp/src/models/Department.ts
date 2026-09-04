@@ -6,7 +6,7 @@ import { Position } from "./Position.ts";
 import { User } from "./User.ts";
 
 export class Department extends Model<DepartmentRecord, "id"> {
-  static $fillable = ["name"] as const;
+  static $fillable = ["name", "hiring_frozen"] as const;
   static $guarded = [] as const;
   static $casts = { id: "integer" } as const;
 

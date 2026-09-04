@@ -10,6 +10,7 @@ import { hiringFlag } from "../../lib/serialize.ts";
 import { resolveStaffDepartmentId } from "../../lib/staffTeam.ts";
 import { Application } from "../../models/Application.ts";
 import { User } from "../../models/User.ts";
+import { departmentService } from "../departments/service.ts";
 import { endedNotification, hiredNotification, notifyUser } from "../notifications/service.ts";
 import { positions } from "../positions/repository.ts";
 import { referralService } from "../referrals/service.ts";
@@ -160,6 +161,7 @@ export class ApplicationService {
     if (!position || hiringFlag(position.hiring) !== 1) {
       throw new UnprocessableEntityError("Position is not open for applications.");
     }
+    await departmentService.assertHiringOpen(Number(position.department_id));
     if (payload.source_id != null) {
       await sourceService.assertKnown(Number(payload.source_id));
     }

@@ -10,6 +10,7 @@ import { isStaff } from "../../lib/roles.ts";
 import { hiringFlag, iso } from "../../lib/serialize.ts";
 import type { CareerPosting } from "../../models/CareerPosting.ts";
 import type { Position } from "../../models/Position.ts";
+import { departmentService } from "../departments/service.ts";
 import { positions } from "../positions/repository.ts";
 import type { UserRecord } from "../users/table.ts";
 import { careerPostings } from "./repository.ts";
@@ -91,6 +92,7 @@ export class CareerService {
     if (!isHiring({ hiring: position.get("hiring") as boolean | number | null })) {
       throw new UnprocessableEntityError("Only an open hiring seat can be published.");
     }
+    await departmentService.assertHiringOpen(Number(position.get("department_id")));
     const existing = await careerPostings.forPosition(Number(position.id));
     if (existing && asPostingStatus(existing.status) === "published") {
       throw new ConflictError("This position is already published to careers.");

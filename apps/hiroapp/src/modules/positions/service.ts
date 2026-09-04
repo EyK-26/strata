@@ -12,6 +12,7 @@ import { resolveStaffDepartmentId } from "../../lib/staffTeam.ts";
 import { Position } from "../../models/Position.ts";
 import { applications } from "../applications/repository.ts";
 import { departments } from "../departments/repository.ts";
+import { departmentService } from "../departments/service.ts";
 import type { UserRecord } from "../users/table.ts";
 import { positions } from "./repository.ts";
 import type { PositionRecord } from "./table.ts";
@@ -133,6 +134,7 @@ export class PositionService {
     if (!department) {
       throw new UnprocessableEntityError("Department not found.");
     }
+    await departmentService.assertHiringOpen(departmentId);
     const created = await positions.create({
       user_id: null,
       department_id: departmentId,
@@ -220,6 +222,7 @@ export class PositionService {
     if (position.get("user_id")) {
       throw new ConflictError("Occupied positions cannot be reopened.");
     }
+    await departmentService.assertHiringOpen(Number(position.get("department_id")));
     await position.update({ hiring: true });
     await recordHiringEvent(
       "position.reopened",
