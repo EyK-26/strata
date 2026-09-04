@@ -12,6 +12,7 @@ import { Application } from "../../models/Application.ts";
 import { User } from "../../models/User.ts";
 import { endedNotification, hiredNotification, notifyUser } from "../notifications/service.ts";
 import { positions } from "../positions/repository.ts";
+import { referralService } from "../referrals/service.ts";
 import { users } from "../users/repository.ts";
 import type { UserRecord } from "../users/table.ts";
 import { applications } from "./repository.ts";
@@ -163,6 +164,7 @@ export class ApplicationService {
     if (existing && !existing.get("deleted_at")) {
       throw new ConflictError("You have already applied to this position.");
     }
+    let application: Application;
     if (existing) {
       await existing.restore();
       await existing.update({
@@ -170,14 +172,17 @@ export class ApplicationService {
         attachment_text: payload.attachment_text,
         attachment_file: payload.attachment_file,
       });
-      return existing;
+      application = existing;
+    } else {
+      application = await User.newFromRecord(user).applications().create({
+        position_id: payload.position_id,
+        status_id: STATUS.APPLIED,
+        attachment_text: payload.attachment_text,
+        attachment_file: payload.attachment_file,
+      });
     }
-    return User.newFromRecord(user).applications().create({
-      position_id: payload.position_id,
-      status_id: STATUS.APPLIED,
-      attachment_text: payload.attachment_text,
-      attachment_file: payload.attachment_file,
-    });
+    await referralService.markApplied(user.email, payload.position_id);
+    return application;
   }
 
   async move(actor: UserRecord, application: Application) {

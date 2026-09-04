@@ -43,6 +43,27 @@
       <span><%= application.status?.name %></span>
     </a>
   <% }) %>
+  <% if (it.currentUser?.role_id !== 2) { %>
+    <h3>Referrals</h3>
+    <% (it.referrals ?? []).forEach((referral) => { %>
+      <p><%= referral.name %> · <%= referral.email %> · <%= referral.status %></p>
+      <% if (referral.status !== "closed") { %>
+        <form action="/referrals/<%= referral.id %>/close" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+          <button type="submit">Close referral</button>
+        </form>
+      <% } %>
+    <% }) %>
+    <form class="ReferralForm" action="/positions/<%= it.position.id %>/referrals" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+      <label>Name <input type="text" name="name" /></label>
+      <label>Email <input type="email" name="email" /></label>
+      <label>Notes <textarea name="notes"></textarea></label>
+      <button type="submit">Add referral</button>
+    </form>
+  <% } %>
   <div class="comments">
     <h3>Comments</h3>
     <% (it.comments ?? []).forEach((comment) => { %>

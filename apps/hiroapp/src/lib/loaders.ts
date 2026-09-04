@@ -15,6 +15,8 @@ import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
 import { offers } from "../modules/offers/repository.ts";
 import { serializeOffer } from "../modules/offers/service.ts";
+import { referrals } from "../modules/referrals/repository.ts";
+import { serializeReferral } from "../modules/referrals/service.ts";
 import { applicationRejections, rejectionReasons } from "../modules/rejections/repository.ts";
 import { serializeReason, serializeRejection } from "../modules/rejections/service.ts";
 import type { UserRecord } from "../modules/users/repository.ts";
@@ -80,6 +82,7 @@ export async function loadPositionWithApplications(positionId: number) {
       department: department ? new NamedResource(department).toArray() : null,
     }),
     comments: comments.map((row) => row.toArray()),
+    referrals: (await referrals.forPosition(positionId)).map(serializeReferral),
     applications: apps.map((application) => {
       const applicant = application.loaded<User>("user");
       const status = application.loaded<{

@@ -5,6 +5,7 @@ import { Application } from "./Application.ts";
 import { Comment } from "./Comment.ts";
 import { Department } from "./Department.ts";
 import { Grade } from "./Grade.ts";
+import { Referral } from "./Referral.ts";
 import { Skill } from "./Skill.ts";
 import { User } from "./User.ts";
 
@@ -59,6 +60,10 @@ export class Position extends Model<PositionRecord, "id"> {
 
   comments() {
     return this.morphMany(() => Comment, "commentable");
+  }
+
+  referrals() {
+    return this.hasMany(() => Referral);
   }
 }
 
