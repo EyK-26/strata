@@ -11,8 +11,8 @@
         <div class="logo_with_number">Inbox: <%= notes.filter((n) => !n.read_at).length %></div>
         <% notes.forEach((msg) => { %>
           <div class="<%= msg.read_at ? 'notification_preview message_read' : 'notification_preview' %>">
-            <span>From: <%= msg.data?.from %></span>
-            <span>Subject: <%= msg.data?.subject %></span>
+            <span>From: <%= msg.data?.from ?? "HiroApp" %></span>
+            <span>Subject: <%= msg.data?.subject ?? msg.type ?? "Notification" %></span>
           </div>
         <% }) %>
       </div>

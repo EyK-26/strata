@@ -29,7 +29,11 @@ eventBus.listen(APPLICATION_SUBMITTED, async (payload) => {
   await notifyUser({
     userId: Number(applicant.id),
     type: "App\\Notifications\\ApplicationSubmitted",
-    data: { application_id: Number(application.id) },
+    data: {
+      application_id: Number(application.id),
+      from: "HiroApp",
+      subject: "Application received",
+    },
     email: {
       to: email,
       subject: "Application received",
