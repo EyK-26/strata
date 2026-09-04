@@ -1,0 +1,22 @@
+<div class="UserDetail">
+  <h2><%= it.user.first_name %> <%= it.user.last_name %></h2>
+  <p><%= it.user.email %></p>
+  <p><%= it.position_name %> — <%= it.department_name %></p>
+  <% if (it.currentUser?.role_id === 1) { %>
+    <form action="/users/<%= it.user.id %>/delete" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <button type="submit">Delete user</button>
+    </form>
+  <% } %>
+  <% if (it.currentUser?.role_id !== 2) { %>
+    <form class="ContactUser" action="/notify" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <input type="hidden" name="to" value="<%= it.user.email %>" />
+      <input type="hidden" name="from" value="<%= it.currentUser.email %>" />
+      <input type="hidden" name="return_to" value="/users/<%= it.user.id %>" />
+      <label>Subject <input type="text" name="subject" required /></label>
+      <label>Message <textarea name="text" required></textarea></label>
+      <button>Send</button>
+    </form>
+  <% } %>
+</div>

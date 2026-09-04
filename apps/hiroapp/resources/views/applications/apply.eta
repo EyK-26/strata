@@ -1,0 +1,15 @@
+<div class="CreateApplication">
+  <form action="/apply/<%= it.position_id %>" method="post">
+    <%~ include("../partials/csrf.eta") %>
+    <input type="hidden" name="position_id" value="<%= it.position_id %>" />
+    <label>
+      Please share few words about you and your application.
+      <textarea name="attachment_text"></textarea>
+    </label>
+    <label>
+      Please share the link to your talent profile:
+      <input type="url" name="attachment_file" />
+    </label>
+    <button>Apply</button>
+  </form>
+</div>

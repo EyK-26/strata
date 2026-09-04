@@ -1,0 +1,16 @@
+<div class="FailedJobs">
+  <h2>Failed jobs</h2>
+  <% it.jobs.forEach((job) => { %>
+    <div class="list-item">
+      <p><%= job.job_name %></p>
+      <pre><%= job.exception %></pre>
+      <form action="/failed-jobs/<%= job.id %>/retry" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <button type="submit">Retry</button>
+      </form>
+    </div>
+  <% }) %>
+  <% if (it.jobs.length === 0) { %>
+    <p>No failed jobs.</p>
+  <% } %>
+</div>

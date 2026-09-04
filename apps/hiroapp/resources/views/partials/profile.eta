@@ -1,0 +1,27 @@
+<% if (it.currentUser) { %>
+  <div class="UserProfile" style="margin-bottom: 1em">
+    <div class="NavigationMobile">
+      <%~ include("./nav.eta") %>
+    </div>
+    <span class="username"><%= it.currentUser.first_name %> <%= it.currentUser.last_name %></span>
+    <span class="department"><%= it.currentUser.position?.department?.name ?? "" %></span>
+    <% const notes = it.notifications ?? it.currentUser.notifications ?? [] %>
+    <% if (notes.length > 0) { %>
+      <div class="inbox">
+        <div class="logo_with_number">Inbox: <%= notes.filter((n) => !n.read_at).length %></div>
+        <% notes.forEach((msg) => { %>
+          <div class="<%= msg.read_at ? 'notification_preview message_read' : 'notification_preview' %>">
+            <span>From: <%= msg.data?.from %></span>
+            <span>Subject: <%= msg.data?.subject %></span>
+          </div>
+        <% }) %>
+      </div>
+    <% } else { %>
+      Your Inbox is Empty
+    <% } %>
+    <form action="/logout" method="post">
+      <%~ include("./csrf.eta") %>
+      <button type="submit">Logout</button>
+    </form>
+  </div>
+<% } %>

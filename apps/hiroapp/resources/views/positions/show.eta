@@ -1,0 +1,40 @@
+<div class="PositionDetail">
+  <h2><%= it.position.name %></h2>
+  <p><%= it.position.description %></p>
+  <p>Department: <%= it.position.department?.name %></p>
+  <p>Grade: <%= it.position.grade?.name %></p>
+  <% if (it.currentUser?.role_id === 1) { %>
+    <form action="/positions/<%= it.position.id %>/delete" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <button type="submit">Close position</button>
+    </form>
+  <% } %>
+  <% if (it.currentUser?.role_id !== 2) { %>
+    <p><a href="/positions/<%= it.position.id %>/skills">Skills and match</a></p>
+    <% if (it.position.department_id) { %>
+      <p><a href="/departments/<%= it.position.department_id %>/applications">Department applications</a></p>
+    <% } %>
+  <% } %>
+  <form action="/positions/<%= it.position.id %>/watch" method="post">
+    <%~ include("../partials/csrf.eta") %>
+    <button type="submit">Toggle watch</button>
+  </form>
+  <h3>Applicants</h3>
+  <% it.applications.forEach((application) => { %>
+    <a class="list-item" href="/applications/<%= application.id %>">
+      <span><%= application.user?.first_name %> <%= application.user?.last_name %></span>
+      <span><%= application.status?.name %></span>
+    </a>
+  <% }) %>
+  <div class="comments">
+    <h3>Comments</h3>
+    <% (it.comments ?? []).forEach((comment) => { %>
+      <p><%= comment.body %></p>
+    <% }) %>
+    <form action="/positions/<%= it.position.id %>/comments" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <label>Add comment <textarea name="body"></textarea></label>
+      <button type="submit">Save comment</button>
+    </form>
+  </div>
+</div>

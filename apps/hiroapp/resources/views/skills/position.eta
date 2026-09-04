@@ -1,0 +1,18 @@
+<div class="PositionSkills">
+  <h2>Skills for <%= it.position.name %></h2>
+  <ul>
+    <% it.attached.forEach((skill) => { %>
+      <li><%= skill.name %></li>
+    <% }) %>
+  </ul>
+  <form action="/positions/<%= it.position.id %>/skills" method="post">
+    <%~ include("../partials/csrf.eta") %>
+    <label>
+      Skill ids
+      <input type="text" name="skill_ids" value="<%= it.attached.map((skill) => skill.id).join(',') %>" />
+    </label>
+    <p>Available: <% it.catalog.forEach((skill) => { %><span><%= skill.id %>=<%= skill.name %> </span><% }) %></p>
+    <button type="submit">Save position skills</button>
+  </form>
+  <p><a href="/positions/<%= it.position.id %>/match">Skill match</a></p>
+</div>

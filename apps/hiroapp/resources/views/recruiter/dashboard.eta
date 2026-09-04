@@ -1,0 +1,11 @@
+<div class="Dashboard">
+  <h2>Dashboard</h2>
+  <p>Applicants: <%= it.count %></p>
+  <% it.applications.forEach((application) => { %>
+    <a class="list-item" href="/applications/<%= application.id %>">
+      <span><%= application.user?.first_name %> <%= application.user?.last_name %></span>
+      <span><%= application.position?.name %></span>
+      <span><%= application.status?.name %></span>
+    </a>
+  <% }) %>
+</div>

@@ -1,0 +1,23 @@
+{
+  "name": "hiroapp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch --preload ./src/bootstrap/preload.ts src/bootstrap/server.ts",
+    "start": "bun --preload ./src/bootstrap/preload.ts src/bootstrap/server.ts",
+    "migrate": "bun --preload ./src/bootstrap/preload.ts src/db/migrate.ts",
+    "fresh": "bun --preload ./src/bootstrap/preload.ts src/db/fresh.ts",
+    "seed": "bun --preload ./src/bootstrap/preload.ts src/db/seed.ts",
+    "frontend:install": "bun install --cwd frontend",
+    "frontend:build": "bun run --cwd frontend build",
+    "assets:css": "bun ./frontend/node_modules/sass/sass.js frontend/src/app.scss public/assets/app.css",
+    "smoke": "bun --preload ./src/bootstrap/preload.ts src/scripts/smoke.ts",
+    "test": "bun test --preload ./src/bootstrap/preload.ts"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.9.0",
+    "@getstrata/bootstrap": "workspace:*",
+    "@getstrata/cli": "workspace:*",
+    "@getstrata/core": "workspace:*"
+  }
+}

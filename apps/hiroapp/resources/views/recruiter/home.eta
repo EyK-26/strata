@@ -1,0 +1,7 @@
+<div class="HomeRecruiter">
+  <div class="HomeRecruiter_links">
+    <a href="/hirings">Your hirings</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/position/create">Create a Position</a>
+  </div>
+</div>

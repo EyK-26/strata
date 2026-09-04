@@ -1,0 +1,19 @@
+<div class="Position">
+  <% if (it.position) { %>
+    <div class="detail-header">
+      <h2><%= it.position.name %></h2>
+      <a href="/apply/<%= it.position.id %>"><button>Apply</button></a>
+      <form action="/positions/<%= it.position.id %>/watch" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <button type="submit">Watch this position</button>
+      </form>
+    </div>
+    <div class="detail-info">
+      <span>Department: <%= it.position.department?.name %></span>
+      <span>Grade : <%= it.position.grade?.name %></span>
+      <span><%= it.position.description %></span>
+    </div>
+  <% } else { %>
+    <span>Position does not exist</span>
+  <% } %>
+</div>

@@ -1,0 +1,970 @@
+$bg-1: #334155;
+$bg-2: #475569;
+$bg-3: #9ca3af;
+$bg-4: #e5e7eb;
+$bg-5: #155f90;
+$bg-6: #cbd5e1;
+$bg-7: #94a3b8;
+$text-1: #1f2937;
+$errors: #f97316;
+$green-light: #059669;
+$green-dark: #047857;
+$red-light: #823442;
+$red-dark: #3f161e;
+
+@mixin search-n-dropdown {
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    background-color: $bg-6;
+    flex-grow: 1;
+    border-radius: 0.5em;
+    margin-right: 1em;
+}
+
+@mixin list-item-hover {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 1em;
+    &:hover {
+        transition: background-color 0.3s ease;
+        background-color: $bg-3;
+        border-radius: 0.2em;
+        transform: scale(1.05);
+        span {
+            color: $bg-1;
+        }
+    }
+    span {
+        font-size: 1.2em;
+        color: $bg-7;
+    }
+}
+
+html {
+    box-sizing: border-box;
+}
+*,
+*:before,
+*:after {
+    box-sizing: inherit;
+}
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial;
+    line-height: 1.6;
+}
+
+::-webkit-scrollbar {
+    width: 3px;
+}
+::-webkit-scrollbar-track {
+    background: none;
+}
+::-webkit-scrollbar-track:hover {
+    background: #262626;
+}
+
+::-webkit-scrollbar-thumb {
+    background: darkgray;
+    border-radius: 2em;
+    width: 1px;
+}
+
+#root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    background-color: $bg-1;
+}
+
+h1 {
+    margin: 0;
+    padding: 0;
+}
+
+h2 {
+    margin-top: 0;
+    font-size: 2.5em;
+    color: $bg-4;
+}
+
+a {
+    text-decoration: none;
+    font-weight: bolder;
+    color: $bg-4;
+    transition: color 0.5s ease;
+    &:hover {
+        color: $bg-5;
+    }
+}
+
+input {
+    border-radius: 1em;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    background-color: $bg-6;
+    border: none;
+    &:focus {
+        outline: none;
+    }
+}
+
+button {
+    padding: 0.3em;
+    border-radius: 0.3em;
+    background-color: $bg-1;
+    color: $bg-4;
+    transition: background-color 0.3s ease;
+    border: none;
+    box-shadow: 0 3px 2px rgba(0, 0, 0, 0.4);
+    &:hover {
+        background-color: $bg-5;
+    }
+}
+
+select {
+    border-radius: 0.5em;
+    width: 25em;
+    background-color: $bg-6;
+    padding: 0.2em;
+}
+
+span {
+    color: $text-1;
+}
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 0;
+}
+
+.container {
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    .Login {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background-color: $bg-3;
+        color: $text-1;
+        margin: auto;
+        border-radius: 1em;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+        h1 {
+            padding-top: 1em;
+        }
+        form {
+            padding: 3em 2em;
+            label {
+                display: flex;
+                flex-direction: column;
+                margin-bottom: 1.6em;
+                input {
+                    padding: 0.6em;
+                    width: 26em;
+                }
+            }
+            button {
+                width: 100%;
+                padding: 0.8em;
+            }
+        }
+    }
+    .errors {
+        display: flex;
+        flex-direction: column;
+        padding-left: 2em;
+        padding-top: 1em;
+        span {
+            color: $errors;
+        }
+    }
+}
+
+.footer {
+    width: 100%;
+    background-color: $bg-3;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 0.4em 1em;
+    display: flex;
+    justify-content: end;
+    align-items: center;
+}
+
+.Header {
+    position: fixed;
+    top: 0;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 1em 2em;
+    background-color: $bg-3;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    .Navigation {
+        width: 24em;
+        display: flex;
+        justify-content: space-evenly;
+    }
+    .profile {
+        color: $bg-5;
+        &:hover {
+            color: $bg-4;
+            cursor: pointer;
+        }
+    }
+    .UserProfile {
+        .NavigationMobile {
+            display: none;
+        }
+        position: absolute;
+        background-color: $bg-3;
+        display: flex;
+        flex-direction: column;
+        right: 0;
+        top: 3.6rem;
+        padding: 1.2em;
+        min-width: 30em;
+        max-width: 40em;
+        line-height: 2;
+        font-size: 0.8rem;
+        font-weight: 500;
+        border-radius: 0 0 0 0.6em;
+        border-top: 1px solid $bg-4;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        span {
+            line-height: 1.4;
+            padding-bottom: 0.4em;
+        }
+        .username {
+            font-weight: bold;
+        }
+        .department {
+            font-size: smaller;
+        }
+    }
+}
+
+.inbox {
+    .message {
+        width: 35em;
+        min-height: 20em;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: $bg-3;
+        z-index: 10;
+        padding: 2em 4em;
+        border-radius: 1em;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        &-header {
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 2em;
+        }
+        &-body {
+            padding-bottom: 2em;
+        }
+    }
+    .notification_preview {
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+        span {
+            color: $bg-1;
+            font-weight: bold;
+        }
+        &.message_read {
+            span {
+                color: $bg-2;
+                font-weight: normal;
+            }
+        }
+    }
+}
+
+.main {
+    margin-top: 6em;
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    width: 80%;
+    & > div {
+        min-height: 30em;
+        width: 100%;
+        background-color: $bg-2;
+        margin: 2em;
+        padding: 2em;
+        border-radius: 1em;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+        .searchbar {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding-bottom: 1em;
+            input {
+                @include search-n-dropdown;
+            }
+            .search-button {
+                width: 5em;
+                button {
+                    width: 100%;
+                }
+            }
+        }
+        .Pagination {
+            display: flex;
+            justify-content: space-between;
+            padding: 1em 0;
+            width: 100%;
+            .buttons {
+                width: 5em;
+                display: flex;
+                justify-content: space-between;
+                button {
+                    width: 100%;
+                }
+            }
+        }
+        .list {
+            .status {
+                &-ended {
+                    span {
+                        color: $bg-1;
+                    }
+                }
+                &-hired {
+                    span {
+                        color: $green-light;
+                    }
+                }
+            }
+            &-item {
+                display: flex;
+                justify-content: space-between;
+                padding: 0 1em;
+                &:hover {
+                    transition: background-color 0.3s ease;
+                    background-color: $bg-3;
+                    border-radius: 0.2em;
+                    transform: scale(1.05);
+                    span {
+                        color: $bg-1;
+                    }
+                }
+                span {
+                    font-size: 1.2em;
+                    color: $bg-7;
+                }
+            }
+        }
+    }
+}
+
+.detail-header {
+    padding: 2em;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    button {
+        padding: 0.3em 1em;
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+}
+
+.detail-info {
+    overflow: auto;
+    max-height: 60vh;
+    padding: 2em;
+    display: flex;
+    flex-direction: column;
+    span {
+        font-size: 1.2em;
+        color: $bg-7;
+    }
+}
+
+.CreateApplication {
+    form {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 20em;
+        font-size: 1.4em;
+        color: $bg-7;
+        label {
+            display: flex;
+            flex-direction: column;
+        }
+        textarea {
+            resize: none;
+            border-radius: 1em;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+            padding: 1em;
+            &:focus {
+                outline: none;
+            }
+            max-width: 30rem;
+            height: 10rem;
+            background-color: $bg-6;
+        }
+        input {
+            border-radius: 0.5em;
+            padding: 0.5em 1em;
+            max-width: 30rem;
+        }
+        button {
+            width: 5em;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+    }
+}
+
+.ApplicationDetail {
+    .body {
+        display: flex;
+        justify-content: space-between;
+        padding: 2em;
+    }
+    > span {
+        color: $green-light;
+    }
+    &Details {
+        display: flex;
+        flex-direction: column;
+        max-width: 30rem;
+        .info-details {
+            display: flex;
+            flex-direction: column;
+            .info-text {
+                padding-left: 1em;
+                overflow: auto;
+                max-height: 15em;
+                padding: 0.5em 0;
+            }
+        }
+        .info-name {
+            font-weight: bold;
+            color: $bg-6;
+            padding: 0.5em 0;
+        }
+        span {
+            font-size: 1.2em;
+            color: $bg-7;
+            padding: 0.5em 0;
+        }
+        .pageType,
+        .SubmittedInformation {
+            font-size: 1.6em;
+            font-weight: bold;
+            color: $bg-6;
+        }
+    }
+    &Status {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-evenly;
+        align-items: end;
+        .topPart {
+            height: 4em;
+            display: flex;
+            flex-direction: column;
+            align-items: end;
+            .processing {
+                font-size: 1.2em;
+                color: $errors;
+            }
+        }
+        .interactivePart {
+            min-height: 7em;
+            max-width: 30em;
+            margin-bottom: 1em;
+            .Reject,
+            .Hire {
+                display: flex;
+                flex-direction: column;
+                flex-wrap: wrap;
+                align-items: end;
+                .text {
+                    width: 100%;
+                }
+                .buttons {
+                    padding-top: 1em;
+                    width: 7.5em;
+                    display: flex;
+                    justify-content: space-between;
+                }
+            }
+        }
+        .progress {
+            span {
+                font-size: 1.2em;
+                color: $bg-7;
+            }
+            width: 13em;
+            &.hasButton {
+                width: 20em;
+            }
+            display: flex;
+            flex-direction: column;
+            .status {
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.2em 0.5em 0.2em 1em;
+                .circle {
+                    width: 1.2em;
+                    height: 1.2em;
+                    border-radius: 50%;
+                    border: none;
+                    z-index: 2;
+                }
+                .line {
+                    position: absolute;
+                    width: 0.4em;
+                    height: 2.34em;
+                    border: none;
+                    transform: translate(0.4em, 0);
+                    z-index: 1;
+                }
+                .first {
+                    transform: translate(0.4em, 0);
+                    height: 4em;
+                    z-index: 0;
+                }
+                .last {
+                    transform: translate(0.4em, -1em);
+                    z-index: 0;
+                }
+
+                &-ended {
+                    span {
+                        color: $bg-1;
+                    }
+                    .circle,
+                    .line {
+                        background-color: $bg-1;
+                    }
+                }
+                &-done {
+                    span {
+                        color: $bg-1;
+                    }
+                    .circle,
+                    .line {
+                        background-color: $bg-1;
+                    }
+                }
+                &-active {
+                    span {
+                        color: $green-dark;
+                        font-weight: bold;
+                    }
+                    background-color: $green-light;
+                    border-radius: 1em;
+                    .circle,
+                    .line {
+                        background-color: $green-dark;
+                    }
+                    &.ended {
+                        background-color: $red-light;
+                        .circle {
+                            background-color: $red-dark;
+                        }
+                        span {
+                            color: $red-dark;
+                            font-weight: bold;
+                        }
+                    }
+                }
+                &-future {
+                    .circle,
+                    .line {
+                        background-color: $bg-7;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// modal window
+.InterviewForm {
+    width: 50em;
+    min-height: 25em;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: $bg-3;
+    z-index: 10;
+    padding: 2em 4em;
+    border-radius: 0.5em;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    form {
+        display: flex;
+        flex-direction: column;
+        align-items: end;
+        label {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 1em;
+            input,
+            select {
+                border-radius: 0.5em;
+                width: 25em;
+                background-color: $bg-6;
+                padding: 0.2em;
+            }
+            textarea {
+                resize: none;
+                box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+                padding: 1em;
+                font-size: 1.2em;
+                border-radius: 0.5em;
+                &:focus {
+                    outline: none;
+                }
+                background-color: $bg-6;
+            }
+        }
+        .buttons {
+            width: 7.5em;
+            display: flex;
+            justify-content: space-between;
+        }
+    }
+}
+
+.dropdown-search {
+    display: flex;
+    flex-direction: column;
+    min-width: none 100%;
+    .dropdown {
+        @include search-n-dropdown;
+        // display: flex;
+        // flex-direction: column;
+    }
+}
+
+.btn-hidden {
+    opacity: 0;
+}
+
+.contact-user {
+    margin-left: 2rem;
+}
+
+.delete-user {
+    display: flex;
+    flex-direction: column;
+    align-items: end;
+    padding-top: 0.9em;
+    .delete {
+        display: flex;
+        flex-direction: column;
+        align-items: end;
+        max-width: 30em;
+        margin-top: 1em;
+        .text {
+            width: 100%;
+        }
+        .buttons {
+            padding-top: 1em;
+            width: 15em;
+            justify-content: space-between;
+            display: flex;
+            flex-direction: row;
+            .button {
+                margin: 0.2em;
+            }
+        }
+    }
+}
+
+.HomeRecruiter {
+    display: flex;
+    flex-direction: column;
+    .HomeRecruiter_links {
+        display: flex;
+        justify-content: space-between;
+    }
+}
+
+.YourHirings {
+    padding: 4em;
+    border-radius: 2em;
+    box-shadow: 0 0 2em rgba(0, 0, 0, 0.1);
+
+    h2 {
+        text-align: center;
+        color: #333;
+    }
+
+    button {
+        font-size: 1em;
+        margin-bottom: 2em;
+    }
+
+    .hirings_container {
+        display: grid;
+        gap: 1.6em;
+        max-height: 50vh;
+        overflow: auto;
+        div {
+            background-color: $bg-7;
+            padding: 1em;
+            border-radius: 1em;
+            margin-right: 1em;
+
+            h4 {
+                margin: 0;
+                color: #333;
+            }
+
+            p {
+                margin: 5px 0;
+                color: #666;
+            }
+
+            a {
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+        }
+    }
+}
+
+.CreatePosition {
+    border-radius: 2em;
+    box-shadow: 0 0 2em rgba(0, 0, 0, 0.1);
+
+    h2 {
+        text-align: center;
+        color: #333;
+    }
+
+    button {
+        font-size: 1em;
+        margin-bottom: 2em;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+
+        label {
+            margin: 0.8em 0;
+            display: flex;
+            flex-direction: column;
+
+            select,
+            textarea,
+            input {
+                padding: 8px;
+                margin-top: 5px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                width: 100%;
+                resize: none;
+            }
+        }
+    }
+}
+
+.TotalApplicants {
+    border-radius: 2em;
+    h3 {
+        color: #333;
+    }
+
+    div {
+        margin-top: 2em;
+        display: flex;
+        align-items: center;
+    }
+}
+
+.Dashboard {
+    .Dashboard_close {
+        margin: 1em;
+        font-size: 1em;
+    }
+
+    .Applicants {
+        border-radius: 1em;
+        margin-top: 1em;
+        background-color: $bg-7;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        .dashboard_number {
+            font-size: 2.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        h3 {
+            color: #333;
+            margin-bottom: 0;
+        }
+
+        .ApplicantDetail_container {
+            max-height: 50vh;
+            overflow: auto;
+            padding: 1em;
+            width: 80%;
+            .ApplicantsDetail {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                margin-bottom: 1em;
+                background-color: $bg-2;
+                border-radius: 8px;
+                padding: 1em;
+                .ApplicantDetail_candidate {
+                    display: flex;
+                    justify-content: space-between;
+                }
+            }
+        }
+    }
+}
+
+.UserDetail {
+    display: flex;
+    flex-direction: column;
+    span {
+        color: $bg-4;
+    }
+}
+
+.ContactUser {
+    width: 50em;
+    min-height: 25em;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: $bg-3;
+    z-index: 10;
+    padding: 2em 4em;
+    border-radius: 0.5em;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    form {
+        display: flex;
+        flex-direction: column;
+        button,
+        input {
+            margin: 0.5em;
+        }
+    }
+    textarea {
+        resize: none;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+        padding: 1em;
+        font-size: 1.2em;
+        border-radius: 0.5em;
+        &:focus {
+            outline: none;
+        }
+        background-color: $bg-6;
+    }
+}
+
+.CreateUser {
+    padding: 2em;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+
+    h2 {
+        text-align: center;
+        color: #333;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+
+        label {
+            margin: 0.2em;
+            display: flex;
+            flex-direction: column;
+
+            span {
+                margin-bottom: 5px;
+                font-weight: bold;
+            }
+
+            input,
+            select {
+                margin-bottom: 0.4em;
+            }
+        }
+    }
+}
+
+@media only screen and (max-width: 450px) {
+    .detail-header {
+        flex-direction: column;
+    }
+}
+
+@media only screen and (max-width: 390px) {
+    .searchbar,
+    .list-item {
+        flex-direction: column;
+    }
+    h2 {
+        font-size: 1.5em;
+    }
+}
+
+@media only screen and (max-width: 700px) {
+    .Header > .Navigation {
+        display: none;
+    }
+    .NavigationMobile {
+        display: block !important;
+        .Navigation {
+            flex-direction: column;
+        }
+    }
+    .main {
+        width: 100%;
+    }
+    h2 {
+        font-size: 2em;
+    }
+}
+
+@media only screen and (max-width: 1100px) {
+    .main {
+        flex-wrap: wrap;
+    }
+    .ApplicationDetail > .body {
+        flex-wrap: wrap;
+        .ApplicationDetailStatus {
+            width: 100%;
+        }
+    }
+}

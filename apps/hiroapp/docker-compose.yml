@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:18.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hiroapp
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hiroapp"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    volumes:
+      # Postgres 18+ uses /var/lib/postgresql/<major>/docker. A mount at
+      # /var/lib/postgresql/data makes the official image exit immediately.
+      - hiroapp-postgres-18:/var/lib/postgresql
+
+  app:
+    image: oven/bun:1.4.0
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "3000:3000"
+    environment:
+      APP_NAME: HiroApp
+      APP_ENV: local
+      APP_URL: http://localhost:3000
+      APP_KEY_PREFIX: hiroapp
+      FRONTEND_MODE: server-htmx
+      TENANCY_DRIVER: none
+      QUEUE_DRIVER: sync
+      MAIL_DRIVER: log
+      CACHE_DRIVER: array
+      AUTH_DEV_HEADERS: "false"
+      SESSION_SECRET: hiroapp-dev-session-secret-change-me
+      HIROAPP_SEED_SCALE: demo
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hiroapp
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "./scripts/docker-dev-entrypoint.sh"]
+    command:
+      - bash
+      - -lc
+      - bun run migrate && bun run seed && bun --watch --preload ./src/bootstrap/preload.ts src/bootstrap/server.ts
+
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  hiroapp-postgres-18:

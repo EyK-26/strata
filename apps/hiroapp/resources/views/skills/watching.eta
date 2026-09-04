@@ -1,0 +1,11 @@
+<div class="Watchlist">
+  <h2>Watchlist</h2>
+  <% it.positions.forEach((position) => { %>
+    <a class="list-item" href="/positions/<%= position.id %>">
+      <span><%= position.name %></span>
+    </a>
+  <% }) %>
+  <% if (it.positions.length === 0) { %>
+    <p>You are not watching any positions.</p>
+  <% } %>
+</div>

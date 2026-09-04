@@ -6,7 +6,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-const MODULES_DIR = join(import.meta.dir, "../src/modules");
+const MODULE_ROOTS = [
+  join(import.meta.dir, "../src/modules"),
+  join(import.meta.dir, "../apps/hiroapp/src"),
+];
 const violations: string[] = [];
 
 async function walk(dir: string): Promise<void> {
@@ -42,7 +45,9 @@ async function walk(dir: string): Promise<void> {
   }
 }
 
-await walk(MODULES_DIR);
+for (const root of MODULE_ROOTS) {
+  await walk(root);
+}
 
 if (violations.length > 0) {
   console.error(
