@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## 0.2.68
+
+- `configureModulesDirectory()` clears the discovered-module cache when the directory changes, so OpenAPI/`createApp` can load HiroApp after core tests pointed at empty fixtures.
+- `createWebRoutes()` / `mergeWebRoutes()` accept optional `{ modules }` so leftover bootstrap route assembly does not pick up the dogfood app's modules. `CreateWebRoutesOptions` is exported from the public API.
+
 ## 0.2.67
 
 - `CookieSessionStore.create()` records optional browser metadata (`userAgent`, `ipAddress`, `last_active_at`).

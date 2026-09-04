@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.5.101
+
+- Tenant middleware falls back with explicit branches when a member, admin, or guest tenant lookup misses, so the request still scopes to the default tenant.
+
 ## 0.5.100
 
 HiroApp dogfood of 0.5.99: eager `with()` / nested `load("a.b")` missed related rows when a Postgres int4 PK arrived as a JS `number` and an int8 FK as a `bigint`. Map matching used `===`.
