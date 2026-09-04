@@ -18,7 +18,6 @@ import { wrapApi } from "../../http/wrap.ts";
 import { loadApplicationDetail } from "../../lib/loaders.ts";
 import { isCandidate, STATUS } from "../../lib/roles.ts";
 import { Application } from "../../models/Application.ts";
-import { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
 import {
   endedNotification,
