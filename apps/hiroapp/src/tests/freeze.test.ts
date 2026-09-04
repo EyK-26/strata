@@ -26,7 +26,6 @@ describe.skipIf(!enabled)("Wave 42 department hiring freeze", () => {
   let baseUrl = "";
   let adminCookies: string[] = [];
   let recruiterCookies: string[] = [];
-  let candidateCookies: string[] = [];
 
   beforeAll(async () => {
     const boot = await bootHiroapp();
@@ -34,7 +33,6 @@ describe.skipIf(!enabled)("Wave 42 department hiring freeze", () => {
     baseUrl = boot.baseUrl;
     adminCookies = (await signInCookie("admin@hiroapp.com")).cookies;
     recruiterCookies = (await signInCookie("recruiter@hiroapp.com")).cookies;
-    candidateCookies = (await signInCookie("candidate@hiroapp.com")).cookies;
   });
 
   afterAll(() => {
@@ -200,7 +198,10 @@ describe.skipIf(!enabled)("Wave 42 department hiring freeze", () => {
     });
     expect([302, 303].includes(htmlFreeze.response.status)).toBe(true);
     const frozenHtml = (await departmentService.ordered()).find((row) => row.id === htmlDept.id);
-    expect(serializeDepartment(frozenHtml!).hiring_frozen).toBe(true);
+    if (!frozenHtml) {
+      throw new Error("missing html freeze department");
+    }
+    expect(serializeDepartment(frozenHtml).hiring_frozen).toBe(true);
     const thawPage = await request("/departments", { cookies: adminCookies });
     expect(thawPage.text).toContain("Unfreeze hiring");
     const htmlThaw = await request(`/departments/${htmlDept.id}/unfreeze`, {
