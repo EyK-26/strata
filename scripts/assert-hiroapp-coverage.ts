@@ -71,25 +71,24 @@ if (!/\n 0 fail\n/.test(output) && !/\n0 fail\n/.test(output)) {
   process.exit(exitCode === 0 ? 1 : exitCode);
 }
 
-const uncovered: string[] = [];
-const seen = new Set<string>();
+const rows = new Map<string, { funcs: string; lines: string }>();
 for (const line of output.split("\n")) {
   const match = line.match(/^\s+(apps\/hiroapp\/src\/\S+)\s+\|\s+([\d.]+)\s+\|\s+([\d.]+)/);
   if (!match) {
     continue;
   }
   const file = match[1] ?? "";
-  if (isIgnored(file) || seen.has(file)) {
+  if (isIgnored(file)) {
     continue;
   }
-  seen.add(file);
-  const lines = Number(match[3]);
-  if (lines < 100) {
-    uncovered.push(`${file} funcs=${match[2]} lines=${match[3]}`);
-  }
+  rows.set(file, { funcs: match[2] ?? "0", lines: match[3] ?? "0" });
 }
 
-if (seen.size === 0) {
+const uncovered = [...rows.entries()]
+  .filter(([, stats]) => Number(stats.lines) < 100)
+  .map(([file, stats]) => `${file} funcs=${stats.funcs} lines=${stats.lines}`);
+
+if (rows.size === 0) {
   console.error("HiroApp coverage gate found no apps/hiroapp/src files.");
   process.exit(1);
 }
@@ -100,4 +99,4 @@ if (uncovered.length > 0) {
   process.exit(1);
 }
 
-console.log(`HiroApp domain coverage gate passed (${seen.size} files).`);
+console.log(`HiroApp domain coverage gate passed (${rows.size} files).`);

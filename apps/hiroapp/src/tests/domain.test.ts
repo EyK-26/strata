@@ -14,7 +14,15 @@ import { hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { generateTotp } from "@getstrata/core/security/totp";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { recordHiringEvent } from "../lib/hiringEvents.ts";
-import { isAdmin, isCandidate, isRecruiter, isStaff, ROLE, roleName } from "../lib/roles.ts";
+import {
+  isAdmin,
+  isCandidate,
+  isRecruiter,
+  isStaff,
+  ROLE,
+  roleName,
+  STATUS,
+} from "../lib/roles.ts";
 import { toSessionUser } from "../lib/sessionUser.ts";
 import {
   canManageTeam,
@@ -144,17 +152,42 @@ describe.skipIf(!enabled)("Wave 10 HiroApp domain coverage", () => {
     expect((await positions.idsInDepartment(1)).length).toBeGreaterThan(0);
     expect(Array.isArray(await positions.occupiedUserIds(1))).toBe(true);
 
-    const apps = await applications.forPosition(hiring[0]?.id ?? 1);
-    expect(Array.isArray(apps)).toBe(true);
+    const candidate = await seededUser("candidate@hiroapp.com");
+    const fixture = await positions.create({
+      user_id: null,
+      department_id: 1,
+      grade_id: 1,
+      name: "Repository Coverage Seat",
+      description: "domain coverage",
+      hiring: true,
+      start_date: null,
+      end_date: null,
+    });
+    const row = await applications.create({
+      user_id: candidate.id,
+      position_id: fixture.id,
+      status_id: STATUS.APPLIED,
+      attachment_text: "repo-coverage",
+      attachment_file: null,
+    });
+    expect((await applications.forPosition(fixture.id)).some((item) => item.id === row.id)).toBe(
+      true,
+    );
     expect(await applications.forPositions([])).toEqual([]);
     expect(await applications.countForPositions([])).toBe(0);
-    if (apps[0]) {
-      expect(await applications.findPair(apps[0].user_id, apps[0].position_id ?? 0)).toBeTruthy();
-      expect((await applications.forPositions([apps[0].position_id ?? 1])).length).toBeGreaterThan(
-        0,
-      );
-      expect(await applications.countForPositions([apps[0].position_id ?? 1])).toBeGreaterThan(0);
-    }
+    expect(await applications.findPair(row.user_id, fixture.id)).toBeTruthy();
+    expect((await applications.forPositions([fixture.id])).some((item) => item.id === row.id)).toBe(
+      true,
+    );
+    expect(
+      await applications.countForPositions([fixture.id], { status_id: STATUS.APPLIED }),
+    ).toBeGreaterThan(0);
+    expect((await applications.forUser(candidate.id)).some((item) => item.id === row.id)).toBe(
+      true,
+    );
+    await applications.deleteForPosition(fixture.id);
+    expect(await applications.forPosition(fixture.id)).toEqual([]);
+    await applications.deleteForPosition(9_999_999);
 
     const tokens = await tokenService.listTokens(admin.id);
     const created = await tokenService.createToken(admin.id, {
