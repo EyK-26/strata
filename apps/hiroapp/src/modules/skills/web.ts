@@ -5,13 +5,13 @@ import { bindModel } from "../../http/bind.ts";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { renderPage } from "../../http/view.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
-import { ROLE } from "../../lib/roles.ts";
 import { serializeNamed, serializePosition } from "../../lib/serialize.ts";
 import { Department } from "../../models/Department.ts";
 import { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
 import { watchlistService } from "../positions/watchlist.ts";
 import { skills } from "./repository.ts";
+import { parseSkillIds, skillService } from "./service.ts";
 
 export function skillWebRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
@@ -29,15 +29,12 @@ export function skillWebRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await authorize(request, "skills", "create");
         const { fields } = await parseFormBody(request);
-        const skillIds = String(fields.skill_ids ?? "")
-          .split(",")
-          .map((value) => Number(value.trim()))
-          .filter((id) => Number.isInteger(id) && id > 0);
-        const model = User.newFromRecord(user);
-        await model.skills().detach();
-        for (const skillId of skillIds) {
-          await model.skills().withPivotValues({ years: 1, level: "intermediate" }).attach(skillId);
-        }
+        const items = parseSkillIds(fields.skill_ids).map((skill_id) => ({
+          skill_id,
+          years: 1,
+          level: "intermediate",
+        }));
+        await skillService.replaceUserSkills(user, items);
         return redirectResponse("/skills");
       }),
     },
@@ -88,19 +85,10 @@ export function skillWebRoutes(dependencies: AppDependencies): AppRouteMap {
           "id",
           (id) => Position.findOrFail(id),
           async (request, position) => {
-            await authorize(request, "skills", "update");
+            const actor = await authorize(request, "skills", "update");
             const { fields } = await parseFormBody(request);
-            const skillIds = String(fields.skill_ids ?? "")
-              .split(",")
-              .map((value) => Number(value.trim()))
-              .filter((skillId) => Number.isInteger(skillId) && skillId > 0);
-            await position.skills().detach();
-            for (const skillId of skillIds) {
-              await position
-                .skills()
-                .withPivotValues({ required: true, weight: 1 })
-                .attach(skillId);
-            }
+            const items = parseSkillIds(fields.skill_ids).map((skill_id) => ({ skill_id }));
+            await skillService.replacePositionSkills(actor, position, items);
             return redirectResponse(`/positions/${position.id}/skills`);
           },
         ),
@@ -114,26 +102,10 @@ export function skillWebRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Position.findOrFail(id),
           async (request, position) => {
             await authorize(request, "skills", "update");
-            const required = await position.skills();
-            const requiredIds = new Set(required.map((skill) => Number(skill.id)));
-            const candidates = await User.where({ role_id: ROLE.CANDIDATE }).get();
-            const matches = [];
-            for (const candidate of candidates) {
-              const owned = await candidate.skills();
-              const ownedIds = new Set(owned.map((skill) => Number(skill.id)));
-              const hit = [...requiredIds].filter((skillId) => ownedIds.has(skillId)).length;
-              matches.push({
-                id: candidate.id,
-                first_name: candidate.get("first_name"),
-                last_name: candidate.get("last_name"),
-                matched: hit,
-                required: requiredIds.size,
-              });
-            }
-            matches.sort((left, right) => right.matched - left.matched);
+            const matches = await skillService.matchCandidates(position);
             return renderPage(request, "skills/match", {
               position: serializePosition(position),
-              matches,
+              matches: matches.map((row) => skillService.presentMatch(row)),
             });
           },
         ),

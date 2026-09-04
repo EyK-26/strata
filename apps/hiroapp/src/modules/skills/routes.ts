@@ -4,7 +4,6 @@ import { bindModel } from "../../http/bind.ts";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { NamedResource } from "../../http/resources.ts";
 import { wrapApi } from "../../http/wrap.ts";
-import { ROLE } from "../../lib/roles.ts";
 import { Department } from "../../models/Department.ts";
 import { Position } from "../../models/Position.ts";
 import { User } from "../../models/User.ts";
@@ -16,6 +15,7 @@ import {
   SyncPositionSkillsRequest,
   SyncUserSkillsRequest,
 } from "./requests.ts";
+import { skillService } from "./service.ts";
 
 function namedCollection(rows: Array<{ toArray?: () => Record<string, unknown> }>) {
   return NamedResource.collection(rows.map((row) => new NamedResource(row))).toResponse();
@@ -37,15 +37,9 @@ export function skillRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: wrapApi(dependencies, async (request) => {
         const user = await authorize(request, "skills", "create");
         const payload = await new SyncUserSkillsRequest().validate(request);
-        const model = User.newFromRecord(user);
-        await model.skills().detach();
-        for (const skill of payload.skills) {
-          await model
-            .skills()
-            .withPivotValues({ years: skill.years, level: skill.level })
-            .attach(skill.skill_id);
-        }
-        return jsonResponse(namedCollection(await model.skills()));
+        return jsonResponse(
+          namedCollection(await skillService.replaceUserSkills(user, payload.skills)),
+        );
       }),
     },
     "/api/me/watching": {
@@ -87,16 +81,10 @@ export function skillRoutes(dependencies: AppDependencies): AppRouteMap {
           "id",
           (id) => Position.findOrFail(id),
           async (request, position) => {
-            await authorize(request, "skills", "update");
+            const actor = await authorize(request, "skills", "update");
             const payload = await new SyncPositionSkillsRequest().validate(request);
-            await position.skills().detach();
-            for (const skill of payload.skills) {
-              await position
-                .skills()
-                .withPivotValues({ required: skill.required, weight: skill.weight })
-                .attach(skill.skill_id);
-            }
-            return jsonResponse(namedCollection(await position.skills()));
+            const rows = await skillService.replacePositionSkills(actor, position, payload.skills);
+            return jsonResponse(namedCollection(rows));
           },
         ),
       ),
@@ -109,22 +97,8 @@ export function skillRoutes(dependencies: AppDependencies): AppRouteMap {
           (id) => Position.findOrFail(id),
           async (request, position) => {
             await authorize(request, "skills", "update");
-            const required = await position.skills();
-            const requiredIds = new Set(required.map((skill) => Number(skill.id)));
-            const candidates = await User.where({ role_id: ROLE.CANDIDATE }).get();
-            const matches = [];
-            for (const candidate of candidates) {
-              const owned = await candidate.skills();
-              const ownedIds = new Set(owned.map((skill) => Number(skill.id)));
-              const hit = [...requiredIds].filter((skillId) => ownedIds.has(skillId)).length;
-              matches.push({
-                user: candidate.toArray(),
-                matched: hit,
-                required: requiredIds.size,
-              });
-            }
-            matches.sort((left, right) => right.matched - left.matched);
-            return jsonResponse(matches);
+            const matches = await skillService.matchCandidates(position);
+            return jsonResponse(matches.map((row) => skillService.presentMatchApi(row)));
           },
         ),
       ),
