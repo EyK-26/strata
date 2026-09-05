@@ -12,7 +12,7 @@ describe("starter template CLI", () => {
     };
 
     expect(packageJson.dependencies["@getstrata/cli"]).toBe("^0.2.0");
-    expect(packageJson.dependencies["@getstrata/core"]).toBe("^0.7.3");
+    expect(packageJson.dependencies["@getstrata/core"]).toBe("^0.7.4");
     expect(packageJson.scripts.dev).toBe("strata dev");
     expect(packageJson.scripts.start).toBe("strata start");
     expect(packageJson.scripts["db:migrate"]).toBe("strata migrate");

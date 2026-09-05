@@ -204,7 +204,7 @@ function renderPackageJson(
     : {
         "@getstrata/bootstrap": "^0.4.2",
         "@getstrata/cli": "^0.2.0",
-        "@getstrata/core": "^0.7.3",
+        "@getstrata/core": "^0.7.4",
       };
   if (options.layers?.database === "mysql") {
     coreDeps.mysql2 = "^3.24.3";

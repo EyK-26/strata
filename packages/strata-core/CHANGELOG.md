@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.7.4
+
+- Default database pool and query handles live on `globalThis`, so the published `@getstrata/core` bundle and `src/core` share one pool in the same process.
+
 ## 0.7.3
 
 - `JsonResource.whenLoaded` returns `null` when a relation is loaded but empty. It does not call the transform, so `new PositionResource(value).toArray()` cannot crash on a missing belongsTo.
