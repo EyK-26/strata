@@ -119,4 +119,31 @@ describe("createMemoryThrottleMiddleware", () => {
 
     expect((await middleware(request, next)).status).toBe(200);
   });
+
+  test("returns an HTML 429 when the request prefers HTML views", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    try {
+      const middleware = createMemoryThrottleMiddleware({
+        maxAttempts: 1,
+        decaySeconds: 60,
+        keyPrefix: "test-throttle-html:",
+      });
+      const next = async () => Response.json({ ok: true });
+      const request = new Request("https://example.test/login", {
+        headers: { accept: "text/html" },
+      });
+
+      expect((await middleware(request, next)).status).toBe(200);
+
+      const blocked = await middleware(request, next);
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get("content-type")).toContain("text/html");
+      expect(await blocked.text()).toContain("Too many requests.");
+      expect(blocked.headers.get("retry-after")).toBe("60");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
 });

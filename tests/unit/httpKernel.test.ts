@@ -120,6 +120,30 @@ describe("HttpKernel", () => {
     }
   });
 
+  test("wrapWebLogin keeps JSON 429 for JSON login clients", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "server-htmx";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = wrapWebLogin(
+        kernel,
+        async () => new Response("json-slow", { status: 429 }),
+        async () => new Response("html-slow", { status: 429 }),
+      );
+
+      const response = await handler(
+        new Request("http://example.test/login", {
+          headers: { accept: "application/json" },
+        }),
+      );
+      expect(response.status).toBe(429);
+      expect(await response.text()).toBe("json-slow");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
   test("wrapSigned rejects unsigned URLs and allows valid ones", async () => {
     const previousMode = process.env.FRONTEND_MODE;
     const previousSecret = process.env.SIGNED_URL_SECRET;

@@ -2,6 +2,7 @@ import { RedisClient } from "bun";
 import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
+import { tooManyRequestsResponse } from "./throttleResponse";
 
 interface LoginThrottleOptions {
   redisUrl: string;
@@ -52,14 +53,10 @@ function createLoginThrottleMiddleware(options: LoginThrottleOptions): Middlewar
     }
 
     if (attempts > options.maxAttempts) {
-      return Response.json(
-        { error: "Too many login attempts. Try again later." },
-        {
-          status: 429,
-          headers: {
-            "retry-after": String(options.decaySeconds),
-          },
-        },
+      return await tooManyRequestsResponse(
+        request,
+        "Too many login attempts. Try again later.",
+        options.decaySeconds,
       );
     }
 

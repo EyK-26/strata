@@ -98,6 +98,8 @@ function createFakeSql(user: SessionUser) {
             id: sessionId,
             user_id: user.id,
             name: user.name,
+            first_name: (user as SessionUser & { first_name?: string }).first_name,
+            last_name: (user as SessionUser & { last_name?: string }).last_name,
             email: user.email,
             learn_subscriber: user.learn_subscriber ?? false,
             is_admin: user.is_admin ?? false,
@@ -330,5 +332,33 @@ describe("CookieSessionGuard", () => {
     expect(sql.sessions.has(keep)).toBe(true);
     expect(sql.sessions.has(other)).toBe(false);
     expect(await store.listForUser(14)).toHaveLength(1);
+  });
+
+  test("composes a display name from first_name and last_name", async () => {
+    const user = {
+      id: 21,
+      name: "",
+      first_name: "Ada",
+      last_name: "Lovelace",
+      email: "ada@example.test",
+      is_admin: true,
+    } as SessionUser & { first_name: string; last_name: string };
+    const sql = createFakeSql(user);
+    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
+    const auth = createCookieSessionAuthManager({
+      store,
+      mapUser: (sessionUser) => ({
+        id: sessionUser.id,
+        role: sessionUser.is_admin ? "admin" : "member",
+        name: sessionUser.name,
+      }),
+    });
+
+    const sessionId = await store.create(user);
+    const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
+
+    expect(
+      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+    ).toEqual({ id: 21, role: "admin", name: "Ada Lovelace" });
   });
 });

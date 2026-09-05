@@ -388,148 +388,149 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   }
 
   private async attach(rows: readonly TEntity[]): Promise<Array<TEntity & LoadedRow>> {
-    if (rows.length === 0 || this.eagerLoads.length === 0) {
-      return rows.map((row) => ({ ...row })) as Array<TEntity & LoadedRow>;
+    const result = rows.map((row) => ({ ...row })) as Array<TEntity & LoadedRow>;
+    if (result.length === 0 || this.eagerLoads.length === 0) {
+      return result;
     }
 
-    let result: Array<TEntity & LoadedRow> = rows.map((row) => ({ ...row })) as Array<
-      TEntity & LoadedRow
-    >;
+    await Promise.all(this.eagerLoads.map((load) => this.hydrateEagerLoad(rows, result, load)));
+    return result;
+  }
 
-    for (const load of this.eagerLoads) {
-      if (load.kind === "hasMany") {
-        const relation = load.relation as HasManyRelation<
-          TEntity,
-          Record<string, unknown>,
-          keyof TEntity & string,
-          string
-        >;
-        const grouped = await load.repository
-          .withConnection(this.repository.getConnection())
-          .loadHasManyForParents(rows, relation, load.options);
-        result = result.map((row) => ({
-          ...row,
-          [load.as]: getByRelationKey(grouped, row[relation.localKey]) ?? [],
-        })) as Array<TEntity & LoadedRow>;
-        continue;
-      }
-
-      if (load.kind === "morphMany") {
-        const relation = load.relation as MorphManyRelation<
-          TEntity,
-          Record<string, unknown>,
-          keyof TEntity & string,
-          string,
-          string
-        >;
-        const grouped = await load.repository
-          .withConnection(this.repository.getConnection())
-          .loadMorphManyForParents(rows, relation, load.options);
-        result = result.map((row) => ({
-          ...row,
-          [load.as]: getByRelationKey(grouped, row[relation.localKey]) ?? [],
-        })) as Array<TEntity & LoadedRow>;
-        continue;
-      }
-
-      if (load.kind === "morphOne") {
-        const relation = load.relation as MorphOneRelation<
-          TEntity,
-          Record<string, unknown>,
-          keyof TEntity & string,
-          string,
-          string
-        >;
-        const grouped = await load.repository
-          .withConnection(this.repository.getConnection())
-          .loadMorphOneForParents(rows, relation, load.options);
-        result = result.map((row) => ({
-          ...row,
-          [load.as]: getByRelationKey(grouped, row[relation.localKey]),
-        })) as Array<TEntity & LoadedRow>;
-        continue;
-      }
-
-      if (load.kind === "hasManyThrough") {
-        const relation = load.relation as HasManyThroughRelation<
-          TEntity,
-          Record<string, unknown>,
-          keyof TEntity & string,
-          string,
-          string,
-          string
-        >;
-        const grouped = await load.repository
-          .withConnection(this.repository.getConnection())
-          .loadHasManyThroughForParents(rows, relation, load.options);
-        result = result.map((row) => ({
-          ...row,
-          [load.as]: getByRelationKey(grouped, row[relation.localKey]) ?? [],
-        })) as Array<TEntity & LoadedRow>;
-        continue;
-      }
-
-      if (load.kind === "belongsToMany") {
-        const relation = load.relation as BelongsToManyRelation<
-          TEntity,
-          Record<string, unknown>,
-          Record<string, unknown>,
-          keyof TEntity & string,
-          string,
-          string,
-          string
-        >;
-        const grouped = await this.repository.loadBelongsToManyForParents(
-          rows,
-          relation,
-          load.repository as never,
-          load.options,
-        );
-        result = result.map((row) => ({
-          ...row,
-          [load.as]: getByRelationKey(grouped, row[relation.parentKey]) ?? [],
-        })) as Array<TEntity & LoadedRow>;
-        continue;
-      }
-
-      if (load.kind === "morphTo") {
-        const relation = load.relation as MorphToRelation<
-          TEntity,
-          keyof TEntity & string,
-          keyof TEntity & string
-        >;
-        const grouped = await this.repository.loadMorphToForChildren(
-          rows,
-          relation,
-          load.morphRepositories ?? new Map(),
-          load.options,
-        );
-        result = result.map((row) => ({
-          ...row,
-          [load.as]: getByRelationKey(grouped, row[relation.morphIdKey as keyof TEntity]),
-        })) as Array<TEntity & LoadedRow>;
-        continue;
-      }
-
-      const relation = load.relation as BelongsToRelation<
+  private async hydrateEagerLoad(
+    rows: readonly TEntity[],
+    result: Array<TEntity & LoadedRow>,
+    load: StoredEagerLoad<TEntity>,
+  ): Promise<void> {
+    if (load.kind === "hasMany") {
+      const relation = load.relation as HasManyRelation<
         TEntity,
         Record<string, unknown>,
         keyof TEntity & string,
         string
       >;
-      const grouped = await this.repository.loadBelongsToForParents(
-        rows,
-        relation,
-        load.repository,
-        load.options,
-      );
-      result = result.map((row) => ({
-        ...row,
-        [load.as]: getByRelationKey(grouped, row[relation.foreignKey as keyof TEntity]),
-      })) as Array<TEntity & LoadedRow>;
+      const grouped = await load.repository
+        .withConnection(this.repository.getConnection())
+        .loadHasManyForParents(rows, relation, load.options);
+      for (const row of result) {
+        (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.localKey]) ?? [];
+      }
+      return;
     }
 
-    return result;
+    if (load.kind === "morphMany") {
+      const relation = load.relation as MorphManyRelation<
+        TEntity,
+        Record<string, unknown>,
+        keyof TEntity & string,
+        string,
+        string
+      >;
+      const grouped = await load.repository
+        .withConnection(this.repository.getConnection())
+        .loadMorphManyForParents(rows, relation, load.options);
+      for (const row of result) {
+        (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.localKey]) ?? [];
+      }
+      return;
+    }
+
+    if (load.kind === "morphOne") {
+      const relation = load.relation as MorphOneRelation<
+        TEntity,
+        Record<string, unknown>,
+        keyof TEntity & string,
+        string,
+        string
+      >;
+      const grouped = await load.repository
+        .withConnection(this.repository.getConnection())
+        .loadMorphOneForParents(rows, relation, load.options);
+      for (const row of result) {
+        (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.localKey]);
+      }
+      return;
+    }
+
+    if (load.kind === "hasManyThrough") {
+      const relation = load.relation as HasManyThroughRelation<
+        TEntity,
+        Record<string, unknown>,
+        keyof TEntity & string,
+        string,
+        string,
+        string
+      >;
+      const grouped = await load.repository
+        .withConnection(this.repository.getConnection())
+        .loadHasManyThroughForParents(rows, relation, load.options);
+      for (const row of result) {
+        (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.localKey]) ?? [];
+      }
+      return;
+    }
+
+    if (load.kind === "belongsToMany") {
+      const relation = load.relation as BelongsToManyRelation<
+        TEntity,
+        Record<string, unknown>,
+        Record<string, unknown>,
+        keyof TEntity & string,
+        string,
+        string,
+        string
+      >;
+      const grouped = await this.repository.loadBelongsToManyForParents(
+        rows,
+        relation,
+        load.repository as never,
+        load.options,
+      );
+      for (const row of result) {
+        (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.parentKey]) ?? [];
+      }
+      return;
+    }
+
+    if (load.kind === "morphTo") {
+      const relation = load.relation as MorphToRelation<
+        TEntity,
+        keyof TEntity & string,
+        keyof TEntity & string
+      >;
+      const grouped = await this.repository.loadMorphToForChildren(
+        rows,
+        relation,
+        load.morphRepositories ?? new Map(),
+        load.options,
+      );
+      for (const row of result) {
+        (row as LoadedRow)[load.as] = getByRelationKey(
+          grouped,
+          row[relation.morphIdKey as keyof TEntity],
+        );
+      }
+      return;
+    }
+
+    const relation = load.relation as BelongsToRelation<
+      TEntity,
+      Record<string, unknown>,
+      keyof TEntity & string,
+      string
+    >;
+    const grouped = await this.repository.loadBelongsToForParents(
+      rows,
+      relation,
+      load.repository,
+      load.options,
+    );
+    for (const row of result) {
+      (row as LoadedRow)[load.as] = getByRelationKey(
+        grouped,
+        row[relation.foreignKey as keyof TEntity],
+      );
+    }
   }
 }
 

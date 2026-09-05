@@ -28,6 +28,7 @@ describe("relation key matching", () => {
     expect(getByRelationKey(byNumber, 10)).toBe("alpha");
     expect(getByRelationKey(byNumber, 10n)).toBe("alpha");
     expect(getByRelationKey(byNumber, "10")).toBe("alpha");
+    expect(getByRelationKey(byNumber, 10n)).toBe("alpha");
     expect(getByRelationKey(byNumber, null)).toBeUndefined();
     expect(getByRelationKey(byNumber, 99)).toBeUndefined();
   });

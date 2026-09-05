@@ -14,13 +14,15 @@ export interface SessionUser {
 }
 
 interface SessionRow {
-  id: string;
-  user_id: number;
-  name: string;
-  email: string;
-  learn_subscriber: boolean;
-  is_admin: boolean;
-  expires_at: Date;
+  id?: string;
+  user_id?: number;
+  name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  learn_subscriber?: boolean | null;
+  is_admin?: boolean | null;
+  expires_at?: Date;
 }
 
 type SqlClient = {
@@ -76,13 +78,34 @@ function defaultMapSessionUser(user: SessionUser): AuthUser {
   };
 }
 
+function sessionDisplayName(row: SessionRow, email: string): string {
+  if (typeof row.name === "string" && row.name.trim() !== "") {
+    return row.name;
+  }
+
+  const first = typeof row.first_name === "string" ? row.first_name.trim() : "";
+  const last = typeof row.last_name === "string" ? row.last_name.trim() : "";
+  const composed = `${first} ${last}`.trim();
+  return composed || email;
+}
+
+function mapSessionUserRow(row: SessionRow): SessionUser {
+  const email = typeof row.email === "string" ? row.email : "";
+  return {
+    id: Number(row.user_id ?? row.id),
+    name: sessionDisplayName(row, email),
+    email,
+    learn_subscriber: Boolean(row.learn_subscriber),
+    is_admin: Boolean(row.is_admin),
+  };
+}
+
 async function defaultLoadSessionUser(
   sql: SqlClient,
   sessionId: string,
 ): Promise<SessionUser | null> {
   const rows = (await sql.unsafe(
-    `SELECT s.id, s.user_id, s.expires_at, u.name, u.email, u.learn_subscriber,
-            COALESCE(u.is_admin, false) AS is_admin
+    `SELECT s.user_id, s.expires_at, u.*
      FROM sessions s
      INNER JOIN users u ON u.id = s.user_id
      WHERE s.id = $1 AND s.expires_at > NOW()`,
@@ -92,13 +115,7 @@ async function defaultLoadSessionUser(
   const row = rows[0];
   if (!row) return null;
 
-  return {
-    id: row.user_id,
-    name: row.name,
-    email: row.email,
-    learn_subscriber: row.learn_subscriber,
-    is_admin: row.is_admin,
-  };
+  return mapSessionUserRow(row);
 }
 
 function redirectWithCookie(location: string, setCookie: string, status: number): Response {

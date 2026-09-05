@@ -195,13 +195,7 @@ class HasManyRelationQuery<
   }
 
   async createMany(records: ReadonlyArray<Record<string, unknown>>): Promise<RelatedRecord[]> {
-    const created: RelatedRecord[] = [];
-
-    for (const attributes of records) {
-      created.push(await this.create(attributes));
-    }
-
-    return created;
+    return Promise.all(records.map((attributes) => this.create(attributes)));
   }
 }
 

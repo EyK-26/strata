@@ -191,6 +191,22 @@ function relationMatchKey(value: unknown): string {
   return String(value);
 }
 
+const relationLookupCache = new WeakMap<object, Map<string, unknown>>();
+
+function indexedRelationLookup<K, V>(map: ReadonlyMap<K, V>): Map<string, V> {
+  const cached = relationLookupCache.get(map as object);
+  if (cached) {
+    return cached as Map<string, V>;
+  }
+
+  const indexed = new Map<string, V>();
+  for (const [existing, value] of map) {
+    indexed.set(relationMatchKey(existing), value);
+  }
+  relationLookupCache.set(map as object, indexed);
+  return indexed;
+}
+
 function getByRelationKey<K, V>(map: ReadonlyMap<K, V>, key: unknown): V | undefined {
   if (map.has(key as K)) {
     return map.get(key as K);
@@ -202,13 +218,7 @@ function getByRelationKey<K, V>(map: ReadonlyMap<K, V>, key: unknown): V | undef
     return undefined;
   }
 
-  for (const [existing, value] of map) {
-    if (relationMatchKey(existing) === want) {
-      return value;
-    }
-  }
-
-  return undefined;
+  return indexedRelationLookup(map).get(want);
 }
 
 function indexHasManyRelation<

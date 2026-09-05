@@ -4,6 +4,7 @@ import { RedisClient } from "bun";
 import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
+import { tooManyRequestsResponse } from "./throttleResponse";
 
 interface ThrottleOptions {
   redisUrl: string;
@@ -45,15 +46,7 @@ function createThrottleMiddleware(options: ThrottleOptions): Middleware {
       options.maxAttempts * rateLimitMultiplierForPlan(currentTenant()?.plan ?? "free");
 
     if (attempts > maxAttempts) {
-      return Response.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: {
-            "retry-after": String(options.decaySeconds),
-          },
-        },
-      );
+      return await tooManyRequestsResponse(request, "Too many requests.", options.decaySeconds);
     }
 
     return await next();

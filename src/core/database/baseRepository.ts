@@ -692,28 +692,30 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
 
     const parentsByType = new Map<string, Map<string, TParent>>();
 
-    for (const [morphType, ids] of idsByType) {
-      const repository = repositoriesByType.get(morphType);
+    await Promise.all(
+      [...idsByType.entries()].map(async ([morphType, ids]) => {
+        const repository = repositoriesByType.get(morphType);
 
-      if (!repository) {
-        continue;
-      }
+        if (!repository) {
+          return;
+        }
 
-      const ownerKey = repository.getTable().primaryKey as OwnerKey;
-      const parents = await repository.withConnection(this.connection).findWhere(
-        {
-          [ownerKey]: [...ids],
-        } as unknown as QueryWhere<TParent>,
-        options,
-      );
-      const indexed = new Map<string, TParent>();
+        const ownerKey = repository.getTable().primaryKey as OwnerKey;
+        const parents = await repository.withConnection(this.connection).findWhere(
+          {
+            [ownerKey]: [...ids],
+          } as unknown as QueryWhere<TParent>,
+          options,
+        );
+        const indexed = new Map<string, TParent>();
 
-      for (const parent of parents) {
-        indexed.set(relationMatchKey(parent[ownerKey]), parent);
-      }
+        for (const parent of parents) {
+          indexed.set(relationMatchKey(parent[ownerKey]), parent);
+        }
 
-      parentsByType.set(morphType, indexed);
-    }
+        parentsByType.set(morphType, indexed);
+      }),
+    );
 
     return indexMorphToRelation(children, parentsByType, relation);
   }

@@ -1,6 +1,7 @@
 import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
+import { tooManyRequestsResponse } from "./throttleResponse";
 
 interface MemoryThrottleOptions {
   maxAttempts: number;
@@ -33,15 +34,7 @@ function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Middlew
     existing.count += 1;
 
     if (existing.count > options.maxAttempts) {
-      return Response.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: {
-            "retry-after": String(options.decaySeconds),
-          },
-        },
-      );
+      return await tooManyRequestsResponse(request, "Too many requests.", options.decaySeconds);
     }
 
     return await next();

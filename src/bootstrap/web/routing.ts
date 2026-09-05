@@ -1,3 +1,4 @@
+import { requestPrefersJson } from "@getstrata/core/http/contentNegotiation";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import type { RouteRequest } from "@getstrata/core/http/route";
@@ -92,7 +93,7 @@ function wrapWebThrottle(
 
   return async (request) => {
     const response = await throttled(request);
-    if (response.status === 429) {
+    if (response.status === 429 && !requestPrefersJson(request)) {
       return onThrottled(request);
     }
     return response;

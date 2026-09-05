@@ -160,8 +160,9 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
       return (await this.createOne(overrides)) as FactoryMakeResult<TRecord, Counted>;
     }
 
+    // Persist in sequence so autoincrement ids match make() order. Seeders and
+    // Laravel-style factories depend on that (first sequence row is id 1).
     const records: TRecord[] = [];
-
     for (let index = 0; index < this.quantity; index += 1) {
       records.push(await this.createOne(overrides));
     }
@@ -201,13 +202,19 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
   }
 
   protected async createOne(overrides: Partial<TRecord> = {}): Promise<TRecord> {
-    const created = await this.persist(this.insertable(this.makeOne(overrides)));
+    return this.persistCreated(this.makeOne(overrides));
+  }
 
-    for (const child of this.children) {
-      await (child.factory as Factory<Record<string, unknown>>)
-        .for(created as { id?: unknown }, child.foreignKey)
-        .create();
-    }
+  protected async persistCreated(record: TRecord): Promise<TRecord> {
+    const created = await this.persist(this.insertable(record));
+
+    await Promise.all(
+      this.children.map((child) =>
+        (child.factory as Factory<Record<string, unknown>>)
+          .for(created as { id?: unknown }, child.foreignKey)
+          .create(),
+      ),
+    );
 
     for (const callback of this.afterCreatingCallbacks) {
       await callback(created);

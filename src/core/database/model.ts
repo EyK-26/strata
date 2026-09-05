@@ -154,45 +154,47 @@ async function eagerLoadOnModels(
     grouped.set(head, existing);
   }
 
-  for (const [head, nested] of grouped) {
-    const unloaded = models.filter((model) => model.loaded(head) === undefined);
+  await Promise.all(
+    [...grouped.entries()].map(async ([head, nested]) => {
+      const unloaded = models.filter((model) => model.loaded(head) === undefined);
 
-    if (unloaded.length > 0) {
-      const first = unloaded[0];
-      if (!first) {
-        continue;
-      }
-      const method = (first as unknown as Record<string, unknown>)[head];
+      if (unloaded.length > 0) {
+        const first = unloaded[0];
+        if (!first) {
+          return;
+        }
+        const method = (first as unknown as Record<string, unknown>)[head];
 
-      if (typeof method !== "function") {
-        throw new Error(
-          `${(first.constructor as { name: string }).name} has no relation method ${head}().`,
+        if (typeof method !== "function") {
+          throw new Error(
+            `${(first.constructor as { name: string }).name} has no relation method ${head}().`,
+          );
+        }
+
+        const relationQuery = method.call(first) as AnyRelationQuery;
+        const query = first.getRepository().query();
+        relationQuery.applyEagerLoad(query, head);
+        const attached = await query.attachToRows(
+          unloaded.map((model) => model.toObject() as Record<string, unknown>),
         );
+
+        for (const [index, model] of unloaded.entries()) {
+          const row = attached[index] ?? model.toObject();
+          model.setLoaded(head, relationQuery.hydrateEager(row as Record<string, unknown>, head));
+        }
       }
 
-      const relationQuery = method.call(first) as AnyRelationQuery;
-      const query = first.getRepository().query();
-      relationQuery.applyEagerLoad(query, head);
-      const attached = await query.attachToRows(
-        unloaded.map((model) => model.toObject() as Record<string, unknown>),
-      );
-
-      for (const [index, model] of unloaded.entries()) {
-        const row = attached[index] ?? model.toObject();
-        model.setLoaded(head, relationQuery.hydrateEager(row as Record<string, unknown>, head));
+      if (nested.length === 0) {
+        return;
       }
-    }
 
-    if (nested.length === 0) {
-      continue;
-    }
-
-    const children = models.flatMap((model) => {
-      const loaded = model.loaded(head);
-      return Array.isArray(loaded) ? loaded : loaded ? [loaded] : [];
-    });
-    await eagerLoadOnModels(children.filter(isLoadableModel), nested);
-  }
+      const children = models.flatMap((model) => {
+        const loaded = model.loaded(head);
+        return Array.isArray(loaded) ? loaded : loaded ? [loaded] : [];
+      });
+      await eagerLoadOnModels(children.filter(isLoadableModel), nested);
+    }),
+  );
 }
 
 async function loadNested(
@@ -599,7 +601,6 @@ class ModelQuery {
 
     for (const row of rows) {
       const model = statics.newFromRecord(row, true) as AnyModel;
-      await runObservers(model, "retrieved");
 
       for (const { name, relationQuery } of this.eager) {
         model.setLoaded(name, relationQuery.hydrateEager(row, name));
@@ -607,6 +608,8 @@ class ModelQuery {
 
       models.push(model);
     }
+
+    await Promise.all(models.map((model) => runObservers(model as AnyModel, "retrieved")));
 
     const nested = this.eager.filter((item) => item.path.includes(".")).map((item) => item.path);
     await eagerLoadOnModels(models.filter(isLoadableModel), nested);
