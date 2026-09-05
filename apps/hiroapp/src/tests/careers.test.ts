@@ -380,7 +380,7 @@ describe.skipIf(!enabled)("Wave 36 public careers", () => {
     });
     expect((await careerService.forPosition(recruiter, closedSeat))?.status).toBe("scheduled");
 
-    const frozenDepartment = await departmentService.create(`Career Schedule ${Date.now()}`);
+    const frozenDepartment = await departmentService.create(`Schedule Freeze ${Date.now()}`);
     const frozenSeat = await Position.create({
       user_id: null,
       department_id: frozenDepartment.id,

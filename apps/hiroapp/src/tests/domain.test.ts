@@ -443,11 +443,10 @@ describe.skipIf(!enabled)("Wave 10 HiroApp domain coverage", () => {
     const admin = await seededUser("admin@hiroapp.com");
     const recruiter = await seededUser("recruiter@hiroapp.com");
     const candidate = await seededUser("candidate@hiroapp.com");
-    const department = (await departments.ordered())[0];
-    if (!department) {
-      throw new Error("no department");
+    const departmentId = await resolveStaffDepartmentId(recruiter);
+    if (!departmentId) {
+      throw new Error("recruiter has no hiring team");
     }
-    const departmentId = Number(department.id);
     await expect(
       teamService.addMember(recruiter, departmentId, recruiter.id),
     ).rejects.toBeInstanceOf(ForbiddenError);
