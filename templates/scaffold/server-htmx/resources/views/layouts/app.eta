@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title><%= it.title ?? "WorkHub" %></title>
+    <title><%= it.title ?? "Strata" %></title>
     <meta name="csrf-token" content="<%= it.csrfToken ?? "" %>" />
     <meta name="htmx-config" content='{"inlineStyleNonce":"<%= it.cspNonce ?? "" %>"}' />
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
@@ -19,7 +19,7 @@
   </head>
   <body>
     <header class="site-header">
-      <a href="/organizations" class="brand">WorkHub</a>
+      <a href="/organizations" class="brand">Strata</a>
       <nav>
         <a href="/organizations">Organizations</a>
       </nav>

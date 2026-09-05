@@ -17,11 +17,11 @@ describe("markdown mail", () => {
 
   test("markdownToHtml keeps query strings in http links", () => {
     const html = markdownToHtml(
-      "Reset [here](https://workhub.test/reset-password?email=a%40b.test&token=abc).",
+      "Reset [here](https://strata.test/reset-password?email=a%40b.test&token=abc).",
     );
 
     expect(html).toContain(
-      'href="https://workhub.test/reset-password?email=a%40b.test&amp;token=abc"',
+      'href="https://strata.test/reset-password?email=a%40b.test&amp;token=abc"',
     );
     expect(html).not.toContain("&amp;amp;");
   });

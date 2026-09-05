@@ -1,13 +1,14 @@
-import { importHiroappModule, readDogfoodApp } from "../../bootstrap/dogfoodApp.ts";
+import { importHiroappModule } from "../../bootstrap/dogfoodApp.ts";
+import { isFixtureSchema } from "../../bootstrap/schemaTarget.ts";
 
 async function migrateCommand(): Promise<void> {
-  if (readDogfoodApp() === "hiroapp") {
-    await importHiroappModule("src/db/migrate.ts");
+  if (isFixtureSchema()) {
+    const { migrateDatabase } = await import("../../db/migrations/runner");
+    await migrateDatabase();
     return;
   }
 
-  const { migrateDatabase } = await import("../../db/migrations/runner");
-  await migrateDatabase();
+  await importHiroappModule("src/db/migrate.ts");
 }
 
 export { migrateCommand };

@@ -14,7 +14,7 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.indexBelongsToManyRelation).toBe("function");
   });
 
-  test("exports Model helpers for Eloquent-parity ORM", () => {
+  test("exports Model helpers for the active-record ORM", () => {
     expect(typeof core.Model).toBe("function");
     expect(typeof core.registerModelRepository).toBe("function");
     expect(typeof core.hydrateValue).toBe("function");

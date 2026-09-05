@@ -1,3 +1,4 @@
+import { currentSqlDialect } from "@getstrata/core/database/dialect";
 import type { TableDefinition } from "./table.ts";
 import type {
   MutationValues,
@@ -13,11 +14,11 @@ import type {
 import type { WhereNode } from "./whereBuilder.ts";
 
 function quoteIdentifier(identifier: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
-    throw new Error(`Invalid SQL identifier: ${identifier}`);
-  }
+  return currentSqlDialect().quoteIdentifier(identifier);
+}
 
-  return `"${identifier}"`;
+function returningSuffix(columns: string): string {
+  return currentSqlDialect().returningClause(columns);
 }
 
 function qualifyColumn(tableName: string, column: string): string {
@@ -60,7 +61,7 @@ function isQueryOperator(value: QueryFilterValue): value is QueryOperator {
 
 function pushParam(values: unknown[], value: unknown): string {
   values.push(value);
-  return `$${values.length}`;
+  return currentSqlDialect().placeholder(values.length);
 }
 
 function buildInClause(column: string, values: readonly unknown[], params: unknown[]): string {
@@ -116,10 +117,16 @@ function buildOperatorClauses(
   }
 
   if (operator.ilike !== undefined) {
-    clauses.push(`${column} ILIKE ${pushParam(params, operator.ilike)}`);
+    clauses.push(
+      `${column} ${currentSqlDialect().ilikeOperator()} ${pushParam(params, operator.ilike)}`,
+    );
   }
 
   if (operator.tsMatch !== undefined) {
+    if (currentSqlDialect().driver !== "pgsql") {
+      throw new Error("Full-text search (tsMatch) is only available on PostgreSQL.");
+    }
+
     clauses.push(`${column} @@ plainto_tsquery('english', ${pushParam(params, operator.tsMatch)})`);
   }
 
@@ -445,7 +452,7 @@ function buildSelectList<TEntity extends object>(
       }
 
       if (item.kind === "literalText") {
-        return `${pushParam(params, item.value)}::text AS ${quoteIdentifier(item.as)}`;
+        return `${currentSqlDialect().castToText(pushParam(params, item.value))} AS ${quoteIdentifier(item.as)}`;
       }
 
       const column = qualifyColumn(item.table, item.column);
@@ -590,7 +597,7 @@ function buildInsertQuery<TEntity extends object, PrimaryKey extends keyof TEnti
   const returningColumns = buildReturningColumns(table);
 
   return {
-    text: `INSERT INTO ${quoteIdentifier(table.name)} (${columns}) VALUES (${placeholders}) RETURNING ${returningColumns}`,
+    text: `INSERT INTO ${quoteIdentifier(table.name)} (${columns}) VALUES (${placeholders})${returningSuffix(returningColumns)}`,
     params,
   };
 }
@@ -621,7 +628,7 @@ function buildUpdateQuery<TEntity extends object, PrimaryKey extends keyof TEnti
   const scopeSuffix = scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
 
   return {
-    text: `UPDATE ${quoteIdentifier(table.name)} SET ${setClause} WHERE ${quoteIdentifier(table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix} RETURNING ${returningColumns}`,
+    text: `UPDATE ${quoteIdentifier(table.name)} SET ${setClause} WHERE ${quoteIdentifier(table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix}${returningSuffix(returningColumns)}`,
     params,
   };
 }
@@ -644,10 +651,13 @@ function buildSoftDeleteByIdQuery<
   const scopeClauses: string[] = [];
   appendSoftDeleteScope(table, {}, scopeClauses);
   const scopeSuffix = scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
+  const params: unknown[] = [];
+  const deletedAtPlaceholder = pushParam(params, deletedAt);
+  const idPlaceholder = pushParam(params, id);
 
   return {
-    text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = $1 WHERE ${quoteIdentifier(table.primaryKey)} = $2${scopeSuffix} RETURNING ${returningColumns}`,
-    params: [deletedAt, id],
+    text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = ${deletedAtPlaceholder} WHERE ${quoteIdentifier(table.primaryKey)} = ${idPlaceholder}${scopeSuffix}${returningSuffix(returningColumns)}`,
+    params,
   };
 }
 
@@ -662,10 +672,13 @@ function buildRestoreByIdQuery<TEntity extends object, PrimaryKey extends keyof 
   }
 
   const returningColumns = buildReturningColumns(table);
+  const params: unknown[] = [];
+  const deletedAtPlaceholder = pushParam(params, null);
+  const idPlaceholder = pushParam(params, id);
 
   return {
-    text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = $1 WHERE ${quoteIdentifier(table.primaryKey)} = $2 AND ${qualifyColumn(table.name, deletedAtColumn)} IS NOT NULL RETURNING ${returningColumns}`,
-    params: [null, id],
+    text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = ${deletedAtPlaceholder} WHERE ${quoteIdentifier(table.primaryKey)} = ${idPlaceholder} AND ${qualifyColumn(table.name, deletedAtColumn)} IS NOT NULL${returningSuffix(returningColumns)}`,
+    params,
   };
 }
 
@@ -673,9 +686,15 @@ function buildDeleteByIdQuery<TEntity extends object, PrimaryKey extends keyof T
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
 ): { text: string; params: unknown[] } {
+  const params: unknown[] = [];
+  const idPlaceholder = pushParam(params, id);
+  const returning = returningSuffix(
+    `${quoteIdentifier(table.primaryKey)} AS ${quoteIdentifier("deleted_id")}`,
+  );
+
   return {
-    text: `DELETE FROM ${quoteIdentifier(table.name)} WHERE ${quoteIdentifier(table.primaryKey)} = $1 RETURNING ${quoteIdentifier(table.primaryKey)} AS ${quoteIdentifier("deleted_id")}`,
-    params: [id],
+    text: `DELETE FROM ${quoteIdentifier(table.name)} WHERE ${quoteIdentifier(table.primaryKey)} = ${idPlaceholder}${returning}`,
+    params,
   };
 }
 

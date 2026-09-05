@@ -1,3 +1,4 @@
+import { exportPendingAuditLogs } from "@getstrata/core/audit/exportAuditLogs";
 import { appSchedule } from "@getstrata/core/scheduler/schedule";
 import { careerService } from "./modules/careers/service.ts";
 import { holdService } from "./modules/holds/service.ts";
@@ -21,8 +22,8 @@ appSchedule.command("0 * * * *", "close-expired-positions", async () => {
   await closeExpiredPositions();
 });
 
-appSchedule.command("* * * * *", "refresh-hiring-deadlines", async () => {
-  await refreshHiringDeadlines();
+appSchedule.command("15 * * * *", "export-audit-logs", async () => {
+  await exportPendingAuditLogs();
 });
 
 export { closeExpiredPositions, refreshHiringDeadlines };

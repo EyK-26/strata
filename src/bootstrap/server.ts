@@ -1,9 +1,3 @@
-import { importHiroappModule, readDogfoodApp } from "./dogfoodApp.ts";
-import "./preloadModules.ts";
+import { importHiroappModule } from "./dogfoodApp.ts";
 
-if (readDogfoodApp() === "hiroapp") {
-  await importHiroappModule("src/bootstrap/server.ts");
-} else {
-  const { default: App } = await import("./app");
-  new App().serve();
-}
+await importHiroappModule("src/bootstrap/server.ts");

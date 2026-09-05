@@ -51,7 +51,7 @@ describe("secretsCheckCommand", () => {
   });
 
   test("throws when production defaults remain", () => {
-    process.env.ADMIN_API_TOKEN = "workhub-admin-test-token";
+    process.env.ADMIN_API_TOKEN = "strata-admin-test-token";
 
     expect(() => secretsCheckCommand()).toThrow(/Production startup blocked/);
   });

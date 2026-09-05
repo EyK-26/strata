@@ -1,14 +1,5 @@
 const MEMBER_ABILITIES = [
-  "organizations:read",
-  "organizations:create",
-  "projects:read",
-  "projects:create",
-  "tasks:read",
-  "tasks:create",
-  "comments:read",
-  "comments:create",
-  "attachments:read",
-  "attachments:create",
+  "profile:read",
   "auth:tokens:read",
   "auth:tokens:write",
   "auth:tokens:delete",
@@ -16,19 +7,10 @@ const MEMBER_ABILITIES = [
 
 const ADMIN_ABILITIES = [
   ...MEMBER_ABILITIES,
-  "organizations:create",
-  "organizations:update",
-  "organizations:delete",
-  "projects:update",
-  "projects:delete",
-  "tasks:update",
-  "tasks:delete",
-  "comments:update",
-  "comments:delete",
-  "attachments:delete",
   "webhooks:read",
   "webhooks:write",
   "audit:read",
+  "audit:export",
 ] as const;
 
 const PLATFORM_ADMIN_ABILITIES = ["*"] as const;

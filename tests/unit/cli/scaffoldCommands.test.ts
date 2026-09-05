@@ -32,7 +32,7 @@ async function withTempWorkspace(
   run: (workspace: string) => Promise<void>,
   options: { chdir?: boolean } = {},
 ): Promise<void> {
-  const workspace = await mkdtemp(join(tmpdir(), "workhub-cli-scaffold-"));
+  const workspace = await mkdtemp(join(tmpdir(), "strata-cli-scaffold-"));
   tempDirectories.push(workspace);
   modulesRoot = join(workspace, "modules");
   migrationsRoot = join(workspace, "db", "migrations");

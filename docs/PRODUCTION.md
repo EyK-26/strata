@@ -1,17 +1,14 @@
 # Production readiness
 
-WorkHub blocks `APP_ENV=production` HTTP and queue workers when unsafe defaults are detected (`assertProductionSecrets` plus WorkHub extras from `App.serve()` and `queue:work`). `createAppContext()` does not run that gate. The published helper is feature-gated for every app; WorkHub’s default-on encryption/CORS/OAuth/public-read checklist lives in `src/config/productionSecrets.ts`. Use this checklist before going live.
+`assertProductionSecrets()` runs when `APP_ENV=production`. HiroApp calls it from `createApp()`. The check is feature-gated: flags that are off do not demand their secrets.
 
-## Quick validation
-
-Simulate production checks against your current shell environment (or `.env`):
+Validate:
 
 ```bash
-# Must pass with production-like env — expect failures until vars are rotated
 APP_ENV=production strata secrets:check
 ```
 
-Fix every error until the command prints `Production secret checks passed`.
+Fix every error until it prints that production secret checks passed.
 
 ## Required for all production deployments
 
@@ -21,41 +18,39 @@ Fix every error until the command prints `Production secret checks passed`.
 | `APP_DEBUG=false` | Always (recommended) |
 | `AUTH_DEV_HEADERS=false` | Always in production |
 | `SESSION_SECRET` (32+ chars) | `FRONTEND_MODE=server-htmx` |
-| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Token auth enabled (`ADMIN_API_TOKEN` / `MEMBER_API_TOKEN` / `FEATURE_API_TOKENS=true`) — rotate away from published test defaults |
+| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | When those env vars are set or `FEATURE_API_TOKENS=true`. Rotate away from `strata-*-test-token` and any leftover published seed strings |
 | `TOKEN_HASH_PEPPER` | Token auth enabled |
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Token auth enabled |
-| `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled (`FEATURE_OAUTH`, `FEATURE_SAML`, or provider env) |
-| `CORS_ALLOWED_ORIGINS` | Only when `CORS_ALLOWED_ORIGINS` is set (no `*`) |
-| `FEATURE_PUBLIC_READS=false` | Only when `FEATURE_PUBLIC_READS=true` is set |
+| `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled |
+| `CORS_ALLOWED_ORIGINS` | If you set this variable, it must not include `*` |
+| `FEATURE_PUBLIC_READS=false` | Unless you intentionally publish reads (HiroApp careers can keep public list routes without this flag meaning "open tenant probe") |
 
-A production HTMX sibling app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need API tokens, SCIM, OAuth, or CORS when those features are off.
+A production HTML app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need API tokens, SCIM, OAuth, or CORS when those features are off.
 
-WorkHub still requires its extra production profile (encryption/billing defaults, explicit CORS, OAuth state, public reads off). See [SIBLING-HTMX.md](./SIBLING-HTMX.md).
+## When a feature is on
 
-## Enterprise modules (when enabled)
-
-See [INTEGRATIONS.md](./INTEGRATIONS.md) for wiring details.
+See [INTEGRATIONS.md](./INTEGRATIONS.md).
 
 | Feature flag | Required env | Notes |
 |--------------|--------------|-------|
-| `FEATURE_FIELD_ENCRYPTION=true` | `KMS_ENCRYPTION_KEY` (32-byte hex or base64) | Email and sensitive fields |
+| `FEATURE_FIELD_ENCRYPTION=true` | `KMS_ENCRYPTION_KEY` (32-byte hex or base64) | Offer notes and similar fields |
 | `FEATURE_SCIM=true` | `SCIM_BEARER_TOKEN` (rotated) | Optional `SCIM_TENANT_TOKENS` per tenant |
-| `FEATURE_BILLING=true` | `STRIPE_WEBHOOK_SECRET` | Live Stripe SDK is app-specific — see integrations doc |
-| `FEATURE_SIEM_EXPORT=true` | `SIEM_EXPORT_URL` (+ optional `SIEM_EXPORT_TOKEN`) | Warns if missing; export job no-ops |
-| `FEATURE_OAUTH=true` | Provider credentials (`GITHUB_*`, `OIDC_*`, etc.) | See `.env.example` |
-| `FEATURE_SAML=true` | `SAML_LOGIN_URL` + IdP metadata in your adapter | Stub redirect only in repo |
+| `FEATURE_BILLING=true` | `STRIPE_WEBHOOK_SECRET` | Stripe SDK stays in the app, not core |
+| `FEATURE_SIEM_EXPORT=true` | `SIEM_EXPORT_URL` (optional `SIEM_EXPORT_TOKEN`) | Warns if missing; export job no-ops |
+| `FEATURE_OAUTH=true` | Provider credentials (`GITHUB_*`, `OIDC_*`) | See `.env.example` |
+| `FEATURE_SAML=true` | `SAML_LOGIN_URL` plus IdP metadata in your adapter | |
 
-## Recommended (not enforced by startup guard)
+## Recommended (not all enforced at boot)
 
-- `REDIS_URL` for cache, queue, and rate limiting
-- `TRUST_FORWARDED_FOR=true` only when a trusted reverse proxy sets `X-Forwarded-For` / `X-Real-IP` (`@getstrata/core/http/clientIp`)
+- `REDIS_URL` for cache, queue, and shared login throttle
+- `JWT_SECRET` if you mint JWTs (otherwise JWT falls back to `SESSION_SECRET`)
+- `TRUST_FORWARDED_FOR=true` only when a trusted reverse proxy sets `X-Forwarded-For`
 - `METRICS_TOKEN` to authorize `GET /metrics` (production hides the endpoint unless this is set)
-- `TENANCY_DRIVER=none` for apps without a `tenant` table (`@getstrata/core/tenant/tenancyConfig`; WorkHub keeps the default `rls`)
-- `OTEL_EXPORTER_OTLP_ENDPOINT` for tracing
-- Off-site database backups — see [DR.md](./DR.md)
+- `TENANCY_DRIVER=none` for apps without a `tenant` table. HiroApp keeps `rls`
+- Off-site database backups: [DR.md](./DR.md)
 
 ## Deployment docs
 
-- [DEPLOY.md](../DEPLOY.md) — environment and process layout
-- [RUNBOOK.md](../RUNBOOK.md) — operations
-- [INTEGRATIONS.md](./INTEGRATIONS.md) — SCIM, Stripe, SIEM, OAuth/SAML
+- [DEPLOY.md](../DEPLOY.md)
+- [RUNBOOK.md](../RUNBOOK.md)
+- [INTEGRATIONS.md](./INTEGRATIONS.md)

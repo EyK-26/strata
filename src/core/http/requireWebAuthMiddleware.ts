@@ -1,5 +1,6 @@
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import type { AuthManager } from "@getstrata/core/auth/guard";
+import { createIntendedUrlCookieFromRequest } from "@getstrata/core/auth/intendedUrlCookie";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
@@ -17,7 +18,12 @@ function createRequireWebAuthMiddleware(auth: AuthManager): Middleware {
       throw new UnauthorizedError();
     }
 
-    return Response.redirect(loginRedirectLocation(request), 302);
+    const intended = createIntendedUrlCookieFromRequest(request);
+    const headers = new Headers({ Location: loginRedirectLocation(request) });
+    if (intended) {
+      headers.append("Set-Cookie", intended);
+    }
+    return new Response(null, { status: 302, headers });
   };
 }
 

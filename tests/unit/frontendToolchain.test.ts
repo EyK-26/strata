@@ -10,23 +10,6 @@ async function readJson(relativePath: string): Promise<Record<string, unknown>> 
 }
 
 describe("spa-react frontend toolchain", () => {
-  test("WorkHub frontend uses Bun instead of Vite", async () => {
-    const packageJson = await readJson("frontend/package.json");
-    const scripts = packageJson.scripts as Record<string, string>;
-    const allDependencies = {
-      ...(packageJson.dependencies as Record<string, string>),
-      ...(packageJson.devDependencies as Record<string, string>),
-    };
-
-    expect(scripts.build).toContain("build.ts");
-    expect(scripts.dev).toContain("dev-server.ts");
-    expect(allDependencies.vite).toBeUndefined();
-    expect(allDependencies["@vitejs/plugin-react"]).toBeUndefined();
-
-    const buildScript = await readFile(join(process.cwd(), "frontend/build.ts"), "utf8");
-    expect(buildScript).toContain('publicPath: "/app/"');
-  });
-
   test("spa-react scaffold uses Bun instead of Vite", async () => {
     const packageJson = await readJson("templates/scaffold/spa-react/frontend/package.json");
     const scripts = packageJson.scripts as Record<string, string>;

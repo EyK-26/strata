@@ -1,14 +1,19 @@
 /** Published test-token strings that must never ship in production. */
-const PUBLISHED_TEST_ADMIN_API_TOKEN = "workhub-admin-test-token";
-const PUBLISHED_TEST_MEMBER_API_TOKEN = "workhub-member-test-token";
-const PUBLISHED_TEST_SCIM_BEARER_TOKEN = "workhub-scim-test-token";
+const PUBLISHED_TEST_ADMIN_API_TOKEN = "strata-admin-test-token";
+const PUBLISHED_TEST_MEMBER_API_TOKEN = "strata-member-test-token";
+const PUBLISHED_TEST_SCIM_BEARER_TOKEN = "strata-scim-test-token";
 const MIN_SESSION_SECRET_LENGTH = 32;
 
 const PUBLISHED_TEST_TOKENS = new Set([
   PUBLISHED_TEST_ADMIN_API_TOKEN,
   PUBLISHED_TEST_MEMBER_API_TOKEN,
+  "workhub-admin-test-token",
+  "workhub-member-test-token",
 ]);
-const PUBLISHED_TEST_SCIM_TOKENS = new Set([PUBLISHED_TEST_SCIM_BEARER_TOKEN]);
+const PUBLISHED_TEST_SCIM_TOKENS = new Set([
+  PUBLISHED_TEST_SCIM_BEARER_TOKEN,
+  "workhub-scim-test-token",
+]);
 
 function isEnabled(value: string | undefined, defaultEnabled: boolean): boolean {
   if (value === undefined) {

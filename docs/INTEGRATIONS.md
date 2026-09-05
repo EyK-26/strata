@@ -1,15 +1,14 @@
-# Integration Stubs
+# Integrations
 
-HiroApp ships **integration points** for enterprise services. Core routes and jobs exist; **provider SDKs and IdP-specific behavior are yours to wire** via environment variables and small adapter extensions.
+HiroApp exposes hooks for HRIS, billing, SIEM, and SSO. Core routes and jobs exist. Provider SDKs and IdP-specific behavior are yours to finish in small adapters. Keep vendor SDKs out of `src/core/` when you can.
 
-Production checklist: [PRODUCTION.md](./PRODUCTION.md)  
+Production checklist: [PRODUCTION.md](./PRODUCTION.md)
+
 Validate env: `APP_ENV=production bun run cli secrets:check`
-
----
 
 ## SCIM 2.0 (`FEATURE_SCIM=true`)
 
-**Status:** Functional provisioning API (users + org-as-groups). Filters and advanced IdP mappings are minimal.
+Functional provisioning API (users plus org-as-groups). Filters and advanced IdP mappings are minimal. **Staff only.** Candidates are ignored.
 
 | Endpoint | Notes |
 |----------|-------|
@@ -19,93 +18,49 @@ Validate env: `APP_ENV=production bun run cli secrets:check`
 | `GET /scim/v2/Groups` | Organizations as SCIM groups |
 | `PATCH /scim/v2/Groups/:id` | Add members via `members` patch op |
 
-### Production setup
-
-1. Set `SCIM_BEARER_TOKEN` to a long random secret (not `workhub-scim-test-token`).
+1. Set `SCIM_BEARER_TOKEN` to a long random secret (not `strata-scim-test-token`).
 2. Optional multi-tenant tokens: `SCIM_TENANT_TOKENS=1:token-a,2:token-b`.
-3. In Okta / Azure AD / Google Workspace, set SCIM base URL to `https://your-host/scim/v2`, bearer auth.
-4. Run `bun run cli secrets:check` with `APP_ENV=production`.
-
-**Extend:** `apps/hiroapp/src/modules/scim/service.ts` — filters, deprovisioning, custom group CRUD. Staff only; candidates are ignored.
-
----
+3. In your IdP, set SCIM base URL to `https://your-host/scim/v2`, bearer auth.
+4. Extend `apps/hiroapp/src/modules/scim/service.ts` for deprovisioning and custom groups.
 
 ## Billing (`FEATURE_BILLING=true`)
 
-**Status:** Subscription table + Stripe webhook **receiver** (signature verification). No live Stripe SDK calls in-repo.
+Subscription table plus a Stripe webhook receiver (signature verification). Live Stripe SDK calls stay in the app.
 
 | Endpoint | Notes |
 |----------|-------|
 | `GET /api/billing/subscription` | Current tenant subscription |
 | `POST /api/billing/webhooks/stripe` | Webhook receiver |
 
-### Production setup
+Set `STRIPE_WEBHOOK_SECRET`. Plan sync and usage metering live in `apps/hiroapp/src/modules/billing/service.ts`.
 
-1. Create a Stripe webhook endpoint pointing at `https://your-host/api/v1/billing/webhooks/stripe`.
-2. Set `STRIPE_WEBHOOK_SECRET` from the Stripe dashboard (required in production when billing is enabled).
-3. Set `STRIPE_SECRET_KEY` when you add a Stripe client adapter for checkout/portal (not included in core).
-4. Map Stripe `customer` / subscription metadata to tenant IDs in your adapter.
+## SIEM / audit export (`FEATURE_SIEM_EXPORT=true`)
 
-**Extend:**
+1. Set `SIEM_EXPORT_URL` to an HTTP ingest endpoint that passes SSRF checks (no private IPs in production).
+2. Optional `SIEM_EXPORT_TOKEN`.
+3. Admins can also download `GET /api/audit-logs/export?format=json` or `format=cef`.
+4. The schedule task `export-audit-logs` pushes pending rows.
 
-- `apps/hiroapp/src/modules/billing/service.ts` — plan sync, usage metering
-- New `src/core/billing/stripeClient.ts` (or module-local adapter) — Stripe SDK
+## GitHub OAuth
 
----
+Set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and register the callback `https://your-host/auth/oauth/github/callback`. Candidates who sign in this way get `role_id=2` unless the email already exists.
 
-## SIEM audit export
+## OIDC (Azure AD, Okta, and similar)
 
-**Status:** Scheduled batch export when `SIEM_EXPORT_URL` is set (`src/core/audit/exportAuditLogs.ts`).
+Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. Callback: `/auth/oauth/oidc/callback`.
 
-### Production setup
+## SAML
 
-1. Set `SIEM_EXPORT_URL` to your SIEM HTTP ingest endpoint (must pass SSRF checks — no private IPs in production).
-2. Optional: `SIEM_EXPORT_TOKEN`, `SIEM_EXPORT_FORMAT=json|cef`, `SIEM_EXPORT_BATCH_SIZE`.
-3. Enable `FEATURE_SIEM_EXPORT=true` (default in `.env.example`).
-4. Scheduler runs `audit-export` every minute via `src/bootstrap/schedule.ts`.
+Set `SAML_LOGIN_URL`. In-repo behavior is a stub redirect. Put IdP XML parsing in an app adapter, not in `src/core/`.
 
-**Extend:** Add Splunk HEC, Datadog, or S3 batch adapters alongside the JSON/CEF formatters.
+## Mock SSO (local only)
 
----
+`FEATURE_OAUTH_MOCK=true` adds `/auth/oauth/mock`. The callback creates `sso.candidate@hiroapp.com`. Never enable this in production.
 
-## OIDC / OAuth / SAML
+## Partner API tokens
 
-**Status:** GitHub OAuth works when `GITHUB_CLIENT_*` are set. OIDC issuer flow registers when `OIDC_*` env vars are present. SAML is a redirect stub when `FEATURE_SAML=true`.
+Create a token with ability `integrations:ping` and call `GET /api/integrations/ping`. That is the job-board heartbeat. Add more abilities in HiroApp when a real vendor needs them.
 
-### Production setup — GitHub OAuth
+## Design rule
 
-```env
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-OAUTH_REDIRECT_URI=https://your-host/api/v1/auth/oauth/github/callback
-OAUTH_STATE_SECRET=...   # required in production
-```
-
-Register the HTMX callback (`https://your-host/oauth/github/callback`) as an additional authorized redirect URI on the GitHub app. HiroApp sends that URI for `/oauth/:provider` and keeps `OAUTH_REDIRECT_URI` for the API bearer flow.
-
-### Production setup — OIDC (Azure AD, Okta, etc.)
-
-```env
-OIDC_ISSUER=https://your-idp.example.com
-OIDC_CLIENT_ID=...
-OIDC_CLIENT_SECRET=...
-OAUTH_REDIRECT_URI=https://your-host/api/v1/auth/oauth/oidc/callback
-```
-
-### Production setup — SAML
-
-1. Set `FEATURE_SAML=true` and `SAML_LOGIN_URL` (IdP entry point).
-2. Replace stub in `src/core/auth/oauth/samlProvider.ts` with `@node-saml/node-saml` or your IdP SDK.
-3. Add ACS/callback routes in the user module as needed.
-
-**Extend:** `src/core/auth/oauth/oidcProvider.ts`, `samlProvider.ts`, `apps/hiroapp/src/modules/auth` (provider registration).
-
----
-
-## Recommended integration pattern
-
-1. Keep vendor SDKs **outside** `src/core/` where possible — wrap in module adapters.
-2. Register adapters in module `provider.ts` `boot()` phase.
-3. Gate routes with `isFeatureEnabled()` in module `index.ts`.
-4. Document env vars in `.env.example`, [PRODUCTION.md](./PRODUCTION.md), and `DEPLOY.md`.
-5. Add integration tests with mocked HTTP (see `apps/hiroapp/src/tests/enterprise.test.ts`, `tests/unit/exportAuditLogs.test.ts`).
+Keep vendor SDKs outside `src/core/`. Wrap them in `apps/hiroapp/src/modules/...` adapters so the framework stays usable without Stripe or a specific IdP.

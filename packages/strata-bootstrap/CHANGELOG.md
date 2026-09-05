@@ -1,5 +1,11 @@
 # @getstrata/bootstrap changelog
 
+## 0.3.0
+
+- Peer `@getstrata/core` `^0.6.0`.
+- Cookie session SQL uses the current SQL dialect for placeholders, `NOW()`, and `NULLS LAST`.
+- Kernel comments describe guest, verified-email, and password-confirm gates without referring to another framework.
+
 ## 0.2.68
 
 - `configureModulesDirectory()` clears the discovered-module cache when the directory changes, so OpenAPI/`createApp` can load HiroApp after core tests pointed at empty fixtures.
@@ -13,17 +19,17 @@
 
 ## 0.2.66
 
-- `assertProductionSecrets()` is feature-gated for every app. API tokens no longer imply WorkHub’s encryption/CORS/OAuth/public-read checklist. Published test token strings are still denied. WorkHub’s extra production profile lives in the app (`src/config/productionSecrets.ts`).
-- **Breaking:** `HttpKernel.wrapWebGuest()` defaults `home` to `/` instead of `/organizations`. Apps with an org home should pass that path (WorkHub already does).
+- `assertProductionSecrets()` is feature-gated for every app. API tokens no longer imply the previous in-repo app's encryption/CORS/OAuth/public-read checklist. Published test token strings are still denied. the previous in-repo app's extra production profile lives in the app (`src/config/productionSecrets.ts`).
+- **Breaking:** `HttpKernel.wrapWebGuest()` defaults `home` to `/` instead of `/organizations`. Apps with an org home should pass that path (the previous in-repo app already does).
 - `createWebRoutes()` no longer seeds a `/` → `/organizations` redirect. The in-repo app owns `/` via its organization module.
 
 ## 0.2.65
 
-- App listener discovery reads `src/listeners` from `process.cwd()` so a built `@getstrata/bootstrap` bundle still finds WorkHub registrars (`import.meta.dir` after `build:bootstrap` is the package dist). Listener boot calls each registrar every time (registrars are idempotent per `eventBus`).
+- App listener discovery reads `src/listeners` from `process.cwd()` so a built `@getstrata/bootstrap` bundle still finds the previous in-repo app registrars (`import.meta.dir` after `build:bootstrap` is the package dist). Listener boot calls each registrar every time (registrars are idempotent per `eventBus`).
 
 ## 0.2.64
 
-- `registerDefaultJobs()` no longer registers WorkHub `webhook.dispatch`. Apps that dispatch model webhooks should call `registerWebhookJobs()` (WorkHub’s webhook provider and `queue:work` do).
+- `registerDefaultJobs()` no longer registers the previous in-repo app `webhook.dispatch`. Apps that dispatch model webhooks should call `registerWebhookJobs()` (the previous in-repo app's webhook provider and `queue:work` do).
 
 ## 0.2.63
 
@@ -31,7 +37,7 @@
 
 ## 0.2.62
 
-- `HttpKernel.wrapWebPasswordConfirm()` is Laravel `password.confirm` for HTML routes. Peer `@getstrata/core` `^0.5.75`.
+- `HttpKernel.wrapWebPasswordConfirm()` is the previous PHP framework `password.confirm` for HTML routes. Peer `@getstrata/core` `^0.5.75`.
 
 ## 0.2.61
 
@@ -43,7 +49,7 @@
 
 ## 0.2.59
 
-- `HttpKernel.wrapWebGuest()` is Laravel `guest` / `RedirectIfAuthenticated`. Signed-in HTML users redirect to `/organizations` (override the home path). Peer `@getstrata/core` `^0.5.72`.
+- `HttpKernel.wrapWebGuest()` is the previous PHP framework `guest` / `RedirectIfAuthenticated`. Signed-in HTML users redirect to `/organizations` (override the home path). Peer `@getstrata/core` `^0.5.72`.
 
 ## 0.2.58
 
@@ -59,7 +65,7 @@
 
 ## 0.2.55
 
-- HttpKernel and route builders read `isViewsEnabled` / `isSpaEnabled` from `@getstrata/core/runtime/frontendMode` instead of WorkHub `src/config/frontend`.
+- HttpKernel and route builders read `isViewsEnabled` / `isSpaEnabled` from `@getstrata/core/runtime/frontendMode` instead of the previous in-repo app `src/config/frontend`.
 
 ## 0.2.54
 
@@ -83,7 +89,7 @@
 
 ## 0.2.50
 
-- `createCookieSessionAuthManager` / `CookieSessionGuard` turn `CookieSessionStore` into an `AuthGuard` / `AuthManager` for `CORE_AUTH_TOKEN`. Supply a `mapUser` mapper; WorkHub abilities are not baked in. Omit `sql` to read the client from `bindDatabaseConnection()` on every call.
-- `checkDatabase()` / `createHealthRoutes()` ping the bound database client, not WorkHub’s private connection holder. `/health` stays `{ status: "ok" }` unless `{ pingOnHealth: true }`. Extra JSON fields are optional.
-- `assertProductionSecrets()` is feature-gated. A production HTMX app with `SESSION_SECRET` (32+), `AUTH_DEV_HEADERS=false`, and feature flags off does not need WorkHub API tokens. WorkHub’s current production env (rotated tokens, CORS, pepper, expiry) still passes.
+- `createCookieSessionAuthManager` / `CookieSessionGuard` turn `CookieSessionStore` into an `AuthGuard` / `AuthManager` for `CORE_AUTH_TOKEN`. Supply a `mapUser` mapper; the previous in-repo app abilities are not baked in. Omit `sql` to read the client from `bindDatabaseConnection()` on every call.
+- `checkDatabase()` / `createHealthRoutes()` ping the bound database client, not the previous in-repo app's private connection holder. `/health` stays `{ status: "ok" }` unless `{ pingOnHealth: true }`. Extra JSON fields are optional.
+- `assertProductionSecrets()` is feature-gated. A production HTMX app with `SESSION_SECRET` (32+), `AUTH_DEV_HEADERS=false`, and feature flags off does not need the previous in-repo app API tokens. the previous in-repo app's current production env (rotated tokens, CORS, pepper, expiry) still passes.
 - Re-exports `CORE_ABILITY_CHECKER_TOKEN` and `CORE_AUTH_USER_DIRECTORY_TOKEN`.

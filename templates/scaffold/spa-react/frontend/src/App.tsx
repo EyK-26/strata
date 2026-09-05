@@ -26,7 +26,7 @@ function AppShell() {
   return (
     <div className="app-shell">
       <header className="site-header">
-        <strong>WorkHub SPA</strong>
+        <strong>Strata SPA</strong>
         <nav>
           <Link to="/organizations">Organizations</Link>
           <Link to="/projects">Projects</Link>

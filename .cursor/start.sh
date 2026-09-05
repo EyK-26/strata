@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cloud Agent per-boot startup for WorkHub (Strata).
+# Cloud Agent per-boot startup for Strata.
 #
 # Runs on every environment boot: (re)starts PostgreSQL + Redis and applies any
 # pending migrations. Dependencies and the base schema/seed are provisioned once
@@ -20,4 +20,4 @@ source "${REPO_ROOT}/.cursor/services.sh"
 # Idempotent: applies only outstanding migrations, no-op on a seeded snapshot.
 bun run cli migrate
 
-echo "WorkHub services ready (PostgreSQL :54329, Redis :6379)."
+echo "Strata services ready (PostgreSQL :54329, Redis :6379)."

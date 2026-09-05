@@ -7,7 +7,7 @@ install_dependencies() {
   fi
 
   echo ""
-  echo "Lockfile out of sync with package.json — running 'bun install' to update it."
+  echo "Lockfile out of sync with package.json. Running 'bun install' to update it."
   echo "If dependencies changed, commit the updated bun.lock before pushing."
   echo ""
   bun install

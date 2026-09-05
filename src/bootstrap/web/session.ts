@@ -1,9 +1,19 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { type AuthGuard, AuthManager } from "@getstrata/core/auth/guard";
 import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
+import { currentSqlDialect } from "@getstrata/core/database/dialect";
 import { readRequestCookie } from "@getstrata/core/http/cookies";
+import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
+
+function sqlPlaceholder(index: number): string {
+  return currentSqlDialect().placeholder(index);
+}
+
+function sqlNow(): string {
+  return currentSqlDialect().nowExpression();
+}
 
 export interface SessionUser {
   id: number;
@@ -108,7 +118,7 @@ async function defaultLoadSessionUser(
     `SELECT s.user_id, s.expires_at, u.*
      FROM sessions s
      INNER JOIN users u ON u.id = s.user_id
-     WHERE s.id = $1 AND s.expires_at > NOW()`,
+     WHERE s.id = ${sqlPlaceholder(1)} AND s.expires_at > ${sqlNow()}`,
     [sessionId],
   )) as SessionRow[];
 
@@ -154,7 +164,7 @@ export class CookieSessionStore {
     if (!raw) return null;
 
     const [sessionId, signature] = raw.split(".");
-    if (!sessionId || !signature || signature !== this.sign(sessionId)) {
+    if (!sessionId || !signature || !timingSafeCompareString(signature, this.sign(sessionId))) {
       return null;
     }
 
@@ -178,37 +188,39 @@ export class CookieSessionStore {
     const expires = new Date(Date.now() + this.maxAgeSeconds * 1000);
     await this.sql().unsafe(
       `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())`,
+       VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()})`,
       [id, user.id, expires, meta.userAgent ?? null, meta.ipAddress ?? null],
     );
     return id;
   }
 
   async destroy(sessionId: string): Promise<void> {
-    await this.sql().unsafe(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
+    await this.sql().unsafe(`DELETE FROM sessions WHERE id = ${sqlPlaceholder(1)}`, [sessionId]);
   }
 
   async destroyOtherSessions(userId: number, keepSessionId: string): Promise<void> {
-    await this.sql().unsafe(`DELETE FROM sessions WHERE user_id = $1 AND id <> $2`, [
-      userId,
-      keepSessionId,
-    ]);
+    await this.sql().unsafe(
+      `DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)} AND id <> ${sqlPlaceholder(2)}`,
+      [userId, keepSessionId],
+    );
   }
 
   async listForUser(userId: number): Promise<BrowserSessionRecord[]> {
+    const dialect = currentSqlDialect();
     return this.sql().unsafe<BrowserSessionRecord>(
       `SELECT id, user_id, user_agent, ip_address, last_active_at, expires_at
        FROM sessions
-       WHERE user_id = $1 AND expires_at > NOW()
-       ORDER BY last_active_at DESC NULLS LAST, expires_at DESC`,
+       WHERE user_id = ${dialect.placeholder(1)} AND expires_at > ${dialect.nowExpression()}
+       ORDER BY last_active_at DESC${dialect.nullsLastSuffix()}, expires_at DESC`,
       [userId],
     );
   }
 
   async touch(sessionId: string): Promise<void> {
-    await this.sql().unsafe(`UPDATE sessions SET last_active_at = NOW() WHERE id = $1`, [
-      sessionId,
-    ]);
+    await this.sql().unsafe(
+      `UPDATE sessions SET last_active_at = ${sqlNow()} WHERE id = ${sqlPlaceholder(1)}`,
+      [sessionId],
+    );
   }
 
   async read(request: Request): Promise<SessionUser | null> {
@@ -219,7 +231,7 @@ export class CookieSessionStore {
   }
 
   private sign(value: string): string {
-    return createHash("sha256").update(`${value}.${this.secret}`).digest("hex").slice(0, 32);
+    return createHmac("sha256", this.secret).update(value).digest("hex").slice(0, 32);
   }
 }
 
@@ -245,7 +257,10 @@ export class CookieSessionAuthManager extends AuthManager {
     readonly store: CookieSessionStore,
     mapUser: MapSessionUser = defaultMapSessionUser,
   ) {
-    super(new CookieSessionGuard(store, mapUser));
+    const guard = new CookieSessionGuard(store, mapUser);
+    super(guard);
+    this.registerGuard("web", guard);
+    this.registerGuard("session", guard);
   }
 
   async signIn(

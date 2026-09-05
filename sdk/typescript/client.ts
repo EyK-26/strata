@@ -1,76 +1,132 @@
-export class WorkHubClient {
-  constructor(private readonly baseUrl = "http://localhost:3000/api/v1") {}
+export class HiroAppClient {
+  constructor(private readonly baseUrl = "http://localhost:3000/api") {}
 
   private async request(path: string, init: RequestInit = {}): Promise<Response> {
     return await fetch(`${this.baseUrl}${path}`, init);
   }
 
-  async getAdminFeatures(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/admin/features", { ...init, method: "GET" });
+  async getApplicationSources(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/application-sources", { ...init, method: "GET" });
   }
 
-  async getAdminOrganizationMembers(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/admin/organization-members", { ...init, method: "GET" });
+  async getApplications(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications", { ...init, method: "GET" });
   }
 
-  async getAdminStats(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/admin/stats", { ...init, method: "GET" });
+  async postApplications(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications", { ...init, method: "POST" });
   }
 
-  async getAdminTenants(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/admin/tenants", { ...init, method: "GET" });
+  async getApplicationsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}", { ...init, method: "GET" });
   }
 
-  async getAttachmentsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/attachments/{id}", { ...init, method: "GET" });
+  async getApplicationsIdBackgroundCheck(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/background-check", { ...init, method: "GET" });
   }
 
-  async deleteAttachmentsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/attachments/{id}", { ...init, method: "DELETE" });
+  async postApplicationsIdBackgroundCheck(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/background-check", { ...init, method: "POST" });
   }
 
-  async getAttachmentsIdDownload(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/attachments/{id}/download", { ...init, method: "GET" });
+  async getApplicationsIdComments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/comments", { ...init, method: "GET" });
   }
 
-  async getAttachmentsIdThumbnail(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/attachments/{id}/thumbnail", { ...init, method: "GET" });
+  async postApplicationsIdComments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/comments", { ...init, method: "POST" });
+  }
+
+  async postApplicationsIdEnd(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/end", { ...init, method: "POST" });
+  }
+
+  async getApplicationsIdHold(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/hold", { ...init, method: "GET" });
+  }
+
+  async postApplicationsIdHold(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/hold", { ...init, method: "POST" });
+  }
+
+  async getApplicationsIdInterviews(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/interviews", { ...init, method: "GET" });
+  }
+
+  async postApplicationsIdMove(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/move", { ...init, method: "POST" });
+  }
+
+  async getApplicationsIdOffers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/offers", { ...init, method: "GET" });
+  }
+
+  async postApplicationsIdOffers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/offers", { ...init, method: "POST" });
+  }
+
+  async postApplicationsIdOffersFromTemplate(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/offers/from-template", { ...init, method: "POST" });
+  }
+
+  async getApplicationsIdOnboarding(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/onboarding", { ...init, method: "GET" });
+  }
+
+  async postApplicationsIdOnboarding(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/onboarding", { ...init, method: "POST" });
+  }
+
+  async postApplicationsIdReject(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/reject", { ...init, method: "POST" });
+  }
+
+  async getApplicationsIdRejections(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/rejections", { ...init, method: "GET" });
+  }
+
+  async postApplicationsIdRestore(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/restore", { ...init, method: "POST" });
+  }
+
+  async getApplicationsIdSource(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/source", { ...init, method: "GET" });
+  }
+
+  async postApplicationsIdSource(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/source", { ...init, method: "POST" });
+  }
+
+  async getApplicationsIdTalentPool(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/talent-pool", { ...init, method: "GET" });
+  }
+
+  async postApplicationsIdTalentPool(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/talent-pool", { ...init, method: "POST" });
+  }
+
+  async postApplicationsIdTransfer(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/transfer", { ...init, method: "POST" });
+  }
+
+  async postApplicationsIdWithdraw(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/{id}/withdraw", { ...init, method: "POST" });
+  }
+
+  async postApplicationsNotify(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/applications/notify", { ...init, method: "POST" });
   }
 
   async getAuditLogs(init: RequestInit = {}): Promise<Response> {
     return await this.request("/audit-logs", { ...init, method: "GET" });
   }
 
-  async postAuthEmailVerificationNotification(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/auth/email/verification-notification", { ...init, method: "POST" });
+  async getAuditLogsExport(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/audit-logs/export", { ...init, method: "GET" });
   }
 
-  async postAuthForgotPassword(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/auth/forgot-password", { ...init, method: "POST" });
-  }
-
-  async postAuthLogin(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/auth/login", { ...init, method: "POST" });
-  }
-
-  async getAuthMe(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/auth/me", { ...init, method: "GET" });
-  }
-
-  async getAuthOauthProvider(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/auth/oauth/{provider}", { ...init, method: "GET" });
-  }
-
-  async getAuthOauthProviderCallback(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/auth/oauth/{provider}/callback", { ...init, method: "GET" });
-  }
-
-  async postAuthRegister(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/auth/register", { ...init, method: "POST" });
-  }
-
-  async postAuthResetPassword(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/auth/reset-password", { ...init, method: "POST" });
+  async postAuthToken(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/auth/token", { ...init, method: "POST" });
   }
 
   async getAuthTokens(init: RequestInit = {}): Promise<Response> {
@@ -89,160 +145,456 @@ export class WorkHubClient {
     return await this.request("/auth/two-factor-challenge", { ...init, method: "POST" });
   }
 
+  async postBackgroundChecksIdCancel(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/background-checks/{id}/cancel", { ...init, method: "POST" });
+  }
+
+  async postBackgroundChecksIdClear(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/background-checks/{id}/clear", { ...init, method: "POST" });
+  }
+
+  async postBackgroundChecksIdFlag(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/background-checks/{id}/flag", { ...init, method: "POST" });
+  }
+
   async getBillingSubscription(init: RequestInit = {}): Promise<Response> {
     return await this.request("/billing/subscription", { ...init, method: "GET" });
   }
 
-  async postBillingWebhooksStripe(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/billing/webhooks/stripe", { ...init, method: "POST" });
+  async getCareers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/careers", { ...init, method: "GET" });
   }
 
-  async getComments(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/comments", { ...init, method: "GET" });
+  async getCareersId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/careers/{id}", { ...init, method: "GET" });
   }
 
-  async getCommentsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/comments/{id}", { ...init, method: "GET" });
+  async postCareersIdExpire(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/careers/{id}/expire", { ...init, method: "POST" });
   }
 
-  async patchCommentsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/comments/{id}", { ...init, method: "PATCH" });
+  async postCareersIdPin(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/careers/{id}/pin", { ...init, method: "POST" });
   }
 
-  async deleteCommentsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/comments/{id}", { ...init, method: "DELETE" });
+  async postCareersIdUnpin(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/careers/{id}/unpin", { ...init, method: "POST" });
   }
 
-  async postInvitationsAccept(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/invitations/accept", { ...init, method: "POST" });
+  async postCareersIdUnpublish(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/careers/{id}/unpublish", { ...init, method: "POST" });
   }
 
-  async getOrganizations(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations", { ...init, method: "GET" });
+  async getCatalog(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/catalog", { ...init, method: "GET" });
   }
 
-  async postOrganizations(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations", { ...init, method: "POST" });
+  async getDashboardCount(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/dashboard/count", { ...init, method: "GET" });
   }
 
-  async getOrganizationsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}", { ...init, method: "GET" });
+  async getDashboardData(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/dashboard/data", { ...init, method: "GET" });
   }
 
-  async patchOrganizationsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}", { ...init, method: "PATCH" });
+  async getDepartments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments", { ...init, method: "GET" });
   }
 
-  async deleteOrganizationsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}", { ...init, method: "DELETE" });
+  async postDepartments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments", { ...init, method: "POST" });
   }
 
-  async getOrganizationsIdInvitations(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}/invitations", { ...init, method: "GET" });
+  async postDepartmentsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}", { ...init, method: "POST" });
   }
 
-  async postOrganizationsIdInvitations(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}/invitations", { ...init, method: "POST" });
+  async getDepartmentsIdApplications(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/applications", { ...init, method: "GET" });
   }
 
-  async deleteOrganizationsIdInvitationsInvitationId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}/invitations/{invitationId}", { ...init, method: "DELETE" });
+  async postDepartmentsIdDelete(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/delete", { ...init, method: "POST" });
   }
 
-  async postOrganizationsIdInvitationsInvitationIdResend(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}/invitations/{invitationId}/resend", { ...init, method: "POST" });
+  async postDepartmentsIdFreeze(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/freeze", { ...init, method: "POST" });
   }
 
-  async getOrganizationsIdMembers(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}/members", { ...init, method: "GET" });
+  async getDepartmentsIdInvitations(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/invitations", { ...init, method: "GET" });
   }
 
-  async postOrganizationsIdMembers(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}/members", { ...init, method: "POST" });
+  async postDepartmentsIdInvitations(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/invitations", { ...init, method: "POST" });
   }
 
-  async patchOrganizationsIdMembersUserId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}/members/{userId}", { ...init, method: "PATCH" });
+  async getDepartmentsIdMembers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/members", { ...init, method: "GET" });
   }
 
-  async deleteOrganizationsIdMembersUserId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/organizations/{id}/members/{userId}", { ...init, method: "DELETE" });
+  async postDepartmentsIdMembers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/members", { ...init, method: "POST" });
   }
 
-  async getProjects(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/projects", { ...init, method: "GET" });
+  async deleteDepartmentsIdMembersUserId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/members/{userId}", { ...init, method: "DELETE" });
   }
 
-  async postProjects(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/projects", { ...init, method: "POST" });
+  async postDepartmentsIdUnfreeze(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/departments/{id}/unfreeze", { ...init, method: "POST" });
   }
 
-  async getProjectsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/projects/{id}", { ...init, method: "GET" });
+  async getExportApplications(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/export/applications", { ...init, method: "GET" });
   }
 
-  async patchProjectsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/projects/{id}", { ...init, method: "PATCH" });
+  async getFailedJobs(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/failed-jobs", { ...init, method: "GET" });
   }
 
-  async deleteProjectsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/projects/{id}", { ...init, method: "DELETE" });
+  async postFailedJobsIdRetry(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/failed-jobs/{id}/retry", { ...init, method: "POST" });
   }
 
-  async getReportsOrganizationsId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/reports/organizations/{id}", { ...init, method: "GET" });
+  async postHoldsIdRelease(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/holds/{id}/release", { ...init, method: "POST" });
   }
 
-  async getReportsSummary(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/reports/summary", { ...init, method: "GET" });
+  async getIntegrationsPing(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/integrations/ping", { ...init, method: "GET" });
   }
 
-  async getSearch(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/search", { ...init, method: "GET" });
+  async getInterviews(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews", { ...init, method: "GET" });
   }
 
-  async getTasks(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks", { ...init, method: "GET" });
+  async postInterviews(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews", { ...init, method: "POST" });
   }
 
-  async postTasks(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks", { ...init, method: "POST" });
+  async postInterviewsIdCancel(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/cancel", { ...init, method: "POST" });
   }
 
-  async getTasksId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks/{id}", { ...init, method: "GET" });
+  async postInterviewsIdComplete(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/complete", { ...init, method: "POST" });
   }
 
-  async patchTasksId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks/{id}", { ...init, method: "PATCH" });
+  async getInterviewsIdConfirm(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/confirm", { ...init, method: "GET" });
   }
 
-  async deleteTasksId(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks/{id}", { ...init, method: "DELETE" });
+  async postInterviewsIdConfirm(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/confirm", { ...init, method: "POST" });
   }
 
-  async getTasksIdAttachments(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks/{id}/attachments", { ...init, method: "GET" });
+  async postInterviewsIdDecline(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/decline", { ...init, method: "POST" });
   }
 
-  async postTasksIdAttachments(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks/{id}/attachments", { ...init, method: "POST" });
+  async postInterviewsIdNoShow(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/no-show", { ...init, method: "POST" });
   }
 
-  async getTasksIdComments(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks/{id}/comments", { ...init, method: "GET" });
+  async postInterviewsIdReschedule(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/reschedule", { ...init, method: "POST" });
   }
 
-  async postTasksIdComments(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/tasks/{id}/comments", { ...init, method: "POST" });
+  async getInterviewsIdScorecards(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/scorecards", { ...init, method: "GET" });
+  }
+
+  async postInterviewsIdScorecards(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/{id}/scorecards", { ...init, method: "POST" });
+  }
+
+  async getInterviewsConfirm(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/interviews/confirm", { ...init, method: "GET" });
+  }
+
+  async postLogin(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/login", { ...init, method: "POST" });
+  }
+
+  async postLogout(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/logout", { ...init, method: "POST" });
+  }
+
+  async getMeSkills(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/me/skills", { ...init, method: "GET" });
+  }
+
+  async postMeSkills(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/me/skills", { ...init, method: "POST" });
+  }
+
+  async getMeWatching(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/me/watching", { ...init, method: "GET" });
+  }
+
+  async getMerges(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/merges", { ...init, method: "GET" });
+  }
+
+  async postMerges(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/merges", { ...init, method: "POST" });
+  }
+
+  async postNotify(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/notify", { ...init, method: "POST" });
+  }
+
+  async getNotifyGet(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/notify/get", { ...init, method: "GET" });
+  }
+
+  async postNotifyMarkasread(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/notify/markasread", { ...init, method: "POST" });
+  }
+
+  async getOfferTemplates(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offer-templates", { ...init, method: "GET" });
+  }
+
+  async postOfferTemplates(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offer-templates", { ...init, method: "POST" });
+  }
+
+  async postOfferTemplatesIdDelete(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offer-templates/{id}/delete", { ...init, method: "POST" });
+  }
+
+  async postOfferTemplatesIdUpdate(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offer-templates/{id}/update", { ...init, method: "POST" });
+  }
+
+  async postOffersIdAccept(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offers/{id}/accept", { ...init, method: "POST" });
+  }
+
+  async postOffersIdDecline(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offers/{id}/decline", { ...init, method: "POST" });
+  }
+
+  async postOffersIdExpire(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offers/{id}/expire", { ...init, method: "POST" });
+  }
+
+  async postOffersIdSend(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offers/{id}/send", { ...init, method: "POST" });
+  }
+
+  async postOffersIdWithdraw(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/offers/{id}/withdraw", { ...init, method: "POST" });
+  }
+
+  async postOnboardingIdComplete(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/onboarding/{id}/complete", { ...init, method: "POST" });
+  }
+
+  async getPipelineSummary(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/pipeline/summary", { ...init, method: "GET" });
+  }
+
+  async getPositions(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions", { ...init, method: "GET" });
+  }
+
+  async postPositions(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions", { ...init, method: "POST" });
+  }
+
+  async getPositionsDepDepartment(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions-dep/{department}", { ...init, method: "GET" });
+  }
+
+  async getPositionsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}", { ...init, method: "GET" });
+  }
+
+  async postPositionsId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}", { ...init, method: "POST" });
+  }
+
+  async getPositionsIdCareer(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/career", { ...init, method: "GET" });
+  }
+
+  async postPositionsIdCareer(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/career", { ...init, method: "POST" });
+  }
+
+  async postPositionsIdClose(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/close", { ...init, method: "POST" });
+  }
+
+  async getPositionsIdComments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/comments", { ...init, method: "GET" });
+  }
+
+  async postPositionsIdComments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/comments", { ...init, method: "POST" });
+  }
+
+  async postPositionsIdDelete(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/delete", { ...init, method: "POST" });
+  }
+
+  async getPositionsIdInterviewers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/interviewers", { ...init, method: "GET" });
+  }
+
+  async postPositionsIdInterviewers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/interviewers", { ...init, method: "POST" });
+  }
+
+  async getPositionsIdMatch(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/match", { ...init, method: "GET" });
+  }
+
+  async getPositionsIdReferrals(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/referrals", { ...init, method: "GET" });
+  }
+
+  async postPositionsIdReferrals(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/referrals", { ...init, method: "POST" });
+  }
+
+  async postPositionsIdReopen(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/reopen", { ...init, method: "POST" });
+  }
+
+  async getPositionsIdRequisition(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/requisition", { ...init, method: "GET" });
+  }
+
+  async postPositionsIdRequisition(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/requisition", { ...init, method: "POST" });
+  }
+
+  async postPositionsIdRestore(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/restore", { ...init, method: "POST" });
+  }
+
+  async getPositionsIdSkills(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/skills", { ...init, method: "GET" });
+  }
+
+  async postPositionsIdSkills(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/skills", { ...init, method: "POST" });
+  }
+
+  async getPositionsIdSlots(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/slots", { ...init, method: "GET" });
+  }
+
+  async postPositionsIdSlots(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/slots", { ...init, method: "POST" });
+  }
+
+  async postPositionsIdWatch(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/{id}/watch", { ...init, method: "POST" });
+  }
+
+  async getPositionsAll(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/positions/all", { ...init, method: "GET" });
+  }
+
+  async getReferrals(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/referrals", { ...init, method: "GET" });
+  }
+
+  async postReferralsIdClose(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/referrals/{id}/close", { ...init, method: "POST" });
+  }
+
+  async getRejectionReasons(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/rejection-reasons", { ...init, method: "GET" });
+  }
+
+  async getRequisitions(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/requisitions", { ...init, method: "GET" });
+  }
+
+  async postRequisitionsIdApprove(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/requisitions/{id}/approve", { ...init, method: "POST" });
+  }
+
+  async postRequisitionsIdReject(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/requisitions/{id}/reject", { ...init, method: "POST" });
+  }
+
+  async getSkills(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/skills", { ...init, method: "GET" });
+  }
+
+  async postSlotsIdBook(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/slots/{id}/book", { ...init, method: "POST" });
+  }
+
+  async postSlotsIdCancel(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/slots/{id}/cancel", { ...init, method: "POST" });
+  }
+
+  async postTagsIdDelete(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/tags/{id}/delete", { ...init, method: "POST" });
+  }
+
+  async getTalentPool(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/talent-pool", { ...init, method: "GET" });
+  }
+
+  async postTalentPool(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/talent-pool", { ...init, method: "POST" });
+  }
+
+  async postTalentPoolIdReachOut(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/talent-pool/{id}/reach-out", { ...init, method: "POST" });
+  }
+
+  async postTalentPoolIdRelease(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/talent-pool/{id}/release", { ...init, method: "POST" });
+  }
+
+  async getUser(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/user", { ...init, method: "GET" });
+  }
+
+  async getUsers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users", { ...init, method: "GET" });
+  }
+
+  async postUsers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users", { ...init, method: "POST" });
+  }
+
+  async getUsersId(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/{id}", { ...init, method: "GET" });
+  }
+
+  async postUsersIdDelete(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/{id}/delete", { ...init, method: "POST" });
+  }
+
+  async getUsersIdTags(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/{id}/tags", { ...init, method: "GET" });
+  }
+
+  async postUsersIdTags(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/{id}/tags", { ...init, method: "POST" });
+  }
+
+  async postUsersIdTalentPool(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/{id}/talent-pool", { ...init, method: "POST" });
+  }
+
+  async getUsersMe(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me", { ...init, method: "GET" });
   }
 
   async patchUsersMe(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me", { ...init, method: "PATCH" });
-  }
-
-  async deleteUsersMe(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me", { ...init, method: "DELETE" });
   }
 
   async postUsersMeConfirmPassword(init: RequestInit = {}): Promise<Response> {
@@ -253,16 +605,12 @@ export class WorkHubClient {
     return await this.request("/users/me/confirmed-password-status", { ...init, method: "GET" });
   }
 
-  async getUsersMeCurrentOrganization(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/current-organization", { ...init, method: "GET" });
+  async putUsersMeCurrentDepartment(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/current-department", { ...init, method: "PUT" });
   }
 
-  async putUsersMeCurrentOrganization(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/current-organization", { ...init, method: "PUT" });
-  }
-
-  async getUsersMeExport(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/export", { ...init, method: "GET" });
+  async getUsersMeDepartments(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/users/me/departments", { ...init, method: "GET" });
   }
 
   async getUsersMeInvitations(init: RequestInit = {}): Promise<Response> {
@@ -297,32 +645,8 @@ export class WorkHubClient {
     return await this.request("/users/me/mfa/recovery-codes", { ...init, method: "POST" });
   }
 
-  async getUsersMeNotifications(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/notifications", { ...init, method: "GET" });
-  }
-
-  async patchUsersMeNotifications(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/notifications", { ...init, method: "PATCH" });
-  }
-
-  async patchUsersMeNotificationsIdRead(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/notifications/{id}/read", { ...init, method: "PATCH" });
-  }
-
   async putUsersMePassword(init: RequestInit = {}): Promise<Response> {
     return await this.request("/users/me/password", { ...init, method: "PUT" });
-  }
-
-  async getUsersMePhoto(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/photo", { ...init, method: "GET" });
-  }
-
-  async postUsersMePhoto(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/photo", { ...init, method: "POST" });
-  }
-
-  async deleteUsersMePhoto(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/users/me/photo", { ...init, method: "DELETE" });
   }
 
   async getUsersMeSessions(init: RequestInit = {}): Promise<Response> {
@@ -345,16 +669,12 @@ export class WorkHubClient {
     return await this.request("/webhooks/{id}", { ...init, method: "DELETE" });
   }
 
-  async postWebhooksIdActivate(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/webhooks/{id}/activate", { ...init, method: "POST" });
-  }
-
   async postWebhooksIdDeactivate(init: RequestInit = {}): Promise<Response> {
     return await this.request("/webhooks/{id}/deactivate", { ...init, method: "POST" });
   }
 
-  async postWebhooksDeliveriesIdRetry(init: RequestInit = {}): Promise<Response> {
-    return await this.request("/webhooks/deliveries/{id}/retry", { ...init, method: "POST" });
+  async postBillingWebhooksStripe(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/billing/webhooks/stripe", { ...init, method: "POST" });
   }
 
   async getHealth(init: RequestInit = {}): Promise<Response> {

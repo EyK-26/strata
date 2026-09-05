@@ -12,7 +12,7 @@ bunx @getstrata/starter my-app
 ## What you get
 
 - Bun + TypeScript app using `@getstrata/core` and `@getstrata/bootstrap`
-- Postgres via Docker Compose (no WorkHub `tenant` table; set `TENANCY_DRIVER=none`)
+- Postgres via Docker Compose (no `tenant` table; set `TENANCY_DRIVER=none`)
 - Eta templates, simple router, health check
 - `strata migrate` / `strata migrate:fresh` and `strata dev` via `@getstrata/cli`
 
@@ -27,9 +27,11 @@ Copy `.env.example` to `.env`. The scaffold is an API app without a `tenant` tab
 | `SESSION_SECRET` | unset | Required in production when `FRONTEND_MODE=server-htmx` |
 | `TRUST_FORWARDED_FOR` | unset | Set `true` only behind a trusted reverse proxy |
 | `METRICS_TOKEN` | unset | Required in production to expose `GET /metrics` |
-| `FEATURE_PUBLIC_READS` | unset | Set `false` in production |
+| `FEATURE_PUBLIC_READS` | unset | Set `false` in production unless you publish reads |
 
 `createAppContext()` does not call `assertProductionSecrets()`. The helper is feature-gated (API tokens, Stripe, SCIM only when those features are on). Starter apps can call it in production without enabling those features.
+
+Guides: [docs/BUILDING-APPS.md](../../docs/BUILDING-APPS.md), [docs/AUTH.md](../../docs/AUTH.md).
 
 ## Publish
 

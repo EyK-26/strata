@@ -7,18 +7,18 @@ afterAll(() => {
 });
 
 describe("migrateFreshCommand", () => {
-  const previousDogfood = process.env.DOGFOOD_APP;
+  const previousSchema = process.env.STRATA_SCHEMA;
 
   afterEach(() => {
-    if (previousDogfood === undefined) {
-      delete process.env.DOGFOOD_APP;
+    if (previousSchema === undefined) {
+      delete process.env.STRATA_SCHEMA;
     } else {
-      process.env.DOGFOOD_APP = previousDogfood;
+      process.env.STRATA_SCHEMA = previousSchema;
     }
   });
 
   test("calls freshDatabase without seed by default", async () => {
-    process.env.DOGFOOD_APP = "workhub";
+    process.env.STRATA_SCHEMA = "fixture";
     const freshDatabase = spyOn(migrationRunner, "freshDatabase").mockResolvedValue(undefined);
 
     await migrateFreshCommand();
@@ -28,7 +28,7 @@ describe("migrateFreshCommand", () => {
   });
 
   test("passes seed option when --seed is provided", async () => {
-    process.env.DOGFOOD_APP = "workhub";
+    process.env.STRATA_SCHEMA = "fixture";
     const freshDatabase = spyOn(migrationRunner, "freshDatabase").mockResolvedValue(undefined);
 
     await migrateFreshCommand("--seed");

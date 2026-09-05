@@ -74,7 +74,7 @@ describe("Factory", () => {
     expect(inserted).toEqual([{ name: "Anon" }]);
   });
 
-  test("count/state/sequence/for/has match Laravel factory design", async () => {
+  test("count/state/sequence/for/has compose factory definitions", async () => {
     const inserted: Array<Record<string, unknown>> = [];
 
     class PostFactory extends Factory<{ id?: number; user_id?: number; title: string }> {

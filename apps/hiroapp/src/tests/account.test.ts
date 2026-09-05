@@ -181,6 +181,16 @@ describe.skipIf(!enabled)("Wave 6 staff identity", () => {
     expect(typeof created.body.plainTextToken).toBe("string");
     expect(created.body.token.name).toBe("ci-token");
 
+    const me = await fetch(`${baseUrl}/api/user`, {
+      headers: {
+        authorization: `Bearer ${created.body.plainTextToken}`,
+        accept: "application/json",
+      },
+    });
+    expect(me.status).toBe(200);
+    const meBody = (await me.json()) as { email: string };
+    expect(meBody.email).toBe("recruiter@hiroapp.com");
+
     const listed = await jsonRequest("/api/auth/tokens", { cookies: recruiterCookies });
     expect(listed.body.some((row: { name: string }) => row.name === "ci-token")).toBe(true);
 
@@ -268,6 +278,23 @@ describe.skipIf(!enabled)("Wave 6 staff identity", () => {
     expect(listed.body.every((row: { current: boolean }) => row.current)).toBe(true);
     const stillMe = await jsonRequest("/api/users/me", { cookies: adminCookies });
     expect(stillMe.response.status).toBe(200);
+  });
+
+  test("staff can mint a JWT and call the API without a session cookie", async () => {
+    const minted = await fetch(`${baseUrl}/api/auth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ email: "recruiter@hiroapp.com", password: "password" }),
+    });
+    expect(minted.status).toBe(200);
+    const payload = (await minted.json()) as { token: string; token_type: string };
+    expect(payload.token_type).toBe("Bearer");
+    const me = await fetch(`${baseUrl}/api/user`, {
+      headers: { authorization: `Bearer ${payload.token}`, accept: "application/json" },
+    });
+    expect(me.status).toBe(200);
+    const meBody = (await me.json()) as { email: string };
+    expect(meBody.email).toBe("recruiter@hiroapp.com");
   });
 });
 

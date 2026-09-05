@@ -22,7 +22,7 @@ beforeAll(() => {
   bindDatabase();
 });
 
-describe.skipIf(!enabled)("Laravel-shaped Model relations (HiroApp tables)", () => {
+describe.skipIf(!enabled)("Model relations on HiroApp tables", () => {
   test("await user.applications() is thenable and returns Application models", async () => {
     const candidate = await users.findByEmail("candidate@hiroapp.com");
     expect(candidate).toBeTruthy();
@@ -115,7 +115,7 @@ describe.skipIf(!enabled)("Laravel-shaped Model relations (HiroApp tables)", () 
     expect((found!.loaded("applications") as unknown[]).length).toBeGreaterThan(0);
   });
 
-  test("user.applications().create() sets the FK (Laravel hasMany create)", async () => {
+  test("user.applications().create() sets the foreign key", async () => {
     const candidate = await users.findByEmail("candidate@hiroapp.com");
     const hiring = await Position.where({ hiring: true }).first();
     expect(hiring).toBeTruthy();
@@ -188,7 +188,7 @@ describe.skipIf(!enabled)("Laravel-shaped Model relations (HiroApp tables)", () 
   });
 });
 
-describe.skipIf(!enabled)("Factory Laravel shape", () => {
+describe.skipIf(!enabled)("Factory count, state, and sequence", () => {
   test("count/state/sequence clone; count().make() returns an array", () => {
     const original = userFactory.state({ role_id: ROLE.CANDIDATE });
     const counted = original.count(3);
@@ -280,7 +280,7 @@ describe.skipIf(!enabled)("Factory Laravel shape", () => {
   });
 });
 
-describe.skipIf(!enabled)("JsonResource vs Laravel HiroApp (Laravel had no Resources)", () => {
+describe.skipIf(!enabled)("JsonResource collection wrapping", () => {
   test("collection toResponse wraps once: { data: [...] }", () => {
     class PositionResource extends JsonResource<{ name: string }> {
       toArray() {

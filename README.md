@@ -1,530 +1,125 @@
 # Strata
 
-**Docker-first** Bun + PostgreSQL + Redis framework monorepo. **HiroApp** (`apps/hiroapp`) is the in-repo dogfood app (hiring domain, Laravel-shaped Eloquent / HTTP, staff Fortify/Jetstream). WorkHub `src/modules` has been removed.
+Strata is a Bun framework for building server apps. You write TypeScript. The runtime is Bun. PostgreSQL is the proven database for production. Redis is optional until you need cache, queues, or shared rate limits.
 
-Published packages (import **subpaths**, not the root barrel):
+**HiroApp** (`apps/hiroapp`) is the only in-repo example product. It is a hiring OS: public careers, applications, interviews, offers, staff tools. When you want to see how a Strata feature is meant to be used, look there.
 
-| Package | Role |
-|---------|------|
-| `@getstrata/core` | Framework (`packages/strata-core`) |
-| `@getstrata/bootstrap` | HttpKernel, DI, web helpers |
-| `@getstrata/cli` | `strata` CLI |
-| `@getstrata/starter` | `bun create strata` |
+This README is the map. Each linked guide is written for someone who has used HTTP and SQL, but has not used this repo before.
 
-In-repo dogfood: **HiroApp** (`apps/hiroapp`) is the `bun run dev` default. See [docs/DOGFOOD.md](docs/DOGFOOD.md).
+| I want to... | Read this |
+|--------------|-----------|
+| Run HiroApp on my machine | [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) |
+| Choose cookie sessions, API tokens, JWT, or Basic auth | [docs/AUTH.md](docs/AUTH.md) |
+| Choose PostgreSQL, MySQL, or SQLite | [docs/DATABASE.md](docs/DATABASE.md) |
+| Learn HiroApp as a product and as a teaching app | [docs/HIROAPP.md](docs/HIROAPP.md) |
+| Start my own app | [docs/BUILDING-APPS.md](docs/BUILDING-APPS.md) |
+| Run tests and coverage | [docs/TESTING.md](docs/TESTING.md) |
+| Ship to production | [docs/PRODUCTION.md](docs/PRODUCTION.md) |
 
-CI blocks root `@getstrata/core` imports (`scripts/verify-no-root-imports.ts`).
+## What this framework is (and is not)
 
-Pinned versions:
+Strata gives you:
 
-- Bun `1.4.0` (see [Bun 1.4 upgrade notes](https://bun.sh/blog/bun-v1.4))
-- PostgreSQL `18.4`
-- Adminer `5.4.2`
-- TypeScript `5.9` via `tsc` for typechecking and declaration emit (the experimental native TypeScript compiler is not used yet; see below)
+- HTTP routing, middleware, CSRF, signed URLs, and HTML or JSON responses
+- Cookie sessions that store a row in `sessions`, plus named API guards
+- A query builder, migrations, models, and repositories
+- Queues, cache, mail, storage, and scheduled tasks
+- Policies, abilities on tokens, and Postgres row-level security when you need tenants
 
-The leftover schema for core tests is `src/db/migrations` and `src/db/seeders`. HiroApp’s product schema is `apps/hiroapp/src/db`.
+Strata does not pick your frontend. HiroApp uses server-rendered HTML with HTMX. You can serve a React SPA, or a JSON API only. The auth and SQL choices are also yours. Pick the strongest option that matches how clients talk to you. See [docs/AUTH.md](docs/AUTH.md).
 
-### Bun 1.4
+PostgreSQL is what we run in CI and in HiroApp. Dialect helpers exist so generated SQL can target MySQL or SQLite. Those runtimes are not proven in this repo. Do not pretend they are.
 
-We run CI and Docker on **Bun 1.4.0**. Notable changes from 1.3:
+## Packages
 
-- Node.js compatibility target is **26.3.0** (rebuild native addons if you use any).
-- Default lockfile format is **v2**; run `bun install` after upgrading Bun.
-- `Temporal` is enabled by default; set `BUN_JSC_useTemporal=0` only if you hit legacy date assumptions.
-- `Bun.TOML` is stricter (duplicate keys, invalid UTF-8, oversized integers fail).
+| Package | What it is |
+|---------|------------|
+| `@getstrata/core` | Runtime: auth, HTTP, database, queue, mail, security |
+| `@getstrata/bootstrap` | App boot: kernel, providers, cookie session helpers |
+| `@getstrata/cli` | `strata` commands: `dev`, `start`, `migrate`, `run` |
+| `@getstrata/starter` | `bunx @getstrata/starter my-app` |
 
-Strata mail uses **`Bun.markdown.html()`** plus an allowlist sanitizer (`sanitizeMailHtml`). Do not add `marked` or `sanitize-html` unless a consumer needs them.
+Import **subpaths**, not the root `@getstrata/core` barrel, from application code:
 
-Built-in adoption in Strata / HiroApp:
-
-| Bun 1.4 API | Usage |
-|-------------|--------|
-| `Bun.markdown` | `@getstrata/core/mail/markdownMail` (`markdownToHtml`) |
-| `Bun.Image` | Attachment thumbnails and Jetstream profile photos via `@getstrata/core/media/imageTransform` |
-| `Bun.cron()` | `schedule:install` / `schedule:uninstall` CLI; optional `SCHEDULER_DRIVER=in-process-cron` |
-| `Bun.Terminal` | `shell` CLI via `@getstrata/core/terminal/runShell` |
-| `Bun.WebView` | `scripts/smoke-webview.ts` + CI smoke step |
-| `bun test --parallel` | CI `test-parallel` job (`--isolate`) |
-| `bun dedupe` / `bun audit` | `deps:dedupe`, `deps:audit`, `deps:audit-fix` scripts; CI runs dedupe after install |
-| `bun prune --production` | Docker release stage |
-
-### TypeScript
-
-Typechecking and `.d.ts` emit use **`tsc` 5.9**. Bun's built-in transpiler handles runtime TS execution. We do **not** use the experimental native TypeScript compiler (`@typescript/native-preview` / TypeScript 7 `tsgo`) yet: its programmatic API is not ready, and swapping the publish pipeline would be a large breaking change with little benefit until TS 7 ships as stable `tsc`.
-
-## Start
-
-### Docker (recommended)
-
-```bash
-docker compose up -d --wait
+```typescript
+import { Policy } from "@getstrata/core/auth/policy";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 ```
 
-Startup automatically runs:
+CI rejects root-barrel imports in apps.
 
-- `strata migrate`
-- `strata seed`
-- `strata start`
+## Run HiroApp locally
 
-After schema changes, rebuild from migrations:
+You need Docker for Postgres and Redis, and Bun 1.4+.
 
 ```bash
-docker compose exec app strata migrate:fresh --seed
-docker compose restart app
-```
-
-### Native development
-
-With Postgres and Redis reachable via **published Docker ports** (or a local install):
-
-```bash
-cp .env.example .env          # Docker Compose service hostnames (inside containers)
-cp .env.host.example .env.host  # optional: localhost:54329 / localhost:6379 for host Bun
-
-# Recommended: wrapper sets host URLs automatically
+cp .env.example .env
 docker compose up -d postgres redis --wait
-bun run dev:host
-
-# Or migrate + validate on the host:
-bun run validate:host
+bun install
+bun run build:framework
+bun run build:bootstrap
+bun run hiroapp:fresh
+bun run hiroapp:dev:htmx
 ```
 
-Manual env (equivalent to `dev:host`):
+Open http://localhost:3000. Seeded logins all use password `password`:
+
+| Email | Role |
+|-------|------|
+| `admin@hiroapp.com` | Admin (`role_id=1`) |
+| `recruiter@hiroapp.com` | Recruiter (`role_id=3`) |
+| `candidate@hiroapp.com` | Candidate (`role_id=2`) |
+
+A candidate is a `User` with `role_id = 2`. There is no separate Candidate model.
+
+Host-native Bun against published ports: `bun run dev:host` (see `.env.host.example`).
+
+## Frontend modes
+
+Set `FRONTEND_MODE`:
+
+| Value | What you get |
+|-------|----------------|
+| `server-htmx` | HTML from Eta templates plus JSON under `/api` (HiroApp default for local UI) |
+| `spa-react` | JSON API plus a SPA document |
+| `api` | JSON only |
+
+HiroApp HTML uses cookie sessions and CSRF. Partner integrations use Bearer tokens or JWT. See [docs/AUTH.md](docs/AUTH.md).
+
+## Useful commands
 
 ```bash
-DATABASE_URL=postgresql://postgres:postgres@localhost:54329/bun_testing_test \
-REDIS_URL=redis://localhost:6379 \
-strata migrate:fresh --seed && strata dev
+bun run hiroapp:fresh          # HiroApp migrate + seed
+bun run hiroapp:dev:htmx       # HiroApp HTML UI
+bun run test:hiroapp           # HiroApp tests
+bun run test:coverage          # Framework coverage gate
+bun run validate:host          # Full local CI-shaped check
+strata migrate                 # App schema (HiroApp when DOGFOOD_APP=hiroapp)
+STRATA_SCHEMA=fixture strata migrate:fresh --seed   # Core-test fixture schema only
 ```
 
-See [docs/TESTING.md](docs/TESTING.md) and `.env.host.example`.
+The leftover `src/db` schema is a **fixture** for framework tests (tenants, RLS). It is not a product. Do not add product features there.
 
-## Framework overview
+## Layout
 
-The app boots through **service providers** and **auto-discovered modules** under `apps/hiroapp/src/modules/`. Each module can register DI bindings, policies, and HTTP routes.
-
-Import stable framework types from `@getstrata/core/<subpath>` (see [docs/PACKAGING.md](docs/PACKAGING.md)). Build locally with `bun run verify:framework`.
-
-### HttpKernel (middleware)
-
-Routes are wrapped by an `HttpKernel` that applies middleware in layers:
-
-- **Global:** CORS, security headers, structured request logging, `x-request-id`, auth context
-- **`api` group:** Redis-backed rate limiting when `REDIS_URL` is set (keyed by bearer token, user id, or IP)
-- **`authenticated` group:** requires a signed-in user (`401` for guests)
-
-Module routes use helpers such as `kernel.wrapAuthenticated(handler)` for protected mutations, `kernel.wrapWebPasswordConfirm(handler)` for Laravel `password.confirm` HTML routes, and `kernel.wrapAbility("projects:delete", handler)` when a bearer token must carry a specific scope. See `src/bootstrap/httpKernel.ts`.
-
-### Frontend modes
-
-Choose how the app is initialized:
-
-| Mode | Env | What you get |
-|------|-----|--------------|
-| **API-only** (default) | `FRONTEND_MODE=api` | JSON API under `/api/v1`, static landing at `/` |
-| **Server + HTMX** | `FRONTEND_MODE=server-htmx` | Eta templates (HTML + `<% %>`, not Pug), cookie sessions (optional `remember` on `/login`), HTMX partials, `/login`, `/register`, `/email/verify` |
-| **SPA (React)** | `FRONTEND_MODE=spa-react` | Bun + React app served from `/app/*` |
-
-Switch modes in an existing project:
-
-```bash
-strata new --frontend=server-htmx
-strata new --frontend=spa-react
-strata new --frontend=api
+```
+apps/hiroapp/     Hiring OS (the example product)
+src/core/         Framework runtime
+src/bootstrap/    Kernel, providers, cookie sessions
+packages/         Published npm packages
+templates/        App scaffolds
+docs/             Guides
+tests/            Framework tests
 ```
 
-Server mode adds a parallel **`web` middleware group** with cookie sessions (`CookieSessionStore` for HiroApp HTML; HMAC `SessionGuard` remains available for leftover core tests), HTML form validation (`WebFormRequest`), and optional `webRoutes()` on modules. Generate web scaffolding with:
+## Honest limits
 
-```bash
-strata make:module widget --with-web
-```
+- HiroApp and CI use PostgreSQL. `tsMatch` (full-text search) throws on other dialects.
+- MySQL and SQLite SQL compilation exists. Query execution against those engines is not a CI guarantee.
+- HMAC session cookies without a `sessions` row exist for token-style apps. HiroApp HTML does not use that as its login path. Cookie + CSRF is the browser path.
+- `AUTH_DEV_HEADERS=true` is for tests. Production must set it to `false`.
+- Published seed tokens such as `strata-admin-test-token` are blocked in production.
 
-SPA dev workflow:
+## License
 
-```bash
-cd frontend && bun install && bun run dev
-```
-
-Production build:
-
-```bash
-bun run build:frontend
-```
-
-### Adoption tiers
-
-The same codebase scales from hobby projects to enterprise deployments. Enable only what you need:
-
-| Tier | Goal | Key settings |
-|------|------|--------------|
-| **Hobby** | Learn and prototype | `APP_ENV=local`, `AUTH_DEV_HEADERS=true`, `QUEUE_DRIVER=sync`, `CACHE_DRIVER=array` |
-| **Small production** | One team, one region | Rotate tokens, `AUTH_DEV_HEADERS=false`, Redis, backups (see `DEPLOY.md`) |
-| **Mid-market SaaS** | Multi-tenant product | `x-tenant-id`, org membership RBAC, `FEATURE_BILLING`, OAuth/OIDC |
-| **Enterprise** | Regulated / IdP-driven | `KMS_ENCRYPTION_KEY`, `SCIM_BEARER_TOKEN`, `SIEM_EXPORT_URL`, `OTEL_*` |
-
-Feature flags (`FEATURE_*`) disable optional modules without removing code. See `.env.example`.
-
-- Production checklist: [docs/PRODUCTION.md](docs/PRODUCTION.md) (`strata secrets:check`)
-- Tenancy and RLS: [docs/TENANCY.md](docs/TENANCY.md)
-- Enterprise integrations (SCIM, billing, SIEM, OAuth): [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
-- Framework packaging & npm: [docs/PACKAGING.md](docs/PACKAGING.md)
-- Coverage policy: [docs/COVERAGE.md](docs/COVERAGE.md)
-- Disaster recovery: [docs/DR.md](docs/DR.md)
-- Operations: [RUNBOOK.md](RUNBOOK.md), [DEPLOY.md](DEPLOY.md)
-
-HiroApp seeded password users after `bun run hiroapp:fresh` (see [apps/hiroapp/README.md](apps/hiroapp/README.md)):
-
-| Email | Password | Role |
-|-------|----------|------|
-| `admin@hiroapp.com` | `password` | Admin (`role_id=1`) |
-| `recruiter@hiroapp.com` | `password` | Recruiter (`role_id=3`) |
-| `candidate@hiroapp.com` | `password` | Candidate (`role_id=2`) |
-
-Leftover `src/db` seeds (`DOGFOOD_APP=workhub migrate:fresh --seed`) still create `admin@workhub.test` / `member@workhub.test` and `workhub-*-test-token` so core tenant/RLS tests have a schema. They are not a second product app.
-
-### API prefix
-
-HiroApp JSON routes live under **`/api`** (`API_PREFIX=/api`). Operational probes stay at the root:
-
-- `GET /health`
-- `GET /ready`
-- `GET /metrics`: Prometheus text metrics (open locally; production requires `METRICS_TOKEN`)
-
-### Model-aware authorization
-
-Policies are registered per HiroApp resource (`departments`, `positions`, `applications`, …). Route handlers use `securedBindRouteModel()` to resolve a model from the URL, then authorize the action against that instance before running the handler.
-
-### Admin dashboard (server-htmx)
-
-When `FRONTEND_MODE=server-htmx`, HiroApp staff (`role_id=1` admin, `role_id=3` recruiter) use cookie sessions (`CookieSessionStore`). Sign in as `admin@hiroapp.com` / `password`.
-
-| Route | Purpose |
-|-------|---------|
-| `/` | Role home (admin hiring board, recruiter home, candidate applications) |
-| `/users` | Staff directory (admin) |
-| `/account` | Staff profile, department team, invitations, API tokens, TOTP MFA, browser sessions |
-| `/confirm-password` | Laravel `password.confirm` gate |
-| `/two-factor-challenge` | Fortify 2FA after password login |
-| `/billing` | Current tenant subscription (staff) |
-| `/webhooks` | Outbound webhook admin (staff) |
-| `/login` | HTMX cookie login |
-
-Candidates stay applicants — not team members, not SCIM employees, not org tokens. Core exports: `AdminResourceRegistry`, `formatAdminValue`, `FailedJobService.delete()`, `runQueueJob`, `temporarySignedUrl`.
-
-### Cache, events, and queues
-
-- Tagged cache (`array` or `redis` driver) with automatic invalidation on model writes
-- Model lifecycle events dispatched from repositories (`eventBus` is a process-wide singleton so built `@getstrata/core` bundles and app listeners share one bus)
-- Queue drivers: `sync`, `async`, or `redis` (`QUEUE_DRIVER`)
-- Failed job recording with retry/backoff (`queue:failed`, `queue:retry`, `queue:flush-failed`)
-- Run a Redis worker: `strata queue:work` (requires `REDIS_URL`)
-
-### Auth and API tokens
-
-HiroApp HTML uses `CookieSessionStore` (`hiroapp_session`). Staff can mint bearer tokens from `/account`. JSON login is `POST /api/auth/login` with `{ "email", "password" }` (seeded password is `password`). MFA for staff uses `/two-factor-challenge` and `POST /api/auth/two-factor-challenge`.
-
-Set `AUTH_DEV_HEADERS=false` in production and rely on cookie sessions or bearer tokens.
-
-### Audit log and webhooks
-
-HiroApp staff surfaces: `GET /api/audit-logs`, `GET/POST /api/webhooks`, HTML `/billing` and `/webhooks`. Model writes append audit rows and dispatch signed webhook payloads. App-specific listeners live under `apps/hiroapp/src/listeners` (HiroApp’s listener provider loads them; leftover `src/listeners` is gone).
-
-### OpenAPI and SDK generation
-
-```bash
-strata route:list
-strata openapi:generate   # writes docs/openapi.json from registered routes
-strata sdk:generate       # writes sdk/typescript/client.ts
-```
-
-### Facades
-
-Lazy helpers for jobs, listeners, and CLI code live in `src/core/facades/`:
-
-```typescript
-import { cache, auth, policyGate, queue, events, config, log, storage, mail } from "../core/facades";
-```
-
-### Generators
-
-```bash
-strata make:module invoice   # full CRUD scaffold (provider, policy, routes, validation)
-strata make:migration create_invoice
-strata make:policy invoice
-strata make:job sendInvoice
-strata make:listener invalidateCache organization.created
-strata make:request user
-strata make:factory user
-```
-
-Generated modules include HttpKernel-aware routes, FormRequest-style body parsing via `validateObject`, and policy hooks for update/delete.
-
-Enterprise patterns:
-
-- Mutations use `kernel.wrapAbility("<resource>:create", handler)`. See generated `routes.ts`
-- Optional modules can gate routes with `isFeatureEnabled()` in `index.ts`
-- Register policies in `provider.ts` and enforce org scope in services via `membershipScope` helpers
-- Show routes use `securedBindRouteModel` with `view` policy; guests retain public read access for hobby/demo
-
-See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for SCIM/billing extension points.
-
-### Scheduler, storage, and mail
-
-- `strata schedule:run`: run due scheduled tasks (`src/bootstrap/schedule.ts`); `runDueScheduledTasks` lives in `@getstrata/core`. The WorkHub CLI command is not part of the `@getstrata/bootstrap` public API.
-- Local file storage via `storage()` (`STORAGE_PATH`, default `storage/`)
-- Log mail driver via `mail()` for development notifications
-
-### Production lifecycle
-
-- Postgres connections use a configurable pool (`DB_POOL_*` env vars) with health-aware reconnect on `/ready`
-- `SIGINT` / `SIGTERM` drain the HTTP server and close database connections via `@getstrata/core` helpers:
-
-```typescript
-import {
-  installGracefulShutdownSignals,
-  registerShutdownHandler,
-} from "@getstrata/core/lifecycle/gracefulShutdown";
-
-installGracefulShutdownSignals();
-registerShutdownHandler("http-server", () => server.stop());
-registerShutdownHandler("database", async () => closeDatabase());
-```
-
-- `queue:work` stops cleanly on shutdown signals after the current Redis poll cycle
-- Production startup rejects default seed API tokens when `APP_ENV=production`
-- Migrations use a Postgres advisory lock for single-flight deploy safety
-
-### Production Docker image
-
-```bash
-docker build -t hiroapp-app .
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-The production compose overlay sets `APP_ENV=production`, disables dev auth headers, and runs immutable images without bind mounts.
-
-## Environment
-
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_URL` | Postgres connection string (required) |
-| `PORT` | HTTP port (default `3000`) |
-| `APP_ENV`, `APP_DEBUG`, `APP_URL` | Application metadata |
-| `API_PREFIX` | API route prefix (HiroApp uses `/api`) |
-| `CACHE_DRIVER` | `array` or `redis` |
-| `CACHE_TTL_MS`, `CACHE_MAX_ENTRIES` | In-memory cache limits |
-| `REDIS_URL` | Redis for cache, throttling, and queues |
-| `QUEUE_DRIVER` | `sync`, `async`, or `redis` (app defaults to `redis` in Docker) |
-| `QUEUE_MAX_ATTEMPTS`, `QUEUE_BACKOFF_MS` | Job retry settings |
-| `AUTH_DEV_HEADERS` | Allow `x-authenticated-user-*` headers (default `true`; set `false` in production) |
-| `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | Seed tokens for leftover `src/db` WorkHub schema tests |
-| `CORS_ALLOWED_ORIGINS` | CORS allowlist (`*` in development) |
-| `RATE_LIMIT_PER_MINUTE` | Per-token/user/IP limit (default `120`) |
-| `STORAGE_PATH` | Local storage root (default `storage`) |
-| `DB_POOL_MAX` | Postgres pool size (default `10`) |
-| `DB_POOL_IDLE_TIMEOUT` | Close idle pool connections after N seconds (default `30`) |
-| `DB_POOL_MAX_LIFETIME` | Max connection lifetime in seconds (default `3600`) |
-| `DB_CONNECTION_TIMEOUT` | Connection establishment timeout in seconds (default `10`) |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `OAUTH_REDIRECT_URI` | GitHub OAuth login |
-
-Dev/test auth headers (`GuestGuard`, when `AUTH_DEV_HEADERS=true`):
-
-- `x-authenticated-user-id`
-- `x-authenticated-user-role` (`admin` or `member`)
-
-Copy `.env.example` for a full local template.
-
-## Run tests
-
-```bash
-# Docker (matches CI)
-docker compose run --rm -e QUEUE_DRIVER=sync app bun run validate:ci
-
-# Inside a running app container
-docker compose exec app bun run test:all
-docker compose exec app bun run test:coverage   # scoped 100% gate; see docs/TESTING.md
-docker compose exec app bun run check
-docker compose exec app bun run lint:ci
-```
-
-On the host (map Postgres/Redis to published ports):
-
-```bash
-DATABASE_URL=postgresql://postgres:postgres@localhost:54329/bun_testing_test \
-REDIS_URL=redis://localhost:6379 \
-CACHE_DRIVER=redis \
-bun run validate:ci
-```
-
-Details: [docs/TESTING.md](docs/TESTING.md) (frontend modes, HTMX login, coverage exclusions).
-
-## Lint and format
-
-[Biome](https://biomejs.dev/) handles linting and formatting in one pass:
-
-| Command | Purpose |
-|---------|---------|
-| `bun run lint` | Check formatting, import order, and lint rules |
-| `bun run lint:ci` | Same checks in CI mode (no auto-fix) |
-| `bun run lint:fix` | Apply safe fixes + format across the repo |
-| `bun run format` | Format only (no lint rules) |
-| `bun run validate` | Typecheck, lint, OpenAPI validate, unit + integration tests |
-| `bun run validate:ci` | CI parity: above + OpenAPI drift check + scoped coverage gate |
-
-Git hooks (via Lefthook): **pre-commit** formats staged files; **pre-push** runs `validate:host` (migrate + full CI on host Postgres/Redis).
-
-Generated artifacts (`docs/openapi.json`, `sdk/typescript/client.ts`) are excluded from Biome. Regenerate them with the CLI instead of hand-editing.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. Use `bun run validate` before opening a PR.
-
-## Enter the app container
-
-```bash
-docker compose exec app sh
-```
-
-Useful commands inside:
-
-```bash
-bun run test:all
-bun run check
-bun run lint
-bun run lint:fix
-bun run format
-strata help
-strata route:list
-strata openapi:generate
-strata sdk:generate
-strata queue:work
-strata schedule:run
-```
-
-## CLI
-
-Framework commands use the `strata` binary from `@getstrata/cli`. Bun stays the runtime, installer, and test runner (`bun install`, `bun test`, `bun run validate`). `bun run cli` is an alias for `strata`.
-
-`strata run <file>` executes a file with the app preload. It is not an alias for `bun run <package.json script>`.
-
-Show commands:
-
-```bash
-strata help
-strata tinker
-```
-
-`strata tinker` banners `${APP_NAME} tinker` (default `WorkHub`).
-
-Database:
-
-```bash
-strata migrate
-strata migrate:status
-strata migrate:fresh --seed
-strata rollback
-strata seed
-```
-
-Scaffolding:
-
-```bash
-strata make:migration create_users
-strata make:module user
-strata make:request user
-strata make:factory user
-```
-
-Queue and ops:
-
-```bash
-strata queue:work
-strata queue:failed
-strata queue:retry <id>
-strata queue:flush-failed
-strata route:list
-strata openapi:generate
-strata sdk:generate
-strata schedule:run
-```
-
-In Docker Compose a dedicated `worker` service runs the queue worker alongside the app.
-
-## Operations
-
-Health checks (no rate limiting):
-
-- `GET /health`: liveness probe
-- `GET /ready`: readiness probe (Postgres + Redis)
-
-## WorkHub API examples
-
-All examples use the `/api/v1` prefix.
-
-List endpoints accept validated query params:
-
-- `/api/v1/organizations?page=1&perPage=10`
-- `/api/v1/projects?organizationId=1&status=active&include=organization`
-- `/api/v1/tasks?projectId=1&status=in_progress&include=project`
-
-Write endpoints accept JSON bodies:
-
-- `POST /api/v1/organizations` with `{ "name": "...", "slug": "..." }`
-- `POST /api/v1/projects` with `{ "organization_id": 1, "name": "...", "status": "draft" }`
-- `POST /api/v1/tasks` with `{ "project_id": 1, "title": "...", "priority": 2 }`
-- `POST /api/v1/tasks/:id/comments` with `{ "body": "..." }`
-
-Verify auth:
-
-```bash
-curl -H "Authorization: Bearer <staff-token>" http://localhost:3000/api/auth/me
-```
-
-Open:
-
-- App: `http://localhost:3000`
-- API: `http://localhost:3000/api/v1/organizations`
-- Adminer: `http://localhost:8080`
-
-Adminer login:
-
-- System: `PostgreSQL`
-- Server: `postgres`
-- Username: `postgres`
-- Password: `postgres`
-- Database: `bun_testing_test`
-
-## After code or dependency changes
-
-```bash
-docker compose restart app
-```
-
-Local Docker runs `bun install --frozen-lockfile` on startup. If `package.json` and `bun.lock` drift (for example after a pull), the entrypoint falls back to `bun install` and prints a reminder to commit `bun.lock`. CI and the production Dockerfile still require a frozen lockfile.
-
-## Stop
-
-```bash
-docker compose down -v --remove-orphans
-```
-
-## Main endpoints
-
-### WorkHub domain (under `/api/v1`)
-
-- `GET/POST /organizations`, members via `GET/POST /organizations/:id/members`, `PATCH /organizations/:id/members/:userId`. Invitations: `GET/POST /organizations/:id/invitations`, `DELETE /organizations/:id/invitations/:invitationId`, `POST /organizations/:id/invitations/:invitationId/resend`, `POST /invitations/accept`. HTMX: `POST /organizations/:id/members/:userId/role`, unknown emails send a signed invite (`GET /invitations/accept`); pending invitations can be resent or cancelled
-- `GET/POST /projects`, `GET/PATCH/DELETE /projects/:id`. Signed-in HTML `GET /projects` defaults to the current team (`?organizationId=` overrides; guests and JSON stay unscoped)
-- `GET/POST /tasks`, `GET/PATCH/DELETE /tasks/:id`. Signed-in HTML `GET /tasks` defaults to the current team (`?organizationId=` overrides; guests and JSON stay unscoped)
-- `GET/POST /tasks/:id/comments`, `GET/PATCH/DELETE /comments/:id`
-- `GET/POST /tasks/:id/attachments`, `GET/DELETE /attachments/:id`, `GET /attachments/:id/download`
-- `GET /reports/summary`, `GET /reports/organizations/:id`
-- `GET /search?q=...`
-- `GET /audit-logs`
-- `GET/POST /webhooks`, `POST /webhooks/:id/deactivate`, `POST /webhooks/:id/activate`, `POST /webhooks/:id/delete`, `POST /webhooks/deliveries/:id/retry`
-- `GET/PATCH /users/me/notifications`, `PATCH /users/me/notifications/:id/read`
-- `GET /billing/subscription` (when `FEATURE_BILLING=true`)
-- `GET /admin/stats`, `/admin/tenants`, `/admin/features`, `/admin/organization-members` (global admin, API)
-- Web (HTMX): `/admin`, `/admin/queue`, `/admin/audit`, `/admin/resources`, `/search`, `/reports`, `/account`, `/notifications`, `/billing`, `/webhooks` (create defaults to the current team), `/forgot-password` when `FRONTEND_MODE=server-htmx`
-- Auth: `GET /api/v1/auth/me`, `POST /api/v1/auth/login`, `POST /api/v1/auth/two-factor-challenge`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`, `POST /api/v1/auth/email/verification-notification`, OAuth routes, token CRUD, `PATCH /api/v1/users/me` (`{ name, email }`), `PUT /api/v1/users/me/password` (`{ current_password, password, password_confirmation }`; revokes other API tokens), `POST /api/v1/users/me/logout-other-devices` (`{ password }`; also invalidates older HMAC sessions), `GET /api/v1/users/me/sessions`, `DELETE /api/v1/users/me/sessions/:id`, `POST /api/v1/users/me/confirm-password`, `GET /api/v1/users/me/confirmed-password-status`, `POST /api/v1/users/me/mfa`, `POST /api/v1/users/me/mfa/confirm`, `POST /api/v1/users/me/mfa/recovery-codes`, `DELETE /api/v1/users/me/mfa`, `GET /api/v1/users/me/export`, `GET /api/v1/users/me/invitations`, `POST /api/v1/users/me/invitations/:id/accept`, `DELETE /api/v1/users/me/invitations/:id`, `POST /api/v1/users/me/photo` (multipart field `photo`), `GET /api/v1/users/me/photo`, `DELETE /api/v1/users/me/photo`, `DELETE /api/v1/users/me`. HTMX: `GET/POST /register` (optional same-origin `redirect`), `GET /oauth/:provider`, `GET /oauth/:provider/callback`, `GET/POST /confirm-password`, `GET/POST /two-factor-challenge`, `POST /account/profile`, `POST /account/photo`, `GET /account/photo`, `POST /account/photo/delete`, `POST /account/password`, `POST /account/logout-other-devices`, `POST /account/tokens`, `POST /account/tokens/:id/revoke`, `GET /account/export`, `POST /account/delete`, `POST /account/invitations/:id/accept`, `POST /account/invitations/:id/decline`
-
-SCIM (`FEATURE_SCIM=true`, bearer token): `/scim/v2/Users`, `/scim/v2/Groups`, …
-
-Protected mutations require authentication and matching token abilities. Reports exclude soft-deleted records. Full route list: `strata route:list` or [docs/openapi.json](docs/openapi.json).
+MIT. See [CONTRIBUTING.md](CONTRIBUTING.md) if you are changing this repo.

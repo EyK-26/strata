@@ -128,7 +128,7 @@ class HttpKernel {
     return withErrorHandling(this.wrap("web", handler));
   }
 
-  /** Laravel `guest` / `RedirectIfAuthenticated` — signed-in users go to `home`. */
+  /** Signed-in HTML users redirect to `home` instead of seeing guest pages. */
   wrapWebGuest(handler: RouteHandler, home: WebGuestHome = "/"): RouteHandler {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
@@ -160,7 +160,7 @@ class HttpKernel {
     return this.wrapWebAuth(handler, { verified: true });
   }
 
-  /** Signed-in HTML without Laravel `verified` (logout, verification notice). */
+  /** Signed-in HTML without the email-verified gate (logout, verification notice). */
   wrapWebAuthenticatedAllowUnverified(handler: RouteHandler): RouteHandler {
     return this.wrapWebAuth(handler, { verified: false });
   }
@@ -169,7 +169,7 @@ class HttpKernel {
     return this.wrapWebAuth(handler, { verified: true });
   }
 
-  /** Laravel `password.confirm` — requires a fresh signed confirmation cookie. */
+  /** Requires a fresh signed password-confirmation cookie. */
   wrapWebPasswordConfirm(handler: RouteHandler): RouteHandler {
     return this.wrapWebAuth(withMiddleware(createRequirePasswordConfirmMiddleware())(handler), {
       verified: true,
@@ -204,7 +204,7 @@ class HttpKernel {
     return this.wrap("authenticated", handler);
   }
 
-  /** Laravel `verified` for JSON/API routes. No-op when `FEATURE_EMAIL_VERIFICATION` is off. */
+  /** JSON routes that require a verified email. No-op when `FEATURE_EMAIL_VERIFICATION` is off. */
   wrapVerified(handler: RouteHandler): RouteHandler {
     const middleware = [...this.group("authenticated"), ...this.verifiedMiddleware()];
 

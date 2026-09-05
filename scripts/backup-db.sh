@@ -3,7 +3,7 @@ set -eu
 
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-OUTPUT_FILE="${BACKUP_DIR}/workhub-${TIMESTAMP}.sql"
+OUTPUT_FILE="${BACKUP_DIR}/strata-${TIMESTAMP}.sql"
 
 mkdir -p "${BACKUP_DIR}"
 

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { CORE_CACHE_TOKEN } from "@getstrata/bootstrap/config";
 import { createTestApp } from "../../src/testing/createTestApp";
-import { pinWorkhubIntegrationEnv } from "../helpers/integrationEnv";
+import { pinSeededIntegrationEnv } from "../helpers/integrationEnv";
 
 describe("createTestApp", () => {
   const apps: Array<Awaited<ReturnType<typeof createTestApp>>> = [];
 
   beforeAll(() => {
-    pinWorkhubIntegrationEnv();
+    pinSeededIntegrationEnv();
   });
 
   afterAll(() => {

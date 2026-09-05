@@ -155,7 +155,7 @@ class HasManyRelationQuery<
     return this.scopedQuery().count();
   }
 
-  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord[]) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,
@@ -256,7 +256,7 @@ class HasOneRelationQuery<
     return this.inner.count();
   }
 
-  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,
@@ -347,7 +347,7 @@ class BelongsToRelationQuery<
     return this.get();
   }
 
-  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,
@@ -480,7 +480,7 @@ class BelongsToManyRelationQuery<
     return Number(rows[0]?.count ?? 0);
   }
 
-  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord[]) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,
@@ -652,7 +652,7 @@ class MorphManyRelationQuery<
       .count();
   }
 
-  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord[]) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,
@@ -728,7 +728,7 @@ class MorphOneRelationQuery<
     return this.inner.count();
   }
 
-  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,
@@ -807,7 +807,7 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
     return row ? related.newFromRecord(row) : null;
   }
 
-  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $user->applications()`).
+  // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,
@@ -898,7 +898,7 @@ class HasManyThroughRelationQuery<
     return rows.length;
   }
 
-  // biome-ignore lint/suspicious/noThenProperty: Laravel relation queries are thenable (`await $department->applications()`).
+  // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await department.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord[]) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,

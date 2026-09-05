@@ -239,7 +239,7 @@ describe("HiroApp-shaped Eloquent parity", () => {
     expect(params).toContain(9);
   });
 
-  test("morphMany writes Laravel class names and morphTo uses explicit morph name", async () => {
+  test("morphMany writes class names and morphTo uses an explicit morph name", async () => {
     const connection = new FakeConnection();
     const { UserModel, NotificationModel } = createGraph(connection);
     const user = new UserModel({ id: 3, name: "Ada", role_id: 2 }, UserModel.repository());

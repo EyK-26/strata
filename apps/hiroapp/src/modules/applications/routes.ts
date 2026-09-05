@@ -3,6 +3,7 @@ import { ForbiddenError } from "@getstrata/core/errors/http";
 import { applyConditionalGet, etagFromResource, isEtagEnabled } from "@getstrata/core/http/etag";
 import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
 import { parsePaginationQuery } from "@getstrata/core/http/pagination";
+import { parseMultipartUpload } from "@getstrata/core/http/parseMultipartUpload";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { assertValidSignature, temporarySignedUrl } from "@getstrata/core/http/signedUrl";
@@ -46,6 +47,25 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: withMiddleware(applyThrottle)(
         wrapApi(dependencies, async (request) => {
           const user = await authorize(request, "applications", "create");
+          const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+          if (contentType.includes("multipart/form-data")) {
+            const upload = await parseMultipartUpload(request.clone(), "resume");
+            const form = await request.formData();
+            const positionId = Number(form.get("position_id"));
+            const storedPath = dependencies.storage
+              ? await dependencies.storage.put(
+                  `resumes/${user.id}-${positionId}-${upload.fileName}`,
+                  upload.contents,
+                )
+              : upload.fileName;
+            const created = await applicationService.apply(user, {
+              position_id: positionId,
+              attachment_text: null,
+              attachment_file: storedPath,
+              source_id: form.get("source_id") ? Number(form.get("source_id")) : null,
+            });
+            return jsonResponse(new ApplicationResource(created).toResponse());
+          }
           const payload = await new CreateApplicationRequest().validate(request);
           let storedPath = payload.attachment_file;
           if (payload.attachment_text && dependencies.storage) {

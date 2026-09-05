@@ -114,18 +114,18 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bun_testing
           REDIS_URL: redis://localhost:6379
-          WORKHUB_SKIP_TEST_BOOTSTRAP: 1
+          SKIP_FIXTURE_TEST_BOOTSTRAP: 1
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
           FEATURE_SCIM: "true"
-          SCIM_BEARER_TOKEN: workhub-scim-test-token
-          ADMIN_API_TOKEN: workhub-admin-test-token
-          MEMBER_API_TOKEN: workhub-member-test-token
+          SCIM_BEARER_TOKEN: strata-scim-test-token
+          ADMIN_API_TOKEN: strata-admin-test-token
+          MEMBER_API_TOKEN: strata-member-test-token
         run: |
           scripts/with-host-env.sh sh -c "
             bun run build:framework &&
             bun run build:bootstrap &&
-            DOGFOOD_APP=workhub bun run cli migrate:fresh --seed &&
+            STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed &&
             DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
             bun run validate:ci
           "

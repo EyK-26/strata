@@ -78,7 +78,7 @@ describe("appKeyPrefix", () => {
     }
   });
 
-  test("honors APP_KEY_PREFIX for sibling apps", () => {
+  test("honors APP_KEY_PREFIX for isolated app keyspaces", () => {
     const previous = snapshotIdentityEnv();
     clearIdentityOverrides();
     process.env.APP_KEY_PREFIX = "forum";

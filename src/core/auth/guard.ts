@@ -1,6 +1,7 @@
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
+import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
 import { abilityCatalog } from "./abilityCatalog";
 import type { AuthUser } from "./authContext";
 import { currentAuthUser } from "./authContext";
@@ -48,15 +49,9 @@ class ApiTokenGuard implements AuthGuard {
   ) {}
 
   resolve(request: Request): AuthUser | null {
-    const authorization = request.headers.get("authorization");
+    const token = readBearerToken(request);
 
-    if (!authorization?.startsWith("Bearer ")) {
-      return null;
-    }
-
-    const token = authorization.slice("Bearer ".length).trim();
-
-    if (token !== this.options.token) {
+    if (!token || token !== this.options.token) {
       return null;
     }
 
@@ -68,15 +63,9 @@ class DatabaseTokenGuard implements AuthGuard {
   constructor(private readonly container: ServiceContainerLike) {}
 
   async resolve(request: Request): Promise<AuthUser | null> {
-    const authorization = request.headers.get("authorization");
+    const token = readBearerToken(request);
 
-    if (!authorization?.startsWith("Bearer ")) {
-      return null;
-    }
-
-    const token = authorization.slice("Bearer ".length).trim();
-
-    if (!token) {
+    if (!token || token.split(".").length === 3) {
       return null;
     }
 
@@ -106,12 +95,45 @@ class CompositeGuard implements AuthGuard {
   }
 }
 
+const BEARER_GUARD_NAMES = ["api", "access_token", "token", "jwt"] as const;
+const BASIC_GUARD_NAMES = ["basic"] as const;
+const SESSION_GUARD_NAMES = ["web", "session", "default"] as const;
+
 class AuthManager {
-  constructor(private readonly guard: AuthGuard) {}
+  private readonly namedGuards = new Map<string, AuthGuard>();
+
+  constructor(private readonly guard: AuthGuard) {
+    this.namedGuards.set("default", guard);
+  }
+
+  registerGuard(name: string, next: AuthGuard): this {
+    const trimmed = name.trim();
+
+    if (!trimmed) {
+      throw new Error("Auth guard name must not be empty.");
+    }
+
+    this.namedGuards.set(trimmed, next);
+    return this;
+  }
+
+  use(name = "default"): AuthGuard {
+    const found = this.namedGuards.get(name);
+
+    if (!found) {
+      throw new Error(`Unknown auth guard "${name}".`);
+    }
+
+    return found;
+  }
+
+  guardNames(): string[] {
+    return [...this.namedGuards.keys()];
+  }
 
   async resolve(request?: Request): Promise<AuthUser | null> {
     if (request) {
-      return await Promise.resolve(this.guard.resolve(request));
+      return await this.authenticateRequest(request);
     }
 
     return currentAuthUser();
@@ -133,6 +155,53 @@ class AuthManager {
     }
 
     return user;
+  }
+
+  private async authenticateRequest(request: Request): Promise<AuthUser | null> {
+    const scheme = authorizationScheme(request);
+
+    if (scheme === "bearer") {
+      const fromBearer = await this.tryNamedGuards(request, BEARER_GUARD_NAMES);
+      if (fromBearer) {
+        return fromBearer;
+      }
+    } else if (scheme === "basic") {
+      const fromBasic = await this.tryNamedGuards(request, BASIC_GUARD_NAMES);
+      if (fromBasic) {
+        return fromBasic;
+      }
+    } else {
+      const fromSession = await this.tryNamedGuards(request, SESSION_GUARD_NAMES);
+      if (fromSession) {
+        return fromSession;
+      }
+    }
+
+    return await Promise.resolve(this.guard.resolve(request));
+  }
+
+  private async tryNamedGuards(
+    request: Request,
+    names: readonly string[],
+  ): Promise<AuthUser | null> {
+    const seen = new Set<AuthGuard>();
+
+    for (const name of names) {
+      const named = this.namedGuards.get(name);
+
+      if (!named || seen.has(named)) {
+        continue;
+      }
+
+      seen.add(named);
+      const user = await Promise.resolve(named.resolve(request));
+
+      if (user) {
+        return user;
+      }
+    }
+
+    return null;
   }
 }
 

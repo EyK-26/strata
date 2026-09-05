@@ -72,7 +72,7 @@ describe("EventBus", () => {
     await expect(bus.dispatch("missing.event", { id: 1 })).resolves.toBeUndefined();
   });
 
-  test("on/emit are Laravel-shaped aliases for listen/dispatch", async () => {
+  test("on/emit are aliases for listen/dispatch", async () => {
     const bus = new EventBus();
     const seen: unknown[] = [];
     bus.on("mail.sent", (payload) => {

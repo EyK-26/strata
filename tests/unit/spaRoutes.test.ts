@@ -22,7 +22,7 @@ describe("createSpaRoutes", () => {
   });
 
   test("serves built index.html for /app/* fallback", async () => {
-    await writeFile(INDEX_FILE, "<!doctype html><html><body>WorkHub SPA</body></html>");
+    await writeFile(INDEX_FILE, "<!doctype html><html><body>Strata SPA</body></html>");
 
     const routes = createSpaRoutes(createDependencies());
     const handler = routes["/app/*"];
@@ -34,7 +34,7 @@ describe("createSpaRoutes", () => {
     const response = await handler(new Request("http://localhost:3000/app/organizations"));
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("WorkHub SPA");
+    expect(await response.text()).toContain("Strata SPA");
   });
 
   test("returns 503 when SPA build is missing", async () => {
@@ -51,7 +51,7 @@ describe("createSpaRoutes", () => {
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
-      error: "SPA build not found. Run `bun run build:frontend`.",
+      error: "SPA build not found. Run `bun run frontend:build` in your app.",
     });
   });
 

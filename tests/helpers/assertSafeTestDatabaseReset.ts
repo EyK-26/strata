@@ -3,7 +3,7 @@ function databaseLooksLikeTest(databaseUrl: string): boolean {
 }
 
 function assertSafeTestDatabaseReset(env: Record<string, string | undefined> = process.env): void {
-  if (env.WORKHUB_ALLOW_TEST_DB_RESET === "1") {
+  if (env.STRATA_ALLOW_TEST_DB_RESET === "1") {
     return;
   }
 
@@ -17,7 +17,7 @@ function assertSafeTestDatabaseReset(env: Record<string, string | undefined> = p
 
   if (!databaseLooksLikeTest(databaseUrl)) {
     throw new Error(
-      "Refusing migrate:fresh from test globalSetup: DATABASE_URL does not look like a test database. Set WORKHUB_ALLOW_TEST_DB_RESET=1 to override.",
+      "Refusing migrate:fresh from test globalSetup: DATABASE_URL does not look like a test database. Set STRATA_ALLOW_TEST_DB_RESET=1 to override.",
     );
   }
 }

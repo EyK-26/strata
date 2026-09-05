@@ -2,18 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import {
-  CSRF_COOKIE,
   createCsrfTokenCookie,
   csrfCookieName,
   resolveCsrfToken,
   verifyCsrfToken,
 } from "@getstrata/core/http/csrfToken";
+import { appCookieName } from "@getstrata/core/runtime/appKeyPrefix";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("csrfToken", () => {
   test("creates and verifies a csrf token", () => {
     const { token, cookie } = createCsrfTokenCookie();
-    const request = new Request("http://example.test/organizations", {
+    const request = new Request("http://example.test/login", {
       headers: { cookie: cookie.split(";")[0] ?? "" },
     });
 
@@ -41,14 +41,13 @@ describe("csrfToken", () => {
     }
   });
 
-  test("defaults to the WorkHub CSRF cookie name", () => {
+  test("defaults to the namespaced CSRF cookie", () => {
     const previous = process.env.CSRF_COOKIE_NAME;
     delete process.env.CSRF_COOKIE_NAME;
 
     try {
-      expect(CSRF_COOKIE).toBe("workhub_csrf");
-      expect(csrfCookieName()).toBe("workhub_csrf");
-      expect(createCsrfTokenCookie().cookie).toContain("workhub_csrf=");
+      expect(csrfCookieName()).toBe(appCookieName("csrf"));
+      expect(createCsrfTokenCookie().cookie).toContain(`${appCookieName("csrf")}=`);
     } finally {
       restoreEnvVar("CSRF_COOKIE_NAME", previous);
     }
@@ -56,13 +55,13 @@ describe("csrfToken", () => {
 
   test("overrides the CSRF cookie name from CSRF_COOKIE_NAME", () => {
     const previous = process.env.CSRF_COOKIE_NAME;
-    process.env.CSRF_COOKIE_NAME = "strata_csrf";
+    process.env.CSRF_COOKIE_NAME = "hiring_csrf";
 
     try {
-      expect(csrfCookieName()).toBe("strata_csrf");
+      expect(csrfCookieName()).toBe("hiring_csrf");
       const created = createCsrfTokenCookie();
-      expect(created.cookie).toContain("strata_csrf=");
-      expect(created.cookie).not.toContain("workhub_csrf=");
+      expect(created.cookie).toContain("hiring_csrf=");
+      expect(created.cookie).not.toContain(`${appCookieName("csrf")}=`);
 
       const request = new Request("http://example.test/", {
         headers: { cookie: created.cookie.split(";")[0] ?? "" },
@@ -78,12 +77,12 @@ describe("createCsrfMiddleware", () => {
   test("allows safe methods and sets csrf cookie when needed", async () => {
     const middleware = createCsrfMiddleware();
     const response = await middleware(
-      new Request("http://example.test/organizations"),
+      new Request("http://example.test/login"),
       async () => new Response("ok"),
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("set-cookie")).toContain("workhub_csrf=");
+    expect(response.headers.get("set-cookie")).toContain(`${appCookieName("csrf")}=`);
   });
 
   test("rejects mutating requests without a csrf token", async () => {
@@ -92,7 +91,7 @@ describe("createCsrfMiddleware", () => {
 
     await expect(
       middleware(
-        new Request("http://example.test/organizations", {
+        new Request("http://example.test/login", {
           method: "POST",
           headers: { cookie: cookie.split(";")[0] ?? "" },
         }),
@@ -107,7 +106,7 @@ describe("createCsrfMiddleware", () => {
     const body = new URLSearchParams({ _token: token, name: "Acme" });
 
     const response = await middleware(
-      new Request("http://example.test/organizations", {
+      new Request("http://example.test/login", {
         method: "POST",
         headers: {
           cookie: cookie.split(";")[0] ?? "",
@@ -119,5 +118,26 @@ describe("createCsrfMiddleware", () => {
     );
 
     expect(response.status).toBe(302);
+  });
+
+  test("skips CSRF when the request uses a bearer or basic credential", async () => {
+    const middleware = createCsrfMiddleware();
+    const bearer = await middleware(
+      new Request("http://example.test/api/applications", {
+        method: "POST",
+        headers: { authorization: "Bearer hiring-token" },
+      }),
+      async () => new Response("ok"),
+    );
+    const basic = await middleware(
+      new Request("http://example.test/api/applications", {
+        method: "POST",
+        headers: { authorization: `Basic ${Buffer.from("a:b").toString("base64")}` },
+      }),
+      async () => new Response("ok"),
+    );
+
+    expect(bearer.status).toBe(200);
+    expect(basic.status).toBe(200);
   });
 });

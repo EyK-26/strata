@@ -1,5 +1,5 @@
 /**
- * @getstrata/bootstrap — application shell for Strata sibling apps.
+ * @getstrata/bootstrap: application shell for Strata apps.
  */
 
 export type { ScheduledTask } from "@getstrata/core/scheduler/schedule";

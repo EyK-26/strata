@@ -18,6 +18,7 @@ export type { AbilityChecker } from "../core/auth/abilityChecker.ts";
 export { isGlobalAdmin, resolveUserId } from "../core/auth/accessControl.ts";
 export type { AuthUser } from "../core/auth/authContext.ts";
 export { authContext, currentAuthUser, runWithAuthUser } from "../core/auth/authContext.ts";
+export { BasicAuthGuard } from "../core/auth/basicAuthGuard.ts";
 export type { AuthGuard } from "../core/auth/guard.ts";
 export {
   ApiTokenGuard,
@@ -26,6 +27,9 @@ export {
   DatabaseTokenGuard,
   GuestGuard,
 } from "../core/auth/guard.ts";
+export type { JwtPayload } from "../core/auth/jwt.ts";
+export { jwtTtlSeconds, signJwt, verifyJwt } from "../core/auth/jwt.ts";
+export { JwtGuard } from "../core/auth/jwtGuard.ts";
 export {
   configureMembershipLookup,
   currentOrganizationIds,
@@ -51,6 +55,7 @@ export {
 } from "../core/auth/membershipService.ts";
 export { Policy, PolicyGate } from "../core/auth/policy.ts";
 export { createScimAuthMiddleware } from "../core/auth/scimAuthMiddleware.ts";
+export { createTokenAbilityChecker } from "../core/auth/tokenAbilityChecker.ts";
 export {
   type CacheDriver,
   type CreateCacheStoreOptions,
@@ -79,6 +84,14 @@ export {
   getDefaultDatabaseQuery,
   registerDefaultDatabasePool,
 } from "../core/database/defaultConnection.ts";
+export type { SqlDialect } from "../core/database/dialect.ts";
+export {
+  currentSqlDialect,
+  dialectFor,
+  resetSqlDialect,
+  runWithSqlDialect,
+  useSqlDialect,
+} from "../core/database/dialect.ts";
 export { Factory } from "../core/database/factory.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "../core/database/inflection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";

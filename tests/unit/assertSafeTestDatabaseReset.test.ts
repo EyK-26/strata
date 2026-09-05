@@ -5,7 +5,7 @@ describe("assertSafeTestDatabaseReset", () => {
   test("allows an explicit override", () => {
     expect(() =>
       assertSafeTestDatabaseReset({
-        WORKHUB_ALLOW_TEST_DB_RESET: "1",
+        STRATA_ALLOW_TEST_DB_RESET: "1",
         APP_ENV: "production",
         DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/prod",
       }),
@@ -25,12 +25,12 @@ describe("assertSafeTestDatabaseReset", () => {
     expect(() =>
       assertSafeTestDatabaseReset({
         APP_ENV: "local",
-        DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/workhub",
+        DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/strata",
       }),
     ).toThrow(/does not look like a test database/);
   });
 
-  test("allows the local WorkHub test database url", () => {
+  test("allows the local fixture test database url", () => {
     expect(() =>
       assertSafeTestDatabaseReset({
         APP_ENV: "local",

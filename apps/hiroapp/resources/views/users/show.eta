@@ -1,7 +1,7 @@
 <div class="UserDetail">
   <h2><%= it.user.first_name %> <%= it.user.last_name %></h2>
   <p><%= it.user.email %></p>
-  <p><%= it.position_name %> — <%= it.department_name %></p>
+  <p><%= it.position_name %> / <%= it.department_name %></p>
   <% if (it.currentUser?.role_id === 1) { %>
     <form action="/users/<%= it.user.id %>/delete" method="post">
       <%~ include("../partials/csrf.eta") %>

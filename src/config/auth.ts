@@ -4,7 +4,7 @@ interface AuthConfig {
 }
 
 const authConfig: AuthConfig = {
-  allowDevHeaders: (process.env.AUTH_DEV_HEADERS ?? "true") !== "false",
+  allowDevHeaders: process.env.AUTH_DEV_HEADERS === "true",
   tokenDefaultAbilities: ["*"],
 };
 

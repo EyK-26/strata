@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 async function withTempProject(run: (workspace: string) => Promise<void>): Promise<void> {
-  const workspace = await mkdtemp(join(tmpdir(), "workhub-cli-generate-"));
+  const workspace = await mkdtemp(join(tmpdir(), "strata-cli-generate-"));
   tempDirectories.push(workspace);
   await mkdir(join(workspace, "docs"), { recursive: true });
   process.chdir(workspace);

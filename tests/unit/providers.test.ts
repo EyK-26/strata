@@ -41,7 +41,7 @@ describe("config store", () => {
 });
 
 describe("app providers", () => {
-  test("does not run WorkHub production secret gates", () => {
+  test("does not run product-app production secret gates", () => {
     const previous = process.env.APP_ENV;
     process.env.APP_ENV = "production";
 

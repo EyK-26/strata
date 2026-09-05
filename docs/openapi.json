@@ -950,6 +950,78 @@
     "/api/audit-logs": {
       "get": {
         "summary": "List audit log entries",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
+    "/api/audit-logs/export": {
+      "get": {
+        "summary": "Download audit events as JSON or CEF",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
+    "/api/auth/token": {
+      "post": {
+        "summary": "Mint a short-lived JWT with email and password",
         "responses": {
           "200": {
             "description": "OK"
@@ -1256,7 +1328,7 @@
     },
     "/api/careers": {
       "get": {
-        "summary": "GET /api/careers",
+        "summary": "List public career postings",
         "responses": {
           "200": {
             "description": "OK"
@@ -1287,7 +1359,7 @@
     },
     "/api/careers/{id}": {
       "get": {
-        "summary": "GET /api/careers/:id",
+        "summary": "Show a public career posting",
         "responses": {
           "200": {
             "description": "OK"
@@ -2093,6 +2165,42 @@
         }
       }
     },
+    "/api/integrations/ping": {
+      "get": {
+        "summary": "Partner heartbeat (requires integrations:ping)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error"
+          }
+        }
+      }
+    },
     "/api/interviews": {
       "get": {
         "summary": "GET /api/interviews",
@@ -2502,11 +2610,6 @@
     "/api/login": {
       "post": {
         "summary": "Login with email and password",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -4557,6 +4660,11 @@
     "/api/user": {
       "get": {
         "summary": "Current authenticated HiroApp user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"

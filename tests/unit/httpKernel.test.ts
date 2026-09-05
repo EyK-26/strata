@@ -66,7 +66,7 @@ describe("HttpKernel", () => {
 
       const getResponse = await handler(new Request("http://example.test/organizations"));
       expect(getResponse.status).toBe(200);
-      expect(getResponse.headers.get("set-cookie")).toContain("workhub_csrf=");
+      expect(getResponse.headers.get("set-cookie")).toContain("strata_csrf=");
 
       const postResponse = await handler(
         new Request("http://example.test/organizations", { method: "POST" }),
@@ -160,7 +160,7 @@ describe("HttpKernel", () => {
 
       const signed = await handler(
         new Request(
-          `http://example.test${temporarySignedUrl("/reset-password", 120, { email: "a@workhub.test" })}`,
+          `http://example.test${temporarySignedUrl("/reset-password", 120, { email: "a@strata.test" })}`,
         ),
       );
       expect(signed.status).toBe(200);
@@ -240,7 +240,7 @@ describe("HttpKernel", () => {
 
       expect(unverified.status).toBe(302);
       expect(unverified.headers.get("Location")).toBe("/email/verify");
-      expect(unverified.headers.get("Set-Cookie") ?? "").not.toContain("workhub_intended=");
+      expect(unverified.headers.get("Set-Cookie") ?? "").not.toContain("strata_intended=");
     } finally {
       restoreEnvVar("FRONTEND_MODE", previousMode);
       restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previousVerify);
@@ -270,7 +270,7 @@ describe("HttpKernel", () => {
       expect(unverified.headers.get("Location")).toBe("/email/verify");
       expect(
         (unverified.headers.getSetCookie?.() ?? [unverified.headers.get("Set-Cookie") ?? ""]).some(
-          (cookie) => cookie.includes("workhub_intended="),
+          (cookie) => cookie.includes("strata_intended="),
         ),
       ).toBe(true);
 

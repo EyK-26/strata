@@ -28,7 +28,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
-# user uploads (repo root only — do not match packages/*/entries/storage/)
+# user uploads (repo root only; do not match packages/*/entries/storage/)
 /storage
 
 # IntelliJ based IDEs

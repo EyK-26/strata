@@ -1,11 +1,14 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { parseFormBody } from "@getstrata/bootstrap/web/forms";
+import { isEmailVerificationRequired } from "@getstrata/core/auth/emailVerification";
+import { clearIntendedUrlCookie, readIntendedUrl } from "@getstrata/core/auth/intendedUrlCookie";
 import { verifyPassword } from "@getstrata/core/auth/password";
+import { hasValidSignature } from "@getstrata/core/http/signedUrl";
 import { redirectResponse } from "@getstrata/core/view";
 import { redirectWithCookies, sessionMetaFromRequest } from "../../http/cookies.ts";
-import { authManager } from "../../http/currentUser.ts";
+import { authManager, requireCurrentUser } from "../../http/currentUser.ts";
 import { renderPage } from "../../http/view.ts";
-import { wrapWebAuthenticated, wrapWebGuest } from "../../http/wrap.ts";
+import { wrapLoginWeb, wrapWeb, wrapWebGuest, wrapWebUnverified } from "../../http/wrap.ts";
 import { toSessionUser } from "../../lib/sessionUser.ts";
 import { createMfaChallengeCookie } from "../account/mfaChallenge.ts";
 import { accountService } from "../account/service.ts";
@@ -17,7 +20,7 @@ export function authWebRoutes(dependencies: AppDependencies): AppRouteMap {
       GET: wrapWebGuest(dependencies, async (request) =>
         renderPage(request, "auth/login", { errors: {} }, 200, false),
       ),
-      POST: wrapWebGuest(dependencies, async (request) => {
+      POST: wrapLoginWeb(dependencies, async (request) => {
         const { fields } = await parseFormBody(request);
         const email = (fields.email ?? "").trim().toLowerCase();
         const password = fields.password ?? "";
@@ -40,20 +43,44 @@ export function authWebRoutes(dependencies: AppDependencies): AppRouteMap {
         if (accountService.staffRequiresMfa(user)) {
           return redirectWithCookies("/two-factor-challenge", [createMfaChallengeCookie(user.id)]);
         }
-        return authManager().signInRedirect(
+        const nextPath = readIntendedUrl(request) ?? "/";
+        const signedIn = await authManager().signIn(
           toSessionUser(user),
-          "/",
-          302,
           sessionMetaFromRequest(request),
         );
+        return redirectWithCookies(nextPath, [signedIn.setCookie, clearIntendedUrlCookie()]);
       }),
     },
     "/logout": {
-      POST: wrapWebAuthenticated(dependencies, async (request) =>
+      POST: wrapWebUnverified(dependencies, async (request) =>
         authManager().signOutRedirect(request, "/login", 302),
       ),
     },
+    "/email/verify": {
+      GET: wrapWeb(dependencies, async (request) => {
+        if (hasValidSignature(request)) {
+          const userId = Number(new URL(request.url).searchParams.get("id"));
+          if (Number.isInteger(userId) && userId > 0) {
+            await accountService.markEmailVerified(userId);
+          }
+          return redirectResponse("/");
+        }
+        if (!isEmailVerificationRequired()) {
+          return redirectResponse("/");
+        }
+        const user = await requireCurrentUser(request).catch(() => null);
+        if (!user) {
+          return redirectResponse("/login");
+        }
+        return renderPage(request, "auth/verify-email", { email: user.email }, 200, false);
+      }),
+    },
+    "/email/verification-notification": {
+      POST: wrapWebUnverified(dependencies, async (request) => {
+        const user = await requireCurrentUser(request);
+        await accountService.sendVerificationEmail(user);
+        return redirectResponse("/email/verify");
+      }),
+    },
   };
 }
-
-void redirectResponse;

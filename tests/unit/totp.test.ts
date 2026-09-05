@@ -41,13 +41,13 @@ describe("totp", () => {
   test("buildOtpauthUrl encodes issuer and account", () => {
     const url = buildOtpauthUrl({
       secret: "JBSWY3DPEHPK3PXP",
-      account: "admin@workhub.test",
-      issuer: "WorkHub",
+      account: "admin@strata.test",
+      issuer: "Strata",
     });
 
     expect(url.startsWith("otpauth://totp/")).toBe(true);
     expect(url).toContain("secret=JBSWY3DPEHPK3PXP");
-    expect(url).toContain("issuer=WorkHub");
+    expect(url).toContain("issuer=Strata");
   });
 
   test("buildOtpauthUrl defaults the issuer from APP_NAME", () => {
@@ -56,12 +56,12 @@ describe("totp", () => {
     try {
       delete process.env.APP_NAME;
       expect(
-        buildOtpauthUrl({ secret: "JBSWY3DPEHPK3PXP", account: "admin@workhub.test" }),
+        buildOtpauthUrl({ secret: "JBSWY3DPEHPK3PXP", account: "admin@strata.test" }),
       ).toContain("issuer=Strata");
 
       process.env.APP_NAME = "Acme";
       expect(
-        buildOtpauthUrl({ secret: "JBSWY3DPEHPK3PXP", account: "admin@workhub.test" }),
+        buildOtpauthUrl({ secret: "JBSWY3DPEHPK3PXP", account: "admin@strata.test" }),
       ).toContain("issuer=Acme");
     } finally {
       restoreEnvVar("APP_NAME", previous);

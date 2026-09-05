@@ -49,7 +49,7 @@ console.log("script-ok");
 }
 
 describe("published strata CLI", () => {
-  test("does not import WorkHub src/cli", async () => {
+  test("does not import a product-app src/cli", async () => {
     const source = await readFile(
       join(import.meta.dir, "../../../packages/strata-cli/cli.ts"),
       "utf8",
@@ -82,7 +82,7 @@ describe("published strata CLI", () => {
     expect(app.server).toBe(join(workspace, "app/server.ts"));
   });
 
-  test("help lists framework commands without WorkHub", async () => {
+  test("help lists framework commands without a product app", async () => {
     const workspace = await createTempApp();
     const logs: string[] = [];
     const originalLog = console.log;

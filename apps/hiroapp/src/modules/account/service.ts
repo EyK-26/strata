@@ -1,6 +1,9 @@
+import { isEmailVerificationRequired } from "@getstrata/core/auth/emailVerification";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
 import { protectMfaSecret, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
+import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { mailer } from "@getstrata/core/mail/mailer";
 import {
   generateRecoveryCodes,
   hashRecoveryCode,
@@ -35,7 +38,29 @@ export class AccountService {
       updated_at: new Date(),
     });
     logSecurityEvent("auth_profile_updated", { user_id: userId, email_changed: emailChanged });
+    if (emailChanged) {
+      await this.sendVerificationEmail(updated);
+    }
     return updated;
+  }
+
+  async sendVerificationEmail(user: UserRecord): Promise<void> {
+    if (!isEmailVerificationRequired()) {
+      return;
+    }
+    const url = absoluteTemporarySignedUrl("/email/verify", 86_400, { id: String(user.id) });
+    await mailer().send({
+      to: user.email,
+      subject: "Confirm your HiroApp email",
+      body: `Open this link to confirm your email address: ${url}`,
+    });
+  }
+
+  async markEmailVerified(userId: number): Promise<UserRecord> {
+    return users.updateByIdOrThrow(userId, {
+      email_verified_at: new Date(),
+      updated_at: new Date(),
+    });
   }
 
   async changePassword(userId: number, currentPassword: string, nextPassword: string) {

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign in — HiroApp</title>
+    <title>Sign in | HiroApp</title>
     <link rel="stylesheet" href="/assets/app.css" />
   </head>
   <body>
@@ -23,6 +23,7 @@
           </label>
           <button>Login</button>
         </form>
+        <p><a href="/login/sso">Sign in with SSO</a></p>
       </div>
       <div class="errors">
         <% if (it.errors?.email) { %><span><%= it.errors.email %></span><% } %>

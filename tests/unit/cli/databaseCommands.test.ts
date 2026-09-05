@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
-const previousDogfood = process.env.DOGFOOD_APP;
+const previousSchema = process.env.STRATA_SCHEMA;
 
 afterEach(() => {
   mock.restore();
-  if (previousDogfood === undefined) {
-    delete process.env.DOGFOOD_APP;
+  if (previousSchema === undefined) {
+    delete process.env.STRATA_SCHEMA;
   } else {
-    process.env.DOGFOOD_APP = previousDogfood;
+    process.env.STRATA_SCHEMA = previousSchema;
   }
 });
 
 describe("migrateCommand", () => {
   test("delegates to migrateDatabase", async () => {
-    process.env.DOGFOOD_APP = "workhub";
+    process.env.STRATA_SCHEMA = "fixture";
     let called = false;
 
     mock.module("../../../src/db/migrations/runner", () => ({
@@ -31,6 +31,7 @@ describe("migrateCommand", () => {
 
 describe("rollbackCommand", () => {
   test("delegates to rollbackDatabase", async () => {
+    process.env.STRATA_SCHEMA = "fixture";
     let called = false;
 
     mock.module("../../../src/db/migrations/runner", () => ({
@@ -48,7 +49,7 @@ describe("rollbackCommand", () => {
 
 describe("seedCommand", () => {
   test("delegates to seedDatabase", async () => {
-    process.env.DOGFOOD_APP = "workhub";
+    process.env.STRATA_SCHEMA = "fixture";
     let called = false;
 
     mock.module("../../../src/db/seeders/runner", () => ({

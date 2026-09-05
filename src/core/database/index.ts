@@ -1,6 +1,14 @@
 export type { DatabaseConnection } from "./baseRepository.ts";
 export { default as BaseRepository } from "./baseRepository.ts";
 export { createDatabaseConnection } from "./connection.ts";
+export type { SqlDialect } from "./dialect.ts";
+export {
+  currentSqlDialect,
+  dialectFor,
+  resetSqlDialect,
+  runWithSqlDialect,
+  useSqlDialect,
+} from "./dialect.ts";
 export { mapDatabaseError, withDatabaseErrorHandling } from "./errors.ts";
 export { Factory } from "./factory.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "./inflection.ts";

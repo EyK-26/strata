@@ -12,7 +12,10 @@ import {
 } from "./config";
 
 const appEnvSchema: EnvSchema = defineEnvSchema({
-  DATABASE_URL: { required: true, pattern: /^postgres(ql)?:\/\// },
+  DATABASE_URL: {
+    required: true,
+    pattern: /^(postgres(ql)?|mysql|sqlite):\/\//i,
+  },
   PORT: {
     integer: true,
     minimum: 1,
@@ -40,8 +43,20 @@ const appEnvSchema: EnvSchema = defineEnvSchema({
     pattern: /^(sync|async|redis)$/,
   },
   AUTH_DEV_HEADERS: {
-    default: "true",
+    default: "false",
     pattern: /^(true|false|0|1)$/,
+  },
+  DB_CONNECTION: {
+    default: "",
+    pattern: /^(pgsql|postgres|postgresql|mysql|mariadb|sqlite)?$/i,
+  },
+  AUTH_DEFAULT_GUARD: {
+    default: "web",
+  },
+  JWT_TTL_SECONDS: {
+    integer: true,
+    minimum: 60,
+    default: "3600",
   },
   APP_ENV: {
     default: "local",

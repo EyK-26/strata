@@ -1,4 +1,5 @@
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
+import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
@@ -6,8 +7,15 @@ import { isSpaEnabled } from "@getstrata/core/runtime/frontendMode";
 import { sessionMetaFromRequest, withCookies } from "../../http/cookies.ts";
 import { authManager, requireCurrentUser } from "../../http/currentUser.ts";
 import { mergeResource, NotificationResource, UserResource } from "../../http/resources.ts";
-import { wrapApi, wrapGuestApi } from "../../http/wrap.ts";
+import {
+  wrapApi,
+  wrapGuestApi,
+  wrapLoginApi,
+  wrapPartnerApi,
+  wrapTokenApi,
+} from "../../http/wrap.ts";
 import { loadUserGraph } from "../../lib/loaders.ts";
+import { isStaff, roleName } from "../../lib/roles.ts";
 import { toSessionUser } from "../../lib/sessionUser.ts";
 import {
   clearMfaChallengeCookie,
@@ -67,7 +75,37 @@ export function authRoutes(dependencies: AppDependencies): AppRouteMap {
       }),
     },
     "/api/login": {
-      POST: wrapGuestApi(dependencies, loginJson),
+      POST: wrapLoginApi(dependencies, loginJson),
+    },
+    "/api/auth/token": {
+      POST: wrapTokenApi(dependencies, async (request) => {
+        const payload = await new LoginRequest().validate(request);
+        const user = await users.findByEmail(payload.email);
+        if (!user || !(await verifyPassword(payload.password, user.password))) {
+          throw new ValidationError("The given data was invalid.", {
+            email: ["These credentials do not match our records."],
+          });
+        }
+        if (accountService.staffRequiresMfa(user)) {
+          throw new UnauthorizedError("Two-factor authentication required.");
+        }
+        const token = signJwt({
+          sub: Number(user.id),
+          role: roleName(user.role_id),
+          abilities: isStaff(user.role_id) ? ["*"] : ["profile:read"],
+          emailVerifiedAt: user.email_verified_at ?? null,
+        });
+        return jsonResponse({
+          token,
+          token_type: "Bearer",
+          expires_in: jwtTtlSeconds(),
+        });
+      }),
+    },
+    "/api/integrations/ping": {
+      GET: wrapPartnerApi(dependencies, "integrations:ping", async () =>
+        jsonResponse({ ok: true, service: "hiroapp" }),
+      ),
     },
     "/api/logout": {
       POST: wrapGuestApi(dependencies, async (request) => {
@@ -113,7 +151,7 @@ export function authRoutes(dependencies: AppDependencies): AppRouteMap {
   }
 
   routes["/login"] = {
-    POST: wrapGuestApi(dependencies, loginJson),
+    POST: wrapLoginApi(dependencies, loginJson),
   };
 
   routes["/logout"] = {

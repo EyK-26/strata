@@ -12,6 +12,8 @@ interface AuthUserDirectory {
   resolveUserFromToken(token: string): Promise<AuthUser | null>;
   findByIdOrThrow(id: number): Promise<AuthUserRecord>;
   hasActiveBrowserSession?(userId: number, issuedAt: number): Promise<boolean>;
+  findByEmail?(email: string): Promise<(AuthUserRecord & { password?: string | null }) | null>;
+  verifyCredentials?(email: string, password: string): Promise<AuthUser | null>;
 }
 
 export type { AuthUserDirectory, AuthUserRecord };

@@ -1,4 +1,5 @@
-import { importHiroappModule, readDogfoodApp } from "../../bootstrap/dogfoodApp.ts";
+import { importHiroappModule } from "../../bootstrap/dogfoodApp.ts";
+import { isFixtureSchema } from "../../bootstrap/schemaTarget.ts";
 
 async function migrateFreshCommand(...args: string[]): Promise<void> {
   const shouldSeed = args.includes("--seed");
@@ -10,16 +11,16 @@ async function migrateFreshCommand(...args: string[]): Promise<void> {
     );
   }
 
-  if (readDogfoodApp() === "hiroapp") {
-    await importHiroappModule("src/db/fresh.ts");
-    if (shouldSeed) {
-      await importHiroappModule("src/db/seed.ts");
-    }
+  if (isFixtureSchema()) {
+    const { freshDatabase } = await import("../../db/migrations/runner");
+    await freshDatabase({ seed: shouldSeed });
     return;
   }
 
-  const { freshDatabase } = await import("../../db/migrations/runner");
-  await freshDatabase({ seed: shouldSeed });
+  await importHiroappModule("src/db/fresh.ts");
+  if (shouldSeed) {
+    await importHiroappModule("src/db/seed.ts");
+  }
 }
 
 export { migrateFreshCommand };

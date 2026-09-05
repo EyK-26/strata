@@ -39,7 +39,7 @@ export function toRouteRequest<TParams extends Record<string, string>>(
 }
 
 /**
- * Laravel-style secured route-model binding for string keys (slugs, UUIDs).
+ * Secured route-model binding for string keys (slugs, UUIDs).
  * Public HTML show pages should look up the model in the controller instead.
  * If this wrapper is still used on HTML, a missing model becomes a styled 404
  * and GET ETags are skipped for HTML / composite objects unless `etag: true`.
@@ -100,7 +100,7 @@ function wrapWebThrottle(
   };
 }
 
-/** Convenience alias: HttpKernel is the Laravel-style router middleware wrapper. */
+/** Convenience alias for `createHttpKernel`. */
 export function createRouteKernel(dependencies: AppDependencies): HttpKernel {
   return createHttpKernel(dependencies);
 }

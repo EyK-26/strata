@@ -16,8 +16,8 @@ describe("QueueWorker lifecycle", () => {
   async function clearQueueKeys(): Promise<void> {
     const client = new RedisClient(redisUrl);
     await client.del(QUEUE_HIGH_KEY);
-    await client.del("workhub:queue:default");
-    await client.del("workhub:queue:low");
+    await client.del("strata:queue:default");
+    await client.del("strata:queue:low");
   }
 
   test("requestStop exits the run loop", async () => {
