@@ -16,7 +16,7 @@ export function setup() {
   const loginResponse = http.post(
     `${baseUrl}/api/auth/token`,
     JSON.stringify({
-      email: "recruiter@hiroapp.com",
+      email: "demo@example.com",
       password: "password",
     }),
     {
@@ -42,7 +42,7 @@ export default function (data) {
 
   check(http.get(`${baseUrl}/health`), { "health ok": (response) => response.status === 200 });
   check(http.get(`${baseUrl}/ready`), { "ready ok": (response) => response.status === 200 });
-  check(http.get(`${baseUrl}/careers`), { "careers ok": (response) => response.status === 200 });
+  check(http.get(`${baseUrl}/login`), { "login ok": (response) => response.status === 200 });
   check(http.get(`${baseUrl}/api/user`, { headers }), {
     "current user ok": (response) => response.status === 200,
   });

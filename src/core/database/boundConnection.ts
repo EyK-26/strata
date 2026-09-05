@@ -1,19 +1,33 @@
 import type { DatabaseConnection } from "./baseRepository";
 
-const boundConnectionHolder: { connection: DatabaseConnection | null } = {
-  connection: null,
+const BOUND_CONNECTION_KEY = Symbol.for("@getstrata/boundDatabaseConnection");
+
+type BoundConnectionState = {
+  connection: DatabaseConnection | null;
 };
 
+function boundConnectionState(): BoundConnectionState {
+  const globalRecord = globalThis as Record<symbol, BoundConnectionState | undefined>;
+  const existing = globalRecord[BOUND_CONNECTION_KEY];
+  if (existing) {
+    return existing;
+  }
+
+  const created: BoundConnectionState = { connection: null };
+  globalRecord[BOUND_CONNECTION_KEY] = created;
+  return created;
+}
+
 function bindDatabaseConnection(connection: DatabaseConnection): void {
-  boundConnectionHolder.connection = connection;
+  boundConnectionState().connection = connection;
 }
 
 function getBoundDatabaseConnection(): DatabaseConnection | null {
-  return boundConnectionHolder.connection;
+  return boundConnectionState().connection;
 }
 
 function resetBoundDatabaseConnection(): void {
-  boundConnectionHolder.connection = null;
+  boundConnectionState().connection = null;
 }
 
 export { bindDatabaseConnection, getBoundDatabaseConnection, resetBoundDatabaseConnection };

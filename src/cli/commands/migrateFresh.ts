@@ -17,9 +17,15 @@ async function migrateFreshCommand(...args: string[]): Promise<void> {
     return;
   }
 
-  await importHiroappModule("src/db/fresh.ts");
+  const fresh = await importHiroappModule<{ fresh?: () => Promise<void> }>("src/db/fresh.ts");
+  if (typeof fresh.fresh === "function") {
+    await fresh.fresh();
+  }
   if (shouldSeed) {
-    await importHiroappModule("src/db/seed.ts");
+    const seeded = await importHiroappModule<{ seed?: () => Promise<void> }>("src/db/seed.ts");
+    if (typeof seeded.seed === "function") {
+      await seeded.seed();
+    }
   }
 }
 

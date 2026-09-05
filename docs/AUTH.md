@@ -17,7 +17,7 @@ From most locked down for browsers, to weaker or narrower tools:
 | 5 | HTTP Basic over TLS | Private scripts, health cron, first-party tools | Change the password. | HiroApp `GET /api/user` accepts Basic. Never on the public internet without TLS. |
 | 6 | `x-authenticated-user-id` headers | Automated tests | N/A | Only when `AUTH_DEV_HEADERS=true`. Production must set `false`. |
 
-If you are building a browser app, start at rank 1. If you are building a candidate SPA, use rank 2 with a tight ability list. If you are building a job-board integration, use rank 2 with `integrations:ping`. JWT is for clients that cannot store a revocable server token and can live with expiry. Do not use JWT as the candidate portal session.
+If you are building a browser app, start at rank 1. If you are building a SPA, use rank 2 with a tight ability list. JWT is for clients that cannot store a revocable server token and can live with expiry. Do not use JWT as a portal session.
 
 ## Named guards
 
@@ -45,7 +45,7 @@ configureAbilityCatalog({
 });
 ```
 
-HiroApp does this in `apps/hiroapp/src/bootstrap/providers/auth.ts`. Opaque API tokens still store their own ability list on the `api_token` row. That list is what `wrapPartnerApi` checks.
+HiroApp does this in generated `apps/hiroapp/src/bootstrap/providers/auth.ts`. Opaque API tokens still store their own ability list on the `api_tokens` row.
 
 On each request `AuthManager` looks at `Authorization`:
 
@@ -63,16 +63,11 @@ Cookie sessions need CSRF on POST, PUT, PATCH, and DELETE. HTML forms send `_tok
 
 ## Abilities
 
-Opaque tokens store an ability list. `*` means all. HiroApp partner ping requires `integrations:ping`:
+Opaque tokens store an ability list. `*` means all.
 
-```http
-GET /api/integrations/ping
-Authorization: Bearer <token>
-```
+Staff JWTs mint with `reports:export` and `profile:read`, not `*`. JWT claims are not revoked until expiry.
 
-Staff JWTs mint with `reports:export` and `profile:read`, not `*`. Candidate JWTs mint with `interviews:join` for short-lived join links. Neither is a portal login. HiroApp candidate login is `POST /api/apply/login`, which stores a hashed opaque token (`applications:read`, `applications:write`, `interviews:read`, `offers:read`, `profile:read`). Remember: JWT claims are not revoked until expiry.
-
-Use policies (`Policy` / `PolicyGate`) for "can this recruiter see this application?" That is not the same as a token ability.
+Use policies (`Policy` / `PolicyGate`) for resource authorization. That is not the same as a token ability.
 
 ## Email verification and password confirm
 

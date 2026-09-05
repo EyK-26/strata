@@ -1,6 +1,0 @@
-<div class="SkillMatch">
-  <h2>Matches for <%= it.position.name %></h2>
-  <% it.matches.forEach((row) => { %>
-    <p><%= row.first_name %> <%= row.last_name %>: <%= row.matched %> / <%= row.required %></p>
-  <% }) %>
-</div>

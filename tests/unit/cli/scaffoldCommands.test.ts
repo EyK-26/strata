@@ -9,10 +9,9 @@ import {
   toKebabCase,
   toPascalCase,
 } from "../../../src/cli/commands/utils";
-import { captureConsole } from "./helpers";
+import { captureConsole, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
-const originalCwd = process.cwd();
 let modulesRoot = "";
 let migrationsRoot = "";
 
@@ -51,7 +50,7 @@ async function withTempWorkspace(
 }
 
 afterEach(async () => {
-  process.chdir(originalCwd);
+  process.chdir(repoRoot);
   mock.restore();
 
   while (tempDirectories.length > 0) {

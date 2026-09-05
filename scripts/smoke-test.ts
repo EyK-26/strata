@@ -17,7 +17,9 @@ await assertOk(`${BASE_URL}/health`);
 await assertOk(`${BASE_URL}/ready`);
 await assertOk(`${BASE_URL}/metrics`);
 
-process.env.APP_URL = BASE_URL;
-await import("../apps/hiroapp/src/scripts/smoke.ts");
+const login = await fetch(`${BASE_URL}/login`, { redirect: "manual" });
+if (!login.ok) {
+  throw new Error(`Smoke check failed: ${BASE_URL}/login returned ${login.status}`);
+}
 
 console.log(`Smoke tests passed against ${BASE_URL}`);

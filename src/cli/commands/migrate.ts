@@ -8,7 +8,16 @@ async function migrateCommand(): Promise<void> {
     return;
   }
 
-  await importHiroappModule("src/db/migrate.ts");
+  const mod = await importHiroappModule<{
+    migrate?: () => Promise<void>;
+    seed?: () => Promise<void>;
+  }>("src/db/migrate.ts");
+  if (typeof mod.migrate === "function") {
+    await mod.migrate();
+  }
+  if (typeof mod.seed === "function") {
+    await mod.seed();
+  }
 }
 
 export { migrateCommand };

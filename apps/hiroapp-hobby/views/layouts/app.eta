@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= it.layout.title %> · hiroapp-hobby</title>
+    <% if (it.layout.description) { %>
+    <meta name="description" content="<%= it.layout.description %>" />
+    <% } %>
+    <link rel="stylesheet" href="/assets/site.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">hiroapp-hobby</a>
+      <nav>
+        
+      </nav>
+    </header>
+    <main><%~ it.body %></main>
+  </body>
+</html>

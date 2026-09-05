@@ -22,18 +22,48 @@
     },
     "apps/hiroapp": {
       "name": "hiroapp",
+      "version": "0.1.0",
       "dependencies": {
-        "@faker-js/faker": "^10.5.0",
         "@getstrata/bootstrap": "workspace:*",
         "@getstrata/cli": "workspace:*",
         "@getstrata/core": "workspace:*",
       },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "typescript": "^5.9.2",
+      },
+    },
+    "apps/hiroapp-hobby": {
+      "name": "hiroapp-hobby",
+      "version": "0.1.0",
+      "dependencies": {
+        "@getstrata/bootstrap": "workspace:*",
+        "@getstrata/cli": "workspace:*",
+        "@getstrata/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "typescript": "^5.9.2",
+      },
+    },
+    "apps/hiroapp-team": {
+      "name": "hiroapp-team",
+      "version": "0.1.0",
+      "dependencies": {
+        "@getstrata/bootstrap": "workspace:*",
+        "@getstrata/cli": "workspace:*",
+        "@getstrata/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "typescript": "^5.9.2",
+      },
     },
     "packages/strata-bootstrap": {
       "name": "@getstrata/bootstrap",
-      "version": "0.3.0",
+      "version": "0.4.2",
       "peerDependencies": {
-        "@getstrata/core": "^0.5.75",
+        "@getstrata/core": "^0.7.2",
         "typescript": "^5.9.0",
       },
     },
@@ -46,7 +76,7 @@
     },
     "packages/strata-core": {
       "name": "@getstrata/core",
-      "version": "0.6.0",
+      "version": "0.7.3",
       "dependencies": {
         "eta": "^4.6.0",
         "mysql2": "^3.24.3",
@@ -57,7 +87,7 @@
     },
     "packages/strata-starter": {
       "name": "@getstrata/starter",
-      "version": "0.1.5",
+      "version": "0.1.9",
       "bin": {
         "create-strata": "./dist/cli.js",
       },
@@ -105,6 +135,10 @@
     "generate-function": ["generate-function@2.3.1", "", { "dependencies": { "is-property": "^1.0.2" } }, "sha512-eeB5GfMNeevm/GRYq20ShmsaGcmI81kIX2K9XQx5miC8KdHaC6Jm0qQ8ZNeGOi7wYB8OsdxKs+Y2oVuTFuVwKQ=="],
 
     "hiroapp": ["hiroapp@workspace:apps/hiroapp"],
+
+    "hiroapp-hobby": ["hiroapp-hobby@workspace:apps/hiroapp-hobby"],
+
+    "hiroapp-team": ["hiroapp-team@workspace:apps/hiroapp-team"],
 
     "iconv-lite": ["iconv-lite@0.7.3", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3.0.0" } }, "sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ=="],
 

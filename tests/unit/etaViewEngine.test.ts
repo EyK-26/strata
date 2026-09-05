@@ -179,7 +179,8 @@ describe("EtaViewEngine", () => {
 describe("assertEtaHtmlSource", () => {
   test("accepts committed HiroApp and scaffold HTML+Eta views", async () => {
     const roots = [
-      join(process.cwd(), "apps/hiroapp/resources/views"),
+      join(process.cwd(), "apps/hiroapp/views"),
+      join(process.cwd(), "apps/hiroapp-team/views"),
       join(process.cwd(), "templates"),
       join(process.cwd(), "packages/strata-starter/templates"),
     ];

@@ -75,7 +75,61 @@ async function copyTemplateTree(sourceRoot: string, targetRoot: string): Promise
   }
 }
 
+function firstPositional(args: string[]): string | undefined {
+  const valueFlags = new Set([
+    "--frontend",
+    "--database",
+    "--auth",
+    "--tenancy",
+    "--cache",
+    "--queue",
+    "--mail",
+    "--spa-prefix",
+    "--docker-services",
+    "--template",
+    "--env",
+  ]);
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) {
+      continue;
+    }
+    if (valueFlags.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    return arg;
+  }
+
+  return undefined;
+}
+
 async function newCommand(...args: string[]): Promise<void> {
+  const projectName = firstPositional(args);
+  if (projectName) {
+    const starterGenerate = join(
+      import.meta.dir,
+      "../../../packages/strata-starter/src/generate.ts",
+    );
+    if (!existsSync(starterGenerate)) {
+      console.error(
+        `Creating a new directory uses create-strata. Run: bunx create-strata ${projectName}`,
+      );
+      process.exit(1);
+    }
+
+    const { runCreateStrata } = await import(starterGenerate);
+    const code = await runCreateStrata(args);
+    if (code !== 0) {
+      process.exit(code);
+    }
+    return;
+  }
+
   const { template, envPath } = parseArgs(args);
 
   if (template === "hybrid") {

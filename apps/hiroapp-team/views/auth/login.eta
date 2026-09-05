@@ -1,0 +1,19 @@
+<section class="section">
+  <h1>Sign in</h1>
+  <p>Seeded accounts use password <code>password</code>.</p>
+  <% if (it.errors && it.errors.email) { %>
+  <p class="error"><%= it.errors.email %></p>
+  <% } %>
+  <form method="post" action="/login">
+    <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+    <label>
+      Email
+      <input type="email" name="email" value="<%= it.email || "demo@example.com" %>" required />
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" value="password" required />
+    </label>
+    <button type="submit">Sign in</button>
+  </form>
+</section>

@@ -5,12 +5,17 @@ HiroApp is the example. Your app should live outside this repo (or in `apps/` on
 ## Scaffold
 
 ```bash
-bunx @getstrata/starter my-app
+bunx create-strata my-app
 cd my-app
 cp .env.example .env
+bun install
+strata migrate
+strata dev
 ```
 
-The starter is a JSON API with `TENANCY_DRIVER=none` (no `tenant` table). Add cookie sessions when you add HTML.
+The CLI is interactive in a terminal. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`.
+
+Layer flags: [STARTER.md](./STARTER.md). The three in-repo examples are generated from that script (`bun run generate:example-apps`). Do not treat HiroApp as the source of the wizard.
 
 ## Frontend shapes
 
@@ -18,7 +23,7 @@ Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMod
 
 1. **`api`.** JSON routes only. Clients send Bearer or Basic. No CSRF.
 2. **`server-htmx`.** Eta HTML + HTMX. Cookie session + CSRF.
-3. **`spa-react`.** JSON API plus a SPA document under `SPA_PREFIX` (default `/app`). Prefer opaque tokens for the SPA. HiroApp sets `SPA_PREFIX=/apply`.
+3. **`spa-react`.** JSON API plus a SPA document under `SPA_PREFIX` (default `/app`). Prefer opaque tokens for the SPA.
 4. **`hybrid`.** Staff HTML at `/` plus a SPA prefix. Framework SPA routes stay under `SPA_PREFIX` (`/app`, `/app/`, `/app/*` by default) and do not redirect `/`. Apps call `mergeSpaRoutes` with `distDirectory` and `wrap`. Do not copy a second static-file server.
 
 `.eta` files are HTML plus Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`). Class shorthand such as `section.section` fails at render.
@@ -38,7 +43,7 @@ const auth = createCookieSessionAuthManager({
 container.set(CORE_AUTH_TOKEN, auth);
 ```
 
-Pass `loadSessionUser` whenever the default `SELECT u.*` does not match your `users` table. HiroApp maps `role_id` and `email_verified_at` in `apps/hiroapp/src/bootstrap/providers/auth.ts`.
+Pass `loadSessionUser` whenever the default `SELECT u.*` does not match your `users` table. Generated cookie apps map `is_admin` in `src/bootstrap/providers/auth.ts`.
 
 Use `signIn` / `signOut` (or the redirect helpers). Do not mint cookies in controllers.
 
@@ -60,9 +65,7 @@ Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and 
 
 ## HTTP kernel
 
-`createHttpKernel(dependencies)` groups middleware (`web`, `api`, `authenticated`). HiroApp adds CSRF, tenant, and verified-email around those groups in `apps/hiroapp/src/http/wrap.ts`. Copy that file more than you copy HiroApp domain modules.
-
-Prefer `buildModuleRoutes` / `buildWebModuleRoutes` for a new app. `@getstrata/bootstrap/createRoutes` still assembles leftover fixture HTTP for framework tests. It is not your starter.
+`createHttpKernel(dependencies)` groups middleware (`web`, `api`, `authenticated`). Generated apps use `buildModuleRoutes` / `buildWebModuleRoutes`. `@getstrata/bootstrap/createRoutes` still assembles leftover fixture HTTP for framework tests. It is not your starter.
 
 ## Views and errors
 

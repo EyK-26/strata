@@ -11,8 +11,8 @@
       "**",
       "!!**/docs/openapi.json",
       "!!**/sdk/typescript/client.ts",
-      "!!**/apps/hiroapp/frontend",
-      "!!**/apps/hiroapp/public"
+      "!!**/apps/*/frontend",
+      "!!**/apps/*/public"
     ]
   },
   "formatter": {

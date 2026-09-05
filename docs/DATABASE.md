@@ -21,22 +21,19 @@ If `DB_CONNECTION` is unset, the URL scheme picks the dialect. If both are unset
 ## How to opt in
 
 ```bash
-# Postgres (HiroApp)
+# Postgres (in-repo HTML example uses hiroapp_test)
 DATABASE_URL=postgresql://postgres:postgres@localhost:54329/hiroapp_test
 
-# MySQL (your app OLTP; not HiroApp hiring)
+# MySQL as the app's only engine (not mixed with Postgres)
 DB_CONNECTION=mysql
 DATABASE_URL=mysql://user:pass@localhost:3306/myapp
 
-# HiroApp job-board sidecar (hiring stays on Postgres)
-MYSQL_URL=mysql://hiroapp:hiroapp@localhost:33061/hiroapp_job_board
-
-# SQLite file (local toys, not HiroApp)
+# SQLite file (local toys)
 DB_CONNECTION=sqlite
 DATABASE_URL=sqlite://tmp/dev.sqlite
 ```
 
-HiroApp migrations and RLS policies are Postgres. Do not point HiroApp at MySQL or SQLite.
+Pick **one** primary database per app. Named connections can attach another engine for a sidecar, but that is not how the in-repo examples run.
 
 ## Query builder
 
@@ -64,19 +61,14 @@ import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection"
 import { registerNamedConnection, runOnNamedConnection } from "@getstrata/core/database/namedConnections";
 
 registerNamedConnection("kiosk", "sqlite", createSqliteConnection(":memory:"));
-registerNamedConnection("job-board", "mysql", createMysqlConnection(process.env.MYSQL_URL!));
+registerNamedConnection("analytics", "mysql", createMysqlConnection(process.env.MYSQL_URL!));
 
 await runOnNamedConnection("kiosk", async () => {
   // currentSqlDialect() is sqlite, and unsafe() hits the kiosk handle
 });
 ```
 
-HiroApp uses this for two sidecars. Postgres remains the hiring source of truth.
-
-- **SQLite kiosk** (`HIROAPP_KIOSK_SQLITE`): on-site interview scorecards, then `POST /api/kiosk/sync` into Postgres.
-- **MySQL job board** (`MYSQL_URL`): published career postings only. If MySQL is down, publish still succeeds on Postgres.
-
-A dialect change does not invent a driver. You still provide the connection. `Bun.sql` is Postgres-only. MySQL uses `mysql2`. SQLite uses `bun:sqlite`.
+A dialect change does not invent a driver. You still provide the connection. `Bun.sql` is Postgres-only. MySQL uses `mysql2`. SQLite uses `bun:sqlite`. The in-repo examples each use one engine.
 
 ## Schema builder
 
@@ -84,7 +76,7 @@ A dialect change does not invent a driver. You still provide the connection. `Bu
 
 ## Binding the client
 
-HiroApp uses Bun's `Bun.sql` (Postgres) via `bindBunSql()` / `bindDatabaseConnection()`. Sidecars register with `registerNamedConnection`. A dialect change does not invent a MySQL driver. You still provide the connection.
+HiroApp uses Bun's `Bun.sql` (Postgres) via `bindBunSql()` / `bindDatabaseConnection()`. A dialect change does not invent a MySQL driver. You still provide the connection.
 
 ## Tenancy
 

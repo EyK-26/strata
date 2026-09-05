@@ -8,7 +8,10 @@ async function rollbackCommand(): Promise<void> {
     return;
   }
 
-  await importHiroappModule("src/db/rollback.ts");
+  const mod = await importHiroappModule<{ rollback?: () => Promise<void> }>("src/db/rollback.ts");
+  if (typeof mod.rollback === "function") {
+    await mod.rollback();
+  }
 }
 
 export { rollbackCommand };

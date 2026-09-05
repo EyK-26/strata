@@ -1,7 +1,7 @@
 {
   "name": "@getstrata/starter",
-  "version": "0.1.8",
-  "description": "Scaffold a new Strata app with bun create strata",
+  "version": "0.1.9",
+  "description": "Interactive create-strata wizard. Choose each layer; one database engine.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -17,7 +17,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun build cli.ts --outdir dist --target bun && cp -r templates dist/templates",
+    "build": "bun build cli.ts --outdir dist --target bun && rm -rf dist/templates && mkdir -p dist/templates/overlays && cp -r templates/. dist/templates && cp -r ../../templates/scaffold/. dist/templates/overlays",
     "prepublishOnly": "bun run build"
   },
   "publishConfig": {

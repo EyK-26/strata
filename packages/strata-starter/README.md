@@ -1,37 +1,24 @@
 # create-strata
 
-Scaffold a new [Strata](https://github.com/EyK-26/strata) application.
+Interactive starter for [Strata](https://github.com/EyK-26/strata). The wizard always asks each layer. SQLite APIs and Postgres HTML apps use the same generator.
 
 ## Usage
 
 ```bash
-bunx @getstrata/starter my-app
-# or after install: bunx create-strata my-app
+bunx create-strata my-app
+bunx create-strata my-app --yes
+bunx create-strata html --frontend server-htmx --database postgres --auth cookie --cache redis --queue redis --docker --yes
 ```
+
+Layer flags: `--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`, `--spa-prefix`, plus extras (`--mfa`, `--scim`, `--metrics`, ...).
+
+Pick **one** database engine. Docker Compose is optional and only includes services for the tools you selected (`--docker`, `--no-docker`, `--docker-services=postgres,redis`).
 
 ## What you get
 
-- Bun + TypeScript app using `@getstrata/core` and `@getstrata/bootstrap`
-- Postgres via Docker Compose (no `tenant` table; set `TENANCY_DRIVER=none`)
-- Eta templates, simple router, health check
-- `strata migrate` / `strata migrate:fresh` and `strata dev` via `@getstrata/cli`
+A Bun + TypeScript app on `@getstrata/core` and `@getstrata/bootstrap` that boots. Cookie apps include `/login`. Token apps include `POST /api/v1/auth/login`. Choices are stored in `strata.layers.json`.
 
-## Environment
-
-Copy `.env.example` to `.env`. The scaffold is an API app without a `tenant` table:
-
-| Variable | Local default | Notes |
-|----------|---------------|--------|
-| `TENANCY_DRIVER` | `none` | Skip Postgres RLS / `tenant` lookups |
-| `FRONTEND_MODE` | `api` | `server-htmx`, `spa-react`, or `hybrid` if you add those UIs |
-| `SESSION_SECRET` | unset | Required in production when views are on (`server-htmx` or `hybrid`) |
-| `TRUST_FORWARDED_FOR` | unset | Set `true` only behind a trusted reverse proxy |
-| `METRICS_TOKEN` | unset | Required in production to expose `GET /metrics` |
-| `FEATURE_PUBLIC_READS` | unset | Set `false` in production unless you publish reads |
-
-`createAppContext()` does not call `assertProductionSecrets()`. The helper is feature-gated (API tokens, Stripe, SCIM only when those features are on). Starter apps can call it in production without enabling those features.
-
-Guides: [docs/BUILDING-APPS.md](../../docs/BUILDING-APPS.md), [docs/AUTH.md](../../docs/AUTH.md).
+In-repo examples (`apps/hiroapp-hobby`, `apps/hiroapp-team`, `apps/hiroapp`) are generated from this same script. See [docs/STARTER.md](../../docs/STARTER.md).
 
 ## Publish
 

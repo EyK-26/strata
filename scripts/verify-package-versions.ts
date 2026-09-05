@@ -10,7 +10,7 @@ const EXPECTED: Record<string, string> = {
   "@getstrata/core": "0.7.3",
   "@getstrata/bootstrap": "0.4.2",
   "@getstrata/cli": "0.2.0",
-  "@getstrata/starter": "0.1.8",
+  "@getstrata/starter": "0.1.9",
 };
 
 const PACKAGE_DIRS: Record<string, string> = {

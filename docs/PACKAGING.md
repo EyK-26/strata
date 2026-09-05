@@ -1,6 +1,6 @@
 # Framework packaging
 
-**Strata** is the framework. **HiroApp** is the in-repo example product. Framework code lives in `src/core/` and `src/bootstrap/`. HiroApp lives in `apps/hiroapp`. Extraction to a separate repository is optional.
+**Strata** is the framework. **HiroApp** is the in-repo generated example. Framework code lives in `src/core/` and `src/bootstrap/`. Example apps live in `apps/`. Extraction to a separate repository is optional.
 
 ## Public API
 
@@ -25,7 +25,7 @@ Modules that own process-wide state (database pool, auth/tenant async-local stor
 | `@getstrata/core` | Runtime: HTTP, database, auth, queue, mail |
 | `@getstrata/bootstrap` | HttpKernel, providers, cookie session helpers |
 | `@getstrata/cli` | `strata` CLI (`dev`, `start`, `migrate`, `run`, plus app-registered commands) |
-| `@getstrata/starter` | `bun create strata` app scaffold |
+| `@getstrata/starter` | `bunx create-strata` interactive layers (one database engine per app) |
 
 Versions are asserted by `scripts/verify-package-versions.ts`.
 

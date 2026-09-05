@@ -123,21 +123,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: hiroapp_job_board
-          MYSQL_USER: hiroapp
-          MYSQL_PASSWORD: hiroapp
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 15
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -160,7 +145,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bun_testing
           REDIS_URL: redis://localhost:6379
-          MYSQL_URL: mysql://hiroapp:hiroapp@127.0.0.1:3306/hiroapp_job_board
           SKIP_FIXTURE_TEST_BOOTSTRAP: 1
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync

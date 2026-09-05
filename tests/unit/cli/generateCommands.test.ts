@@ -3,13 +3,12 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { captureConsole } from "./helpers";
+import { captureConsole, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
-const originalCwd = process.cwd();
 
 afterEach(async () => {
-  process.chdir(originalCwd);
+  process.chdir(repoRoot);
 
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();
@@ -159,6 +158,48 @@ describe("newCommand", () => {
       );
       expect(existsSync(join(workspace, "frontend/build.ts"))).toBe(true);
       expect(output.logs.some((line) => line.includes("Hybrid mode enabled:"))).toBe(true);
+    });
+  });
+
+  test("project name delegates to create-strata", async () => {
+    await withTempProject(async (workspace) => {
+      const { newCommand } = await import("../../../src/cli/commands/new");
+      const output = captureConsole();
+
+      try {
+        await newCommand("kit-app", "--yes");
+      } finally {
+        output.restore();
+      }
+
+      expect(existsSync(join(workspace, "kit-app/strata.layers.json"))).toBe(true);
+      expect(output.logs.some((line) => line.includes("strata migrate"))).toBe(true);
+    });
+  });
+
+  test("project name is not consumed by --docker-services", async () => {
+    await withTempProject(async (workspace) => {
+      const { newCommand } = await import("../../../src/cli/commands/new");
+      const output = captureConsole();
+
+      try {
+        await newCommand(
+          "kit-pg",
+          "--database=postgres",
+          "--cache=redis",
+          "--queue=redis",
+          "--docker-services",
+          "postgres",
+          "--yes",
+        );
+      } finally {
+        output.restore();
+      }
+
+      expect(existsSync(join(workspace, "kit-pg/docker-compose.yml"))).toBe(true);
+      const compose = await readFile(join(workspace, "kit-pg/docker-compose.yml"), "utf8");
+      expect(compose).toContain("postgres:");
+      expect(compose).not.toContain("redis:");
     });
   });
 });

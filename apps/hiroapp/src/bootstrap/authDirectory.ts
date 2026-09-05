@@ -2,82 +2,112 @@ import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
-import { roleName } from "../lib/roles.ts";
-import { apiTokens } from "../modules/account/tokenRepository.ts";
-import { normalizeAbilities } from "../modules/account/tokenService.ts";
-import { users } from "../modules/users/repository.ts";
+import { getSql } from "./database.ts";
 
-function expired(value: Date | string | null | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-
-  const timestamp = value instanceof Date ? value.getTime() : Date.parse(String(value));
-  return Number.isFinite(timestamp) && timestamp <= Date.now();
+function mapRole(isAdmin: unknown): string {
+  return isAdmin === true || isAdmin === 1 || isAdmin === "1" ? "admin" : "member";
 }
 
-export const hiroAuthDirectory: AuthUserDirectory = {
-  async resolveUserFromToken(token: string): Promise<AuthUser | null> {
+export const starterAuthDirectory: AuthUserDirectory = {
+  async resolveUserFromToken(token: string) {
     if (!token || token.split(".").length === 3) {
       return null;
     }
-
-    const record = await apiTokens.findByTokenHash(hashApiToken(token));
-    if (!record || expired(record.expires_at)) {
+    const hashed = hashApiToken(token);
+    const rows = await getSql().unsafe<
+      Array<{
+        id: number;
+        user_id: number;
+        abilities: string;
+        expires_at: Date | string | null;
+        role?: string;
+        is_admin?: number | boolean;
+        email_verified_at?: Date | string | null;
+      }>
+    >(
+      `SELECT t.id, t.user_id, t.abilities, t.expires_at, u.is_admin, u.email_verified_at
+       FROM api_tokens t INNER JOIN users u ON u.id = t.user_id
+       WHERE t.token_hash = $1`,
+      [hashed],
+    );
+    const row = rows[0];
+    if (!row) {
       return null;
     }
-
-    const user = await users.findById(Number(record.user_id));
-    if (!user) {
+    if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) {
       return null;
     }
-
-    await apiTokens.updateById(record.id, { last_used_at: new Date() });
-
+    let abilities: string[] = [];
+    try {
+      abilities = JSON.parse(String(row.abilities ?? "[]")) as string[];
+    } catch {
+      abilities = ["profile:read"];
+    }
     return {
-      id: Number(user.id),
-      role: roleName(user.role_id),
-      abilities: normalizeAbilities(record.abilities),
-      tokenId: Number(record.id),
-      emailVerifiedAt: user.email_verified_at ?? null,
+      id: Number(row.user_id),
+      role: row.is_admin ? "admin" : "member",
+      abilities,
+      tokenId: Number(row.id),
+      emailVerifiedAt: row.email_verified_at ?? null,
     };
   },
 
   async findByIdOrThrow(id: number) {
-    const user = await users.findByIdOrThrow(id);
+    const rows = await getSql().unsafe<
+      Array<{
+        id: number;
+        email: string;
+        is_admin: number | boolean;
+        email_verified_at: Date | string | null;
+        password: string;
+      }>
+    >(`SELECT id, email, is_admin, email_verified_at, password FROM users WHERE id = $1`, [id]);
+    const row = rows[0];
+    if (!row) {
+      throw new Error(`User ${id} not found.`);
+    }
     return {
-      id: Number(user.id),
-      email: user.email,
-      role: roleName(user.role_id),
-      email_verified_at: user.email_verified_at ?? null,
-      session_valid_after: user.session_valid_after ?? null,
-      password: user.password,
+      id: Number(row.id),
+      email: row.email,
+      role: mapRole(row.is_admin),
+      email_verified_at: row.email_verified_at ?? null,
+      password: row.password,
     };
   },
 
   async findByEmail(email: string) {
-    const user = await users.findByEmail(email);
-    if (!user) {
+    const rows = await getSql().unsafe<
+      Array<{
+        id: number;
+        email: string;
+        is_admin: number | boolean;
+        email_verified_at: Date | string | null;
+        password: string;
+      }>
+    >(`SELECT id, email, is_admin, email_verified_at, password FROM users WHERE email = $1`, [
+      email.trim().toLowerCase(),
+    ]);
+    const row = rows[0];
+    if (!row) {
       return null;
     }
     return {
-      id: Number(user.id),
-      email: user.email,
-      role: roleName(user.role_id),
-      email_verified_at: user.email_verified_at ?? null,
-      session_valid_after: user.session_valid_after ?? null,
-      password: user.password,
+      id: Number(row.id),
+      email: row.email,
+      role: mapRole(row.is_admin),
+      email_verified_at: row.email_verified_at ?? null,
+      password: row.password,
     };
   },
 
   async verifyCredentials(email: string, password: string): Promise<AuthUser | null> {
-    const user = await users.findByEmail(email);
-    if (!user || !(await verifyPassword(password, user.password))) {
+    const user = await this.findByEmail(email);
+    if (!user?.password || !(await verifyPassword(password, user.password))) {
       return null;
     }
     return {
-      id: Number(user.id),
-      role: roleName(user.role_id),
+      id: user.id,
+      role: user.role,
       emailVerifiedAt: user.email_verified_at ?? null,
     };
   },

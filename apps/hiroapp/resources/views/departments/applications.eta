@@ -1,9 +1,0 @@
-<div class="DepartmentApplications">
-  <h2>Applications in <%= it.department.name %></h2>
-  <p>Count: <%= it.count %></p>
-  <% it.applications.forEach((application) => { %>
-    <a class="stack-row" href="/applications/<%= application.id %>">
-      <span>Application <%= application.id %></span>
-    </a>
-  <% }) %>
-</div>
