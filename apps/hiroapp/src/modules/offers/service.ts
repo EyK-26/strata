@@ -113,7 +113,7 @@ function revealOfferNotes(notes: string | null | undefined): string | null {
   return decryptField(notes, key);
 }
 
-function serializeOffer(row: Offer | OfferRecord) {
+export function serializeOffer(row: Offer | OfferRecord) {
   const record =
     typeof (row as Offer).toObject === "function"
       ? (row as Offer).toObject()
