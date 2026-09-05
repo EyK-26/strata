@@ -438,4 +438,122 @@ describe.skipIf(!enabled)("Wave 36 public careers", () => {
     const scheduledPage = await request(`/positions/${htmlSeat.id}`, { cookies: recruiterCookies });
     expect(scheduledPage.text).toContain("Cancel scheduled publish");
   });
+
+  test("staff pin published careers; public list sorts pinned first", async () => {
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+    const candidate = await seededUser("candidate@hiroapp.com");
+
+    const first = await openSeat();
+    const second = await openSeat();
+    const publishedFirst = await careerService.publish(recruiter, first);
+    const publishedSecond = await careerService.publish(recruiter, second);
+    expect(serializeCareerPosting(publishedFirst).pinned).toBe(false);
+
+    await expect(
+      careerService.pin(candidate, await CareerPosting.findOrFail(publishedFirst.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    const scheduledSeat = await openSeat();
+    const scheduled = await careerService.publish(recruiter, scheduledSeat, {
+      publish_at: "2026-12-31T00:00:00Z",
+    });
+    await expect(
+      careerService.pin(recruiter, await CareerPosting.findOrFail(scheduled.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await careerService.unpublish(recruiter, await CareerPosting.findOrFail(publishedFirst.id));
+    await expect(
+      careerService.pin(recruiter, await CareerPosting.findOrFail(publishedFirst.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await careerService.publish(recruiter, first);
+
+    const pinned = await careerService.pin(
+      recruiter,
+      await CareerPosting.findOrFail(publishedFirst.id),
+    );
+    expect(pinned.pinned).toBe(true);
+    expect(serializeCareerPosting(pinned).pinned).toBe(true);
+    await expect(
+      careerService.pin(recruiter, await CareerPosting.findOrFail(publishedFirst.id)),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    const listed = await careerService.listPublic();
+    const firstIndex = listed.findIndex((row) => row.id === publishedFirst.id);
+    const secondIndex = listed.findIndex((row) => row.id === publishedSecond.id);
+    expect(firstIndex).toBeGreaterThanOrEqual(0);
+    expect(secondIndex).toBeGreaterThanOrEqual(0);
+    expect(firstIndex).toBeLessThan(secondIndex);
+    expect(listed[firstIndex]?.pinned).toBe(true);
+
+    const unpinned = await careerService.unpin(
+      recruiter,
+      await CareerPosting.findOrFail(publishedFirst.id),
+    );
+    expect(unpinned.pinned).toBe(false);
+    await expect(
+      careerService.unpin(recruiter, await CareerPosting.findOrFail(publishedFirst.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    await careerService.pin(recruiter, await CareerPosting.findOrFail(publishedFirst.id));
+    const unpublished = await careerService.unpublish(
+      recruiter,
+      await CareerPosting.findOrFail(publishedFirst.id),
+    );
+    expect(unpublished.pinned).toBe(false);
+
+    const httpSeat = await openSeat();
+    const httpPublished = await jsonRequest(`/api/positions/${httpSeat.id}/career`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const forbiddenHttp = await jsonRequest(`/api/careers/${httpPublished.body.id}/pin`, {
+      cookies: candidateCookies,
+      method: "POST",
+    });
+    expect(forbiddenHttp.response.status).toBe(403);
+    const httpPinned = await jsonRequest(`/api/careers/${httpPublished.body.id}/pin`, {
+      cookies: recruiterCookies,
+      method: "POST",
+    });
+    expect(httpPinned.body.pinned).toBe(true);
+    const httpUnpinned = await jsonRequest(`/api/careers/${httpPublished.body.id}/unpin`, {
+      cookies: recruiterCookies,
+      method: "POST",
+    });
+    expect(httpUnpinned.body.pinned).toBe(false);
+
+    const htmlSeat = await openSeat();
+    await careerService.publish(recruiter, htmlSeat);
+    const page = await request(`/positions/${htmlSeat.id}`, { cookies: recruiterCookies });
+    expect(page.response.status).toBe(200);
+    expect(page.text).toContain("Pin career");
+    const htmlPosting = await careerService.forPosition(recruiter, htmlSeat);
+    if (!htmlPosting) {
+      throw new Error("missing html career posting");
+    }
+    const htmlPin = await request(`/careers/${htmlPosting.id}/pin`, {
+      cookies: page.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(page.cookies),
+      },
+      body: `return_to=/positions/${htmlSeat.id}`,
+    });
+    expect([302, 303].includes(htmlPin.response.status)).toBe(true);
+    expect((await careerService.forPosition(recruiter, htmlSeat))?.pinned).toBe(true);
+    const unpinPage = await request(`/positions/${htmlSeat.id}`, { cookies: recruiterCookies });
+    expect(unpinPage.text).toContain("Unpin career");
+    const htmlUnpin = await request(`/careers/${htmlPosting.id}/unpin`, {
+      cookies: unpinPage.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(unpinPage.cookies),
+      },
+      body: `return_to=/positions/${htmlSeat.id}`,
+    });
+    expect([302, 303].includes(htmlUnpin.response.status)).toBe(true);
+    const careersPage = await request("/careers");
+    expect(careersPage.response.status).toBe(200);
+  });
 });

@@ -12,6 +12,7 @@ export class CareerPosting extends Model<CareerPostingRecord, "id"> {
     "tenant_id",
     "expires_at",
     "publish_at",
+    "pinned",
   ] as const;
   static $guarded = [] as const;
   static $morphClass = "App\\Models\\CareerPosting";
@@ -21,6 +22,7 @@ export class CareerPosting extends Model<CareerPostingRecord, "id"> {
     published_by: "integer",
     expires_at: "datetime",
     publish_at: "datetime",
+    pinned: "boolean",
   } as const;
 
   position() {

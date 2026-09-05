@@ -10,6 +10,7 @@ export interface CareerPostingRecord {
   status: CareerPostingStatus;
   expires_at: Date | null;
   publish_at: Date | null;
+  pinned: boolean;
   created_at: Date | null;
   updated_at: Date | null;
 }
@@ -25,6 +26,7 @@ export const careerPostingTable = defineTable<CareerPostingRecord, "id">({
     "status",
     "expires_at",
     "publish_at",
+    "pinned",
     "created_at",
     "updated_at",
   ],

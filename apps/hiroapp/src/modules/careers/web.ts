@@ -83,5 +83,35 @@ export function careerWebRoutes(dependencies: AppDependencies): AppRouteMap {
         ),
       ),
     },
+    "/careers/:id/pin": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => CareerPosting.findOrFail(id),
+          async (request, posting) => {
+            const actor = await requireCurrentUser(request);
+            const { fields } = await parseFormBody(request);
+            await careerService.pin(actor, posting);
+            return redirectResponse(returnTo(fields, `/positions/${posting.get("position_id")}`));
+          },
+        ),
+      ),
+    },
+    "/careers/:id/unpin": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => CareerPosting.findOrFail(id),
+          async (request, posting) => {
+            const actor = await requireCurrentUser(request);
+            const { fields } = await parseFormBody(request);
+            await careerService.unpin(actor, posting);
+            return redirectResponse(returnTo(fields, `/positions/${posting.get("position_id")}`));
+          },
+        ),
+      ),
+    },
   };
 }

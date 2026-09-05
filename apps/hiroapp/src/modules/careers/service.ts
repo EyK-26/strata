@@ -77,6 +77,10 @@ function parsePublishAt(value: string | null | undefined) {
   );
 }
 
+function isPinned(value: boolean | number | string | null | undefined) {
+  return hiringFlag(value) === 1;
+}
+
 function isLive(status: CareerPostingStatus) {
   return status === "published" || status === "scheduled";
 }
@@ -90,6 +94,7 @@ export function serializeCareerPosting(row: CareerPosting | CareerPostingRecord)
     status: asPostingStatus(record.status),
     expires_at: iso(record.expires_at),
     publish_at: iso(record.publish_at),
+    pinned: isPinned(record.pinned),
     created_at: iso(record.created_at),
     updated_at: iso(record.updated_at),
   };
@@ -142,7 +147,10 @@ export class CareerService {
     if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() > Date.now()) {
       return record;
     }
-    const updated = await careerPostings.updateByIdOrThrow(record.id, { status: "expired" });
+    const updated = await careerPostings.updateByIdOrThrow(record.id, {
+      status: "expired",
+      pinned: false,
+    });
     await recordHiringEvent(
       "career.expired",
       { career_posting_id: updated.id, position_id: updated.position_id },
@@ -187,7 +195,9 @@ export class CareerService {
         };
       }),
     );
-    return visible.filter((row) => row !== null);
+    return visible
+      .filter((row) => row !== null)
+      .sort((left, right) => Number(right.pinned) - Number(left.pinned) || left.id - right.id);
   }
 
   async showPublic(posting: CareerPosting) {
@@ -229,6 +239,7 @@ export class CareerService {
           status,
           expires_at: expiresAt,
           publish_at: publishAt,
+          pinned: false,
         })
       : await careerPostings.create({
           position_id: Number(position.id),
@@ -237,6 +248,7 @@ export class CareerService {
           status,
           expires_at: expiresAt,
           publish_at: publishAt,
+          pinned: false,
         });
     await recordHiringEvent(
       publishAt ? "career.scheduled" : "career.published",
@@ -257,6 +269,7 @@ export class CareerService {
     }
     const updated = await careerPostings.updateByIdOrThrow(current.id, {
       status: "unpublished",
+      pinned: false,
     });
     await recordHiringEvent(
       "career.unpublished",
@@ -272,9 +285,45 @@ export class CareerService {
     if (asPostingStatus(current.status) !== "published") {
       throw new ForbiddenError("This career posting cannot be expired.");
     }
-    const updated = await careerPostings.updateByIdOrThrow(current.id, { status: "expired" });
+    const updated = await careerPostings.updateByIdOrThrow(current.id, {
+      status: "expired",
+      pinned: false,
+    });
     await recordHiringEvent(
       "career.expired",
+      { career_posting_id: updated.id, position_id: updated.position_id },
+      { type: "career_posting", id: updated.id },
+    );
+    return updated;
+  }
+
+  async pin(actor: UserRecord, posting: CareerPosting) {
+    assertStaff(actor);
+    const current = await this.fresh(posting);
+    if (asPostingStatus(current.status) !== "published") {
+      throw new ForbiddenError("Only a published career can be pinned.");
+    }
+    if (isPinned(current.pinned)) {
+      throw new ConflictError("This career posting is already pinned.");
+    }
+    const updated = await careerPostings.updateByIdOrThrow(current.id, { pinned: true });
+    await recordHiringEvent(
+      "career.pinned",
+      { career_posting_id: updated.id, position_id: updated.position_id },
+      { type: "career_posting", id: updated.id },
+    );
+    return updated;
+  }
+
+  async unpin(actor: UserRecord, posting: CareerPosting) {
+    assertStaff(actor);
+    const current = await this.fresh(posting);
+    if (!isPinned(current.pinned)) {
+      throw new ForbiddenError("This career posting is not pinned.");
+    }
+    const updated = await careerPostings.updateByIdOrThrow(current.id, { pinned: false });
+    await recordHiringEvent(
+      "career.unpinned",
       { career_posting_id: updated.id, position_id: updated.position_id },
       { type: "career_posting", id: updated.id },
     );

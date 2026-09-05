@@ -76,5 +76,31 @@ export function careerRoutes(dependencies: AppDependencies): AppRouteMap {
         ),
       ),
     },
+    "/api/careers/:id/pin": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => CareerPosting.findOrFail(id),
+          async (request, posting) => {
+            const actor = await requireCurrentUser(request);
+            return jsonResponse(serializeCareerPosting(await careerService.pin(actor, posting)));
+          },
+        ),
+      ),
+    },
+    "/api/careers/:id/unpin": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => CareerPosting.findOrFail(id),
+          async (request, posting) => {
+            const actor = await requireCurrentUser(request);
+            return jsonResponse(serializeCareerPosting(await careerService.unpin(actor, posting)));
+          },
+        ),
+      ),
+    },
   };
 }

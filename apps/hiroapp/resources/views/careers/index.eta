@@ -4,6 +4,6 @@
     <p>No published jobs.</p>
   <% } %>
   <% (it.postings ?? []).forEach((posting) => { %>
-    <p><a href="/careers/<%= posting.id %>"><%= posting.name %></a></p>
+    <p><% if (posting.pinned) { %><span>Pinned</span> <% } %><a href="/careers/<%= posting.id %>"><%= posting.name %></a></p>
   <% }) %>
 </div>

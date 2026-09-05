@@ -56,6 +56,19 @@
       <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
       <button type="submit">Expire from careers</button>
     </form>
+    <% if (it.career.pinned) { %>
+      <form action="/careers/<%= it.career.id %>/unpin" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+        <button type="submit">Unpin career</button>
+      </form>
+    <% } else { %>
+      <form action="/careers/<%= it.career.id %>/pin" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+        <button type="submit">Pin career</button>
+      </form>
+    <% } %>
   <% } %>
   <% if (it.currentUser?.role_id !== 2 && it.position.hiring && (!it.career || it.career.status === "unpublished" || it.career.status === "expired")) { %>
     <form class="CareerForm" action="/positions/<%= it.position.id %>/career" method="post">
