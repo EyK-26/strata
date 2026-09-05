@@ -73,6 +73,7 @@ describe("SQL dialect", () => {
       const dialect = currentSqlDialect();
       expect(dialect.placeholder(1)).toBe("?");
       expect(dialect.quoteIdentifier("users")).toBe('"users"');
+      expect(dialect.ilikeOperator()).toBe("LIKE");
       expect(dialect.nowExpression()).toBe("CURRENT_TIMESTAMP");
       expect(dialect.returningClause("id")).toBe(" RETURNING id");
       expect(dialect.nullsLastSuffix()).toBe("");
@@ -123,6 +124,7 @@ describe("SQL dialect", () => {
   test("dialectFor returns the named dialect without changing the process default", () => {
     resetSqlDialect();
     const before = currentSqlDialect().driver;
+    expect(dialectFor("pgsql").placeholder(2)).toBe("$2");
     expect(dialectFor("mysql").driver).toBe("mysql");
     expect(dialectFor("sqlite").castToText("x")).toBe("CAST(x AS TEXT)");
     expect(currentSqlDialect().driver).toBe(before);
