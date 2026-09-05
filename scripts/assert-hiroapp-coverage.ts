@@ -41,6 +41,7 @@ const proc = Bun.spawn(
     "test",
     "--coverage",
     "--coverage-reporter=text",
+    "--max-concurrency=1",
     "--preload",
     "./apps/hiroapp/src/tests/preload.ts",
     "./apps/hiroapp/src/tests",

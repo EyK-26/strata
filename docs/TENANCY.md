@@ -6,7 +6,7 @@ HTTP requests and background jobs must set `app.tenant_id` on the connection tha
 
 ## Tables with `tenant_isolation`
 
-RLS is forced on isolated tables (`app_bypass_rls()` or `tenant_id = app_current_tenant_id()`). HiroApp hiring tables that call `isolateTenantTable` join that set. The fixture schema isolates organization, users, audit, project, task, comment, webhook, notification, attachments, and subscription.
+RLS is forced on isolated tables (`app_bypass_rls()` or `tenant_id = app_current_tenant_id()`). HiroApp hiring tables that call `isolateTenantTable` join that set. Core tests still isolate a leftover fixture schema (users, audit, webhooks, and similar). That fixture is not a second product.
 
 ## Auth-global tables (no RLS)
 
@@ -15,7 +15,7 @@ RLS is forced on isolated tables (`app_bypass_rls()` or `tenant_id = app_current
 | Table | Why |
 |-------|-----|
 | `api_token` | Bearer lookup runs in auth middleware **before** tenant middleware. The token finds the user. The user row then supplies `tenant_id`. RLS here would hide tokens until a tenant was already known. |
-| Organization membership | Membership middleware also runs **before** tenant middleware so org roles exist for the rest of the request. Isolation is enforced later via `organization.tenant_id` RLS and membership-scope helpers. |
+| Optional membership joins | If your app uses membership middleware, it also runs **before** tenant middleware so roles exist for the rest of the request. HiroApp does not use org membership. It scopes hiring rows with `users.tenant_id` and RLS. |
 
 Global middleware order: auth, then membership, then tenant. Do not reverse that order.
 

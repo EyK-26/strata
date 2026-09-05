@@ -3,8 +3,10 @@ import { OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
 import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
 import type { OAuthProfile, OAuthProvider } from "@getstrata/core/auth/oauth/types";
 import { hashPassword } from "@getstrata/core/auth/password";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { ROLE } from "../../lib/roles.ts";
+import { runWithoutTenantScope } from "../../lib/tenantRepository.ts";
 import { users } from "../users/repository.ts";
 import type { UserRecord } from "../users/table.ts";
 import { oauthIdentities } from "./repository.ts";
@@ -66,11 +68,13 @@ export function resolveSsoProvider(name: string): OAuthProvider | null {
 export class SsoService {
   async loginFromProfile(provider: string, profile: OAuthProfile): Promise<UserRecord> {
     const existing = await oauthIdentities.findByProvider(provider, profile.providerUserId);
-    if (existing) {
-      const user = await users.findById(Number(existing.user_id));
-      if (user) {
-        return user;
-      }
+    const linked = existing
+      ? await runWithoutTenantScope(() =>
+          runWithMigrationBypass(() => users.findById(Number(existing.user_id))),
+        )
+      : null;
+    if (linked) {
+      return linked;
     }
 
     const email = profile.email.trim().toLowerCase();
