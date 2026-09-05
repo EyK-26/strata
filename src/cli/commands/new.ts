@@ -93,6 +93,9 @@ function firstPositional(args: string[]): string | undefined {
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (!arg) {
+      continue;
+    }
     if (valueFlags.has(arg)) {
       index += 1;
       continue;

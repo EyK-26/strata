@@ -135,6 +135,9 @@ function parseCreateStrataArgs(argv: string[]): ParsedFlags {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (!arg) {
+      continue;
+    }
     if (arg === "-h" || arg === "--help") {
       flags.help = true;
       continue;

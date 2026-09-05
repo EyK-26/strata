@@ -72,7 +72,7 @@ function resolveOverlayRoot(root = starterPackageRoot()): string {
       return candidate;
     }
   }
-  return candidates[0];
+  return candidates[0] ?? join(root, "templates/overlays");
 }
 
 function assertProjectName(projectName: string): void {

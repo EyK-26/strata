@@ -53,7 +53,8 @@ function createReadlinePrompter(): Prompter {
       }
       const asNumber = Number.parseInt(answer, 10);
       if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= choices.length) {
-        return choices[asNumber - 1].value;
+        const selected = choices[asNumber - 1];
+        return selected?.value ?? defaultValue;
       }
       const match = choices.find((choice) => choice.value === answer || choice.label === answer);
       return match?.value ?? defaultValue;
@@ -85,12 +86,13 @@ async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<Sta
     flags.kit ?? "hobby",
   );
 
-  let layers: StarterLayers =
-    kit === "custom" ? { ...presetLayers("hobby"), kit: "custom" } : presetLayers(kit);
+  const isCustom = kit === "custom";
+  let layers: StarterLayers = isCustom
+    ? { ...presetLayers("hobby"), kit: "custom" }
+    : presetLayers(kit);
   layers = applyFlagOverrides(layers, { ...flags, kit });
 
-  const customize =
-    kit === "custom" || (await prompter.confirm("Customize layers?", kit === "custom"));
+  const customize = isCustom || (await prompter.confirm("Customize layers?", false));
 
   if (customize) {
     layers.frontend = await prompter.select(
