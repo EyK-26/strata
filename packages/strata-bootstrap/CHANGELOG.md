@@ -1,7 +1,8 @@
 # @getstrata/bootstrap changelog
 
-## Unreleased
+## 0.3.0
 
+- Peer `@getstrata/core` `^0.6.0`.
 - Cookie session SQL uses the current SQL dialect for placeholders, `NOW()`, and `NULLS LAST`.
 - Kernel comments describe guest, verified-email, and password-confirm gates without referring to another framework.
 
