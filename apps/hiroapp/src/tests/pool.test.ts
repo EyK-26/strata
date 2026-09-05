@@ -400,4 +400,52 @@ describe.skipIf(!enabled)("Wave 31 talent pool", () => {
       }),
     ).toBe(true);
   });
+
+  test("staff add a candidate to the talent pool from their profile", async () => {
+    const profile = await makeCandidate("profile");
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+
+    const forbidden = await jsonRequest(`/api/users/${profile.id}/talent-pool`, {
+      cookies: candidateCookies,
+      method: "POST",
+      body: JSON.stringify({ notes: "nope" }),
+    });
+    expect(forbidden.response.status).toBe(403);
+
+    const httpCreated = await jsonRequest(`/api/users/${profile.id}/talent-pool`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ notes: "from profile" }),
+    });
+    expect(httpCreated.response.status).toBe(200);
+    expect(httpCreated.body.status).toBe("active");
+    expect(httpCreated.body.user_id).toBe(profile.id);
+    const conflict = await jsonRequest(`/api/users/${profile.id}/talent-pool`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    expect(conflict.response.status).toBe(409);
+
+    const htmlCandidate = await makeCandidate("profile-html");
+    const page = await request(`/users/${htmlCandidate.id}`, { cookies: recruiterCookies });
+    expect(page.response.status).toBe(200);
+    expect(page.text).toContain("Add to talent pool");
+    const html = await request(`/users/${htmlCandidate.id}/talent-pool`, {
+      cookies: page.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(page.cookies),
+      },
+      body: `notes=html+profile&return_to=/users/${htmlCandidate.id}`,
+    });
+    expect([302, 303].includes(html.response.status)).toBe(true);
+    const listed = await talentPoolService.list(recruiter);
+    expect(listed.some((row) => row.user_id === htmlCandidate.id && row.status === "active")).toBe(
+      true,
+    );
+    const after = await request(`/users/${htmlCandidate.id}`, { cookies: recruiterCookies });
+    expect(after.text).toContain("In talent pool");
+  });
 });

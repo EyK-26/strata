@@ -7,6 +7,7 @@ import { renderPage } from "../../http/view.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
 import { Application } from "../../models/Application.ts";
 import { TalentPoolEntry } from "../../models/TalentPoolEntry.ts";
+import { User } from "../../models/User.ts";
 import { talentPoolService } from "./service.ts";
 
 function returnTo(fields: Record<string, string>, fallback: string) {
@@ -79,6 +80,24 @@ export function talentPoolWebRoutes(dependencies: AppDependencies): AppRouteMap 
               notes: fields.notes || null,
             });
             return redirectResponse(returnTo(fields, `/applications/${application.id}`));
+          },
+        ),
+      ),
+    },
+    "/users/:id/talent-pool": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => User.findOrFail(id),
+          async (request, user) => {
+            const actor = await requireCurrentUser(request);
+            const { fields } = await parseFormBody(request);
+            await talentPoolService.add(actor, {
+              user_id: Number(user.id),
+              notes: fields.notes || null,
+            });
+            return redirectResponse(returnTo(fields, `/users/${user.id}`));
           },
         ),
       ),

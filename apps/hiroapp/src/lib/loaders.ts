@@ -214,11 +214,13 @@ export async function loadUserDetail(userId: number) {
   const inbox = await inboxFor(user);
   const position = user.loaded<Position>("position");
   const department = position?.loaded<{ name: string }>("department");
+  const poolEntry = await talentPool.findByUser(userId);
   return {
     user: new UserResource(user).toArray(),
     notifications: inbox.map((row) => new NotificationResource(row).toArray()),
     position_name: position?.get("name") ?? null,
     department_name: department?.name ?? null,
     tags: (await candidateTags.forUser(userId)).map(serializeTag),
+    talent_pool: poolEntry ? serializePoolEntry(poolEntry) : null,
   };
 }

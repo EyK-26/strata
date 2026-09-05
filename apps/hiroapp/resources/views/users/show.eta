@@ -33,5 +33,21 @@
       <label>Message <textarea name="text" required></textarea></label>
       <button>Send</button>
     </form>
+    <% if (it.user.role_id === 2 && it.talent_pool && it.talent_pool.status === "active") { %>
+      <p>In talent pool</p>
+      <form action="/talent-pool/<%= it.talent_pool.id %>/release" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <input type="hidden" name="return_to" value="/users/<%= it.user.id %>" />
+        <button type="submit">Release from talent pool</button>
+      </form>
+    <% } %>
+    <% if (it.user.role_id === 2 && (!it.talent_pool || it.talent_pool.status !== "active")) { %>
+      <form class="TalentPoolForm" action="/users/<%= it.user.id %>/talent-pool" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <input type="hidden" name="return_to" value="/users/<%= it.user.id %>" />
+        <label>Notes <textarea name="notes"></textarea></label>
+        <button type="submit">Add to talent pool</button>
+      </form>
+    <% } %>
   <% } %>
 </div>
