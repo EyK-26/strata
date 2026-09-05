@@ -345,13 +345,16 @@ describe("CookieSessionGuard", () => {
     } as SessionUser & { first_name: string; last_name: string };
     const sql = createFakeSql(user);
     const store = new CookieSessionStore(sql, "session-secret", "strata_session");
+    let loadedName = "";
     const auth = createCookieSessionAuthManager({
       store,
-      mapUser: (sessionUser) => ({
-        id: sessionUser.id,
-        role: sessionUser.is_admin ? "admin" : "member",
-        name: sessionUser.name,
-      }),
+      mapUser: (sessionUser) => {
+        loadedName = sessionUser.name;
+        return {
+          id: sessionUser.id,
+          role: sessionUser.is_admin ? "admin" : "member",
+        };
+      },
     });
 
     const sessionId = await store.create(user);
@@ -359,6 +362,7 @@ describe("CookieSessionGuard", () => {
 
     expect(
       await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
-    ).toEqual({ id: 21, role: "admin", name: "Ada Lovelace" });
+    ).toEqual({ id: 21, role: "admin" });
+    expect(loadedName).toBe("Ada Lovelace");
   });
 });
