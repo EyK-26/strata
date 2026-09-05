@@ -190,6 +190,8 @@ describe.skipIf(!enabled)("Waves 52-58 hiring OS HTML", () => {
     expect(appPage.text).toContain("Cancel interview");
     expect(appPage.text).toContain("Save scorecard");
     expect(appPage.text).toContain("Hiring seat");
+    expect(appPage.text).not.toMatch(/<p>\s*undefined\s*<\/p>/);
+    expect(appPage.text).not.toMatch(/<p>\s*null\s*<\/p>/);
     const complete = await request(`/interviews/${interview.interview.id}/complete`, {
       cookies: appPage.cookies,
       method: "POST",

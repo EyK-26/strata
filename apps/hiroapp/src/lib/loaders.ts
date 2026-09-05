@@ -7,6 +7,7 @@ import {
   UserResource,
 } from "../http/resources.ts";
 import { Application } from "../models/Application.ts";
+import type { Department } from "../models/Department.ts";
 import type { Notification } from "../models/Notification.ts";
 import { Position } from "../models/Position.ts";
 import { User } from "../models/User.ts";
@@ -158,7 +159,8 @@ export async function loadApplicationDetail(applicationId: number) {
   if (position) {
     await position.load("department");
   }
-  const department = position?.loaded<{ name: string }>("department");
+  const department = position?.loaded<Department>("department");
+  const departmentName = department ? String(department.get("name") ?? "") : "";
   const status = application.loaded<{
     name: string;
     id: number;
@@ -181,7 +183,10 @@ export async function loadApplicationDetail(applicationId: number) {
     application: mergeResource(new ApplicationResource(application), {
       user: user ? new UserResource(user).toArray() : null,
       position: position
-        ? { name: position.get("name"), department: department ? { name: department.name } : null }
+        ? {
+            name: position.get("name"),
+            department: departmentName ? { name: departmentName } : null,
+          }
         : null,
       status: status ? new NamedResource(status).toArray() : null,
     }),

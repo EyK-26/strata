@@ -5,9 +5,9 @@
   </div>
   <div class="body">
     <div class="ApplicationDetailDetails">
-      <p><%= it.application.position?.name %></p>
-      <p><%= it.application.position?.department?.name %></p>
-      <p><%= it.application.attachment_text %></p>
+      <p><%= it.application.position?.name ?? "" %></p>
+      <p><%= it.application.position?.department?.name ?? "" %></p>
+      <p><%= it.application.attachment_text ?? "" %></p>
       <% if (it.application.attachment_file) { %>
         <p><a href="<%= it.application.attachment_file %>"><%= it.application.attachment_file %></a></p>
       <% } %>
