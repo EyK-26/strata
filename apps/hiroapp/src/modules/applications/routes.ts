@@ -19,6 +19,7 @@ import {
   ApplicationIndexRequest,
   CreateApplicationRequest,
   InterviewNotifyRequest,
+  TransferApplicationRequest,
 } from "./requests.ts";
 import { applicationService } from "./service.ts";
 
@@ -149,6 +150,21 @@ export function applicationRoutes(dependencies: AppDependencies): AppRouteMap {
             const actor = await authorize(request, "applications", "update");
             await applicationService.move(actor, application);
             return jsonResponse(null);
+          },
+        ),
+      ),
+    },
+    "/api/applications/:id/transfer": {
+      POST: wrapApi(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Application.findOrFail(id),
+          async (request, application) => {
+            const actor = await authorize(request, "applications", "update");
+            const payload = await new TransferApplicationRequest().validate(request);
+            const updated = await applicationService.transfer(actor, application, payload);
+            return jsonResponse(new ApplicationResource(updated).toArray());
           },
         ),
       ),

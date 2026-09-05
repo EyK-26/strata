@@ -351,6 +351,23 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
         ),
       ),
     },
+    "/applications/:id/transfer": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          (id) => Application.findOrFail(id),
+          async (request, bound) => {
+            const actor = await authorize(request, "applications", "update");
+            const { fields } = await parseFormBody(request);
+            await applicationService.transfer(actor, bound, {
+              position_id: Number(fields.position_id),
+            });
+            return redirectResponse(`/applications/${bound.id}`);
+          },
+        ),
+      ),
+    },
     "/applications/:id/end": {
       POST: wrapWebAuthenticated(
         dependencies,

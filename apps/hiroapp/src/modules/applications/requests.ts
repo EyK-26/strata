@@ -48,6 +48,21 @@ export class ApplicationIndexRequest extends QueryFormRequest<{
   }
 }
 
+export class TransferApplicationRequest extends FormRequest<{
+  position_id: number;
+}> {
+  protected parse(payload: unknown) {
+    const body = expectObject(payload);
+    const position_id = Number(body.position_id);
+    if (!Number.isInteger(position_id) || position_id <= 0) {
+      throw new ValidationError("The given data was invalid.", {
+        position_id: ["The position is required."],
+      });
+    }
+    return { position_id };
+  }
+}
+
 export class InterviewNotifyRequest extends FormRequest<{
   text: string;
   datetime: string;

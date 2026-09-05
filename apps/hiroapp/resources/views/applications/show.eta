@@ -43,6 +43,13 @@
           </div>
         <% }) %>
       </div>
+      <% if (it.roleId !== 2 && it.application.status_id < 5) { %>
+        <form class="TransferForm" action="/applications/<%= it.application.id %>/transfer" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <label>Hiring seat id <input type="number" name="position_id" min="1" required /></label>
+          <button type="submit">Transfer application</button>
+        </form>
+      <% } %>
       <% if (it.roleId === 2 && it.application.status_id < 5) { %>
         <form action="/applications/<%= it.application.id %>/withdraw" method="post">
           <%~ include("../partials/csrf.eta") %>

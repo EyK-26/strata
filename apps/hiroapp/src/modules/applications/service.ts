@@ -5,9 +5,9 @@ import {
   UnprocessableEntityError,
 } from "@getstrata/core/errors/http";
 import { recordHiringEvent } from "../../lib/hiringEvents.ts";
-import { isCandidate, isRecruiter, STATUS } from "../../lib/roles.ts";
+import { isCandidate, isRecruiter, isStaff, STATUS } from "../../lib/roles.ts";
 import { hiringFlag } from "../../lib/serialize.ts";
-import { resolveStaffDepartmentId } from "../../lib/staffTeam.ts";
+import { requireStaffDepartmentAccess, resolveStaffDepartmentId } from "../../lib/staffTeam.ts";
 import { Application } from "../../models/Application.ts";
 import { User } from "../../models/User.ts";
 import { departmentService } from "../departments/service.ts";
@@ -40,6 +40,10 @@ export type ApplyPayload = {
   attachment_text: string | null;
   attachment_file: string | null;
   source_id?: number | null;
+};
+
+export type TransferPayload = {
+  position_id: number;
 };
 
 function emptyCounts(): PipelineCounts {
@@ -277,6 +281,50 @@ export class ApplicationService {
         });
       }
     });
+    return Application.findOrFail(id);
+  }
+
+  async transfer(actor: UserRecord, application: Application, payload: TransferPayload) {
+    if (!isStaff(actor.role_id)) {
+      throw new ForbiddenError("Only staff can transfer applications.");
+    }
+    const statusId = Number(application.get("status_id"));
+    if (statusId === STATUS.HIRED || statusId === STATUS.ENDED) {
+      throw new UnprocessableEntityError("A hired or ended application cannot be transferred.");
+    }
+    const targetId = Number(payload.position_id);
+    if (!Number.isInteger(targetId) || targetId <= 0) {
+      throw new UnprocessableEntityError("Position is not open for applications.");
+    }
+    const fromPositionId = Number(application.get("position_id"));
+    if (fromPositionId === targetId) {
+      throw new UnprocessableEntityError("Application is already on this hiring seat.");
+    }
+    const target = await positions.findById(targetId);
+    if (!target || hiringFlag(target.hiring) !== 1) {
+      throw new UnprocessableEntityError("Position is not open for applications.");
+    }
+    await departmentService.assertHiringOpen(Number(target.department_id));
+    await requireStaffDepartmentAccess(actor, Number(target.department_id));
+    const userId = Number(application.get("user_id"));
+    const existing = await Application.withTrashed()
+      .where({ user_id: userId, position_id: targetId })
+      .first();
+    if (existing) {
+      throw new ConflictError("This candidate already has an application for that position.");
+    }
+    const id = Number(application.id);
+    await applications.updateById(id, { position_id: targetId });
+    await recordHiringEvent(
+      "application.transferred",
+      {
+        application_id: id,
+        user_id: userId,
+        from_position_id: Number.isInteger(fromPositionId) ? fromPositionId : null,
+        to_position_id: targetId,
+      },
+      { type: "application", id },
+    );
     return Application.findOrFail(id);
   }
 
