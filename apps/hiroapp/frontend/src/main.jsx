@@ -1,5 +1,5 @@
 import axios from "axios";
-import "./app.scss";
+import "./app.css";
 import "./HiroApp.jsx";
 
 function readCookie(name) {

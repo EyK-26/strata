@@ -3,23 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HiroApp</title>
+    <title>Sign in — HiroApp</title>
     <link rel="stylesheet" href="/assets/app.css" />
   </head>
   <body>
     <div class="container">
-      <div class="Login">
+      <div class="Login auth-card">
         <h1>Welcome To HiroApp</h1>
         <small>Hire someone, make a change!</small>
-        <form action="/login" method="post">
+        <form action="/login" method="post" class="stack-form">
           <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
           <label>
             Email
-            <input type="email" name="email" value="<%= it.email ?? '' %>" />
+            <input type="email" name="email" value="<%= it.email ?? '' %>" autocomplete="username" />
           </label>
           <label>
             Password
-            <input type="password" name="password" />
+            <input type="password" name="password" autocomplete="current-password" />
           </label>
           <button>Login</button>
         </form>

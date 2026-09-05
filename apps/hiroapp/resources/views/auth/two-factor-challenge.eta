@@ -8,21 +8,23 @@
   </head>
   <body>
     <div class="container">
-      <h1>Two-factor authentication</h1>
-      <p class="hint">Enter an authenticator code or a one-time recovery code to finish signing in.</p>
-      <% if (it.errors?.mfa_code) { %>
-        <div class="errors"><span><%= it.errors.mfa_code %></span></div>
-      <% } %>
-      <form method="post" action="/two-factor-challenge" class="stack-form">
-        <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
-        <input type="hidden" name="redirect" value="<%= it.redirect ?? '/' %>" />
-        <label>
-          MFA or recovery code
-          <input type="text" name="mfa_code" autocomplete="one-time-code" required />
-        </label>
-        <button type="submit">Continue</button>
-      </form>
-      <p class="hint"><a href="/login">Back to sign in</a></p>
+      <div class="auth-card">
+        <h1>Two-factor authentication</h1>
+        <p class="hint">Enter an authenticator code or a one-time recovery code to finish signing in.</p>
+        <% if (it.errors?.mfa_code) { %>
+          <div class="errors"><span><%= it.errors.mfa_code %></span></div>
+        <% } %>
+        <form method="post" action="/two-factor-challenge" class="stack-form">
+          <input type="hidden" name="_token" value="<%= it.csrfToken ?? "" %>" />
+          <input type="hidden" name="redirect" value="<%= it.redirect ?? '/' %>" />
+          <label>
+            MFA or recovery code
+            <input type="text" name="mfa_code" autocomplete="one-time-code" required />
+          </label>
+          <button type="submit">Continue</button>
+        </form>
+        <p class="hint"><a href="/login">Back to sign in</a></p>
+      </div>
     </div>
   </body>
 </html>
