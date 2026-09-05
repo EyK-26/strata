@@ -23,7 +23,7 @@ import { EtaViewEngine } from "@getstrata/core/view";
 
 `.eta` files are **HTML + Eta tags** (`<% %>`, `<%= %>`, `<%~ include() %>`), not another template language. Class/attribute shorthand such as `section.section` or `a href=` fails at render time with the template name.
 
-**Dependency:** `eta` is a direct dependency of `@getstrata/core`. Apps do not need to list it separately. The database **engine** is your choice. HiroApp uses **Bun's built-in `Bun.sql`** (Postgres). Create and bind it with `createBunSqlPool()` / `bindBunSql()`, or call `bindDatabaseConnection()` yourself. Extra engines register with `registerNamedConnection` (`database/namedConnections`, `database/sqliteConnection`, `database/mysqlConnection`).
+**Dependency:** `eta` is a direct dependency of `@getstrata/core`. Apps do not need to list it separately. The database **engine** is your choice. Generated HiroApp uses **Bun's built-in `Bun.sql`** (Postgres): `createBunSqlPool()`, then `registerDefaultDatabasePool()` and `bindDatabaseConnection()`. `bindBunSql()` is a helper that registers both. Extra engines register with `registerNamedConnection` (`database/namedConnections`, `database/sqliteConnection`, `database/mysqlConnection`).
 
 `orderBy` accepts `{ column, direction }` objects or column shorthand such as `{ published_at: "desc" }`. `{ ilike }` uses the value as-is. Pass `%term%` yourself.
 
@@ -33,7 +33,7 @@ import { EtaViewEngine } from "@getstrata/core/view";
 - `createFailedJobService`, `FailedJobService.delete()`: failed job persistence and cleanup
 - `runQueueJob`, `jobRegistry`: dispatch retried jobs from admin UIs
 
-HiroApp uses failed-job recovery in the staff dashboard. You do not have to use the admin registry.
+Core ships failed-job helpers and an optional admin resource registry. Generated HiroApp does not include an admin dashboard. You do not have to use the registry.
 
 ## Build and verify (monorepo root)
 

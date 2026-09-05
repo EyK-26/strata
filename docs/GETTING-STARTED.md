@@ -32,14 +32,14 @@ cp .env.host.example .env.host
 The in-repo HTML example (`apps/hiroapp`) should use:
 
 ```bash
-APP_NAME=HiroApp
+APP_NAME=hiroapp
 APP_KEY_PREFIX=hiroapp
 API_PREFIX=/api
 FRONTEND_MODE=server-htmx
 AUTH_DEV_HEADERS=false
 ```
 
-`APP_KEY_PREFIX` names cookies and Redis keys (`hiroapp_session`, `hiroapp:queue:default`). If you run two apps against one Redis, they must not share a prefix.
+`APP_KEY_PREFIX` names Redis keys (`hiroapp:queue:default`). Generated HTML apps use cookie `strata_session` unless you change `cookieName` in the auth provider. If you run two apps against one Redis, they must not share a prefix.
 
 ## 3. Start Postgres and Redis
 
@@ -81,7 +81,7 @@ Visit http://localhost:3000. HTML sign-in is `/login`.
 
 ## 7. Try the generated paths
 
-1. **Staff browser (cookie + CSRF).** Open `/login`, sign in as `demo@example.com`. HTML forms post `_token`.
+1. **HTML browser (cookie + CSRF).** Open `/login`, sign in as `demo@example.com`. HTML forms post `_token`.
 2. **Health.** `GET /health` returns `ok` when the database answers.
 3. **API token or JWT.** `POST /api/v1/auth/login` mints an opaque token. `POST /api/auth/token` mints a short-lived JWT. Call `GET /api/user` with `Authorization: Bearer <token>`. Details: [AUTH.md](./AUTH.md).
 
@@ -92,7 +92,7 @@ Your own app should be generated with `bunx create-strata`, not copied from Hiro
 | Symptom | Likely cause |
 |---------|----------------|
 | HiroApp migrate cannot import `@getstrata/core/...` | Run `bun run build:framework` |
-| Cookie login loops | `SESSION_SECRET` missing, or you are mixing `APP_KEY_PREFIX` values |
+| Cookie login loops | `SESSION_SECRET` missing, or the browser is sending a different cookie name than `strata_session` |
 | 403 on POST | Missing CSRF token (`_token` or `x-csrf-token`) |
 | 403 on Bearer POST | Token missing the ability, or you sent CSRF-protected cookie API without a token |
 | Tests reset the wrong database | `DATABASE_URL` is not a test URL. See [TESTING.md](./TESTING.md) |

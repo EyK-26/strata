@@ -24,9 +24,9 @@ Use this when HiroApp or the database is down. Times are operational targets, no
 ## Phase 3. Verify (120 to 240 min)
 
 - Smoke: `bun run smoke` against the DR URL
-- Sign in as a recruiter (cookie) and as a token client (`GET /api/user`)
-- Confirm careers list and one application still load
-- Confirm audit export still returns JSON
+- Sign in as `admin@example.test` (cookie, `/login`) and as a token client (`POST /api/v1/auth/login`, then `GET /api/user`)
+- Confirm HTML home `/` and `GET /health` still load
+- If you enabled SIEM export, confirm the export job still returns JSON
 
 ## Phase 4. Post-incident
 

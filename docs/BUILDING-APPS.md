@@ -24,7 +24,7 @@ Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMod
 1. **`api`.** JSON routes only. Clients send Bearer or Basic. No CSRF.
 2. **`server-htmx`.** Eta HTML + HTMX. Cookie session + CSRF.
 3. **`spa-react`.** JSON API plus a SPA document under `SPA_PREFIX` (default `/app`). Prefer opaque tokens for the SPA.
-4. **`hybrid`.** Staff HTML at `/` plus a SPA prefix. Framework SPA routes stay under `SPA_PREFIX` (`/app`, `/app/`, `/app/*` by default) and do not redirect `/`. Apps call `mergeSpaRoutes` with `distDirectory` and `wrap`. Do not copy a second static-file server.
+4. **`hybrid`.** HTML at `/` plus a SPA prefix. Framework SPA routes stay under `SPA_PREFIX` (`/app`, `/app/`, `/app/*` by default) and do not redirect `/`. Apps call `mergeSpaRoutes` with `distDirectory` and `wrap`. Do not copy a second static-file server.
 
 `.eta` files are HTML plus Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`). Class shorthand such as `section.section` fails at render.
 
@@ -84,7 +84,7 @@ Call `assertProductionSecrets()` from your `createApp` / `serve` path. It is fea
 | `API_PREFIX` | `/api/v1` |
 | `APP_SDK_CLASS` | `${APP_NAME}Client` |
 
-HiroApp pins `hiroapp` / `HiroApp` / `/api`.
+Generated HiroApp pins `APP_KEY_PREFIX=hiroapp`, `APP_NAME=hiroapp`, and `API_PREFIX=/api`. The HTML session cookie is still `strata_session` unless you change `cookieName`.
 
 ## Next
 

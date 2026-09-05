@@ -80,7 +80,7 @@ CI fails if `docs/openapi.json` drifts. Commit regenerated files.
 
 - Biome is the source of truth (`biome.json`)
 - Match neighboring files
-- Keep enterprise features opt-in via `FEATURE_*`
+- Keep optional extras opt-in via `FEATURE_*` env flags. Generated extras are stubs unless you add adapters.
 - Import `@getstrata/core/...` subpaths, never the root barrel, from app code
 
 ## Tests
