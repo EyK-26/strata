@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { restoreEnvVar } from "../../helpers/restoreEnv";
 import { runCli } from "./helpers";
 
 describe("cli index", () => {
@@ -34,10 +35,16 @@ describe("cli index", () => {
   });
 
   test("runs migrate:status command", async () => {
-    const result = await runCli(["migrate:status"]);
+    const previousSchema = process.env.STRATA_SCHEMA;
+    process.env.STRATA_SCHEMA = "fixture";
+    try {
+      const result = await runCli(["migrate:status"]);
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Migration status:");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Migration status:");
+    } finally {
+      restoreEnvVar("STRATA_SCHEMA", previousSchema);
+    }
   });
 
   test("exits with error for unknown commands", async () => {

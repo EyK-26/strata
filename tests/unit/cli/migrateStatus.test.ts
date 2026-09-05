@@ -1,9 +1,17 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { migrateStatusCommand } from "../../../src/cli/commands/migrateStatus";
+import { restoreEnvVar } from "../../helpers/restoreEnv";
 import { captureConsole } from "./helpers";
 
 describe("migrateStatusCommand", () => {
+  const previousSchema = process.env.STRATA_SCHEMA;
+
+  afterEach(() => {
+    restoreEnvVar("STRATA_SCHEMA", previousSchema);
+  });
+
   test("prints migration status entries", async () => {
+    process.env.STRATA_SCHEMA = "fixture";
     const output = captureConsole();
 
     try {
