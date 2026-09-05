@@ -3,6 +3,10 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
+import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
+import { resetDefaultDatabasePoolForTests } from "@getstrata/core/database/defaultConnection";
+import { resetSqlDialect } from "@getstrata/core/database/dialect";
 import {
   generateProject,
   resolveOverlayRoot,
@@ -16,8 +20,39 @@ import {
 import { presetLayers } from "../../../packages/strata-starter/src/presets.ts";
 
 const tempDirectories: string[] = [];
+const repoRoot = process.cwd();
+const ENV_KEYS = [
+  "DATABASE_URL",
+  "APP_ENV",
+  "FRONTEND_MODE",
+  "AUTH_DEV_HEADERS",
+  "TENANCY_DRIVER",
+  "SESSION_SECRET",
+  "SPA_PREFIX",
+  "CACHE_DRIVER",
+  "QUEUE_DRIVER",
+  "MAIL_DRIVER",
+] as const;
+const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+
+function restoreRuntime(): void {
+  for (const key of ENV_KEYS) {
+    const value = originalEnv[key];
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+  resetSqlDialect();
+  resetBoundDatabaseConnection();
+  resetDefaultDatabasePoolForTests();
+  resetDiscoverModulesForTests();
+}
 
 afterEach(async () => {
+  process.chdir(repoRoot);
+  restoreRuntime();
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();
     if (directory) {
