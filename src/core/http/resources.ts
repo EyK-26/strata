@@ -6,11 +6,15 @@ function whenLoaded<T>(
   model: { loaded: (name: string) => unknown },
   relation: string,
   transform?: (value: unknown) => T,
-): T | undefined {
+): T | undefined | null {
   const value = model.loaded(relation);
 
   if (value === undefined) {
     return undefined;
+  }
+
+  if (value === null) {
+    return null;
   }
 
   return transform ? transform(value) : (value as T);
@@ -42,10 +46,10 @@ class JsonResource<T = unknown> {
   whenLoaded<TValue = unknown>(
     relation: string,
     transform?: (value: unknown) => TValue,
-  ): TValue | undefined {
+  ): TValue | undefined | null {
     const model = this.resource as { loaded?: (name: string) => unknown };
 
-    if (typeof model.loaded !== "function") {
+    if (this.resource == null || typeof model.loaded !== "function") {
       return undefined;
     }
 

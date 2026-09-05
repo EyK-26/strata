@@ -26,6 +26,27 @@ describe("JsonResource", () => {
     expect(whenLoaded(model, "role", (value) => (value as { name: string }).name)).toBe("admin");
   });
 
+  test("whenLoaded returns null for a loaded empty relation without calling transform", () => {
+    const model = {
+      loaded(name: string) {
+        return name === "position" ? null : undefined;
+      },
+    };
+    const resource = JsonResource.make(model);
+    let called = false;
+
+    expect(
+      resource.whenLoaded("position", () => {
+        called = true;
+        return { id: 1 };
+      }),
+    ).toBeNull();
+    expect(called).toBe(false);
+    expect(resource.whenLoaded("missing", () => ({ id: 1 }))).toBeUndefined();
+    expect(whenLoaded(model, "position", () => ({ id: 1 }))).toBeNull();
+    expect(JsonResource.make(null).whenLoaded("position")).toBeUndefined();
+  });
+
   test("collection and unwrap", () => {
     JsonResource.wrap = null;
     const bare = new JsonResource({ id: 1 });

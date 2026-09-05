@@ -42,7 +42,7 @@ Versions are asserted by `scripts/verify-package-versions.ts`.
 
 1. The [`@getstrata`](https://www.npmjs.com/org/getstrata) org must exist on npm.
 2. Add `NPM_TOKEN` to GitHub repository secrets (Automation token with publish access).
-3. Tag a release: `git tag v0.7.2 && git push origin v0.7.2`.
+3. Tag a release: `git tag v0.7.3 && git push origin v0.7.3`.
 4. The release workflow builds and runs `npm publish --access public`.
 
 See `packages/strata-core/CHANGELOG.md` for release notes.

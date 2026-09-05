@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { signJwt } from "@getstrata/core/auth/jwt";
+import { ApplicationResource } from "../http/resources.ts";
+import { STATUS } from "../lib/roles.ts";
 import { Application } from "../models/Application.ts";
 import { Position } from "../models/Position.ts";
 import { applyService } from "../modules/apply/service.ts";
@@ -48,7 +50,9 @@ describe.skipIf(!enabled)("candidate apply portal", () => {
   async function expectStatus(response: Response, status: number) {
     if (response.status !== status) {
       const body = await response.clone().text();
-      throw new Error(`expected ${status}, got ${response.status}: ${body.slice(0, 500)}`);
+      throw new Error(
+        `expected ${status}, got ${response.status} for ${response.url}: ${body.slice(0, 500)}`,
+      );
     }
     expect(response.status).toBe(status);
   }
@@ -156,6 +160,40 @@ describe.skipIf(!enabled)("candidate apply portal", () => {
 
     const after = await fetch(`${baseUrl}/api/apply/me`, { headers: auth });
     await expectStatus(after, 401);
+  });
+
+  test("ApplicationResource serializes a loaded-null position as null", () => {
+    const application = {
+      id: 8,
+      user_id: 2,
+      position_id: null,
+      status_id: STATUS.APPLIED,
+      attachment_text: null,
+      attachment_file: null,
+      loaded(name: string) {
+        if (name === "position") {
+          return null;
+        }
+        return undefined;
+      },
+    };
+    const payload = new ApplicationResource(application).toArray();
+    expect(payload.position_id).toBeNull();
+    expect(payload.position).toBeNull();
+    expect(payload.status).toBeUndefined();
+  });
+
+  test("apply service lists candidate applications whose position is missing", async () => {
+    const candidate = await seededUser("candidate@hiroapp.com");
+    await Application.create({
+      user_id: candidate.id,
+      position_id: null,
+      status_id: STATUS.APPLIED,
+      attachment_text: "no seat",
+      attachment_file: null,
+    });
+    const listed = await applyService.applications(candidate);
+    expect(listed.some((row) => row.position_id === null && row.position === null)).toBe(true);
   });
 
   test("apply service logout without a token row is a no-op", async () => {

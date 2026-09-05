@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.7.3
+
+- `JsonResource.whenLoaded` returns `null` when a relation is loaded but empty. It does not call the transform, so `new PositionResource(value).toArray()` cannot crash on a missing belongsTo.
+
 ## 0.7.2
 
 - `withJsonErrorHandling` always maps thrown errors to JSON. `requestPrefersJson` treats `/api/` as JSON even when `Accept` is HTML, so hybrid staff HTML cannot remap JSON API errors.

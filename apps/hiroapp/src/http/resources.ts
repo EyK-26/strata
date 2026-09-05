@@ -1,10 +1,18 @@
 import { JsonResource } from "@getstrata/core/http/resources";
 import { dateOnly, hiringFlag, iso, serializeTimestamps } from "../lib/serialize.ts";
 
-function asRaw<T extends Record<string, unknown>>(value: {
-  toArray?: () => T;
-  toObject?: () => T;
-}): T {
+function asRaw<T extends Record<string, unknown>>(
+  value:
+    | {
+        toArray?: () => T;
+        toObject?: () => T;
+      }
+    | null
+    | undefined,
+): T {
+  if (value == null || typeof value !== "object") {
+    return {} as T;
+  }
   if (typeof value.toArray === "function") {
     return value.toArray();
   }
@@ -12,6 +20,16 @@ function asRaw<T extends Record<string, unknown>>(value: {
     return value.toObject();
   }
   return value as T;
+}
+
+function relatedArray(
+  Resource: new (value: unknown) => JsonResource,
+  value: unknown,
+): Record<string, unknown> | null {
+  if (value == null) {
+    return null;
+  }
+  return new Resource(value).toArray();
 }
 
 function id(value: unknown) {
@@ -119,9 +137,9 @@ class ApplicationResource extends JsonResource {
       attachment_file: raw.attachment_file,
       ...serializeTimestamps(raw),
     };
-    const position = this.whenLoaded("position", (value) => new PositionResource(value).toArray());
-    const status = this.whenLoaded("status", (value) => new NamedResource(value).toArray());
-    const user = this.whenLoaded("user", (value) => new UserResource(value).toArray());
+    const position = this.whenLoaded("position", (value) => relatedArray(PositionResource, value));
+    const status = this.whenLoaded("status", (value) => relatedArray(NamedResource, value));
+    const user = this.whenLoaded("user", (value) => relatedArray(UserResource, value));
     if (position !== undefined) {
       payload.position = position;
     }
