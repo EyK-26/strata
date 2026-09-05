@@ -1,6 +1,6 @@
 # @getstrata/bootstrap
 
-Application bootstrap for Strata sibling apps: HttpKernel, service container, and web utilities.
+Application bootstrap for Strata apps: HttpKernel, service container, and web utilities.
 
 ## Install
 
@@ -8,7 +8,7 @@ Application bootstrap for Strata sibling apps: HttpKernel, service container, an
 bun add @getstrata/bootstrap @getstrata/core
 ```
 
-## Web utilities (getstrata-style apps)
+## Web utilities
 
 ```typescript
 import {
@@ -20,22 +20,20 @@ import {
 } from "@getstrata/bootstrap";
 ```
 
-`CookieSessionStore` reads optional `is_admin` from the user row for global admin routing via `wrapWebGlobalAdmin`.
+`CookieSessionStore` can read `is_admin` from the user row for `wrapWebGlobalAdmin`. Pass `loadSessionUser` when your `users` table does not match the default `SELECT u.*`.
 
-## HttpKernel (API / module apps)
+## HttpKernel
 
 ```typescript
 import { createHttpKernel, createAppContext, coreProviders } from "@getstrata/bootstrap";
 ```
 
-`createAppContext()` does not call `assertProductionSecrets`. That helper is feature-gated for every app (tokens, CORS, OAuth, encryption only when those features are on). WorkHub also runs its own production extras from `App.serve()` / `queue:work`. Sibling HTMX apps can call the published helper without API tokens when feature flags are off — see [SIBLING-HTMX.md](../../docs/SIBLING-HTMX.md).
+`createAppContext()` does not call `assertProductionSecrets`. That helper is feature-gated (tokens, CORS, OAuth, encryption only when those features are on). HTML apps can call it without API tokens when those flags are off. See [docs/BUILDING-APPS.md](../../docs/BUILDING-APPS.md) and [docs/PRODUCTION.md](../../docs/PRODUCTION.md).
 
-Sibling HTMX apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstrap/web/session` instead of HMAC `SessionGuard`. Use `signIn` / `signOut` (or the redirect helpers) instead of calling `CookieSessionStore` from controllers. Pass `mapUser` to map roles in the app. Pass `loadSessionUser` when the default `learn_subscriber` / `is_admin` SELECT does not match your schema.
+HTML apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstrap/web/session` instead of HMAC `SessionGuard`. Use `signIn` / `signOut` (or the redirect helpers). Pass `mapUser` to map roles in the app.
 
-`wrapWeb` applies the web group (CSRF + flash) and `withErrorHandling`, so CSRF `ForbiddenError` becomes an HTML 403 in `FRONTEND_MODE=server-htmx`. `wrapWebGuest` is Laravel `guest` / `RedirectIfAuthenticated` (signed-in users go to `/` by default; pass a string or `(user) => path` to override). `wrapWebLogin` / `wrapWebRegister` include that web group plus throttle — do not wrap them with `wrapWeb` again. The throttle callback should return an HTML form at 429.
+`wrapWeb` applies the web group (CSRF + flash) and `withErrorHandling`, so CSRF `ForbiddenError` becomes an HTML 403 in `FRONTEND_MODE=server-htmx`. `wrapWebGuest` sends signed-in users to `/` by default (pass a string or `(user) => path` to override). `wrapWebLogin` / `wrapWebRegister` include that web group plus throttle. Do not wrap them with `wrapWeb` again. The throttle callback should return an HTML form at 429.
 
 `registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. Apps that dispatch model webhooks should call `registerWebhookJobs()` themselves.
 
-These subpaths assemble the in-repo dogfood app and are not a generic starter API: `@getstrata/bootstrap/createRoutes` (includes SCIM), `@getstrata/bootstrap/schedule`, and `@getstrata/bootstrap/createWebRoutes` (discovers app `webRoutes`; `/` is owned by the app). Sibling apps should use `buildWebModuleRoutes` / `buildModuleRoutes`.
-
-See the [strata](https://github.com/EyK-26/strata) monorepo reference app for full module patterns.
+These subpaths assemble leftover fixture HTTP for framework tests and are not a generic starter API: `@getstrata/bootstrap/createRoutes`, `@getstrata/bootstrap/schedule`, `@getstrata/bootstrap/createWebRoutes`. New apps should use `buildWebModuleRoutes` / `buildModuleRoutes`. HiroApp uses `createApp()` in `apps/hiroapp`.

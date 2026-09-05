@@ -1,9 +1,66 @@
 import { randomUUID } from "node:crypto";
 import { resolveApplicationQueue } from "@getstrata/bootstrap/applicationRegistry";
 import { mailer } from "@getstrata/core/mail/mailer";
+import type {
+  DatabaseNotificationPayload,
+  DatabaseNotificationStore,
+  MailNotificationMessage,
+  Notifiable,
+  NotificationChannelName,
+} from "@getstrata/core/notifications";
+import { createNotificationDispatcher, Notification } from "@getstrata/core/notifications";
 import { trackedSendNotificationJob } from "../../jobs/sendNotification.ts";
-import type { Notification } from "../../models/Notification.ts";
+import type { Notification as NotificationRow } from "../../models/Notification.ts";
 import { User } from "../../models/User.ts";
+
+class HiringMailNotification extends Notification<Notifiable> {
+  constructor(
+    private readonly input: {
+      type: string;
+      data: Record<string, unknown>;
+      email?: { to: string; subject: string; body: string };
+    },
+  ) {
+    super();
+  }
+
+  override via(_notifiable: Notifiable): NotificationChannelName[] {
+    return this.input.email ? ["database", "mail"] : ["database"];
+  }
+
+  override toMail(_notifiable: Notifiable): MailNotificationMessage | null {
+    if (!this.input.email) {
+      return null;
+    }
+    return {
+      subject: this.input.email.subject,
+      body: this.input.email.body,
+    };
+  }
+
+  override toDatabase(_notifiable: Notifiable): DatabaseNotificationPayload | null {
+    return {
+      type: this.input.type,
+      title: String(this.input.data.subject ?? this.input.type),
+      body: String(this.input.data.text ?? this.input.email?.body ?? ""),
+      data: this.input.data,
+      notifiableType: "App\\Models\\User",
+    };
+  }
+}
+
+const hiringNotificationStore: DatabaseNotificationStore = {
+  async create(input) {
+    const owner = await User.findOrFail(input.userId);
+    const created = await owner.notifications().create({
+      id: randomUUID(),
+      type: input.type,
+      data: input.data ?? { title: input.title, body: input.body },
+      read_at: null,
+    });
+    return (created as NotificationRow).toObject();
+  },
+};
 
 export async function deliverNotification(input: {
   userId: number;
@@ -11,24 +68,21 @@ export async function deliverNotification(input: {
   data: Record<string, unknown>;
   email?: { to: string; subject: string; body: string };
 }) {
-  const owner = await User.findOrFail(input.userId);
-  const created = await owner.notifications().create({
-    id: randomUUID(),
-    type: input.type,
-    data: input.data,
-    read_at: null,
-  });
-  const row = (created as Notification).toObject();
-
-  if (input.email) {
-    await mailer().send({
-      to: input.email.to,
-      subject: input.email.subject,
-      body: input.email.body,
-    });
-  }
-
-  return row;
+  let created: Record<string, unknown> | null = null;
+  const store: DatabaseNotificationStore = {
+    async create(record) {
+      created = await hiringNotificationStore.create(record);
+      return created;
+    },
+  };
+  const dispatcher = createNotificationDispatcher(mailer(), store);
+  const notifiable: Notifiable = {
+    getNotificationKey: () => input.userId,
+    routeNotificationFor: (channel) =>
+      channel === "mail" ? (input.email?.to ?? null) : input.userId,
+  };
+  await dispatcher.send(notifiable, new HiringMailNotification(input));
+  return created ?? { type: input.type, data: input.data };
 }
 
 export async function notifyUser(input: {

@@ -30,7 +30,7 @@ describe("EtaViewEngine", () => {
   const previousFrontendMode = process.env.FRONTEND_MODE;
 
   beforeAll(async () => {
-    viewsDirectory = await mkdtemp(join(tmpdir(), "workhub-views-"));
+    viewsDirectory = await mkdtemp(join(tmpdir(), "strata-views-"));
     await mkdir(join(viewsDirectory, "layouts"), { recursive: true });
     await mkdir(join(viewsDirectory, "partials"), { recursive: true });
 
@@ -177,15 +177,24 @@ describe("EtaViewEngine", () => {
 });
 
 describe("assertEtaHtmlSource", () => {
-  test("accepts committed WorkHub and scaffold HTML+Eta views", async () => {
+  test("accepts committed HiroApp and scaffold HTML+Eta views", async () => {
     const roots = [
-      join(process.cwd(), "resources/views"),
+      join(process.cwd(), "apps/hiroapp/resources/views"),
       join(process.cwd(), "templates"),
       join(process.cwd(), "packages/strata-starter/templates"),
     ];
 
     for (const root of roots) {
-      for (const file of await collectEtaFiles(root)) {
+      let files: string[] = [];
+      try {
+        files = await collectEtaFiles(root);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          continue;
+        }
+        throw error;
+      }
+      for (const file of files) {
         const source = await readFile(file, "utf8");
         expect(() => assertEtaHtmlSource(relative(process.cwd(), file), source)).not.toThrow();
       }

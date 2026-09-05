@@ -32,7 +32,7 @@ async function withOpenApiWorkspace(
   openapiContents: string,
   run: () => Promise<void>,
 ): Promise<void> {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "workhub-openapi-check-"));
+  const tempDirectory = await mkdtemp(join(tmpdir(), "strata-openapi-check-"));
   tempDirectories.push(tempDirectory);
 
   const docsDirectory = join(tempDirectory, "docs");

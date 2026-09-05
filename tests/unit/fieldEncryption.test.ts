@@ -45,19 +45,19 @@ describe("fieldEncryption", () => {
       throw new Error("Expected encryption key to be configured.");
     }
 
-    const ciphertext = encryptField("admin@workhub.test", key);
+    const ciphertext = encryptField("admin@strata.test", key);
     expect(ciphertext.startsWith("enc:v1:")).toBe(true);
-    expect(revealEmail(ciphertext)).toBe("admin@workhub.test");
-    expect(decryptField(ciphertext, key)).toBe("admin@workhub.test");
+    expect(revealEmail(ciphertext)).toBe("admin@strata.test");
+    expect(decryptField(ciphertext, key)).toBe("admin@strata.test");
   });
 
   test("creates deterministic lookup hashes for encrypted emails", () => {
     process.env.KMS_ENCRYPTION_KEY = "b".repeat(64);
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
 
-    const protectedEmail = protectEmail("Admin@WorkHub.test");
+    const protectedEmail = protectEmail("Admin@Strata.test");
     expect(protectedEmail.storedEmail.startsWith("enc:v1:")).toBe(true);
-    expect(emailLookupForQuery("admin@workhub.test")).toBe(protectedEmail.emailLookup);
+    expect(emailLookupForQuery("admin@strata.test")).toBe(protectedEmail.emailLookup);
   });
 
   test("returns plaintext when encryption is disabled or keys are missing", () => {

@@ -32,14 +32,14 @@ jobs:
 
       - name: Run Bun 1.4 parallel unit tests
         env:
-          WORKHUB_SKIP_TEST_BOOTSTRAP: 1
+          SKIP_FIXTURE_TEST_BOOTSTRAP: 1
           PORT: "3000"
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
           FEATURE_SCIM: "true"
-          SCIM_BEARER_TOKEN: workhub-scim-test-token
-          ADMIN_API_TOKEN: workhub-admin-test-token
-          MEMBER_API_TOKEN: workhub-member-test-token
+          SCIM_BEARER_TOKEN: strata-scim-test-token
+          ADMIN_API_TOKEN: strata-admin-test-token
+          MEMBER_API_TOKEN: strata-member-test-token
         run: |
           bun install --frozen-lockfile
           bun dedupe
@@ -64,28 +64,25 @@ jobs:
 
       - name: Install dependencies and run checks
         env:
-          WORKHUB_SKIP_TEST_BOOTSTRAP: 1
+          SKIP_FIXTURE_TEST_BOOTSTRAP: 1
           PORT: "3000"
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
           FEATURE_SCIM: "true"
-          SCIM_BEARER_TOKEN: workhub-scim-test-token
-          ADMIN_API_TOKEN: workhub-admin-test-token
-          MEMBER_API_TOKEN: workhub-member-test-token
+          SCIM_BEARER_TOKEN: strata-scim-test-token
+          ADMIN_API_TOKEN: strata-admin-test-token
+          MEMBER_API_TOKEN: strata-member-test-token
         run: |
           bun install --frozen-lockfile
           bun dedupe
           bun run build:framework
           bun run build:bootstrap
           scripts/with-host-env.sh sh -c "
-            DOGFOOD_APP=workhub bun run cli migrate:fresh --seed &&
+            STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed &&
             DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
             bun run validate:ci &&
             bun run verify:framework
           "
-
-      - name: Build spa-react frontend
-        run: bun run build:frontend
 
       - name: Start app for smoke tests
         env:

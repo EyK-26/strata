@@ -1,9 +1,12 @@
+import { CACHE_TAGS } from "@getstrata/core/cache/tags";
 import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
   UnprocessableEntityError,
 } from "@getstrata/core/errors/http";
+import { resolveApplicationCache } from "@getstrata/core/runtime/applicationRegistry";
+import { guestCanViewResource } from "@getstrata/core/security/publicReads";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { recordHiringEvent } from "../../lib/hiringEvents.ts";
 import { isStaff } from "../../lib/roles.ts";
@@ -83,6 +86,14 @@ function isPinned(value: boolean | number | string | null | undefined) {
 
 function isLive(status: CareerPostingStatus) {
   return status === "published" || status === "scheduled";
+}
+
+async function flushCareerBoardCache() {
+  try {
+    await resolveApplicationCache().tags(CACHE_TAGS.careers).flush();
+  } catch {
+    // Isolated service calls may run before the app cache is bound.
+  }
 }
 
 export function serializeCareerPosting(row: CareerPosting | CareerPostingRecord) {
@@ -180,6 +191,9 @@ export class CareerService {
         expired += 1;
       }
     }
+    if (published > 0 || expired > 0) {
+      await flushCareerBoardCache();
+    }
     return { published, expired };
   }
 
@@ -197,6 +211,19 @@ export class CareerService {
   }
 
   async listPublic() {
+    if (!guestCanViewResource()) {
+      throw new ForbiddenError("The public career board is turned off.");
+    }
+    try {
+      return await resolveApplicationCache()
+        .tags(CACHE_TAGS.careers)
+        .remember("careers:public", () => this.loadPublicBoard());
+    } catch {
+      return await this.loadPublicBoard();
+    }
+  }
+
+  private async loadPublicBoard() {
     const rows = await careerPostings.listed();
     const freshRows = await Promise.all(rows.map((row) => this.fresh(row)));
     const visible = await Promise.all(
@@ -221,6 +248,9 @@ export class CareerService {
   }
 
   async showPublic(posting: CareerPosting) {
+    if (!guestCanViewResource()) {
+      throw new ForbiddenError("The public career board is turned off.");
+    }
     const fresh = await this.fresh(posting);
     if (asPostingStatus(fresh.status) !== "published") {
       throw new NotFoundError("Career posting not found.");
@@ -278,6 +308,7 @@ export class CareerService {
     if (!publishAt) {
       await watchlistService.alertPublished(position, saved.id);
     }
+    await flushCareerBoardCache();
     return saved;
   }
 
@@ -296,6 +327,7 @@ export class CareerService {
       { career_posting_id: updated.id, position_id: updated.position_id },
       { type: "career_posting", id: updated.id },
     );
+    await flushCareerBoardCache();
     return updated;
   }
 
@@ -314,6 +346,7 @@ export class CareerService {
       { career_posting_id: updated.id, position_id: updated.position_id },
       { type: "career_posting", id: updated.id },
     );
+    await flushCareerBoardCache();
     return updated;
   }
 
@@ -332,6 +365,7 @@ export class CareerService {
       { career_posting_id: updated.id, position_id: updated.position_id },
       { type: "career_posting", id: updated.id },
     );
+    await flushCareerBoardCache();
     return updated;
   }
 
@@ -347,6 +381,7 @@ export class CareerService {
       { career_posting_id: updated.id, position_id: updated.position_id },
       { type: "career_posting", id: updated.id },
     );
+    await flushCareerBoardCache();
     return updated;
   }
 }

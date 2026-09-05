@@ -161,7 +161,7 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     }
 
     // Persist in sequence so autoincrement ids match make() order. Seeders and
-    // Laravel-style factories depend on that (first sequence row is id 1).
+    // Factories depend on that (first sequence row is id 1).
     const records: TRecord[] = [];
     for (let index = 0; index < this.quantity; index += 1) {
       records.push(await this.createOne(overrides));

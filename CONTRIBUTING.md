@@ -1,16 +1,14 @@
 # Contributing
 
-Thanks for improving WorkHub. This project is Docker-first — run commands inside the app container unless noted.
+Thanks for improving Strata. This project is Docker-first. Run commands inside the app container unless you use the host wrappers (`bun run dev:host`, `bun run validate:host`).
 
 ## Prerequisites
 
 - Docker Compose
 - Copy `.env.example` to `.env` for in-container runs
-- For **host-native** Bun against published ports: use `bun run dev:host` / `bun run validate:host` or copy `.env.host.example` to `.env.host`
+- For host-native Bun against published ports: `bun run dev:host` / `bun run validate:host`, or copy `.env.host.example` to `.env.host`
 
 ## Before you open a PR
-
-Run the full validation suite:
 
 ```bash
 docker compose run --rm -e QUEUE_DRIVER=sync app bun run validate:ci
@@ -22,22 +20,25 @@ Or inside a running container:
 docker compose exec app bun run validate:ci
 ```
 
-Equivalent step-by-step:
+Step by step:
 
 ```bash
-docker compose exec app bun run check      # TypeScript
-docker compose exec app bun run lint:ci    # Biome lint + format check
+docker compose exec app bun run check
+docker compose exec app bun run lint:ci
 docker compose exec app strata openapi:validate
-docker compose exec app strata openapi:check  # Committed OpenAPI drift
-docker compose exec app bun run test:coverage    # Scoped 100% coverage gate
+docker compose exec app strata openapi:check
+docker compose exec app bun run test:coverage
+docker compose exec app bun run test:hiroapp:coverage
 ```
 
-## Git hooks (optional)
+On the host: `bun run validate:host`.
 
-After `bun install`, Lefthook installs hooks automatically via the `prepare` script:
+## Git hooks
 
-- **pre-commit** — Biome format/lint on staged files
-- **pre-push** — full `validate:ci` script
+After `bun install`, Lefthook installs hooks via the `prepare` script:
+
+- pre-commit: Biome format/lint on staged files
+- pre-push: `bun run validate:host`
 
 Manual install: `bunx lefthook install`
 
@@ -47,38 +48,49 @@ Manual install: `bunx lefthook install`
 docker compose exec app strata make:module invoice
 ```
 
-Generated modules use `wrapAbility` for mutations. Gate optional features with `isFeatureEnabled()` in `index.ts`. Enforce org scope in services via `membershipScope` helpers.
+Gate optional features with `isFeatureEnabled()` in `index.ts`. Put hiring-domain examples in HiroApp, not in the leftover `src/db` fixture.
 
 ## Migrations and seeds
 
+HiroApp:
+
 ```bash
-docker compose exec app strata make:migration add_example
-docker compose exec app strata migrate:fresh --seed
+docker compose exec app bun run hiroapp:fresh
 ```
+
+Fixture schema (framework tests only):
+
+```bash
+docker compose exec app sh -c 'STRATA_SCHEMA=fixture strata migrate:fresh --seed'
+```
+
+Never edit an applied migration. Add a new file.
 
 ## OpenAPI
 
-Regenerate when routes change:
+When HiroApp routes change:
 
 ```bash
-docker compose exec app strata openapi:generate
-docker compose exec app strata sdk:generate
+DOGFOOD_APP=hiroapp APP_KEY_PREFIX=hiroapp APP_NAME=HiroApp API_PREFIX=/api strata openapi:generate
+strata openapi:check
 ```
 
-CI fails if `docs/openapi.json` drifts — commit regenerated files.
+CI fails if `docs/openapi.json` drifts. Commit regenerated files.
 
 ## Code style
 
 - Biome is the source of truth (`biome.json`)
-- Match existing patterns in neighboring files
-- Keep enterprise features opt-in via `FEATURE_*` env vars
+- Match neighboring files
+- Keep enterprise features opt-in via `FEATURE_*`
+- Import `@getstrata/core/...` subpaths, never the root barrel, from app code
 
 ## Tests
 
-- Unit: `bun run unit`
-- Integration (requires Postgres): `bun run integration`
-- Add integration coverage for auth, tenancy, and feature-flag behavior when touching those areas
+- Framework unit: `bun run unit`
+- Integration (Postgres/Redis): `bun run integration`
+- HiroApp: `bun run test:hiroapp`
+- Add coverage for auth, tenancy, and flags when you touch those areas
 
 ## Security
 
-Do not commit secrets. Production blocks default seed tokens — see `src/bootstrap/secretsGuard.ts`.
+Do not commit secrets. Production blocks published seed tokens. See `src/bootstrap/secretsGuard.ts`.

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in with SSO | HiroApp</title>
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="Login auth-card">
+        <h1>Company single sign-on</h1>
+        <p>Use your company identity provider when the hiring team has configured one.</p>
+        <% if (it.errors?.provider) { %>
+          <p class="error"><%= it.errors.provider %></p>
+        <% } %>
+        <% if (!it.providers || it.providers.length === 0) { %>
+          <p>No SSO providers are configured. Use email and password on the login page.</p>
+        <% } else { %>
+          <ul>
+            <% it.providers.forEach((name) => { %>
+              <li><a href="/auth/oauth/<%= name %>">Continue with <%= name %></a></li>
+            <% }) %>
+          </ul>
+        <% } %>
+        <p><a href="/login">Back to email login</a></p>
+      </div>
+    </div>
+  </body>
+</html>

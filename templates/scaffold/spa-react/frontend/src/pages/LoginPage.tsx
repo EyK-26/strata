@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 export default function LoginPage() {
   const { login, token } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@workhub.test");
+  const [email, setEmail] = useState("admin@example.test");
   const [password, setPassword] = useState("password");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

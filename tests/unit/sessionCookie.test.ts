@@ -102,7 +102,7 @@ describe("sessionCookie", () => {
 
     const request = new Request("http://example.test/organizations", {
       headers: {
-        cookie: "workhub_session=999.123.deadbeef",
+        cookie: "strata_session=999.123.deadbeef",
       },
     });
 
@@ -113,7 +113,7 @@ describe("sessionCookie", () => {
     expect(
       readSessionUserId(
         new Request("http://example.test/", {
-          headers: { cookie: "workhub_session=1.2" },
+          headers: { cookie: "strata_session=1.2" },
         }),
       ),
     ).toBeNull();
@@ -121,7 +121,7 @@ describe("sessionCookie", () => {
     expect(
       readSessionUserId(
         new Request("http://example.test/", {
-          headers: { cookie: "workhub_session=0.123.sig" },
+          headers: { cookie: "strata_session=0.123.sig" },
         }),
       ),
     ).toBeNull();
@@ -131,7 +131,7 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`42.${expiredIssuedAt}.deadbeef`)}`,
+            cookie: `strata_session=${encodeURIComponent(`42.${expiredIssuedAt}.deadbeef`)}`,
           },
         }),
       ),
@@ -145,7 +145,7 @@ describe("sessionCookie", () => {
     expect(
       readSessionUserId(
         new Request("http://example.test/", {
-          headers: { cookie: `workhub_session=${encodeURIComponent(tampered)}` },
+          headers: { cookie: `strata_session=${encodeURIComponent(tampered)}` },
         }),
       ),
     ).toBeNull();
@@ -154,7 +154,7 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.`)}`,
+            cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.`)}`,
           },
         }),
       ),
@@ -190,7 +190,7 @@ describe("sessionCookie", () => {
     const cookiePair = createSessionCookie(42).split(";")[0] ?? "";
     const encoded = cookiePair.split("=")[1] ?? "";
     const request = new Request("http://example.test/", {
-      headers: { cookie: `workhub_session=${encoded}` },
+      headers: { cookie: `strata_session=${encoded}` },
     });
 
     expect(readSessionUserId(request)).toBe(42);
@@ -203,14 +203,14 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${badSignature}`)}`,
+            cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${badSignature}`)}`,
           },
         }),
       ),
     ).toBeNull();
   });
 
-  test("defaults to the WorkHub session cookie name when APP_KEY_PREFIX is pinned", () => {
+  test("defaults to the Strata session cookie name when APP_KEY_PREFIX is pinned", () => {
     delete process.env.SESSION_COOKIE_NAME;
 
     expect(SESSION_COOKIE).toBe(appCookieName("session"));
@@ -243,7 +243,7 @@ describe("sessionCookie", () => {
 
     const cookie = createSessionCookie(11);
     expect(cookie).toContain("strata_session=");
-    expect(cookie).not.toContain("workhub_session=");
+    expect(cookie).not.toContain("strata_session=");
 
     expect(
       readSessionUserId(
@@ -256,13 +256,13 @@ describe("sessionCookie", () => {
     expect(
       readSessionUserId(
         new Request("http://example.test/", {
-          headers: { cookie: "workhub_session=11.1.deadbeef" },
+          headers: { cookie: "strata_session=11.1.deadbeef" },
         }),
       ),
     ).toBeNull();
 
     process.env.SESSION_COOKIE_NAME = "   ";
-    expect(sessionCookieName()).toBe("workhub_session");
+    expect(sessionCookieName()).toBe("strata_session");
   });
 
   test("creates a longer remember-me cookie that stays valid past the session TTL", () => {
@@ -286,7 +286,7 @@ describe("sessionCookie", () => {
     expect(
       readSessionUserId(
         new Request("http://example.test/", {
-          headers: { cookie: `workhub_session=${encodeURIComponent(`42.${now}.0.deadbeef`)}` },
+          headers: { cookie: `strata_session=${encodeURIComponent(`42.${now}.0.deadbeef`)}` },
         }),
       ),
     ).toBeNull();
@@ -294,7 +294,7 @@ describe("sessionCookie", () => {
     expect(
       readSessionUserId(
         new Request("http://example.test/", {
-          headers: { cookie: `workhub_session=${encodeURIComponent(`42.${now}.abc.deadbeef`)}` },
+          headers: { cookie: `strata_session=${encodeURIComponent(`42.${now}.abc.deadbeef`)}` },
         }),
       ),
     ).toBeNull();
@@ -304,7 +304,7 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`${42}.${expiredIssuedAt}.${SESSION_REMEMBER_TTL_SECONDS}.deadbeef`)}`,
+            cookie: `strata_session=${encodeURIComponent(`${42}.${expiredIssuedAt}.${SESSION_REMEMBER_TTL_SECONDS}.deadbeef`)}`,
           },
         }),
       ),
@@ -314,7 +314,7 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`42.${now}.${SESSION_REMEMBER_TTL_SECONDS}.`)}`,
+            cookie: `strata_session=${encodeURIComponent(`42.${now}.${SESSION_REMEMBER_TTL_SECONDS}.`)}`,
           },
         }),
       ),
@@ -330,7 +330,7 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${ttlRaw}.${shortSignature}`)}`,
+            cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${ttlRaw}.${shortSignature}`)}`,
           },
         }),
       ),
@@ -341,7 +341,7 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${ttlRaw}.${badSignature}`)}`,
+            cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${ttlRaw}.${badSignature}`)}`,
           },
         }),
       ),
@@ -351,7 +351,7 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`0.${now}.${SESSION_REMEMBER_TTL_SECONDS}.deadbeef`)}`,
+            cookie: `strata_session=${encodeURIComponent(`0.${now}.${SESSION_REMEMBER_TTL_SECONDS}.deadbeef`)}`,
           },
         }),
       ),

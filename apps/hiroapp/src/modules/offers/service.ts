@@ -1,4 +1,10 @@
 import {
+  decryptField,
+  encryptField,
+  isFieldEncryptionEnabled,
+  resolveEncryptionKey,
+} from "@getstrata/core/crypto/fieldEncryption";
+import {
   ConflictError,
   ForbiddenError,
   UnprocessableEntityError,
@@ -84,7 +90,30 @@ function parseExpiresAt(value: string | null | undefined) {
   return expiresAt;
 }
 
-export function serializeOffer(row: Offer | OfferRecord) {
+function protectOfferNotes(notes: string | null | undefined): string | null {
+  const trimmed = notes?.trim() || null;
+  if (!trimmed) {
+    return null;
+  }
+  const key = resolveEncryptionKey();
+  if (!key || !isFieldEncryptionEnabled()) {
+    return trimmed;
+  }
+  return encryptField(trimmed, key);
+}
+
+function revealOfferNotes(notes: string | null | undefined): string | null {
+  if (!notes) {
+    return null;
+  }
+  const key = resolveEncryptionKey();
+  if (!key) {
+    return notes;
+  }
+  return decryptField(notes, key);
+}
+
+function serializeOffer(row: Offer | OfferRecord) {
   const record =
     typeof (row as Offer).toObject === "function"
       ? (row as Offer).toObject()
@@ -97,7 +126,7 @@ export function serializeOffer(row: Offer | OfferRecord) {
     starts_on: dateOnly(record.starts_on),
     expires_at: iso(record.expires_at),
     status: asOfferStatus(record.status),
-    notes: record.notes,
+    notes: revealOfferNotes(record.notes),
     created_at: iso(record.created_at),
     updated_at: iso(record.updated_at),
   };
@@ -142,7 +171,7 @@ export class OfferService {
     assertStaff(actor);
     const salary = parseSalary(Number(input.salary));
     const startsOn = parseStartsOn(input.starts_on);
-    const notes = input.notes?.trim() || null;
+    const notes = protectOfferNotes(input.notes);
     await this.serializedForApplication(Number(application.id));
     const active = await offers.activeForApplication(Number(application.id));
     if (active) {

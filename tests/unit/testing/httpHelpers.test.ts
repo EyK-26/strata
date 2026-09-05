@@ -102,7 +102,7 @@ describe("postForm", () => {
 
     try {
       const response = await postForm(`${server.url}login`, {
-        email: "admin@workhub.test",
+        email: "admin@strata.test",
         password: "password",
       });
       const body = (await response.json()) as {
@@ -113,7 +113,7 @@ describe("postForm", () => {
 
       expect(body.method).toBe("POST");
       expect(body.contentType).toBe("application/x-www-form-urlencoded");
-      expect(body.body).toBe("email=admin%40workhub.test&password=password");
+      expect(body.body).toBe("email=admin%40strata.test&password=password");
     } finally {
       server.stop(true);
     }

@@ -1,18 +1,18 @@
 groups:
-  - name: workhub
+  - name: strata
     rules:
-      - alert: WorkHubReadyCheckFailing
+      - alert: StrataReadyCheckFailing
         expr: increase(http_requests_total{path="/ready",status="503"}[5m]) > 0
         for: 2m
         labels:
           severity: critical
         annotations:
-          summary: WorkHub readiness probe is failing
+          summary: The app readiness probe is failing
 
-      - alert: WorkHubHighErrorRate
+      - alert: StrataHighErrorRate
         expr: sum(increase(http_requests_total{status=~"5.."}[5m])) > 10
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: WorkHub is returning elevated 5xx responses
+          summary: The app is returning elevated 5xx responses

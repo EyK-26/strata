@@ -2,6 +2,7 @@ import { ForbiddenError } from "@getstrata/core/errors/http";
 import { readSubmittedCsrfTokenFromBody, resolveCsrfToken, verifyCsrfToken } from "./csrfToken";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";
+import { requestUsesHeaderCredentials } from "./statelessAuth";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -18,6 +19,10 @@ function appendSetCookie(response: Response, cookie: string): Response {
 
 function createCsrfMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
+    if (requestUsesHeaderCredentials(request)) {
+      return await next();
+    }
+
     const method = request.method.toUpperCase();
 
     if (!MUTATING_METHODS.has(method)) {

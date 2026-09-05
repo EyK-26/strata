@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import {
-  CSRF_COOKIE,
   createCsrfTokenCookie,
   csrfCookieName,
   resolveCsrfToken,
   verifyCsrfToken,
 } from "@getstrata/core/http/csrfToken";
+import { appCookieName } from "@getstrata/core/runtime/appKeyPrefix";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("csrfToken", () => {
@@ -41,14 +41,13 @@ describe("csrfToken", () => {
     }
   });
 
-  test("defaults to the WorkHub CSRF cookie name", () => {
+  test("defaults to the namespaced CSRF cookie", () => {
     const previous = process.env.CSRF_COOKIE_NAME;
     delete process.env.CSRF_COOKIE_NAME;
 
     try {
-      expect(CSRF_COOKIE).toBe("workhub_csrf");
-      expect(csrfCookieName()).toBe("workhub_csrf");
-      expect(createCsrfTokenCookie().cookie).toContain("workhub_csrf=");
+      expect(csrfCookieName()).toBe(appCookieName("csrf"));
+      expect(createCsrfTokenCookie().cookie).toContain(`${appCookieName("csrf")}=`);
     } finally {
       restoreEnvVar("CSRF_COOKIE_NAME", previous);
     }
@@ -62,7 +61,7 @@ describe("csrfToken", () => {
       expect(csrfCookieName()).toBe("strata_csrf");
       const created = createCsrfTokenCookie();
       expect(created.cookie).toContain("strata_csrf=");
-      expect(created.cookie).not.toContain("workhub_csrf=");
+      expect(created.cookie).not.toContain("strata_csrf=");
 
       const request = new Request("http://example.test/", {
         headers: { cookie: created.cookie.split(";")[0] ?? "" },
@@ -83,7 +82,7 @@ describe("createCsrfMiddleware", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("set-cookie")).toContain("workhub_csrf=");
+    expect(response.headers.get("set-cookie")).toContain(`${appCookieName("csrf")}=`);
   });
 
   test("rejects mutating requests without a csrf token", async () => {
@@ -119,5 +118,26 @@ describe("createCsrfMiddleware", () => {
     );
 
     expect(response.status).toBe(302);
+  });
+
+  test("skips CSRF when the request uses a bearer or basic credential", async () => {
+    const middleware = createCsrfMiddleware();
+    const bearer = await middleware(
+      new Request("http://example.test/api/applications", {
+        method: "POST",
+        headers: { authorization: "Bearer hiring-token" },
+      }),
+      async () => new Response("ok"),
+    );
+    const basic = await middleware(
+      new Request("http://example.test/api/applications", {
+        method: "POST",
+        headers: { authorization: `Basic ${Buffer.from("a:b").toString("base64")}` },
+      }),
+      async () => new Response("ok"),
+    );
+
+    expect(bearer.status).toBe(200);
+    expect(basic.status).toBe(200);
   });
 });

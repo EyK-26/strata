@@ -12,8 +12,8 @@ const seeder: Seeder = {
     await db`
       INSERT INTO users (id, name, email, email_lookup, role, tenant_id, password_hash, current_organization_id)
       VALUES
-        (1, 'Admin User', 'admin@workhub.test', 'admin@workhub.test', 'admin', 1, ${adminPasswordHash}, 1),
-        (2, 'Member User', 'member@workhub.test', 'member@workhub.test', 'member', 1, ${memberPasswordHash}, 1)
+        (1, 'Admin User', 'admin@strata.test', 'admin@strata.test', 'admin', 1, ${adminPasswordHash}, 1),
+        (2, 'Member User', 'member@strata.test', 'member@strata.test', 'member', 1, ${memberPasswordHash}, 1)
       ON CONFLICT (id) DO UPDATE SET
         password_hash = EXCLUDED.password_hash,
         email_lookup = EXCLUDED.email_lookup,

@@ -13,7 +13,7 @@ import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("storage", () => {
   test("writes, reads, and deletes files", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "workhub-storage-"));
+    const directory = await mkdtemp(join(tmpdir(), "strata-storage-"));
     const storage = new StorageManager(new LocalStorageDriver(directory));
 
     try {

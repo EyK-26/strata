@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cloud Agent install phase for WorkHub (Strata).
+# Cloud Agent install phase for Strata.
 #
 # Idempotent one-time setup that is captured in the environment snapshot:
 #   - Bun 1.4.0 (pinned)

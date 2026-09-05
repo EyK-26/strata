@@ -1,12 +1,12 @@
-# Semgrep SAST rules for WorkHub
+# Semgrep SAST rules for Strata
 
 rules:
-  - id: workhub-hardcoded-bearer-token
+  - id: strata-hardcoded-bearer-token
     message: Avoid hard-coded bearer tokens outside test fixtures.
     severity: ERROR
     languages: [typescript]
     patterns:
-      - pattern-regex: Bearer workhub-[a-z-]+
+      - pattern-regex: Bearer strata-[a-z-]+
     paths:
       exclude:
         - tests/

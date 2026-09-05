@@ -11,13 +11,12 @@ export const options = {
 };
 
 const baseUrl = __ENV.BASE_URL || "http://localhost:3000";
-const adminToken = __ENV.ADMIN_API_TOKEN || "workhub-admin-test-token";
 
 export function setup() {
   const loginResponse = http.post(
-    `${baseUrl}/api/v1/auth/login`,
+    `${baseUrl}/api/auth/token`,
     JSON.stringify({
-      email: "admin@workhub.test",
+      email: "recruiter@hiroapp.com",
       password: "password",
     }),
     {
@@ -26,13 +25,13 @@ export function setup() {
   );
 
   check(loginResponse, {
-    "login ok": (response) => response.status === 201,
+    "jwt mint ok": (response) => response.status === 200,
   });
 
   const loginBody = loginResponse.json();
 
   return {
-    token: loginBody?.token ?? adminToken,
+    token: loginBody?.token ?? "",
   };
 }
 
@@ -43,15 +42,9 @@ export default function (data) {
 
   check(http.get(`${baseUrl}/health`), { "health ok": (response) => response.status === 200 });
   check(http.get(`${baseUrl}/ready`), { "ready ok": (response) => response.status === 200 });
-
-  const organizations = http.get(`${baseUrl}/api/v1/organizations`, { headers });
-  check(organizations, {
-    "organizations ok": (response) => response.status === 200,
-  });
-
-  const projects = http.get(`${baseUrl}/api/v1/projects`, { headers });
-  check(projects, {
-    "projects ok": (response) => response.status === 200,
+  check(http.get(`${baseUrl}/careers`), { "careers ok": (response) => response.status === 200 });
+  check(http.get(`${baseUrl}/api/user`, { headers }), {
+    "current user ok": (response) => response.status === 200,
   });
 
   sleep(0.5);

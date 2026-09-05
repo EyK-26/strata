@@ -4,14 +4,14 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 FAILED=0
 
-echo "Scanning for default WorkHub credential literals outside approved paths..."
+echo "Scanning for default published test credential literals outside approved paths..."
 
 if ! command -v rg >/dev/null 2>&1; then
   echo "ripgrep (rg) is required for scripts/security-scan.sh" >&2
   exit 1
 fi
 
-PATTERN='workhub-(admin|member|scim)-test-token'
+PATTERN='strata-(admin|member|scim)-test-token'
 
 if rg -n \
   --glob '!.env*' \
@@ -27,9 +27,9 @@ if rg -n \
   --glob '!DEPLOY.md' \
   --glob '!RUNBOOK.md' \
   "${PATTERN}" \
-  "${ROOT}" >/tmp/workhub-secret-scan.txt 2>/dev/null; then
+  "${ROOT}" >/tmp/strata-secret-scan.txt 2>/dev/null; then
   echo "Default credential literals found outside approved paths:" >&2
-  cat /tmp/workhub-secret-scan.txt >&2
+  cat /tmp/strata-secret-scan.txt >&2
   FAILED=1
 else
   echo "No default credential literals detected outside approved paths."

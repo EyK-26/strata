@@ -2,11 +2,15 @@ import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel, type HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
 import { createScimAuthMiddleware } from "@getstrata/core/auth/scimAuthMiddleware";
+import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
 import { CORE_AUTH_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ValidationError } from "@getstrata/core/errors/http";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
+import { createLoginThrottleMiddleware } from "@getstrata/core/http/loginThrottleMiddleware";
 import type { Middleware, RouteHandler } from "@getstrata/core/http/middleware";
+import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbilityMiddleware";
+import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMiddleware";
 import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
 import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
@@ -49,6 +53,21 @@ export function wrapJson(handler: RouteHandler): RouteHandler {
 
 function csrfWhenNeeded(): ReturnType<typeof createCsrfMiddleware>[] {
   return [createCsrfMiddleware()];
+}
+
+function loginThrottle(): ReturnType<typeof createLoginThrottleMiddleware>[] {
+  const production = process.env.APP_ENV === "production";
+  const maxAttempts = Number(process.env.LOGIN_RATE_LIMIT_PER_WINDOW ?? (production ? "5" : "100"));
+  const decaySeconds = Number(
+    process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS ?? (production ? "900" : "60"),
+  );
+  return [
+    createLoginThrottleMiddleware({
+      redisUrl: process.env.REDIS_URL?.trim() || undefined,
+      maxAttempts: Number.isInteger(maxAttempts) && maxAttempts > 0 ? maxAttempts : 100,
+      decaySeconds: Number.isInteger(decaySeconds) && decaySeconds > 0 ? decaySeconds : 60,
+    }),
+  ];
 }
 
 function touchCookieSession(): Middleware {
@@ -94,6 +113,21 @@ export function wrapGuestApi(dependencies: AppDependencies, handler: RouteHandle
   )(wrapJson(handler));
 }
 
+export function wrapLoginApi(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
+  return withMiddleware(...loginThrottle())(wrapGuestApi(dependencies, handler));
+}
+
+export function wrapTokenApi(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
+  const kernel = createKernel(dependencies);
+  const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
+  return withMiddleware(
+    ...loginThrottle(),
+    createAuthMiddleware(auth),
+    createTenantMiddleware(),
+    ...kernel.group("api"),
+  )(wrapJson(handler));
+}
+
 export function wrapWeb(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
   const kernel = createKernel(dependencies);
   const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
@@ -112,6 +146,10 @@ export function wrapWebGuest(dependencies: AppDependencies, handler: RouteHandle
   )(kernel.wrapWebGuest(handler));
 }
 
+export function wrapLoginWeb(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
+  return withMiddleware(...loginThrottle())(wrapWebGuest(dependencies, handler));
+}
+
 export function wrapWebAuthenticated(
   dependencies: AppDependencies,
   handler: RouteHandler,
@@ -125,6 +163,36 @@ export function wrapWebAuthenticated(
     createRequireVerifiedMiddleware(auth),
     createTenantMiddleware(),
   )(kernel.wrapWeb(handler));
+}
+
+export function wrapWebUnverified(
+  dependencies: AppDependencies,
+  handler: RouteHandler,
+): RouteHandler {
+  const kernel = createKernel(dependencies);
+  const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
+  return withMiddleware(
+    createAuthMiddleware(auth),
+    touchCookieSession(),
+    createRequireWebAuthMiddleware(auth),
+    createTenantMiddleware(),
+  )(kernel.wrapWeb(handler));
+}
+
+export function wrapPartnerApi(
+  dependencies: AppDependencies,
+  ability: string,
+  handler: RouteHandler,
+): RouteHandler {
+  const kernel = createKernel(dependencies);
+  const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
+  return withMiddleware(
+    createAuthMiddleware(auth),
+    createRequireAuthMiddleware(auth),
+    createRequireAbilityMiddleware(createTokenAbilityChecker())(ability),
+    createTenantMiddleware(),
+    ...kernel.group("api"),
+  )(wrapJson(handler));
 }
 
 export function wrapWebPasswordConfirm(

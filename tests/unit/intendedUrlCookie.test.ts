@@ -46,7 +46,7 @@ describe("intendedUrlCookie", () => {
   test("creates and reads a same-origin intended path", () => {
     const cookie = createIntendedUrlCookie("/account?tab=profile");
 
-    expect(cookie).toContain("workhub_intended=");
+    expect(cookie).toContain("strata_intended=");
     expect(cookie).toContain("Max-Age=86400");
 
     const request = new Request("http://example.test/verify-email", {
@@ -74,21 +74,21 @@ describe("intendedUrlCookie", () => {
     expect(
       readIntendedUrl(
         new Request("http://example.test/verify-email", {
-          headers: { cookie: "workhub_session=abc" },
+          headers: { cookie: "strata_session=abc" },
         }),
       ),
     ).toBeNull();
     expect(
       readIntendedUrl(
         new Request("http://example.test/verify-email", {
-          headers: { cookie: "workhub_intended=%2Flogin" },
+          headers: { cookie: "strata_intended=%2Flogin" },
         }),
       ),
     ).toBeNull();
     expect(
       readIntendedUrl(
         new Request("http://example.test/verify-email", {
-          headers: { cookie: "workhub_intended=https%3A%2F%2Fevil.example" },
+          headers: { cookie: "strata_intended=https%3A%2F%2Fevil.example" },
         }),
       ),
     ).toBeNull();
@@ -97,12 +97,12 @@ describe("intendedUrlCookie", () => {
   test("stashes GET and HEAD requests but not mutating methods", () => {
     expect(
       createIntendedUrlCookieFromRequest(new Request("http://example.test/account")),
-    ).toContain("workhub_intended=%2Faccount");
+    ).toContain("strata_intended=%2Faccount");
     expect(
       createIntendedUrlCookieFromRequest(
         new Request("http://example.test/projects/1?tab=files", { method: "HEAD" }),
       ),
-    ).toContain("workhub_intended=%2Fprojects%2F1%3Ftab%3Dfiles");
+    ).toContain("strata_intended=%2Fprojects%2F1%3Ftab%3Dfiles");
     expect(
       createIntendedUrlCookieFromRequest(
         new Request("http://example.test/account", { method: "POST" }),
@@ -118,11 +118,11 @@ describe("intendedUrlCookie", () => {
     expect(clearIntendedUrlCookie()).toContain("; Secure");
   });
 
-  test("defaults to the WorkHub intended cookie name", () => {
+  test("defaults to the Strata intended cookie name", () => {
     delete process.env.INTENDED_URL_COOKIE_NAME;
     delete process.env.APP_KEY_PREFIX;
 
-    expect(INTENDED_URL_COOKIE).toBe("workhub_intended");
+    expect(INTENDED_URL_COOKIE).toBe("strata_intended");
     expect(intendedUrlCookieName()).toBe("strata_intended");
     expect(createIntendedUrlCookie("/account")).toContain("strata_intended=");
     expect(clearIntendedUrlCookie()).toContain("strata_intended=");
@@ -130,16 +130,16 @@ describe("intendedUrlCookie", () => {
   });
 
   test("overrides the cookie name, TTL, and APP_KEY_PREFIX", () => {
-    process.env.INTENDED_URL_COOKIE_NAME = "strata_intended";
+    process.env.INTENDED_URL_COOKIE_NAME = "acme_next";
     process.env.INTENDED_URL_TTL_SECONDS = "90";
 
-    expect(intendedUrlCookieName()).toBe("strata_intended");
+    expect(intendedUrlCookieName()).toBe("acme_next");
     expect(intendedUrlTtlSeconds()).toBe(90);
 
     const cookie = createIntendedUrlCookie("/reports");
-    expect(cookie).toContain("strata_intended=");
+    expect(cookie).toContain("acme_next=");
     expect(cookie).toContain("Max-Age=90");
-    expect(cookie).not.toContain("workhub_intended=");
+    expect(cookie).not.toContain("strata_intended=");
     expect(
       readIntendedUrl(
         new Request("http://example.test/", {

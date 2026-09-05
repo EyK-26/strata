@@ -1,3 +1,4 @@
+import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import {
   type AuthGuard,
   AuthManager,
@@ -5,6 +6,7 @@ import {
   DatabaseTokenGuard,
   GuestGuard,
 } from "@getstrata/core/auth/guard";
+import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import { authConfig } from "../../config/auth";
 import { CORE_AUTH_TOKEN } from "../config";
@@ -15,13 +17,25 @@ const authProvider: ServiceProvider = {
   register({ container, config }) {
     config.set("auth.allowDevHeaders", authConfig.allowDevHeaders);
 
-    const guards: AuthGuard[] = [new DatabaseTokenGuard(container), new SessionGuard(container)];
+    const apiGuard = new DatabaseTokenGuard(container);
+    const sessionGuard = new SessionGuard(container);
+    const jwtGuard = new JwtGuard();
+    const basicGuard = new BasicAuthGuard(container);
+    const guards: AuthGuard[] = [apiGuard, jwtGuard, basicGuard, sessionGuard];
 
     if (authConfig.allowDevHeaders) {
       guards.push(new GuestGuard());
     }
 
-    container.set(CORE_AUTH_TOKEN, new AuthManager(new CompositeGuard(guards)));
+    const auth = new AuthManager(new CompositeGuard(guards));
+    auth.registerGuard("api", apiGuard);
+    auth.registerGuard("access_token", apiGuard);
+    auth.registerGuard("jwt", jwtGuard);
+    auth.registerGuard("basic", basicGuard);
+    auth.registerGuard("web", sessionGuard);
+    auth.registerGuard("session", sessionGuard);
+
+    container.set(CORE_AUTH_TOKEN, auth);
   },
 };
 

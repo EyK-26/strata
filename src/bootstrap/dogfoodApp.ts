@@ -1,14 +1,13 @@
 import { join } from "node:path";
 
-type DogfoodApp = "workhub" | "hiroapp";
+type DogfoodApp = "hiroapp";
 
 function readDogfoodApp(): DogfoodApp {
-  const value = (process.env.DOGFOOD_APP ?? "hiroapp").trim().toLowerCase();
-  return value === "workhub" ? "workhub" : "hiroapp";
+  return "hiroapp";
 }
 
 function isHiroappDogfood(): boolean {
-  return readDogfoodApp() === "hiroapp";
+  return true;
 }
 
 function hiroappSourcePath(...segments: string[]): string {

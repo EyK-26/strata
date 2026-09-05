@@ -13,6 +13,7 @@ export const CORE_SHARED_SUBPATHS = [
   "auth/guard",
   "auth/membershipContext",
   "database",
+  "database/dialect",
   "database/baseRepository",
   "database/bindConnection",
   "database/boundConnection",

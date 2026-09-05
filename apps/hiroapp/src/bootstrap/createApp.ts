@@ -13,6 +13,7 @@ import {
 } from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
 import { isSpaEnabled, isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { ensureHiroappDatabase } from "../db/ensureDatabase.ts";
@@ -29,6 +30,7 @@ import { storageProvider } from "./providers/storage.ts";
 import { viewProvider } from "./providers/view.ts";
 
 export async function createApp(): Promise<{ context: AppContext; routes: AppRouteMap }> {
+  assertProductionSecrets();
   await ensureHiroappDatabase();
   bindDatabase();
 

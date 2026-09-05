@@ -36,8 +36,8 @@ describe("signed URLs", () => {
 
   test("rejects tampered query params and expired links", () => {
     process.env.SIGNED_URL_SECRET = "test-signed-url-secret";
-    const url = temporarySignedUrl("/reset-password", 60, { email: "a@workhub.test" });
-    const tampered = url.replace("email=a%40workhub.test", "email=b%40workhub.test");
+    const url = temporarySignedUrl("/reset-password", 60, { email: "a@strata.test" });
+    const tampered = url.replace("email=a%40strata.test", "email=b%40strata.test");
 
     expect(hasValidSignature(`http://example.test${tampered}`)).toBe(false);
 
@@ -54,9 +54,9 @@ describe("signed URLs", () => {
 
   test("absoluteTemporarySignedUrl prefixes APP_URL", () => {
     process.env.SIGNED_URL_SECRET = "test-signed-url-secret";
-    const absolute = absoluteTemporarySignedUrl("/login", 30, {}, "https://workhub.test");
+    const absolute = absoluteTemporarySignedUrl("/login", 30, {}, "https://strata.test");
 
-    expect(absolute.startsWith("https://workhub.test/login?")).toBe(true);
+    expect(absolute.startsWith("https://strata.test/login?")).toBe(true);
     expect(hasValidSignature(absolute)).toBe(true);
   });
 
@@ -73,7 +73,7 @@ describe("signed URLs", () => {
     ).rejects.toThrow(ForbiddenError);
 
     const valid = new Request(
-      `http://example.test${temporarySignedUrl("/reset-password", 60, { email: "a@workhub.test" })}`,
+      `http://example.test${temporarySignedUrl("/reset-password", 60, { email: "a@strata.test" })}`,
     );
     const response = await middleware(valid, async () => new Response("ok"));
     expect(response.status).toBe(200);

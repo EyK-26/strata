@@ -1,4 +1,4 @@
-export const TEST_SCIM_BEARER_TOKEN = "workhub-scim-test-token";
+export const TEST_SCIM_BEARER_TOKEN = "strata-scim-test-token";
 export const DEFAULT_SCIM_BEARER_TOKEN = TEST_SCIM_BEARER_TOKEN;
 
 export const SCIM_SCHEMAS = {

@@ -1,4 +1,0 @@
-<section class="page-header">
-  <h1><%= it.title ?? "Forbidden" %></h1>
-  <p><%= it.message ?? "You do not have permission to view this page." %></p>
-</section>

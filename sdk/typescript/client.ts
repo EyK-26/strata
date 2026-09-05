@@ -1,4 +1,4 @@
-export class WorkHubClient {
+export class HiroAppClient {
   constructor(private readonly baseUrl = "http://localhost:3000/api/v1") {}
 
   private async request(path: string, init: RequestInit = {}): Promise<Response> {

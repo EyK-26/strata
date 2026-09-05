@@ -10,7 +10,7 @@ describe("validateEnv", () => {
           PORT: { integer: true, minimum: 1, default: "3000" },
         }),
         {
-          DATABASE_URL: "postgresql://postgres:postgres@localhost/workhub",
+          DATABASE_URL: "postgresql://postgres:postgres@localhost/strata",
           PORT: "3000",
         },
       ),

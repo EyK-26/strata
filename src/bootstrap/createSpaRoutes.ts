@@ -27,7 +27,7 @@ function createSpaRoutes(_dependencies: AppDependencies): AppRouteMap {
 
       return jsonResponse(
         {
-          error: "SPA build not found. Run `bun run build:frontend`.",
+          error: "SPA build not found. Run `bun run frontend:build` in your app.",
         },
         { status: 503 },
       );

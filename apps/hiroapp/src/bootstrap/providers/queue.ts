@@ -1,4 +1,5 @@
 import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import { CORE_QUEUE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import {
   createAppQueue,
@@ -10,6 +11,7 @@ import { registerHiroappJobs } from "../../jobs/sendNotification.ts";
 const queueProvider: ServiceProvider = {
   name: "hiroapp.queue",
   register({ container }) {
+    registerDefaultJobs();
     registerHiroappJobs();
     const driver = (process.env.QUEUE_DRIVER ?? "sync") as "sync" | "async" | "redis";
     const failedJobs = createFailedJobService();

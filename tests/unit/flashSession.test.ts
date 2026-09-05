@@ -25,7 +25,7 @@ describe("flashSession", () => {
     });
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("set-cookie")).toContain("workhub_flash=");
+    expect(response.headers.get("set-cookie")).toContain("strata_flash=");
   });
 
   test("withFlashClear removes the flash cookie", () => {

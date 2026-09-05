@@ -1469,7 +1469,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
     if (!resolvedName) {
       throw new Error(
-        `${this.constructor.name}.morphTo() needs an explicit morph name (Laravel infers it from the relation method).`,
+        `${this.constructor.name}.morphTo() needs an explicit morph name (the calling method name is not available at runtime).`,
       );
     }
 

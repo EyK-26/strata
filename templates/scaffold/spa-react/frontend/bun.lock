@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "workhub-frontend",
+      "name": "strata-frontend",
       "dependencies": {
         "react": "^19.1.1",
         "react-dom": "^19.1.1",

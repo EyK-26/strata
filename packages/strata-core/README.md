@@ -2,73 +2,56 @@
 
 Stable **Strata** framework surface for application modules.
 
-**Source:** `src/framework/public-api.ts` (monorepo)  
+**Source:** `src/framework/public-api.ts` (monorepo)
 **Repository:** [EyK-26/strata](https://github.com/EyK-26/strata), directory `packages/strata-core`
 
-WorkHub is the reference application built on Strata; import the framework from this package in your own modules. Sibling HTMX apps (Eta, cookie sessions, no API tokens) should follow [docs/SIBLING-HTMX.md](../../docs/SIBLING-HTMX.md).
+HiroApp is the example product. Import this package from your own modules. HTML cookie apps: [docs/BUILDING-APPS.md](../../docs/BUILDING-APPS.md). Auth choices: [docs/AUTH.md](../../docs/AUTH.md). SQL engines: [docs/DATABASE.md](../../docs/DATABASE.md).
 
 ## Usage
 
-Set `DATABASE_URL` before importing (connection is created lazily on first query):
+Set `DATABASE_URL` before importing (the connection is created lazily on first query):
 
 ```typescript
 process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:5432/myapp";
 
-import { AdminResourceRegistry } from "@getstrata/core/admin/registry";
-import { formatAdminValue } from "@getstrata/core/admin/formatValue";
 import { Policy } from "@getstrata/core/auth/policy";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { mail } from "@getstrata/core/facades";
 import { FormRequest } from "@getstrata/core/http/formRequest";
 import { withErrorHandling } from "@getstrata/core/http/response";
-import { mailer } from "@getstrata/core/mail/mailer";
-import { storage } from "@getstrata/core/facades";
 import { EtaViewEngine } from "@getstrata/core/view";
 ```
 
-`.eta` files are **HTML + Eta tags** (`<% %>`, `<%= %>`, `<%~ include() %>`), not Pug. Class/attribute shorthand such as `section.section` or `a href=` fails at render time with the template name.
+`.eta` files are **HTML + Eta tags** (`<% %>`, `<%= %>`, `<%~ include() %>`), not another template language. Class/attribute shorthand such as `section.section` or `a href=` fails at render time with the template name.
 
-**Dependency:** `eta` is bundled as a direct dependency of `@getstrata/core`. Apps do not need to list it separately. The database driver is your app's choice. WorkHub and getstrata use **Bun's built-in `Bun.sql`** client; create and bind it with `createBunSqlPool()` / `bindBunSql()`, or call `bindDatabaseConnection()` yourself.
+**Dependency:** `eta` is a direct dependency of `@getstrata/core`. Apps do not need to list it separately. The database **engine** is your choice. HiroApp uses **Bun's built-in `Bun.sql`** (Postgres). Create and bind it with `createBunSqlPool()` / `bindBunSql()`, or call `bindDatabaseConnection()` yourself.
 
-`orderBy` accepts explicit `{ column, direction }` objects or column shorthand such as `{ published_at: "desc" }`.
+`orderBy` accepts `{ column, direction }` objects or column shorthand such as `{ published_at: "desc" }`. `{ ilike }` uses the value as-is. Pass `%term%` yourself.
 
 ## Admin and queue helpers
-
-Exports for admin dashboards and queue recovery:
 
 - `AdminResourceRegistry`, `formatAdminValue`: read-only resource browsers
 - `createFailedJobService`, `FailedJobService.delete()`: failed job persistence and cleanup
 - `runQueueJob`, `jobRegistry`: dispatch retried jobs from admin UIs
 
+HiroApp uses failed-job recovery in the staff dashboard. You do not have to use the admin registry.
+
 ## Build and verify (monorepo root)
 
 ```bash
 bun run build:framework
-bun run verify:framework   # build + public API tests
-bun run verify:shared-subpaths  # after build: confirm singleton shims
+bun run verify:framework
+bun run verify:shared-subpaths
 ```
 
 ## Subpath imports
 
-`@getstrata/core` publishes **144+ subpaths** (for example `@getstrata/core/http/authMiddleware`,
-`@getstrata/core/database/migrations`). Prefer subpaths over the root import in apps, bootstrap, and tests.
+`@getstrata/core` publishes many subpaths (for example `@getstrata/core/http/authMiddleware`, `@getstrata/core/database/migrations`). Prefer subpaths over the root import in apps, bootstrap, and tests.
 
-Some subpaths **re-export the main bundle** so singleton state stays shared (database pool binding,
-`AsyncLocalStorage` auth/tenant context, global registries, `HttpError` / `Notification` classes for
-`instanceof`). The canonical list lives in `scripts/core-shared-subpaths.ts` and is verified by
-`scripts/verify-core-shared-subpaths.ts` after each framework build.
+Some subpaths **re-export the main bundle** so singleton state stays shared (database pool, dialect override, async-local auth/tenant, `HttpError` for `instanceof`). The list lives in `scripts/core-shared-subpaths.ts`.
 
-When adding a subpath that owns process-wide state or base classes used with `instanceof`, append it to
-`CORE_SHARED_SUBPATHS`, run `bun scripts/sync-package-subpaths.ts`, and rebuild. Non-shared subpath
-bundles are built with generated `--external @getstrata/core/*` flags (all 144+ subpaths) so framework
-source can import shared modules via package self-imports (`scripts/codemod-core-self-imports.ts`).
-Bootstrap subpath builds externalize all `@getstrata/bootstrap/*` and `@getstrata/core/*` entries.
+When adding a subpath that owns process-wide state or base classes used with `instanceof`, append it to `CORE_SHARED_SUBPATHS`, run `bun scripts/sync-package-subpaths.ts`, and rebuild.
+
 `scripts/verify-no-root-imports.ts` blocks root `@getstrata/core` imports in application source.
-`scripts/verify-no-shared-barrel-imports.ts` blocks `@getstrata/core/database` and
-`@getstrata/core/http` barrel imports in application source.
-`scripts/audit-public-api-surface.ts` reports root exports with no in-repo root import usage.
-`scripts/verify-bundled-subpaths.ts` ensures entries like `http/webFormRequest` do not inline
-`ValidationError`.
 
 ```typescript
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
@@ -82,9 +65,7 @@ import type { Migration } from "@getstrata/core/database/migrations/types";
 Package name: **`@getstrata/core`** (npm org [`@getstrata`](https://www.npmjs.com/org/getstrata)).
 
 1. Add `NPM_TOKEN` to GitHub repository secrets.
-2. Tag a release: `git tag v0.5.96 && git push origin v0.5.96`
+2. Tag a release: `git tag v0.6.0 && git push origin v0.6.0`
 3. [Release workflow](../../.github/workflows/release.yml) builds and runs `npm publish --access public`.
 
-Previously published as `@eyk-workhub/framework@0.1.0`, deprecated in favor of this package.
-
-See [docs/PACKAGING.md](../../docs/PACKAGING.md) for boundaries and future extraction.
+See [docs/PACKAGING.md](../../docs/PACKAGING.md).

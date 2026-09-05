@@ -18,16 +18,16 @@ describe("Mailer", () => {
     try {
       const mailer = new Mailer(new LogMailDriver());
       await mailer.send({
-        to: "admin@workhub.test",
+        to: "admin@strata.test",
         subject: "Welcome",
-        body: "Hello from WorkHub",
+        body: "Hello from Strata",
       });
     } finally {
       console.log = originalLog;
     }
 
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toContain("admin@workhub.test");
+    expect(messages[0]).toContain("admin@strata.test");
     expect(messages[0]).toContain("Welcome");
   });
 
@@ -36,7 +36,7 @@ describe("Mailer", () => {
     const config = {
       host: "smtp.example.test",
       port: 587,
-      from: "noreply@workhub.test",
+      from: "noreply@strata.test",
       secure: false,
       username: "mailer",
       password: "secret",
@@ -47,14 +47,14 @@ describe("Mailer", () => {
     });
 
     await driver.send({
-      to: "user@workhub.test",
+      to: "user@strata.test",
       subject: "Task assigned",
       body: "You have a new task.",
     });
 
     expect(sent).toEqual([
       {
-        to: "user@workhub.test",
+        to: "user@strata.test",
         subject: "Task assigned",
         body: "You have a new task.",
       },
@@ -73,7 +73,7 @@ describe("Mailer", () => {
 
     process.env.MAIL_HOST = "smtp.mail.test";
     process.env.MAIL_PORT = "2525";
-    process.env.MAIL_FROM = "noreply@workhub.test";
+    process.env.MAIL_FROM = "noreply@strata.test";
     process.env.MAIL_USERNAME = "smtp-user";
     process.env.MAIL_PASSWORD = "smtp-pass";
     process.env.MAIL_SECURE = "true";
@@ -82,7 +82,7 @@ describe("Mailer", () => {
       expect(resolveSmtpConfig()).toEqual({
         host: "smtp.mail.test",
         port: 2525,
-        from: "noreply@workhub.test",
+        from: "noreply@strata.test",
         username: "smtp-user",
         password: "smtp-pass",
         secure: true,

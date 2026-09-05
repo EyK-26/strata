@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 
-const TEST_ADMIN_API_TOKEN = "workhub-admin-test-token";
+const TEST_ADMIN_API_TOKEN = "strata-admin-test-token";
 
 describe("assertProductionSecrets", () => {
   test("allows default tokens outside production", () => {
@@ -158,7 +158,7 @@ describe("assertProductionSecrets", () => {
     ).not.toThrow();
   });
 
-  test("allows a production HTMX sibling app without WorkHub tokens", () => {
+  test("allows a production HTMX app without published test tokens", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",

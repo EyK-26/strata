@@ -194,7 +194,7 @@ describe("createTenantMiddleware", () => {
       "@getstrata/core/tenant/tenantMiddleware"
     );
     const middleware = createTenantMiddleware();
-    const email = `ghost-member-${Date.now()}@workhub.test`;
+    const email = `ghost-member-${Date.now()}@strata.test`;
 
     const userId = await runWithMigrationBypass(async () => {
       await db`SET session_replication_role = replica`;
@@ -235,7 +235,7 @@ describe("createTenantMiddleware", () => {
       "@getstrata/core/tenant/tenantMiddleware"
     );
     const middleware = createTenantMiddleware();
-    const email = `ghost-admin-${Date.now()}@workhub.test`;
+    const email = `ghost-admin-${Date.now()}@strata.test`;
 
     const userId = await runWithMigrationBypass(async () => {
       await db`SET session_replication_role = replica`;

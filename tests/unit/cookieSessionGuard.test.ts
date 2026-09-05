@@ -6,7 +6,7 @@ import {
   createCookieSessionAuthManager,
   type SessionUser,
 } from "@getstrata/bootstrap/web/session";
-import { createSessionCookie } from "@getstrata/core/auth/sessionCookie";
+import { createSessionCookie, sessionCookieName } from "@getstrata/core/auth/sessionCookie";
 import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
@@ -118,7 +118,7 @@ describe("CookieSessionGuard", () => {
     resetBoundDatabaseConnection();
   });
 
-  test("AuthManager.resolve maps a store cookie, not HMAC workhub_session", async () => {
+  test("AuthManager.resolve maps a store cookie, not HMAC strata_session", async () => {
     const user: SessionUser = {
       id: 9,
       name: "Ada",
@@ -148,7 +148,7 @@ describe("CookieSessionGuard", () => {
     expect(cookie.startsWith("strata_session=")).toBe(true);
 
     const hmacCookie = createSessionCookie(9).split(";")[0] ?? "";
-    expect(hmacCookie.startsWith("workhub_session=")).toBe(true);
+    expect(hmacCookie.startsWith(`${sessionCookieName()}=`)).toBe(true);
     expect(
       await auth.resolve(new Request("http://example.test/", { headers: { cookie: hmacCookie } })),
     ).toBeNull();

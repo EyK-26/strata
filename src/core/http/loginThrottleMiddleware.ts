@@ -5,11 +5,15 @@ import type { Middleware } from "./middleware";
 import { tooManyRequestsResponse } from "./throttleResponse";
 
 interface LoginThrottleOptions {
-  redisUrl: string;
+  redisUrl?: string;
   maxAttempts: number;
   decaySeconds: number;
   keyPrefix?: string;
 }
+
+type LoginThrottleBucket = { count: number; resetAt: number };
+
+const memoryLoginBuckets = new Map<string, LoginThrottleBucket>();
 
 function resolveLoginIdentity(request: Request): string {
   return readClientIp(request) ?? "unknown";
@@ -37,7 +41,43 @@ async function resolveLoginEmail(request: Request): Promise<string> {
   }
 }
 
-function createLoginThrottleMiddleware(options: LoginThrottleOptions): Middleware {
+function consumeMemoryAttempt(key: string, decaySeconds: number): number {
+  const now = Date.now();
+  const existing = memoryLoginBuckets.get(key);
+
+  if (!existing || existing.resetAt <= now) {
+    memoryLoginBuckets.set(key, { count: 1, resetAt: now + decaySeconds * 1000 });
+    return 1;
+  }
+
+  existing.count += 1;
+  return existing.count;
+}
+
+function createMemoryLoginThrottleMiddleware(options: LoginThrottleOptions): Middleware {
+  const prefix = options.keyPrefix ?? namespacedRedisKey("login-throttle:");
+
+  return async (request: Request, next: () => Promise<Response>) => {
+    const identity = resolveLoginIdentity(request);
+    const email = await resolveLoginEmail(request);
+    const throttleKey = `${prefix}${identity}:${email}`;
+    const attempts = consumeMemoryAttempt(throttleKey, options.decaySeconds);
+
+    if (attempts > options.maxAttempts) {
+      return await tooManyRequestsResponse(
+        request,
+        "Too many login attempts. Try again later.",
+        options.decaySeconds,
+      );
+    }
+
+    return await next();
+  };
+}
+
+function createRedisLoginThrottleMiddleware(
+  options: LoginThrottleOptions & { redisUrl: string },
+): Middleware {
   const client = new RedisClient(options.redisUrl);
   const prefix = options.keyPrefix ?? namespacedRedisKey("login-throttle:");
 
@@ -64,5 +104,25 @@ function createLoginThrottleMiddleware(options: LoginThrottleOptions): Middlewar
   };
 }
 
+function createLoginThrottleMiddleware(options: LoginThrottleOptions): Middleware {
+  const redisUrl = options.redisUrl?.trim() ?? "";
+
+  if (redisUrl) {
+    return createRedisLoginThrottleMiddleware({ ...options, redisUrl });
+  }
+
+  return createMemoryLoginThrottleMiddleware(options);
+}
+
+function resetMemoryLoginThrottleForTests(): void {
+  memoryLoginBuckets.clear();
+}
+
 export type { LoginThrottleOptions };
-export { createLoginThrottleMiddleware, resolveLoginIdentity };
+export {
+  createLoginThrottleMiddleware,
+  createMemoryLoginThrottleMiddleware,
+  resetMemoryLoginThrottleForTests,
+  resolveLoginEmail,
+  resolveLoginIdentity,
+};

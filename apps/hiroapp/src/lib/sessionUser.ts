@@ -10,5 +10,6 @@ export function toSessionUser(user: UserRecord): HiroSessionUser {
     last_name: user.last_name,
     role_id: Number(user.role_id),
     is_admin: Number(user.role_id) === 1,
+    email_verified_at: user.email_verified_at ?? null,
   };
 }

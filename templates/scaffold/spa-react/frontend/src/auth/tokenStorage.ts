@@ -1,4 +1,4 @@
-const TOKEN_KEY = "workhub_api_token";
+const TOKEN_KEY = "strata_api_token";
 
 function readToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);

@@ -1,13 +1,14 @@
-import { importHiroappModule, readDogfoodApp } from "../../bootstrap/dogfoodApp.ts";
+import { importHiroappModule } from "../../bootstrap/dogfoodApp.ts";
+import { isFixtureSchema } from "../../bootstrap/schemaTarget.ts";
 
 async function seedCommand(): Promise<void> {
-  if (readDogfoodApp() === "hiroapp") {
-    await importHiroappModule("src/db/seed.ts");
+  if (isFixtureSchema()) {
+    const { seedDatabase } = await import("../../db/seeders/runner");
+    await seedDatabase();
     return;
   }
 
-  const { seedDatabase } = await import("../../db/seeders/runner");
-  await seedDatabase();
+  await importHiroappModule("src/db/seed.ts");
 }
 
 export { seedCommand };

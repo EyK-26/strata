@@ -13,7 +13,7 @@ afterEach(() => {
 
 describe("assertSafeOutboundUrl", () => {
   test("accepts public https URLs", () => {
-    const parsed = assertSafeOutboundUrl("https://hooks.example.com/workhub");
+    const parsed = assertSafeOutboundUrl("https://hooks.example.com/strata");
 
     expect(parsed.hostname).toBe("hooks.example.com");
   });
@@ -28,11 +28,11 @@ describe("assertSafeOutboundUrl", () => {
   });
 
   test("rejects non-https URLs by default", () => {
-    expect(() => assertSafeOutboundUrl("http://hooks.example.com/workhub")).toThrow(/HTTPS/);
+    expect(() => assertSafeOutboundUrl("http://hooks.example.com/strata")).toThrow(/HTTPS/);
   });
 
   test("allows http URLs outside production when configured", () => {
-    const parsed = assertSafeOutboundUrl("http://hooks.example.com/workhub", {
+    const parsed = assertSafeOutboundUrl("http://hooks.example.com/strata", {
       allowHttp: true,
     });
 

@@ -66,7 +66,7 @@ describe("passwordConfirmCookie", () => {
     expect(
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
-          headers: { cookie: "workhub_session=1.2.deadbeef" },
+          headers: { cookie: "strata_session=1.2.deadbeef" },
         }),
         42,
       ),
@@ -75,7 +75,7 @@ describe("passwordConfirmCookie", () => {
     expect(
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
-          headers: { cookie: "workhub_password_confirmed=1.2" },
+          headers: { cookie: "strata_password_confirmed=1.2" },
         }),
         1,
       ),
@@ -84,7 +84,7 @@ describe("passwordConfirmCookie", () => {
     expect(
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
-          headers: { cookie: "workhub_password_confirmed=0.123.deadbeef" },
+          headers: { cookie: "strata_password_confirmed=0.123.deadbeef" },
         }),
         1,
       ),
@@ -93,7 +93,7 @@ describe("passwordConfirmCookie", () => {
     expect(
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
-          headers: { cookie: "workhub_password_confirmed=1.abc.deadbeef" },
+          headers: { cookie: "strata_password_confirmed=1.abc.deadbeef" },
         }),
         1,
       ),
@@ -104,7 +104,7 @@ describe("passwordConfirmCookie", () => {
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
           headers: {
-            cookie: `workhub_password_confirmed=${encodeURIComponent(`${42}.${expiredConfirmedAt}.deadbeef`)}`,
+            cookie: `strata_password_confirmed=${encodeURIComponent(`${42}.${expiredConfirmedAt}.deadbeef`)}`,
           },
         }),
         42,
@@ -115,7 +115,7 @@ describe("passwordConfirmCookie", () => {
     expect(
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
-          headers: { cookie: `workhub_password_confirmed=1.${freshConfirmedAt}.` },
+          headers: { cookie: `strata_password_confirmed=1.${freshConfirmedAt}.` },
         }),
         1,
       ),
@@ -130,7 +130,7 @@ describe("passwordConfirmCookie", () => {
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
           headers: {
-            cookie: `workhub_password_confirmed=${encodeURIComponent(`${userIdRaw}.${confirmedAtRaw}.${shortSignature}`)}`,
+            cookie: `strata_password_confirmed=${encodeURIComponent(`${userIdRaw}.${confirmedAtRaw}.${shortSignature}`)}`,
           },
         }),
         42,
@@ -142,7 +142,7 @@ describe("passwordConfirmCookie", () => {
       hasFreshPasswordConfirmation(
         new Request("http://example.test/account/export", {
           headers: {
-            cookie: `workhub_password_confirmed=${encodeURIComponent(`${userIdRaw}.${confirmedAtRaw}.${badSignature}`)}`,
+            cookie: `strata_password_confirmed=${encodeURIComponent(`${userIdRaw}.${confirmedAtRaw}.${badSignature}`)}`,
           },
         }),
         42,
@@ -176,26 +176,26 @@ describe("passwordConfirmCookie", () => {
     ).toBe(true);
   });
 
-  test("defaults to the WorkHub confirmation cookie name", () => {
+  test("defaults to the Strata confirmation cookie name", () => {
     delete process.env.PASSWORD_CONFIRM_COOKIE_NAME;
 
-    expect(PASSWORD_CONFIRM_COOKIE).toBe("workhub_password_confirmed");
-    expect(passwordConfirmCookieName()).toBe("workhub_password_confirmed");
-    expect(createPasswordConfirmCookie(1)).toContain("workhub_password_confirmed=");
-    expect(clearPasswordConfirmCookie()).toContain("workhub_password_confirmed=");
+    expect(PASSWORD_CONFIRM_COOKIE).toBe("strata_password_confirmed");
+    expect(passwordConfirmCookieName()).toBe("strata_password_confirmed");
+    expect(createPasswordConfirmCookie(1)).toContain("strata_password_confirmed=");
+    expect(clearPasswordConfirmCookie()).toContain("strata_password_confirmed=");
   });
 
   test("overrides the confirmation cookie name and TTL", () => {
-    process.env.PASSWORD_CONFIRM_COOKIE_NAME = "strata_password_confirmed";
+    process.env.PASSWORD_CONFIRM_COOKIE_NAME = "acme_confirmed";
     process.env.PASSWORD_CONFIRM_TIMEOUT = "90";
 
-    expect(passwordConfirmCookieName()).toBe("strata_password_confirmed");
+    expect(passwordConfirmCookieName()).toBe("acme_confirmed");
     expect(passwordConfirmTtlSeconds()).toBe(90);
 
     const cookie = createPasswordConfirmCookie(11);
-    expect(cookie).toContain("strata_password_confirmed=");
+    expect(cookie).toContain("acme_confirmed=");
     expect(cookie).toContain("Max-Age=90");
-    expect(cookie).not.toContain("workhub_password_confirmed=");
+    expect(cookie).not.toContain("strata_password_confirmed=");
 
     expect(
       hasFreshPasswordConfirmation(
@@ -208,7 +208,7 @@ describe("passwordConfirmCookie", () => {
 
     process.env.PASSWORD_CONFIRM_COOKIE_NAME = "   ";
     process.env.PASSWORD_CONFIRM_TIMEOUT = "nope";
-    expect(passwordConfirmCookieName()).toBe("workhub_password_confirmed");
+    expect(passwordConfirmCookieName()).toBe("strata_password_confirmed");
     expect(passwordConfirmTtlSeconds()).toBe(DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS);
 
     process.env.PASSWORD_CONFIRM_TIMEOUT = "0";

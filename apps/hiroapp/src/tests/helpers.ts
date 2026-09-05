@@ -56,6 +56,7 @@ export async function signInCookie(email: string) {
     last_name: user.last_name,
     role_id: user.role_id,
     is_admin: Number(user.role_id) === 1,
+    email_verified_at: user.email_verified_at ?? null,
   };
   const { setCookie } = await auth.signIn(sessionUser, {
     userAgent: "HiroAppTest/1.0",

@@ -533,11 +533,19 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
       ),
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await authorize(request, "applications", "create");
-        const { fields } = await parseFormBody(request);
+        const { fields, files } = await parseFormBody(request);
+        let storedPath = fields.attachment_file || null;
+        const resume = files.resume;
+        if (resume && resume.size > 0 && dependencies.storage) {
+          storedPath = await dependencies.storage.put(
+            `resumes/${user.id}-${fields.position_id}-${resume.name}`,
+            new Uint8Array(await resume.arrayBuffer()),
+          );
+        }
         const created = await applicationService.apply(user, {
           position_id: Number(fields.position_id),
           attachment_text: fields.attachment_text || null,
-          attachment_file: fields.attachment_file || null,
+          attachment_file: storedPath,
           source_id: fields.source_id ? Number(fields.source_id) : null,
         });
         return redirectResponse(`/applications/${created.id}`);

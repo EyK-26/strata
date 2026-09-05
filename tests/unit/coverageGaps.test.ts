@@ -114,7 +114,7 @@ describe("coverage gap helpers", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `workhub_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.`)}`,
+            cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.`)}`,
           },
         }),
       ),
