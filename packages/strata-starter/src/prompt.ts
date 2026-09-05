@@ -6,12 +6,11 @@ import {
   layersFromFlags,
   type ParsedFlags,
 } from "./parseArgs.ts";
-import { presetLayers } from "./presets.ts";
+import { defaultLayers } from "./presets.ts";
 import {
   DOCKER_SERVICE_LABELS,
   dockerLayerForNeeded,
   emptyDockerServices,
-  type KitId,
   neededDockerServices,
   type StarterLayers,
 } from "./types.ts";
@@ -77,109 +76,81 @@ function createReadlinePrompter(): Prompter {
 }
 
 async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<StarterLayers> {
-  const kit = await prompter.select<KitId>(
-    "Starter kit",
+  const layers: StarterLayers = applyFlagOverrides(defaultLayers(), flags);
+
+  layers.frontend = await prompter.select(
+    "Frontend",
     [
-      { value: "hobby", label: "hobby: SQLite API, header auth" },
-      { value: "team", label: "team: Postgres HTML, cookie sessions, Redis" },
-      {
-        value: "enterprise",
-        label: "enterprise: hybrid UI, cookies + tokens + JWT, RLS, SMTP",
-      },
-      { value: "hiroapp-hobby", label: "hiroapp-hobby: hiring-shaped, SQLite, /apply" },
-      { value: "hiroapp-team", label: "hiroapp-team: hiring-shaped, Postgres, /apply" },
-      {
-        value: "hiroapp-enterprise",
-        label: "hiroapp-enterprise: hiring-shaped staff HTML + candidate SPA",
-      },
-      { value: "custom", label: "custom: pick each layer" },
+      { value: "api", label: "api: JSON only" },
+      { value: "server-htmx", label: "server-htmx: Eta HTML + HTMX" },
+      { value: "spa-react", label: "spa-react: JSON + React under SPA_PREFIX" },
+      { value: "hybrid", label: "hybrid: HTML at / plus SPA prefix" },
     ],
-    flags.kit ?? "hobby",
+    layers.frontend,
   );
-
-  const isCustom = kit === "custom";
-  let layers: StarterLayers = isCustom
-    ? { ...presetLayers("hobby"), kit: "custom" }
-    : presetLayers(kit);
-  layers = applyFlagOverrides(layers, { ...flags, kit });
-
-  const customize = isCustom || (await prompter.confirm("Customize layers?", false));
-
-  if (customize) {
-    layers.frontend = await prompter.select(
-      "Frontend",
-      [
-        { value: "api", label: "api: JSON only" },
-        { value: "server-htmx", label: "server-htmx: Eta HTML + HTMX" },
-        { value: "spa-react", label: "spa-react: JSON + React under SPA_PREFIX" },
-        { value: "hybrid", label: "hybrid: HTML at / plus SPA prefix" },
-      ],
-      layers.frontend,
-    );
-    layers.database = await prompter.select(
-      "Database",
-      [
-        { value: "sqlite", label: "sqlite: file database" },
-        { value: "postgres", label: "postgres: production default" },
-        { value: "mysql", label: "mysql: published mirror or primary" },
-      ],
-      layers.database,
-    );
-    layers.auth = await prompter.select(
-      "Auth",
-      [
-        { value: "headers", label: "headers: x-authenticated-user-id (local/tests)" },
-        { value: "cookie", label: "cookie: sessions table + CSRF" },
-        { value: "token", label: "token: opaque hashed Bearer" },
-        { value: "jwt", label: "jwt: short-lived HS256" },
-        { value: "cookie-token", label: "cookie-token: HTML cookies + API tokens" },
-        { value: "cookie-token-jwt", label: "cookie-token-jwt: cookies, tokens, and JWT" },
-      ],
-      layers.auth,
-    );
+  layers.database = await prompter.select(
+    "Database (one engine)",
+    [
+      { value: "sqlite", label: "sqlite: file database" },
+      { value: "postgres", label: "postgres" },
+      { value: "mysql", label: "mysql" },
+    ],
+    layers.database,
+  );
+  layers.auth = await prompter.select(
+    "Auth",
+    [
+      { value: "headers", label: "headers: x-authenticated-user-id (local/tests)" },
+      { value: "cookie", label: "cookie: sessions table + CSRF" },
+      { value: "token", label: "token: opaque hashed Bearer" },
+      { value: "jwt", label: "jwt: short-lived HS256" },
+      { value: "cookie-token", label: "cookie-token: HTML cookies + API tokens" },
+      { value: "cookie-token-jwt", label: "cookie-token-jwt: cookies, tokens, and JWT" },
+    ],
+    layers.auth,
+  );
+  if (layers.database === "postgres") {
     layers.tenancy = await prompter.select(
       "Tenancy",
       [
         { value: "none", label: "none: no tenant table" },
-        { value: "rls", label: "rls: Postgres row-level security (you add tenant tables)" },
+        { value: "rls", label: "rls: Postgres row-level security plus a tenant table" },
       ],
       layers.tenancy,
     );
-    layers.cache = await prompter.select(
-      "Cache",
-      [
-        { value: "array", label: "array: in-process" },
-        { value: "redis", label: "redis" },
-      ],
-      layers.cache,
-    );
-    layers.queue = await prompter.select(
-      "Queue",
-      [
-        { value: "sync", label: "sync: run jobs inline" },
-        { value: "redis", label: "redis: background worker" },
-      ],
-      layers.queue,
-    );
-    layers.mail = await prompter.select(
-      "Mail",
-      [
-        { value: "log", label: "log: print messages" },
-        { value: "smtp", label: "smtp" },
-      ],
-      layers.mail,
-    );
-    if (layers.frontend === "spa-react" || layers.frontend === "hybrid") {
-      layers.spaPrefix = await prompter.question("SPA prefix", layers.spaPrefix);
-    }
+  } else {
+    layers.tenancy = "none";
+  }
+  layers.cache = await prompter.select(
+    "Cache",
+    [
+      { value: "array", label: "array: in-process" },
+      { value: "redis", label: "redis" },
+    ],
+    layers.cache,
+  );
+  layers.queue = await prompter.select(
+    "Queue",
+    [
+      { value: "sync", label: "sync: run jobs inline" },
+      { value: "redis", label: "redis: background worker" },
+    ],
+    layers.queue,
+  );
+  layers.mail = await prompter.select(
+    "Mail",
+    [
+      { value: "log", label: "log: print messages" },
+      { value: "smtp", label: "smtp" },
+    ],
+    layers.mail,
+  );
+  if (layers.frontend === "spa-react" || layers.frontend === "hybrid") {
+    layers.spaPrefix = await prompter.question("SPA prefix", layers.spaPrefix);
   }
 
   const askExtras =
-    flags.corporate ||
-    layers.scale === "enterprise" ||
-    kit === "enterprise" ||
-    kit === "hiroapp-enterprise" ||
-    (await prompter.confirm("Configure corporate extras?", false));
+    flags.extrasPrompt || (await prompter.confirm("Configure extras (MFA, SCIM, metrics)?", false));
 
   if (askExtras) {
     layers.extras.mfa = await prompter.confirm("Staff MFA env flag?", layers.extras.mfa);
@@ -189,14 +160,6 @@ async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<Sta
     );
     layers.extras.scim = await prompter.confirm("SCIM env stubs?", layers.extras.scim);
     layers.extras.metrics = await prompter.confirm("Metrics token?", layers.extras.metrics);
-    layers.extras.sqliteKiosk = await prompter.confirm(
-      "SQLite kiosk named connection?",
-      layers.extras.sqliteKiosk,
-    );
-    layers.extras.mysqlMirror = await prompter.confirm(
-      "MySQL job-board mirror connection?",
-      layers.extras.mysqlMirror,
-    );
   }
 
   if (!dockerFlagsProvided(flags)) {
@@ -253,22 +216,6 @@ async function resolveStarterPlan(
   injected?: Prompter,
 ): Promise<{ projectName: string; layers: StarterLayers }> {
   if (!isInteractive(flags)) {
-    if (flags.kit === "custom") {
-      const hasLayerFlag = Boolean(
-        flags.frontend ||
-          flags.database ||
-          flags.auth ||
-          flags.tenancy ||
-          flags.cache ||
-          flags.queue ||
-          flags.mail,
-      );
-      if (!hasLayerFlag) {
-        throw new Error(
-          "custom kit requires layer flags (--frontend, --database, --auth, ...) or a terminal.",
-        );
-      }
-    }
     return {
       projectName: flags.projectName ?? "strata-app",
       layers: layersFromFlags(flags),

@@ -168,7 +168,7 @@ describe("newCommand", () => {
       const output = captureConsole();
 
       try {
-        await newCommand("kit-app", "--kit=hobby", "--yes");
+        await newCommand("kit-app", "--yes");
       } finally {
         output.restore();
       }
@@ -184,7 +184,15 @@ describe("newCommand", () => {
       const output = captureConsole();
 
       try {
-        await newCommand("kit-pg", "--kit=team", "--docker-services", "postgres", "--yes");
+        await newCommand(
+          "kit-pg",
+          "--database=postgres",
+          "--cache=redis",
+          "--queue=redis",
+          "--docker-services",
+          "postgres",
+          "--yes",
+        );
       } finally {
         output.restore();
       }

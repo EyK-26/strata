@@ -1,6 +1,0 @@
-<div class="Page">
-  <h1><%= it.posting.name %></h1>
-  <p><%= it.posting.description %></p>
-  <p><a href="/apply/<%= it.posting.position_id %>">Apply</a></p>
-  <p><a href="/careers">All open roles</a></p>
-</div>

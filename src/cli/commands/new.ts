@@ -77,8 +77,6 @@ async function copyTemplateTree(sourceRoot: string, targetRoot: string): Promise
 
 function firstPositional(args: string[]): string | undefined {
   const valueFlags = new Set([
-    "--kit",
-    "--preset",
     "--frontend",
     "--database",
     "--auth",

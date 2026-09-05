@@ -1,8 +1,8 @@
-# Starter kits
+# Starter
 
-`bunx create-strata` scaffolds a runnable Strata app. You pick a kit, or you pick each layer. The same generator covers a hobby SQLite API and an enterprise hybrid app.
+`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, optional extras, then Docker vs local installs.
 
-HiroApp (`apps/hiroapp`) is the in-repo hiring product. It is **not** generated from this starter. Use a hiring recipe when you want a new hiring-shaped app. See `apps/hiroapp/starter-layers.json` for the retroactive map.
+HiroApp in this repo is one generated example (`apps/hiroapp`: Postgres + HTMX). It is not the source of the wizard. Sibling examples: `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis). Regenerate them with `bun run generate:example-apps`.
 
 ## Quick start
 
@@ -15,82 +15,55 @@ strata migrate
 strata dev
 ```
 
-In a terminal the CLI asks for a kit, then optionally each layer. In CI:
+In CI, pass `--yes` and the layers you want. Defaults (no flags) are SQLite, JSON API, header auth:
 
 ```bash
-bunx create-strata my-app --kit hobby --yes
-bunx create-strata hiring --kit hiroapp-enterprise --yes
+bunx create-strata my-app --yes
+bunx create-strata html --frontend server-htmx --database postgres --auth cookie --cache redis --queue redis --docker --yes
 ```
 
-## Kits
-
-| Kit | Frontend | Database | Auth | Typical use |
-|-----|----------|----------|------|-------------|
-| `hobby` | `api` | SQLite | Dev headers | Local spike, file SQLite |
-| `team` | `server-htmx` | Postgres | Cookie sessions | Staff HTML, Redis cache/queue |
-| `enterprise` | `hybrid` | Postgres | Cookies + opaque tokens + JWT | RLS env, SMTP, sidecars |
-| `custom` | you pick | you pick | you pick | Any mix of the layers below |
-| `hiroapp-hobby` | `hybrid` | SQLite | Cookie + token, `/apply` | Hiring-shaped skeleton |
-| `hiroapp-team` | `hybrid` | Postgres | Cookie + token, `/apply` | Hiring-shaped with Redis |
-| `hiroapp-enterprise` | `hybrid` | Postgres | Cookie + token + JWT, `/apply` | Hiring-shaped corporate extras |
-
-Hiring aliases also work: `hiroapp_build_from_starter_kit_x_level_hobby`, `_team`, `_enterprise` (and `_entreprise`).
-
 ## Layers
-
-Pass any of these as flags. They override the kit.
 
 | Flag | Values |
 |------|--------|
 | `--frontend` | `api`, `server-htmx`, `spa-react`, `hybrid` |
-| `--database` | `sqlite`, `postgres`, `mysql` |
+| `--database` | `sqlite`, `postgres`, `mysql` (one engine; not mixed) |
 | `--auth` | `headers`, `cookie`, `token`, `jwt`, `cookie-token`, `cookie-token-jwt` |
 | `--tenancy` | `none`, `rls` |
 | `--cache` | `array`, `redis` |
 | `--queue` | `sync`, `redis` |
 | `--mail` | `log`, `smtp` |
-| `--spa-prefix` | default `/app`; hiring recipes use `/apply` |
+| `--spa-prefix` | default `/app` |
 
-Corporate extras (on by default for enterprise kits, or pass `--corporate` to prompt):
+Extras (off unless you pass flags or answer yes in the wizard): `--mfa`, `--email-verification`, `--scim`, `--metrics`.
 
-`--mfa`, `--email-verification`, `--scim`, `--metrics`, `--kiosk`, `--mysql-mirror` (each has a `--no-*` form).
-
-These extras write env stubs and, for kiosk/mirror, a `bindSidecars()` helper. They do not copy HiroApp domain modules.
+You can add cache, SMTP, Redis, or another auth mode later by changing env and the matching bootstrap files. The generator only installs what you asked for.
 
 ## Docker vs local tools
 
-Postgres, MySQL, Redis, and SMTP can run in Docker Compose or as installs already on the machine. The wizard asks after you pick layers. It is skipped when those tools are not needed (SQLite plus in-process cache/queue and log mail).
+Postgres, MySQL, Redis, and SMTP can run in Docker Compose or as installs already on the machine. The wizard asks after layers. It is skipped when those tools are not needed.
 
 | Flag | Effect |
 |------|--------|
 | `--docker` | Write Compose for every selected tool that needs a service |
 | `--no-docker` | Do not write `docker-compose.yml`; point env at local installs |
-| `--docker-services=postgres,redis` | Compose only for that subset, intersected with what the kit needs |
+| `--docker-services=postgres,redis` | Compose only for that subset |
 
-Non-interactive defaults: hobby kits skip Compose; team and enterprise kits write Compose for every needed service. Pass `--no-docker` when Postgres or Redis already run on the machine.
-
-`custom` with `--yes` does not write Compose unless you pass `--docker` or `--docker-services`.
-
-Compose only includes services for the layers you selected (Postgres kit without Redis will not add a Redis container).
+`--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines.
 
 ## What you get that actually runs
 
 - `GET /health` after `strata migrate`
-- Notes table on every kit
-- Cookie kits: `users` + `sessions`, HTML `/login`, seed `demo@example.com` / `password`
-- Token kits: `POST /api/v1/auth/login` returns an opaque Bearer (SPA scaffold uses this)
-- JWT kits: `POST /api/auth/token` mints a short-lived HS256 token
-- Hybrid/SPA: `mergeSpaRoutes` under `SPA_PREFIX`
+- Notes table on every app
+- Cookie apps: `users` + `sessions`, HTML `/login`, seed `demo@example.com` / `password`
+- Token apps: `POST /api/v1/auth/login`
+- JWT apps: `POST /api/auth/token`
 - `strata.layers.json` records the choices
 
 `APP_ENV=production` calls `assertProductionSecrets()` on boot.
 
-## HiroApp: too late to regenerate
-
-HiroApp already has hiring modules, Eloquent models, migrations, MFA, SCIM, and two sidecars. Replacing `apps/hiroapp` with a starter output would break that tree.
-
-Use the hiring recipes (`hiroapp-hobby` ... `hiroapp-enterprise`) for **new** apps. Treat HiroApp as the reference implementation, not as a target for `create-strata`.
-
 ## In this repo
 
-`strata new my-app --kit hobby --yes` calls the same generator. `strata new --frontend=hybrid` (no project name) still overlays HTML/SPA files into the current directory.
+`strata new my-app --yes` calls the same generator. `strata new --frontend=hybrid` (no project name) still overlays HTML/SPA files into the current directory.
+
+Example apps are generated from `scripts/generate-example-apps.ts`. The original hiring product was removed until it can be rebuilt on this generator without mixing Postgres and MySQL.

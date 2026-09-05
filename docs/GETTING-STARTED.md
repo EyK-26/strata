@@ -5,7 +5,7 @@ This guide assumes you can run a terminal, Docker, and Bun. You do not need to k
 ## 1. Install tools
 
 - [Bun](https://bun.sh) 1.4 or newer
-- Docker Compose (for PostgreSQL 18, Redis, and optional MySQL)
+- Docker Compose (for PostgreSQL 18 and Redis)
 
 Clone the repo and install JavaScript packages:
 
@@ -21,7 +21,7 @@ For Docker Compose (app in a container):
 cp .env.example .env
 ```
 
-For Bun on your machine, with Postgres/Redis/MySQL in Docker on published ports:
+For Bun on your machine, with Postgres and Redis in Docker on published ports:
 
 ```bash
 cp .env.host.example .env.host
@@ -29,72 +29,63 @@ cp .env.host.example .env.host
 
 `bun run dev:host` and `bun run validate:host` load the host file for you.
 
-HiroApp should use:
+The in-repo HTML example (`apps/hiroapp`) should use:
 
 ```bash
 APP_NAME=HiroApp
 APP_KEY_PREFIX=hiroapp
 API_PREFIX=/api
 FRONTEND_MODE=server-htmx
-SPA_PREFIX=/apply
 AUTH_DEV_HEADERS=false
 ```
 
-`FRONTEND_MODE=hybrid` also serves the candidate SPA at `SPA_PREFIX` (HiroApp uses `/apply`; build it with `bun run --cwd apps/hiroapp frontend:build`). Staff HTML stays at `/`. The framework serves that prefix through `createSpaRoutes`.
-
 `APP_KEY_PREFIX` names cookies and Redis keys (`hiroapp_session`, `hiroapp:queue:default`). If you run two apps against one Redis, they must not share a prefix.
 
-## 3. Start Postgres, Redis, and MySQL
+## 3. Start Postgres and Redis
 
 ```bash
-docker compose up -d postgres redis mysql --wait
+docker compose up -d postgres redis --wait
 ```
 
-Default host ports: Postgres `54329`, Redis `6379`, MySQL `33061`. MySQL is the job-board mirror only. Hiring still runs if you skip it.
+Default host ports: Postgres `54329`, Redis `6379`. HiroApp migrate creates `hiroapp_test` on that Postgres server so it does not share tables with the framework fixture database.
 
 ## 4. Build the framework packages
 
-HiroApp imports `@getstrata/core/*` from `packages/strata-core/dist`. Build before migrate:
+Apps import `@getstrata/core/*` from `packages/strata-core/dist`. Build before migrate:
 
 ```bash
 bun run build:framework
 bun run build:bootstrap
 ```
 
-## 5. Create the HiroApp database
+## 5. Create the example database
 
 ```bash
 bun run hiroapp:fresh
 ```
 
-This creates `hiroapp_test` if needed, runs HiroApp migrations, and seeds people you can log in as.
+This creates `hiroapp_test` if needed, runs the generated starter schema, and seeds people you can log in as.
 
 ## 6. Start the app
 
 ```bash
-bun run hiroapp:dev:htmx
+bun run hiroapp:dev
 ```
 
-Or staff HTML plus the candidate portal:
+Visit http://localhost:3000. HTML sign-in is `/login`.
 
-```bash
-bun run hiroapp:dev:hybrid
-```
+| Email | Password | Role |
+|-------|----------|------|
+| `demo@example.com` | `password` | member |
+| `admin@example.test` | `password` | admin |
 
-Visit http://localhost:3000.
+## 7. Try the generated paths
 
-| Email | Password | What they can do |
-|-------|----------|------------------|
-| `admin@hiroapp.com` | `password` | Entire hiring OS, audit export, SCIM staff |
-| `recruiter@hiroapp.com` | `password` | Pipeline for their department |
-| `candidate@hiroapp.com` | `password` | Apply, interviews, offers, profile |
+1. **Staff browser (cookie + CSRF).** Open `/login`, sign in as `demo@example.com`. HTML forms post `_token`.
+2. **Health.** `GET /health` returns `ok` when the database answers.
+3. **API token or JWT.** `POST /api/v1/auth/login` mints an opaque token. `POST /api/auth/token` mints a short-lived JWT. Call `GET /api/user` with `Authorization: Bearer <token>`. Details: [AUTH.md](./AUTH.md).
 
-## 7. Try four real paths
-
-1. **Staff browser (cookie + CSRF).** Open `/login`, sign in as the recruiter. HTML forms post `_token`.
-2. **Candidate portal.** Open `/apply`, sign in as the candidate. Login mints a hashed opaque token. The SPA stores it in `sessionStorage` (a memory store plus a refresh cookie is stronger for production).
-3. **Public careers.** Open `/careers` without logging in. Listed postings are public.
-4. **API token or JWT.** As a recruiter, create a token on `/account` or `POST /api/auth/tokens`. Call `GET /api/user` with `Authorization: Bearer <token>`. Or mint a short-lived JWT with `POST /api/auth/token`. Staff JWTs do not include `*`. Partner ping still needs an opaque token with `integrations:ping`. Details: [AUTH.md](./AUTH.md).
+Your own app should be generated with `bunx create-strata`, not copied from HiroApp. See [STARTER.md](./STARTER.md).
 
 ## 8. When something fails
 
@@ -104,7 +95,6 @@ Visit http://localhost:3000.
 | Cookie login loops | `SESSION_SECRET` missing, or you are mixing `APP_KEY_PREFIX` values |
 | 403 on POST | Missing CSRF token (`_token` or `x-csrf-token`) |
 | 403 on Bearer POST | Token missing the ability, or you sent CSRF-protected cookie API without a token |
-| `/apply` returns 503 | Run `bun run --cwd apps/hiroapp frontend:build` |
 | Tests reset the wrong database | `DATABASE_URL` is not a test URL. See [TESTING.md](./TESTING.md) |
 
-Next: [HIROAPP.md](./HIROAPP.md) to learn the product, or [BUILDING-APPS.md](./BUILDING-APPS.md) to start your own app.
+Next: [HIROAPP.md](./HIROAPP.md) for the three example apps, or [BUILDING-APPS.md](./BUILDING-APPS.md) to start your own app.

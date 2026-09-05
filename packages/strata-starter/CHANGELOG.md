@@ -1,3 +1,3 @@
 # create-strata 0.1.9
 
-Interactive starter kits: hobby, team, enterprise, custom layer flags, and hiring recipes (`hiroapp-*`). Generated apps are runnable (health, dialect-aware migrate, cookie/token/JWT login when selected). Docker Compose is optional per selected tool (local installs or Compose, including a mix). HiroApp is not regenerated from this kit.
+Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script. The original hiring product is not the source of the generator.

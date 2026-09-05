@@ -1,3 +1,4 @@
+import { appDatabaseName } from "./renderEnv.ts";
 import {
   authNeedsUsers,
   authUsesCookie,
@@ -5,6 +6,20 @@ import {
   type DatabaseLayer,
   type StarterLayers,
 } from "./types.ts";
+
+function needsEnsure(layers: StarterLayers): boolean {
+  return layers.database !== "sqlite";
+}
+
+function ensureImport(layers: StarterLayers): string {
+  return needsEnsure(layers)
+    ? `import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";\n`
+    : "";
+}
+
+function ensureCall(layers: StarterLayers): string {
+  return needsEnsure(layers) ? "  await ensureAppDatabase();\n" : "";
+}
 
 function dialectFragments(database: DatabaseLayer) {
   if (database === "sqlite") {
@@ -165,7 +180,13 @@ export async function closeDatabase() {
 `;
   }
 
-  return `import { bindBunSql, createBunSqlPool } from "@getstrata/core/database/bunSql";
+  return `import { createBunSqlPool } from "@getstrata/core/database/bunSql";
+import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { bindDatabaseConnection } from "@getstrata/core/database/boundConnection";
+import {
+  getDefaultDatabaseQuery,
+  registerDefaultDatabasePool,
+} from "@getstrata/core/database/defaultConnection";
 import { useSqlDialect } from "@getstrata/core/database/dialect";
 
 export type SqlClient = {
@@ -186,7 +207,10 @@ export function getSql(): SqlClient {
   }
 
   useSqlDialect("${driver}");
-  sql = bindBunSql(createBunSqlPool({ url, max: 5 })) as SqlClient;
+  const pool = createBunSqlPool({ url, max: 5 }) as SqlDatabaseConnection;
+  registerDefaultDatabasePool(pool);
+  bindDatabaseConnection(getDefaultDatabaseQuery());
+  sql = getDefaultDatabaseQuery() as SqlClient;
   return sql;
 }
 
@@ -210,21 +234,32 @@ export async function closeDatabase() {
 
 function renderMigrateTs(layers: StarterLayers): string {
   const d = dialectFragments(layers.database);
-  const statements: string[] = [
-    `CREATE TABLE IF NOT EXISTS notes (
+  const statements: string[] = [];
+
+  if (layers.tenancy === "rls") {
+    statements.push(`CREATE TABLE IF NOT EXISTS tenant (
+    id ${d.id},
+    slug ${d.text} NOT NULL UNIQUE,
+    plan ${d.text} NOT NULL DEFAULT 'enterprise',
+    region ${d.text} NOT NULL DEFAULT 'eu'
+  )`);
+  }
+
+  statements.push(`CREATE TABLE IF NOT EXISTS notes (
     id ${d.id},
     body ${d.text} NOT NULL,
     created_at ${d.timestamp}
-  )`,
-  ];
+  )`);
 
   if (authNeedsUsers(layers.auth)) {
+    const tenantColumn =
+      layers.tenancy === "rls" ? "\n    tenant_id INTEGER NOT NULL DEFAULT 1," : "";
     statements.push(`CREATE TABLE IF NOT EXISTS users (
     id ${d.id},
     name ${d.text} NOT NULL,
     email ${d.text} NOT NULL UNIQUE,
     password ${d.text} NOT NULL,
-    is_admin ${d.bool},
+    is_admin ${d.bool},${tenantColumn}
     email_verified_at ${d.timestampNull},
     created_at ${d.timestamp}
   )`);
@@ -262,6 +297,20 @@ function renderMigrateTs(layers: StarterLayers): string {
   const adminFlag = ph ? "false, " : "0, ";
   const adminTrue = ph ? "true" : "1";
 
+  const seedTenant =
+    layers.tenancy === "rls"
+      ? `
+  const [{ count: tenantCount }] = await sql.unsafe<Array<{ count: string | number }>>(
+    "SELECT COUNT(*) AS count FROM tenant",
+  );
+  if (Number(tenantCount) === 0) {
+    await sql.unsafe(
+      "INSERT INTO tenant (slug, plan, region) VALUES (${ph ? "$1, $2, $3" : "?, ?, ?"})",
+      ["default", "enterprise", "eu"],
+    );
+  }`
+      : "";
+
   const seedUsers = authNeedsUsers(layers.auth)
     ? `
   const [{ count: userCount }] = await sql.unsafe<Array<{ count: string | number }>>(
@@ -280,23 +329,23 @@ function renderMigrateTs(layers: StarterLayers): string {
     ? `import { hashPassword } from "@getstrata/core/auth/password";\n`
     : "";
 
-  const seedBlock = seedUsers;
+  const seedBlock = `${seedTenant}${seedUsers}`;
 
-  return `${hashImport}import { getSql } from "../bootstrap/database.ts";
+  return `${hashImport}${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";
 
 const migrations = [
 ${list}
 ];
 
 export async function migrate() {
-  const sql = getSql();
+${ensureCall(layers)}  const sql = getSql();
   for (const statement of migrations) {
     await sql.unsafe(statement);
   }
 }
 
 export async function seed() {
-  const sql = getSql();
+${ensureCall(layers)}  const sql = getSql();
   const [{ count }] = await sql.unsafe<Array<{ count: string | number }>>(
     "SELECT COUNT(*) AS count FROM notes",
   );
@@ -328,19 +377,22 @@ function dropTables(layers: StarterLayers): string[] {
     ordered.push("users");
   }
   ordered.push("notes");
+  if (layers.tenancy === "rls") {
+    ordered.push("tenant");
+  }
   return ordered;
 }
 
 function renderFreshTs(layers: StarterLayers): string {
   const tables = dropTables(layers);
   const cascade = layers.database === "sqlite" ? "" : " CASCADE";
-  return `import { getSql } from "../bootstrap/database.ts";
+  return `${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";
 import { migrate, seed } from "./migrate.ts";
 
 const tables = ${JSON.stringify(tables)};
 
 export async function fresh() {
-  const sql = getSql();
+${ensureCall(layers)}  const sql = getSql();
   for (const table of tables) {
     await sql.unsafe(\`DROP TABLE IF EXISTS \${table}${cascade}\`);
   }
@@ -356,13 +408,78 @@ if (import.meta.main) {
 `;
 }
 
+function renderSeedTs(): string {
+  return `import { seed } from "./migrate.ts";
+
+export { seed };
+
+if (import.meta.main) {
+  await seed();
+  console.log("Database seeded.");
+  process.exit(0);
+}
+`;
+}
+
+function renderStatusTs(layers: StarterLayers): string {
+  const tables = dropTables(layers);
+  return `${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";
+
+const tables = ${JSON.stringify(tables)};
+
+export async function status() {
+${ensureCall(layers)}  const sql = getSql();
+  console.log("Starter schema (inline SQL, not a migration runner):");
+  for (const table of tables) {
+    try {
+      const rows = await sql.unsafe<Array<{ count: string | number }>>(
+        \`SELECT COUNT(*) AS count FROM \${table}\`,
+      );
+      console.log(\`- [present] \${table} (rows: \${rows[0]?.count ?? 0})\`);
+    } catch {
+      console.log(\`- [missing] \${table}\`);
+    }
+  }
+}
+
+if (import.meta.main) {
+  await status();
+  process.exit(0);
+}
+`;
+}
+
+function renderRollbackTs(layers: StarterLayers): string {
+  const tables = dropTables(layers);
+  const cascade = layers.database === "sqlite" ? "" : " CASCADE";
+  return `${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";
+
+const tables = ${JSON.stringify(tables)};
+
+export async function rollback() {
+${ensureCall(layers)}  const sql = getSql();
+  for (const table of tables) {
+    await sql.unsafe(\`DROP TABLE IF EXISTS \${table}${cascade}\`);
+    console.log(\`dropped \${table}\`);
+  }
+}
+
+if (import.meta.main) {
+  await rollback();
+  console.log("Rolled back starter tables.");
+  process.exit(0);
+}
+`;
+}
+
 function renderPreloadTs(layers: StarterLayers, projectName: string): string {
+  const database = appDatabaseName(projectName);
   const fallback =
     layers.database === "sqlite"
       ? "sqlite:./storage/app.sqlite"
       : layers.database === "mysql"
-        ? `mysql://root:root@localhost:3306/${projectName}`
-        : `postgresql://postgres:postgres@localhost:5432/${projectName}`;
+        ? `mysql://root:root@localhost:3306/${database}`
+        : `postgresql://postgres:postgres@localhost:5432/${database}`;
 
   return `import { join } from "node:path";
 import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
@@ -454,37 +571,130 @@ export default queueProvider;
 `;
 }
 
-function renderSidecarsTs(layers: StarterLayers): string | null {
-  if (!layers.extras.sqliteKiosk && !layers.extras.mysqlMirror) {
+function renderEnsureDatabaseTs(layers: StarterLayers, projectName: string): string | null {
+  if (layers.database === "sqlite") {
     return null;
   }
 
-  return `import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
-import {
-  hasNamedConnection,
-  registerNamedConnection,
-} from "@getstrata/core/database/namedConnections";
-import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
+  const database = appDatabaseName(projectName);
+  const fallback =
+    layers.database === "mysql"
+      ? `mysql://root:root@localhost:3306/${database}`
+      : `postgresql://postgres:postgres@localhost:5432/${database}`;
 
-let bound = false;
+  if (layers.database === "mysql") {
+    return `const APP_DATABASE = ${JSON.stringify(database)};
 
-export function bindSidecars() {
-  if (bound) {
-    return;
-  }
-  bound = true;
-
-  const sqlitePath = process.env.KIOSK_SQLITE?.trim();
-  if (sqlitePath && !hasNamedConnection("kiosk")) {
-    registerNamedConnection("kiosk", "sqlite", createSqliteConnection(sqlitePath));
+function resolveAppDatabaseUrl(): string {
+  const explicit = process.env.APP_DATABASE_URL?.trim();
+  if (explicit) {
+    return explicit;
   }
 
-  const mysqlUrl = process.env.MYSQL_URL?.trim();
-  if (mysqlUrl && !hasNamedConnection("job-board")) {
-    registerNamedConnection("job-board", "mysql", createMysqlConnection(mysqlUrl));
+  const base = process.env.DATABASE_URL?.trim() || ${JSON.stringify(fallback)};
+  try {
+    const url = new URL(base);
+    url.pathname = \`/\${APP_DATABASE}\`;
+    return url.toString();
+  } catch {
+    return base;
   }
 }
+
+export async function ensureAppDatabase(): Promise<string> {
+  const url = resolveAppDatabaseUrl();
+  process.env.DATABASE_URL = url;
+  return url;
+}
 `;
+  }
+
+  return `const APP_DATABASE = ${JSON.stringify(database)};
+
+function resolveAppDatabaseUrl(): string {
+  const explicit = process.env.APP_DATABASE_URL?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const base = process.env.DATABASE_URL?.trim() || ${JSON.stringify(fallback)};
+  try {
+    const url = new URL(base);
+    url.pathname = \`/\${APP_DATABASE}\`;
+    return url.toString();
+  } catch {
+    return base;
+  }
+}
+
+function adminCandidateUrls(url: string): string[] {
+  const names = ["postgres", "template1"];
+  try {
+    const current = decodeURIComponent(new URL(url).pathname.replace(/^\\//, ""));
+    if (current && !names.includes(current)) {
+      names.push(current);
+    }
+  } catch {
+    // keep the built-in admin databases
+  }
+  return names.map((name) => {
+    const admin = new URL(url);
+    admin.pathname = \`/\${name}\`;
+    return admin.toString();
+  });
+}
+
+async function openAdminConnection(url: string): Promise<Bun.SQL> {
+  let lastError: unknown;
+  for (const candidate of adminCandidateUrls(url)) {
+    const adminSql = new Bun.SQL(candidate);
+    try {
+      await adminSql\`SELECT 1\`;
+      return adminSql;
+    } catch (error) {
+      lastError = error;
+      await adminSql.close().catch(() => undefined);
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Could not open an admin connection to create the app database.");
+}
+
+export async function ensureAppDatabase(): Promise<string> {
+  const url = resolveAppDatabaseUrl();
+  const parsed = new URL(url);
+  const name = decodeURIComponent(parsed.pathname.replace(/^\\//, ""));
+  if (!name) {
+    throw new Error("DATABASE_URL is missing a database name.");
+  }
+
+  const identifier = name.replace(/[^A-Za-z0-9_]/g, "");
+  if (identifier !== name) {
+    throw new Error(\`Refusing to create a database with an unsafe name: \${name}\`);
+  }
+
+  const adminSql = await openAdminConnection(url);
+  try {
+    const rows = await adminSql\`
+      SELECT 1 AS ok FROM pg_database WHERE datname = \${name}
+    \`;
+    if (rows.length === 0) {
+      await adminSql.unsafe(\`CREATE DATABASE \${identifier}\`);
+    }
+  } finally {
+    await adminSql.close();
+  }
+
+  process.env.DATABASE_URL = url;
+  process.env.APP_DATABASE_URL = url;
+  return url;
+}
+`;
+}
+
+function renderSidecarsTs(_layers: StarterLayers): string | null {
+  return null;
 }
 
 function renderProvidersIndex(): string {
@@ -508,7 +718,9 @@ export { starterProviders };
 }
 
 function renderCreateAppTs(layers: StarterLayers): string {
-  const sidecars = layers.extras.sqliteKiosk || layers.extras.mysqlMirror;
+  const ensureLine = needsEnsure(layers)
+    ? `import { ensureAppDatabase } from "./ensureDatabase.ts";\n`
+    : "";
   return `import { join } from "node:path";
 import "./preload.ts";
 import { runProviderPhase } from "@getstrata/bootstrap/context";
@@ -527,6 +739,7 @@ import {
   configureModulesDirectory,
   ensureModulesLoaded,
 } from "@getstrata/bootstrap/discoverModules";
+import { createHealthRoutes } from "@getstrata/bootstrap/health";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
@@ -535,8 +748,8 @@ import { migrate } from "../db/migrate.ts";
 import { buildRoutes } from "../routes.ts";
 import { loadConfig } from "./config.ts";
 import { getSql } from "./database.ts";
-import { starterProviders } from "./providers/index.ts";
-${sidecars ? `import { bindSidecars } from "./sidecars.ts";\n` : ""}
+${ensureLine}import { starterProviders } from "./providers/index.ts";
+
 export interface BootstrapOptions {
   migrate?: boolean;
 }
@@ -595,9 +808,8 @@ export async function bootstrapApp(options: BootstrapOptions = {}): Promise<Boot
     assertProductionSecrets();
   }
 
-  const appConfig = loadConfig();
+${needsEnsure(layers) ? "  await ensureAppDatabase();\n" : ""}  const appConfig = loadConfig();
   getSql();
-${sidecars ? "  bindSidecars();\n" : ""}
   configureModulesDirectory(join(import.meta.dir, "../modules"));
   await ensureModulesLoaded();
   const context = createAppContext();
@@ -607,13 +819,18 @@ ${sidecars ? "  bindSidecars();\n" : ""}
   }
 
   const routes = mergeSpaRoutes(context.dependencies, {
-    ...createMetricsRoutes(),
+    ...createHealthRoutes(context.dependencies),
     ...buildRoutes(context.dependencies),
+    ...createMetricsRoutes(),
   }, {
     distDirectory: join(import.meta.dir, "../../frontend/dist"),
   });
 
   return { context, routes, config: appConfig };
+}
+
+export async function createApp(options: BootstrapOptions = {}) {
+  return bootstrapApp({ migrate: false, ...options });
 }
 
 export function createAppServer(routes: AppRouteMap, port = 0) {
@@ -677,12 +894,16 @@ export {
   renderConfigTs,
   renderCreateAppTs,
   renderDatabaseTs,
+  renderEnsureDatabaseTs,
   renderFreshTs,
   renderMigrateTs,
   renderPreloadTs,
   renderProvidersIndex,
   renderQueueProvider,
+  renderRollbackTs,
   renderRoutesTs,
+  renderSeedTs,
   renderSidecarsTs,
+  renderStatusTs,
   renderViewTs,
 };

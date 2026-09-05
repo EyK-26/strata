@@ -2,8 +2,7 @@
 /**
  * Fail if any in-scope framework file is below 100% lines.
  * Bun's coverageThreshold cannot be used: core tests load HiroApp createApp
- * via OpenAPI, which would fail an aggregate 100% gate. HiroApp is scored by
- * scripts/assert-hiroapp-coverage.ts.
+ * via OpenAPI, which would fail an aggregate 100% gate.
  */
 
 import {

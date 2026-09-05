@@ -1,10 +1,19 @@
-import { join } from "node:path";
-import { loadMigrationsFromDirectory, rollbackDatabase } from "@getstrata/core/database/migrations";
-import { connectHiroappDatabase } from "./connect.ts";
+import { getSql } from "../bootstrap/database.ts";
+import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 
-const db = await connectHiroappDatabase();
-const migrations = await loadMigrationsFromDirectory(join(import.meta.dir, "migrations"));
-const count = await rollbackDatabase(db, migrations, {
-  onMigration: (name) => console.log(`rolled back ${name}`),
-});
-console.log(`Rolled back ${count} migration(s).`);
+const tables = ["api_tokens", "sessions", "users", "notes", "tenant"];
+
+export async function rollback() {
+  await ensureAppDatabase();
+  const sql = getSql();
+  for (const table of tables) {
+    await sql.unsafe(`DROP TABLE IF EXISTS ${table} CASCADE`);
+    console.log(`dropped ${table}`);
+  }
+}
+
+if (import.meta.main) {
+  await rollback();
+  console.log("Rolled back starter tables.");
+  process.exit(0);
+}

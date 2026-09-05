@@ -1,0 +1,6 @@
+<section class="section">
+  <h1>Welcome to hiroapp-hobby</h1>
+  <p>Frontend <code>api</code>, database <code>sqlite</code>, auth <code>headers</code>.</p>
+  <p>Health check: <a href="/health"><code>/health</code></a>.</p>
+  
+</section>

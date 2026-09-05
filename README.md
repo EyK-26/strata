@@ -2,7 +2,7 @@
 
 Strata is a Bun framework for building server apps. You write TypeScript. The runtime is Bun. PostgreSQL is the proven database for production. Redis is optional until you need cache, queues, or shared rate limits.
 
-**HiroApp** (`apps/hiroapp`) is the only in-repo example product. It is a hiring OS: public careers, applications, interviews, offers, staff tools. When you want to see how a Strata feature is meant to be used, look there.
+**HiroApp** (`apps/hiroapp`) is the in-repo Postgres + HTMX example, generated from `create-strata`. Sibling examples: `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis). The original hiring product was removed until it can be rebuilt on that generator. When you want a new app, use [docs/STARTER.md](docs/STARTER.md).
 
 This README is the map. Each linked guide is written for someone who has used HTTP and SQL, but has not used this repo before.
 
@@ -26,9 +26,9 @@ Strata gives you:
 - Queues, cache, mail, storage, and scheduled tasks
 - Policies, abilities on tokens, and Postgres row-level security when you need tenants
 
-Strata does not pick your frontend. HiroApp staff tools are server-rendered HTML with HTMX. Candidates can use the React portal at `/apply`. You can also serve a JSON API only. The auth and SQL choices are also yours. Pick the strongest option that matches how clients talk to you. See [docs/AUTH.md](docs/AUTH.md).
+Strata does not pick your frontend. You can serve server-rendered HTML with HTMX, a React SPA under a prefix, both, or JSON only. The auth and SQL choices are also yours. Pick the strongest option that matches how clients talk to you. See [docs/AUTH.md](docs/AUTH.md).
 
-PostgreSQL is what we run in CI and in HiroApp OLTP. Named connections can attach SQLite or MySQL as sidecars. Dialect helpers exist so generated SQL can target those engines. Do not shard one hiring row across three databases.
+PostgreSQL is what we run in CI and in the in-repo HTML example. Named connections can attach SQLite or MySQL. Dialect helpers exist so generated SQL can target those engines. An app picks **one** primary database. Do not run Postgres and MySQL together as two OLTP stores for the same product.
 
 ## Packages
 
@@ -37,7 +37,7 @@ PostgreSQL is what we run in CI and in HiroApp OLTP. Named connections can attac
 | `@getstrata/core` | Runtime: auth, HTTP, database, queue, mail, security |
 | `@getstrata/bootstrap` | App boot: kernel, providers, cookie session helpers |
 | `@getstrata/cli` | `strata` commands: `dev`, `start`, `migrate`, `run` |
-| `@getstrata/starter` | `bunx create-strata my-app` (interactive kits) |
+| `@getstrata/starter` | `bunx create-strata my-app` (interactive layers) |
 
 Import **subpaths**, not the root `@getstrata/core` barrel, from application code:
 
@@ -59,18 +59,15 @@ bun install
 bun run build:framework
 bun run build:bootstrap
 bun run hiroapp:fresh
-bun run hiroapp:dev:htmx
+bun run hiroapp:dev
 ```
 
-Open http://localhost:3000. Seeded logins all use password `password`:
+Open http://localhost:3000. Seeded logins use password `password`:
 
 | Email | Role |
 |-------|------|
-| `admin@hiroapp.com` | Admin (`role_id=1`) |
-| `recruiter@hiroapp.com` | Recruiter (`role_id=3`) |
-| `candidate@hiroapp.com` | Candidate (`role_id=2`) |
-
-A candidate is a `User` with `role_id = 2`. There is no separate Candidate model.
+| `demo@example.com` | member |
+| `admin@example.test` | admin |
 
 Host-native Bun against published ports: `bun run dev:host` (see `.env.host.example`).
 
@@ -80,23 +77,22 @@ Set `FRONTEND_MODE`:
 
 | Value | What you get |
 |-------|----------------|
-| `server-htmx` | HTML from Eta templates plus JSON under `/api` (HiroApp default for local UI) |
+| `server-htmx` | HTML from Eta templates plus JSON under `/api` |
 | `spa-react` | JSON API plus a SPA document under `SPA_PREFIX` (default `/app`) |
-| `hybrid` | Staff HTML at `/` plus a SPA prefix (`SPA_PREFIX=/apply` in HiroApp, `/app` in the scaffold) |
+| `hybrid` | Staff HTML at `/` plus a SPA prefix (default `/app`) |
 | `api` | JSON only |
 
-HiroApp HTML uses cookie sessions and CSRF. Partner integrations use Bearer tokens or JWT. See [docs/AUTH.md](docs/AUTH.md).
+The in-repo HTML example uses cookie sessions and CSRF. See [docs/AUTH.md](docs/AUTH.md).
 
 ## Useful commands
 
 ```bash
-bun run hiroapp:fresh          # HiroApp migrate + seed
-bun run hiroapp:dev:hybrid     # Staff HTML plus candidate SPA at /apply
-bun run hiroapp:dev:htmx       # HiroApp HTML UI
-bun run test:hiroapp           # HiroApp tests
+bun run hiroapp:fresh          # Example app migrate + seed
+bun run hiroapp:dev            # Postgres + HTMX example
+bun run generate:example-apps  # Rewrite apps/hiroapp* from create-strata
 bun run test:coverage          # Framework coverage gate
 bun run validate:host          # Full local CI-shaped check
-strata migrate                 # App schema (HiroApp when DOGFOOD_APP=hiroapp)
+strata migrate                 # App schema (apps/hiroapp when dogfood)
 STRATA_SCHEMA=fixture strata migrate:fresh --seed   # Core-test fixture schema only
 ```
 
@@ -105,7 +101,9 @@ The leftover `src/db` schema is a **fixture** for framework tests (tenants, RLS)
 ## Layout
 
 ```
-apps/hiroapp/     Hiring OS (the example product)
+apps/hiroapp/           Postgres + HTMX example (generated)
+apps/hiroapp-hobby/     SQLite JSON API example (generated)
+apps/hiroapp-team/      Postgres HTML + Redis example (generated)
 src/core/         Framework runtime
 src/bootstrap/    Kernel, providers, cookie sessions
 packages/         Published npm packages

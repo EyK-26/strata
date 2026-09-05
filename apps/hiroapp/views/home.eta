@@ -1,0 +1,6 @@
+<section class="section">
+  <h1>Welcome to hiroapp</h1>
+  <p>Frontend <code>server-htmx</code>, database <code>postgres</code>, auth <code>cookie-token-jwt</code>.</p>
+  <p>Health check: <a href="/health"><code>/health</code></a>.</p>
+  <p>HTML sign-in: <a href="/login">/login</a> (demo@example.com / password).</p>
+</section>

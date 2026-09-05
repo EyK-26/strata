@@ -28,7 +28,6 @@ docker compose exec app bun run lint:ci
 docker compose exec app strata openapi:validate
 docker compose exec app strata openapi:check
 docker compose exec app bun run test:coverage
-docker compose exec app bun run test:hiroapp:coverage
 ```
 
 On the host: `bun run validate:host`.
@@ -48,7 +47,7 @@ Manual install: `bunx lefthook install`
 docker compose exec app strata make:module invoice
 ```
 
-Gate optional features with `isFeatureEnabled()` in `index.ts`. Put hiring-domain examples in HiroApp, not in the leftover `src/db` fixture.
+Gate optional features with `isFeatureEnabled()` in `index.ts`. Put product-domain examples in a generated app, not in the leftover `src/db` fixture.
 
 ## Migrations and seeds
 
@@ -88,7 +87,6 @@ CI fails if `docs/openapi.json` drifts. Commit regenerated files.
 
 - Framework unit: `bun run unit`
 - Integration (Postgres/Redis): `bun run integration`
-- HiroApp: `bun run test:hiroapp`
 - Add coverage for auth, tenancy, and flags when you touch those areas
 
 ## Security

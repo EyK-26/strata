@@ -1,4 +1,0 @@
-<section class="page-header">
-  <h1><%= it.title ?? "Error" %></h1>
-  <p><%= it.message ?? "Something went wrong." %></p>
-</section>

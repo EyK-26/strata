@@ -1,5 +1,4 @@
 const FRONTENDS = ["api", "server-htmx", "spa-react", "hybrid"] as const;
-const SCALES = ["hobby", "team", "enterprise"] as const;
 const DATABASES = ["sqlite", "postgres", "mysql"] as const;
 const AUTH_STACKS = [
   "headers",
@@ -14,18 +13,9 @@ const CACHE_DRIVERS = ["array", "redis"] as const;
 const QUEUE_DRIVERS = ["sync", "redis"] as const;
 const MAIL_DRIVERS = ["log", "smtp"] as const;
 const DOCKER_SERVICE_NAMES = ["postgres", "mysql", "redis", "mailpit"] as const;
-const KITS = [
-  "hobby",
-  "team",
-  "enterprise",
-  "custom",
-  "hiroapp-hobby",
-  "hiroapp-team",
-  "hiroapp-enterprise",
-] as const;
+const EXAMPLE_APP_IDS = ["hiroapp-hobby", "hiroapp-team", "hiroapp"] as const;
 
 type FrontendMode = (typeof FRONTENDS)[number];
-type Scale = (typeof SCALES)[number];
 type DatabaseLayer = (typeof DATABASES)[number];
 type AuthStack = (typeof AUTH_STACKS)[number];
 type TenancyLayer = (typeof TENANCY_DRIVERS)[number];
@@ -33,7 +23,7 @@ type CacheLayer = (typeof CACHE_DRIVERS)[number];
 type QueueLayer = (typeof QUEUE_DRIVERS)[number];
 type MailLayer = (typeof MAIL_DRIVERS)[number];
 type DockerServiceName = (typeof DOCKER_SERVICE_NAMES)[number];
-type KitId = (typeof KITS)[number];
+type ExampleAppId = (typeof EXAMPLE_APP_IDS)[number];
 
 const DOCKER_SERVICE_LABELS: Record<DockerServiceName, string> = {
   postgres: "Postgres",
@@ -47,8 +37,6 @@ interface CorporateExtras {
   emailVerification: boolean;
   scim: boolean;
   metrics: boolean;
-  sqliteKiosk: boolean;
-  mysqlMirror: boolean;
 }
 
 interface DockerLayer {
@@ -61,12 +49,9 @@ interface DockerNeedles {
   cache: CacheLayer;
   queue: QueueLayer;
   mail: MailLayer;
-  extras: CorporateExtras;
 }
 
 interface StarterLayers {
-  kit: KitId;
-  scale: Scale;
   frontend: FrontendMode;
   database: DatabaseLayer;
   auth: AuthStack;
@@ -85,6 +70,8 @@ interface GenerateOptions {
   layers: StarterLayers;
   templateRoot: string;
   overlayRoot: string;
+  force?: boolean;
+  workspaceDependencies?: boolean;
 }
 
 function authUsesCookie(auth: AuthStack): boolean {
@@ -107,10 +94,6 @@ function needsRedis(layers: Pick<StarterLayers, "cache" | "queue">): boolean {
   return layers.cache === "redis" || layers.queue === "redis";
 }
 
-function isHiringRecipe(kit: KitId): boolean {
-  return kit.startsWith("hiroapp-");
-}
-
 function emptyDockerServices(): Record<DockerServiceName, boolean> {
   return { postgres: false, mysql: false, redis: false, mailpit: false };
 }
@@ -130,7 +113,7 @@ function neededDockerServices(layers: DockerNeedles): DockerServiceName[] {
   if (layers.database === "postgres") {
     needed.push("postgres");
   }
-  if (layers.database === "mysql" || layers.extras.mysqlMirror) {
+  if (layers.database === "mysql") {
     needed.push("mysql");
   }
   if (needsRedis(layers)) {
@@ -175,12 +158,11 @@ export type {
   DatabaseLayer,
   DockerLayer,
   DockerServiceName,
+  ExampleAppId,
   FrontendMode,
   GenerateOptions,
-  KitId,
   MailLayer,
   QueueLayer,
-  Scale,
   StarterLayers,
   TenancyLayer,
 };
@@ -195,17 +177,15 @@ export {
   DOCKER_SERVICE_LABELS,
   DOCKER_SERVICE_NAMES,
   dockerLayerForNeeded,
+  EXAMPLE_APP_IDS,
   emptyDockerServices,
   enableDockerServices,
   FRONTENDS,
-  isHiringRecipe,
-  KITS,
   MAIL_DRIVERS,
   neededDockerServices,
   needsRedis,
   QUEUE_DRIVERS,
   reconcileDocker,
-  SCALES,
   selectedDockerServices,
   TENANCY_DRIVERS,
 };

@@ -7,7 +7,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-const HIROAPP_ROOT = join(import.meta.dir, "../apps/hiroapp/src");
+const APPS_ROOT = join(import.meta.dir, "../apps");
 const violations: string[] = [];
 
 async function walk(dir: string): Promise<string[]> {
@@ -35,17 +35,27 @@ function record(fullPath: string, index: number, line: string) {
 }
 
 try {
-  for (const filePath of await walk(HIROAPP_ROOT)) {
-    const lines = (await readFile(filePath, "utf8")).split("\n");
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index] ?? "";
-      if (/from\s+['"](?:\.\.\/)+src\/(?:core|bootstrap)\//.test(line)) {
-        record(filePath, index, line);
+  for (const appEntry of await readdir(APPS_ROOT, { withFileTypes: true })) {
+    if (!appEntry.isDirectory() || appEntry.name === "node_modules") {
+      continue;
+    }
+    const appSrc = join(APPS_ROOT, appEntry.name, "src");
+    try {
+      for (const filePath of await walk(appSrc)) {
+        const lines = (await readFile(filePath, "utf8")).split("\n");
+        for (let index = 0; index < lines.length; index += 1) {
+          const line = lines[index] ?? "";
+          if (/from\s+['"](?:\.\.\/)+src\/(?:core|bootstrap)\//.test(line)) {
+            record(filePath, index, line);
+          }
+        }
       }
+    } catch {
+      // App tree may not have src yet.
     }
   }
 } catch {
-  // HiroApp is optional until the app tree is present.
+  // apps/ is optional until example apps are generated.
 }
 
 if (violations.length > 0) {

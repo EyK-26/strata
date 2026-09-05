@@ -1,8 +1,0 @@
-<h1>Billing</h1>
-<p>Tenant <%= it.tenantId %></p>
-<% if (it.subscription) { %>
-  <p>Plan: <%= it.subscription.plan %></p>
-  <p>Status: <%= it.subscription.status %></p>
-<% } else { %>
-  <p>No subscription on file.</p>
-<% } %>

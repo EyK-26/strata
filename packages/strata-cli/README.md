@@ -26,7 +26,7 @@ From the current working directory, `strata` loads `strata.config.ts` if present
 
 `strata run <file>` executes a file with the app preload. It is not an alias for `bun run <package.json script>`.
 
-`strata new my-app --kit hobby --yes` scaffolds a new directory (same generator as `bunx create-strata`). `strata new --frontend=hybrid` (no project name) copies the staff HTML scaffold and the SPA scaffold into the current directory. Hybrid keeps HTML at `/` and serves the SPA under `/app/*`.
+`strata new my-app --yes` scaffolds a new directory (same generator as `bunx create-strata`). `strata new --frontend=hybrid` (no project name) copies the staff HTML scaffold and the SPA scaffold into the current directory. Hybrid keeps HTML at `/` and serves the SPA under `/app/*`.
 
 ## This monorepo
 

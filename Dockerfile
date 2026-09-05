@@ -8,6 +8,8 @@ COPY packages/strata-bootstrap/package.json packages/strata-bootstrap/
 COPY packages/strata-cli/package.json packages/strata-cli/
 COPY packages/strata-starter/package.json packages/strata-starter/
 COPY apps/hiroapp/package.json apps/hiroapp/
+COPY apps/hiroapp-hobby/package.json apps/hiroapp-hobby/
+COPY apps/hiroapp-team/package.json apps/hiroapp-team/
 RUN bun install --frozen-lockfile
 
 FROM base AS build

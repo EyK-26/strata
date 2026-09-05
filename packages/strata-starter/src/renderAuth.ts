@@ -3,7 +3,6 @@ import {
   authUsesCookie,
   authUsesJwt,
   authUsesToken,
-  isHiringRecipe,
   type StarterLayers,
 } from "./types.ts";
 
@@ -63,10 +62,13 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
 
   const placeholder = layers.database === "postgres" ? "$1" : "?";
 
-  return `import { verifyPassword } from "@getstrata/core/auth/password";
-import { hashApiToken } from "@getstrata/core/auth/tokenHash";
-import type { AuthUser } from "@getstrata/core/auth/authContext";
-import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
+  const hashImport = authUsesToken(layers.auth)
+    ? `import { hashApiToken } from "@getstrata/core/auth/tokenHash";\n`
+    : "";
+
+  return `import type { AuthUser } from "@getstrata/core/auth/authContext";
+import { verifyPassword } from "@getstrata/core/auth/password";
+${hashImport}import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
 import { getSql } from "./database.ts";
 
 function mapRole(isAdmin: unknown): string {
@@ -210,7 +212,7 @@ export default authProvider;
   const jwtReg = authUsesJwt(layers.auth) ? `    auth.registerGuard("jwt", new JwtGuard());` : "";
 
   const basicReg =
-    layers.kit === "enterprise" || layers.kit === "hiroapp-enterprise"
+    authUsesToken(layers.auth) || authUsesJwt(layers.auth)
       ? `    auth.registerGuard("basic", new BasicAuthGuard(container));`
       : "";
 
@@ -218,18 +220,41 @@ export default authProvider;
     ? `    container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());`
     : "";
 
-  return `import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
-import { createCookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
-import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
-import { AuthManager, DatabaseTokenGuard } from "@getstrata/core/auth/guard";
-import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
-import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
-import type { ServiceProvider } from "@getstrata/core/contracts/di";
-import {
-  CORE_ABILITY_CHECKER_TOKEN,
-  CORE_AUTH_USER_DIRECTORY_TOKEN,
-} from "@getstrata/core/contracts/serviceTokens";
-import { starterAuthDirectory } from "../authDirectory.ts";
+  const imports: string[] = [`import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";`];
+  if (authUsesCookie(layers.auth)) {
+    imports.push(
+      `import { createCookieSessionAuthManager } from "@getstrata/bootstrap/web/session";`,
+    );
+  }
+  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth)) {
+    imports.push(`import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";`);
+  }
+  if (!authUsesCookie(layers.auth) && authUsesToken(layers.auth)) {
+    imports.push(`import { AuthManager, DatabaseTokenGuard } from "@getstrata/core/auth/guard";`);
+  } else if (!authUsesCookie(layers.auth) && authUsesJwt(layers.auth)) {
+    imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
+  } else if (authUsesCookie(layers.auth) && authUsesToken(layers.auth)) {
+    imports.push(`import { DatabaseTokenGuard } from "@getstrata/core/auth/guard";`);
+  }
+  if (authUsesJwt(layers.auth)) {
+    imports.push(`import { JwtGuard } from "@getstrata/core/auth/jwtGuard";`);
+  }
+  if (authUsesToken(layers.auth)) {
+    imports.push(
+      `import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";`,
+    );
+  }
+  imports.push(`import type { ServiceProvider } from "@getstrata/core/contracts/di";`);
+  const tokenImports = ["CORE_AUTH_USER_DIRECTORY_TOKEN"];
+  if (authUsesToken(layers.auth)) {
+    tokenImports.unshift("CORE_ABILITY_CHECKER_TOKEN");
+  }
+  imports.push(
+    `import {\n  ${tokenImports.join(",\n  ")},\n} from "@getstrata/core/contracts/serviceTokens";`,
+  );
+  imports.push(`import { starterAuthDirectory } from "../authDirectory.ts";`);
+
+  return `${imports.join("\n")}
 
 const authProvider: ServiceProvider = {
   name: "starter.auth",
@@ -384,20 +409,45 @@ function renderAuthModule(layers: StarterLayers): string | null {
     },`
       : "";
 
-  return `import { randomBytes } from "node:crypto";
-import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
-import { parseFormBody } from "@getstrata/bootstrap/web/forms";
-import { wrapWebLogin } from "@getstrata/bootstrap/web/routing";
-import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
-import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";
-import { AuthManager } from "@getstrata/core/auth/guard";
-import { verifyPassword } from "@getstrata/core/auth/password";
-import { hashApiToken } from "@getstrata/core/auth/tokenHash";
-import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
-import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";
-import { getSql } from "../../bootstrap/database.ts";
-import { renderPage } from "../../lib/view.ts";
+  const imports: string[] = [];
+  if (authUsesToken(layers.auth)) {
+    imports.push(`import { randomBytes } from "node:crypto";`);
+  }
+  imports.push(`import type { AppModule } from "@getstrata/bootstrap/contracts";`);
+  imports.push(`import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";`);
+  if (authUsesCookie(layers.auth)) {
+    imports.push(`import { parseFormBody } from "@getstrata/bootstrap/web/forms";`);
+    imports.push(`import { wrapWebLogin } from "@getstrata/bootstrap/web/routing";`);
+    imports.push(
+      `import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";`,
+    );
+  }
+  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth)) {
+    imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
+  }
+  if (authUsesJwt(layers.auth)) {
+    imports.push(`import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";`);
+  }
+  if (authUsesCookie(layers.auth)) {
+    imports.push(`import { verifyPassword } from "@getstrata/core/auth/password";`);
+  }
+  if (authUsesToken(layers.auth)) {
+    imports.push(`import { hashApiToken } from "@getstrata/core/auth/tokenHash";`);
+  }
+  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth)) {
+    imports.push(
+      `import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";`,
+    );
+  }
+  imports.push(`import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";`);
+  if (authUsesToken(layers.auth)) {
+    imports.push(`import { getSql } from "../../bootstrap/database.ts";`);
+  }
+  if (authUsesCookie(layers.auth)) {
+    imports.push(`import { renderPage } from "../../lib/view.ts";`);
+  }
+
+  return `${imports.join("\n")}
 
 const authModule: AppModule = {
   name: "auth",
@@ -453,39 +503,6 @@ export default siteModule;
 `;
 }
 
-function renderCareersModule(layers: StarterLayers): string | null {
-  if (!isHiringRecipe(layers.kit)) {
-    return null;
-  }
-
-  return `import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { renderPage } from "../../lib/view.ts";
-
-const careersModule: AppModule = {
-  name: "careers",
-  order: 3,
-  webRoutes({ kernel }) {
-    return {
-      "/careers": kernel.wrapWeb(async (request) =>
-        renderPage(
-          "careers.eta",
-          {
-            layout: {
-              title: "Careers",
-              description: "Open roles",
-            },
-          },
-          request,
-        ),
-      ),
-    };
-  },
-};
-
-export default careersModule;
-`;
-}
-
 function renderLoginView(): string {
   return `<section class="section">
   <h1>Sign in</h1>
@@ -509,21 +526,8 @@ function renderLoginView(): string {
 `;
 }
 
-function renderCareersView(): string {
-  return `<section class="section">
-  <h1>Open roles</h1>
-  <p>This hiring-shaped starter lists roles here. HiroApp is the full product in <code>apps/hiroapp</code>.</p>
-  <ul>
-    <li>Staff HTML stays at <code>/</code>.</li>
-    <li>Candidate SPA is served under your <code>SPA_PREFIX</code>.</li>
-  </ul>
-</section>
-`;
-}
-
 function renderLayout(layers: StarterLayers, projectName: string): string {
   const cookie = authUsesCookie(layers.auth);
-  const careers = isHiringRecipe(layers.kit);
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -539,7 +543,6 @@ function renderLayout(layers: StarterLayers, projectName: string): string {
     <header class="site-header">
       <a class="brand" href="/">${projectName}</a>
       <nav>
-        ${careers ? '<a href="/careers">Careers</a>' : ""}
         ${cookie ? '<a href="/login">Sign in</a>' : ""}
       </nav>
     </header>
@@ -553,15 +556,11 @@ function renderHomeView(projectName: string, layers: StarterLayers): string {
   const loginLine = authUsesCookie(layers.auth)
     ? '<p>HTML sign-in: <a href="/login">/login</a> (demo@example.com / password).</p>'
     : "";
-  const careersLine = isHiringRecipe(layers.kit)
-    ? '<p>Public board: <a href="/careers">/careers</a>.</p>'
-    : "";
   return `<section class="section">
   <h1>Welcome to ${projectName}</h1>
-  <p>Kit <strong>${layers.kit}</strong> is running.</p>
+  <p>Frontend <code>${layers.frontend}</code>, database <code>${layers.database}</code>, auth <code>${layers.auth}</code>.</p>
   <p>Health check: <a href="/health"><code>/health</code></a>.</p>
   ${loginLine}
-  ${careersLine}
 </section>
 `;
 }
@@ -570,8 +569,6 @@ export {
   renderAuthDirectory,
   renderAuthModule,
   renderAuthProvider,
-  renderCareersModule,
-  renderCareersView,
   renderHomeView,
   renderLayout,
   renderLoginView,

@@ -8,7 +8,10 @@ async function seedCommand(): Promise<void> {
     return;
   }
 
-  await importHiroappModule("src/db/seed.ts");
+  const mod = await importHiroappModule<{ seed?: () => Promise<void> }>("src/db/seed.ts");
+  if (typeof mod.seed === "function") {
+    await mod.seed();
+  }
 }
 
 export { seedCommand };

@@ -1,4 +1,0 @@
-<div>
-  <%~ include("../positions/list.eta") %>
-  <%~ include("./users-list.eta") %>
-</div>

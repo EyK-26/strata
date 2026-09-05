@@ -1,8 +1,8 @@
 # Coverage
 
-CI requires **100% lines on in-scope files** through `scripts/assert-core-coverage.ts` (`bun run test:coverage`) and `scripts/assert-hiroapp-coverage.ts` (`bun run test:hiroapp:coverage`).
+CI requires **100% lines on in-scope files** through `scripts/assert-core-coverage.ts` (`bun run test:coverage`).
 
-Do not set Bun `coverageThreshold`. OpenAPI and CLI tests load HiroApp `createApp`, so one process would score both trees and fail a naive 100% gate. Ignore lists live in `bunfig.toml` (`coveragePathIgnorePatterns`) and the assert scripts.
+Do not set Bun `coverageThreshold`. OpenAPI and CLI tests load HiroApp `createApp`, so one process would score both trees and fail a naive 100% gate. Ignore lists live in `bunfig.toml` (`coveragePathIgnorePatterns`) and `scripts/assert-core-coverage.ts`.
 
 ## Why scoped coverage?
 
@@ -21,19 +21,18 @@ Business rules and security-sensitive code get strict unit coverage. Thin routin
 
 ```bash
 bun run test:coverage
-bun run test:hiroapp:coverage
 ```
 
 Configuration: `bunfig.toml` → `coveragePathIgnorePatterns`. See [TESTING.md](./TESTING.md).
 
 ## CI
 
-CI migrates the fixture schema (core RLS tests), then HiroApp, then both coverage gates. Any in-scope file below 100% lines blocks merge.
+CI migrates the fixture schema (core RLS tests), then HiroApp, then the core coverage gate. Any in-scope file below 100% lines blocks merge.
 
 ## Adding new code
 
 1. Domain logic in an in-scope path: add unit tests until that file is 100% lines.
-2. New route or middleware: extend HiroApp or framework request tests.
+2. New route or middleware: extend framework request tests or a generated example app.
 3. New public framework API: export from `src/framework/public-api.ts` and extend `tests/unit/frameworkPublicApi.test.ts`.
 
 If a file should move between in-scope and out-of-scope, update `bunfig.toml` and say why in the PR. Do not silently widen exclusions.

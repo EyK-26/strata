@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
 import type { ParsedFlags } from "./parseArgs.ts";
@@ -8,8 +8,6 @@ import {
   renderAuthDirectory,
   renderAuthModule,
   renderAuthProvider,
-  renderCareersModule,
-  renderCareersView,
   renderHomeView,
   renderLayout,
   renderLoginView,
@@ -28,13 +26,17 @@ import {
   renderConfigTs,
   renderCreateAppTs,
   renderDatabaseTs,
+  renderEnsureDatabaseTs,
   renderFreshTs,
   renderMigrateTs,
   renderPreloadTs,
   renderProvidersIndex,
   renderQueueProvider,
+  renderRollbackTs,
   renderRoutesTs,
+  renderSeedTs,
   renderSidecarsTs,
+  renderStatusTs,
   renderViewTs,
 } from "./renderRuntime.ts";
 import type { GenerateOptions, StarterLayers } from "./types.ts";
@@ -87,20 +89,15 @@ function applyFrontendOverlays(
   targetDir: string,
   layers: StarterLayers,
 ): void {
-  if (layers.frontend === "hybrid") {
-    copyOverlayTree(join(overlayRoot, "server-htmx"), targetDir);
+  // HTMX/HTML views are written by the generator into views/. The old
+  // templates/scaffold/server-htmx tree is leftover sample CRUD for
+  // `strata new --frontend=server-htmx` into an existing app, not create-strata.
+  if (layers.frontend === "hybrid" || layers.frontend === "spa-react") {
     copyOverlayTree(join(overlayRoot, "spa-react"), targetDir);
-    return;
   }
-  if (layers.frontend === "server-htmx") {
-    copyOverlayTree(join(overlayRoot, "server-htmx"), targetDir);
-    return;
+  if (layers.frontend === "api") {
+    copyOverlayTree(join(overlayRoot, "api"), targetDir);
   }
-  if (layers.frontend === "spa-react") {
-    copyOverlayTree(join(overlayRoot, "spa-react"), targetDir);
-    return;
-  }
-  copyOverlayTree(join(overlayRoot, "api"), targetDir);
 }
 
 function writeGeneratedFiles(options: GenerateOptions): void {
@@ -109,7 +106,10 @@ function writeGeneratedFiles(options: GenerateOptions): void {
 
   writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, layers));
   writeText(join(targetDir, ".gitignore"), renderGitignore());
-  writeText(join(targetDir, "package.json"), renderPackageJson(projectName));
+  writeText(
+    join(targetDir, "package.json"),
+    renderPackageJson(projectName, { ...options, layers }),
+  );
   writeText(join(targetDir, "README.md"), renderReadme(projectName, layers));
   writeText(join(targetDir, "strata.layers.json"), renderLayersManifest(projectName, layers));
 
@@ -125,6 +125,12 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   writeText(join(src, "bootstrap/config.ts"), renderConfigTs());
   writeText(join(src, "bootstrap/preload.ts"), renderPreloadTs(layers, projectName));
   writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(layers));
+  const ensureDatabase = renderEnsureDatabaseTs(layers, projectName);
+  if (ensureDatabase) {
+    writeText(join(src, "bootstrap/ensureDatabase.ts"), ensureDatabase);
+  } else {
+    removeIfExists(join(src, "bootstrap/ensureDatabase.ts"));
+  }
   writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(layers));
   writeText(join(src, "bootstrap/providers/config.ts"), renderConfigProvider(layers));
   writeText(join(src, "bootstrap/providers/queue.ts"), renderQueueProvider());
@@ -132,6 +138,9 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   writeText(join(src, "bootstrap/providers/auth.ts"), renderAuthProvider(layers));
   writeText(join(src, "db/migrate.ts"), renderMigrateTs(layers));
   writeText(join(src, "db/fresh.ts"), renderFreshTs(layers));
+  writeText(join(src, "db/seed.ts"), renderSeedTs());
+  writeText(join(src, "db/status.ts"), renderStatusTs(layers));
+  writeText(join(src, "db/rollback.ts"), renderRollbackTs(layers));
   writeText(join(src, "modules/site/index.ts"), renderSiteModule(layers));
 
   const directory = renderAuthDirectory(layers);
@@ -147,12 +156,6 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   const authModule = renderAuthModule(layers);
   if (authModule) {
     writeText(join(src, "modules/auth/index.ts"), authModule);
-  }
-
-  const careers = renderCareersModule(layers);
-  if (careers) {
-    writeText(join(src, "modules/careers/index.ts"), careers);
-    writeText(join(targetDir, "views/careers.eta"), renderCareersView());
   }
 
   writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, layers));
@@ -173,7 +176,7 @@ function printNextSteps(projectName: string, layers: StarterLayers, compose: boo
     neededTools.length === 0 ? "none" : dockerOn.length > 0 ? dockerOn.join("+") : "local";
   console.log(`\nCreated Strata app in ${projectName}/\n`);
   console.log(
-    `Kit: ${layers.kit}  frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}  docker=${dockerSummary}`,
+    `frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}  docker=${dockerSummary}`,
   );
   console.log("\nNext steps:");
   console.log(`  cd ${projectName}`);
@@ -192,7 +195,10 @@ function printNextSteps(projectName: string, layers: StarterLayers, compose: boo
 function generateProject(options: GenerateOptions): void {
   assertProjectName(options.projectName);
   if (existsSync(options.targetDir)) {
-    throw new Error(`Directory already exists: ${options.targetDir}`);
+    if (!options.force) {
+      throw new Error(`Directory already exists: ${options.targetDir}`);
+    }
+    rmSync(options.targetDir, { recursive: true, force: true });
   }
 
   copyTree(options.templateRoot, options.targetDir, options.projectName, new Set(["overlays"]));
@@ -223,6 +229,7 @@ async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<num
       layers: plan.layers,
       templateRoot: resolveTemplateRoot(),
       overlayRoot: resolveOverlayRoot(),
+      force: flags.force,
     });
     printNextSteps(
       plan.projectName,

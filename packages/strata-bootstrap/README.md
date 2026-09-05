@@ -38,4 +38,4 @@ HTML apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstra
 
 `registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. Apps that dispatch model webhooks should call `registerWebhookJobs()` themselves.
 
-These subpaths assemble leftover fixture HTTP for framework tests and are not a generic starter API: `@getstrata/bootstrap/createRoutes`, `@getstrata/bootstrap/schedule`, `@getstrata/bootstrap/createWebRoutes`. New apps should use `buildWebModuleRoutes` / `buildModuleRoutes`. HiroApp uses `createApp()` in `apps/hiroapp`.
+These subpaths assemble leftover fixture HTTP for framework tests and are not a generic starter API: `@getstrata/bootstrap/createRoutes`, `@getstrata/bootstrap/schedule`, `@getstrata/bootstrap/createWebRoutes`. New apps should use `buildWebModuleRoutes` / `buildModuleRoutes`. Generated examples use `createApp()` in `apps/hiroapp`.

@@ -20,7 +20,10 @@ async function migrateStatusCommand(): Promise<void> {
     return;
   }
 
-  await importHiroappModule("src/db/status.ts");
+  const mod = await importHiroappModule<{ status?: () => Promise<void> }>("src/db/status.ts");
+  if (typeof mod.status === "function") {
+    await mod.status();
+  }
 }
 
 export { migrateStatusCommand };

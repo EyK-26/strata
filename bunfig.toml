@@ -3,8 +3,8 @@ preload = ["./tests/preloadEnv.ts", "./tests/globalSetup.ts"]
 coveragePath = ["src"]
 
 # Do not set coverageThreshold here. OpenAPI/CLI tests load HiroApp createApp,
-# so the same bun process scores apps/hiroapp/src. 100% gates live in
-# scripts/assert-core-coverage.ts and scripts/assert-hiroapp-coverage.ts.
+# so the same bun process can score apps/hiroapp/src. 100% gates live in
+# scripts/assert-core-coverage.ts.
 # See docs/COVERAGE.md.
 coveragePathIgnorePatterns = [
   "tests/**",

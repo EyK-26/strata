@@ -1,7 +1,7 @@
 import {
   type CorporateExtras,
   dockerLayerForNeeded,
-  type KitId,
+  type ExampleAppId,
   type StarterLayers,
 } from "./types.ts";
 
@@ -10,13 +10,6 @@ const noneExtras: CorporateExtras = {
   emailVerification: false,
   scim: false,
   metrics: false,
-  sqliteKiosk: false,
-  mysqlMirror: false,
-};
-
-const teamExtras: CorporateExtras = {
-  ...noneExtras,
-  metrics: true,
 };
 
 const enterpriseExtras: CorporateExtras = {
@@ -24,8 +17,6 @@ const enterpriseExtras: CorporateExtras = {
   emailVerification: true,
   scim: true,
   metrics: true,
-  sqliteKiosk: true,
-  mysqlMirror: true,
 };
 
 function withDocker(
@@ -38,11 +29,9 @@ function withDocker(
   };
 }
 
-const PRESETS: Record<Exclude<KitId, "custom">, StarterLayers> = {
-  hobby: withDocker(
+function defaultLayers(): StarterLayers {
+  return withDocker(
     {
-      kit: "hobby",
-      scale: "hobby",
       frontend: "api",
       database: "sqlite",
       auth: "headers",
@@ -54,11 +43,13 @@ const PRESETS: Record<Exclude<KitId, "custom">, StarterLayers> = {
       extras: { ...noneExtras },
     },
     false,
-  ),
-  team: withDocker(
+  );
+}
+
+const EXAMPLE_APPS: Record<ExampleAppId, StarterLayers> = {
+  "hiroapp-hobby": defaultLayers(),
+  "hiroapp-team": withDocker(
     {
-      kit: "team",
-      scale: "team",
       frontend: "server-htmx",
       database: "postgres",
       auth: "cookie",
@@ -67,15 +58,13 @@ const PRESETS: Record<Exclude<KitId, "custom">, StarterLayers> = {
       queue: "redis",
       mail: "log",
       spaPrefix: "/app",
-      extras: { ...teamExtras },
+      extras: { ...noneExtras, metrics: true },
     },
     true,
   ),
-  enterprise: withDocker(
+  hiroapp: withDocker(
     {
-      kit: "enterprise",
-      scale: "enterprise",
-      frontend: "hybrid",
+      frontend: "server-htmx",
       database: "postgres",
       auth: "cookie-token-jwt",
       tenancy: "rls",
@@ -87,58 +76,10 @@ const PRESETS: Record<Exclude<KitId, "custom">, StarterLayers> = {
     },
     true,
   ),
-  "hiroapp-hobby": withDocker(
-    {
-      kit: "hiroapp-hobby",
-      scale: "hobby",
-      frontend: "hybrid",
-      database: "sqlite",
-      auth: "cookie-token",
-      tenancy: "none",
-      cache: "array",
-      queue: "sync",
-      mail: "log",
-      spaPrefix: "/apply",
-      extras: { ...noneExtras },
-    },
-    false,
-  ),
-  "hiroapp-team": withDocker(
-    {
-      kit: "hiroapp-team",
-      scale: "team",
-      frontend: "hybrid",
-      database: "postgres",
-      auth: "cookie-token",
-      tenancy: "none",
-      cache: "redis",
-      queue: "redis",
-      mail: "log",
-      spaPrefix: "/apply",
-      extras: { ...teamExtras },
-    },
-    true,
-  ),
-  "hiroapp-enterprise": withDocker(
-    {
-      kit: "hiroapp-enterprise",
-      scale: "enterprise",
-      frontend: "hybrid",
-      database: "postgres",
-      auth: "cookie-token-jwt",
-      tenancy: "rls",
-      cache: "redis",
-      queue: "redis",
-      mail: "smtp",
-      spaPrefix: "/apply",
-      extras: { ...enterpriseExtras },
-    },
-    true,
-  ),
 };
 
-function presetLayers(kit: Exclude<KitId, "custom">): StarterLayers {
-  return structuredClone(PRESETS[kit]);
+function exampleAppLayers(id: ExampleAppId): StarterLayers {
+  return structuredClone(EXAMPLE_APPS[id]);
 }
 
-export { noneExtras, PRESETS, presetLayers };
+export { defaultLayers, EXAMPLE_APPS, enterpriseExtras, exampleAppLayers, noneExtras };

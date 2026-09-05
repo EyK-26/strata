@@ -12,9 +12,7 @@ How to run HiroApp (or your Strata app) in staging and production.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string (hiring source of truth) |
-| `MYSQL_URL` | No | MySQL job-board mirror only. Publish still succeeds if unset or down |
-| `HIROAPP_KIOSK_SQLITE` | No | SQLite path or `:memory:` for on-site scorecards |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `REDIS_URL` | Yes (prod) | Redis for cache, queues, shared rate limiting |
 | `APP_ENV` | Yes | `local`, `staging`, or `production` |
 | `APP_DEBUG` | No | Set `false` in staging/production |
@@ -34,10 +32,10 @@ Production startup refuses published seed tokens (`strata-*-test-token` and left
 ## Local development
 
 ```bash
-docker compose up -d postgres redis mysql --wait
+docker compose up -d postgres redis --wait
 bun run build:framework
 bun run hiroapp:fresh
-bun run hiroapp:dev:htmx
+bun run hiroapp:dev
 ```
 
 See [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
@@ -124,7 +122,7 @@ Terminate TLS at the reverse proxy. Set `Secure` cookies in production (`APP_ENV
 k6 run -e BASE_URL=https://your-host scripts/load/k6-api-load.js
 ```
 
-The load script mints a HiroApp JWT and hits `/health`, `/careers`, and `/api/user`.
+The load script mints a JWT as `demo@example.com` and hits `/health`, `/ready`, and `/api/user`.
 
 ## Health probes
 
