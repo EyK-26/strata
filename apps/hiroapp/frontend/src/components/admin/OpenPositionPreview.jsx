@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 const OpenPositionPreview = ({ position }) => {
 	return (
 		<div>
-			<Link to={"/positions/" + position.id} className="list-item">
+			<Link to={"/positions/" + position.id} className="stack-row">
 				<span>{position.name}</span>
 				<span>({position.applications.length})</span>
 			</Link>

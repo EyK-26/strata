@@ -57,7 +57,7 @@ const Users = () => {
 			<div className="list">
 				{users.slice(startResults, startResults + 20).map((user) => (
 					<div key={user.id}>
-						<Link to={"/users/" + user.id} key={user.id} className="list-item">
+						<Link to={"/users/" + user.id} key={user.id} className="stack-row">
 							<span>
 								{user.first_name} {user.last_name}
 							</span>

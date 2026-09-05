@@ -170,15 +170,15 @@
     @apply flex max-w-lg flex-col gap-4;
   }
 
-  .list-item {
+  .stack-row {
     @apply flex flex-col gap-1 rounded-lg px-3 py-2 no-underline transition sm:flex-row sm:items-center sm:justify-between;
   }
 
-  .list-item:hover {
+  .stack-row:hover {
     @apply bg-slate-100;
   }
 
-  .list-item span {
+  .stack-row span {
     @apply text-slate-700;
   }
 
@@ -262,7 +262,13 @@
   .TalentPoolForm,
   .OnboardingForm,
   .RejectForm,
-  .CareerForm {
+  .CareerForm,
+  .TransferForm,
+  .PipelineFilter,
+  .ScorecardForm,
+  .SlotForm,
+  .ReferralForm,
+  .RequisitionForm {
     @apply mt-4 flex max-w-xl flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4;
   }
 

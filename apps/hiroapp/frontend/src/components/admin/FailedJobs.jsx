@@ -22,7 +22,7 @@ const FailedJobs = () => {
         <div className="FailedJobs">
             <h2>Failed jobs</h2>
             {jobs.map((job) => (
-                <div key={job.id} className="list-item">
+                <div key={job.id} className="stack-row">
                     <p>{job.job_name}</p>
                     <pre>{job.exception}</pre>
                     <button type="button" onClick={() => retry(job.id)}>

@@ -2,7 +2,7 @@
   <h2>Watchlist</h2>
   <p>Inbox alerts when a watched seat is published to careers.</p>
   <% it.positions.forEach((position) => { %>
-    <a class="list-item" href="/positions/<%= position.id %>">
+    <a class="stack-row" href="/positions/<%= position.id %>">
       <span><%= position.name %></span>
     </a>
   <% }) %>

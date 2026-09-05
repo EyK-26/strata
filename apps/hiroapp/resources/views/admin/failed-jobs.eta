@@ -1,7 +1,7 @@
 <div class="FailedJobs">
   <h2>Failed jobs</h2>
   <% it.jobs.forEach((job) => { %>
-    <div class="list-item">
+    <div class="stack-row">
       <p><%= job.job_name %></p>
       <pre><%= job.exception %></pre>
       <form action="/failed-jobs/<%= job.id %>/retry" method="post">

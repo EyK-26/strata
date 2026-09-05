@@ -42,10 +42,10 @@ const Applications = () => {
                                 <div
                                     className={
                                         application.status_id === 6
-                                            ? "list-item status-ended"
+                                            ? "stack-row status-ended"
                                             : application.status_id === 5
-                                            ? "list-item status-hired"
-                                            : "list-item"
+                                            ? "stack-row status-hired"
+                                            : "stack-row"
                                     }
                                 >
                                     <span>{application.position.name}</span>

@@ -15,7 +15,7 @@ const Watchlist = () => {
         <div className="Watchlist">
             <h2>Watchlist</h2>
             {positions.map((position) => (
-                <Link key={position.id} className="list-item" to={`/positions/${position.id}`}>
+                <Link key={position.id} className="stack-row" to={`/positions/${position.id}`}>
                     {position.name}
                 </Link>
             ))}

@@ -19,7 +19,7 @@ const DepartmentApps = () => {
             {payload.data.map((application) => (
                 <Link
                     key={application.id}
-                    className="list-item"
+                    className="stack-row"
                     to={`/applications/${application.id}`}
                 >
                     Application {application.id}

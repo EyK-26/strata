@@ -60,7 +60,7 @@ const Positions = () => {
                                 to={"/positions/" + position.id}
                                 key={position.id}
                             >
-                                <div className="list-item">
+                                <div className="stack-row">
                                     <span>{position.name}</span>
                                 </div>
                             </Link>
