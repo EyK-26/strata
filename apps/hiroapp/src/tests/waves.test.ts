@@ -13,7 +13,7 @@ import { positions } from "../modules/positions/repository.ts";
 import { skills } from "../modules/skills/repository.ts";
 import { users } from "../modules/users/repository.ts";
 import { applicationObserver } from "../observers/ApplicationObserver.ts";
-import { closeExpiredPositions } from "../schedule.ts";
+import { closeExpiredPositions, refreshHiringDeadlines } from "../schedule.ts";
 import { bootHiroapp, collectCookies, cookieHeader, csrfFrom, signInCookie } from "./helpers.ts";
 
 const enabled = process.env.HIROAPP_TEST === "1";
@@ -151,6 +151,14 @@ describe.skipIf(!enabled)("Wave 4 observers, schedule, chunk", () => {
     const refreshed = await Position.find(created.id);
     expect(refreshed?.get("hiring")).toBe(false);
     await created.delete();
+  });
+
+  test("refreshHiringDeadlines sweeps holds, careers, and offers", async () => {
+    const result = await refreshHiringDeadlines(new Date("2020-01-02"));
+    expect(typeof result.holds).toBe("number");
+    expect(typeof result.careers.published).toBe("number");
+    expect(typeof result.careers.expired).toBe("number");
+    expect(typeof result.offers).toBe("number");
   });
 
   test("Application.chunk walks persisted rows", async () => {

@@ -84,6 +84,7 @@ export function serializeHold(row: ApplicationHold | ApplicationHoldRecord) {
 export class ApplicationHoldService {
   private async releaseIfDue(
     row: ApplicationHold | ApplicationHoldRecord,
+    now = new Date(),
   ): Promise<ApplicationHoldRecord> {
     const record =
       typeof (row as ApplicationHold).toObject === "function"
@@ -96,7 +97,7 @@ export class ApplicationHoldService {
       return record;
     }
     const holdsUntil = new Date(record.holds_until);
-    if (Number.isNaN(holdsUntil.getTime()) || holdsUntil.getTime() > Date.now()) {
+    if (Number.isNaN(holdsUntil.getTime()) || holdsUntil.getTime() > now.getTime()) {
       return record;
     }
     const updated = await applicationHolds.updateByIdOrThrow(record.id, {
@@ -183,6 +184,18 @@ export class ApplicationHoldService {
       { type: "application_hold", id: updated.id },
     );
     return updated;
+  }
+
+  async releaseDue(now = new Date()) {
+    const rows = await applicationHolds.findAll({ where: { status: "holding" } });
+    let released = 0;
+    for (const row of rows) {
+      const fresh = await this.releaseIfDue(row, now);
+      if (asHoldStatus(row.status) === "holding" && asHoldStatus(fresh.status) === "released") {
+        released += 1;
+      }
+    }
+    return released;
   }
 }
 

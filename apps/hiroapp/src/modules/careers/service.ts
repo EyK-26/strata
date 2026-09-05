@@ -103,6 +103,7 @@ export function serializeCareerPosting(row: CareerPosting | CareerPostingRecord)
 export class CareerService {
   private async publishIfDue(
     row: CareerPosting | CareerPostingRecord,
+    now = new Date(),
   ): Promise<CareerPostingRecord> {
     const record = asRecord(row);
     if (asPostingStatus(record.status) !== "scheduled") {
@@ -110,7 +111,7 @@ export class CareerService {
     }
     if (record.publish_at) {
       const publishAt = new Date(record.publish_at);
-      if (Number.isNaN(publishAt.getTime()) || publishAt.getTime() > Date.now()) {
+      if (Number.isNaN(publishAt.getTime()) || publishAt.getTime() > now.getTime()) {
         return record;
       }
     }
@@ -135,6 +136,7 @@ export class CareerService {
 
   private async expireIfDue(
     row: CareerPosting | CareerPostingRecord,
+    now = new Date(),
   ): Promise<CareerPostingRecord> {
     const record = asRecord(row);
     if (asPostingStatus(record.status) !== "published") {
@@ -144,7 +146,7 @@ export class CareerService {
       return record;
     }
     const expiresAt = new Date(record.expires_at);
-    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() > Date.now()) {
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() > now.getTime()) {
       return record;
     }
     const updated = await careerPostings.updateByIdOrThrow(record.id, {
@@ -159,8 +161,26 @@ export class CareerService {
     return updated;
   }
 
-  private async fresh(row: CareerPosting | CareerPostingRecord) {
-    return this.expireIfDue(await this.publishIfDue(row));
+  private async fresh(row: CareerPosting | CareerPostingRecord, now = new Date()) {
+    return this.expireIfDue(await this.publishIfDue(row, now), now);
+  }
+
+  async refreshDue(now = new Date()) {
+    const rows = await careerPostings.listed();
+    let published = 0;
+    let expired = 0;
+    for (const row of rows) {
+      const before = asPostingStatus(row.status);
+      const fresh = await this.fresh(row, now);
+      const after = asPostingStatus(fresh.status);
+      if (before === "scheduled" && after === "published") {
+        published += 1;
+      }
+      if (before === "published" && after === "expired") {
+        expired += 1;
+      }
+    }
+    return { published, expired };
   }
 
   async serializedForPosition(positionId: number) {

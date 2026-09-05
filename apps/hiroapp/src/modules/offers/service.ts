@@ -104,7 +104,7 @@ export function serializeOffer(row: Offer | OfferRecord) {
 }
 
 export class OfferService {
-  private async expireIfDue(row: OfferRecord): Promise<OfferRecord> {
+  private async expireIfDue(row: OfferRecord, now = new Date()): Promise<OfferRecord> {
     if (asOfferStatus(row.status) !== "sent") {
       return row;
     }
@@ -112,7 +112,7 @@ export class OfferService {
       return row;
     }
     const expiresAt = new Date(row.expires_at);
-    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() > Date.now()) {
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() > now.getTime()) {
       return row;
     }
     const updated = await offers.updateByIdOrThrow(row.id, { status: "expired" });
@@ -271,6 +271,18 @@ export class OfferService {
 
   async decline(actor: UserRecord, offer: Offer) {
     return this.respond(actor, offer, "declined");
+  }
+
+  async expireDue(now = new Date()) {
+    const rows = await offers.findAll({ where: { status: "sent" } });
+    let expired = 0;
+    for (const row of rows) {
+      const fresh = await this.expireIfDue(row, now);
+      if (asOfferStatus(row.status) === "sent" && asOfferStatus(fresh.status) === "expired") {
+        expired += 1;
+      }
+    }
+    return expired;
   }
 }
 

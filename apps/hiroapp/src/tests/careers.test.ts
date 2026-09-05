@@ -367,6 +367,26 @@ describe.skipIf(!enabled)("Wave 36 public careers", () => {
     const live = await careerService.forPosition(recruiter, seat);
     expect(live?.status).toBe("published");
     expect((await careerService.listPublic()).some((row) => row.id === rescheduled.id)).toBe(true);
+    const dueSeat = await openSeat();
+    const due = await careerService.publish(recruiter, dueSeat, {
+      publish_at: "2026-12-01T12:00:00Z",
+    });
+    await careerPostings.updateByIdOrThrow(due.id, {
+      publish_at: new Date("2020-01-01T00:00:00Z"),
+    });
+    expect(
+      (await careerService.refreshDue(new Date("2020-01-02"))).published,
+    ).toBeGreaterThanOrEqual(1);
+    const expiringSeat = await openSeat();
+    const expiring = await careerService.publish(recruiter, expiringSeat, {
+      expires_at: "2026-12-01T12:00:00Z",
+    });
+    await careerPostings.updateByIdOrThrow(expiring.id, {
+      expires_at: new Date("2020-01-01T00:00:00Z"),
+    });
+    expect((await careerService.refreshDue(new Date("2020-01-02"))).expired).toBeGreaterThanOrEqual(
+      1,
+    );
     const shown = await careerService.showPublic(await CareerPosting.findOrFail(rescheduled.id));
     expect(shown.status).toBe("published");
 

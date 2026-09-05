@@ -281,6 +281,13 @@ describe.skipIf(!enabled)("Wave 25 application offers", () => {
     expect(serializeOffer(await Offer.findOrFail(staleSent.id)).status).toBe("expired");
     const listedStale = await offerService.listForApplication(recruiter, staleApp);
     expect(listedStale[0]?.status).toBe("expired");
+    const sweepApp = await openApplication(candidate.id);
+    const sweepDraft = await offerService.create(recruiter, sweepApp, { salary: 91_000 });
+    const sweepSent = await offerService.send(recruiter, await Offer.findOrFail(sweepDraft.id), {
+      expires_at: "2026-12-15T00:00:00Z",
+    });
+    await offers.updateByIdOrThrow(sweepSent.id, { expires_at: new Date("2020-01-01T00:00:00Z") });
+    expect(await offerService.expireDue(new Date("2020-01-02"))).toBeGreaterThanOrEqual(1);
 
     const httpApp = await openApplication(candidate.id);
     const httpDraft = await jsonRequest(`/api/applications/${httpApp.id}/offers`, {

@@ -245,6 +245,14 @@ describe.skipIf(!enabled)("Wave 38 application holds", () => {
       holds_until: new Date("2020-01-01T00:00:00Z"),
     });
     expect((await holdService.forApplication(recruiter, stale))?.status).toBe("released");
+    const sweepApp = await openApplication(candidate.id);
+    const sweepHold = await holdService.hold(recruiter, sweepApp, {
+      holds_until: "2026-12-01T00:00:00Z",
+    });
+    await applicationHolds.updateByIdOrThrow(sweepHold.id, {
+      holds_until: new Date("2020-01-01T00:00:00Z"),
+    });
+    expect(await holdService.releaseDue(new Date("2020-01-02"))).toBeGreaterThanOrEqual(1);
     await expect(
       holdService.release(recruiter, await ApplicationHold.findOrFail(timed.id)),
     ).rejects.toBeInstanceOf(ForbiddenError);
