@@ -1,23 +1,11 @@
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { FrontendMode } from "../../config/frontend";
+import { type FrontendMode, parseFrontendMode } from "../../config/frontend";
 
 const TEMPLATE_ROOT = join(import.meta.dir, "../../../templates/scaffold");
 
 type ScaffoldTemplate = FrontendMode;
-
-function parseFrontendMode(value: string | undefined): FrontendMode {
-  if (value === "server-htmx") {
-    return "server-htmx";
-  }
-
-  if (value === "spa-react") {
-    return "spa-react";
-  }
-
-  return "api";
-}
 
 function parseTemplateMode(value: string | undefined): ScaffoldTemplate {
   return parseFrontendMode(value);
@@ -90,21 +78,28 @@ async function copyTemplateTree(sourceRoot: string, targetRoot: string): Promise
 async function newCommand(...args: string[]): Promise<void> {
   const { template, envPath } = parseArgs(args);
 
-  if (template === "server-htmx") {
+  if (template === "hybrid") {
     await copyTemplateTree(join(TEMPLATE_ROOT, "server-htmx"), process.cwd());
-  }
-
-  if (template === "spa-react") {
     await copyTemplateTree(join(TEMPLATE_ROOT, "spa-react"), process.cwd());
-  }
-
-  if (template === "api") {
+  } else if (template === "server-htmx") {
+    await copyTemplateTree(join(TEMPLATE_ROOT, "server-htmx"), process.cwd());
+  } else if (template === "spa-react") {
+    await copyTemplateTree(join(TEMPLATE_ROOT, "spa-react"), process.cwd());
+  } else {
     await copyTemplateTree(join(TEMPLATE_ROOT, "api"), process.cwd());
   }
 
   await upsertEnvValue(envPath, "FRONTEND_MODE", template);
 
   console.log(`Frontend mode set to "${template}" in ${envPath}.`);
+
+  if (template === "hybrid") {
+    console.log("Hybrid mode enabled:");
+    console.log("- Staff HTML: resources/views/ (Eta templates with CSRF + flash)");
+    console.log("- SPA: frontend/ served under /app/* (keep HTML at /)");
+    console.log("\nRestart the app after changing FRONTEND_MODE.");
+    return;
+  }
 
   if (template === "server-htmx") {
     console.log("Server pages enabled:");

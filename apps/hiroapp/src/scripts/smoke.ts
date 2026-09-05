@@ -1,3 +1,5 @@
+import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
+
 /**
  * Smoke: login + role homes + one candidate apply POST.
  * Requires a running server and a seeded database.
@@ -32,7 +34,7 @@ function csrfFrom(cookies: string[]) {
 }
 
 async function login(email: string) {
-  const htmx = (process.env.FRONTEND_MODE ?? "").trim() === "server-htmx";
+  const htmx = isViewsEnabled();
   const home = await request(htmx ? "/login" : "/");
   const token = csrfFrom(home.cookies);
   const posted = htmx

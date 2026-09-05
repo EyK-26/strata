@@ -12,13 +12,14 @@ cp .env.example .env
 
 The starter is a JSON API with `TENANCY_DRIVER=none` (no `tenant` table). Add cookie sessions when you add HTML.
 
-## Three frontend shapes
+## Frontend shapes
 
-Set `FRONTEND_MODE`:
+Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMode` (`parseFrontendMode`, `FRONTEND_MODE_PATTERN`). Apps should reuse that pattern in their env schema instead of copying a regex.
 
 1. **`api`.** JSON routes only. Clients send Bearer or Basic. No CSRF.
-2. **`server-htmx`.** Eta HTML + HTMX. Cookie session + CSRF. HiroApp is this.
-3. **`spa-react`.** JSON API plus a SPA. Prefer opaque tokens or JWT for the SPA, or a cookie if the SPA is same-site and you keep CSRF.
+2. **`server-htmx`.** Eta HTML + HTMX. Cookie session + CSRF.
+3. **`spa-react`.** JSON API plus a SPA document under `/app`. Prefer opaque tokens for the SPA. HiroApp's candidate portal mounts at `/apply` instead.
+4. **`hybrid`.** Staff HTML at `/` plus a SPA prefix. Framework SPA routes stay under `/app/*` and do not redirect `/`. HiroApp uses `/apply` for the candidate portal.
 
 `.eta` files are HTML plus Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`). Class shorthand such as `section.section` fails at render.
 

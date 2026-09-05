@@ -23,7 +23,7 @@ import { EtaViewEngine } from "@getstrata/core/view";
 
 `.eta` files are **HTML + Eta tags** (`<% %>`, `<%= %>`, `<%~ include() %>`), not another template language. Class/attribute shorthand such as `section.section` or `a href=` fails at render time with the template name.
 
-**Dependency:** `eta` is a direct dependency of `@getstrata/core`. Apps do not need to list it separately. The database **engine** is your choice. HiroApp uses **Bun's built-in `Bun.sql`** (Postgres). Create and bind it with `createBunSqlPool()` / `bindBunSql()`, or call `bindDatabaseConnection()` yourself.
+**Dependency:** `eta` is a direct dependency of `@getstrata/core`. Apps do not need to list it separately. The database **engine** is your choice. HiroApp uses **Bun's built-in `Bun.sql`** (Postgres). Create and bind it with `createBunSqlPool()` / `bindBunSql()`, or call `bindDatabaseConnection()` yourself. Extra engines register with `registerNamedConnection` (`database/namedConnections`, `database/sqliteConnection`, `database/mysqlConnection`).
 
 `orderBy` accepts `{ column, direction }` objects or column shorthand such as `{ published_at: "desc" }`. `{ ilike }` uses the value as-is. Pass `%term%` yourself.
 
@@ -65,7 +65,7 @@ import type { Migration } from "@getstrata/core/database/migrations/types";
 Package name: **`@getstrata/core`** (npm org [`@getstrata`](https://www.npmjs.com/org/getstrata)).
 
 1. Add `NPM_TOKEN` to GitHub repository secrets.
-2. Tag a release: `git tag v0.6.0 && git push origin v0.6.0`
+2. Tag a release: `git tag v0.7.0 && git push origin v0.7.0`
 3. [Release workflow](../../.github/workflows/release.yml) builds and runs `npm publish --access public`.
 
 See [docs/PACKAGING.md](../../docs/PACKAGING.md).

@@ -13,12 +13,19 @@ function createDependencies() {
 }
 
 describe("createSpaRoutes", () => {
+  const previousMode = process.env.FRONTEND_MODE;
+
   beforeEach(async () => {
     await mkdir(DIST_DIR, { recursive: true });
   });
 
   afterEach(async () => {
     await rm(DIST_DIR, { recursive: true, force: true });
+    if (previousMode === undefined) {
+      delete process.env.FRONTEND_MODE;
+    } else {
+      process.env.FRONTEND_MODE = previousMode;
+    }
   });
 
   test("serves built index.html for /app/* fallback", async () => {
@@ -55,12 +62,21 @@ describe("createSpaRoutes", () => {
     });
   });
 
-  test("redirects / to /app/", async () => {
+  test("redirects / to /app/ when views are off", async () => {
+    process.env.FRONTEND_MODE = "spa-react";
     const routes = createSpaRoutes(createDependencies());
     const response = await routes["/"](new Request("http://localhost:3000/"));
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/app/");
+  });
+
+  test("does not claim / when hybrid keeps staff HTML at /", async () => {
+    process.env.FRONTEND_MODE = "hybrid";
+    const routes = createSpaRoutes(createDependencies());
+
+    expect(routes["/"]).toBeUndefined();
+    expect(routes["/app/*"]).toBeDefined();
   });
 
   test("exposes dist directory constant", () => {

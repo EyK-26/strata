@@ -1,365 +1,54 @@
-@import "tailwindcss";
-
-@source "../../resources/views/**/*.eta";
-@source "./**/*.{js,jsx}";
-
-@theme {
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-800: #3730a3;
+:root {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
 }
 
-@layer base {
-  html {
-    @apply scroll-smooth;
-  }
-
-  body {
-    @apply m-0 min-h-screen bg-slate-50 font-sans text-slate-800 antialiased;
-  }
-
-  a {
-    @apply font-semibold text-indigo-700 no-underline transition-colors;
-  }
-
-  a:hover {
-    @apply text-indigo-500;
-  }
-
-  a:focus-visible,
-  button:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible {
-    @apply outline-2 outline-offset-2 outline-indigo-600;
-  }
-
-  h1 {
-    @apply m-0 text-2xl font-semibold tracking-tight text-slate-900;
-  }
-
-  h2 {
-    @apply mt-0 text-xl font-semibold text-slate-900;
-  }
-
-  h3 {
-    @apply text-lg font-semibold text-slate-900;
-  }
-
-  label {
-    @apply flex flex-col gap-1 text-sm font-medium text-slate-700;
-  }
-
-  input:not([type="checkbox"]):not([type="hidden"]):not([type="radio"]),
-  select,
-  textarea {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm;
-  }
-
-  button,
-  input[type="submit"] {
-    @apply inline-flex cursor-pointer items-center justify-center rounded-lg border border-transparent bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors;
-  }
-
-  button:hover,
-  input[type="submit"]:hover {
-    @apply bg-indigo-700;
-  }
-
-  table {
-    @apply w-full border-collapse text-left text-sm;
-  }
-
-  th,
-  td {
-    @apply border-b border-slate-200 px-3 py-2;
-  }
-
-  #root {
-    @apply flex min-h-screen flex-col bg-slate-50;
-  }
+* {
+  box-sizing: border-box;
 }
 
-@layer components {
-  .skip-link {
-    @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-indigo-700 focus:shadow-lg;
-  }
+body {
+  margin: 0;
+}
 
-  .site-shell {
-    @apply flex min-h-screen flex-col;
-  }
+a {
+  color: #1d4ed8;
+}
 
-  .Header,
-  .site-header {
-    @apply sticky top-0 z-40 flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur lg:px-6;
-  }
+.shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
 
-  .page_title,
-  .brand {
-    @apply text-lg font-bold tracking-tight text-slate-900;
-  }
+.topnav {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
 
-  .nav-toggle {
-    @apply sr-only;
-  }
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
 
-  .nav-toggle-label {
-    @apply inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 lg:hidden;
-  }
+.stack-form {
+  display: grid;
+  gap: 0.75rem;
+}
 
-  .Navigation {
-    @apply flex max-h-[70vh] w-full flex-col gap-1 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm lg:max-h-none lg:w-auto lg:flex-1 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2 lg:overflow-visible lg:border-0 lg:bg-transparent lg:p-0;
-  }
+.stack-form input,
+.stack-form textarea,
+.stack-form button {
+  font: inherit;
+  padding: 0.5rem;
+}
 
-  .Navigation a {
-    @apply rounded-md px-2 py-1 text-slate-700;
-  }
-
-  .Navigation a:hover {
-    @apply bg-indigo-50 text-indigo-700;
-  }
-
-  .nav-group {
-    @apply flex flex-col gap-1 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-3;
-  }
-
-  .nav-group-label {
-    @apply text-[0.7rem] font-semibold uppercase tracking-wide text-slate-400 lg:hidden;
-  }
-
-  .profile {
-    @apply ml-auto cursor-pointer font-semibold text-indigo-700;
-  }
-
-  .site-body {
-    @apply mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 lg:flex-row lg:items-start lg:px-6;
-  }
-
-  .main {
-    @apply mx-auto mt-0 flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 lg:flex-row lg:items-start lg:px-6;
-  }
-
-  .site-main {
-    @apply min-w-0 flex-1;
-  }
-
-  .flash {
-    @apply mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800;
-  }
-
-  .hint {
-    @apply text-sm text-slate-600;
-  }
-
-  .panel,
-  .page-header,
-  .Page,
-  .card {
-    @apply rounded-2xl border border-slate-200 bg-white p-6 shadow-sm;
-  }
-
-  .page-header {
-    @apply mb-4;
-  }
-
-  .stack-form,
-  form.stack-form {
-    @apply flex max-w-lg flex-col gap-4;
-  }
-
-  .stack-row {
-    @apply flex flex-col gap-1 rounded-lg px-3 py-2 no-underline transition sm:flex-row sm:items-center sm:justify-between;
-  }
-
-  .stack-row:hover {
-    @apply bg-slate-100;
-  }
-
-  .stack-row span {
-    @apply text-slate-700;
-  }
-
-  .UserProfile {
-    @apply w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-24 lg:w-72 lg:shrink-0;
-  }
-
-  .UserProfile .username {
-    @apply block font-semibold text-slate-900;
-  }
-
-  .UserProfile .department {
-    @apply mb-3 block text-sm text-slate-500;
-  }
-
-  .UserProfile .NavigationMobile {
-    @apply hidden;
-  }
-
-  .inbox {
-    @apply mb-4 rounded-xl bg-slate-50 p-3 text-sm;
-  }
-
-  .logo_with_number {
-    @apply mb-2 font-semibold text-slate-800;
-  }
-
-  .notification_preview {
-    @apply flex flex-col rounded-md px-2 py-1;
-  }
-
-  .notification_preview span {
-    @apply text-slate-800;
-  }
-
-  .notification_preview.message_read span {
-    @apply font-normal text-slate-500;
-  }
-
-  .footer {
-    @apply mt-auto flex w-full items-center justify-end border-t border-slate-200 bg-white px-6 py-3 text-sm text-slate-500;
-  }
-
-  .container {
-    @apply mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12;
-  }
-
-  .Login {
-    @apply rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm;
-  }
-
-  .Login h1 {
-    @apply pt-0;
-  }
-
-  .Login form {
-    @apply mt-6 flex flex-col gap-4 p-0 text-left;
-  }
-
-  .Login form label input {
-    @apply w-full;
-  }
-
-  .errors {
-    @apply mt-4 flex flex-col gap-1 text-sm text-orange-600;
-  }
-
-  .modal-overlay {
-    @apply fixed inset-0 z-40 bg-slate-900/50;
-  }
-
-  .InterviewForm {
-    @apply fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(50rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-2xl bg-white p-6 shadow-2xl;
-  }
-
-  .InterviewScheduleForm,
-  .OfferForm,
-  .SourceForm,
-  .HoldForm,
-  .BackgroundCheckForm,
-  .TalentPoolForm,
-  .OnboardingForm,
-  .RejectForm,
-  .CareerForm,
-  .TransferForm,
-  .PipelineFilter,
-  .ScorecardForm,
-  .SlotForm,
-  .ReferralForm,
-  .RequisitionForm {
-    @apply mt-4 flex max-w-xl flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4;
-  }
-
-  .searchbar {
-    @apply mb-4 flex flex-col gap-2 sm:flex-row sm:items-center;
-  }
-
-  .Pagination {
-    @apply flex items-center justify-between py-4;
-  }
-
-  .OpenPositions,
-  .Applications,
-  .HomeRecruiter,
-  .CreateApplication,
-  .CreatePosition,
-  .YourHirings,
-  .TalentPool {
-    @apply flex flex-col gap-4;
-  }
-
-  .HomeRecruiter_links {
-    @apply flex flex-wrap gap-3;
-  }
-
-  .PipelineSummary {
-    @apply grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-4;
-  }
-
-  .ApplicationDetail .body {
-    @apply flex flex-col gap-8 lg:flex-row lg:justify-between;
-  }
-
-  .ApplicationDetailDetails {
-    @apply flex max-w-xl flex-col gap-2;
-  }
-
-  .ApplicationDetailStatus {
-    @apply flex min-w-56 flex-col gap-4;
-  }
-
-  .progress {
-    @apply flex w-52 flex-col;
-  }
-
-  .progress.hasButton {
-    @apply w-72;
-  }
-
-  .progress .status {
-    @apply relative flex items-center justify-between gap-3 rounded-lg px-3 py-2;
-  }
-
-  .progress .circle {
-    @apply h-3 w-3 rounded-full bg-slate-300;
-  }
-
-  .status-done .circle,
-  .status-ended .circle {
-    @apply bg-slate-700;
-  }
-
-  .status-active {
-    @apply bg-emerald-100;
-  }
-
-  .status-active .circle {
-    @apply bg-emerald-700;
-  }
-
-  .status.ended {
-    @apply bg-rose-100;
-  }
-
-  .hirings_container {
-    @apply grid max-h-[50vh] gap-4 overflow-auto;
-  }
-
-  .hirings_container div {
-    @apply rounded-xl bg-slate-100 p-4;
-  }
-
-  .detail-header {
-    @apply flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-start;
-  }
-
-  .detail-info {
-    @apply flex max-h-[60vh] flex-col overflow-auto p-4;
-  }
-
-  .auth-card {
-    @apply mx-auto mt-16 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm;
-  }
+.error {
+  color: #b91c1c;
 }

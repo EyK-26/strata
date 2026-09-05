@@ -186,6 +186,31 @@ describe("assertProductionSecrets", () => {
     ).toThrow(/SESSION_SECRET/);
   });
 
+  test("requires SESSION_SECRET for hybrid staff HTML plus candidate SPA", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        FRONTEND_MODE: "hybrid",
+        AUTH_DEV_HEADERS: "false",
+        DATABASE_URL: "postgres://localhost/getstrata",
+      }),
+    ).toThrow(/SESSION_SECRET/);
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        FRONTEND_MODE: "hybrid",
+        AUTH_DEV_HEADERS: "false",
+        DATABASE_URL: "postgres://localhost/getstrata",
+        SESSION_SECRET: "a".repeat(32),
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_SCIM: "false",
+        FEATURE_OAUTH: "false",
+        FEATURE_PUBLIC_READS: "false",
+      }),
+    ).not.toThrow();
+  });
+
   test("blocks public reads in production", () => {
     expect(() =>
       assertProductionSecrets({

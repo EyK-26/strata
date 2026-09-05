@@ -94,4 +94,15 @@ describe("resolveContentSecurityPolicy", () => {
 
     expect(policy).toBe(strictApiContentSecurityPolicy());
   });
+
+  test("uses the HTMX CSP baseline in hybrid mode", () => {
+    process.env.FRONTEND_MODE = "hybrid";
+
+    const policy = resolveContentSecurityPolicy(
+      new Response("<html></html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+    );
+
+    expect(policy).toBe(serverHtmxContentSecurityPolicy());
+    expect(policy).toContain("https://unpkg.com");
+  });
 });

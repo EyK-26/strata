@@ -26,6 +26,8 @@ From the current working directory, `strata` loads `strata.config.ts` if present
 
 `strata run <file>` executes a file with the app preload. It is not an alias for `bun run <package.json script>`.
 
+`strata new --frontend=hybrid` copies the staff HTML scaffold and the SPA scaffold. Hybrid keeps HTML at `/` and serves the SPA under `/app/*`.
+
 ## This monorepo
 
 `bun run cli <command>` is an alias for `strata <command>`. `bun run dev` starts HiroApp.

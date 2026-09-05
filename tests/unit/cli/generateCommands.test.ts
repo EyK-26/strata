@@ -106,6 +106,7 @@ describe("newCommand", () => {
 
     expect(parseFrontendMode("server-htmx")).toBe("server-htmx");
     expect(parseFrontendMode("spa-react")).toBe("spa-react");
+    expect(parseFrontendMode("hybrid")).toBe("hybrid");
     expect(parseFrontendMode("unknown")).toBe("api");
   });
 
@@ -137,6 +138,27 @@ describe("newCommand", () => {
       await newCommand("--template=api", "--env=.env.test");
 
       expect(await Bun.file(join(workspace, "docs/API.md")).exists()).toBe(true);
+    });
+  });
+
+  test("hybrid copies staff HTML and SPA scaffolds without claiming / for the SPA", async () => {
+    await withTempProject(async (workspace) => {
+      const { newCommand } = await import("../../../src/cli/commands/new");
+      const output = captureConsole();
+
+      try {
+        await newCommand("--frontend=hybrid", "--env=.env.test");
+      } finally {
+        output.restore();
+      }
+
+      const envContents = await readFile(join(workspace, ".env.test"), "utf8");
+      expect(envContents).toContain("FRONTEND_MODE=hybrid");
+      expect(await Bun.file(join(workspace, "resources/views/layouts/app.eta")).exists()).toBe(
+        true,
+      );
+      expect(existsSync(join(workspace, "frontend/build.ts"))).toBe(true);
+      expect(output.logs.some((line) => line.includes("Hybrid mode enabled:"))).toBe(true);
     });
   });
 });

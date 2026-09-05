@@ -32,7 +32,7 @@ import { createHttpKernel, createAppContext, coreProviders } from "@getstrata/bo
 
 HTML apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstrap/web/session` instead of HMAC `SessionGuard`. Use `signIn` / `signOut` (or the redirect helpers). Pass `mapUser` to map roles in the app.
 
-`wrapWeb` applies the web group (CSRF + flash) and `withErrorHandling`, so CSRF `ForbiddenError` becomes an HTML 403 in `FRONTEND_MODE=server-htmx`. `wrapWebGuest` sends signed-in users to `/` by default (pass a string or `(user) => path` to override). `wrapWebLogin` / `wrapWebRegister` include that web group plus throttle. Do not wrap them with `wrapWeb` again. The throttle callback should return an HTML form at 429.
+`wrapWeb` applies the web group (CSRF + flash) and `withErrorHandling`, so CSRF `ForbiddenError` becomes an HTML 403 when views are on (`FRONTEND_MODE=server-htmx` or `hybrid`). `wrapWebGuest` sends signed-in users to `/` by default (pass a string or `(user) => path` to override). `wrapWebLogin` / `wrapWebRegister` include that web group plus throttle. Do not wrap them with `wrapWeb` again. The throttle callback should return an HTML form at 429.
 
 `registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. Apps that dispatch model webhooks should call `registerWebhookJobs()` themselves.
 

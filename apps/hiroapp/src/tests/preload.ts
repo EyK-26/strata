@@ -19,6 +19,7 @@ process.env.QUEUE_DRIVER ??= "sync";
 process.env.MAIL_DRIVER ??= "log";
 process.env.CACHE_DRIVER ??= "array";
 process.env.HIROAPP_SEED_SCALE ??= "demo";
+process.env.HIROAPP_KIOSK_SQLITE ??= ":memory:";
 process.env.FEATURE_ETAG ??= "true";
 process.env.TENANCY_DRIVER ??= "rls";
 process.env.SCIM_BEARER_TOKEN ??= "hiroapp-scim-test-token";

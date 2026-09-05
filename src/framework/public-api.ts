@@ -77,6 +77,7 @@ export { bindBunSql, createBunSqlPool } from "../core/database/bunSql.ts";
 export { createDatabaseConnection } from "../core/database/connection.ts";
 export {
   getActiveDatabaseConnection,
+  hasActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "../core/database/connectionContext.ts";
 export {
@@ -125,6 +126,18 @@ export {
   registerModelClass,
   registerModelRepository,
 } from "../core/database/model.ts";
+export {
+  createMysqlConnection,
+  createMysqlConnectionFromPool,
+} from "../core/database/mysqlConnection.ts";
+export {
+  getNamedConnection,
+  hasNamedConnection,
+  registerNamedConnection,
+  resetNamedConnections,
+  runOnNamedConnection,
+  unregisterNamedConnection,
+} from "../core/database/namedConnections.ts";
 export { createDatabaseQueryProxy } from "../core/database/queryProxy.ts";
 export type {
   BelongsToManyRelation,
@@ -188,6 +201,7 @@ export {
   runSeedersFromDirectory,
 } from "../core/database/seeders/runner.ts";
 export type { Seeder, SeederDatabase } from "../core/database/seeders/types.ts";
+export { createSqliteConnection } from "../core/database/sqliteConnection.ts";
 export { defineTable } from "../core/database/table.ts";
 export { runInTransaction } from "../core/database/transaction.ts";
 export type {

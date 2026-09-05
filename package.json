@@ -40,11 +40,12 @@
     "integration": "bun test ./tests/integration/redisCache.integration.test.ts ./tests/integration/queue.integration.test.ts",
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
     "test:coverage": "bun scripts/assert-core-coverage.ts",
-    "test:hiroapp": "HIROAPP_TEST=1 DOGFOOD_APP=hiroapp QUEUE_DRIVER=sync MAIL_DRIVER=log CACHE_DRIVER=array FRONTEND_MODE=server-htmx HIROAPP_SEED_SCALE=demo bun test --preload ./apps/hiroapp/src/tests/preload.ts ./apps/hiroapp/src/tests",
+    "test:hiroapp": "HIROAPP_TEST=1 DOGFOOD_APP=hiroapp QUEUE_DRIVER=sync MAIL_DRIVER=log CACHE_DRIVER=array FRONTEND_MODE=hybrid HIROAPP_SEED_SCALE=demo bun test --preload ./apps/hiroapp/src/tests/preload.ts ./apps/hiroapp/src/tests",
     "test:hiroapp:coverage": "bun scripts/assert-hiroapp-coverage.ts",
     "hiroapp:fresh": "DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed",
     "hiroapp:dev": "DOGFOOD_APP=hiroapp bun run dev",
     "hiroapp:dev:htmx": "DOGFOOD_APP=hiroapp FRONTEND_MODE=server-htmx bun run dev",
+    "hiroapp:dev:hybrid": "DOGFOOD_APP=hiroapp FRONTEND_MODE=hybrid bun run --filter hiroapp frontend:build && DOGFOOD_APP=hiroapp FRONTEND_MODE=hybrid bun run dev",
     "test:parallel": "scripts/test-parallel.sh",
     "deps:dedupe": "bun dedupe",
     "deps:audit": "bun audit",
@@ -67,6 +68,7 @@
     "@getstrata/cli": "workspace:*",
     "@getstrata/core": "workspace:*",
     "eta": "^4.6.0",
+    "mysql2": "^3.24.3",
     "uqr": "^0.1.3"
   }
 }

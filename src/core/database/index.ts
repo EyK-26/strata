@@ -1,6 +1,12 @@
 export type { DatabaseConnection } from "./baseRepository.ts";
 export { default as BaseRepository } from "./baseRepository.ts";
 export { createDatabaseConnection } from "./connection.ts";
+export type { ActiveDatabaseHandle } from "./connectionContext.ts";
+export {
+  getActiveDatabaseConnection,
+  hasActiveDatabaseConnection,
+  runWithDatabaseConnection,
+} from "./connectionContext.ts";
 export type { SqlDialect } from "./dialect.ts";
 export {
   currentSqlDialect,
@@ -31,6 +37,16 @@ export {
   registerModelClass,
   registerModelRepository,
 } from "./model.ts";
+export { createMysqlConnection, createMysqlConnectionFromPool } from "./mysqlConnection.ts";
+export type { NamedConnectionEntry } from "./namedConnections.ts";
+export {
+  getNamedConnection,
+  hasNamedConnection,
+  registerNamedConnection,
+  resetNamedConnections,
+  runOnNamedConnection,
+  unregisterNamedConnection,
+} from "./namedConnections.ts";
 export {
   buildAdvancedWhereClause,
   buildCountQuery,
@@ -108,6 +124,7 @@ export {
   SqliteGrammar,
   UnsupportedSchemaFeatureError,
 } from "./schema/index.ts";
+export { createSqliteConnection } from "./sqliteConnection.ts";
 export type { TableDefinition } from "./table.ts";
 export { defineTable } from "./table.ts";
 export { runInTransaction } from "./transaction.ts";

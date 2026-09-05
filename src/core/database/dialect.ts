@@ -1,3 +1,4 @@
+import { createAsyncContextStore } from "../runtime/asyncContextStore";
 import { type DatabaseDriver, resolveDatabaseDriver } from "./schema/driver.ts";
 
 interface SqlDialect {
@@ -100,6 +101,8 @@ const dialects: Record<DatabaseDriver, SqlDialect> = {
   sqlite: sqliteDialect,
 };
 
+const dialectContext = createAsyncContextStore<SqlDialect>("@getstrata/sqlDialect");
+
 let dialectOverride: SqlDialect | null = null;
 
 function dialectFor(driver: DatabaseDriver): SqlDialect {
@@ -107,7 +110,7 @@ function dialectFor(driver: DatabaseDriver): SqlDialect {
 }
 
 function currentSqlDialect(): SqlDialect {
-  return dialectOverride ?? dialectFor(resolveDatabaseDriver());
+  return dialectContext.getStore() ?? dialectOverride ?? dialectFor(resolveDatabaseDriver());
 }
 
 function useSqlDialect(driver: DatabaseDriver): SqlDialect {
@@ -119,15 +122,11 @@ function resetSqlDialect(): void {
   dialectOverride = null;
 }
 
-function runWithSqlDialect<T>(driver: DatabaseDriver, callback: () => T): T {
-  const previous = dialectOverride;
-  dialectOverride = dialectFor(driver);
-
-  try {
-    return callback();
-  } finally {
-    dialectOverride = previous;
-  }
+function runWithSqlDialect<T>(
+  driver: DatabaseDriver,
+  callback: () => T | Promise<T>,
+): T | Promise<T> {
+  return dialectContext.run(dialectFor(driver), callback);
 }
 
 export type { SqlDialect };

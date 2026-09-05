@@ -1,13 +1,13 @@
 import { join } from "node:path";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { isSpaEnabled } from "@getstrata/core/runtime/frontendMode";
+import { isSpaEnabled, isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 
 const SPA_DIST_DIRECTORY = join(process.cwd(), "frontend/dist");
 const SPA_INDEX_FILE = join(SPA_DIST_DIRECTORY, "index.html");
 
 function createSpaRoutes(_dependencies: AppDependencies): AppRouteMap {
-  return {
+  const routes: AppRouteMap = {
     "/app/*": async (request: Request) => {
       const pathname = new URL(request.url).pathname;
       const relativePath = pathname.replace(/^\/app\//, "");
@@ -32,8 +32,13 @@ function createSpaRoutes(_dependencies: AppDependencies): AppRouteMap {
         { status: 503 },
       );
     },
-    "/": async () => Response.redirect("/app/", 302),
   };
+
+  if (!isViewsEnabled()) {
+    routes["/"] = async () => Response.redirect("/app/", 302);
+  }
+
+  return routes;
 }
 
 function mergeSpaRoutes(dependencies: AppDependencies, routes: AppRouteMap): AppRouteMap {

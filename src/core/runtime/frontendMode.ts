@@ -1,26 +1,45 @@
-type FrontendMode = "api" | "server-htmx" | "spa-react";
+const FRONTEND_MODES = ["api", "server-htmx", "spa-react", "hybrid"] as const;
 
-function readFrontendMode(): FrontendMode {
-  const mode = (process.env.FRONTEND_MODE ?? "api").trim();
+type FrontendMode = (typeof FRONTEND_MODES)[number];
 
-  if (mode === "server-htmx") {
-    return "server-htmx";
+const FRONTEND_MODE_PATTERN = new RegExp(`^(${FRONTEND_MODES.join("|")})$`);
+
+function parseFrontendMode(value: string | undefined): FrontendMode {
+  const mode = (value ?? "api").trim();
+  if (mode === "server-htmx" || mode === "spa-react" || mode === "hybrid") {
+    return mode;
   }
-
-  if (mode === "spa-react") {
-    return "spa-react";
-  }
-
   return "api";
 }
 
+function readFrontendMode(): FrontendMode {
+  return parseFrontendMode(process.env.FRONTEND_MODE);
+}
+
+function isViewsMode(mode: FrontendMode): boolean {
+  return mode === "server-htmx" || mode === "hybrid";
+}
+
+function isSpaMode(mode: FrontendMode): boolean {
+  return mode === "spa-react" || mode === "hybrid";
+}
+
 function isViewsEnabled(): boolean {
-  return readFrontendMode() === "server-htmx";
+  return isViewsMode(readFrontendMode());
 }
 
 function isSpaEnabled(): boolean {
-  return readFrontendMode() === "spa-react";
+  return isSpaMode(readFrontendMode());
 }
 
 export type { FrontendMode };
-export { isSpaEnabled, isViewsEnabled, readFrontendMode };
+export {
+  FRONTEND_MODE_PATTERN,
+  FRONTEND_MODES,
+  isSpaEnabled,
+  isSpaMode,
+  isViewsEnabled,
+  isViewsMode,
+  parseFrontendMode,
+  readFrontendMode,
+};

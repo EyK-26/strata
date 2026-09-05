@@ -1,18 +1,14 @@
-import axios from "axios";
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App.jsx";
 import "./app.css";
-import "./HiroApp.jsx";
 
-function readCookie(name) {
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-axios.defaults.withCredentials = true;
-axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest";
-axios.interceptors.request.use((config) => {
-  const token = readCookie("hiroapp_csrf");
-  if (token) {
-    config.headers["x-csrf-token"] = token;
-  }
-  return config;
-});
+const container = document.getElementById("root");
+createRoot(container).render(
+  <React.StrictMode>
+    <BrowserRouter basename="/apply">
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>,
+);

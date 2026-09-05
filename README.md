@@ -26,9 +26,9 @@ Strata gives you:
 - Queues, cache, mail, storage, and scheduled tasks
 - Policies, abilities on tokens, and Postgres row-level security when you need tenants
 
-Strata does not pick your frontend. HiroApp uses server-rendered HTML with HTMX. You can serve a React SPA, or a JSON API only. The auth and SQL choices are also yours. Pick the strongest option that matches how clients talk to you. See [docs/AUTH.md](docs/AUTH.md).
+Strata does not pick your frontend. HiroApp staff tools are server-rendered HTML with HTMX. Candidates can use the React portal at `/apply`. You can also serve a JSON API only. The auth and SQL choices are also yours. Pick the strongest option that matches how clients talk to you. See [docs/AUTH.md](docs/AUTH.md).
 
-PostgreSQL is what we run in CI and in HiroApp. Dialect helpers exist so generated SQL can target MySQL or SQLite. Those runtimes are not proven in this repo. Do not pretend they are.
+PostgreSQL is what we run in CI and in HiroApp OLTP. Named connections can attach SQLite or MySQL as sidecars. Dialect helpers exist so generated SQL can target those engines. Do not shard one hiring row across three databases.
 
 ## Packages
 
@@ -81,7 +81,8 @@ Set `FRONTEND_MODE`:
 | Value | What you get |
 |-------|----------------|
 | `server-htmx` | HTML from Eta templates plus JSON under `/api` (HiroApp default for local UI) |
-| `spa-react` | JSON API plus a SPA document |
+| `spa-react` | JSON API plus a SPA document under `/app` |
+| `hybrid` | Staff HTML at `/` plus a SPA prefix (`/apply` in HiroApp, `/app` in the scaffold) |
 | `api` | JSON only |
 
 HiroApp HTML uses cookie sessions and CSRF. Partner integrations use Bearer tokens or JWT. See [docs/AUTH.md](docs/AUTH.md).
@@ -90,6 +91,7 @@ HiroApp HTML uses cookie sessions and CSRF. Partner integrations use Bearer toke
 
 ```bash
 bun run hiroapp:fresh          # HiroApp migrate + seed
+bun run hiroapp:dev:hybrid     # Staff HTML plus candidate SPA at /apply
 bun run hiroapp:dev:htmx       # HiroApp HTML UI
 bun run test:hiroapp           # HiroApp tests
 bun run test:coverage          # Framework coverage gate

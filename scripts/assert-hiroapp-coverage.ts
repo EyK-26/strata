@@ -55,7 +55,7 @@ const proc = Bun.spawn(
       QUEUE_DRIVER: "sync",
       MAIL_DRIVER: "log",
       CACHE_DRIVER: "array",
-      FRONTEND_MODE: "server-htmx",
+      FRONTEND_MODE: "hybrid",
       HIROAPP_SEED_SCALE: "demo",
     },
     stdout: "pipe",

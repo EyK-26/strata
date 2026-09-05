@@ -29,7 +29,11 @@ Docker-shaped CI:
 docker compose run --rm -e QUEUE_DRIVER=sync -e SKIP_FIXTURE_TEST_BOOTSTRAP=1 app bun run validate:ci
 ```
 
-Host-native: Postgres on `localhost:54329`, Redis on `6379`. `validate:host` builds packages, migrates the fixture (`STRATA_SCHEMA=fixture`), migrates HiroApp, then runs `validate:ci`.
+Host-native: Postgres on `localhost:54329`, Redis on `6379`, MySQL on `33061`. `validate:host` builds packages, migrates the fixture (`STRATA_SCHEMA=fixture`), migrates HiroApp, then runs `validate:ci`. Start MySQL with Compose if you want the live job-board mirror test:
+
+```bash
+docker compose up -d postgres redis mysql --wait
+```
 
 ## What CI migrates
 
@@ -59,7 +63,7 @@ HTTP middleware uses the same helper. Jobs that touch RLS tables must too. See [
 
 Cross-tenant migrate/seed work uses `runWithMigrationBypass()`.
 
-For HTML tests, set `FRONTEND_MODE=server-htmx`.
+For HTML tests, set `FRONTEND_MODE=server-htmx` or `hybrid`. HiroApp `test:hiroapp` uses `hybrid` so staff HTML and `/apply` stay on the same process. Do not flip `FRONTEND_MODE` inside a single test file while other files are running.
 
 Coverage policy: [COVERAGE.md](./COVERAGE.md).
 

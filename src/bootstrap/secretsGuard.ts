@@ -1,3 +1,5 @@
+import { isViewsMode, parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
+
 /** Published test-token strings that must never ship in production. */
 const PUBLISHED_TEST_ADMIN_API_TOKEN = "strata-admin-test-token";
 const PUBLISHED_TEST_MEMBER_API_TOKEN = "strata-member-test-token";
@@ -58,7 +60,7 @@ function assertSessionSecret(env: Record<string, string | undefined>): void {
 
   if (secret.length < MIN_SESSION_SECRET_LENGTH) {
     throw new Error(
-      "Production startup blocked: set SESSION_SECRET when FRONTEND_MODE=server-htmx (32+ characters).",
+      "Production startup blocked: set SESSION_SECRET when FRONTEND_MODE=server-htmx or hybrid (32+ characters).",
     );
   }
 }
@@ -160,9 +162,7 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
 
   assertFeatureProductionSecrets(env);
 
-  const frontendMode = (env.FRONTEND_MODE ?? "api").trim();
-
-  if (frontendMode === "server-htmx") {
+  if (isViewsMode(parseFrontendMode(env.FRONTEND_MODE))) {
     assertSessionSecret(env);
   }
 }

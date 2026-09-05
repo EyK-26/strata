@@ -12,14 +12,16 @@ How to run HiroApp (or your Strata app) in staging and production.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `DATABASE_URL` | Yes | PostgreSQL connection string (hiring source of truth) |
+| `MYSQL_URL` | No | MySQL job-board mirror only. Publish still succeeds if unset or down |
+| `HIROAPP_KIOSK_SQLITE` | No | SQLite path or `:memory:` for on-site scorecards |
 | `REDIS_URL` | Yes (prod) | Redis for cache, queues, shared rate limiting |
 | `APP_ENV` | Yes | `local`, `staging`, or `production` |
 | `APP_DEBUG` | No | Set `false` in staging/production |
 | `AUTH_DEV_HEADERS` | Prod | Must be `false` |
 | `API_PREFIX` | No | HiroApp uses `/api` |
-| `FRONTEND_MODE` | No | `api`, `server-htmx`, or `spa-react` |
-| `SESSION_SECRET` | Prod (server-htmx) | Signs cookie-session payloads. Required for HTML in production |
+| `FRONTEND_MODE` | No | `api`, `server-htmx`, `spa-react`, or `hybrid` |
+| `SESSION_SECRET` | Prod (HTML) | Signs cookie-session payloads. Required when views are on (`server-htmx` or `hybrid`) |
 | `JWT_SECRET` | No | HS256 key for JWT mint. Falls back to `SESSION_SECRET` |
 | `TRUST_FORWARDED_FOR` | No | Set `true` only behind a trusted proxy |
 | `METRICS_TOKEN` | Prod | Bearer token for `GET /metrics`. Production returns 404 when unset |
@@ -32,7 +34,7 @@ Production startup refuses published seed tokens (`strata-*-test-token` and left
 ## Local development
 
 ```bash
-docker compose up -d postgres redis --wait
+docker compose up -d postgres redis mysql --wait
 bun run build:framework
 bun run hiroapp:fresh
 bun run hiroapp:dev:htmx
@@ -96,7 +98,7 @@ bun run cli openapi:check
 
 Authenticated users are scoped to their account tenant. Global admins may pass `x-tenant-id`. Guests use tenant `1`. They can switch via `x-tenant-id` only when `FEATURE_PUBLIC_READS=true`. See [docs/TENANCY.md](docs/TENANCY.md).
 
-## HTML cookie sessions (`FRONTEND_MODE=server-htmx`)
+## HTML cookie sessions (`FRONTEND_MODE=server-htmx` or `hybrid`)
 
 HiroApp stores sessions in Postgres. Any instance can serve a request if it shares the database. Sticky sessions are not required.
 

@@ -1,5 +1,13 @@
 # @getstrata/bootstrap changelog
 
+## 0.4.0
+
+- Peer `@getstrata/core` `^0.7.0`.
+- Production `SESSION_SECRET` is required whenever views are on (`FRONTEND_MODE=server-htmx` or `hybrid`).
+- Hybrid SPA routes stay under `/app/*`. They do not redirect `/`, so staff HTML keeps the home path.
+- `appEnvSchema` validates `FRONTEND_MODE` with the core pattern, including `hybrid`.
+- `HttpKernel.wrapApi` maps thrown HTTP errors to JSON the same way `wrapWeb` maps them to HTML.
+
 ## 0.3.0
 
 - Peer `@getstrata/core` `^0.6.0`.

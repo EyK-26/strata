@@ -10,14 +10,14 @@ From most locked down for browsers, to weaker or narrower tools:
 
 | Rank | Mechanism | Good for | Revoke? | Notes |
 |------|-----------|----------|---------|-------|
-| 1 | Cookie session stored in `sessions` + CSRF | HTML apps, same-site browsers | Yes. Delete the row. | HiroApp staff and candidate web UI. `SameSite=Lax`, `HttpOnly`. |
+| 1 | Cookie session stored in `sessions` + CSRF | HTML apps, same-site browsers | Yes. Delete the row. | HiroApp staff HTML. `SameSite=Lax`, `HttpOnly`. |
 | 2 | Opaque access token (hashed in `api_token`) | SPA, mobile, partner jobs boards | Yes. Delete or expire the row. | Send `Authorization: Bearer`. Skip CSRF. Scope with abilities. |
 | 3 | HMAC signed session cookie (no `sessions` row) | JSON APIs that want a signed cookie without a table | Partial. `session_valid_after` or a custom directory check. | Not HiroApp HTML login. |
 | 4 | JWT HS256 | Service-to-service, short-lived scripts | Hard. Wait for `exp`, or keep a denylist (you build that). | HiroApp `POST /api/auth/token`. |
 | 5 | HTTP Basic over TLS | Private scripts, health cron, first-party tools | Change the password. | HiroApp `GET /api/user` accepts Basic. Never on the public internet without TLS. |
 | 6 | `x-authenticated-user-id` headers | Automated tests | N/A | Only when `AUTH_DEV_HEADERS=true`. Production must set `false`. |
 
-If you are building a browser app, start at rank 1. If you are building a job-board integration, use rank 2 with a tight ability list such as `integrations:ping`. JWT is for clients that cannot store a revocable server token and can live with expiry.
+If you are building a browser app, start at rank 1. If you are building a candidate SPA, use rank 2 with a tight ability list. If you are building a job-board integration, use rank 2 with `integrations:ping`. JWT is for clients that cannot store a revocable server token and can live with expiry. Do not use JWT as the candidate portal session.
 
 ## Named guards
 
@@ -70,7 +70,7 @@ GET /api/integrations/ping
 Authorization: Bearer <token>
 ```
 
-Staff JWTs mint with `abilities: ["*"]`. Candidate JWTs mint with `profile:read`. Adjust that in `apps/hiroapp/src/modules/auth/routes.ts` if your product needs finer JWT claims. Remember: JWT claims are not revoked until expiry.
+Staff JWTs mint with `reports:export` and `profile:read`, not `*`. Candidate JWTs mint with `interviews:join` for short-lived join links. Neither is a portal login. HiroApp candidate login is `POST /api/apply/login`, which stores a hashed opaque token (`applications:read`, `applications:write`, `interviews:read`, `offers:read`, `profile:read`). Remember: JWT claims are not revoked until expiry.
 
 Use policies (`Policy` / `PolicyGate`) for "can this recruiter see this application?" That is not the same as a token ability.
 

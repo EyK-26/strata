@@ -10,7 +10,6 @@
     "seed": "bun --preload ./src/bootstrap/preload.ts src/db/seed.ts",
     "frontend:install": "bun install --cwd frontend",
     "frontend:build": "bun run --cwd frontend build",
-    "assets:css": "bunx --cwd frontend @tailwindcss/cli -i ./src/app.css -o ../public/assets/app.css --minify",
     "smoke": "bun --preload ./src/bootstrap/preload.ts src/scripts/smoke.ts",
     "test": "bun test --preload ./src/bootstrap/preload.ts"
   },

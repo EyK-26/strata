@@ -24,6 +24,7 @@
           <button>Login</button>
         </form>
         <p><a href="/login/sso">Sign in with SSO</a></p>
+        <p><a href="/apply">Candidate portal</a></p>
       </div>
       <div class="errors">
         <% if (it.errors?.email) { %><span><%= it.errors.email %></span><% } %>

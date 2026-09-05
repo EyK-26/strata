@@ -24,9 +24,12 @@ If `DB_CONNECTION` is unset, the URL scheme picks the dialect. If both are unset
 # Postgres (HiroApp)
 DATABASE_URL=postgresql://postgres:postgres@localhost:54329/hiroapp_test
 
-# MySQL (your app; not HiroApp)
+# MySQL (your app OLTP; not HiroApp hiring)
 DB_CONNECTION=mysql
 DATABASE_URL=mysql://user:pass@localhost:3306/myapp
+
+# HiroApp job-board sidecar (hiring stays on Postgres)
+MYSQL_URL=mysql://hiroapp:hiroapp@localhost:33061/hiroapp_job_board
 
 # SQLite file (local toys, not HiroApp)
 DB_CONNECTION=sqlite
@@ -47,9 +50,33 @@ runWithSqlDialect("mysql", () => {
 });
 ```
 
-`useSqlDialect("mysql")` changes the process until `resetSqlDialect()`. Prefer `runWithSqlDialect` so the previous dialect always comes back.
+`useSqlDialect("mysql")` changes the process until `resetSqlDialect()`. Prefer `runWithSqlDialect` so the previous dialect always comes back, including across `await`.
 
-The dialect module is a process singleton. Apps must import `@getstrata/core/database/dialect`, not a copied helper, or overrides will not match the query builder.
+The dialect is stored in AsyncLocalStorage (`@getstrata/sqlDialect`) with a process fallback for `useSqlDialect`. Apps must import `@getstrata/core/database/dialect`, not a copied helper, or overrides will not match the query builder.
+
+## Named connections
+
+Register extra engines without pointing HiroApp OLTP at them:
+
+```typescript
+import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
+import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
+import { registerNamedConnection, runOnNamedConnection } from "@getstrata/core/database/namedConnections";
+
+registerNamedConnection("kiosk", "sqlite", createSqliteConnection(":memory:"));
+registerNamedConnection("job-board", "mysql", createMysqlConnection(process.env.MYSQL_URL!));
+
+await runOnNamedConnection("kiosk", async () => {
+  // currentSqlDialect() is sqlite, and unsafe() hits the kiosk handle
+});
+```
+
+HiroApp uses this for two sidecars. Postgres remains the hiring source of truth.
+
+- **SQLite kiosk** (`HIROAPP_KIOSK_SQLITE`): on-site interview scorecards, then `POST /api/kiosk/sync` into Postgres.
+- **MySQL job board** (`MYSQL_URL`): published career postings only. If MySQL is down, publish still succeeds on Postgres.
+
+A dialect change does not invent a driver. You still provide the connection. `Bun.sql` is Postgres-only. MySQL uses `mysql2`. SQLite uses `bun:sqlite`.
 
 ## Schema builder
 
@@ -57,7 +84,7 @@ The dialect module is a process singleton. Apps must import `@getstrata/core/dat
 
 ## Binding the client
 
-HiroApp uses Bun's `Bun.sql` (Postgres) via `bindBunSql()` / `bindDatabaseConnection()`. Your app can bind another client if it speaks the same `unsafe(sql, params)` shape. A dialect change does not invent a MySQL driver. You still provide the connection.
+HiroApp uses Bun's `Bun.sql` (Postgres) via `bindBunSql()` / `bindDatabaseConnection()`. Sidecars register with `registerNamedConnection`. A dialect change does not invent a MySQL driver. You still provide the connection.
 
 ## Tenancy
 
@@ -65,7 +92,8 @@ Postgres RLS is documented in [TENANCY.md](./TENANCY.md). `TENANCY_DRIVER=none` 
 
 ## Honest limits
 
-- Compiling MySQL or SQLite SQL is not the same as running HiroApp on those engines.
+- Compiling MySQL or SQLite SQL is not the same as running HiroApp OLTP on those engines.
+- Named connections are sidecars. Do not shard one hiring row across three engines.
 - `tsMatch` throws off Postgres on purpose.
-- MySQL has no `RETURNING`. Insert helpers that expect a returned row need another SELECT, which this repo does not pretend to hide.
+- MySQL has no `RETURNING`. Insert helpers that expect a returned row need another SELECT.
 - Identifier quoting rejects anything that is not `[A-Za-z_][A-Za-z0-9_]*`.

@@ -82,6 +82,17 @@ describe.skipIf(!enabled)("auth choices and hiring integrations", () => {
       headers: { authorization: `Bearer ${denied.plainTextToken}` },
     });
     expect(blocked.status).toBe(403);
+    const mintedJwt = await fetch(`${baseUrl}/api/auth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ email: "admin@hiroapp.com", password: "password" }),
+    });
+    expect(mintedJwt.status).toBe(200);
+    const jwtBody = (await mintedJwt.json()) as { token: string };
+    const jwtPing = await fetch(`${baseUrl}/api/integrations/ping`, {
+      headers: { authorization: `Bearer ${jwtBody.token}` },
+    });
+    expect(jwtPing.status).toBe(403);
   });
 
   test("unverified HTML users are sent to confirm their email", async () => {

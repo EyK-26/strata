@@ -28,7 +28,7 @@ jobs:
           bun-version: "1.4.0"
 
       - name: Start services
-        run: docker compose up -d postgres redis --wait
+        run: docker compose up -d postgres redis mysql --wait
 
       - name: Run Bun 1.4 parallel unit tests
         env:
@@ -60,7 +60,7 @@ jobs:
           bun-version: "1.4.0"
 
       - name: Start services
-        run: docker compose up -d postgres redis --wait
+        run: docker compose up -d postgres redis mysql --wait
 
       - name: Install dependencies and run checks
         env:

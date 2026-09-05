@@ -3,7 +3,7 @@ import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import { UnauthorizedError, ValidationError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { isSpaEnabled } from "@getstrata/core/runtime/frontendMode";
+import { isSpaEnabled, isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { sessionMetaFromRequest, withCookies } from "../../http/cookies.ts";
 import { authManager, requireCurrentUser } from "../../http/currentUser.ts";
 import { mergeResource, NotificationResource, UserResource } from "../../http/resources.ts";
@@ -92,7 +92,9 @@ export function authRoutes(dependencies: AppDependencies): AppRouteMap {
         const token = signJwt({
           sub: Number(user.id),
           role: roleName(user.role_id),
-          abilities: isStaff(user.role_id) ? ["*"] : ["profile:read"],
+          abilities: isStaff(user.role_id)
+            ? ["reports:export", "profile:read"]
+            : ["interviews:join"],
           emailVerifiedAt: user.email_verified_at ?? null,
         });
         return jsonResponse({
@@ -146,7 +148,7 @@ export function authRoutes(dependencies: AppDependencies): AppRouteMap {
     },
   };
 
-  if (!isSpaEnabled()) {
+  if (!isSpaEnabled() || isViewsEnabled()) {
     return routes;
   }
 

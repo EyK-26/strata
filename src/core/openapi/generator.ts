@@ -66,6 +66,18 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /api/user": "Current authenticated HiroApp user",
   "POST /api/login": "Login with email and password",
   "POST /api/auth/token": "Mint a short-lived JWT with email and password",
+  "POST /api/apply/login": "Candidate portal login (opaque token)",
+  "POST /api/apply/logout": "Revoke the candidate portal token",
+  "GET /api/apply/me": "Candidate portal current user",
+  "GET /api/apply/positions": "Published jobs for the candidate portal",
+  "GET /api/apply/applications": "Candidate portal applications",
+  "POST /api/apply/applications": "Apply from the candidate portal",
+  "GET /api/apply/interviews": "Candidate portal interviews",
+  "GET /api/apply/offers": "Candidate portal offers",
+  "PATCH /api/apply/profile": "Update candidate portal profile",
+  "GET /api/kiosk/scorecards": "List on-site kiosk scorecards",
+  "POST /api/kiosk/scorecards": "Store an on-site kiosk scorecard",
+  "POST /api/kiosk/sync": "Sync kiosk scorecards into Postgres",
   "GET /api/integrations/ping": "Partner heartbeat (requires integrations:ping)",
   "GET /api/audit-logs/export": "Download audit events as JSON or CEF",
   "GET /api/careers": "List public career postings",
@@ -121,9 +133,11 @@ function requiresBearerAuth(path: string, method: string): boolean {
     relative.startsWith("/auth/email/verification-notification") ||
     relative.startsWith("/auth/oauth") ||
     relative === "/auth/token" ||
+    relative === "/apply/login" ||
     relative === "/login" ||
     path === "/login" ||
-    path === "/api/login"
+    path === "/api/login" ||
+    path === "/api/apply/login"
   ) {
     return false;
   }

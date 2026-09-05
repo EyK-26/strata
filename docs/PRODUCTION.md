@@ -17,7 +17,7 @@ Fix every error until it prints that production secret checks passed.
 | `APP_ENV=production` | Always |
 | `APP_DEBUG=false` | Always (recommended) |
 | `AUTH_DEV_HEADERS=false` | Always in production |
-| `SESSION_SECRET` (32+ chars) | `FRONTEND_MODE=server-htmx` |
+| `SESSION_SECRET` (32+ chars) | `FRONTEND_MODE=server-htmx` or `hybrid` |
 | `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | When those env vars are set or `FEATURE_API_TOKENS=true`. Rotate away from `strata-*-test-token` and any leftover published seed strings |
 | `TOKEN_HASH_PEPPER` | Token auth enabled |
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Token auth enabled |

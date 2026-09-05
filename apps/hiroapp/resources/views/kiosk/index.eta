@@ -1,0 +1,32 @@
+<div class="Page">
+  <h1>Interview kiosk</h1>
+  <p>Scorecards stay on this device until you sync them to HiroApp.</p>
+  <form action="/kiosk" method="post" class="stack-form">
+    <%~ include("../partials/csrf.eta") %>
+    <label>Interview id <input type="number" name="interview_id" required /></label>
+    <label>Score <input type="number" name="overall_score" min="1" max="5" required /></label>
+    <label>Recommendation
+      <select name="recommendation">
+        <option value="hire">Hire</option>
+        <option value="hold">Hold</option>
+        <option value="no_hire">No hire</option>
+      </select>
+    </label>
+    <label>Notes <textarea name="notes"></textarea></label>
+    <button>Save locally</button>
+  </form>
+  <form action="/kiosk" method="post">
+    <%~ include("../partials/csrf.eta") %>
+    <input type="hidden" name="intent" value="sync" />
+    <button>Sync to HiroApp</button>
+  </form>
+  <% if (!(it.rows ?? []).length) { %>
+    <p>No local scorecards.</p>
+  <% } %>
+  <% (it.rows ?? []).forEach((row) => { %>
+    <p>
+      Interview <%= row.interview_id %> · <%= row.overall_score %> · <%= row.recommendation %>
+      <% if (row.synced_at) { %> · synced<% } else { %> · pending<% } %>
+    </p>
+  <% }) %>
+</div>

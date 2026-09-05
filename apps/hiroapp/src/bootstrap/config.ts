@@ -1,6 +1,6 @@
 import { defineEnvSchema, validateEnv } from "@getstrata/core/config/envSchema";
 import { appCookieName } from "@getstrata/core/runtime/appKeyPrefix";
-import { readFrontendMode } from "@getstrata/core/runtime/frontendMode";
+import { FRONTEND_MODE_PATTERN, readFrontendMode } from "@getstrata/core/runtime/frontendMode";
 import { resolveHiroappDatabaseUrl } from "../db/ensureDatabase.ts";
 
 export const APP_PORT_CONFIG_KEY = "app.port";
@@ -14,7 +14,7 @@ export const envSchema = defineEnvSchema({
   APP_ENV: { default: "local" },
   APP_URL: { default: "http://localhost:3000" },
   APP_KEY_PREFIX: { default: "hiroapp" },
-  FRONTEND_MODE: { default: "spa-react", pattern: /^(spa-react|server-htmx|api)$/ },
+  FRONTEND_MODE: { default: "server-htmx", pattern: FRONTEND_MODE_PATTERN },
   TENANCY_DRIVER: { default: "rls", pattern: /^(none|rls)$/ },
   QUEUE_DRIVER: { default: "sync", pattern: /^(sync|async|redis)$/ },
   MAIL_DRIVER: { default: "log", pattern: /^(log|smtp)$/ },

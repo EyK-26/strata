@@ -121,7 +121,7 @@ class HttpKernel {
   }
 
   wrapApi(handler: RouteHandler): RouteHandler {
-    return this.wrap(["api", "authenticated"], handler);
+    return withErrorHandling(this.wrap(["api", "authenticated"], handler));
   }
 
   wrapWeb(handler: RouteHandler): RouteHandler {

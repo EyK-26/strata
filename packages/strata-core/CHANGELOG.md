@@ -1,5 +1,13 @@
 # @getstrata/core changelog
 
+## 0.7.0
+
+- `FRONTEND_MODE=hybrid` turns on staff HTML and the candidate SPA together. Views are on for `server-htmx` and `hybrid`. The SPA is on for `spa-react` and `hybrid`.
+- `parseFrontendMode`, `FRONTEND_MODES`, and `FRONTEND_MODE_PATTERN` are the allowed-value list. Apps should reuse that pattern in env schemas.
+- Named database connections: `registerNamedConnection`, `runOnNamedConnection`, SQLite (`bun:sqlite`), and MySQL (`mysql2`). `runWithSqlDialect` keeps the dialect across `await` via AsyncLocalStorage.
+- New subpaths: `database/namedConnections`, `database/sqliteConnection`, `database/mysqlConnection`, `database/connectionContext`.
+- OpenAPI treats `POST /api/apply/login` as unauthenticated.
+
 ## 0.6.0
 
 - **Breaking:** cookie session signatures use HMAC-SHA256. Existing HMAC cookies signed with the previous digest will not verify. Rotate `SESSION_SECRET` or sign users in again.

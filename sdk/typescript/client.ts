@@ -117,6 +117,42 @@ export class HiroAppClient {
     return await this.request("/applications/notify", { ...init, method: "POST" });
   }
 
+  async getApplyApplications(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/applications", { ...init, method: "GET" });
+  }
+
+  async postApplyApplications(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/applications", { ...init, method: "POST" });
+  }
+
+  async getApplyInterviews(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/interviews", { ...init, method: "GET" });
+  }
+
+  async postApplyLogin(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/login", { ...init, method: "POST" });
+  }
+
+  async postApplyLogout(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/logout", { ...init, method: "POST" });
+  }
+
+  async getApplyMe(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/me", { ...init, method: "GET" });
+  }
+
+  async getApplyOffers(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/offers", { ...init, method: "GET" });
+  }
+
+  async getApplyPositions(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/positions", { ...init, method: "GET" });
+  }
+
+  async patchApplyProfile(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/apply/profile", { ...init, method: "PATCH" });
+  }
+
   async getAuditLogs(init: RequestInit = {}): Promise<Response> {
     return await this.request("/audit-logs", { ...init, method: "GET" });
   }
@@ -311,6 +347,18 @@ export class HiroAppClient {
 
   async getInterviewsConfirm(init: RequestInit = {}): Promise<Response> {
     return await this.request("/interviews/confirm", { ...init, method: "GET" });
+  }
+
+  async getKioskScorecards(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/kiosk/scorecards", { ...init, method: "GET" });
+  }
+
+  async postKioskScorecards(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/kiosk/scorecards", { ...init, method: "POST" });
+  }
+
+  async postKioskSync(init: RequestInit = {}): Promise<Response> {
+    return await this.request("/kiosk/sync", { ...init, method: "POST" });
   }
 
   async postLogin(init: RequestInit = {}): Promise<Response> {

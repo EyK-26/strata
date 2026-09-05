@@ -7,6 +7,7 @@
       <a href="/account">Account</a>
       <a href="/applications">Pipeline</a>
       <a href="/interviews">Interviews</a>
+      <a href="/kiosk">Kiosk</a>
       <a href="/referrals">Referrals</a>
       <a href="/requisitions">Requisitions</a>
       <a href="/inbox">Inbox</a>
@@ -50,6 +51,7 @@
       <a href="/applications">Pipeline</a>
       <a href="/dashboard">Dashboard</a>
       <a href="/interviews">Interviews</a>
+      <a href="/kiosk">Kiosk</a>
       <a href="/referrals">Referrals</a>
       <a href="/inbox">Inbox</a>
       <a href="/talent-pool">Talent pool</a>

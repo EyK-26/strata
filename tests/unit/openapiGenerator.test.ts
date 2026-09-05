@@ -150,6 +150,7 @@ describe("generateOpenApiSpec", () => {
         { method: "POST", path: "/api/auth/token", middleware: ["global", "api"] },
         { method: "GET", path: "/api/careers", middleware: ["global"] },
         { method: "GET", path: "/api/careers/:id", middleware: ["global"] },
+        { method: "POST", path: "/api/apply/login", middleware: ["global", "api"] },
         { method: "GET", path: "/api/integrations/ping", middleware: ["global", "api"] },
         { method: "POST", path: "/api/auth/tokens", middleware: ["global", "api"] },
       ]);
@@ -160,6 +161,10 @@ describe("generateOpenApiSpec", () => {
         "Mint a short-lived JWT with email and password",
       );
       expect(operation(spec, "/api/auth/token", "post")?.security).toBeUndefined();
+      expect(operation(spec, "/api/apply/login", "post")?.summary).toBe(
+        "Candidate portal login (opaque token)",
+      );
+      expect(operation(spec, "/api/apply/login", "post")?.security).toBeUndefined();
       expect(operation(spec, "/api/careers", "get")?.security).toBeUndefined();
       expect(operation(spec, "/api/careers/{id}", "get")?.security).toBeUndefined();
       expect(operation(spec, "/api/integrations/ping", "get")?.summary).toBe(

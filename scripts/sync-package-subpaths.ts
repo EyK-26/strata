@@ -62,8 +62,11 @@ const CORE_SUBPATHS = [
   "database/boundConnection",
   "database/bunSql",
   "database/connection",
+  "database/connectionContext",
   "database/defaultConnection",
   "database/dialect",
+  "database/mysqlConnection",
+  "database/namedConnections",
   "database/errors",
   "database/factory",
   "database/migrations",
@@ -76,6 +79,7 @@ const CORE_SUBPATHS = [
   "database/seeders",
   "database/seeders/types",
   "database/schema",
+  "database/sqliteConnection",
   "database/table",
   "database/transaction",
   "database/types",
@@ -354,7 +358,7 @@ async function updatePackageJson(
 
   const relativeEntries = buildEntries.map((entry) => relative(packageDir, entry)).join(" ");
   packageJson.scripts["build:bundle"] =
-    `bun build index.ts --outdir dist --target bun --external bun --external eta${packageDir.includes("bootstrap") ? " --external @getstrata/core" : ""}`;
+    `bun build index.ts --outdir dist --target bun --external bun --external eta --external mysql2${packageDir.includes("bootstrap") ? " --external @getstrata/core" : ""}`;
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
     ? "bun ../../scripts/write-core-shared-shims.ts"
     : "true";
@@ -365,7 +369,7 @@ async function updatePackageJson(
     ? ` ${bootstrapSubpathExternalFlags(BOOTSTRAP_SUBPATHS, CORE_SUBPATHS)}`
     : "";
   packageJson.scripts["build:subpaths"] = relativeEntries
-    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta${coreExternal}${bootstrapExternal}`
+    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta --external mysql2${coreExternal}${bootstrapExternal}`
     : "true";
   packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
     ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"

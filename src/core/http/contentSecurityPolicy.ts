@@ -1,3 +1,5 @@
+import { isSpaEnabled, isViewsEnabled } from "../runtime/frontendMode";
+
 type CspDirectiveValue = string | string[] | false;
 
 interface ContentSecurityPolicyDirectives {
@@ -137,13 +139,11 @@ function applyNonce(
 }
 
 function htmlBaselineDirectives(): Record<string, string[]> {
-  const frontendMode = (process.env.FRONTEND_MODE ?? "api").trim();
-
-  if (frontendMode === "server-htmx") {
+  if (isViewsEnabled()) {
     return cloneDirectives(HTMX_HTML_DIRECTIVES);
   }
 
-  if (frontendMode === "spa-react") {
+  if (isSpaEnabled()) {
     return cloneDirectives(SPA_HTML_DIRECTIVES);
   }
 

@@ -78,6 +78,33 @@ describe("HttpKernel", () => {
     }
   });
 
+  test("wrapApi maps thrown HTTP errors to JSON status codes", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "api";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapApi(async () => {
+        throw new ForbiddenError("reports:export required");
+      });
+
+      const response = await handler(
+        new Request("http://example.test/api/reports", {
+          headers: {
+            accept: "application/json",
+            "x-authenticated-user-id": "1",
+            "x-authenticated-user-role": "admin",
+          },
+        }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "reports:export required" });
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
   test("wrapWebLogin applies the web group so CSRF failures become HTML 403", async () => {
     const previous = process.env.FRONTEND_MODE;
     process.env.FRONTEND_MODE = "server-htmx";

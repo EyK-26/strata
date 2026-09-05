@@ -130,6 +130,16 @@ describe("SQL dialect", () => {
     expect(currentSqlDialect().driver).toBe(before);
   });
 
+  test("runWithSqlDialect keeps the dialect across await", async () => {
+    await runWithSqlDialect("sqlite", async () => {
+      await Promise.resolve();
+      expect(currentSqlDialect().driver).toBe("sqlite");
+      expect(currentSqlDialect().placeholder(1)).toBe("?");
+    });
+    resetSqlDialect();
+    expect(currentSqlDialect().driver).not.toBe("sqlite");
+  });
+
   test("full-text search is refused off PostgreSQL", () => {
     runWithSqlDialect("mysql", () => {
       expect(() =>

@@ -14,6 +14,7 @@ import { hiringFlag, iso } from "../../lib/serialize.ts";
 import type { CareerPosting } from "../../models/CareerPosting.ts";
 import { Position } from "../../models/Position.ts";
 import { departmentService } from "../departments/service.ts";
+import { jobBoardService } from "../jobBoard/service.ts";
 import { positions } from "../positions/repository.ts";
 import { watchlistService } from "../positions/watchlist.ts";
 import type { UserRecord } from "../users/table.ts";
@@ -142,6 +143,13 @@ export class CareerService {
       { type: "career_posting", id: updated.id },
     );
     await watchlistService.alertPublished(Position.newFromRecord(position), updated.id);
+    await jobBoardService.upsertPublished({
+      careerPostingId: Number(updated.id),
+      positionId: Number(updated.position_id),
+      title: position.name,
+      description: position.description,
+      pinned: false,
+    });
     return updated;
   }
 
@@ -169,6 +177,7 @@ export class CareerService {
       { career_posting_id: updated.id, position_id: updated.position_id },
       { type: "career_posting", id: updated.id },
     );
+    await jobBoardService.remove(Number(updated.id));
     return updated;
   }
 
@@ -307,6 +316,13 @@ export class CareerService {
     );
     if (!publishAt) {
       await watchlistService.alertPublished(position, saved.id);
+      await jobBoardService.upsertPublished({
+        careerPostingId: Number(saved.id),
+        positionId: Number(saved.position_id),
+        title: String(position.get("name")),
+        description: (position.get("description") as string | null) ?? null,
+        pinned: false,
+      });
     }
     await flushCareerBoardCache();
     return saved;
@@ -327,6 +343,7 @@ export class CareerService {
       { career_posting_id: updated.id, position_id: updated.position_id },
       { type: "career_posting", id: updated.id },
     );
+    await jobBoardService.remove(Number(updated.id));
     await flushCareerBoardCache();
     return updated;
   }
@@ -346,6 +363,7 @@ export class CareerService {
       { career_posting_id: updated.id, position_id: updated.position_id },
       { type: "career_posting", id: updated.id },
     );
+    await jobBoardService.remove(Number(updated.id));
     await flushCareerBoardCache();
     return updated;
   }

@@ -1,10 +1,11 @@
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel, type HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { createScimAuthMiddleware } from "@getstrata/core/auth/scimAuthMiddleware";
 import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
 import { CORE_AUTH_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { ValidationError } from "@getstrata/core/errors/http";
+import { ForbiddenError, ValidationError } from "@getstrata/core/errors/http";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import { createLoginThrottleMiddleware } from "@getstrata/core/http/loginThrottleMiddleware";
@@ -14,12 +15,22 @@ import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMid
 import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
 import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
-import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
+import { errorResponse, jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { authManager } from "./currentUser.ts";
+
+function requireCandidatePortal(): Middleware {
+  return async (_request, next) => {
+    const authUser = currentAuthUser();
+    if (authUser?.role !== "candidate" || !authUser.tokenId) {
+      return errorResponse(new ForbiddenError("The apply portal requires a candidate API token."));
+    }
+    return next();
+  };
+}
 
 function formatJsonError(error: unknown) {
   if (error instanceof ValidationError) {
@@ -85,6 +96,10 @@ function touchCookieSession(): Middleware {
   };
 }
 
+function wrapApiChain(middleware: Middleware[], handler: RouteHandler): RouteHandler {
+  return withErrorHandling(withMiddleware(...middleware)(wrapJson(handler)));
+}
+
 export function createKernel(dependencies: AppDependencies): HttpKernel {
   return createHttpKernel(dependencies);
 }
@@ -92,25 +107,31 @@ export function createKernel(dependencies: AppDependencies): HttpKernel {
 export function wrapApi(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
   const kernel = createKernel(dependencies);
   const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
-  return withMiddleware(
-    ...csrfWhenNeeded(),
-    createAuthMiddleware(auth),
-    touchCookieSession(),
-    ...kernel.group("authenticated"),
-    createTenantMiddleware(),
-    ...kernel.group("api"),
-  )(wrapJson(handler));
+  return wrapApiChain(
+    [
+      ...csrfWhenNeeded(),
+      createAuthMiddleware(auth),
+      touchCookieSession(),
+      ...kernel.group("authenticated"),
+      createTenantMiddleware(),
+      ...kernel.group("api"),
+    ],
+    handler,
+  );
 }
 
 export function wrapGuestApi(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
   const kernel = createKernel(dependencies);
   const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
-  return withMiddleware(
-    ...csrfWhenNeeded(),
-    createAuthMiddleware(auth),
-    createTenantMiddleware(),
-    ...kernel.group("api"),
-  )(wrapJson(handler));
+  return wrapApiChain(
+    [
+      ...csrfWhenNeeded(),
+      createAuthMiddleware(auth),
+      createTenantMiddleware(),
+      ...kernel.group("api"),
+    ],
+    handler,
+  );
 }
 
 export function wrapLoginApi(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
@@ -120,12 +141,15 @@ export function wrapLoginApi(dependencies: AppDependencies, handler: RouteHandle
 export function wrapTokenApi(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
   const kernel = createKernel(dependencies);
   const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
-  return withMiddleware(
-    ...loginThrottle(),
-    createAuthMiddleware(auth),
-    createTenantMiddleware(),
-    ...kernel.group("api"),
-  )(wrapJson(handler));
+  return wrapApiChain(
+    [
+      ...loginThrottle(),
+      createAuthMiddleware(auth),
+      createTenantMiddleware(),
+      ...kernel.group("api"),
+    ],
+    handler,
+  );
 }
 
 export function wrapWeb(dependencies: AppDependencies, handler: RouteHandler): RouteHandler {
@@ -179,6 +203,25 @@ export function wrapWebUnverified(
   )(kernel.wrapWeb(handler));
 }
 
+export function wrapCandidateApi(
+  dependencies: AppDependencies,
+  handler: RouteHandler,
+): RouteHandler {
+  const kernel = createKernel(dependencies);
+  const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
+  return wrapApiChain(
+    [
+      ...csrfWhenNeeded(),
+      createAuthMiddleware(auth),
+      createRequireAuthMiddleware(auth),
+      requireCandidatePortal(),
+      createTenantMiddleware(),
+      ...kernel.group("api"),
+    ],
+    handler,
+  );
+}
+
 export function wrapPartnerApi(
   dependencies: AppDependencies,
   ability: string,
@@ -186,13 +229,16 @@ export function wrapPartnerApi(
 ): RouteHandler {
   const kernel = createKernel(dependencies);
   const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
-  return withMiddleware(
-    createAuthMiddleware(auth),
-    createRequireAuthMiddleware(auth),
-    createRequireAbilityMiddleware(createTokenAbilityChecker())(ability),
-    createTenantMiddleware(),
-    ...kernel.group("api"),
-  )(wrapJson(handler));
+  return wrapApiChain(
+    [
+      createAuthMiddleware(auth),
+      createRequireAuthMiddleware(auth),
+      createRequireAbilityMiddleware(createTokenAbilityChecker())(ability),
+      createTenantMiddleware(),
+      ...kernel.group("api"),
+    ],
+    handler,
+  );
 }
 
 export function wrapWebPasswordConfirm(

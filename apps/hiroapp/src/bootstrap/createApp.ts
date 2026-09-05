@@ -28,11 +28,13 @@ import { policyProvider } from "./providers/policy.ts";
 import { queueProvider } from "./providers/queue.ts";
 import { storageProvider } from "./providers/storage.ts";
 import { viewProvider } from "./providers/view.ts";
+import { bindSidecars } from "./sidecars.ts";
 
 export async function createApp(): Promise<{ context: AppContext; routes: AppRouteMap }> {
   assertProductionSecrets();
   await ensureHiroappDatabase();
   bindDatabase();
+  bindSidecars();
 
   configureModulesDirectory(join(import.meta.dir, "../modules"));
   const modules = await ensureModulesLoaded();
@@ -95,7 +97,7 @@ function spaCatchAll(): AppRouteMap {
     if (url.pathname.startsWith("/api/")) {
       return new Response("Not found", { status: 404 });
     }
-    const relative = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+    const relative = url.pathname.replace(/^\/apply\/?/, "") || "index.html";
     const asset = Bun.file(`${dist}/${relative}`);
     if (relative !== "index.html" && (await asset.exists())) {
       return new Response(asset);
@@ -113,8 +115,8 @@ function spaCatchAll(): AppRouteMap {
   });
 
   return {
-    "/*": {
-      GET: handler,
-    },
+    "/apply": { GET: handler },
+    "/apply/": { GET: handler },
+    "/apply/*": { GET: handler },
   };
 }
