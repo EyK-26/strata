@@ -4,6 +4,7 @@ import { applyConditionalGet, etagFromResource, isEtagEnabled } from "@getstrata
 import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
 import { parsePaginationQuery } from "@getstrata/core/http/pagination";
 import { parseMultipartUpload } from "@getstrata/core/http/parseMultipartUpload";
+import { jsonResponse } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { assertValidSignature, temporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { bindModel } from "../../http/bind.ts";

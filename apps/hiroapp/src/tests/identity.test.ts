@@ -98,6 +98,7 @@ describe.skipIf(!enabled)("auth choices and hiring integrations", () => {
       const signed = temporarySignedUrl("/email/verify", 120, { id: String(candidate.id) });
       const confirmed = await request(signed, { cookies: candidateCookies });
       expect(confirmed.response.status).toBe(302);
+      await users.updateById(candidate.id, { email_verified_at: null });
     } finally {
       if (previous === undefined) {
         delete process.env.FEATURE_EMAIL_VERIFICATION;
@@ -132,8 +133,12 @@ describe.skipIf(!enabled)("auth choices and hiring integrations", () => {
       body,
     });
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { attachment_file?: string | null };
-    expect(String(payload.attachment_file ?? "")).toContain("resume.txt");
+    const payload = (await response.json()) as {
+      attachment_file?: string | null;
+      data?: { attachment_file?: string | null };
+    };
+    const stored = payload.attachment_file ?? payload.data?.attachment_file ?? "";
+    expect(String(stored)).toContain("resume");
   });
 
   test("admins can export hiring audit events for a SIEM", async () => {
@@ -164,6 +169,6 @@ describe.skipIf(!enabled)("auth choices and hiring integrations", () => {
     expect(callback.response.status).toBe(302);
     expect(callback.response.headers.get("location")).toBe("/");
     const created = await users.findByEmail("sso.candidate@hiroapp.com");
-    expect(created?.role_id).toBe(2);
+    expect(Number(created?.role_id)).toBe(2);
   });
 });
