@@ -73,7 +73,22 @@ export class TalentPoolService {
     const rows = await talentPool.findAll({
       orderBy: { column: "created_at", direction: "DESC" },
     });
-    return rows.map(serializePoolEntry);
+    return Promise.all(
+      rows.map(async (row) => {
+        const user = await users.findById(row.user_id);
+        return {
+          ...serializePoolEntry(row),
+          user: user
+            ? {
+                id: user.id,
+                first_name: user.first_name,
+                last_name: user.last_name,
+                email: user.email,
+              }
+            : null,
+        };
+      }),
+    );
   }
 
   async forApplication(actor: UserRecord, application: Application) {

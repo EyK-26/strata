@@ -209,7 +209,9 @@ describe.skipIf(!enabled)("Wave 31 talent pool", () => {
     expect(blank.notes).toBeNull();
 
     const listed = await talentPoolService.list(recruiter);
-    expect(listed.some((row) => row.id === created.id && row.status === "active")).toBe(true);
+    expect(
+      listed.some((row) => row.id === created.id && row.status === "active" && row.user?.email),
+    ).toBe(true);
 
     const httpCandidate = await makeCandidate("http");
     const forbiddenList = await jsonRequest("/api/talent-pool", { cookies: candidateCookies });

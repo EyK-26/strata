@@ -1,13 +1,20 @@
 <div class="Interviews">
   <h2>Interviews</h2>
   <% (it.interviews ?? []).forEach((interview) => { %>
-    <div class="list-item">
+    <div class="stack-row">
       <span><%= interview.scheduled_at %></span>
       <span><%= interview.place %></span>
       <span><%= interview.status %></span>
+      <% if ((interview.scorecards ?? []).length) { %>
+        <span>Scorecards: <%= interview.scorecard_summary?.count %> · avg <%= interview.scorecard_summary?.average %></span>
+        <% interview.scorecards.forEach((card) => { %>
+          <span><%= card.overall_score %> · <%= card.recommendation %> · <%= card.notes %></span>
+        <% }) %>
+      <% } %>
       <% if (it.currentUser?.role_id === 2 && interview.status === "scheduled") { %>
         <form action="/interviews/<%= interview.id %>/confirm" method="post">
           <%~ include("../partials/csrf.eta") %>
+          <input type="hidden" name="return_to" value="/interviews" />
           <button>Confirm</button>
         </form>
       <% } %>
@@ -40,6 +47,17 @@
             <label>Where <input type="text" name="place" value="<%= interview.place ?? "" %>" /></label>
             <label>Message <textarea name="text">Your interview has been rescheduled.</textarea></label>
             <button>Reschedule</button>
+          </form>
+          <form action="/interviews/<%= interview.id %>/complete" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/interviews" />
+            <label>Notes <textarea name="notes"></textarea></label>
+            <button type="submit">Complete interview</button>
+          </form>
+          <form action="/interviews/<%= interview.id %>/cancel" method="post">
+            <%~ include("../partials/csrf.eta") %>
+            <input type="hidden" name="return_to" value="/interviews" />
+            <button type="submit">Cancel interview</button>
           </form>
           <form action="/interviews/<%= interview.id %>/no-show" method="post">
             <%~ include("../partials/csrf.eta") %>

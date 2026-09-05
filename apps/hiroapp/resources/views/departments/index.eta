@@ -4,9 +4,12 @@
     <p><a href="/departments/create">Create department</a></p>
   <% } %>
   <% (it.departments ?? []).forEach((department) => { %>
-    <div class="list-item">
+    <div class="stack-row">
       <span><%= department.name %></span>
       <span><%= department.hiring_frozen ? "frozen" : "hiring" %></span>
+      <% if (it.currentUser?.role_id !== 2) { %>
+        <a href="/departments/<%= department.id %>">Hiring team</a>
+      <% } %>
       <% if (it.currentUser?.role_id === 1) { %>
         <% if (department.hiring_frozen) { %>
           <form action="/departments/<%= department.id %>/unfreeze" method="post">

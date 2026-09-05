@@ -6,8 +6,10 @@ import { redirectResponse } from "@getstrata/core/view";
 import { authorize, requireCurrentUser } from "../../http/currentUser.ts";
 import { renderPage } from "../../http/view.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
+import { isStaff } from "../../lib/roles.ts";
 import { iso } from "../../lib/serialize.ts";
 import { Interview } from "../../models/Interview.ts";
+import { scorecardService } from "../scorecards/service.ts";
 import { interviewService, serializeInterview } from "./service.ts";
 
 export function interviewWebRoutes(dependencies: AppDependencies): AppRouteMap {
@@ -16,12 +18,27 @@ export function interviewWebRoutes(dependencies: AppDependencies): AppRouteMap {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await requireCurrentUser(request);
         const rows = await interviewService.listForActor(user);
-        return renderPage(request, "interviews/index", {
-          interviews: rows.map((row) => ({
-            ...serializeInterview(row),
-            scheduled_at: iso(row.scheduled_at) ?? "",
-          })),
-        });
+        const interviews = await Promise.all(
+          rows.map(async (row) => {
+            const payload = {
+              ...serializeInterview(row),
+              scheduled_at: iso(row.scheduled_at) ?? "",
+            };
+            if (!isStaff(user.role_id)) {
+              return payload;
+            }
+            const listed = await scorecardService.listForInterview(
+              user,
+              Interview.newFromRecord(row),
+            );
+            return {
+              ...payload,
+              scorecards: listed.data,
+              scorecard_summary: listed.summary,
+            };
+          }),
+        );
+        return renderPage(request, "interviews/index", { interviews });
       }),
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const actor = await authorize(request, "applications", "update");
@@ -42,9 +59,10 @@ export function interviewWebRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const actor = await requireCurrentUser(request);
         const id = parsePositiveIntParam(routeParams(request).id, "id");
+        const { fields } = await parseFormBody(request);
         const interview = await Interview.findOrFail(id);
         await interviewService.confirm(actor, interview);
-        return redirectResponse("/interviews");
+        return redirectResponse(fields.return_to || "/interviews");
       }),
     },
     "/interviews/:id/complete": {
@@ -61,9 +79,10 @@ export function interviewWebRoutes(dependencies: AppDependencies): AppRouteMap {
       POST: wrapWebAuthenticated(dependencies, async (request) => {
         const actor = await authorize(request, "applications", "update");
         const id = parsePositiveIntParam(routeParams(request).id, "id");
+        const { fields } = await parseFormBody(request);
         const interview = await Interview.findOrFail(id);
         await interviewService.cancel(actor, interview);
-        return redirectResponse("/interviews");
+        return redirectResponse(fields.return_to || "/interviews");
       }),
     },
     "/interviews/:id/decline": {

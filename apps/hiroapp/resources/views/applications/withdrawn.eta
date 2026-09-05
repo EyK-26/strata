@@ -1,0 +1,16 @@
+<div class="Applications">
+  <h2>Withdrawn applications</h2>
+  <% if (!(it.applications ?? []).length) { %>
+    <p class="hint">No withdrawn applications.</p>
+  <% } %>
+  <% (it.applications ?? []).forEach((application) => { %>
+    <div class="stack-row">
+      <span><%= application.user?.first_name %> <%= application.user?.last_name %></span>
+      <span><%= application.position?.name %></span>
+      <form action="/applications/<%= application.id %>/restore" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <button type="submit">Restore application</button>
+      </form>
+    </div>
+  <% }) %>
+</div>

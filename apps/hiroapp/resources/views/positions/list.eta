@@ -1,8 +1,11 @@
 <div class="OpenPositions">
   <h2>Open Positions</h2>
+  <% if (it.can_restore) { %>
+    <p><a href="/positions/deleted">Deleted positions</a></p>
+  <% } %>
   <% (it.positions ?? []).forEach((position) => { %>
     <div>
-      <a class="list-item" href="/positions/<%= position.id %>">
+      <a class="stack-row" href="/positions/<%= position.id %>">
         <span><%= position.name %></span>
         <span>(<%= (position.applications ?? []).length %>)</span>
       </a>

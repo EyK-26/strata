@@ -14,6 +14,7 @@ import { careerService } from "../modules/careers/service.ts";
 import { statuses } from "../modules/catalog/repository.ts";
 import { backgroundChecks } from "../modules/checks/repository.ts";
 import { serializeBackgroundCheck } from "../modules/checks/service.ts";
+import { commentService } from "../modules/comments/service.ts";
 import { holdService } from "../modules/holds/service.ts";
 import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
@@ -85,7 +86,7 @@ export async function loadPositionWithApplications(positionId: number) {
     updated_at: Date | null;
   }>("department");
 
-  const comments = await position.comments();
+  const comments = await commentService.serializedForPosition(position);
   const requisition = await requisitions.forPosition(positionId);
   const career = await careerService.serializedForPosition(positionId);
   return {
@@ -100,7 +101,7 @@ export async function loadPositionWithApplications(positionId: number) {
         : null,
       department: department ? new NamedResource(department).toArray() : null,
     }),
-    comments: comments.map((row) => row.toArray()),
+    comments,
     referrals: (await referrals.forPosition(positionId)).map(serializeReferral),
     slots: (await slots.forPosition(positionId)).map(serializeSlot),
     requisition: requisition ? serializeRequisition(requisition) : null,
@@ -165,7 +166,7 @@ export async function loadApplicationDetail(applicationId: number) {
     updated_at: Date | null;
   }>("status");
 
-  const comments = await application.comments();
+  const comments = await commentService.serializedForApplication(application);
   const interviewRows = await interviews.forApplication(applicationId);
   const reasonRows = await rejectionReasons.ordered();
   const reasonName = new Map(reasonRows.map((row) => [Number(row.id), row.name]));
@@ -184,7 +185,7 @@ export async function loadApplicationDetail(applicationId: number) {
         : null,
       status: status ? new NamedResource(status).toArray() : null,
     }),
-    comments: comments.map((row) => row.toArray()),
+    comments,
     interviews: interviewRows.map(serializeInterview),
     offers: await offerService.serializedForApplication(applicationId),
     rejections: rejectionRows.map((row) => ({

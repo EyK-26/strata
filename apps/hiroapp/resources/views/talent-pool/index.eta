@@ -7,8 +7,8 @@
     <button type="submit">Keep candidate</button>
   </form>
   <% (it.entries ?? []).forEach((entry) => { %>
-    <div class="list-item">
-      <span><%= entry.user_id %> · <%= entry.status %> · <%= entry.notes %></span>
+    <div class="stack-row">
+      <span><%= entry.user ? (entry.user.first_name + " " + entry.user.last_name + " · " + entry.user.email) : entry.user_id %> · <%= entry.status %> · <%= entry.notes %></span>
       <% if (entry.status === "active") { %>
         <form action="/talent-pool/<%= entry.id %>/reach-out" method="post">
           <%~ include("../partials/csrf.eta") %>

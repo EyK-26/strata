@@ -90,6 +90,9 @@ describe.skipIf(!enabled)("Wave 34 position requisitions", () => {
     const seat = await openSeat();
 
     expect(await requisitionService.forPosition(recruiter, seat)).toBeNull();
+    await expect(requisitionService.listSubmitted(candidate)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
     await expect(requisitionService.forPosition(candidate, seat)).rejects.toBeInstanceOf(
       ForbiddenError,
     );
@@ -108,6 +111,12 @@ describe.skipIf(!enabled)("Wave 34 position requisitions", () => {
     expect(serializeRequisition({ ...created, status: "nope" as never }).status).toBe("submitted");
     expect((await seat.requisition())?.id).toBe(created.id);
     await expect(requisitionService.submit(recruiter, seat)).rejects.toBeInstanceOf(ConflictError);
+    expect(
+      (await requisitionService.listSubmitted(recruiter)).some((row) => row.id === created.id),
+    ).toBe(true);
+    expect(
+      (await requisitionService.listSubmitted(admin)).some((row) => row.id === created.id),
+    ).toBe(true);
 
     await expect(
       requisitionService.approve(recruiter, await Requisition.findOrFail(created.id)),

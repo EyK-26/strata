@@ -10,6 +10,12 @@ import { requisitionService, serializeRequisition } from "./service.ts";
 
 export function requisitionRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
+    "/api/requisitions": {
+      GET: wrapApi(dependencies, async (request) => {
+        const actor = await requireCurrentUser(request);
+        return jsonResponse(await requisitionService.listSubmitted(actor));
+      }),
+    },
     "/api/positions/:id/requisition": {
       GET: wrapApi(
         dependencies,

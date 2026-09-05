@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { UnprocessableEntityError } from "@getstrata/core/errors/http";
 import { Position } from "../models/Position.ts";
 import { User } from "../models/User.ts";
-import { commentService } from "../modules/comments/service.ts";
+import { commentService, serializeComment } from "../modules/comments/service.ts";
 import {
   bootHiroapp,
   collectCookies,
@@ -83,6 +83,13 @@ describe.skipIf(!enabled)("Wave 19 hiring comments", () => {
     expect(note.get("body")).toBe("pipeline note");
     const listed = await commentService.forApplication(application);
     expect(listed.some((row) => Number(row.id) === Number(note.id))).toBe(true);
+    expect(serializeComment(note).author).toBeNull();
+    const named = await commentService.serializedForApplication(application);
+    expect(
+      named.some(
+        (row) => row.body === "pipeline note" && row.author?.first_name === recruiter.first_name,
+      ),
+    ).toBe(true);
 
     const seat = await Position.create({
       user_id: null,
@@ -101,6 +108,7 @@ describe.skipIf(!enabled)("Wave 19 hiring comments", () => {
     expect(
       (await commentService.forPosition(seat)).some((row) => Number(row.id) === Number(onSeat.id)),
     ).toBe(true);
+    expect((await commentService.serializedForPosition(seat)).length).toBeGreaterThan(0);
 
     const httpApp = await jsonRequest(`/api/applications/${application.id}/comments`, {
       cookies: recruiterCookies,

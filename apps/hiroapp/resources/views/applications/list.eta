@@ -1,7 +1,34 @@
 <div class="Applications">
   <h2><%= it.title ?? "Your Applications" %></h2>
+  <% if (it.statuses) { %>
+    <form class="PipelineFilter" method="get" action="/applications">
+      <label>Search <input name="search" value="<%= it.filters?.search ?? "" %>" /></label>
+      <label>Status
+        <select name="status_id">
+          <option value="">All</option>
+          <% it.statuses.forEach((status) => { %>
+            <option value="<%= status.id %>" <%= Number(it.filters?.status_id) === Number(status.id) ? "selected" : "" %>><%= status.name %></option>
+          <% }) %>
+        </select>
+      </label>
+      <% if ((it.departments ?? []).length) { %>
+        <label>Department
+          <select name="department_id">
+            <option value="">All</option>
+            <% it.departments.forEach((department) => { %>
+              <option value="<%= department.id %>" <%= Number(it.filters?.department_id) === Number(department.id) ? "selected" : "" %>><%= department.name %></option>
+            <% }) %>
+          </select>
+        </label>
+      <% } %>
+      <button type="submit">Filter pipeline</button>
+    </form>
+  <% } %>
+  <% if (it.can_export) { %>
+    <p><a href="/applications/export">Export applications</a> · <a href="/applications/withdrawn">Withdrawn applications</a></p>
+  <% } %>
   <% (it.applications ?? []).forEach((application) => { %>
-    <a class="list-item" href="/applications/<%= application.id %>">
+    <a class="stack-row" href="/applications/<%= application.id %>">
       <% if (application.user) { %>
         <span><%= application.user.first_name %> <%= application.user.last_name %></span>
       <% } %>

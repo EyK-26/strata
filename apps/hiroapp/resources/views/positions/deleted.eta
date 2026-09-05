@@ -1,0 +1,15 @@
+<div class="OpenPositions">
+  <h2>Deleted positions</h2>
+  <% if (!(it.positions ?? []).length) { %>
+    <p class="hint">No deleted positions.</p>
+  <% } %>
+  <% (it.positions ?? []).forEach((position) => { %>
+    <div class="stack-row">
+      <span><%= position.name %></span>
+      <form action="/positions/<%= position.id %>/restore" method="post">
+        <%~ include("../partials/csrf.eta") %>
+        <button type="submit">Restore position</button>
+      </form>
+    </div>
+  <% }) %>
+</div>

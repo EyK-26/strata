@@ -1,4 +1,5 @@
 <div class="ApplicationDetail">
+  <% const roleId = Number(it.currentUser?.role_id ?? it.roleId) %>
   <div class="ApplicationDetailHeader">
     <h2><%= it.application.user?.first_name %> <%= it.application.user?.last_name %></h2>
   </div>
@@ -16,11 +17,11 @@
         <% if (it.application.status_id < 5) { %>
           <form action="/applications/<%= it.application.id %>/end" method="post">
             <%~ include("../partials/csrf.eta") %>
-            <button type="submit"><%= it.roleId === 2 ? "Retrieve Your Application" : "Reject" %></button>
+            <button type="submit"><%= roleId === 2 ? "Retrieve Your Application" : "Reject" %></button>
           </form>
         <% } %>
       </div>
-      <div class="<%= it.roleId !== 2 ? 'progress hasButton' : 'progress' %>">
+      <div class="<%= roleId !== 2 ? 'progress hasButton' : 'progress' %>">
         <% it.all_statuses.forEach((status) => { %>
           <% let className = "status" %>
           <% if (status.id === 6) { className += " ended" } %>
@@ -28,13 +29,13 @@
           <div class="<%= className %>">
             <div class="circle"></div>
             <span><%= status.name %></span>
-            <% if (it.roleId !== 2 && status.id === it.application.status_id && it.application.status_id < 4) { %>
+            <% if (roleId !== 2 && status.id === it.application.status_id && it.application.status_id < 4) { %>
               <form action="/applications/<%= it.application.id %>/move" method="post">
                 <%~ include("../partials/csrf.eta") %>
                 <button type="submit">Move To Next Stage</button>
               </form>
             <% } %>
-            <% if (it.roleId !== 2 && status.id === it.application.status_id && it.application.status_id === 4) { %>
+            <% if (roleId !== 2 && status.id === it.application.status_id && it.application.status_id === 4) { %>
               <form action="/applications/<%= it.application.id %>/move" method="post">
                 <%~ include("../partials/csrf.eta") %>
                 <button type="submit">Hire</button>
@@ -43,20 +44,26 @@
           </div>
         <% }) %>
       </div>
-      <% if (it.roleId !== 2 && it.application.status_id < 5) { %>
+      <% if (roleId !== 2 && it.application.status_id < 5 && (it.transfer_seats ?? []).length) { %>
         <form class="TransferForm" action="/applications/<%= it.application.id %>/transfer" method="post">
           <%~ include("../partials/csrf.eta") %>
-          <label>Hiring seat id <input type="number" name="position_id" min="1" required /></label>
+          <label>Hiring seat
+            <select name="position_id" required>
+              <% (it.transfer_seats ?? []).forEach((seat) => { %>
+                <option value="<%= seat.id %>"><%= seat.name %></option>
+              <% }) %>
+            </select>
+          </label>
           <button type="submit">Transfer application</button>
         </form>
       <% } %>
-      <% if (it.roleId === 2 && it.application.status_id < 5) { %>
+      <% if (roleId === 2 && it.application.status_id < 5) { %>
         <form action="/applications/<%= it.application.id %>/withdraw" method="post">
           <%~ include("../partials/csrf.eta") %>
           <button type="submit">Withdraw application</button>
         </form>
       <% } %>
-      <% if (it.roleId !== 2 && it.application.status_id === 2) { %>
+      <% if (roleId !== 2 && it.application.status_id === 2) { %>
         <form class="InterviewScheduleForm" action="/interviews" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="application_id" value="<%= it.application.id %>" />
@@ -72,6 +79,19 @@
         <h3>Interviews</h3>
         <% it.interviews.forEach((interview) => { %>
           <p><%= interview.scheduled_at %> · <%= interview.place %> · <%= interview.status %></p>
+          <% if ((interview.scorecards ?? []).length) { %>
+            <p>Scorecards: <%= interview.scorecard_summary?.count %> · avg <%= interview.scorecard_summary?.average %></p>
+            <% interview.scorecards.forEach((card) => { %>
+              <p><%= card.overall_score %> · <%= card.recommendation %> · <%= card.notes %></p>
+            <% }) %>
+          <% } %>
+          <% if (it.currentUser?.role_id === 2 && interview.status === "scheduled") { %>
+            <form action="/interviews/<%= interview.id %>/confirm" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+              <button type="submit">Confirm interview</button>
+            </form>
+          <% } %>
           <% if (it.currentUser?.role_id === 2 && (interview.status === "scheduled" || interview.status === "confirmed")) { %>
             <form action="/interviews/<%= interview.id %>/decline" method="post">
               <%~ include("../partials/csrf.eta") %>
@@ -79,7 +99,34 @@
               <button type="submit">Decline interview</button>
             </form>
           <% } %>
-          <% if (it.roleId !== 2 && (interview.status === "scheduled" || interview.status === "confirmed")) { %>
+          <% if (roleId !== 2) { %>
+            <form class="ScorecardForm" action="/interviews/<%= interview.id %>/scorecards" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+              <label>Score <input type="number" name="overall_score" min="1" max="5" /></label>
+              <label>Recommendation
+                <select name="recommendation">
+                  <option value="hire">Hire</option>
+                  <option value="hold">Hold</option>
+                  <option value="no_hire">No hire</option>
+                </select>
+              </label>
+              <label>Notes <textarea name="notes"></textarea></label>
+              <button type="submit">Save scorecard</button>
+            </form>
+          <% } %>
+          <% if (roleId !== 2 && (interview.status === "scheduled" || interview.status === "confirmed")) { %>
+            <form action="/interviews/<%= interview.id %>/complete" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+              <label>Notes <textarea name="notes"></textarea></label>
+              <button type="submit">Complete interview</button>
+            </form>
+            <form action="/interviews/<%= interview.id %>/cancel" method="post">
+              <%~ include("../partials/csrf.eta") %>
+              <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
+              <button type="submit">Cancel interview</button>
+            </form>
             <form action="/interviews/<%= interview.id %>/no-show" method="post">
               <%~ include("../partials/csrf.eta") %>
               <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -92,7 +139,7 @@
         <h3>Offers</h3>
         <% it.offers.forEach((offer) => { %>
           <p><%= offer.salary %> · <%= offer.starts_on %> · <%= offer.status %><% if (offer.expires_at) { %> · expires <%= offer.expires_at %><% } %></p>
-          <% if (it.roleId !== 2 && (offer.status === "draft" || offer.status === "sent")) { %>
+          <% if (roleId !== 2 && (offer.status === "draft" || offer.status === "sent")) { %>
             <% if (offer.status === "draft") { %>
               <form action="/offers/<%= offer.id %>/send" method="post">
                 <%~ include("../partials/csrf.eta") %>
@@ -112,7 +159,7 @@
               <button type="submit">Withdraw offer</button>
             </form>
           <% } %>
-          <% if (it.roleId === 2 && offer.status === "sent") { %>
+          <% if (roleId === 2 && offer.status === "sent") { %>
             <form action="/offers/<%= offer.id %>/accept" method="post">
               <%~ include("../partials/csrf.eta") %>
               <button type="submit">Accept offer</button>
@@ -124,7 +171,7 @@
           <% } %>
         <% }) %>
       <% } %>
-      <% if (it.roleId !== 2 && it.application.status_id >= 4 && it.application.status_id < 6) { %>
+      <% if (roleId !== 2 && it.application.status_id >= 4 && it.application.status_id < 6) { %>
         <form class="OfferForm" action="/applications/<%= it.application.id %>/offers" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -151,7 +198,7 @@
       <% if (it.source) { %>
         <p>Source: <%= it.source.source_name %></p>
       <% } %>
-      <% if (it.roleId !== 2) { %>
+      <% if (roleId !== 2) { %>
         <form class="SourceForm" action="/applications/<%= it.application.id %>/source" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -169,7 +216,7 @@
       <% if (it.hold && it.hold.status === "holding") { %>
         <h3>Hold</h3>
         <p><%= it.hold.status %> · <%= it.hold.notes %><% if (it.hold.holds_until) { %> · until <%= it.hold.holds_until %><% } %></p>
-        <% if (it.roleId !== 2) { %>
+        <% if (roleId !== 2) { %>
           <form action="/holds/<%= it.hold.id %>/release" method="post">
             <%~ include("../partials/csrf.eta") %>
             <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -177,7 +224,7 @@
           </form>
         <% } %>
       <% } %>
-      <% if (it.roleId !== 2 && (!it.hold || it.hold.status === "released")) { %>
+      <% if (roleId !== 2 && (!it.hold || it.hold.status === "released")) { %>
         <form class="HoldForm" action="/applications/<%= it.application.id %>/hold" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -189,7 +236,7 @@
       <% if (it.background_check) { %>
         <h3>Background check</h3>
         <p><%= it.background_check.vendor %> · <%= it.background_check.status %> · <%= it.background_check.notes %></p>
-        <% if (it.roleId !== 2 && it.background_check.status === "requested") { %>
+        <% if (roleId !== 2 && it.background_check.status === "requested") { %>
           <form action="/background-checks/<%= it.background_check.id %>/clear" method="post">
             <%~ include("../partials/csrf.eta") %>
             <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -207,7 +254,7 @@
           </form>
         <% } %>
       <% } %>
-      <% if (it.roleId !== 2 && (!it.background_check || it.background_check.status === "cancelled")) { %>
+      <% if (roleId !== 2 && (!it.background_check || it.background_check.status === "cancelled")) { %>
         <form class="BackgroundCheckForm" action="/applications/<%= it.application.id %>/background-check" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -216,7 +263,7 @@
           <button type="submit">Request background check</button>
         </form>
       <% } %>
-      <% if (it.roleId !== 2 && it.talent_pool && it.talent_pool.status === "active") { %>
+      <% if (roleId !== 2 && it.talent_pool && it.talent_pool.status === "active") { %>
         <p>In talent pool</p>
         <form action="/talent-pool/<%= it.talent_pool.id %>/release" method="post">
           <%~ include("../partials/csrf.eta") %>
@@ -224,7 +271,7 @@
           <button type="submit">Release from talent pool</button>
         </form>
       <% } %>
-      <% if (it.roleId !== 2 && (!it.talent_pool || it.talent_pool.status !== "active")) { %>
+      <% if (roleId !== 2 && (!it.talent_pool || it.talent_pool.status !== "active")) { %>
         <form class="TalentPoolForm" action="/applications/<%= it.application.id %>/talent-pool" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -245,7 +292,7 @@
           <% } %>
         <% }) %>
       <% } %>
-      <% if (it.roleId !== 2 && it.application.status_id === 5) { %>
+      <% if (roleId !== 2 && it.application.status_id === 5) { %>
         <form class="OnboardingForm" action="/applications/<%= it.application.id %>/onboarding" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -254,7 +301,7 @@
           <button type="submit">Add onboarding item</button>
         </form>
       <% } %>
-      <% if (it.roleId !== 2 && it.application.status_id < 6) { %>
+      <% if (roleId !== 2 && it.application.status_id < 6) { %>
         <form class="RejectForm" action="/applications/<%= it.application.id %>/reject" method="post">
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
@@ -274,7 +321,7 @@
   <div class="comments">
     <h3>Comments</h3>
     <% (it.comments ?? []).forEach((comment) => { %>
-      <p><%= comment.body %></p>
+      <p><%= comment.author ? (comment.author.first_name + " " + comment.author.last_name) : "Staff" %> · <%= comment.body %></p>
     <% }) %>
     <form action="/applications/<%= it.application.id %>/comments" method="post">
       <%~ include("../partials/csrf.eta") %>

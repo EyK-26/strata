@@ -1,0 +1,36 @@
+<div class="DepartmentTeam">
+  <h2><%= it.department.name %></h2>
+  <p><%= it.department.hiring_frozen ? "Hiring frozen" : "Hiring open" %></p>
+  <p><a href="/departments">All departments</a></p>
+  <h3>Members</h3>
+  <% (it.members ?? []).forEach((member) => { %>
+    <div class="stack-row">
+      <span><%= member.user?.first_name %> <%= member.user?.last_name %> · <%= member.user?.email %> · <%= member.role %></span>
+      <% if (it.can_manage && member.user_id !== it.currentUser?.id) { %>
+        <form action="/departments/<%= it.department.id %>/members/<%= member.user_id %>/remove" method="post">
+          <%~ include("../partials/csrf.eta") %>
+          <button type="submit">Remove</button>
+        </form>
+      <% } %>
+    </div>
+  <% }) %>
+  <% if (it.can_manage) { %>
+    <form class="stack-form" action="/departments/<%= it.department.id %>/invitations" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <label>Invite email <input type="email" name="email" required /></label>
+      <label>Role
+        <select name="role">
+          <option value="member">Member</option>
+          <option value="owner">Owner</option>
+        </select>
+      </label>
+      <button type="submit">Send invite</button>
+    </form>
+  <% } %>
+  <h3>Open invitations</h3>
+  <% (it.invitations ?? []).forEach((invitation) => { %>
+    <div class="stack-row">
+      <span><%= invitation.email %> · <%= invitation.role %> · expires <%= invitation.expires_at %></span>
+    </div>
+  <% }) %>
+</div>

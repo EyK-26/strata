@@ -2,6 +2,8 @@ import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contract
 import { parseFormBody } from "@getstrata/bootstrap/web/forms";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { hashPassword } from "@getstrata/core/auth/password";
+import { ForbiddenError } from "@getstrata/core/errors/http";
+import { jsonResponse } from "@getstrata/core/http/response";
 import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { redirectResponse } from "@getstrata/core/view";
 import { bindModel } from "../../http/bind.ts";
@@ -15,7 +17,7 @@ import {
   loadUserDetail,
   loadUserGraph,
 } from "../../lib/loaders.ts";
-import { isAdmin, isCandidate, isRecruiter, ROLE } from "../../lib/roles.ts";
+import { isAdmin, isCandidate, isRecruiter, isStaff, ROLE } from "../../lib/roles.ts";
 import {
   serializeApplication,
   serializeNamed,
@@ -24,12 +26,14 @@ import {
 } from "../../lib/serialize.ts";
 import { resolveStaffDepartmentId } from "../../lib/staffTeam.ts";
 import { Application } from "../../models/Application.ts";
+import { Interview } from "../../models/Interview.ts";
 import { Position } from "../../models/Position.ts";
 import type { Status } from "../../models/Status.ts";
 import { User } from "../../models/User.ts";
+import { reportingService } from "../applications/reporting.ts";
 import { applications } from "../applications/repository.ts";
 import { ApplicationIndexRequest } from "../applications/requests.ts";
-import { applicationService } from "../applications/service.ts";
+import { applicationService, resolveStaffPositionIds } from "../applications/service.ts";
 import { statuses } from "../catalog/repository.ts";
 import { departments } from "../departments/repository.ts";
 import { inboxService } from "../notifications/inbox.ts";
@@ -37,6 +41,7 @@ import { interviewNotification, notifyUser } from "../notifications/service.ts";
 import { interviewerService } from "../positions/interviewers.ts";
 import { positions } from "../positions/repository.ts";
 import { positionService } from "../positions/service.ts";
+import { scorecardService } from "../scorecards/service.ts";
 import { sourceService } from "../sources/service.ts";
 import { users } from "../users/repository.ts";
 import { failedJobsAdmin } from "./failedJobs.ts";
@@ -50,6 +55,37 @@ function serializeLoadedApplication(application: Application) {
     status: status ? serializeNamed(status) : null,
     user: applicant ? serializeUser(applicant) : null,
   });
+}
+
+async function staffApplicationDetail(
+  actor: Awaited<ReturnType<typeof requireCurrentUser>>,
+  application: Application,
+  detail: Record<string, unknown>,
+) {
+  if (!isStaff(actor.role_id)) {
+    return detail;
+  }
+  const teamId = isRecruiter(actor.role_id) ? await resolveStaffDepartmentId(actor) : undefined;
+  const seats =
+    isRecruiter(actor.role_id) && !teamId
+      ? []
+      : await positions.hiring({ departmentId: teamId ?? undefined });
+  const interviews = await Promise.all(
+    ((detail.interviews as Array<{ id: number }>) ?? []).map(async (interview) => {
+      const listed = await scorecardService.listForInterview(
+        actor,
+        await Interview.findOrFail(interview.id),
+      );
+      return { ...interview, scorecards: listed.data, scorecard_summary: listed.summary };
+    }),
+  );
+  return {
+    ...detail,
+    interviews,
+    transfer_seats: seats
+      .filter((seat) => Number(seat.id) !== Number(application.get("position_id")))
+      .map((seat) => ({ id: Number(seat.id), name: seat.name })),
+  };
 }
 
 async function homeFor(request: Request) {
@@ -202,7 +238,21 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
             }),
           ),
         );
-        return renderPage(request, "positions/index", { positions: payload, roleId: user.role_id });
+        return renderPage(request, "positions/index", {
+          positions: payload,
+          roleId: Number(user.role_id),
+          can_restore: isAdmin(user.role_id),
+        });
+      }),
+    },
+    "/positions/deleted": {
+      GET: wrapWebAuthenticated(dependencies, async (request) => {
+        const user = await requireCurrentUser(request);
+        denyUnless(isAdmin(user.role_id));
+        const rows = await Position.onlyTrashed().get();
+        return renderPage(request, "positions/deleted", {
+          positions: rows.map((row) => serializePosition(row)),
+        });
       }),
     },
     "/positions/:id": {
@@ -287,6 +337,26 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
         ),
       ),
     },
+    "/positions/:id/restore": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          async (id) => {
+            const position = await Position.onlyTrashed().where({ id }).first();
+            if (!position) {
+              throw new ForbiddenError("No deleted position to restore.");
+            }
+            return position;
+          },
+          async (request, position) => {
+            const actor = await authorize(request, "positions", "delete");
+            await positionService.restore(actor, position);
+            return redirectResponse(`/positions/${position.id}`);
+          },
+        ),
+      ),
+    },
     "/position/create": {
       GET: wrapWebAuthenticated(dependencies, async (request) => {
         const user = await authorize(request, "positions", "create");
@@ -318,6 +388,40 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
         return renderPage(request, "applications/index", {
           applications: payload,
           title: isCandidate(user.role_id) ? "Your Applications" : "Hiring pipeline",
+          filters: query,
+          statuses: (await statuses.all()).map((row) => serializeNamed(row)),
+          departments: isStaff(user.role_id)
+            ? (await departments.ordered()).map(serializeNamed)
+            : [],
+          can_export: isStaff(user.role_id),
+        });
+      }),
+    },
+    "/applications/export": {
+      GET: wrapWebAuthenticated(dependencies, async (request) => {
+        const actor = await authorize(request, "applications", "update");
+        return jsonResponse(await reportingService.exportAll(actor), {
+          headers: {
+            "content-disposition": 'attachment; filename="applications.json"',
+          },
+        });
+      }),
+    },
+    "/applications/withdrawn": {
+      GET: wrapWebAuthenticated(dependencies, async (request) => {
+        const user = await requireCurrentUser(request);
+        denyUnless(isStaff(user.role_id), "Staff only.");
+        const positionIds = await resolveStaffPositionIds(user);
+        if (positionIds && positionIds.length === 0) {
+          return renderPage(request, "applications/withdrawn", { applications: [] });
+        }
+        let query = Application.onlyTrashed().with("user", "position", "status");
+        if (positionIds) {
+          query = query.where({ position_id: { in: positionIds } });
+        }
+        const rows = await query.get();
+        return renderPage(request, "applications/withdrawn", {
+          applications: rows.map((application) => serializeLoadedApplication(application)),
         });
       }),
     },
@@ -330,8 +434,12 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, application) => {
             const user = await authorize(request, "applications", "view", application.toObject());
             return renderPage(request, "applications/show", {
-              ...(await loadApplicationDetail(Number(application.id))),
-              roleId: user.role_id,
+              ...(await staffApplicationDetail(
+                user,
+                application,
+                await loadApplicationDetail(Number(application.id)),
+              )),
+              roleId: Number(user.role_id),
             });
           },
         ),
@@ -488,6 +596,26 @@ export function htmlRoutes(dependencies: AppDependencies): AppRouteMap {
             await authorize(request, "applications", "delete", application.toObject());
             await application.delete();
             return redirectResponse("/applications");
+          },
+        ),
+      ),
+    },
+    "/applications/:id/restore": {
+      POST: wrapWebAuthenticated(
+        dependencies,
+        bindModel(
+          "id",
+          async (id) => {
+            const application = await Application.onlyTrashed().where({ id }).first();
+            if (!application) {
+              throw new ForbiddenError("No withdrawn application to restore.");
+            }
+            return application;
+          },
+          async (request, application) => {
+            await authorize(request, "applications", "update");
+            await application.restore();
+            return redirectResponse(`/applications/${application.id}`);
           },
         ),
       ),

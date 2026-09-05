@@ -5,6 +5,8 @@ import { isAdmin, isStaff } from "../../lib/roles.ts";
 import { iso } from "../../lib/serialize.ts";
 import type { Position } from "../../models/Position.ts";
 import type { Requisition } from "../../models/Requisition.ts";
+import { resolveStaffPositionIds } from "../applications/service.ts";
+import { positions } from "../positions/repository.ts";
 import type { UserRecord } from "../users/table.ts";
 import { requisitions } from "./repository.ts";
 import type { RequisitionRecord, RequisitionStatus } from "./table.ts";
@@ -54,6 +56,25 @@ export class RequisitionService {
     assertStaff(actor);
     const row = await requisitions.forPosition(Number(position.id));
     return row ? serializeRequisition(row) : null;
+  }
+
+  async listSubmitted(actor: UserRecord) {
+    assertStaff(actor);
+    const rows = await requisitions.findAll({ where: { status: "submitted" } });
+    const positionIds = await resolveStaffPositionIds(actor);
+    const scoped =
+      positionIds === null
+        ? rows
+        : rows.filter((row) => positionIds.includes(Number(row.position_id)));
+    return Promise.all(
+      scoped.map(async (row) => {
+        const position = await positions.findById(row.position_id);
+        return {
+          ...serializeRequisition(row),
+          position: position ? { id: Number(position.id), name: position.name } : null,
+        };
+      }),
+    );
   }
 
   async submit(actor: UserRecord, position: Position, input: SubmitRequisitionInput = {}) {

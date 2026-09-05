@@ -7,6 +7,9 @@
       <a href="/account">Account</a>
       <a href="/applications">Pipeline</a>
       <a href="/interviews">Interviews</a>
+      <a href="/referrals">Referrals</a>
+      <a href="/requisitions">Requisitions</a>
+      <a href="/inbox">Inbox</a>
       <a href="/talent-pool">Talent pool</a>
       <a href="/merges">Merges</a>
       <a href="/tags">Tags</a>
@@ -33,6 +36,7 @@
       <a href="/account">Account</a>
       <a href="/applications">Your Applications</a>
       <a href="/interviews">Interviews</a>
+      <a href="/inbox">Inbox</a>
       <a href="/positions">Positions</a>
       <a href="/skills">Skills</a>
       <a href="/watching">Watchlist</a>
@@ -46,7 +50,10 @@
       <a href="/applications">Pipeline</a>
       <a href="/dashboard">Dashboard</a>
       <a href="/interviews">Interviews</a>
+      <a href="/referrals">Referrals</a>
+      <a href="/inbox">Inbox</a>
       <a href="/talent-pool">Talent pool</a>
+      <a href="/departments">Departments</a>
       <a href="/merges">Merges</a>
       <a href="/tags">Tags</a>
     </div>
@@ -54,6 +61,7 @@
       <span class="nav-group-label">Seats</span>
       <a href="/offer-templates">Offer templates</a>
       <a href="/position/create">Create New Position</a>
+      <a href="/requisitions">Requisitions</a>
       <a href="/skills">Skills</a>
       <a href="/webhooks">Webhooks</a>
       <a href="/billing">Billing</a>

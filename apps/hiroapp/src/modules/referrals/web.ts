@@ -3,6 +3,7 @@ import { parseFormBody } from "@getstrata/bootstrap/web/forms";
 import { redirectResponse } from "@getstrata/core/view";
 import { bindModel } from "../../http/bind.ts";
 import { requireCurrentUser } from "../../http/currentUser.ts";
+import { renderPage } from "../../http/view.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
 import { Position } from "../../models/Position.ts";
 import { Referral } from "../../models/Referral.ts";
@@ -14,6 +15,14 @@ function returnTo(fields: Record<string, string>, fallback: string) {
 
 export function referralWebRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
+    "/referrals": {
+      GET: wrapWebAuthenticated(dependencies, async (request) => {
+        const actor = await requireCurrentUser(request);
+        return renderPage(request, "referrals/index", {
+          referrals: await referralService.listForReferrer(actor),
+        });
+      }),
+    },
     "/positions/:id/referrals": {
       POST: wrapWebAuthenticated(
         dependencies,

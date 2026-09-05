@@ -3,6 +3,7 @@ import { parseFormBody } from "@getstrata/bootstrap/web/forms";
 import { redirectResponse } from "@getstrata/core/view";
 import { bindModel } from "../../http/bind.ts";
 import { requireCurrentUser } from "../../http/currentUser.ts";
+import { renderPage } from "../../http/view.ts";
 import { wrapWebAuthenticated } from "../../http/wrap.ts";
 import { Position } from "../../models/Position.ts";
 import { Requisition } from "../../models/Requisition.ts";
@@ -14,6 +15,14 @@ function returnTo(fields: Record<string, string>, fallback: string) {
 
 export function requisitionWebRoutes(dependencies: AppDependencies): AppRouteMap {
   return {
+    "/requisitions": {
+      GET: wrapWebAuthenticated(dependencies, async (request) => {
+        const actor = await requireCurrentUser(request);
+        return renderPage(request, "requisitions/index", {
+          requisitions: await requisitionService.listSubmitted(actor),
+        });
+      }),
+    },
     "/positions/:id/requisition": {
       POST: wrapWebAuthenticated(
         dependencies,

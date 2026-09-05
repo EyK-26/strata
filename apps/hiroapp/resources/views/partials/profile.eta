@@ -6,11 +6,18 @@
     <% const unread = notes.filter((n) => !n.read_at) %>
     <% if (notes.length > 0) { %>
       <div class="inbox">
-        <div class="logo_with_number">Inbox: <%= unread.length %></div>
+        <div class="logo_with_number"><a href="/inbox">Inbox</a>: <%= unread.length %></div>
         <% notes.slice(0, 5).forEach((msg) => { %>
-          <div class="<%= msg.read_at ? 'notification_preview message_read' : 'notification_preview' %>">
+        <div class="<%= msg.read_at ? 'notification_preview message_read' : 'notification_preview' %>">
             <span>From: <%= msg.data?.from ?? "HiroApp" %></span>
             <span>Subject: <%= msg.data?.subject ?? msg.type ?? "Notification" %></span>
+            <% if (!msg.read_at) { %>
+              <form action="/inbox/<%= msg.id %>/read" method="post">
+                <%~ include("./csrf.eta") %>
+                <input type="hidden" name="return_to" value="<%= it.currentPath ?? "/" %>" />
+                <button type="submit">Mark as read</button>
+              </form>
+            <% } %>
           </div>
         <% }) %>
         <% if (notes.length > 5) { %>
@@ -20,6 +27,13 @@
               <div class="<%= msg.read_at ? 'notification_preview message_read' : 'notification_preview' %>">
                 <span>From: <%= msg.data?.from ?? "HiroApp" %></span>
                 <span>Subject: <%= msg.data?.subject ?? msg.type ?? "Notification" %></span>
+                <% if (!msg.read_at) { %>
+                  <form action="/inbox/<%= msg.id %>/read" method="post">
+                    <%~ include("./csrf.eta") %>
+                    <input type="hidden" name="return_to" value="<%= it.currentPath ?? "/" %>" />
+                    <button type="submit">Mark as read</button>
+                  </form>
+                <% } %>
               </div>
             <% }) %>
           </details>
