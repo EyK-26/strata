@@ -12,7 +12,7 @@ This README is the map. Each linked guide is written for someone who has used HT
 | Choose cookie sessions, API tokens, JWT, or Basic auth | [docs/AUTH.md](docs/AUTH.md) |
 | Choose PostgreSQL, MySQL, or SQLite | [docs/DATABASE.md](docs/DATABASE.md) |
 | Learn HiroApp as a product and as a teaching app | [docs/HIROAPP.md](docs/HIROAPP.md) |
-| Start my own app | [docs/BUILDING-APPS.md](docs/BUILDING-APPS.md) |
+| Start my own app | [docs/STARTER.md](docs/STARTER.md) and [docs/BUILDING-APPS.md](docs/BUILDING-APPS.md) |
 | Run tests and coverage | [docs/TESTING.md](docs/TESTING.md) |
 | Ship to production | [docs/PRODUCTION.md](docs/PRODUCTION.md) |
 
@@ -37,7 +37,7 @@ PostgreSQL is what we run in CI and in HiroApp OLTP. Named connections can attac
 | `@getstrata/core` | Runtime: auth, HTTP, database, queue, mail, security |
 | `@getstrata/bootstrap` | App boot: kernel, providers, cookie session helpers |
 | `@getstrata/cli` | `strata` commands: `dev`, `start`, `migrate`, `run` |
-| `@getstrata/starter` | `bunx @getstrata/starter my-app` |
+| `@getstrata/starter` | `bunx create-strata my-app` (interactive kits) |
 
 Import **subpaths**, not the root `@getstrata/core` barrel, from application code:
 

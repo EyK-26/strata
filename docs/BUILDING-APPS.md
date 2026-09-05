@@ -5,12 +5,17 @@ HiroApp is the example. Your app should live outside this repo (or in `apps/` on
 ## Scaffold
 
 ```bash
-bunx @getstrata/starter my-app
+bunx create-strata my-app
 cd my-app
 cp .env.example .env
+bun install
+strata migrate
+strata dev
 ```
 
-The starter is a JSON API with `TENANCY_DRIVER=none` (no `tenant` table). Add cookie sessions when you add HTML.
+The CLI is interactive in a terminal. For CI, pass `--kit hobby --yes` (or `team` / `enterprise` / a hiring recipe). You can override every layer (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`).
+
+Kits and flags: [STARTER.md](./STARTER.md). HiroApp cannot be rebuilt from the starter without replacing `apps/hiroapp`. Use `hiroapp-hobby` / `hiroapp-team` / `hiroapp-enterprise` for a new hiring-shaped app.
 
 ## Frontend shapes
 

@@ -161,6 +161,22 @@ describe("newCommand", () => {
       expect(output.logs.some((line) => line.includes("Hybrid mode enabled:"))).toBe(true);
     });
   });
+
+  test("project name delegates to create-strata", async () => {
+    await withTempProject(async (workspace) => {
+      const { newCommand } = await import("../../../src/cli/commands/new");
+      const output = captureConsole();
+
+      try {
+        await newCommand("kit-app", "--kit=hobby", "--yes");
+      } finally {
+        output.restore();
+      }
+
+      expect(existsSync(join(workspace, "kit-app/strata.layers.json"))).toBe(true);
+      expect(output.logs.some((line) => line.includes("strata migrate"))).toBe(true);
+    });
+  });
 });
 
 describe("openapiGenerateCommand", () => {

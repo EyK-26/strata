@@ -1,0 +1,237 @@
+import { existsSync, mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
+import type { ParsedFlags } from "./parseArgs.ts";
+import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
+import { resolveStarterPlan } from "./prompt.ts";
+import {
+  renderAuthDirectory,
+  renderAuthModule,
+  renderAuthProvider,
+  renderCareersModule,
+  renderCareersView,
+  renderHomeView,
+  renderLayout,
+  renderLoginView,
+  renderSiteModule,
+} from "./renderAuth.ts";
+import {
+  renderDockerCompose,
+  renderEnvExample,
+  renderGitignore,
+  renderLayersManifest,
+  renderPackageJson,
+  renderReadme,
+} from "./renderEnv.ts";
+import {
+  renderConfigProvider,
+  renderConfigTs,
+  renderCreateAppTs,
+  renderDatabaseTs,
+  renderFreshTs,
+  renderMigrateTs,
+  renderPreloadTs,
+  renderProvidersIndex,
+  renderQueueProvider,
+  renderRoutesTs,
+  renderSidecarsTs,
+  renderViewTs,
+} from "./renderRuntime.ts";
+import { authUsesCookie, type GenerateOptions, type StarterLayers } from "./types.ts";
+
+const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]*$/i;
+
+function starterPackageRoot(): string {
+  return join(import.meta.dir, "..");
+}
+
+function resolveTemplateRoot(root = starterPackageRoot()): string {
+  const fromDist = join(root, "templates");
+  if (existsSync(join(fromDist, "src"))) {
+    return fromDist;
+  }
+  const nested = join(root, "dist/templates");
+  if (existsSync(join(nested, "src"))) {
+    return nested;
+  }
+  return fromDist;
+}
+
+function resolveOverlayRoot(root = starterPackageRoot()): string {
+  const candidates = [
+    join(root, "templates/overlays"),
+    join(root, "dist/templates/overlays"),
+    join(root, "../../templates/scaffold"),
+  ];
+  for (const candidate of candidates) {
+    if (
+      existsSync(join(candidate, "server-htmx")) ||
+      existsSync(join(candidate, "spa-react")) ||
+      existsSync(join(candidate, "api"))
+    ) {
+      return candidate;
+    }
+  }
+  return candidates[0];
+}
+
+function assertProjectName(projectName: string): void {
+  if (!PROJECT_NAME_PATTERN.test(projectName)) {
+    throw new Error("Project name must contain only letters, numbers, hyphens, and underscores.");
+  }
+}
+
+function applyFrontendOverlays(
+  overlayRoot: string,
+  targetDir: string,
+  layers: StarterLayers,
+): void {
+  if (layers.frontend === "hybrid") {
+    copyOverlayTree(join(overlayRoot, "server-htmx"), targetDir);
+    copyOverlayTree(join(overlayRoot, "spa-react"), targetDir);
+    return;
+  }
+  if (layers.frontend === "server-htmx") {
+    copyOverlayTree(join(overlayRoot, "server-htmx"), targetDir);
+    return;
+  }
+  if (layers.frontend === "spa-react") {
+    copyOverlayTree(join(overlayRoot, "spa-react"), targetDir);
+    return;
+  }
+  copyOverlayTree(join(overlayRoot, "api"), targetDir);
+}
+
+function writeGeneratedFiles(options: GenerateOptions): void {
+  const { targetDir, projectName, layers } = options;
+  const src = join(targetDir, "src");
+
+  writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, layers));
+  writeText(join(targetDir, ".gitignore"), renderGitignore());
+  writeText(join(targetDir, "package.json"), renderPackageJson(projectName));
+  writeText(join(targetDir, "README.md"), renderReadme(projectName, layers));
+  writeText(join(targetDir, "strata.layers.json"), renderLayersManifest(projectName, layers));
+
+  const compose = renderDockerCompose(projectName, layers);
+  if (compose) {
+    writeText(join(targetDir, "docker-compose.yml"), compose);
+  } else {
+    removeIfExists(join(targetDir, "docker-compose.yml"));
+  }
+
+  writeText(join(src, "routes.ts"), renderRoutesTs());
+  writeText(join(src, "lib/view.ts"), renderViewTs());
+  writeText(join(src, "bootstrap/config.ts"), renderConfigTs());
+  writeText(join(src, "bootstrap/preload.ts"), renderPreloadTs(layers, projectName));
+  writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(layers));
+  writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(layers));
+  writeText(join(src, "bootstrap/providers/config.ts"), renderConfigProvider(layers));
+  writeText(join(src, "bootstrap/providers/queue.ts"), renderQueueProvider());
+  writeText(join(src, "bootstrap/providers/index.ts"), renderProvidersIndex());
+  writeText(join(src, "bootstrap/providers/auth.ts"), renderAuthProvider(layers));
+  writeText(join(src, "db/migrate.ts"), renderMigrateTs(layers));
+  writeText(join(src, "db/fresh.ts"), renderFreshTs(layers));
+  writeText(join(src, "modules/site/index.ts"), renderSiteModule(layers));
+
+  const directory = renderAuthDirectory(layers);
+  if (directory) {
+    writeText(join(src, "bootstrap/authDirectory.ts"), directory);
+  }
+
+  const sidecars = renderSidecarsTs(layers);
+  if (sidecars) {
+    writeText(join(src, "bootstrap/sidecars.ts"), sidecars);
+  }
+
+  const authModule = renderAuthModule(layers);
+  if (authModule) {
+    writeText(join(src, "modules/auth/index.ts"), authModule);
+  }
+
+  const careers = renderCareersModule(layers);
+  if (careers) {
+    writeText(join(src, "modules/careers/index.ts"), careers);
+    writeText(join(targetDir, "views/careers.eta"), renderCareersView());
+  }
+
+  writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, layers));
+  writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(layers, projectName));
+  if (authUsesCookie(layers.auth)) {
+    writeText(join(targetDir, "views/auth/login.eta"), renderLoginView());
+  }
+
+  mkdirSync(join(targetDir, "storage"), { recursive: true });
+  writeText(join(targetDir, "storage/.gitkeep"), "");
+}
+
+function printNextSteps(projectName: string, layers: StarterLayers, compose: boolean): void {
+  console.log(`\nCreated Strata app in ${projectName}/\n`);
+  console.log(
+    `Kit: ${layers.kit}  frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}`,
+  );
+  console.log("\nNext steps:");
+  console.log(`  cd ${projectName}`);
+  console.log("  cp .env.example .env");
+  if (compose) {
+    console.log("  docker compose up -d");
+  }
+  console.log("  bun install");
+  console.log("  strata migrate");
+  console.log("  strata dev\n");
+}
+
+function generateProject(options: GenerateOptions): void {
+  assertProjectName(options.projectName);
+  if (existsSync(options.targetDir)) {
+    throw new Error(`Directory already exists: ${options.targetDir}`);
+  }
+
+  copyTree(options.templateRoot, options.targetDir, options.projectName, new Set(["overlays"]));
+  applyFrontendOverlays(options.overlayRoot, options.targetDir, options.layers);
+  writeGeneratedFiles(options);
+}
+
+async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<number> {
+  let flags: ParsedFlags;
+  try {
+    flags = parseCreateStrataArgs(argv);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    return 1;
+  }
+
+  if (flags.help) {
+    console.log(usage());
+    return 0;
+  }
+
+  try {
+    const plan = await resolveStarterPlan(flags);
+    const targetDir = resolve(cwd, plan.projectName);
+    generateProject({
+      projectName: plan.projectName,
+      targetDir,
+      layers: plan.layers,
+      templateRoot: resolveTemplateRoot(),
+      overlayRoot: resolveOverlayRoot(),
+    });
+    printNextSteps(
+      plan.projectName,
+      plan.layers,
+      renderDockerCompose(plan.projectName, plan.layers) !== null,
+    );
+    return 0;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    return 1;
+  }
+}
+
+export {
+  generateProject,
+  printNextSteps,
+  resolveOverlayRoot,
+  resolveTemplateRoot,
+  runCreateStrata,
+  starterPackageRoot,
+};

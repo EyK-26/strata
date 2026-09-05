@@ -1,0 +1,39 @@
+{
+  "regenerateFromStarter": false,
+  "reason": "HiroApp already has hiring modules, models, migrations, and views. Recreating apps/hiroapp from create-strata would replace that tree.",
+  "useInstead": [
+    "hiroapp-hobby",
+    "hiroapp-team",
+    "hiroapp-enterprise",
+    "hiroapp_build_from_starter_kit_x_level_hobby",
+    "hiroapp_build_from_starter_kit_x_level_team",
+    "hiroapp_build_from_starter_kit_x_level_enterprise"
+  ],
+  "layers": {
+    "scale": "enterprise",
+    "frontend": "hybrid",
+    "spaPrefix": "/apply",
+    "database": "postgres",
+    "sidecars": {
+      "kiosk": "sqlite",
+      "jobBoard": "mysql"
+    },
+    "auth": {
+      "staffHtml": "cookie",
+      "candidateSpa": "opaque-token",
+      "scripts": "jwt",
+      "partners": "basic-or-opaque-token",
+      "devHeaders": false
+    },
+    "tenancy": "rls",
+    "cache": "redis",
+    "queue": "redis",
+    "mail": "log-or-smtp",
+    "extras": {
+      "mfa": true,
+      "emailVerification": true,
+      "scim": true,
+      "metrics": true
+    }
+  }
+}

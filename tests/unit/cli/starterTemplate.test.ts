@@ -12,6 +12,7 @@ describe("starter template CLI", () => {
     };
 
     expect(packageJson.dependencies["@getstrata/cli"]).toBe("^0.2.0");
+    expect(packageJson.dependencies["@getstrata/core"]).toBe("^0.7.3");
     expect(packageJson.scripts.dev).toBe("strata dev");
     expect(packageJson.scripts.start).toBe("strata start");
     expect(packageJson.scripts["db:migrate"]).toBe("strata migrate");
@@ -19,7 +20,10 @@ describe("starter template CLI", () => {
   });
 
   test("create-strata next steps use strata commands", async () => {
-    const source = await readFile(join(process.cwd(), "packages/strata-starter/cli.ts"), "utf8");
+    const source = await readFile(
+      join(process.cwd(), "packages/strata-starter/src/generate.ts"),
+      "utf8",
+    );
     expect(source).toContain("strata migrate");
     expect(source).toContain("strata dev");
     expect(source).not.toContain("bun run db:migrate");

@@ -93,6 +93,10 @@ bun run test:hiroapp:coverage
 
 Candidates are applicants. They are not SCIM employees and not org-wide API owners.
 
+## Starter kits
+
+HiroApp is not generated from `create-strata`. Recreating this tree from a kit would drop hiring modules and migrations. `starter-layers.json` in this directory is the retroactive layer map. New hiring-shaped apps should use `--kit hiroapp-hobby`, `hiroapp-team`, or `hiroapp-enterprise`. Guide: [STARTER.md](./STARTER.md).
+
 ## Tests
 
 HiroApp tests live in `apps/hiroapp/src/tests`. Set `HIROAPP_TEST=1`. Coverage is gated by `scripts/assert-hiroapp-coverage.ts`.
