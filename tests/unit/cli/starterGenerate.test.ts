@@ -18,9 +18,9 @@ import {
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { defaultLayers, exampleAppLayers } from "../../../packages/strata-starter/src/presets.ts";
 import { type Prompter, promptLayers } from "../../../packages/strata-starter/src/prompt.ts";
+import { repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
-const repoRoot = process.cwd();
 const ENV_KEYS = [
   "DATABASE_URL",
   "APP_ENV",
@@ -341,7 +341,7 @@ describe("create-strata CLI", () => {
   test("prints help without kit levels", async () => {
     const result = Bun.spawnSync({
       cmd: ["bun", "packages/strata-starter/cli.ts", "--help"],
-      cwd: process.cwd(),
+      cwd: repoRoot,
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -357,7 +357,7 @@ describe("create-strata CLI", () => {
   test("scaffolds with --yes", async () => {
     const root = await tempDir();
     const result = Bun.spawnSync({
-      cmd: ["bun", join(process.cwd(), "packages/strata-starter/cli.ts"), "cli-hobby", "--yes"],
+      cmd: ["bun", join(repoRoot, "packages/strata-starter/cli.ts"), "cli-hobby", "--yes"],
       cwd: root,
       stdout: "pipe",
       stderr: "pipe",
@@ -375,7 +375,7 @@ describe("create-strata CLI", () => {
     const result = Bun.spawnSync({
       cmd: [
         "bun",
-        join(process.cwd(), "packages/strata-starter/cli.ts"),
+        join(repoRoot, "packages/strata-starter/cli.ts"),
         "cli-team-local",
         "--frontend",
         "server-htmx",
@@ -438,7 +438,7 @@ describe("create-strata CLI", () => {
   test("sqlite API app boots and answers GET /health", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["boot-hobby", "--yes"]);
-    const repo = process.cwd();
+    const repo = repoRoot;
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
     };
@@ -455,7 +455,6 @@ describe("create-strata CLI", () => {
     });
     expect(install.exitCode).toBe(0);
 
-    const originalCwd = process.cwd();
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
     process.env.APP_ENV = "local";
@@ -479,7 +478,7 @@ describe("create-strata CLI", () => {
         await closeDatabase();
       }
     } finally {
-      process.chdir(originalCwd);
+      process.chdir(repoRoot);
     }
   });
 
@@ -493,7 +492,7 @@ describe("create-strata CLI", () => {
       "--yes",
     ]);
 
-    const repo = process.cwd();
+    const repo = repoRoot;
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
     };
@@ -509,7 +508,6 @@ describe("create-strata CLI", () => {
     });
     expect(install.exitCode).toBe(0);
 
-    const originalCwd = process.cwd();
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
     process.env.APP_ENV = "local";
@@ -539,7 +537,7 @@ describe("create-strata CLI", () => {
         await closeDatabase();
       }
     } finally {
-      process.chdir(originalCwd);
+      process.chdir(repoRoot);
     }
   });
 });

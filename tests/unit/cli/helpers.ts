@@ -1,3 +1,7 @@
+import { join } from "node:path";
+
+const repoRoot = join(import.meta.dir, "../../..");
+
 function captureConsole(): {
   logs: string[];
   errors: string[];
@@ -45,14 +49,49 @@ function mockProcessExit(): {
   };
 }
 
-async function runCli(args: string[]): Promise<{
+function cliTestEnv(overrides: Record<string, string | undefined> = {}): Record<string, string> {
+  const env: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value !== "string") {
+      continue;
+    }
+    if (key.startsWith("BUN_TEST") || key === "NODE_V8_COVERAGE") {
+      continue;
+    }
+    env[key] = value;
+  }
+
+  env.MAIL_DRIVER = "log";
+  env.CACHE_DRIVER ??= "array";
+  env.QUEUE_DRIVER ??= "sync";
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      delete env[key];
+    } else {
+      env[key] = value;
+    }
+  }
+
+  return env;
+}
+
+function formatCliResult(result: { stdout: string; stderr: string; exitCode: number }): string {
+  return `exit=${result.exitCode}\n--- stdout ---\n${result.stdout}\n--- stderr ---\n${result.stderr}`;
+}
+
+async function runCli(
+  args: string[],
+  envOverrides?: Record<string, string | undefined>,
+): Promise<{
   stdout: string;
   stderr: string;
   exitCode: number;
 }> {
-  const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", ...args], {
-    cwd: process.cwd(),
-    env: process.env,
+  const proc = Bun.spawn(["bun", join(repoRoot, "src/cli/index.ts"), ...args], {
+    cwd: repoRoot,
+    env: cliTestEnv(envOverrides),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -66,4 +105,4 @@ async function runCli(args: string[]): Promise<{
   return { stdout, stderr, exitCode };
 }
 
-export { captureConsole, mockProcessExit, runCli };
+export { captureConsole, cliTestEnv, formatCliResult, mockProcessExit, repoRoot, runCli };

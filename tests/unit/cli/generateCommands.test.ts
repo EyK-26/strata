@@ -3,13 +3,12 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { captureConsole } from "./helpers";
+import { captureConsole, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
-const originalCwd = process.cwd();
 
 afterEach(async () => {
-  process.chdir(originalCwd);
+  process.chdir(repoRoot);
 
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();

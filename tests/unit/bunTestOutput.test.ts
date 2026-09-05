@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   bunTestsFailed,
   digestBunTestOutput,
+  failingTestLines,
   parseLastFailCount,
 } from "../../scripts/bun-test-output.ts";
 
@@ -27,5 +28,34 @@ describe("bun test output helpers", () => {
     expect(bunTestsFailed("no summary here", 0)).toBe(true);
     expect(bunTestsFailed(" 1 fail\n", 0)).toBe(true);
     expect(bunTestsFailed(" 0 fail\n", 1)).toBe(true);
+  });
+
+  test("keeps ANSI-stripped expected/received lines and error blocks", () => {
+    const output = [
+      "\u001B[31m(fail) cli index > runs help command\u001B[0m",
+      "\u001B[31merror: CLI help failed.\u001B[0m",
+      "--- stdout ---",
+      "Available commands:",
+      "--- stderr ---",
+      "Unknown command: src/cli/index.ts",
+      "      at <unknown> (tests/unit/cli/index.test.ts:8:24)",
+      "(pass) next test",
+      "\u001B[32mExpected:\u001B[0m 0",
+      "\u001B[31mReceived:\u001B[0m 1",
+    ].join("\n");
+
+    const digest = digestBunTestOutput(output);
+    expect(digest).toContain("(fail) cli index > runs help command");
+    expect(digest).toContain("error: CLI help failed.");
+    expect(digest).toContain("--- stdout ---");
+    expect(digest).toContain("Unknown command: src/cli/index.ts");
+    expect(digest).toContain("Expected: 0");
+    expect(digest).toContain("Received: 1");
+    expect(digest).not.toContain("\u001B[");
+
+    const details = failingTestLines(output);
+    expect(details).toContain("(fail) cli index > runs help command");
+    expect(details).toContain("--- stderr ---");
+    expect(details).not.toContain("(pass) next test");
   });
 });

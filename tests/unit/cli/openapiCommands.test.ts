@@ -8,17 +8,16 @@ import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/open
 import { openapiCheckCommand } from "../../../src/cli/commands/openapiCheck";
 import { openapiValidateCommand } from "../../../src/cli/commands/openapiValidate";
 import { registerOpenApiRoutes } from "../../../src/cli/commands/registerOpenApiRoutes";
-import { captureConsole, mockProcessExit } from "./helpers";
+import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
-const originalCwd = process.cwd();
 
 beforeAll(async () => {
   await ensureModulesLoaded();
 });
 
 afterEach(async () => {
-  process.chdir(originalCwd);
+  process.chdir(repoRoot);
 
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();

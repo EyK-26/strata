@@ -1,6 +1,8 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
 import type { Mailer } from "@getstrata/core/mail/mailer";
 import type { StorageManager } from "@getstrata/core/storage/storage";
+import { restoreEnvVar } from "../../helpers/restoreEnv";
+import { cliTestEnv, formatCliResult, repoRoot } from "./helpers";
 
 afterAll(() => {
   mock.restore();
@@ -43,21 +45,34 @@ describe("tinker preload script", () => {
       }));
     `;
 
+    const previousMailDriver = process.env.MAIL_DRIVER;
+    const previousMailHost = process.env.MAIL_HOST;
+    process.env.MAIL_DRIVER = "smtp";
+    delete process.env.MAIL_HOST;
+
     const proc = Bun.spawn(["bun", "-e", script], {
-      cwd: process.cwd(),
+      cwd: repoRoot,
       stdout: "pipe",
       stderr: "pipe",
-      env: process.env,
+      env: cliTestEnv(),
     });
 
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
+    try {
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
 
-    expect(exitCode).toBe(0);
-    expect(stderr).toBe("");
-    expect(JSON.parse(stdout)).toMatchObject({ hasContainer: true });
+      if (exitCode !== 0 || stderr !== "") {
+        throw new Error(
+          `tinker one-liner failed.\n${formatCliResult({ stdout, stderr, exitCode })}`,
+        );
+      }
+      expect(JSON.parse(stdout)).toMatchObject({ hasContainer: true });
+    } finally {
+      restoreEnvVar("MAIL_DRIVER", previousMailDriver);
+      restoreEnvVar("MAIL_HOST", previousMailHost);
+    }
   });
 });
