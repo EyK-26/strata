@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 0.7.1
+
+- `readSpaPrefix` / `normalizeSpaPrefix` own `SPA_PREFIX` (default `/app`). Apps set the env value. They do not copy a second static-file server.
+- The log mail driver records `htmlBytes` instead of dumping the HTML document onto stdout.
+
 ## 0.7.0
 
 - `FRONTEND_MODE=hybrid` turns on staff HTML and the candidate SPA together. Views are on for `server-htmx` and `hybrid`. The SPA is on for `spa-react` and `hybrid`.

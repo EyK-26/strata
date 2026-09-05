@@ -1,4 +1,5 @@
 const FRONTEND_MODES = ["api", "server-htmx", "spa-react", "hybrid"] as const;
+const DEFAULT_SPA_PREFIX = "/app";
 
 type FrontendMode = (typeof FRONTEND_MODES)[number];
 
@@ -32,14 +33,31 @@ function isSpaEnabled(): boolean {
   return isSpaMode(readFrontendMode());
 }
 
+function normalizeSpaPrefix(value: string | undefined): string {
+  const raw = (value ?? DEFAULT_SPA_PREFIX).trim() || DEFAULT_SPA_PREFIX;
+  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  const trimmed = withSlash.replace(/\/+$/, "");
+  if (trimmed.length === 0 || trimmed === "/") {
+    return DEFAULT_SPA_PREFIX;
+  }
+  return trimmed;
+}
+
+function readSpaPrefix(): string {
+  return normalizeSpaPrefix(process.env.SPA_PREFIX);
+}
+
 export type { FrontendMode };
 export {
+  DEFAULT_SPA_PREFIX,
   FRONTEND_MODE_PATTERN,
   FRONTEND_MODES,
   isSpaEnabled,
   isSpaMode,
   isViewsEnabled,
   isViewsMode,
+  normalizeSpaPrefix,
   parseFrontendMode,
   readFrontendMode,
+  readSpaPrefix,
 };

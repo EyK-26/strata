@@ -18,8 +18,8 @@ Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMod
 
 1. **`api`.** JSON routes only. Clients send Bearer or Basic. No CSRF.
 2. **`server-htmx`.** Eta HTML + HTMX. Cookie session + CSRF.
-3. **`spa-react`.** JSON API plus a SPA document under `/app`. Prefer opaque tokens for the SPA. HiroApp's candidate portal mounts at `/apply` instead.
-4. **`hybrid`.** Staff HTML at `/` plus a SPA prefix. Framework SPA routes stay under `/app/*` and do not redirect `/`. HiroApp uses `/apply` for the candidate portal.
+3. **`spa-react`.** JSON API plus a SPA document under `SPA_PREFIX` (default `/app`). Prefer opaque tokens for the SPA. HiroApp sets `SPA_PREFIX=/apply`.
+4. **`hybrid`.** Staff HTML at `/` plus a SPA prefix. Framework SPA routes stay under `SPA_PREFIX` (`/app`, `/app/`, `/app/*` by default) and do not redirect `/`. Apps call `mergeSpaRoutes` with `distDirectory` and `wrap`. Do not copy a second static-file server.
 
 `.eta` files are HTML plus Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`). Class shorthand such as `section.section` fails at render.
 

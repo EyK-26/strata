@@ -7,6 +7,7 @@ import {
   assertAppDependenciesComplete,
   type MutableAppDependencies,
 } from "@getstrata/bootstrap/contracts";
+import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
 import {
   configureModulesDirectory,
   ensureModulesLoaded,
@@ -15,7 +16,7 @@ import { createHealthRoutes } from "@getstrata/bootstrap/health";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
-import { isSpaEnabled, isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
+import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { ensureHiroappDatabase } from "../db/ensureDatabase.ts";
 import { bindHttpContainer } from "../http/currentUser.ts";
 import { wrapSpaDocument } from "../http/wrap.ts";
@@ -83,40 +84,11 @@ export async function createApp(): Promise<{ context: AppContext; routes: AppRou
     }
   }
 
-  if (isSpaEnabled()) {
-    Object.assign(routes, spaCatchAll());
-  }
-
-  return { context, routes };
-}
-
-function spaCatchAll(): AppRouteMap {
-  const dist = join(import.meta.dir, "../../frontend/dist");
-  const handler = wrapSpaDocument(async (request) => {
-    const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) {
-      return new Response("Not found", { status: 404 });
-    }
-    const relative = url.pathname.replace(/^\/apply\/?/, "") || "index.html";
-    const asset = Bun.file(`${dist}/${relative}`);
-    if (relative !== "index.html" && (await asset.exists())) {
-      return new Response(asset);
-    }
-    const index = Bun.file(`${dist}/index.html`);
-    if (await index.exists()) {
-      return new Response(index, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
-    }
-    return Response.json(
-      { error: "SPA build not found. Run `bun run frontend:build`." },
-      { status: 503 },
-    );
-  });
-
   return {
-    "/apply": { GET: handler },
-    "/apply/": { GET: handler },
-    "/apply/*": { GET: handler },
+    context,
+    routes: mergeSpaRoutes(dependencies, routes, {
+      distDirectory: join(import.meta.dir, "../../frontend/dist"),
+      wrap: wrapSpaDocument,
+    }),
   };
 }

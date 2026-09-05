@@ -15,6 +15,7 @@ export const envSchema = defineEnvSchema({
   APP_URL: { default: "http://localhost:3000" },
   APP_KEY_PREFIX: { default: "hiroapp" },
   FRONTEND_MODE: { default: "server-htmx", pattern: FRONTEND_MODE_PATTERN },
+  SPA_PREFIX: { default: "/apply" },
   TENANCY_DRIVER: { default: "rls", pattern: /^(none|rls)$/ },
   QUEUE_DRIVER: { default: "sync", pattern: /^(sync|async|redis)$/ },
   MAIL_DRIVER: { default: "log", pattern: /^(log|smtp)$/ },
@@ -29,6 +30,7 @@ export function loadEnv() {
   process.env.DATABASE_URL = resolveHiroappDatabaseUrl();
   process.env.APP_KEY_PREFIX ??= "hiroapp";
   process.env.APP_NAME ??= "HiroApp";
+  process.env.SPA_PREFIX ??= "/apply";
   const env = validateEnv(envSchema);
   if (env.TENANCY_DRIVER) {
     process.env.TENANCY_DRIVER = env.TENANCY_DRIVER;

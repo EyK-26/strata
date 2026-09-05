@@ -1,24 +1,33 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  DEFAULT_SPA_PREFIX,
   FRONTEND_MODE_PATTERN,
   FRONTEND_MODES,
   isSpaEnabled,
   isSpaMode,
   isViewsEnabled,
   isViewsMode,
+  normalizeSpaPrefix,
   parseFrontendMode,
   readFrontendMode,
+  readSpaPrefix,
 } from "../../src/config/frontend";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("frontend mode", () => {
   const previousMode = process.env.FRONTEND_MODE;
+  const previousPrefix = process.env.SPA_PREFIX;
 
   afterEach(() => {
     if (previousMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {
       restoreEnvVar("FRONTEND_MODE", previousMode);
+    }
+    if (previousPrefix === undefined) {
+      delete process.env.SPA_PREFIX;
+    } else {
+      restoreEnvVar("SPA_PREFIX", previousPrefix);
     }
   });
 
@@ -66,5 +75,16 @@ describe("frontend mode", () => {
     expect(FRONTEND_MODE_PATTERN.test("hybrid")).toBe(true);
     expect(FRONTEND_MODE_PATTERN.test("spa-react")).toBe(true);
     expect(FRONTEND_MODE_PATTERN.test("garbage")).toBe(false);
+  });
+
+  test("readSpaPrefix defaults to /app and normalizes values", () => {
+    delete process.env.SPA_PREFIX;
+    expect(readSpaPrefix()).toBe(DEFAULT_SPA_PREFIX);
+    expect(normalizeSpaPrefix("apply")).toBe("/apply");
+    expect(normalizeSpaPrefix("/apply/")).toBe("/apply");
+    expect(normalizeSpaPrefix("/")).toBe("/app");
+    expect(normalizeSpaPrefix("   ")).toBe("/app");
+    process.env.SPA_PREFIX = "/portal/";
+    expect(readSpaPrefix()).toBe("/portal");
   });
 });

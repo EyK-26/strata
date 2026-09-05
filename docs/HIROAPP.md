@@ -22,7 +22,7 @@ Password for seeded accounts is `password`.
 
 1. **Public careers.** `/careers` lists published and scheduled postings. Guests can read. HTML apply still uses a candidate cookie. The candidate SPA at `/apply` uses an opaque token.
 2. **Staff sign in.** Cookie + CSRF at `/login`. The login page links candidates to `/apply`. Optional `/login/sso` for GitHub, OIDC, or the mock provider when `FEATURE_OAUTH_MOCK=true`.
-3. **Candidate portal.** `FRONTEND_MODE=hybrid` serves React at `/apply`. `POST /api/apply/login` mints a hashed token. Staff cookies and JWTs get 403 on `/api/apply/*`.
+3. **Candidate portal.** `FRONTEND_MODE=hybrid` and `SPA_PREFIX=/apply` serve React through `createSpaRoutes`. `POST /api/apply/login` mints a hashed token. Staff cookies and JWTs get 403 on `/api/apply/*`.
 4. **Email confirm.** With `FEATURE_EMAIL_VERIFICATION=true`, an unverified candidate hitting `/account` is sent to `/email/verify`. The mail contains a signed URL.
 5. **Staff pipeline.** Positions, applications, interviews, scorecards, comments, watchlists. On-site scorecards can land in SQLite first (`/kiosk`), then sync.
 6. **Offers.** Staff send offers. Notes encrypt when `FEATURE_FIELD_ENCRYPTION=true`.

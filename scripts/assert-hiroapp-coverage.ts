@@ -5,6 +5,13 @@
  * same process, so this script is the HiroApp gate.
  */
 
+import {
+  bunTestsFailed,
+  collectSpawnOutput,
+  digestBunTestOutput,
+  reportBunTestFailure,
+} from "./bun-test-output.ts";
+
 const ignore = [
   /\/bootstrap\//,
   /\/db\//,
@@ -56,6 +63,7 @@ const proc = Bun.spawn(
       MAIL_DRIVER: "log",
       CACHE_DRIVER: "array",
       FRONTEND_MODE: "hybrid",
+      SPA_PREFIX: "/apply",
       HIROAPP_SEED_SCALE: "demo",
     },
     stdout: "pipe",
@@ -63,12 +71,11 @@ const proc = Bun.spawn(
   },
 );
 
-const output = `${await new Response(proc.stdout).text()}${await new Response(proc.stderr).text()}`;
-const exitCode = await proc.exited;
-process.stdout.write(output);
+const { output, exitCode } = await collectSpawnOutput(proc);
+process.stdout.write(digestBunTestOutput(output));
 
-if (!/\n 0 fail\n/.test(output) && !/\n0 fail\n/.test(output)) {
-  console.error("HiroApp tests failed.");
+if (bunTestsFailed(output, exitCode)) {
+  reportBunTestFailure("HiroApp", output, exitCode);
   process.exit(exitCode === 0 ? 1 : exitCode);
 }
 

@@ -81,8 +81,8 @@ Set `FRONTEND_MODE`:
 | Value | What you get |
 |-------|----------------|
 | `server-htmx` | HTML from Eta templates plus JSON under `/api` (HiroApp default for local UI) |
-| `spa-react` | JSON API plus a SPA document under `/app` |
-| `hybrid` | Staff HTML at `/` plus a SPA prefix (`/apply` in HiroApp, `/app` in the scaffold) |
+| `spa-react` | JSON API plus a SPA document under `SPA_PREFIX` (default `/app`) |
+| `hybrid` | Staff HTML at `/` plus a SPA prefix (`SPA_PREFIX=/apply` in HiroApp, `/app` in the scaffold) |
 | `api` | JSON only |
 
 HiroApp HTML uses cookie sessions and CSRF. Partner integrations use Bearer tokens or JWT. See [docs/AUTH.md](docs/AUTH.md).

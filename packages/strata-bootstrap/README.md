@@ -34,6 +34,8 @@ HTML apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstra
 
 `wrapWeb` applies the web group (CSRF + flash) and `withErrorHandling`, so CSRF `ForbiddenError` becomes an HTML 403 when views are on (`FRONTEND_MODE=server-htmx` or `hybrid`). `wrapWebGuest` sends signed-in users to `/` by default (pass a string or `(user) => path` to override). `wrapWebLogin` / `wrapWebRegister` include that web group plus throttle. Do not wrap them with `wrapWeb` again. The throttle callback should return an HTML form at 429.
 
+`createSpaRoutes` / `mergeSpaRoutes` serve `SPA_PREFIX` (default `/app`) as `prefix`, `prefix/`, and `prefix/*`. Hybrid does not redirect `/`. Pass `distDirectory` and `wrap` when the app is not the process cwd. Apps should not copy a second static-file server.
+
 `registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. Apps that dispatch model webhooks should call `registerWebhookJobs()` themselves.
 
 These subpaths assemble leftover fixture HTTP for framework tests and are not a generic starter API: `@getstrata/bootstrap/createRoutes`, `@getstrata/bootstrap/schedule`, `@getstrata/bootstrap/createWebRoutes`. New apps should use `buildWebModuleRoutes` / `buildModuleRoutes`. HiroApp uses `createApp()` in `apps/hiroapp`.

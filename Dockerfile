@@ -14,8 +14,9 @@ FROM base AS build
 COPY --from=install /app/node_modules ./node_modules
 COPY . .
 RUN bun run build:framework && bun run build:bootstrap
+# bun prune --production fails on this workspace ("bun.lock does not match
+# package.json") in Bun 1.4. The image runs TypeScript from source.
 ENV NODE_ENV=production
-RUN bun prune --production
 
 FROM base AS release
 COPY --from=build /app/node_modules ./node_modules

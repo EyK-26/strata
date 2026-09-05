@@ -1,5 +1,5 @@
 import { defineEnvSchema, type EnvSchema } from "@getstrata/core/config/envSchema";
-import { FRONTEND_MODE_PATTERN } from "@getstrata/core/runtime/frontendMode";
+import { DEFAULT_SPA_PREFIX, FRONTEND_MODE_PATTERN } from "@getstrata/core/runtime/frontendMode";
 import {
   CACHE_MAX_ENTRIES_CONFIG_KEY,
   CACHE_TTL_MS_CONFIG_KEY,
@@ -71,6 +71,9 @@ const appEnvSchema: EnvSchema = defineEnvSchema({
   FRONTEND_MODE: {
     default: "api",
     pattern: FRONTEND_MODE_PATTERN,
+  },
+  SPA_PREFIX: {
+    default: DEFAULT_SPA_PREFIX,
   },
   API_PREFIX: {
     default: "/api/v1",

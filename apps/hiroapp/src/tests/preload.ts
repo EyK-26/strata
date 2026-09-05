@@ -15,6 +15,7 @@ process.env.DOGFOOD_APP = "hiroapp";
 process.env.APP_KEY_PREFIX = "hiroapp";
 process.env.APP_NAME = "HiroApp";
 process.env.FRONTEND_MODE ??= "server-htmx";
+process.env.SPA_PREFIX ??= "/apply";
 process.env.QUEUE_DRIVER ??= "sync";
 process.env.MAIL_DRIVER ??= "log";
 process.env.CACHE_DRIVER ??= "array";

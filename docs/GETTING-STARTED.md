@@ -36,10 +36,11 @@ APP_NAME=HiroApp
 APP_KEY_PREFIX=hiroapp
 API_PREFIX=/api
 FRONTEND_MODE=server-htmx
+SPA_PREFIX=/apply
 AUTH_DEV_HEADERS=false
 ```
 
-`FRONTEND_MODE=hybrid` also serves the candidate SPA at `/apply` (build it with `bun run --cwd apps/hiroapp frontend:build`). Staff HTML stays at `/`.
+`FRONTEND_MODE=hybrid` also serves the candidate SPA at `SPA_PREFIX` (HiroApp uses `/apply`; build it with `bun run --cwd apps/hiroapp frontend:build`). Staff HTML stays at `/`. The framework serves that prefix through `createSpaRoutes`.
 
 `APP_KEY_PREFIX` names cookies and Redis keys (`hiroapp_session`, `hiroapp:queue:default`). If you run two apps against one Redis, they must not share a prefix.
 

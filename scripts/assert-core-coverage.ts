@@ -6,6 +6,13 @@
  * scripts/assert-hiroapp-coverage.ts.
  */
 
+import {
+  bunTestsFailed,
+  collectSpawnOutput,
+  digestBunTestOutput,
+  reportBunTestFailure,
+} from "./bun-test-output.ts";
+
 const IGNORE_PREFIXES = [
   "src/cli/",
   "src/bootstrap/",
@@ -91,12 +98,12 @@ const proc = Bun.spawn(
   },
 );
 
-const output = `${await new Response(proc.stdout).text()}${await new Response(proc.stderr).text()}`;
-process.stdout.write(output);
+const { output, exitCode } = await collectSpawnOutput(proc);
+process.stdout.write(digestBunTestOutput(output));
 
-if (!/\n 0 fail\n/.test(output) && !/\n0 fail\n/.test(output)) {
-  console.error("Core tests failed.");
-  process.exit(1);
+if (bunTestsFailed(output, exitCode)) {
+  reportBunTestFailure("Core", output, exitCode);
+  process.exit(exitCode === 0 ? 1 : exitCode);
 }
 
 const uncovered: string[] = [];

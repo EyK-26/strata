@@ -1,5 +1,11 @@
 # @getstrata/bootstrap changelog
 
+## 0.4.1
+
+- `createSpaRoutes` reads `SPA_PREFIX`, registers `prefix`, `prefix/`, and `prefix/*`, and accepts `distDirectory` plus `wrap`. Hybrid still does not redirect `/`.
+- `appEnvSchema` defaults `SPA_PREFIX` from core `DEFAULT_SPA_PREFIX`.
+- Peer `@getstrata/core` `^0.7.1`.
+
 ## 0.4.0
 
 - Peer `@getstrata/core` `^0.7.0`.

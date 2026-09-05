@@ -31,6 +31,31 @@ describe("Mailer", () => {
     expect(messages[0]).toContain("Welcome");
   });
 
+  test("log driver records html size instead of dumping the document", async () => {
+    const messages: string[] = [];
+    const originalLog = console.log;
+    console.log = (value?: unknown) => {
+      messages.push(String(value));
+    };
+
+    try {
+      const mailer = new Mailer(new LogMailDriver());
+      await mailer.send({
+        to: "candidate@strata.test",
+        subject: "Application received",
+        body: "Hello",
+        html: "<!DOCTYPE html><html><body>huge hiring template</body></html>",
+      });
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain("htmlBytes");
+    expect(messages[0]).not.toContain("<!DOCTYPE html>");
+    expect(messages[0]).not.toContain("huge hiring template");
+  });
+
   test("smtp driver delegates to the configured transport", async () => {
     const sent: Array<{ to: string; subject: string; body: string; html?: string }> = [];
     const config = {

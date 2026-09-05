@@ -215,7 +215,7 @@ class LogMailDriver implements MailDriver {
         to: message.to,
         subject: message.subject,
         body: message.body,
-        ...(message.html ? { html: message.html } : {}),
+        ...(message.html ? { htmlBytes: Buffer.byteLength(message.html, "utf8") } : {}),
       }),
     );
   }
