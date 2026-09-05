@@ -15,7 +15,7 @@ import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMid
 import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
 import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
-import { errorResponse, jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
+import { errorResponse, jsonResponse, withJsonErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
@@ -55,9 +55,7 @@ export function wrapJson(handler: RouteHandler): RouteHandler {
       if (formatted) {
         return formatted;
       }
-      return withErrorHandling(async () => {
-        throw error;
-      })(request);
+      return errorResponse(error);
     }
   };
 }
@@ -97,7 +95,7 @@ function touchCookieSession(): Middleware {
 }
 
 function wrapApiChain(middleware: Middleware[], handler: RouteHandler): RouteHandler {
-  return withErrorHandling(withMiddleware(...middleware)(wrapJson(handler)));
+  return withJsonErrorHandling(withMiddleware(...middleware)(wrapJson(handler)));
 }
 
 export function createKernel(dependencies: AppDependencies): HttpKernel {

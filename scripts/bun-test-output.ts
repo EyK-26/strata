@@ -63,6 +63,8 @@ export function digestBunTestOutput(output: string): string {
       /expect\(\) calls/.test(line) ||
       /tests across/.test(line) ||
       /^\s*error:/i.test(line) ||
+      /Expected:|Received:/.test(line) ||
+      /^\s+at\s+/.test(line) ||
       /coverage/i.test(line) ||
       /^\s+\S+\s+\|\s+[\d.]+/.test(line) ||
       /^-+/.test(line) ||

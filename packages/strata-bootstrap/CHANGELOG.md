@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 0.4.2
+
+- `HttpKernel.wrapApi` uses `withJsonErrorHandling`. Hybrid views do not turn API errors into HTML.
+
 ## 0.4.1
 
 - `createSpaRoutes` reads `SPA_PREFIX`, registers `prefix`, `prefix/`, and `prefix/*`, and accepts `distDirectory` plus `wrap`. Hybrid still does not redirect `/`.

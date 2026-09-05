@@ -24,7 +24,7 @@ import { createRequireGlobalAdminMiddleware } from "@getstrata/core/http/require
 import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
 import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
-import { withErrorHandling } from "@getstrata/core/http/response";
+import { withErrorHandling, withJsonErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { createSecurityHeadersMiddleware } from "@getstrata/core/http/securityHeadersMiddleware";
 import { createValidateSignatureMiddleware } from "@getstrata/core/http/signedUrl";
@@ -121,7 +121,7 @@ class HttpKernel {
   }
 
   wrapApi(handler: RouteHandler): RouteHandler {
-    return withErrorHandling(this.wrap(["api", "authenticated"], handler));
+    return withJsonErrorHandling(this.wrap(["api", "authenticated"], handler));
   }
 
   wrapWeb(handler: RouteHandler): RouteHandler {

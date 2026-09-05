@@ -45,27 +45,35 @@ describe.skipIf(!enabled)("candidate apply portal", () => {
     expect([200, 503]).toContain(spa.response.status);
   });
 
+  async function expectStatus(response: Response, status: number) {
+    if (response.status !== status) {
+      const body = await response.clone().text();
+      throw new Error(`expected ${status}, got ${response.status}: ${body.slice(0, 500)}`);
+    }
+    expect(response.status).toBe(status);
+  }
+
   test("staff and JWT cannot use the apply portal; candidates mint an opaque token", async () => {
     const staffLogin = await fetch(`${baseUrl}/api/apply/login`, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({ email: "recruiter@hiroapp.com", password: "password" }),
     });
-    expect(staffLogin.status).toBe(403);
+    await expectStatus(staffLogin, 403);
 
     const bad = await fetch(`${baseUrl}/api/apply/login`, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({ email: "candidate@hiroapp.com", password: "wrong" }),
     });
-    expect(bad.status).toBe(422);
+    await expectStatus(bad, 422);
 
     const minted = await fetch(`${baseUrl}/api/apply/login`, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({ email: "candidate@hiroapp.com", password: "password" }),
     });
-    expect(minted.status).toBe(200);
+    await expectStatus(minted, 200);
     const payload = (await minted.json()) as {
       token: string;
       token_type: string;
@@ -76,14 +84,14 @@ describe.skipIf(!enabled)("candidate apply portal", () => {
 
     const auth = { authorization: `Bearer ${payload.token}`, accept: "application/json" };
     const me = await fetch(`${baseUrl}/api/apply/me`, { headers: auth });
-    expect(me.status).toBe(200);
+    await expectStatus(me, 200);
     expect(((await me.json()) as { email: string }).email).toBe("candidate@hiroapp.com");
 
     const cookieBlocked = await request("/api/apply/me", {
       cookies: staffCookies,
       headers: { accept: "application/json" },
     });
-    expect(cookieBlocked.response.status).toBe(403);
+    await expectStatus(cookieBlocked.response, 403);
 
     const candidate = await seededUser("candidate@hiroapp.com");
     const jwt = signJwt({
@@ -94,19 +102,19 @@ describe.skipIf(!enabled)("candidate apply portal", () => {
     const jwtBlocked = await fetch(`${baseUrl}/api/apply/me`, {
       headers: { authorization: `Bearer ${jwt}`, accept: "application/json" },
     });
-    expect(jwtBlocked.status).toBe(403);
+    await expectStatus(jwtBlocked, 403);
 
     const positions = await fetch(`${baseUrl}/api/apply/positions`, { headers: auth });
-    expect(positions.status).toBe(200);
+    await expectStatus(positions, 200);
 
     const listed = await fetch(`${baseUrl}/api/apply/applications`, { headers: auth });
-    expect(listed.status).toBe(200);
+    await expectStatus(listed, 200);
 
     const interviews = await fetch(`${baseUrl}/api/apply/interviews`, { headers: auth });
-    expect(interviews.status).toBe(200);
+    await expectStatus(interviews, 200);
 
     const offers = await fetch(`${baseUrl}/api/apply/offers`, { headers: auth });
-    expect(offers.status).toBe(200);
+    await expectStatus(offers, 200);
 
     const used = new Set(
       (await Application.withTrashed().where({ user_id: candidate.id }).get()).map((row) =>
@@ -125,7 +133,7 @@ describe.skipIf(!enabled)("candidate apply portal", () => {
           attachment_file: null,
         }),
       });
-      expect(applied.status).toBe(200);
+      await expectStatus(applied, 200);
     }
 
     const profile = await fetch(`${baseUrl}/api/apply/profile`, {
@@ -137,17 +145,17 @@ describe.skipIf(!enabled)("candidate apply portal", () => {
         email: candidate.email,
       }),
     });
-    expect(profile.status).toBe(200);
+    await expectStatus(profile, 200);
 
     const loggedOut = await fetch(`${baseUrl}/api/apply/logout`, {
       method: "POST",
       headers: auth,
     });
-    expect(loggedOut.status).toBe(200);
+    await expectStatus(loggedOut, 200);
     expect(await loggedOut.json()).toEqual({ revoked: true });
 
     const after = await fetch(`${baseUrl}/api/apply/me`, { headers: auth });
-    expect(after.status).toBe(401);
+    await expectStatus(after, 401);
   });
 
   test("apply service logout without a token row is a no-op", async () => {

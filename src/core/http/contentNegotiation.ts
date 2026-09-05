@@ -7,6 +7,11 @@ function requestPrefersJson(request?: Request): boolean {
     return false;
   }
 
+  const pathname = new URL(request.url).pathname;
+  if (pathname.startsWith("/api/")) {
+    return true;
+  }
+
   const accept = request.headers.get("accept")?.toLowerCase() ?? "";
 
   if (accept.includes("text/html")) {
@@ -26,9 +31,7 @@ function requestPrefersJson(request?: Request): boolean {
     return false;
   }
 
-  const pathname = new URL(request.url).pathname;
-
-  return pathname.startsWith("/api/");
+  return false;
 }
 
 export { requestPrefersJson };

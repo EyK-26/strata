@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 0.7.2
+
+- `withJsonErrorHandling` always maps thrown errors to JSON. `requestPrefersJson` treats `/api/` as JSON even when `Accept` is HTML, so hybrid staff HTML cannot remap JSON API errors.
+
 ## 0.7.1
 
 - `readSpaPrefix` / `normalizeSpaPrefix` own `SPA_PREFIX` (default `/app`). Apps set the env value. They do not copy a second static-file server.

@@ -48,4 +48,23 @@ function withErrorHandling<TArgs extends unknown[]>(
   };
 }
 
-export { createdResponse, errorResponse, jsonResponse, noContentResponse, withErrorHandling };
+function withJsonErrorHandling<TArgs extends unknown[]>(
+  handler: (...args: TArgs) => Response | Promise<Response>,
+): (...args: TArgs) => Promise<Response> {
+  return async (...args: TArgs): Promise<Response> => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  };
+}
+
+export {
+  createdResponse,
+  errorResponse,
+  jsonResponse,
+  noContentResponse,
+  withErrorHandling,
+  withJsonErrorHandling,
+};

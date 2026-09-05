@@ -69,6 +69,16 @@ describe("webErrorResponse", () => {
     expect(await webErrorResponse(new BadRequestError("Bad Request"), request)).toBeNull();
   });
 
+  test("returns null for /api/ even when Accept is HTML", async () => {
+    process.env.FRONTEND_MODE = "hybrid";
+
+    const request = new Request("http://example.test/api/apply/me", {
+      headers: { accept: "text/html" },
+    });
+
+    expect(await webErrorResponse(new ForbiddenError("staff cookie"), request)).toBeNull();
+  });
+
   test("redirects unauthorized errors to login", async () => {
     process.env.FRONTEND_MODE = "server-htmx";
 

@@ -16,6 +16,14 @@ describe("requestPrefersJson", () => {
     expect(requestPrefersJson(request)).toBe(false);
   });
 
+  test("API paths stay JSON even when Accept is HTML", () => {
+    const request = new Request("http://example.test/api/apply/me", {
+      headers: { accept: "text/html" },
+    });
+
+    expect(requestPrefersJson(request)).toBe(true);
+  });
+
   test("treats HTMX requests as non-JSON", () => {
     const request = new Request("http://example.test/organizations", {
       headers: { "HX-Request": "true" },

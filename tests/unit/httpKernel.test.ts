@@ -105,6 +105,33 @@ describe("HttpKernel", () => {
     }
   });
 
+  test("wrapApi stays JSON in hybrid even without an Accept header", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "hybrid";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapApi(async () => {
+        throw new ForbiddenError("reports:export required");
+      });
+
+      const response = await handler(
+        new Request("http://example.test/api/reports", {
+          headers: {
+            "x-authenticated-user-id": "1",
+            "x-authenticated-user-role": "admin",
+          },
+        }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get("content-type")).toContain("json");
+      expect(await response.json()).toEqual({ error: "reports:export required" });
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
   test("wrapWebLogin applies the web group so CSRF failures become HTML 403", async () => {
     const previous = process.env.FRONTEND_MODE;
     process.env.FRONTEND_MODE = "server-htmx";

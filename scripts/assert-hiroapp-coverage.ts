@@ -65,6 +65,7 @@ const proc = Bun.spawn(
       FRONTEND_MODE: "hybrid",
       SPA_PREFIX: "/apply",
       HIROAPP_SEED_SCALE: "demo",
+      LOGIN_RATE_LIMIT_PER_WINDOW: "10000",
     },
     stdout: "pipe",
     stderr: "pipe",
