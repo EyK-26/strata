@@ -35,4 +35,18 @@ describe("bindDatabaseConnection", () => {
     expect(getBoundDatabaseConnection()).toBeNull();
     expect(resolveRepositoryConnection()).not.toBeNull();
   });
+
+  test("stores the bound connection on a process-wide globalThis key", () => {
+    const bound: DatabaseConnection = {
+      async unsafe() {
+        return [];
+      },
+    };
+    bindDatabaseConnection(bound);
+    const holder = (globalThis as Record<symbol, { connection: DatabaseConnection | null }>)[
+      Symbol.for("@getstrata/boundDatabaseConnection")
+    ];
+    expect(holder?.connection).toBe(bound);
+    resetBoundDatabaseConnection();
+  });
 });
