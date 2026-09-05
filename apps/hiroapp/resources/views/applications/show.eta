@@ -168,7 +168,7 @@
       <% } %>
       <% if (it.hold && it.hold.status === "holding") { %>
         <h3>Hold</h3>
-        <p><%= it.hold.status %> · <%= it.hold.notes %></p>
+        <p><%= it.hold.status %> · <%= it.hold.notes %><% if (it.hold.holds_until) { %> · until <%= it.hold.holds_until %><% } %></p>
         <% if (it.roleId !== 2) { %>
           <form action="/holds/<%= it.hold.id %>/release" method="post">
             <%~ include("../partials/csrf.eta") %>
@@ -182,6 +182,7 @@
           <%~ include("../partials/csrf.eta") %>
           <input type="hidden" name="return_to" value="/applications/<%= it.application.id %>" />
           <label>Hold notes <textarea name="notes"></textarea></label>
+          <label>Hold until <input type="datetime-local" name="holds_until" /></label>
           <button type="submit">Put on hold</button>
         </form>
       <% } %>

@@ -211,4 +211,73 @@ describe.skipIf(!enabled)("Wave 38 application holds", () => {
     });
     expect([302, 303].includes(htmlRelease.response.status)).toBe(true);
   });
+
+  test("staff can schedule a hold-until datetime; past deadlines auto-release", async () => {
+    const candidate = await seededUser("candidate@hiroapp.com");
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+    const { applicationHolds } = await import("../modules/holds/repository.ts");
+
+    const application = await openApplication(candidate.id);
+    await expect(
+      holdService.hold(recruiter, application, { holds_until: "not-a-date" }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    await expect(
+      holdService.hold(recruiter, application, { holds_until: "2020-01-01T00:00:00Z" }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+
+    const blankUntil = await holdService.hold(recruiter, application, { holds_until: "  " });
+    expect(blankUntil.status).toBe("holding");
+    expect(serializeHold(blankUntil).holds_until).toBeNull();
+    await holdService.release(recruiter, await ApplicationHold.findOrFail(blankUntil.id));
+    const created = await holdService.hold(recruiter, application, {
+      notes: "timed",
+      holds_until: "2026-12-01T12:00:00Z",
+    });
+    expect(created.status).toBe("holding");
+    expect(serializeHold(created).holds_until).toBe("2026-12-01T12:00:00.000Z");
+    expect((await holdService.forApplication(recruiter, application))?.status).toBe("holding");
+
+    const stale = await openApplication(candidate.id);
+    const timed = await holdService.hold(recruiter, stale, {
+      holds_until: "2026-12-15T00:00:00Z",
+    });
+    await applicationHolds.updateByIdOrThrow(timed.id, {
+      holds_until: new Date("2020-01-01T00:00:00Z"),
+    });
+    expect((await holdService.forApplication(recruiter, stale))?.status).toBe("released");
+    await expect(
+      holdService.release(recruiter, await ApplicationHold.findOrFail(timed.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    const reheld = await holdService.hold(recruiter, stale, { notes: "after expiry" });
+    expect(reheld.id).toBe(timed.id);
+    expect(reheld.status).toBe("holding");
+    expect(reheld.holds_until).toBeNull();
+
+    const httpApp = await openApplication(candidate.id);
+    const httpCreated = await jsonRequest(`/api/applications/${httpApp.id}/hold`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ notes: "api until", holds_until: "2026-12-20T00:00:00Z" }),
+    });
+    expect(httpCreated.body.status).toBe("holding");
+    expect(httpCreated.body.holds_until).toBe("2026-12-20T00:00:00.000Z");
+
+    const htmlApp = await openApplication(candidate.id);
+    const page = await request(`/applications/${htmlApp.id}`, { cookies: recruiterCookies });
+    expect(page.response.status).toBe(200);
+    expect(page.text).toContain("Hold until");
+    const htmlHold = await request(`/applications/${htmlApp.id}/hold`, {
+      cookies: page.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(page.cookies),
+      },
+      body: `notes=html+until&holds_until=2026-12-25T09%3A00&return_to=/applications/${htmlApp.id}`,
+    });
+    expect([302, 303].includes(htmlHold.response.status)).toBe(true);
+    const htmlRow = await holdService.forApplication(recruiter, htmlApp);
+    expect(htmlRow?.status).toBe("holding");
+    expect(htmlRow?.holds_until).toBeTruthy();
+  });
 });

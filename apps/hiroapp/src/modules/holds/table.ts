@@ -10,6 +10,7 @@ export interface ApplicationHoldRecord {
   tenant_id?: number | null;
   notes: string | null;
   status: HoldStatus;
+  holds_until: Date | null;
   released_at: Date | null;
   created_at: Date | null;
   updated_at: Date | null;
@@ -26,6 +27,7 @@ export const applicationHoldTable = defineTable<ApplicationHoldRecord, "id">({
     "tenant_id",
     "notes",
     "status",
+    "holds_until",
     "released_at",
     "created_at",
     "updated_at",

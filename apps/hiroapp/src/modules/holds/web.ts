@@ -23,7 +23,10 @@ export function holdWebRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, application) => {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
-            await holdService.hold(actor, application, { notes: fields.notes || null });
+            await holdService.hold(actor, application, {
+              notes: fields.notes || null,
+              holds_until: fields.holds_until || null,
+            });
             return redirectResponse(returnTo(fields, `/applications/${application.id}`));
           },
         ),

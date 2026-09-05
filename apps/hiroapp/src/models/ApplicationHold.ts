@@ -11,6 +11,7 @@ export class ApplicationHold extends Model<ApplicationHoldRecord, "id"> {
     "released_by",
     "notes",
     "status",
+    "holds_until",
     "released_at",
     "tenant_id",
   ] as const;
@@ -21,6 +22,7 @@ export class ApplicationHold extends Model<ApplicationHoldRecord, "id"> {
     application_id: "integer",
     created_by: "integer",
     released_by: "integer",
+    holds_until: "datetime",
   } as const;
 
   application() {

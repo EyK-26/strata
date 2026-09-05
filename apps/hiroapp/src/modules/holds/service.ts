@@ -15,6 +15,7 @@ import type { ApplicationHoldRecord, HoldStatus } from "./table.ts";
 
 export type CreateHoldInput = {
   notes?: string | null;
+  holds_until?: string | null;
 };
 
 function asHoldStatus(value: unknown): HoldStatus {
@@ -46,6 +47,21 @@ function assertOpenPipeline(application: Application) {
   }
 }
 
+function parseHoldsUntil(value: string | null | undefined) {
+  const raw = value?.trim() ?? "";
+  if (!raw) {
+    return null;
+  }
+  const holdsUntil = new Date(raw);
+  if (Number.isNaN(holdsUntil.getTime())) {
+    throw new UnprocessableEntityError("The hold-until date is invalid.");
+  }
+  if (holdsUntil.getTime() <= Date.now()) {
+    throw new UnprocessableEntityError("The hold-until date must be in the future.");
+  }
+  return holdsUntil;
+}
+
 export function serializeHold(row: ApplicationHold | ApplicationHoldRecord) {
   const record =
     typeof (row as ApplicationHold).toObject === "function"
@@ -58,6 +74,7 @@ export function serializeHold(row: ApplicationHold | ApplicationHoldRecord) {
     released_by: record.released_by == null ? null : Number(record.released_by),
     notes: record.notes,
     status: asHoldStatus(record.status),
+    holds_until: iso(record.holds_until),
     released_at: iso(record.released_at),
     created_at: iso(record.created_at),
     updated_at: iso(record.updated_at),
@@ -65,17 +82,56 @@ export function serializeHold(row: ApplicationHold | ApplicationHoldRecord) {
 }
 
 export class ApplicationHoldService {
+  private async releaseIfDue(
+    row: ApplicationHold | ApplicationHoldRecord,
+  ): Promise<ApplicationHoldRecord> {
+    const record =
+      typeof (row as ApplicationHold).toObject === "function"
+        ? (row as ApplicationHold).toObject()
+        : (row as ApplicationHoldRecord);
+    if (asHoldStatus(record.status) !== "holding") {
+      return record;
+    }
+    if (!record.holds_until) {
+      return record;
+    }
+    const holdsUntil = new Date(record.holds_until);
+    if (Number.isNaN(holdsUntil.getTime()) || holdsUntil.getTime() > Date.now()) {
+      return record;
+    }
+    const updated = await applicationHolds.updateByIdOrThrow(record.id, {
+      status: "released",
+      released_by: null,
+      released_at: new Date(),
+    });
+    await recordHiringEvent(
+      "application.hold_expired",
+      { hold_id: updated.id, application_id: updated.application_id },
+      { type: "application_hold", id: updated.id },
+    );
+    return updated;
+  }
+
+  async serializedForApplication(applicationId: number) {
+    const row = await applicationHolds.forApplication(applicationId);
+    if (!row) {
+      return null;
+    }
+    return serializeHold(await this.releaseIfDue(row));
+  }
+
   async forApplication(actor: UserRecord, application: Application) {
     await assertCanView(actor, application);
-    const row = await applicationHolds.forApplication(Number(application.id));
-    return row ? serializeHold(row) : null;
+    return this.serializedForApplication(Number(application.id));
   }
 
   async hold(actor: UserRecord, application: Application, input: CreateHoldInput = {}) {
     assertStaff(actor);
     assertOpenPipeline(application);
     const notes = input.notes?.trim() || null;
-    const existing = await applicationHolds.forApplication(Number(application.id));
+    const holdsUntil = parseHoldsUntil(input.holds_until);
+    const existingRow = await applicationHolds.forApplication(Number(application.id));
+    const existing = existingRow ? await this.releaseIfDue(existingRow) : null;
     if (existing && asHoldStatus(existing.status) === "holding") {
       throw new ConflictError("This application is already on hold.");
     }
@@ -85,6 +141,7 @@ export class ApplicationHoldService {
           released_by: null,
           notes,
           status: "holding",
+          holds_until: holdsUntil,
           released_at: null,
         })
       : await applicationHolds.create({
@@ -94,6 +151,7 @@ export class ApplicationHoldService {
           tenant_id: currentTenantId(),
           notes,
           status: "holding",
+          holds_until: holdsUntil,
           released_at: null,
         });
     await recordHiringEvent(
@@ -110,7 +168,8 @@ export class ApplicationHoldService {
 
   async release(actor: UserRecord, hold: ApplicationHold) {
     assertStaff(actor);
-    if (asHoldStatus(hold.get("status")) !== "holding") {
+    const current = await this.releaseIfDue(hold);
+    if (asHoldStatus(current.status) !== "holding") {
       throw new ForbiddenError("This application is not on hold.");
     }
     const updated = await applicationHolds.updateByIdOrThrow(Number(hold.id), {

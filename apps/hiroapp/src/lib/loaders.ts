@@ -14,8 +14,7 @@ import { careerService } from "../modules/careers/service.ts";
 import { statuses } from "../modules/catalog/repository.ts";
 import { backgroundChecks } from "../modules/checks/repository.ts";
 import { serializeBackgroundCheck } from "../modules/checks/service.ts";
-import { applicationHolds } from "../modules/holds/repository.ts";
-import { serializeHold } from "../modules/holds/service.ts";
+import { holdService } from "../modules/holds/service.ts";
 import { interviews } from "../modules/interviews/repository.ts";
 import { serializeInterview } from "../modules/interviews/service.ts";
 import { offerService } from "../modules/offers/service.ts";
@@ -176,7 +175,7 @@ export async function loadApplicationDetail(applicationId: number) {
   const attribution = await applicationAttributions.forApplication(applicationId);
   const poolEntry = await talentPool.findByUser(Number(application.get("user_id")));
   const backgroundCheck = await backgroundChecks.forApplication(applicationId);
-  const holdRow = await applicationHolds.forApplication(applicationId);
+  const hold = await holdService.serializedForApplication(applicationId);
   return {
     application: mergeResource(new ApplicationResource(application), {
       user: user ? new UserResource(user).toArray() : null,
@@ -203,7 +202,7 @@ export async function loadApplicationDetail(applicationId: number) {
     talent_pool: poolEntry ? serializePoolEntry(poolEntry) : null,
     offer_templates: (await offerTemplates.ordered()).map(serializeOfferTemplate),
     background_check: backgroundCheck ? serializeBackgroundCheck(backgroundCheck) : null,
-    hold: holdRow ? serializeHold(holdRow) : null,
+    hold,
     onboarding: (await onboardingItems.forApplication(applicationId)).map(serializeOnboardingItem),
     all_statuses: (await statuses.all()).map((row) => new NamedResource(row).toArray()),
   };
