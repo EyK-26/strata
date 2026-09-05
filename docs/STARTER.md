@@ -26,7 +26,7 @@ bunx create-strata hiring --kit hiroapp-enterprise --yes
 
 | Kit | Frontend | Database | Auth | Typical use |
 |-----|----------|----------|------|-------------|
-| `hobby` | `api` | SQLite | Dev headers | Local spike, no Docker |
+| `hobby` | `api` | SQLite | Dev headers | Local spike, file SQLite |
 | `team` | `server-htmx` | Postgres | Cookie sessions | Staff HTML, Redis cache/queue |
 | `enterprise` | `hybrid` | Postgres | Cookies + opaque tokens + JWT | RLS env, SMTP, sidecars |
 | `custom` | you pick | you pick | you pick | Any mix of the layers below |
@@ -56,6 +56,22 @@ Corporate extras (on by default for enterprise kits, or pass `--corporate` to pr
 `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--kiosk`, `--mysql-mirror` (each has a `--no-*` form).
 
 These extras write env stubs and, for kiosk/mirror, a `bindSidecars()` helper. They do not copy HiroApp domain modules.
+
+## Docker vs local tools
+
+Postgres, MySQL, Redis, and SMTP can run in Docker Compose or as installs already on the machine. The wizard asks after you pick layers. It is skipped when those tools are not needed (SQLite plus in-process cache/queue and log mail).
+
+| Flag | Effect |
+|------|--------|
+| `--docker` | Write Compose for every selected tool that needs a service |
+| `--no-docker` | Do not write `docker-compose.yml`; point env at local installs |
+| `--docker-services=postgres,redis` | Compose only for that subset, intersected with what the kit needs |
+
+Non-interactive defaults: hobby kits skip Compose; team and enterprise kits write Compose for every needed service. Pass `--no-docker` when Postgres or Redis already run on the machine.
+
+`custom` with `--yes` does not write Compose unless you pass `--docker` or `--docker-services`.
+
+Compose only includes services for the layers you selected (Postgres kit without Redis will not add a Redis container).
 
 ## What you get that actually runs
 

@@ -18,6 +18,7 @@ import {
   parseKit,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { presetLayers } from "../../../packages/strata-starter/src/presets.ts";
+import { type Prompter, promptLayers } from "../../../packages/strata-starter/src/prompt.ts";
 
 const tempDirectories: string[] = [];
 const repoRoot = process.cwd();
@@ -78,6 +79,54 @@ function generateInto(directory: string, name: string, kit: Parameters<typeof pr
   return join(directory, name);
 }
 
+function generateFromArgs(directory: string, argv: string[]): string {
+  const flags = parseCreateStrataArgs(argv);
+  const name = flags.projectName ?? "app";
+  generateProject({
+    projectName: name,
+    targetDir: join(directory, name),
+    layers: layersFromFlags(flags),
+    templateRoot: resolveTemplateRoot(),
+    overlayRoot: resolveOverlayRoot(),
+  });
+  return join(directory, name);
+}
+
+function scriptedPrompter(script: {
+  select?: string[];
+  confirm?: boolean[];
+  question?: string[];
+}): Prompter {
+  const select = [...(script.select ?? [])];
+  const confirm = [...(script.confirm ?? [])];
+  const question = [...(script.question ?? [])];
+  return {
+    async question(_message, defaultValue) {
+      if (question.length === 0) {
+        return defaultValue ?? "";
+      }
+      return question.shift() ?? defaultValue ?? "";
+    },
+    async confirm(message) {
+      if (confirm.length === 0) {
+        throw new Error(`unexpected confirm: ${message}`);
+      }
+      return confirm.shift() ?? false;
+    },
+    async select(message, choices, defaultValue) {
+      if (select.length === 0) {
+        throw new Error(`unexpected select: ${message}`);
+      }
+      const value = select.shift();
+      if (!value || !choices.some((choice) => choice.value === value)) {
+        throw new Error(`scripted select "${value}" is not in choices for: ${message}`);
+      }
+      return value as typeof defaultValue;
+    },
+    close() {},
+  };
+}
+
 describe("create-strata args", () => {
   test("parses kits, aliases, and layer overrides", () => {
     expect(parseKit("hiroapp_build_from_starter_kit_x_level_entreprise")).toBe(
@@ -101,6 +150,34 @@ describe("create-strata args", () => {
     expect(layers.database).toBe("sqlite");
     expect(layers.auth).toBe("cookie-token");
     expect(layers.cache).toBe("redis");
+    expect(layers.docker.enabled).toBe(true);
+    expect(layers.docker.services.postgres).toBe(false);
+    expect(layers.docker.services.redis).toBe(true);
+  });
+
+  test("parses docker flags and last-wins --no-docker", () => {
+    const docker = parseCreateStrataArgs(["acme", "--kit=team", "--docker", "--yes"]);
+    expect(docker.docker).toBe(true);
+    expect(layersFromFlags(docker).docker.services.postgres).toBe(true);
+    expect(layersFromFlags(docker).docker.services.redis).toBe(true);
+
+    const local = parseCreateStrataArgs(["acme", "--kit=team", "--docker", "--no-docker", "--yes"]);
+    expect(local.docker).toBe(false);
+    expect(layersFromFlags(local).docker.enabled).toBe(false);
+
+    const subset = parseCreateStrataArgs([
+      "acme",
+      "--kit=team",
+      "--docker-services=postgres,redis",
+      "--yes",
+    ]);
+    expect(subset.dockerServices).toEqual(["postgres", "redis"]);
+    expect(layersFromFlags(subset).docker.services.postgres).toBe(true);
+    expect(layersFromFlags(subset).docker.services.redis).toBe(true);
+
+    expect(() => parseCreateStrataArgs(["acme", "--docker-services=mongo"])).toThrow(
+      /Unknown docker service/,
+    );
   });
 
   test("custom kit without layer flags is rejected by usage of layersFromFlags still producing hobby defaults", () => {
@@ -130,6 +207,10 @@ describe("create-strata generate", () => {
     };
     expect(layers.kit).toBe("hobby");
     expect(layers.hiroappEquivalent).toBe(false);
+
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("Docker Compose | not needed");
+    expect(readme).not.toContain("docker compose up -d");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");
     expect(database).toContain("createSqliteConnection");
@@ -211,6 +292,61 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("—");
   });
 
+  test("team --no-docker skips compose and documents local installs", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, ["team-local", "--kit=team", "--no-docker", "--yes"]);
+
+    expect(existsSync(join(app, "docker-compose.yml"))).toBe(false);
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("off (local installs)");
+    expect(readme).toContain("Use local installs for Postgres, Redis");
+    expect(readme).not.toContain("docker compose up -d");
+    const manifest = JSON.parse(await readFile(join(app, "strata.layers.json"), "utf8")) as {
+      layers: { docker: { enabled: boolean } };
+    };
+    expect(manifest.layers.docker.enabled).toBe(false);
+  });
+
+  test("team --docker-services=postgres writes only postgres", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "team-pg",
+      "--kit=team",
+      "--docker-services=postgres",
+      "--yes",
+    ]);
+
+    const compose = await readFile(join(app, "docker-compose.yml"), "utf8");
+    expect(compose).toContain("postgres:");
+    expect(compose).not.toContain("redis:");
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("docker compose up -d");
+    expect(readme).toContain("Use local installs for Redis");
+  });
+
+  test("custom postgres --docker writes compose; without --docker it does not", async () => {
+    const root = await tempDir();
+    const withDocker = generateFromArgs(root, [
+      "custom-pg-docker",
+      "--kit=custom",
+      "--database=postgres",
+      "--docker",
+      "--yes",
+    ]);
+    expect(existsSync(join(withDocker, "docker-compose.yml"))).toBe(true);
+    const compose = await readFile(join(withDocker, "docker-compose.yml"), "utf8");
+    expect(compose).toContain("postgres:");
+    expect(compose).not.toContain("redis:");
+
+    const local = generateFromArgs(root, [
+      "custom-pg-local",
+      "--kit=custom",
+      "--database=postgres",
+      "--yes",
+    ]);
+    expect(existsSync(join(local, "docker-compose.yml"))).toBe(false);
+  });
+
   test("refuses an existing directory", async () => {
     const root = await tempDir();
     generateInto(root, "taken", "hobby");
@@ -231,6 +367,9 @@ describe("create-strata CLI", () => {
     expect(out).toContain("create-strata");
     expect(out).toContain("--kit");
     expect(out).toContain("hiroapp-enterprise");
+    expect(out).toContain("--docker");
+    expect(out).toContain("--no-docker");
+    expect(out).toContain("--docker-services");
   });
 
   test("scaffolds with --kit hobby --yes", async () => {
@@ -254,6 +393,75 @@ describe("create-strata CLI", () => {
     expect(out).toContain("strata dev");
     expect(out).not.toContain("bun run db:migrate");
     expect(existsSync(join(root, "cli-hobby/src/bootstrap/createApp.ts"))).toBe(true);
+    expect(out).toContain("docker=none");
+    expect(out).not.toContain("docker compose up -d");
+  });
+
+  test("scaffolds team with --no-docker", async () => {
+    const root = await tempDir();
+    const result = Bun.spawnSync({
+      cmd: [
+        "bun",
+        join(process.cwd(), "packages/strata-starter/cli.ts"),
+        "cli-team-local",
+        "--kit",
+        "team",
+        "--no-docker",
+        "--yes",
+      ],
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(0);
+    const out = result.stdout.toString();
+    expect(out).toContain("docker=local");
+    expect(out).toContain("Point env at local postgres, redis");
+    expect(out).not.toContain("docker compose up -d");
+    expect(existsSync(join(root, "cli-team-local/docker-compose.yml"))).toBe(false);
+  });
+
+  test("wizard can choose local tools or a docker mix", async () => {
+    const local = await promptLayers(
+      parseCreateStrataArgs(["demo", "--kit=team"]),
+      scriptedPrompter({
+        select: ["team", "local"],
+        confirm: [false, false],
+      }),
+    );
+    expect(local.docker.enabled).toBe(false);
+    expect(local.docker.services.postgres).toBe(false);
+    expect(local.docker.services.redis).toBe(false);
+
+    const mix = await promptLayers(
+      parseCreateStrataArgs(["demo", "--kit=team"]),
+      scriptedPrompter({
+        select: ["team", "mix"],
+        confirm: [false, false, true, false],
+      }),
+    );
+    expect(mix.docker.enabled).toBe(true);
+    expect(mix.docker.services.postgres).toBe(true);
+    expect(mix.docker.services.redis).toBe(false);
+
+    const hobby = await promptLayers(
+      parseCreateStrataArgs(["demo"]),
+      scriptedPrompter({
+        select: ["hobby"],
+        confirm: [false, false],
+      }),
+    );
+    expect(hobby.docker.enabled).toBe(false);
+
+    const flagged = await promptLayers(
+      parseCreateStrataArgs(["demo", "--kit=team", "--docker-services=postgres"]),
+      scriptedPrompter({
+        select: ["team"],
+        confirm: [false, false],
+      }),
+    );
+    expect(flagged.docker.services.postgres).toBe(true);
+    expect(flagged.docker.services.redis).toBe(false);
   });
 
   test("hobby sqlite app boots and answers GET /health", async () => {

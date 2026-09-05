@@ -87,6 +87,7 @@ function firstPositional(args: string[]): string | undefined {
     "--queue",
     "--mail",
     "--spa-prefix",
+    "--docker-services",
     "--template",
     "--env",
   ]);

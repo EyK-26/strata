@@ -1,9 +1,20 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
-import type { ParsedFlags } from "./parseArgs.ts";
-import { applyFlagOverrides, layersFromFlags } from "./parseArgs.ts";
+import {
+  applyFlagOverrides,
+  dockerFlagsProvided,
+  layersFromFlags,
+  type ParsedFlags,
+} from "./parseArgs.ts";
 import { presetLayers } from "./presets.ts";
-import type { KitId, StarterLayers } from "./types.ts";
+import {
+  DOCKER_SERVICE_LABELS,
+  dockerLayerForNeeded,
+  emptyDockerServices,
+  type KitId,
+  neededDockerServices,
+  type StarterLayers,
+} from "./types.ts";
 
 interface Prompter {
   question(message: string, defaultValue?: string): Promise<string>;
@@ -108,7 +119,7 @@ async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<Sta
     layers.database = await prompter.select(
       "Database",
       [
-        { value: "sqlite", label: "sqlite: file, no Docker" },
+        { value: "sqlite", label: "sqlite: file database" },
         { value: "postgres", label: "postgres: production default" },
         { value: "mysql", label: "mysql: published mirror or primary" },
       ],
@@ -188,7 +199,53 @@ async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<Sta
     );
   }
 
+  if (!dockerFlagsProvided(flags)) {
+    layers.docker = await promptDockerLayer(prompter, layers);
+  }
+
   return applyFlagOverrides(layers, flags);
+}
+
+async function promptDockerLayer(
+  prompter: Prompter,
+  layers: StarterLayers,
+): Promise<StarterLayers["docker"]> {
+  const needed = neededDockerServices(layers);
+  if (needed.length === 0) {
+    return dockerLayerForNeeded(layers, false);
+  }
+
+  const labels = needed.map((name) => DOCKER_SERVICE_LABELS[name]).join(", ");
+  const mode = await prompter.select(
+    `How should supporting tools run (${labels})?`,
+    [
+      { value: "local", label: "local: installs already on this machine" },
+      { value: "docker", label: "docker: Compose for all of them" },
+      { value: "mix", label: "mix: pick Docker Compose vs local per tool" },
+    ],
+    "docker",
+  );
+
+  if (mode === "local") {
+    return dockerLayerForNeeded(layers, false);
+  }
+
+  if (mode === "docker") {
+    return dockerLayerForNeeded(layers, true);
+  }
+
+  const services = emptyDockerServices();
+  for (const name of needed) {
+    services[name] = await prompter.confirm(
+      `Docker Compose for ${DOCKER_SERVICE_LABELS[name]}?`,
+      true,
+    );
+  }
+  const selected = needed.filter((name) => services[name]);
+  return {
+    enabled: selected.length > 0,
+    services,
+  };
 }
 
 async function resolveStarterPlan(

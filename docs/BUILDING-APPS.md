@@ -13,7 +13,7 @@ strata migrate
 strata dev
 ```
 
-The CLI is interactive in a terminal. For CI, pass `--kit hobby --yes` (or `team` / `enterprise` / a hiring recipe). You can override every layer (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`).
+The CLI is interactive in a terminal. For CI, pass `--kit hobby --yes` (or `team` / `enterprise` / a hiring recipe). You can override every layer (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis` when Postgres, Redis, MySQL, or SMTP may already be installed locally.
 
 Kits and flags: [STARTER.md](./STARTER.md). HiroApp cannot be rebuilt from the starter without replacing `apps/hiroapp`. Use `hiroapp-hobby` / `hiroapp-team` / `hiroapp-enterprise` for a new hiring-shaped app.
 

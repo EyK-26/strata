@@ -6,14 +6,20 @@ import {
   type CacheLayer,
   DATABASES,
   type DatabaseLayer,
+  DOCKER_SERVICE_NAMES,
+  type DockerServiceName,
+  dockerLayerForNeeded,
+  enableDockerServices,
   FRONTENDS,
   type FrontendMode,
   KITS,
   type KitId,
   MAIL_DRIVERS,
   type MailLayer,
+  neededDockerServices,
   QUEUE_DRIVERS,
   type QueueLayer,
+  reconcileDocker,
   type StarterLayers,
   TENANCY_DRIVERS,
   type TenancyLayer,
@@ -55,6 +61,8 @@ interface ParsedFlags {
   mail?: MailLayer;
   spaPrefix?: string;
   extras: Partial<StarterLayers["extras"]>;
+  docker?: boolean;
+  dockerServices?: DockerServiceName[];
 }
 
 function usage(): string {
@@ -88,6 +96,9 @@ Options:
   --kiosk / --no-kiosk
   --mysql-mirror / --no-mysql-mirror
   --corporate         Prompt (or enable) enterprise extras on any kit
+  --docker            Write Docker Compose for every selected tool that needs a service
+  --no-docker         Skip docker-compose.yml; use installs already on this machine
+  --docker-services   Subset: postgres, mysql, redis, mailpit (comma-separated)
   --yes, --no-interactive
   -h, --help
 
@@ -95,6 +106,8 @@ Examples:
   bunx create-strata my-app
   bunx create-strata my-app --kit hobby --yes
   bunx create-strata hiring --kit hiroapp-enterprise --yes
+  bunx create-strata api --kit team --no-docker --yes
+  bunx create-strata api --kit team --docker-services=postgres --yes
 `;
 }
 
@@ -121,6 +134,26 @@ function parseKit(value: string): KitId {
     );
   }
   return kit;
+}
+
+function parseDockerServiceList(raw: string): DockerServiceName[] {
+  const names = raw
+    .split(",")
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part.length > 0);
+  const unknown = names.filter(
+    (name) => !(DOCKER_SERVICE_NAMES as readonly string[]).includes(name),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown docker service "${unknown.join(", ")}". Expected ${DOCKER_SERVICE_NAMES.join(", ")}.`,
+    );
+  }
+  return names as DockerServiceName[];
+}
+
+function dockerFlagsProvided(flags: ParsedFlags): boolean {
+  return flags.docker !== undefined || flags.dockerServices !== undefined;
 }
 
 function parseCreateStrataArgs(argv: string[]): ParsedFlags {
@@ -152,6 +185,29 @@ function parseCreateStrataArgs(argv: string[]): ParsedFlags {
     }
     if (arg === "--corporate") {
       flags.corporate = true;
+      continue;
+    }
+    if (arg === "--docker") {
+      flags.docker = true;
+      flags.dockerServices = undefined;
+      continue;
+    }
+    if (arg === "--no-docker") {
+      flags.docker = false;
+      flags.dockerServices = undefined;
+      continue;
+    }
+
+    const dockerServicesInline = takeValue(arg, "--docker-services");
+    if (dockerServicesInline !== undefined) {
+      flags.docker = true;
+      flags.dockerServices = parseDockerServiceList(dockerServicesInline);
+      continue;
+    }
+    if (arg === "--docker-services") {
+      flags.docker = true;
+      flags.dockerServices = parseDockerServiceList(argv[index + 1] ?? "");
+      index += 1;
       continue;
     }
 
@@ -268,8 +324,39 @@ function parseCreateStrataArgs(argv: string[]): ParsedFlags {
   return flags;
 }
 
+function applyDockerFlags(layers: StarterLayers, flags: ParsedFlags): StarterLayers {
+  const needed = neededDockerServices(layers);
+
+  if (flags.docker === false) {
+    return {
+      ...layers,
+      docker: dockerLayerForNeeded(layers, false),
+    };
+  }
+
+  if (flags.dockerServices) {
+    const selected = flags.dockerServices.filter((name) => needed.includes(name));
+    return {
+      ...layers,
+      docker: {
+        enabled: selected.length > 0,
+        services: enableDockerServices(selected),
+      },
+    };
+  }
+
+  if (flags.docker === true) {
+    return {
+      ...layers,
+      docker: dockerLayerForNeeded(layers, true),
+    };
+  }
+
+  return layers;
+}
+
 function applyFlagOverrides(base: StarterLayers, flags: ParsedFlags): StarterLayers {
-  return {
+  const next: StarterLayers = {
     ...base,
     kit: flags.kit ?? base.kit,
     frontend: flags.frontend ?? base.frontend,
@@ -282,6 +369,7 @@ function applyFlagOverrides(base: StarterLayers, flags: ParsedFlags): StarterLay
     spaPrefix: flags.spaPrefix ?? base.spaPrefix,
     extras: { ...base.extras, ...flags.extras },
   };
+  return reconcileDocker(applyDockerFlags(next, flags));
 }
 
 function layersFromFlags(flags: ParsedFlags): StarterLayers {
@@ -295,4 +383,13 @@ function layersFromFlags(flags: ParsedFlags): StarterLayers {
 }
 
 export type { ParsedFlags };
-export { applyFlagOverrides, KIT_ALIASES, layersFromFlags, parseCreateStrataArgs, parseKit, usage };
+export {
+  applyFlagOverrides,
+  dockerFlagsProvided,
+  KIT_ALIASES,
+  layersFromFlags,
+  parseCreateStrataArgs,
+  parseDockerServiceList,
+  parseKit,
+  usage,
+};

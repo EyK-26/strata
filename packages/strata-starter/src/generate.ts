@@ -37,7 +37,8 @@ import {
   renderSidecarsTs,
   renderViewTs,
 } from "./renderRuntime.ts";
-import { authUsesCookie, type GenerateOptions, type StarterLayers } from "./types.ts";
+import type { GenerateOptions, StarterLayers } from "./types.ts";
+import { authUsesCookie, neededDockerServices, selectedDockerServices } from "./types.ts";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]*$/i;
 
@@ -165,15 +166,23 @@ function writeGeneratedFiles(options: GenerateOptions): void {
 }
 
 function printNextSteps(projectName: string, layers: StarterLayers, compose: boolean): void {
+  const dockerOn = selectedDockerServices(layers);
+  const neededTools = neededDockerServices(layers);
+  const localOn = neededTools.filter((name) => !dockerOn.includes(name));
+  const dockerSummary =
+    neededTools.length === 0 ? "none" : dockerOn.length > 0 ? dockerOn.join("+") : "local";
   console.log(`\nCreated Strata app in ${projectName}/\n`);
   console.log(
-    `Kit: ${layers.kit}  frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}`,
+    `Kit: ${layers.kit}  frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}  docker=${dockerSummary}`,
   );
   console.log("\nNext steps:");
   console.log(`  cd ${projectName}`);
   console.log("  cp .env.example .env");
   if (compose) {
     console.log("  docker compose up -d");
+  }
+  if (localOn.length > 0) {
+    console.log(`  Point env at local ${localOn.join(", ")} (see README).`);
   }
   console.log("  bun install");
   console.log("  strata migrate");

@@ -177,6 +177,24 @@ describe("newCommand", () => {
       expect(output.logs.some((line) => line.includes("strata migrate"))).toBe(true);
     });
   });
+
+  test("project name is not consumed by --docker-services", async () => {
+    await withTempProject(async (workspace) => {
+      const { newCommand } = await import("../../../src/cli/commands/new");
+      const output = captureConsole();
+
+      try {
+        await newCommand("kit-pg", "--kit=team", "--docker-services", "postgres", "--yes");
+      } finally {
+        output.restore();
+      }
+
+      expect(existsSync(join(workspace, "kit-pg/docker-compose.yml"))).toBe(true);
+      const compose = await readFile(join(workspace, "kit-pg/docker-compose.yml"), "utf8");
+      expect(compose).toContain("postgres:");
+      expect(compose).not.toContain("redis:");
+    });
+  });
 });
 
 describe("openapiGenerateCommand", () => {

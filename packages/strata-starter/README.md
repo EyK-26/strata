@@ -14,6 +14,8 @@ bunx create-strata hiring --kit hiroapp-enterprise --yes
 
 Layer flags: `--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`, `--spa-prefix`, plus corporate extras (`--mfa`, `--scim`, `--kiosk`, `--mysql-mirror`, ...).
 
+Docker Compose is optional and only includes services for the tools you selected. `--docker` writes Compose for every needed service. `--no-docker` skips the file when Postgres, Redis, MySQL, or SMTP already run on the machine. `--docker-services=postgres,redis` writes a subset. The interactive wizard asks after layers when those tools are needed.
+
 ## What you get
 
 A Bun + TypeScript app on `@getstrata/core` and `@getstrata/bootstrap` that boots. Cookie kits include `/login`. Token kits include `POST /api/v1/auth/login`. Choices are stored in `strata.layers.json`.
