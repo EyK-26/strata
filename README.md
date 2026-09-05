@@ -11,7 +11,7 @@ This README is the map. Each linked guide is written for someone who has used HT
 | Run HiroApp on my machine | [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) |
 | Choose cookie sessions, API tokens, JWT, or Basic auth | [docs/AUTH.md](docs/AUTH.md) |
 | Choose PostgreSQL, MySQL, or SQLite | [docs/DATABASE.md](docs/DATABASE.md) |
-| Learn HiroApp as a product and as a teaching app | [docs/HIROAPP.md](docs/HIROAPP.md) |
+| Learn the generated example apps | [docs/HIROAPP.md](docs/HIROAPP.md) |
 | Start my own app | [docs/STARTER.md](docs/STARTER.md) and [docs/BUILDING-APPS.md](docs/BUILDING-APPS.md) |
 | Run tests and coverage | [docs/TESTING.md](docs/TESTING.md) |
 | Ship to production | [docs/PRODUCTION.md](docs/PRODUCTION.md) |

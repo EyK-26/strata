@@ -1,21 +1,27 @@
 # Tenancy and row-level security
 
-HiroApp (and the framework fixture schema) scope tenant data with Postgres RLS (`TENANCY_DRIVER=rls`, the default). Set `TENANCY_DRIVER=none` for apps that do not have a `tenant` table (the starter template). In that mode, tenant middleware is async-local only. It does not run `SET LOCAL` or query `tenant`.
+Postgres row-level security is a framework feature (`TENANCY_DRIVER=rls`, the default). Set `TENANCY_DRIVER=none` for apps that do not have a `tenant` table. In that mode, tenant middleware is async-local only. It does not run `SET LOCAL` or query `tenant`.
 
 HTTP requests and background jobs must set `app.tenant_id` on the connection that runs queries (`runWithTenantDatabase()`) when RLS is on. Migrations and seeds use `runWithMigrationBypass()`.
 
-## Tables with `tenant_isolation`
+## Generated HiroApp
 
-RLS is forced on isolated tables (`app_bypass_rls()` or `tenant_id = app_current_tenant_id()`). HiroApp hiring tables that call `isolateTenantTable` join that set. Core tests still isolate a leftover fixture schema (users, audit, webhooks, and similar). That fixture is not a second product.
+`apps/hiroapp` sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`), and stores `users.tenant_id`. It does not emit `ENABLE ROW LEVEL SECURITY` policies or call a helper named `isolateTenantTable`.
+
+Sibling examples `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. SQLite and MySQL starters cannot choose RLS.
+
+## Fixture schema (framework tests)
+
+Core tests still isolate a leftover fixture schema (users, audit, webhooks, and similar) with `app_bypass_rls()` or `tenant_id = app_current_tenant_id()`. That fixture is not a second product. Do not copy those hiring-era tables into a generated app.
 
 ## Auth-global tables (no RLS)
 
-`api_token` and membership-style join tables stay global on purpose.
+Bearer lookup and optional membership joins stay global on purpose.
 
 | Table | Why |
 |-------|-----|
-| `api_token` | Bearer lookup runs in auth middleware **before** tenant middleware. The token finds the user. The user row then supplies `tenant_id`. RLS here would hide tokens until a tenant was already known. |
-| Optional membership joins | If your app uses membership middleware, it also runs **before** tenant middleware so roles exist for the rest of the request. HiroApp does not use org membership. It scopes hiring rows with `users.tenant_id` and RLS. |
+| Generated `api_tokens` (fixture name `api_token`) | Bearer lookup runs in auth middleware **before** tenant middleware. The token finds the user. The user row then supplies `tenant_id`. RLS here would hide tokens until a tenant was already known. |
+| Optional membership joins | If your app uses membership middleware, it also runs **before** tenant middleware so roles exist for the rest of the request. Generated HiroApp does not use org membership. It stores `users.tenant_id`. |
 
 Global middleware order: auth, then membership, then tenant. Do not reverse that order.
 
@@ -23,7 +29,7 @@ Global middleware order: auth, then membership, then tenant. Do not reverse that
 
 Unauthenticated requests still need a tenant (login, register, CSRF). They use tenant `1` (`DEFAULT_TENANT`).
 
-`x-tenant-id` on anonymous requests is honored only when `FEATURE_PUBLIC_READS=true` (career board / public demo). Production should set `FEATURE_PUBLIC_READS=false` unless you intentionally publish reads, so guests cannot probe other tenants via that header.
+`x-tenant-id` on anonymous requests is honored only when `FEATURE_PUBLIC_READS=true`. Generated HTML apps set that flag in `.env.example` so local guests can load `/login`. There is no public careers board. Production boot requires `FEATURE_PUBLIC_READS=false` so guests cannot probe other tenants via that header.
 
 Authenticated non-admin users are pinned to their account tenant. Global admins may override with `x-tenant-id`.
 

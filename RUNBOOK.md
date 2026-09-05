@@ -72,7 +72,7 @@ Rotate `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN`, and `SCIM_BEARER_TOKEN` away from 
 
 1. Verify the IdP sends `Authorization: Bearer <SCIM_BEARER_TOKEN>`
 2. Check app logs for `401` on `/scim/v2/Users`
-3. Confirm newly provisioned **staff** appear. Candidates are not SCIM users.
+3. Confirm newly provisioned **users** appear in your app tables. Generated HiroApp only sets `FEATURE_SCIM` and `SCIM_BEARER_TOKEN`; you still add `/scim/v2` adapters.
 
 ## Tracing
 

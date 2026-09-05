@@ -2,7 +2,7 @@
 
 Strata ships hooks for SCIM, billing webhooks, SIEM export, and SSO. Core routes and jobs exist. Provider SDKs and IdP-specific behavior are yours to finish in small adapters in **your app**. Keep vendor SDKs out of `src/core/` when you can.
 
-The generated examples set env flags (`FEATURE_SCIM`, `FEATURE_MFA`, and similar). They do not ship a hiring-domain SCIM or Stripe module. Copy patterns from [AUTH.md](./AUTH.md) and [BUILDING-APPS.md](./BUILDING-APPS.md).
+The generated examples set env flags (`FEATURE_SCIM`, `FEATURE_MFA`, and similar). They do not ship SCIM user adapters or a Stripe module. Copy patterns from [AUTH.md](./AUTH.md) and [BUILDING-APPS.md](./BUILDING-APPS.md).
 
 Production checklist: [PRODUCTION.md](./PRODUCTION.md)
 

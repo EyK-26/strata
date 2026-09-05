@@ -76,7 +76,7 @@ A dialect change does not invent a driver. You still provide the connection. `Bu
 
 ## Binding the client
 
-HiroApp uses Bun's `Bun.sql` (Postgres) via `bindBunSql()` / `bindDatabaseConnection()`. A dialect change does not invent a MySQL driver. You still provide the connection.
+Generated HiroApp uses Bun's `Bun.sql` (Postgres). `getSql()` calls `createBunSqlPool()`, `registerDefaultDatabasePool()`, then `bindDatabaseConnection()`. `bindBunSql()` is a shorter helper that does the last two steps. A dialect change does not invent a MySQL driver. You still provide the connection.
 
 ## Tenancy
 
@@ -85,7 +85,7 @@ Postgres RLS is documented in [TENANCY.md](./TENANCY.md). `TENANCY_DRIVER=none` 
 ## Honest limits
 
 - Compiling MySQL or SQLite SQL is not the same as running HiroApp OLTP on those engines.
-- Named connections are sidecars. Do not shard one hiring row across three engines.
+- Named connections are sidecars. Do not shard one product row across three engines.
 - `tsMatch` throws off Postgres on purpose.
 - MySQL has no `RETURNING`. Insert helpers that expect a returned row need another SELECT.
 - Identifier quoting rejects anything that is not `[A-Za-z_][A-Za-z0-9_]*`.

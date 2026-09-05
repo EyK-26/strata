@@ -23,7 +23,7 @@ Fix every error until it prints that production secret checks passed.
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Token auth enabled |
 | `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled |
 | `CORS_ALLOWED_ORIGINS` | If you set this variable, it must not include `*` |
-| `FEATURE_PUBLIC_READS=false` | Unless you intentionally publish reads (HiroApp careers can keep public list routes without this flag meaning "open tenant probe") |
+| `FEATURE_PUBLIC_READS=false` | Required in production. The flag only controls whether anonymous `x-tenant-id` is honored. Generated HiroApp has no public board. Local `.env.example` may set `true` so `/login` can load. |
 
 A production HTML app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need API tokens, SCIM, OAuth, or CORS when those features are off.
 
@@ -33,7 +33,7 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 
 | Feature flag | Required env | Notes |
 |--------------|--------------|-------|
-| `FEATURE_FIELD_ENCRYPTION=true` | `KMS_ENCRYPTION_KEY` (32-byte hex or base64) | Offer notes and similar fields |
+| `FEATURE_FIELD_ENCRYPTION=true` | `KMS_ENCRYPTION_KEY` (32-byte hex or base64) | Encrypted columns you opt into |
 | `FEATURE_SCIM=true` | `SCIM_BEARER_TOKEN` (rotated) | Optional `SCIM_TENANT_TOKENS` per tenant |
 | `FEATURE_BILLING=true` | `STRIPE_WEBHOOK_SECRET` | Stripe SDK stays in the app, not core |
 | `FEATURE_SIEM_EXPORT=true` | `SIEM_EXPORT_URL` (optional `SIEM_EXPORT_TOKEN`) | Warns if missing; export job no-ops |
