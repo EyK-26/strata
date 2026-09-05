@@ -10,6 +10,10 @@ class CareerPostingRepository extends TenantRepository<CareerPostingRecord, "id"
     return this.firstOrNull({ position_id: positionId });
   }
 
+  async listed() {
+    return this.findWhere({ status: { in: ["published", "scheduled"] } });
+  }
+
   async published() {
     return this.findWhere({ status: "published" });
   }

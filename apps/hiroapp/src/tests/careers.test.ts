@@ -8,6 +8,7 @@ import {
 import { CareerPosting } from "../models/CareerPosting.ts";
 import { Position } from "../models/Position.ts";
 import { careerService, serializeCareerPosting } from "../modules/careers/service.ts";
+import { departmentService } from "../modules/departments/service.ts";
 import { positionService } from "../modules/positions/service.ts";
 import {
   bootHiroapp,
@@ -308,5 +309,133 @@ describe.skipIf(!enabled)("Wave 36 public careers", () => {
     });
     expect([302, 303].includes(html.response.status)).toBe(true);
     expect((await CareerPosting.findOrFail(htmlPosting.id)).get("status")).toBe("expired");
+  });
+
+  test("staff can schedule career publish; due schedules go live", async () => {
+    const recruiter = await seededUser("recruiter@hiroapp.com");
+    const admin = await seededUser("admin@hiroapp.com");
+    const { careerPostings } = await import("../modules/careers/repository.ts");
+
+    const seat = await openSeat();
+    await expect(
+      careerService.publish(recruiter, seat, { publish_at: "not-a-date" }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    await expect(
+      careerService.publish(recruiter, seat, { publish_at: "2020-01-01T00:00:00Z" }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    await expect(
+      careerService.publish(recruiter, seat, {
+        publish_at: "2026-12-01T12:00:00Z",
+        expires_at: "2026-11-01T12:00:00Z",
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+
+    const immediate = await careerService.publish(recruiter, seat, { publish_at: "  " });
+    expect(immediate.status).toBe("published");
+    expect(serializeCareerPosting(immediate).publish_at).toBeNull();
+    await careerService.unpublish(recruiter, await CareerPosting.findOrFail(immediate.id));
+
+    const created = await careerService.publish(recruiter, seat, {
+      publish_at: "2026-12-01T12:00:00Z",
+    });
+    expect(created.status).toBe("scheduled");
+    expect(serializeCareerPosting(created).status).toBe("scheduled");
+    expect(serializeCareerPosting(created).publish_at).toBe("2026-12-01T12:00:00.000Z");
+    await expect(careerService.publish(recruiter, seat)).rejects.toBeInstanceOf(ConflictError);
+    await expect(
+      careerService.expire(recruiter, await CareerPosting.findOrFail(created.id)),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      careerService.showPublic(await CareerPosting.findOrFail(created.id)),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect((await careerService.listPublic()).some((row) => row.id === created.id)).toBe(false);
+
+    const cancelled = await careerService.unpublish(
+      recruiter,
+      await CareerPosting.findOrFail(created.id),
+    );
+    expect(cancelled.status).toBe("unpublished");
+    const rescheduled = await careerService.publish(recruiter, seat, {
+      publish_at: "2026-12-10T00:00:00Z",
+    });
+    expect(rescheduled.id).toBe(created.id);
+    expect(rescheduled.status).toBe("scheduled");
+
+    await careerPostings.updateByIdOrThrow(rescheduled.id, {
+      publish_at: new Date("2020-01-01T00:00:00Z"),
+    });
+    const live = await careerService.forPosition(recruiter, seat);
+    expect(live?.status).toBe("published");
+    expect((await careerService.listPublic()).some((row) => row.id === rescheduled.id)).toBe(true);
+    const shown = await careerService.showPublic(await CareerPosting.findOrFail(rescheduled.id));
+    expect(shown.status).toBe("published");
+
+    const closedSeat = await openSeat();
+    const closed = await careerService.publish(recruiter, closedSeat, {
+      publish_at: "2026-12-20T00:00:00Z",
+    });
+    await positionService.close(recruiter, await Position.findOrFail(Number(closedSeat.id)));
+    await careerPostings.updateByIdOrThrow(closed.id, {
+      publish_at: new Date("2020-01-01T00:00:00Z"),
+    });
+    expect((await careerService.forPosition(recruiter, closedSeat))?.status).toBe("scheduled");
+
+    const frozenDepartment = await departmentService.create(`Career Schedule ${Date.now()}`);
+    const frozenSeat = await Position.create({
+      user_id: null,
+      department_id: frozenDepartment.id,
+      grade_id: 1,
+      name: `Scheduled Freeze ${Date.now()}`,
+      description: "frozen schedule",
+      hiring: true,
+      start_date: null,
+      end_date: null,
+    });
+    const frozen = await careerService.publish(admin, frozenSeat, {
+      publish_at: "2026-12-22T00:00:00Z",
+    });
+    await departmentService.freeze(admin, frozenDepartment.id);
+    await careerPostings.updateByIdOrThrow(frozen.id, {
+      publish_at: new Date("2020-01-01T00:00:00Z"),
+    });
+    expect((await careerService.forPosition(admin, frozenSeat))?.status).toBe("scheduled");
+
+    const undatedSeat = await openSeat();
+    const undated = await careerService.publish(recruiter, undatedSeat, {
+      publish_at: "2026-12-25T00:00:00Z",
+    });
+    await careerPostings.updateByIdOrThrow(undated.id, { publish_at: null });
+    expect((await careerService.forPosition(recruiter, undatedSeat))?.status).toBe("published");
+
+    const httpSeat = await openSeat();
+    const httpScheduled = await jsonRequest(`/api/positions/${httpSeat.id}/career`, {
+      cookies: recruiterCookies,
+      method: "POST",
+      body: JSON.stringify({ publish_at: "2026-12-28T00:00:00Z" }),
+    });
+    expect(httpScheduled.body.status).toBe("scheduled");
+    const httpCancel = await jsonRequest(`/api/careers/${httpScheduled.body.id}/unpublish`, {
+      cookies: recruiterCookies,
+      method: "POST",
+    });
+    expect(httpCancel.body.status).toBe("unpublished");
+
+    const htmlSeat = await openSeat();
+    const page = await request(`/positions/${htmlSeat.id}`, { cookies: recruiterCookies });
+    expect(page.response.status).toBe(200);
+    expect(page.text).toContain("Publish at");
+    const html = await request(`/positions/${htmlSeat.id}/career`, {
+      cookies: page.cookies,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfFrom(page.cookies),
+      },
+      body: `publish_at=2026-12-30T09%3A00&return_to=/positions/${htmlSeat.id}`,
+    });
+    expect([302, 303].includes(html.response.status)).toBe(true);
+    expect((await careerService.forPosition(recruiter, htmlSeat))?.status).toBe("scheduled");
+    const scheduledPage = await request(`/positions/${htmlSeat.id}`, { cookies: recruiterCookies });
+    expect(scheduledPage.text).toContain("Cancel scheduled publish");
   });
 });

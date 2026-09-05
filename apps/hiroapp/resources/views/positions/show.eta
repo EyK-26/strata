@@ -36,6 +36,14 @@
     <%~ include("../partials/csrf.eta") %>
     <button type="submit">Toggle watch</button>
   </form>
+  <% if (it.currentUser?.role_id !== 2 && it.career && it.career.status === "scheduled") { %>
+    <p>Scheduled for careers · <%= it.career.publish_at %></p>
+    <form action="/careers/<%= it.career.id %>/unpublish" method="post">
+      <%~ include("../partials/csrf.eta") %>
+      <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+      <button type="submit">Cancel scheduled publish</button>
+    </form>
+  <% } %>
   <% if (it.currentUser?.role_id !== 2 && it.career && it.career.status === "published") { %>
     <p>Published on careers<% if (it.career.expires_at) { %> · expires <%= it.career.expires_at %><% } %></p>
     <form action="/careers/<%= it.career.id %>/unpublish" method="post">
@@ -49,10 +57,11 @@
       <button type="submit">Expire from careers</button>
     </form>
   <% } %>
-  <% if (it.currentUser?.role_id !== 2 && it.position.hiring && (!it.career || it.career.status !== "published")) { %>
+  <% if (it.currentUser?.role_id !== 2 && it.position.hiring && (!it.career || it.career.status === "unpublished" || it.career.status === "expired")) { %>
     <form class="CareerForm" action="/positions/<%= it.position.id %>/career" method="post">
       <%~ include("../partials/csrf.eta") %>
       <input type="hidden" name="return_to" value="/positions/<%= it.position.id %>" />
+      <label>Publish at <input type="datetime-local" name="publish_at" /></label>
       <label>Expires <input type="datetime-local" name="expires_at" /></label>
       <button type="submit">Publish to careers</button>
     </form>

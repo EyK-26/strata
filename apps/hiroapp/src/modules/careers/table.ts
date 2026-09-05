@@ -1,6 +1,6 @@
 import { defineTable } from "@getstrata/core/database/table";
 
-export type CareerPostingStatus = "published" | "unpublished" | "expired";
+export type CareerPostingStatus = "published" | "unpublished" | "expired" | "scheduled";
 
 export interface CareerPostingRecord {
   id: number;
@@ -9,6 +9,7 @@ export interface CareerPostingRecord {
   tenant_id?: number | null;
   status: CareerPostingStatus;
   expires_at: Date | null;
+  publish_at: Date | null;
   created_at: Date | null;
   updated_at: Date | null;
 }
@@ -23,6 +24,7 @@ export const careerPostingTable = defineTable<CareerPostingRecord, "id">({
     "tenant_id",
     "status",
     "expires_at",
+    "publish_at",
     "created_at",
     "updated_at",
   ],

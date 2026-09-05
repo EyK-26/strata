@@ -2,7 +2,10 @@ import { BadRequestError, ForbiddenError } from "@getstrata/core/errors/http";
 import { FormRequest } from "@getstrata/core/http/formRequest";
 import { expectObject } from "@getstrata/core/http/validation";
 
-export class PublishCareerRequest extends FormRequest<{ expires_at: string | null }> {
+export class PublishCareerRequest extends FormRequest<{
+  expires_at: string | null;
+  publish_at: string | null;
+}> {
   async validate(request: Request) {
     if (!(await this.authorize(request))) {
       throw new ForbiddenError();
@@ -24,6 +27,7 @@ export class PublishCareerRequest extends FormRequest<{ expires_at: string | nul
     const body = expectObject(payload ?? {});
     return {
       expires_at: typeof body.expires_at === "string" ? body.expires_at : null,
+      publish_at: typeof body.publish_at === "string" ? body.publish_at : null,
     };
   }
 }

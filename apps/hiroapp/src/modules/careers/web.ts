@@ -44,7 +44,10 @@ export function careerWebRoutes(dependencies: AppDependencies): AppRouteMap {
           async (request, position) => {
             const actor = await requireCurrentUser(request);
             const { fields } = await parseFormBody(request);
-            await careerService.publish(actor, position, { expires_at: fields.expires_at || null });
+            await careerService.publish(actor, position, {
+              expires_at: fields.expires_at || null,
+              publish_at: fields.publish_at || null,
+            });
             return redirectResponse(returnTo(fields, `/positions/${position.id}`));
           },
         ),
