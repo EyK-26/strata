@@ -13,10 +13,6 @@ class CareerPostingRepository extends TenantRepository<CareerPostingRecord, "id"
   async listed() {
     return this.findWhere({ status: { in: ["published", "scheduled"] } });
   }
-
-  async published() {
-    return this.findWhere({ status: "published" });
-  }
 }
 
 export const careerPostings = new CareerPostingRepository();
