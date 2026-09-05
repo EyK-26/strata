@@ -5,8 +5,8 @@ describe("abilities", () => {
   test("members receive scoped abilities", () => {
     const abilities = resolveAbilitiesForRole("member");
 
-    expect(abilities).toContain("projects:create");
-    expect(abilities).toContain("organizations:create");
+    expect(abilities).toContain("profile:read");
+    expect(abilities).toContain("auth:tokens:write");
     expect(abilities).not.toContain("*");
   });
 

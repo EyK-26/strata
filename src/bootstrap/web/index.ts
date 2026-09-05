@@ -1,5 +1,5 @@
 /**
- * Web-focused bootstrap utilities for sibling apps (getstrata, marketing sites).
+ * Web-focused bootstrap utilities for HTML and cookie-session apps.
  */
 
 export { createCsrfProtection, type ParsedForm, parseFormBody } from "./forms.ts";

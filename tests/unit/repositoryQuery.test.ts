@@ -57,7 +57,7 @@ class MemberRepository extends BaseRepository<Member, "id"> {
 }
 
 describe("RepositoryQuery", () => {
-  test("withHasMany attaches related rows Laravel-style", async () => {
+  test("withHasMany attaches related rows by foreign key", async () => {
     const connection = new FakeConnection();
     const squads = new SquadRepository(connection);
     const members = new MemberRepository(connection);
@@ -147,7 +147,7 @@ describe("RepositoryQuery", () => {
     expect(connection.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  test("whereNull, whereNotNull, whereIn, and whereExists compile Laravel-style filters", async () => {
+  test("whereNull, whereNotNull, whereIn, and whereExists compile SQL filters", async () => {
     const connection = new FakeConnection();
     const squads = new SquadRepository(connection);
 

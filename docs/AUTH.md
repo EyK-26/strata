@@ -29,15 +29,31 @@ auth.registerGuard("jwt", new JwtGuard());
 auth.registerGuard("basic", new BasicAuthGuard(container));
 ```
 
-On each request it looks at `Authorization`:
+Default token abilities for HMAC sessions and test headers are `profile:read` plus `auth:tokens:*`. Replace them per app:
+
+```typescript
+import { configureAbilityCatalog } from "@getstrata/core/auth/abilityCatalog";
+
+configureAbilityCatalog({
+  member: ["profile:read"],
+  admin: ["*"],
+  resolveForRole(role) {
+    if (role === "admin") return ["*"];
+    if (role === "recruiter") return ["profile:read", "integrations:ping"];
+    return ["profile:read"];
+  },
+});
+```
+
+HiroApp does this in `apps/hiroapp/src/bootstrap/providers/auth.ts`. Opaque API tokens still store their own ability list on the `api_token` row. That list is what `wrapPartnerApi` checks.
+
+On each request `AuthManager` looks at `Authorization`:
 
 - `Bearer` tries `api` / `access_token` / `token` / `jwt` in that order. Opaque tokens are skipped by the JWT guard (they are not three dotted parts). JWTs are skipped by the database token guard.
 - `Basic` tries `basic`.
 - Otherwise it tries `web` / `session` / `default` (cookies).
 
 You can still call `auth.use("jwt")` when a route must accept only JWTs.
-
-HiroApp wires this in `apps/hiroapp/src/bootstrap/providers/auth.ts`.
 
 ## CSRF
 

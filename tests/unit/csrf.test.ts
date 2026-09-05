@@ -13,7 +13,7 @@ import { restoreEnvVar } from "../helpers/restoreEnv";
 describe("csrfToken", () => {
   test("creates and verifies a csrf token", () => {
     const { token, cookie } = createCsrfTokenCookie();
-    const request = new Request("http://example.test/organizations", {
+    const request = new Request("http://example.test/login", {
       headers: { cookie: cookie.split(";")[0] ?? "" },
     });
 
@@ -55,13 +55,13 @@ describe("csrfToken", () => {
 
   test("overrides the CSRF cookie name from CSRF_COOKIE_NAME", () => {
     const previous = process.env.CSRF_COOKIE_NAME;
-    process.env.CSRF_COOKIE_NAME = "strata_csrf";
+    process.env.CSRF_COOKIE_NAME = "hiring_csrf";
 
     try {
-      expect(csrfCookieName()).toBe("strata_csrf");
+      expect(csrfCookieName()).toBe("hiring_csrf");
       const created = createCsrfTokenCookie();
-      expect(created.cookie).toContain("strata_csrf=");
-      expect(created.cookie).not.toContain("strata_csrf=");
+      expect(created.cookie).toContain("hiring_csrf=");
+      expect(created.cookie).not.toContain(`${appCookieName("csrf")}=`);
 
       const request = new Request("http://example.test/", {
         headers: { cookie: created.cookie.split(";")[0] ?? "" },
@@ -77,7 +77,7 @@ describe("createCsrfMiddleware", () => {
   test("allows safe methods and sets csrf cookie when needed", async () => {
     const middleware = createCsrfMiddleware();
     const response = await middleware(
-      new Request("http://example.test/organizations"),
+      new Request("http://example.test/login"),
       async () => new Response("ok"),
     );
 
@@ -91,7 +91,7 @@ describe("createCsrfMiddleware", () => {
 
     await expect(
       middleware(
-        new Request("http://example.test/organizations", {
+        new Request("http://example.test/login", {
           method: "POST",
           headers: { cookie: cookie.split(";")[0] ?? "" },
         }),
@@ -106,7 +106,7 @@ describe("createCsrfMiddleware", () => {
     const body = new URLSearchParams({ _token: token, name: "Acme" });
 
     const response = await middleware(
-      new Request("http://example.test/organizations", {
+      new Request("http://example.test/login", {
         method: "POST",
         headers: {
           cookie: cookie.split(";")[0] ?? "",

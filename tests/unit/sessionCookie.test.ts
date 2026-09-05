@@ -70,7 +70,7 @@ describe("sessionCookie", () => {
 
   test("creates and reads a signed session cookie", () => {
     const cookiePair = createSessionCookie(42).split(";")[0] ?? "";
-    const request = new Request("http://example.test/organizations", {
+    const request = new Request("http://example.test/login", {
       headers: {
         cookie: cookiePair,
       },
@@ -98,9 +98,9 @@ describe("sessionCookie", () => {
   });
 
   test("rejects tampered session cookies", () => {
-    expect(readSessionUserId(new Request("http://example.test/organizations"))).toBeNull();
+    expect(readSessionUserId(new Request("http://example.test/login"))).toBeNull();
 
-    const request = new Request("http://example.test/organizations", {
+    const request = new Request("http://example.test/login", {
       headers: {
         cookie: "strata_session=999.123.deadbeef",
       },
@@ -190,7 +190,7 @@ describe("sessionCookie", () => {
     const cookiePair = createSessionCookie(42).split(";")[0] ?? "";
     const encoded = cookiePair.split("=")[1] ?? "";
     const request = new Request("http://example.test/", {
-      headers: { cookie: `strata_session=${encoded}` },
+      headers: { cookie: `${sessionCookieName()}=${encoded}` },
     });
 
     expect(readSessionUserId(request)).toBe(42);
@@ -203,7 +203,7 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${badSignature}`)}`,
+            cookie: `${sessionCookieName()}=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${badSignature}`)}`,
           },
         }),
       ),
@@ -237,13 +237,13 @@ describe("sessionCookie", () => {
   });
 
   test("overrides the HMAC session cookie name from SESSION_COOKIE_NAME", () => {
-    process.env.SESSION_COOKIE_NAME = "strata_session";
+    process.env.SESSION_COOKIE_NAME = "hiring_session";
 
-    expect(sessionCookieName()).toBe("strata_session");
+    expect(sessionCookieName()).toBe("hiring_session");
 
     const cookie = createSessionCookie(11);
-    expect(cookie).toContain("strata_session=");
-    expect(cookie).not.toContain("strata_session=");
+    expect(cookie).toContain("hiring_session=");
+    expect(cookie).not.toContain(`${appCookieName("session")}=`);
 
     expect(
       readSessionUserId(
@@ -256,13 +256,13 @@ describe("sessionCookie", () => {
     expect(
       readSessionUserId(
         new Request("http://example.test/", {
-          headers: { cookie: "strata_session=11.1.deadbeef" },
+          headers: { cookie: `${appCookieName("session")}=11.1.deadbeef` },
         }),
       ),
     ).toBeNull();
 
     process.env.SESSION_COOKIE_NAME = "   ";
-    expect(sessionCookieName()).toBe("strata_session");
+    expect(sessionCookieName()).toBe(appCookieName("session"));
   });
 
   test("creates a longer remember-me cookie that stays valid past the session TTL", () => {

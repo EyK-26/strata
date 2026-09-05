@@ -140,7 +140,41 @@ describe("generateOpenApiSpec", () => {
     }
   });
 
-  test("honors sibling APP_NAME and APP_SDK_CLASS", () => {
+  test("marks HiroApp login, JWT mint, and public careers as unauthenticated", () => {
+    const previousPrefix = process.env.API_PREFIX;
+    process.env.API_PREFIX = "/api";
+
+    try {
+      const spec = generateOpenApiSpec([
+        { method: "POST", path: "/api/login", middleware: ["global", "api"] },
+        { method: "POST", path: "/api/auth/token", middleware: ["global", "api"] },
+        { method: "GET", path: "/api/careers", middleware: ["global"] },
+        { method: "GET", path: "/api/careers/:id", middleware: ["global"] },
+        { method: "GET", path: "/api/integrations/ping", middleware: ["global", "api"] },
+        { method: "POST", path: "/api/auth/tokens", middleware: ["global", "api"] },
+      ]);
+
+      expect(operation(spec, "/api/login", "post")?.summary).toBe("Login with email and password");
+      expect(operation(spec, "/api/login", "post")?.security).toBeUndefined();
+      expect(operation(spec, "/api/auth/token", "post")?.summary).toBe(
+        "Mint a short-lived JWT with email and password",
+      );
+      expect(operation(spec, "/api/auth/token", "post")?.security).toBeUndefined();
+      expect(operation(spec, "/api/careers", "get")?.security).toBeUndefined();
+      expect(operation(spec, "/api/careers/{id}", "get")?.security).toBeUndefined();
+      expect(operation(spec, "/api/integrations/ping", "get")?.summary).toBe(
+        "Partner heartbeat (requires integrations:ping)",
+      );
+      expect(operation(spec, "/api/integrations/ping", "get")?.security).toEqual([
+        { bearerAuth: [] },
+      ]);
+      expect(operation(spec, "/api/auth/tokens", "post")?.security).toEqual([{ bearerAuth: [] }]);
+    } finally {
+      restoreEnvVar("API_PREFIX", previousPrefix);
+    }
+  });
+
+  test("honors APP_NAME and APP_SDK_CLASS for a generated client", () => {
     const previousName = process.env.APP_NAME;
     const previousClass = process.env.APP_SDK_CLASS;
     process.env.APP_NAME = "Forum";

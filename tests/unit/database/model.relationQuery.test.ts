@@ -307,10 +307,10 @@ describe("Eloquent-style model relations", () => {
     ]);
     connection.queue([
       { id: 10, name: "bun" },
-      { id: 20, name: "laravel" },
+      { id: 20, name: "strata" },
     ]);
     const tags = await user.tags().where({}).orderBy({ name: "ASC" }).get();
-    expect(tags.map((tag) => tag.get("name"))).toEqual(["bun", "laravel"]);
+    expect(tags.map((tag) => tag.get("name"))).toEqual(["bun", "strata"]);
 
     await user.tags().attach(30);
     expect(connection.calls.at(-1)?.query).toContain("INSERT");

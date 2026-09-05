@@ -2,10 +2,10 @@ import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
-import { roleName } from "../../lib/roles.ts";
-import { apiTokens } from "../../modules/account/tokenRepository.ts";
-import { normalizeAbilities } from "../../modules/account/tokenService.ts";
-import { users } from "../../modules/users/repository.ts";
+import { roleName } from "../lib/roles.ts";
+import { apiTokens } from "../modules/account/tokenRepository.ts";
+import { normalizeAbilities } from "../modules/account/tokenService.ts";
+import { users } from "../modules/users/repository.ts";
 
 function expired(value: Date | string | null | undefined): boolean {
   if (!value) {

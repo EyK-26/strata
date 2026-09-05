@@ -54,7 +54,7 @@ describe("buildPaginationMeta", () => {
 });
 
 describe("paginatedResponse", () => {
-  test("returns a Laravel-style data/meta JSON payload", async () => {
+  test("returns a data/meta JSON payload", async () => {
     const response = paginatedResponse(
       [{ id: 1 }],
       buildPaginationMeta({ page: 1, perPage: 15, total: 1 }),

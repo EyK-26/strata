@@ -23,6 +23,12 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /auth/tokens": "List API tokens",
   "POST /auth/tokens": "Create API token",
   "DELETE /auth/tokens/:id": "Revoke API token",
+  "POST /auth/token": "Mint a short-lived JWT with email and password",
+  "POST /login": "Login with email and password",
+  "GET /careers": "List public career postings",
+  "GET /careers/:id": "Show a public career posting",
+  "GET /integrations/ping": "Partner heartbeat (requires integrations:ping)",
+  "GET /audit-logs/export": "Download audit events as JSON or CEF",
   "GET /users/me/export": "GDPR export of user data",
   "GET /users/me/current-organization": "Current organization",
   "PUT /users/me/current-organization": "Switch current organization",
@@ -59,6 +65,11 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /metrics": "Prometheus metrics",
   "GET /api/user": "Current authenticated HiroApp user",
   "POST /api/login": "Login with email and password",
+  "POST /api/auth/token": "Mint a short-lived JWT with email and password",
+  "GET /api/integrations/ping": "Partner heartbeat (requires integrations:ping)",
+  "GET /api/audit-logs/export": "Download audit events as JSON or CEF",
+  "GET /api/careers": "List public career postings",
+  "GET /api/careers/:id": "Show a public career posting",
   "POST /api/logout": "Log out the current cookie session",
   "POST /api/auth/two-factor-challenge": "Complete staff two-factor login challenge",
   "GET /api/users/me": "Current user profile",
@@ -108,7 +119,11 @@ function requiresBearerAuth(path: string, method: string): boolean {
     relative.startsWith("/auth/forgot-password") ||
     relative.startsWith("/auth/reset-password") ||
     relative.startsWith("/auth/email/verification-notification") ||
-    relative.startsWith("/auth/oauth")
+    relative.startsWith("/auth/oauth") ||
+    relative === "/auth/token" ||
+    relative === "/login" ||
+    path === "/login" ||
+    path === "/api/login"
   ) {
     return false;
   }
@@ -131,7 +146,7 @@ function requiresBearerAuth(path: string, method: string): boolean {
 
   if (
     method === "GET" &&
-    ["/organizations", "/projects", "/tasks", "/search"].some(
+    ["/organizations", "/projects", "/tasks", "/search", "/careers"].some(
       (prefix) => relative.startsWith(prefix) || path.startsWith(prefix),
     )
   ) {
@@ -142,6 +157,9 @@ function requiresBearerAuth(path: string, method: string): boolean {
     relative.startsWith("/auth/") ||
     relative.startsWith("/users/me") ||
     path.startsWith("/users/me") ||
+    relative === "/user" ||
+    relative.startsWith("/integrations/") ||
+    relative.startsWith("/audit-logs") ||
     ["POST", "PATCH", "PUT", "DELETE"].includes(method)
   );
 }

@@ -122,6 +122,17 @@ describe("named auth guards", () => {
         "Auth guard name must not be empty.",
       );
 
+      const bearerMiss = new AuthManager({
+        resolve() {
+          return { id: 99, role: "fallback" };
+        },
+      });
+      expect(
+        await bearerMiss.resolve(
+          new Request("http://example.test", { headers: { authorization: "Bearer nope" } }),
+        ),
+      ).toEqual({ id: 99, role: "fallback" });
+
       const basicDirectory: AuthUserDirectory = {
         async resolveUserFromToken() {
           return null;
@@ -164,7 +175,12 @@ describe("HTTP Basic guard", () => {
         if (email !== "admin@hiroapp.test") {
           return null;
         }
-        return { id: 1, role: "admin", password };
+        return {
+          id: 1,
+          role: "admin",
+          password,
+          email_verified_at: "2026-01-01T00:00:00.000Z",
+        };
       },
     };
     const guard = new BasicAuthGuard(directoryContainer(directory));
@@ -174,7 +190,11 @@ describe("HTTP Basic guard", () => {
       await guard.resolve(
         new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
       ),
-    ).toEqual({ id: 1, role: "admin", emailVerifiedAt: null });
+    ).toEqual({
+      id: 1,
+      role: "admin",
+      emailVerifiedAt: "2026-01-01T00:00:00.000Z",
+    });
   });
 
   test("uses verifyCredentials when the directory provides it", async () => {

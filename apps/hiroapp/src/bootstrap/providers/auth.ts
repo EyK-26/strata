@@ -4,6 +4,7 @@ import {
   type LoadSessionUser,
   type SessionUser,
 } from "@getstrata/bootstrap/web/session";
+import { configureAbilityCatalog } from "@getstrata/core/auth/abilityCatalog";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import { DatabaseTokenGuard } from "@getstrata/core/auth/guard";
@@ -75,6 +76,27 @@ function mapUser(user: SessionUser): AuthUser {
 export const authProvider: ServiceProvider = {
   name: "hiroapp.auth",
   register({ container }) {
+    configureAbilityCatalog({
+      member: ["profile:read"],
+      admin: ["*"],
+      resolveForRole(role) {
+        if (role === "admin") {
+          return ["*"];
+        }
+        if (role === "recruiter") {
+          return [
+            "profile:read",
+            "applications:read",
+            "applications:write",
+            "integrations:ping",
+            "auth:tokens:read",
+            "auth:tokens:write",
+            "auth:tokens:delete",
+          ];
+        }
+        return ["profile:read"];
+      },
+    });
     container.set(CORE_AUTH_USER_DIRECTORY_TOKEN, hiroAuthDirectory);
     const auth = createCookieSessionAuthManager({
       secret: process.env.SESSION_SECRET?.trim() || "hiroapp-dev-session-secret-change-me",

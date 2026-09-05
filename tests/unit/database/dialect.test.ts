@@ -86,11 +86,13 @@ describe("SQL dialect", () => {
   });
 
   test("rejects unsafe identifiers on every dialect", () => {
-    runWithSqlDialect("mysql", () => {
-      expect(() => currentSqlDialect().quoteIdentifier("users;drop")).toThrow(
-        "Invalid SQL identifier",
-      );
-    });
+    for (const driver of ["pgsql", "mysql", "sqlite"] as const) {
+      runWithSqlDialect(driver, () => {
+        expect(() => currentSqlDialect().quoteIdentifier("users;drop")).toThrow(
+          "Invalid SQL identifier",
+        );
+      });
+    }
   });
 
   test("useSqlDialect and resetSqlDialect restore the env-selected dialect", () => {

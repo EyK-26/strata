@@ -21,12 +21,12 @@ const abilityChecker: AbilityChecker = {
 
 describe("createRequireAbilityMiddleware", () => {
   test("allows users with the required ability", async () => {
-    const middleware = createRequireAbilityMiddleware(abilityChecker)("projects:delete");
+    const middleware = createRequireAbilityMiddleware(abilityChecker)("applications:delete");
 
     const response = await runWithAuthUser(
-      { id: 1, abilities: ["projects:delete"] },
+      { id: 1, abilities: ["applications:delete"] },
       async () =>
-        await middleware(new Request("http://example.test/projects/1"), async () =>
+        await middleware(new Request("http://example.test/applications/1"), async () =>
           Response.json({ ok: true }),
         ),
     );
@@ -35,12 +35,12 @@ describe("createRequireAbilityMiddleware", () => {
   });
 
   test("rejects users missing the required ability", async () => {
-    const middleware = createRequireAbilityMiddleware(abilityChecker)("projects:delete");
+    const middleware = createRequireAbilityMiddleware(abilityChecker)("applications:delete");
 
     const response = await runWithAuthUser(
-      { id: 1, abilities: ["projects:read"] },
+      { id: 1, abilities: ["applications:read"] },
       async () =>
-        await middleware(new Request("http://example.test/projects/1"), async () =>
+        await middleware(new Request("http://example.test/applications/1"), async () =>
           Response.json({ ok: true }),
         ),
     );
@@ -50,12 +50,12 @@ describe("createRequireAbilityMiddleware", () => {
   });
 
   test("allows wildcard abilities", async () => {
-    const middleware = createRequireAbilityMiddleware(abilityChecker)("organizations:delete");
+    const middleware = createRequireAbilityMiddleware(abilityChecker)("departments:delete");
 
     const response = await runWithAuthUser(
       { id: 1, abilities: ["*"] },
       async () =>
-        await middleware(new Request("http://example.test/organizations/1"), async () =>
+        await middleware(new Request("http://example.test/departments/1"), async () =>
           Response.json({ ok: true }),
         ),
     );

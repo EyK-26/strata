@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Named auth guards: opaque Bearer tokens, JWT HS256, HTTP Basic, and cookie sessions. `AuthManager` picks a guard from the `Authorization` scheme. CSRF is skipped for Bearer and Basic.
+- Default `MEMBER_ABILITIES` are profile and token scopes (`profile:read`, `auth:tokens:*`). Apps replace the catalog with `configureAbilityCatalog`. HiroApp maps admin / recruiter / candidate.
+- OpenAPI treats HiroApp login, JWT mint (`POST /api/auth/token`), and public careers as unauthenticated. Partner ping and audit export require credentials.
+- SQL dialect helpers (`pgsql`, `mysql`, `sqlite`) for placeholders, quoting, `ILIKE`/`LIKE`, `RETURNING`, and `NULLS LAST`. Full-text `tsMatch` stays Postgres-only and throws on other engines.
 - SQL dialect helpers (`pgsql`, `mysql`, `sqlite`) for placeholders, quoting, `ILIKE`/`LIKE`, `RETURNING`, and `NULLS LAST`. Full-text `tsMatch` stays Postgres-only and throws on other engines.
 - HiroApp is the only in-repo example product. The leftover `src/db` schema is a test fixture, not a second app.
 - Cookie session signatures use HMAC-SHA256. Existing HMAC cookies signed with the previous digest will not verify.
