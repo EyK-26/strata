@@ -113,17 +113,20 @@ function scriptedPrompter(script: {
       }
       return value as typeof defaultValue;
     },
-    async multiSelect(message, choices) {
+    async multiSelect<T extends string>(
+      _message: string,
+      choices: Array<{ value: T; label: string; enabled: boolean }>,
+    ): Promise<T[]> {
       if (multiSelect.length === 0) {
-        throw new Error(`unexpected multiSelect: ${message}`);
+        throw new Error(`unexpected multiSelect: ${_message}`);
       }
       const values = multiSelect.shift() ?? [];
       for (const value of values) {
         if (!choices.some((choice) => choice.value === value)) {
-          throw new Error(`scripted multiSelect "${value}" is not in choices for: ${message}`);
+          throw new Error(`scripted multiSelect "${value}" is not in choices for: ${_message}`);
         }
       }
-      return values;
+      return values as T[];
     },
     close() {},
   };
