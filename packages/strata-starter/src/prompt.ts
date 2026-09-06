@@ -7,6 +7,7 @@ import {
   type ParsedFlags,
 } from "./parseArgs.ts";
 import { defaultLayers } from "./presets.ts";
+import { promptConfirm, promptMultiSelect, promptSelect } from "./selectPrompt.ts";
 import {
   DOCKER_SERVICE_LABELS,
   dockerLayerForNeeded,
@@ -23,8 +24,21 @@ interface Prompter {
     choices: Array<{ value: T; label: string }>,
     defaultValue: T,
   ): Promise<T>;
+  multiSelect<T extends string>(
+    message: string,
+    choices: Array<{ value: T; label: string; enabled: boolean }>,
+  ): Promise<T[]>;
   close(): void;
 }
+
+const EXTRA_CHOICES = [
+  { value: "mfa", label: "mfa: authenticator challenge + setup pages" },
+  { value: "emailVerification", label: "email-verification: signed links + /email/verify" },
+  { value: "scim", label: "scim: /Users adapter" },
+  { value: "metrics", label: "metrics: Prometheus token" },
+] as const;
+
+type ExtraKey = (typeof EXTRA_CHOICES)[number]["value"];
 
 function isInteractive(flags: ParsedFlags): boolean {
   if (flags.yes || flags.noInteractive) {
@@ -33,8 +47,13 @@ function isInteractive(flags: ParsedFlags): boolean {
   return Boolean(input.isTTY && output.isTTY);
 }
 
+function canUseRawKeys(): boolean {
+  return Boolean(input.isTTY && typeof input.setRawMode === "function");
+}
+
 function createReadlinePrompter(): Prompter {
   const rl = createInterface({ input, output });
+  const io = { input, output };
 
   return {
     async question(message, defaultValue) {
@@ -43,6 +62,15 @@ function createReadlinePrompter(): Prompter {
       return answer || defaultValue || "";
     },
     async confirm(message, defaultValue = false) {
+      if (canUseRawKeys()) {
+        rl.pause();
+        try {
+          return await promptConfirm(message, defaultValue, io);
+        } finally {
+          input.setRawMode?.(false);
+          rl.resume();
+        }
+      }
       const hint = defaultValue ? "Y/n" : "y/N";
       const answer = (await rl.question(`${message} (${hint}): `)).trim().toLowerCase();
       if (!answer) {
@@ -51,6 +79,15 @@ function createReadlinePrompter(): Prompter {
       return answer === "y" || answer === "yes";
     },
     async select(message, choices, defaultValue) {
+      if (canUseRawKeys()) {
+        rl.pause();
+        try {
+          return await promptSelect(message, choices, defaultValue, io);
+        } finally {
+          input.setRawMode?.(false);
+          rl.resume();
+        }
+      }
       console.log(message);
       for (const [index, choice] of choices.entries()) {
         const marker = choice.value === defaultValue ? "*" : " ";
@@ -69,10 +106,59 @@ function createReadlinePrompter(): Prompter {
       const match = choices.find((choice) => choice.value === answer || choice.label === answer);
       return match?.value ?? defaultValue;
     },
+    async multiSelect(message, choices) {
+      if (canUseRawKeys()) {
+        rl.pause();
+        try {
+          return await promptMultiSelect(message, choices, io);
+        } finally {
+          input.setRawMode?.(false);
+          rl.resume();
+        }
+      }
+      const enabled = new Set(
+        choices.filter((choice) => choice.enabled).map((choice) => choice.value),
+      );
+      console.log(`${message} (yes/no each)`);
+      for (const choice of choices) {
+        const hint = enabled.has(choice.value) ? "Y/n" : "y/N";
+        const answer = (await rl.question(`  ${choice.label} (${hint}): `)).trim().toLowerCase();
+        if (!answer) {
+          continue;
+        }
+        if (answer === "y" || answer === "yes") {
+          enabled.add(choice.value);
+        } else if (answer === "n" || answer === "no") {
+          enabled.delete(choice.value);
+        }
+      }
+      return [...enabled];
+    },
     close() {
       rl.close();
     },
   };
+}
+
+async function promptExtras(
+  prompter: Prompter,
+  extras: StarterLayers["extras"],
+): Promise<StarterLayers["extras"]> {
+  const picked = new Set(
+    await prompter.multiSelect(
+      "Extras",
+      EXTRA_CHOICES.map((choice) => ({
+        value: choice.value,
+        label: choice.label,
+        enabled: extras[choice.value],
+      })),
+    ),
+  );
+  const next = { ...extras };
+  for (const choice of EXTRA_CHOICES) {
+    next[choice.value] = picked.has(choice.value);
+  }
+  return next;
 }
 
 async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<StarterLayers> {
@@ -161,21 +247,7 @@ async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<Sta
     layers.spaPrefix = await prompter.question("SPA prefix", layers.spaPrefix);
   }
 
-  const askExtras =
-    flags.extrasPrompt || (await prompter.confirm("Configure extras (MFA, SCIM, metrics)?", false));
-
-  if (askExtras) {
-    layers.extras.mfa = await prompter.confirm(
-      "Authenticator MFA (cookie challenge + setup pages)?",
-      layers.extras.mfa,
-    );
-    layers.extras.emailVerification = await prompter.confirm(
-      "Email verification (signed links + /email/verify)?",
-      layers.extras.emailVerification,
-    );
-    layers.extras.scim = await prompter.confirm("SCIM /Users adapter?", layers.extras.scim);
-    layers.extras.metrics = await prompter.confirm("Metrics token?", layers.extras.metrics);
-  }
+  layers.extras = await promptExtras(prompter, layers.extras);
 
   if (!dockerFlagsProvided(flags)) {
     layers.docker = await promptDockerLayer(prompter, layers);
@@ -250,5 +322,5 @@ async function resolveStarterPlan(
   }
 }
 
-export type { Prompter };
-export { createReadlinePrompter, isInteractive, promptLayers, resolveStarterPlan };
+export type { ExtraKey, Prompter };
+export { createReadlinePrompter, EXTRA_CHOICES, isInteractive, promptLayers, resolveStarterPlan };

@@ -13,7 +13,7 @@ strata migrate
 strata dev
 ```
 
-The CLI is interactive in a terminal. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`.
+The CLI is interactive in a terminal. Move with ↑/↓ and Enter, or type a number. Toggle extras (MFA, email verification, SCIM, metrics) with Space. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`.
 
 Layer flags: [STARTER.md](./STARTER.md). The three in-repo examples are generated from that script (`bun run generate:example-apps`). Do not treat HiroApp as the source of the wizard.
 

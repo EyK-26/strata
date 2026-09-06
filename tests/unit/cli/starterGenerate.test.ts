@@ -84,10 +84,12 @@ function scriptedPrompter(script: {
   select?: string[];
   confirm?: boolean[];
   question?: string[];
+  multiSelect?: string[][];
 }): Prompter {
   const select = [...(script.select ?? [])];
   const confirm = [...(script.confirm ?? [])];
   const question = [...(script.question ?? [])];
+  const multiSelect = [...(script.multiSelect ?? [])];
   return {
     async question(_message, defaultValue) {
       if (question.length === 0) {
@@ -110,6 +112,18 @@ function scriptedPrompter(script: {
         throw new Error(`scripted select "${value}" is not in choices for: ${message}`);
       }
       return value as typeof defaultValue;
+    },
+    async multiSelect(message, choices) {
+      if (multiSelect.length === 0) {
+        throw new Error(`unexpected multiSelect: ${message}`);
+      }
+      const values = multiSelect.shift() ?? [];
+      for (const value of values) {
+        if (!choices.some((choice) => choice.value === value)) {
+          throw new Error(`scripted multiSelect "${value}" is not in choices for: ${message}`);
+        }
+      }
+      return values;
     },
     close() {},
   };
@@ -466,12 +480,18 @@ describe("create-strata CLI", () => {
       parseCreateStrataArgs(["demo"]),
       scriptedPrompter({
         select: ["api", "sqlite", "headers", "none", "array", "sync", "log"],
-        confirm: [false],
+        multiSelect: [[]],
       }),
     );
     expect(layers.frontend).toBe("api");
     expect(layers.database).toBe("sqlite");
     expect(layers.docker.enabled).toBe(false);
+    expect(layers.extras).toEqual({
+      mfa: false,
+      emailVerification: false,
+      scim: false,
+      metrics: false,
+    });
   });
 
   test("wizard can choose local tools or a docker mix", async () => {
@@ -479,7 +499,7 @@ describe("create-strata CLI", () => {
       parseCreateStrataArgs(["demo"]),
       scriptedPrompter({
         select: ["server-htmx", "postgres", "cookie", "none", "redis", "redis", "log", "local"],
-        confirm: [false],
+        multiSelect: [[]],
       }),
     );
     expect(local.docker.enabled).toBe(false);
@@ -488,11 +508,38 @@ describe("create-strata CLI", () => {
       parseCreateStrataArgs(["demo"]),
       scriptedPrompter({
         select: ["server-htmx", "postgres", "cookie", "none", "redis", "redis", "log", "mix"],
-        confirm: [false, true, false],
+        multiSelect: [[]],
+        confirm: [true, false],
       }),
     );
     expect(mix.docker.services.postgres).toBe(true);
     expect(mix.docker.services.redis).toBe(false);
+  });
+
+  test("wizard extras list can enable MFA and SCIM one by one", async () => {
+    const layers = await promptLayers(
+      parseCreateStrataArgs(["demo"]),
+      scriptedPrompter({
+        select: ["api", "sqlite", "headers", "none", "array", "sync", "log"],
+        multiSelect: [["mfa", "scim"]],
+      }),
+    );
+    expect(layers.extras.mfa).toBe(true);
+    expect(layers.extras.scim).toBe(true);
+    expect(layers.extras.emailVerification).toBe(false);
+    expect(layers.extras.metrics).toBe(false);
+
+    const metricsOnly = await promptLayers(
+      parseCreateStrataArgs(["demo"]),
+      scriptedPrompter({
+        select: ["api", "sqlite", "headers", "none", "array", "sync", "log"],
+        multiSelect: [["emailVerification", "metrics"]],
+      }),
+    );
+    expect(metricsOnly.extras.mfa).toBe(false);
+    expect(metricsOnly.extras.scim).toBe(false);
+    expect(metricsOnly.extras.emailVerification).toBe(true);
+    expect(metricsOnly.extras.metrics).toBe(true);
   });
 
   test("sqlite API app boots and answers GET /health", async () => {

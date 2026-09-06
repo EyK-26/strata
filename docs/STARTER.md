@@ -1,6 +1,6 @@
 # Starter
 
-`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, optional extras, then Docker vs local installs.
+`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras (MFA, email verification, SCIM, metrics), then Docker vs local installs. In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space.
 
 HiroApp in this repo is one generated example (`apps/hiroapp`: Postgres + HTMX). It is not the source of the wizard. Sibling examples: `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis). Regenerate them with `bun run generate:example-apps`.
 
@@ -35,7 +35,7 @@ bunx create-strata html --frontend server-htmx --database postgres --auth cookie
 | `--mail` | `log`, `smtp` |
 | `--spa-prefix` | default `/app` |
 
-Extras (off unless you pass flags or answer yes in the wizard): `--mfa`, `--email-verification`, `--scim`, `--metrics`.
+Extras (off until you toggle them in the wizard, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`.
 
 You can add cache, SMTP, Redis, or another auth mode later by changing env and the matching bootstrap files. The generator only installs what you asked for.
 

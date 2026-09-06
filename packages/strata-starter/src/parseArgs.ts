@@ -62,7 +62,7 @@ Options:
   --email-verification / --no-email-verification
   --scim / --no-scim
   --metrics / --no-metrics
-  --extras            Prompt (or enable) MFA, email verification, SCIM, metrics
+  --extras            Interactive extras list (MFA, email verification, SCIM, metrics)
   --docker            Write Docker Compose for every selected tool that needs a service
   --no-docker         Skip docker-compose.yml; use installs already on this machine
   --docker-services   Subset: postgres, mysql, redis, mailpit (comma-separated)
