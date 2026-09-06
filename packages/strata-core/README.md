@@ -65,7 +65,7 @@ import type { Migration } from "@getstrata/core/database/migrations/types";
 Package name: **`@getstrata/core`** (npm org [`@getstrata`](https://www.npmjs.com/org/getstrata)).
 
 1. Add `NPM_TOKEN` to GitHub repository secrets.
-2. Tag a release: `git tag v0.7.4 && git push origin v0.7.4`
+2. Tag a release: `git tag v0.7.5 && git push origin v0.7.5`
 3. [Release workflow](../../.github/workflows/release.yml) builds and runs `npm publish --access public`.
 
 See [docs/PACKAGING.md](../../docs/PACKAGING.md).

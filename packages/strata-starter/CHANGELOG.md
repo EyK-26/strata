@@ -1,8 +1,8 @@
-# create-strata 0.1.9
+# create-strata 0.1.10
 
 Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script. The original hiring product is not the source of the generator.
 
-## Unreleased
+## 0.1.10
 
 - Cookie / cookie-* apps get a restyleable HTML auth kit: welcome, login, register, forgot/reset password (`views/` + `public/assets/site.css`).
 - Token and JWT apps get JSON register and password reset.

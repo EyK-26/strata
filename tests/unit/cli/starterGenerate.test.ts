@@ -222,7 +222,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^0.7.4");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^0.7.5");
     expect(pkg.scripts.dev).toBe("strata dev");
   });
 
