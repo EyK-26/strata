@@ -23,21 +23,24 @@ function createFakeSql(user: SessionUser) {
       lastActiveAt: Date | null;
     }
   >();
+  let lastInsertExpires: unknown;
 
   return {
     sessions,
+    lastInsertExpires: () => lastInsertExpires,
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
       if (query.includes("INSERT INTO sessions")) {
         const [id, userId, expires, userAgent, ipAddress] = params as [
           string,
           number,
-          Date,
+          Date | string,
           string | null | undefined,
           string | null | undefined,
         ];
+        lastInsertExpires = expires;
         sessions.set(id, {
           userId,
-          expiresAt: expires,
+          expiresAt: new Date(expires),
           userAgent: userAgent ?? null,
           ipAddress: ipAddress ?? null,
           lastActiveAt: new Date(),
@@ -314,6 +317,8 @@ describe("CookieSessionGuard", () => {
     expect(listed[0]?.id).toBe(sessionId);
     expect(listed[0]?.user_agent).toBe("HiroAppTest/1.0");
     expect(listed[0]?.ip_address).toBe("203.0.113.10");
+    expect(typeof sql.lastInsertExpires()).toBe("string");
+    expect(String(sql.lastInsertExpires())).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     await store.touch(sessionId);
     expect(sql.sessions.get(sessionId)?.lastActiveAt).toBeInstanceOf(Date);
   });

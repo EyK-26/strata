@@ -332,7 +332,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
             }
             await getSql().unsafe(
               "UPDATE users SET email_verified_at = ${verifiedPh} WHERE id = ${idPh}",
-              [new Date(), id],
+              [new Date().toISOString(), id],
             );
             return jsonResponse({ ok: true });
           })),
@@ -507,7 +507,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
               if (Number.isInteger(id) && id > 0) {
                 await getSql().unsafe(
                   "UPDATE users SET email_verified_at = ${verifiedPh} WHERE id = ${idPh}",
-                  [new Date(), id],
+                  [new Date().toISOString(), id],
                 );
                 const record = await starterAuthDirectory.findByIdOrThrow(id);
                 return flashResponse(

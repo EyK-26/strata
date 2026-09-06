@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Cookie session `mapUser` / row mapping can pass `email_verified_at` through as `emailVerifiedAt` so HTML email verification works.
+- Session insert binds `expires_at` as an ISO string so SQLite cookie login does not fail parameter binding.
 
 ## 0.4.2
 

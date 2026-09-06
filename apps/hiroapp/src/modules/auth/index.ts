@@ -213,7 +213,7 @@ const authModule: AppModule = {
               return jsonResponse({ error: "Invalid verification link." }, { status: 422 });
             }
             await getSql().unsafe("UPDATE users SET email_verified_at = $1 WHERE id = $2", [
-              new Date(),
+              new Date().toISOString(),
               id,
             ]);
             return jsonResponse({ ok: true });
@@ -419,7 +419,7 @@ const authModule: AppModule = {
             const id = Number.parseInt(url.searchParams.get("id") ?? "", 10);
             if (Number.isInteger(id) && id > 0) {
               await getSql().unsafe("UPDATE users SET email_verified_at = $1 WHERE id = $2", [
-                new Date(),
+                new Date().toISOString(),
                 id,
               ]);
               const record = await starterAuthDirectory.findByIdOrThrow(id);

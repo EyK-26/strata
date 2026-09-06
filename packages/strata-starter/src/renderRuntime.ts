@@ -311,7 +311,7 @@ function renderMigrateTs(layers: StarterLayers): string {
       : "?, ?, ?, ?), (?, ?, ?, ?";
   const adminFlag = ph ? "false" : "0";
   const adminTrue = ph ? "true" : "1";
-  const verifiedNow = "new Date()";
+  const verifiedNow = "new Date().toISOString()";
   const userValues = verifyOn
     ? `["Demo User", "demo@example.com", password, ${adminFlag}, ${verifiedNow}, "Admin User", "admin@example.test", password, ${adminTrue}, ${verifiedNow}]`
     : `["Demo User", "demo@example.com", password, ${adminFlag}, "Admin User", "admin@example.test", password, ${adminTrue}]`;

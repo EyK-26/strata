@@ -78,12 +78,12 @@ export async function seed() {
         "demo@example.com",
         password,
         false,
-        new Date(),
+        new Date().toISOString(),
         "Admin User",
         "admin@example.test",
         password,
         true,
-        new Date(),
+        new Date().toISOString(),
       ],
     );
   }

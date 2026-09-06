@@ -193,7 +193,7 @@ export class CookieSessionStore {
     await this.sql().unsafe(
       `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at)
        VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()})`,
-      [id, user.id, expires, meta.userAgent ?? null, meta.ipAddress ?? null],
+      [id, user.id, expires.toISOString(), meta.userAgent ?? null, meta.ipAddress ?? null],
     );
     return id;
   }

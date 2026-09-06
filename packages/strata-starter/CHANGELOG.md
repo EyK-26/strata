@@ -9,3 +9,4 @@ Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue
 - `--tenancy=column` writes a tenant table on any engine. sqlite/mysql `--tenancy=rls` becomes `column` instead of `none`.
 - Selected extras emit MFA pages, email verification, and a SCIM `/Users` adapter (not env flags alone).
 - `strata migrate` seeds empty tables (demo login after migrate).
+- Seed and email-verify timestamps bind as ISO strings so SQLite parameter binding succeeds.
