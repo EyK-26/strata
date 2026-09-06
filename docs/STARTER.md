@@ -1,6 +1,6 @@
 # Starter
 
-`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space.
+`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space. If you see `Choose [1]:` instead, bunx did not get raw keyboard mode, or an older package is cached: `bunx create-strata@latest my-app`.
 
 HiroApp in this repo is one generated example (`apps/hiroapp`: Postgres + HTMX). It is not the source of the wizard. Sibling examples: `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis). Regenerate them with `bun run generate:example-apps`.
 

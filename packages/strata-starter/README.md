@@ -1,6 +1,6 @@
 # create-strata
 
-Interactive starter for [Strata](https://github.com/EyK-26/strata). The wizard always asks each layer. Extras (MFA, email verification, SCIM, metrics) are toggled one by one. SQLite APIs and Postgres HTML apps use the same generator.
+Interactive starter for [Strata](https://github.com/EyK-26/strata). The wizard always asks each layer. In a terminal, lists use ↑/↓ and Enter (or a number). Extras (MFA, email verification, SCIM, metrics) are toggled one by one. SQLite APIs and Postgres HTML apps use the same generator.
 
 ## Usage
 

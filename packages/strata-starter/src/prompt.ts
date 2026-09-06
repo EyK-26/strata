@@ -1,5 +1,5 @@
-import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
+import tty from "node:tty";
 import {
   applyFlagOverrides,
   dockerFlagsProvided,
@@ -7,7 +7,14 @@ import {
   type ParsedFlags,
 } from "./parseArgs.ts";
 import { defaultLayers } from "./presets.ts";
-import { promptConfirm, promptMultiSelect, promptSelect } from "./selectPrompt.ts";
+import {
+  hasRawMode,
+  promptConfirm,
+  promptMultiSelect,
+  promptSelect,
+  resolveSelectIo,
+  type SelectIo,
+} from "./selectPrompt.ts";
 import {
   DOCKER_SERVICE_LABELS,
   dockerDatabaseService,
@@ -46,57 +53,52 @@ function isInteractive(flags: ParsedFlags): boolean {
   if (flags.yes || flags.noInteractive) {
     return false;
   }
-  return Boolean(input.isTTY && output.isTTY);
+  return Boolean((process.stdin.isTTY && process.stdout.isTTY) || (tty.isatty(0) && tty.isatty(1)));
 }
 
-function canUseRawKeys(): boolean {
-  return Boolean(input.isTTY && typeof input.setRawMode === "function");
-}
+function createReadlinePrompter(io?: SelectIo): Prompter {
+  const stdio = () => resolveSelectIo(io);
 
-function createReadlinePrompter(): Prompter {
-  const rl = createInterface({ input, output });
-  const io = { input, output };
+  async function askLine(message: string): Promise<string> {
+    const current = stdio();
+    const rl = createInterface({ input: current.input, output: current.output });
+    try {
+      return (await rl.question(message)).trim();
+    } finally {
+      rl.close();
+    }
+  }
 
   return {
     async question(message, defaultValue) {
       const suffix = defaultValue ? ` [${defaultValue}]` : "";
-      const answer = (await rl.question(`${message}${suffix}: `)).trim();
+      const answer = await askLine(`${message}${suffix}: `);
       return answer || defaultValue || "";
     },
     async confirm(message, defaultValue = false) {
-      if (canUseRawKeys()) {
-        rl.pause();
-        try {
-          return await promptConfirm(message, defaultValue, io);
-        } finally {
-          input.setRawMode?.(false);
-          rl.resume();
-        }
+      const current = stdio();
+      if (hasRawMode(current.input)) {
+        return promptConfirm(message, defaultValue, current);
       }
       const hint = defaultValue ? "Y/n" : "y/N";
-      const answer = (await rl.question(`${message} (${hint}): `)).trim().toLowerCase();
+      const answer = (await askLine(`${message} (${hint}): `)).toLowerCase();
       if (!answer) {
         return defaultValue;
       }
       return answer === "y" || answer === "yes";
     },
     async select(message, choices, defaultValue) {
-      if (canUseRawKeys()) {
-        rl.pause();
-        try {
-          return await promptSelect(message, choices, defaultValue, io);
-        } finally {
-          input.setRawMode?.(false);
-          rl.resume();
-        }
+      const current = stdio();
+      if (hasRawMode(current.input)) {
+        return promptSelect(message, choices, defaultValue, current);
       }
-      console.log(message);
+      current.output.write(`${message}\n`);
       for (const [index, choice] of choices.entries()) {
         const marker = choice.value === defaultValue ? "*" : " ";
-        console.log(`  ${index + 1}) ${marker} ${choice.label}`);
+        current.output.write(`  ${index + 1}) ${marker} ${choice.label}\n`);
       }
       const defaultIndex = choices.findIndex((choice) => choice.value === defaultValue) + 1;
-      const answer = (await rl.question(`Choose [${defaultIndex}]: `)).trim();
+      const answer = await askLine(`Choose [${defaultIndex}]: `);
       if (!answer) {
         return defaultValue;
       }
@@ -109,22 +111,17 @@ function createReadlinePrompter(): Prompter {
       return match?.value ?? defaultValue;
     },
     async multiSelect(message, choices) {
-      if (canUseRawKeys()) {
-        rl.pause();
-        try {
-          return await promptMultiSelect(message, choices, io);
-        } finally {
-          input.setRawMode?.(false);
-          rl.resume();
-        }
+      const current = stdio();
+      if (hasRawMode(current.input)) {
+        return promptMultiSelect(message, choices, current);
       }
       const enabled = new Set(
         choices.filter((choice) => choice.enabled).map((choice) => choice.value),
       );
-      console.log(`${message} (yes/no each)`);
+      current.output.write(`${message} (yes/no each)\n`);
       for (const choice of choices) {
         const hint = enabled.has(choice.value) ? "Y/n" : "y/N";
-        const answer = (await rl.question(`  ${choice.label} (${hint}): `)).trim().toLowerCase();
+        const answer = (await askLine(`  ${choice.label} (${hint}): `)).toLowerCase();
         if (!answer) {
           continue;
         }
@@ -137,7 +134,7 @@ function createReadlinePrompter(): Prompter {
       return [...enabled];
     },
     close() {
-      rl.close();
+      return;
     },
   };
 }

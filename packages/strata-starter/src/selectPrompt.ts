@@ -1,4 +1,5 @@
 import type { Readable, Writable } from "node:stream";
+import tty from "node:tty";
 
 type SelectChoice<T extends string> = { value: T; label: string };
 
@@ -11,6 +12,33 @@ type SelectIo = {
   };
   output: Writable;
 };
+
+function hasRawMode(input: { isTTY?: boolean; setRawMode?: (mode: boolean) => void }): boolean {
+  return Boolean(input.isTTY && typeof input.setRawMode === "function");
+}
+
+let cachedFdIo: SelectIo | undefined;
+
+function resolveSelectIo(preferred?: SelectIo): SelectIo {
+  if (preferred) {
+    return preferred;
+  }
+  const live: SelectIo = { input: process.stdin, output: process.stdout };
+  if (hasRawMode(live.input)) {
+    return live;
+  }
+  if (cachedFdIo && hasRawMode(cachedFdIo.input)) {
+    return cachedFdIo;
+  }
+  if (tty.isatty(0)) {
+    cachedFdIo = {
+      input: new tty.ReadStream(0),
+      output: tty.isatty(1) ? new tty.WriteStream(1) : process.stdout,
+    };
+    return cachedFdIo;
+  }
+  return live;
+}
 
 type SelectKeyEvent =
   | { type: "up" }
@@ -429,6 +457,7 @@ async function promptMultiSelect<T extends string>(
 export type { MultiSelectChoice, SelectChoice, SelectIo, SelectKeyEvent };
 export {
   consumeSelectKeys,
+  hasRawMode,
   moveSelectIndex,
   PromptCancelledError,
   promptConfirm,
@@ -437,4 +466,5 @@ export {
   renderConfirmLines,
   renderMultiSelectLines,
   renderSelectLines,
+  resolveSelectIo,
 };

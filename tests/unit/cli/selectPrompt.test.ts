@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
+import { createReadlinePrompter } from "../../../packages/strata-starter/src/prompt.ts";
 import {
   consumeSelectKeys,
+  hasRawMode,
   moveSelectIndex,
   PromptCancelledError,
   promptConfirm,
   promptMultiSelect,
   promptSelect,
+  resolveSelectIo,
 } from "../../../packages/strata-starter/src/selectPrompt.ts";
 
 const frontend = [
@@ -106,5 +109,60 @@ describe("arrow prompts", () => {
         ["\x03"],
       ),
     ).rejects.toBeInstanceOf(PromptCancelledError);
+  });
+});
+
+describe("raw TTY detection", () => {
+  test("hasRawMode requires isTTY and setRawMode", () => {
+    expect(hasRawMode({ isTTY: true, setRawMode: () => undefined })).toBe(true);
+    expect(hasRawMode({ isTTY: true })).toBe(false);
+    expect(hasRawMode({})).toBe(false);
+  });
+
+  test("resolveSelectIo keeps an injected stream", () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const io = { input, output };
+    expect(resolveSelectIo(io)).toBe(io);
+  });
+});
+
+describe("createReadlinePrompter", () => {
+  test("uses the arrow list when setRawMode exists", async () => {
+    const input = new PassThrough() as PassThrough & {
+      isTTY: boolean;
+      setRawMode: (mode: boolean) => void;
+    };
+    input.isTTY = true;
+    input.setRawMode = () => undefined;
+    const output = new PassThrough();
+    let text = "";
+    output.on("data", (chunk) => {
+      text += chunk.toString();
+    });
+    const prompter = createReadlinePrompter({ input, output });
+    const pending = prompter.select("Frontend", [...frontend], "api");
+    await Promise.resolve();
+    input.write("\x1b[B\r");
+    await expect(pending).resolves.toBe("server-htmx");
+    expect(text).toContain("↑/↓ and Enter");
+    expect(text).not.toContain("Choose [");
+  });
+
+  test("falls back to Choose [N] when raw mode is missing", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let text = "";
+    output.on("data", (chunk) => {
+      text += chunk.toString();
+    });
+    const prompter = createReadlinePrompter({ input, output });
+    const pending = prompter.select("Frontend", [...frontend], "api");
+    await Promise.resolve();
+    await Promise.resolve();
+    input.write("2\n");
+    await expect(pending).resolves.toBe("server-htmx");
+    expect(text).toContain("Choose [1]:");
+    expect(text).not.toContain("↑/↓ and Enter");
   });
 });
