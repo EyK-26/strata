@@ -98,6 +98,16 @@ function htmlAuthKit(auth: AuthStack): boolean {
   return authUsesCookie(auth);
 }
 
+function extraApplies(extra: keyof CorporateExtras, auth: AuthStack): boolean {
+  if (extra === "metrics") {
+    return true;
+  }
+  if (extra === "mfa") {
+    return htmlAuthKit(auth);
+  }
+  return authNeedsUsers(auth);
+}
+
 function needsRedis(layers: Pick<StarterLayers, "cache" | "queue">): boolean {
   return layers.cache === "redis" || layers.queue === "redis";
 }
@@ -188,6 +198,7 @@ export {
   EXAMPLE_APP_IDS,
   emptyDockerServices,
   enableDockerServices,
+  extraApplies,
   FRONTENDS,
   htmlAuthKit,
   MAIL_DRIVERS,

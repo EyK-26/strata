@@ -56,6 +56,8 @@ HTML auth kit (restyle `views/` and `public/assets/site.css`):
 
 Cookie name is `strata_session`. Forms send CSRF as `_token`.
 
+Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <METRICS_TOKEN>`.
+
 ## Production
 
 `createApp` calls `assertProductionSecrets()` when `APP_ENV=production`. Set real secrets before you ship. Cookie HTML apps need `SESSION_SECRET` (32+ characters). Token apps need `TOKEN_HASH_PEPPER`. Set `AUTH_DEV_HEADERS=false`.

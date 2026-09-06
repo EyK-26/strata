@@ -1,6 +1,6 @@
 # Starter
 
-`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, optional extras, then Docker vs local installs.
+`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space.
 
 HiroApp in this repo is one generated example (`apps/hiroapp`: Postgres + HTMX). It is not the source of the wizard. Sibling examples: `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis). Regenerate them with `bun run generate:example-apps`.
 
@@ -35,7 +35,7 @@ bunx create-strata html --frontend server-htmx --database postgres --auth cookie
 | `--mail` | `log`, `smtp` |
 | `--spa-prefix` | default `/app` |
 
-Extras (off unless you pass flags or answer yes in the wizard): `--mfa`, `--email-verification`, `--scim`, `--metrics`.
+Extras that apply to the stack (off until you toggle them, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`. Header auth only offers metrics. MFA needs cookie HTML. SCIM and email verification need a users table. `--no-metrics` skips the metrics extra and does not write `GET /metrics`.
 
 You can add cache, SMTP, Redis, or another auth mode later by changing env and the matching bootstrap files. The generator only installs what you asked for.
 
@@ -60,7 +60,7 @@ Postgres, MySQL, Redis, and SMTP can run in Docker Compose or as installs alread
 - JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
 - Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
 - `--tenancy=column`: `tenant` table + `users.tenant_id` on any engine. `--tenancy=rls`: Postgres only (`SET LOCAL`). sqlite/mysql `rls` becomes `column`
-- Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa`), email verification (`/email/verify`), SCIM `/scim/v2/Users`
+- Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa`), email verification (`/email/verify`), SCIM `/scim/v2/Users`, metrics `GET /metrics` (only when that extra is on)
 - `strata.layers.json` records the choices
 
 `APP_ENV=production` calls `assertProductionSecrets()` on boot.
