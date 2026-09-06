@@ -1,14 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { sessionSecret } from "./config.ts";
 
 const COOKIE = "strata_mfa_pending";
 
-function secret(): string {
-  return process.env.SESSION_SECRET?.trim() || "dev-session-secret-change-me-please-32ch";
-}
-
 function sign(userId: number, issuedAt: number): string {
   const payload = `${userId}.${issuedAt}`;
-  const signature = createHmac("sha256", secret()).update(payload).digest("hex");
+  const signature = createHmac("sha256", sessionSecret()).update(payload).digest("hex");
   return `${payload}.${signature}`;
 }
 

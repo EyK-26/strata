@@ -130,6 +130,7 @@ describe("published strata CLI", () => {
 
     expect(logs).toContain("migrated");
     expect(logs).toContain("seeded");
+    expect(logs.at(-1)).toBe("Migrations applied.");
   });
 
   test("rejects unknown commands", async () => {

@@ -70,17 +70,31 @@ Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <M
 
 The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`.
 
+## Deploy
+
+`Dockerfile` builds a production image from the committed `bun.lock` (run `bun install` once and commit the lockfile).
+
+```bash
+docker build -t hiroapp .
+docker run --rm -p 3000:3000 --env-file .env.production hiroapp
+```
+
+Migrations are a deploy step, not a boot step: run `docker run --rm --env-file .env.production hiroapp bun run db:migrate` before the new version takes traffic.
+The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything else in the Production list below comes from your environment (the `.env.production` file above is one way).
+
 ## Production
 
 `createApp` calls `assertProductionSecrets()` when `APP_ENV=production`. That check fails closed, so read this before your first production boot.
 
 - Replace every `change-me` placeholder in `.env`. The guard rejects the values this generator wrote, not just empty ones.
+- Set `APP_URL` to the public origin (for example `https://app.example.com`). Signed links and redirects are built from it; localhost is rejected.
 - Set `AUTH_DEV_HEADERS=false`.
 - Set `FEATURE_PUBLIC_READS=false`. This app ships `true` so the local welcome page reads without a login. Production requires `false`.
-- Set `CORS_ALLOWED_ORIGINS` to explicit origins if you set it at all. A `*` entry is rejected.
+- Cross-origin browser calls are off in production until you set `CORS_ALLOWED_ORIGINS` to explicit origins. A `*` entry is rejected. Non-browser clients are unaffected.
+- Behind a reverse proxy or load balancer, set `TRUST_FORWARDED_FOR=true` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of `X-Forwarded-For` is trusted.
 - Set `SESSION_SECRET` to 32+ characters.
 - Set `TOKEN_HASH_PEPPER`.
 - Set `SCIM_BEARER_TOKEN`.
 - Set `METRICS_TOKEN`.
 
-`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step.
+`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` answers 503 until the schema exists, so a fresh deploy stays out of rotation until it is migrated.

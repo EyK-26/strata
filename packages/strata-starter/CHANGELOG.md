@@ -6,6 +6,10 @@ Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue
 
 - Generated apps pass their own `bun run check`. Fixed `sql.unsafe<Array<T>>` double-wrapping (`unsafe<T>` already resolves to `T[]`) and the `AuthUserDirectory` import path.
 - Accept a directory path as the project name. `bunx create-strata /tmp/my-app` used to fail validation.
+- Generated apps ship a production `Dockerfile` (multi-stage, `oven/bun:1.4`, non-root, `HEALTHCHECK`, `APP_ENV=production`, `AUTH_DEV_HEADERS=false`, frontend built in-image for spa/hybrid, `VOLUME /app/storage` for SQLite) and a `.dockerignore`, plus a README "Deploy" section.
+- `GET /health` answers 503 `degraded` until the database responds and the starter schema exists; `/ready` returns the same as JSON. A fresh deploy stays out of rotation until migrated.
+- `SESSION_SECRET` has no generated fallback. Cookie apps read it through `sessionSecret()` in `src/bootstrap/config.ts` and refuse to boot without it.
+- README production list adds `APP_URL`, `TRUST_FORWARDED_FOR` behind proxies, and the production CORS default. `.gitignore` covers SQLite WAL side files.
 - Printed next steps use `bun run db:migrate` and `bun run dev`. `strata` installs into the app, not onto `PATH`.
 - MySQL apps migrate and boot. Bounded the keyed and defaulted string columns MySQL cannot index or default, added the missing `CREATE DATABASE`, and formatted timestamps for `DATETIME`.
 - `ensureAppDatabase()` keeps the database name from `DATABASE_URL` instead of forcing a `<project>_test` rename.

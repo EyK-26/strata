@@ -51,12 +51,54 @@ describe("mapDatabaseError", () => {
     expect(mappedForeign.message).toBe("Forbidden");
   });
 
-  test("maps non-postgres errors to bad request errors", () => {
-    expect(mapDatabaseError(new Error("boom")).status).toBe(400);
-    expect(mapDatabaseError(new Error("boom")).message).toBe("boom");
-    expect(mapDatabaseError("plain failure").message).toBe("Database operation failed.");
-    expect(mapDatabaseError(null).message).toBe("Database operation failed.");
-    expect(mapDatabaseError(123).message).toBe("Database operation failed.");
+  test("maps unknown errors to a generic 500 without leaking the message", () => {
+    expect(mapDatabaseError(new Error("boom")).status).toBe(500);
+    expect(mapDatabaseError(new Error("boom")).message).toBe("Internal server error.");
+    expect(mapDatabaseError("plain failure").status).toBe(500);
+    expect(mapDatabaseError(null).message).toBe("Internal server error.");
+    expect(mapDatabaseError(123).message).toBe("Internal server error.");
+  });
+
+  test("maps SQLite constraint codes to 4xx and other SQLite errors to 500", () => {
+    const unique = mapDatabaseError({
+      code: "SQLITE_CONSTRAINT_UNIQUE",
+      errno: 2067,
+      message: "UNIQUE constraint failed: users.email",
+    });
+    expect(unique).toBeInstanceOf(ConflictError);
+    expect(unique.message).not.toContain("users.email");
+    expect(mapDatabaseError({ code: "SQLITE_CONSTRAINT_PRIMARYKEY", errno: 1555 }).status).toBe(
+      409,
+    );
+    expect(mapDatabaseError({ code: "SQLITE_CONSTRAINT_FOREIGNKEY", errno: 787 }).status).toBe(422);
+    expect(mapDatabaseError({ code: "SQLITE_CONSTRAINT_NOTNULL", errno: 1299 }).status).toBe(400);
+    expect(mapDatabaseError({ code: "SQLITE_CONSTRAINT_CHECK", errno: 275 }).status).toBe(400);
+    const busy = mapDatabaseError({ code: "SQLITE_BUSY", errno: 5, message: "database is locked" });
+    expect(busy.status).toBe(500);
+    expect(busy.message).toBe("Database operation failed.");
+  });
+
+  test("maps MySQL errno values to 4xx and other MySQL errors to 500", () => {
+    const dup = mapDatabaseError({
+      code: "ER_DUP_ENTRY",
+      errno: 1062,
+      message: "Duplicate entry 'demo@example.com' for key 'users.email'",
+    });
+    expect(dup).toBeInstanceOf(ConflictError);
+    expect(dup.message).not.toContain("demo@example.com");
+    expect(mapDatabaseError({ code: "ER_NO_REFERENCED_ROW_2", errno: 1452 }).status).toBe(422);
+    expect(mapDatabaseError({ code: "ER_ROW_IS_REFERENCED_2", errno: 1451 }).status).toBe(422);
+    expect(mapDatabaseError({ code: "ER_BAD_NULL_ERROR", errno: 1048 }).status).toBe(400);
+    expect(mapDatabaseError({ code: "ER_CHECK_CONSTRAINT_VIOLATED", errno: 3819 }).status).toBe(
+      400,
+    );
+    const syntax = mapDatabaseError({
+      code: "ER_PARSE_ERROR",
+      errno: 1064,
+      message: "You have an error in your SQL syntax near 'SELEC'",
+    });
+    expect(syntax.status).toBe(500);
+    expect(syntax.message).toBe("Database operation failed.");
   });
 
   test("maps postgres unique violations to conflict errors", () => {
@@ -109,8 +151,8 @@ describe("mapDatabaseError", () => {
       message: "Unexpected database failure.",
     });
 
-    expect(error).toBeInstanceOf(BadRequestError);
-    expect(error.message).toBe("Unexpected database failure.");
+    expect(error.status).toBe(500);
+    expect(error.message).toBe("Database operation failed.");
   });
 
   test("reads five-digit sql states from numeric errno values", () => {
@@ -128,8 +170,8 @@ describe("mapDatabaseError", () => {
       message: "generic failure",
     });
 
-    expect(error).toBeInstanceOf(BadRequestError);
-    expect(error.message).toBe("generic failure");
+    expect(error.status).toBe(500);
+    expect(error.message).toBe("Database operation failed.");
   });
 
   test("reads five-digit sql states from string code values", () => {
@@ -148,8 +190,8 @@ describe("mapDatabaseError", () => {
       message: "generic failure",
     });
 
-    expect(error).toBeInstanceOf(BadRequestError);
-    expect(error.message).toBe("generic failure");
+    expect(error.status).toBe(500);
+    expect(error.message).toBe("Database operation failed.");
   });
 
   test("uses default postgres error messages when detail is missing", () => {

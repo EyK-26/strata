@@ -201,7 +201,7 @@ export default authProvider;
 
   const cookieBlock = authUsesCookie(layers.auth)
     ? `    const auth = createCookieSessionAuthManager({
-      secret: process.env.SESSION_SECRET?.trim() || "dev-session-secret-change-me-please-32ch",
+      secret: sessionSecret(),
       cookieName: "strata_session",
       mapUser: (user) => ({
         id: user.id,
@@ -265,6 +265,9 @@ export default authProvider;
     `import {\n  ${tokenImports.join(",\n  ")},\n} from "@getstrata/core/contracts/serviceTokens";`,
   );
   imports.push(`import { starterAuthDirectory } from "../authDirectory.ts";`);
+  if (authUsesCookie(layers.auth)) {
+    imports.push(`import { sessionSecret } from "../config.ts";`);
+  }
 
   return `${imports.join("\n")}
 

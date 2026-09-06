@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { resetWebErrorViewForTests } from "@getstrata/core/view/webErrorView";
 
 describe("createWebServer", () => {
@@ -34,6 +35,24 @@ describe("createWebServer", () => {
     expect(response.status).toBe(404);
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("Not Found");
+
+    server.stop(true);
+  });
+
+  test("records the socket address so throttles key on the real client", async () => {
+    const server = createWebServer({
+      port: 0,
+      routes: {
+        "/whoami": async () => new Response(currentRequestMeta().ipAddress ?? "none"),
+      },
+      handle: async () => new Response(currentRequestMeta().ipAddress ?? "none"),
+    });
+
+    const viaRoute = await fetch(`http://127.0.0.1:${server.port}/whoami`);
+    expect(await viaRoute.text()).toBe("127.0.0.1");
+
+    const viaFetch = await fetch(`http://127.0.0.1:${server.port}/anything-else`);
+    expect(await viaFetch.text()).toBe("127.0.0.1");
 
     server.stop(true);
   });

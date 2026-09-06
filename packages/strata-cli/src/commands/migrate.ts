@@ -43,6 +43,7 @@ async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<voi
   } finally {
     await closeEntry(entry);
   }
+  console.log("Migrations applied.");
 }
 
 async function migrateFreshCommand(app: StrataAppConfig, args: string[]): Promise<void> {
@@ -56,6 +57,7 @@ async function migrateFreshCommand(app: StrataAppConfig, args: string[]): Promis
     } finally {
       await closeEntry(entry);
     }
+    console.log("Database reset and migrated.");
     return;
   }
 

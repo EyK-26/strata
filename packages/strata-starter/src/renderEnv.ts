@@ -128,6 +128,9 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     lines.push("# MAIL_FROM=");
   }
 
+  lines.push(
+    "# Behind a reverse proxy, trust X-Forwarded-For (rightmost public hop) for throttles and session IPs.",
+  );
   lines.push("# TRUST_FORWARDED_FOR=true");
   return `${lines.join("\n")}\n`;
 }
@@ -216,9 +219,78 @@ dist
 frontend/dist
 storage/*.sqlite
 storage/*.sqlite-journal
+storage/*.sqlite-wal
+storage/*.sqlite-shm
 coverage
 *.tsbuildinfo
 `;
+}
+
+function renderDockerfile(layers: StarterLayers): string {
+  const frontend = needsFrontendBuild(layers.frontend);
+  const lines = [
+    '# Production image. Build once, run with env from your platform; see README "Deploy".',
+    "FROM oven/bun:1.4 AS deps",
+    "WORKDIR /app",
+    "COPY package.json bun.lock ./",
+    "RUN bun install --frozen-lockfile --production",
+    "",
+  ];
+  if (frontend) {
+    lines.push(
+      "FROM oven/bun:1.4 AS frontend",
+      "WORKDIR /app/frontend",
+      "COPY frontend/package.json frontend/bun.lock ./",
+      "RUN bun install --frozen-lockfile",
+      "COPY frontend/ ./",
+      "RUN bun run build",
+      "",
+    );
+  }
+  lines.push(
+    "FROM oven/bun:1.4-slim AS runtime",
+    "WORKDIR /app",
+    "ENV APP_ENV=production",
+    "ENV AUTH_DEV_HEADERS=false",
+    "ENV PORT=3000",
+    "COPY --from=deps /app/node_modules ./node_modules",
+    "COPY . .",
+  );
+  if (frontend) {
+    lines.push("COPY --from=frontend /app/frontend/dist ./frontend/dist");
+  }
+  lines.push("RUN mkdir -p storage && chown -R bun:bun /app", "USER bun", "EXPOSE 3000");
+  if (layers.database === "sqlite") {
+    lines.push(
+      "# SQLite lives in storage/; mount a volume there or the data dies with the container.",
+      'VOLUME ["/app/storage"]',
+    );
+  }
+  lines.push(
+    'HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD ["bun", "-e", "fetch(\'http://127.0.0.1:\' + process.env.PORT + \'/health\').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]',
+    'CMD ["bun", "run", "start"]',
+  );
+  return `${lines.join("\n")}\n`;
+}
+
+function renderDockerignore(layers: StarterLayers): string {
+  const lines = [
+    ".git",
+    "node_modules",
+    ".env",
+    ".env.*",
+    "!.env.example",
+    "storage/*.sqlite",
+    "storage/*.sqlite-journal",
+    "storage/*.sqlite-wal",
+    "storage/*.sqlite-shm",
+    "coverage",
+    "docker-compose.yml",
+  ];
+  if (needsFrontendBuild(layers.frontend)) {
+    lines.push("frontend/node_modules", "frontend/dist");
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 function renderPackageJson(
@@ -364,7 +436,9 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
  */
 function renderApiDocs(projectName: string, layers: StarterLayers): string {
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
-  rows.push("| `GET` | `/health` | Plain text `ok`, or `degraded` if the database ping fails. |");
+  rows.push(
+    "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) when the database or the migrated schema is unavailable. `/ready` returns the same checks as JSON. |",
+  );
   rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
 
   if (authUsesToken(layers.auth)) {
@@ -576,20 +650,40 @@ Until \`frontend/dist\` exists, \`${layers.spaPrefix}\` answers 503. Use \`bun r
 The app uses the database named in \`DATABASE_URL\` and creates it on first migrate when the connection user may. Set \`APP_DATABASE_URL\` only when migrations and the app should target a different database than \`DATABASE_URL\`.
 `
 }
+## Deploy
+
+\`Dockerfile\` builds a production image from the committed \`bun.lock\` (run \`bun install\` once and commit the lockfile).${
+    needsFrontendBuild(layers.frontend) ? " The React frontend is built inside the image." : ""
+  }
+
+\`\`\`bash
+docker build -t ${projectName} .
+docker run --rm -p 3000:3000 --env-file .env.production ${projectName}
+\`\`\`
+
+Migrations are a deploy step, not a boot step: run \`docker run --rm --env-file .env.production ${projectName} bun run db:migrate\` before the new version takes traffic.${
+    layers.database === "sqlite"
+      ? " SQLite stores its file in `/app/storage`; mount a volume there (`-v strata_data:/app/storage`) or the data is lost with the container."
+      : ""
+  }
+The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything else in the Production list below comes from your environment (the \`.env.production\` file above is one way).
+
 ## Production
 
 \`createApp\` calls \`assertProductionSecrets()\` when \`APP_ENV=production\`. That check fails closed, so read this before your first production boot.
 
 - Replace every \`change-me\` placeholder in \`.env\`. The guard rejects the values this generator wrote, not just empty ones.
+- Set \`APP_URL\` to the public origin (for example \`https://app.example.com\`). Signed links and redirects are built from it; localhost is rejected.
 - Set \`AUTH_DEV_HEADERS=false\`.
 - Set \`FEATURE_PUBLIC_READS=false\`. ${
     layers.frontend === "api"
       ? "This app already ships `false`."
       : "This app ships `true` so the local welcome page reads without a login. Production requires `false`."
   }
-- Set \`CORS_ALLOWED_ORIGINS\` to explicit origins if you set it at all. A \`*\` entry is rejected.
+- Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
+- Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
 ${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}
-\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step.
+\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` answers 503 until the schema exists, so a fresh deploy stays out of rotation until it is migrated.
 `;
 }
 
@@ -598,6 +692,8 @@ export {
   defaultDatabaseUrl,
   renderApiDocs,
   renderDockerCompose,
+  renderDockerfile,
+  renderDockerignore,
   renderEnvExample,
   renderGitignore,
   renderLayersManifest,

@@ -1,13 +1,19 @@
 type TenancyDriver = "rls" | "column" | "none";
 
+const TENANCY_DRIVERS: readonly TenancyDriver[] = ["rls", "column", "none"];
+
+/** Unset means rls (the Postgres example). Anything else must be an exact driver name. */
 function readTenancyDriver(env: Record<string, string | undefined> = process.env): TenancyDriver {
-  if (env.TENANCY_DRIVER === "none") {
-    return "none";
+  const raw = env.TENANCY_DRIVER?.trim();
+  if (raw === undefined || raw === "") {
+    return "rls";
   }
-  if (env.TENANCY_DRIVER === "column") {
-    return "column";
+  if ((TENANCY_DRIVERS as readonly string[]).includes(raw)) {
+    return raw as TenancyDriver;
   }
-  return "rls";
+  throw new Error(
+    `TENANCY_DRIVER must be one of ${TENANCY_DRIVERS.join(", ")}; received "${raw}".`,
+  );
 }
 
 function isTenancyEnabled(env: Record<string, string | undefined> = process.env): boolean {

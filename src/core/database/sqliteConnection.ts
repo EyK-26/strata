@@ -25,6 +25,13 @@ function createSqliteConnection(filename: string): SqliteConnection {
 
   const db = new Database(filename, { create: true });
   db.exec("PRAGMA foreign_keys = ON");
+  // Web apps run concurrent requests against one file: WAL lets readers proceed
+  // during writes and busy_timeout waits instead of throwing SQLITE_BUSY.
+  db.exec("PRAGMA busy_timeout = 5000");
+  if (filename !== ":memory:") {
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA synchronous = NORMAL");
+  }
 
   return {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {

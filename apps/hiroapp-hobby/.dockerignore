@@ -1,11 +1,11 @@
+.git
 node_modules
 .env
-.env.local
-dist
-frontend/dist
+.env.*
+!.env.example
 storage/*.sqlite
 storage/*.sqlite-journal
 storage/*.sqlite-wal
 storage/*.sqlite-shm
 coverage
-*.tsbuildinfo
+docker-compose.yml

@@ -552,6 +552,17 @@ export function loadConfig(): AppConfig {
     databaseUrl,
   };
 }
+
+/** Cookie sessions and signed cookies are keyed by this; there is no default. */
+export function sessionSecret(): string {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret) {
+    throw new Error(
+      "SESSION_SECRET is required. Copy .env.example to .env and set it (32+ characters).",
+    );
+  }
+  return secret;
+}
 `;
 }
 
@@ -957,8 +968,8 @@ ${userBlock}
   return htmlResponse(html, { status });
 }
 
-export function plainText(body: string): Response {
-  return new Response(body, { headers: { "content-type": "text/plain; charset=utf-8" } });
+export function plainText(body: string, status = 200): Response {
+  return new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
 `;
 }

@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   dialectFor,
@@ -48,5 +49,33 @@ describe("sqlTimestamp", () => {
     expect(new Date(`${rendered.replace(" ", "T")}Z`).getTime()).toBeGreaterThanOrEqual(
       before - 1000,
     );
+  });
+});
+
+describe("sqlite nowExpression matches timestampValue", () => {
+  test("renders ISO-8601 with T and Z so text comparisons are exact", () => {
+    const db = new Database(":memory:");
+    const now = db.query(`SELECT ${dialectFor("sqlite").nowExpression()} AS now`).get() as {
+      now: string;
+    };
+    expect(now.now).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(Math.abs(new Date(now.now).getTime() - Date.now())).toBeLessThan(5_000);
+    db.close();
+  });
+
+  test("an expired ISO timestamp is not greater than now on the same day", () => {
+    // CURRENT_TIMESTAMP ("YYYY-MM-DD HH:MM:SS") sorted before any same-day ISO value.
+    const db = new Database(":memory:");
+    const nowExpression = dialectFor("sqlite").nowExpression();
+    const expired = dialectFor("sqlite").timestampValue(new Date(Date.now() - 60 * 60 * 1000));
+    const future = dialectFor("sqlite").timestampValue(new Date(Date.now() + 60 * 60 * 1000));
+    const row = db
+      .query(
+        `SELECT (? > ${nowExpression}) AS expired_valid, (? > ${nowExpression}) AS future_valid`,
+      )
+      .get(expired, future) as { expired_valid: number; future_valid: number };
+    expect(row.expired_valid).toBe(0);
+    expect(row.future_valid).toBe(1);
+    db.close();
   });
 });

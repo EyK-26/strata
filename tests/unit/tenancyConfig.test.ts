@@ -23,4 +23,13 @@ describe("tenancyConfig", () => {
     expect(isTenancyEnabled({ TENANCY_DRIVER: "column" })).toBe(true);
     expect(isRlsTenancy({ TENANCY_DRIVER: "column" })).toBe(false);
   });
+
+  test("rejects unknown drivers instead of silently enabling rls", () => {
+    expect(() => readTenancyDriver({ TENANCY_DRIVER: "colum" })).toThrow(
+      /TENANCY_DRIVER must be one of rls, column, none; received "colum"/,
+    );
+    expect(() => isTenancyEnabled({ TENANCY_DRIVER: "off" })).toThrow(/TENANCY_DRIVER/);
+    expect(readTenancyDriver({ TENANCY_DRIVER: " rls " })).toBe("rls");
+    expect(readTenancyDriver({ TENANCY_DRIVER: "" })).toBe("rls");
+  });
 });

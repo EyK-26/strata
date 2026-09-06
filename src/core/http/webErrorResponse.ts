@@ -1,5 +1,7 @@
-import { toHttpError, ValidationError } from "@getstrata/core/errors/http";
+import { type HttpError, toHttpError, ValidationError } from "@getstrata/core/errors/http";
+import { appLogger } from "@getstrata/core/logging/logger";
 import { mapDatabaseError } from "../database/errors";
+import { isProductionEnv } from "../runtime/appEnv";
 import { isViewsEnabled } from "../runtime/frontendMode";
 import { htmlErrorResponse } from "../view/webErrorView";
 import { requestPrefersJson } from "./contentNegotiation";
@@ -45,11 +47,22 @@ function errorPageTitle(status: number, message: string): string {
 }
 
 function publicErrorMessage(status: number, message: string): string {
-  if (status >= 500 && process.env.NODE_ENV === "production") {
+  if (status >= 500 && isProductionEnv()) {
     return "Something went wrong.";
   }
 
   return message;
+}
+
+function logServerError(error: unknown, mappedError: HttpError): void {
+  if (mappedError.status < 500) {
+    return;
+  }
+  appLogger.error("Unhandled request error", {
+    status: mappedError.status,
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
 }
 
 async function webErrorResponse(error: unknown, request?: Request): Promise<Response | null> {
@@ -58,6 +71,7 @@ async function webErrorResponse(error: unknown, request?: Request): Promise<Resp
   }
 
   const mappedError = toHttpError(error) ?? mapDatabaseError(error);
+  logServerError(error, mappedError);
 
   if (mappedError.status === 401) {
     return Response.redirect(loginRedirectLocation(request), 302);
@@ -78,4 +92,4 @@ async function webErrorResponse(error: unknown, request?: Request): Promise<Resp
 }
 
 export type { FieldErrors };
-export { normalizeFieldErrors, webErrorResponse };
+export { logServerError, normalizeFieldErrors, webErrorResponse };

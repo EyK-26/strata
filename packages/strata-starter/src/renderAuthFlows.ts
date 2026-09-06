@@ -25,16 +25,13 @@ function sqlTrue(layers: StarterLayers): string {
 
 function renderPendingMfaTs(): string {
   return `import { createHmac, timingSafeEqual } from "node:crypto";
+import { sessionSecret } from "./config.ts";
 
 const COOKIE = "strata_mfa_pending";
 
-function secret(): string {
-  return process.env.SESSION_SECRET?.trim() || "dev-session-secret-change-me-please-32ch";
-}
-
 function sign(userId: number, issuedAt: number): string {
   const payload = \`\${userId}.\${issuedAt}\`;
-  const signature = createHmac("sha256", secret()).update(payload).digest("hex");
+  const signature = createHmac("sha256", sessionSecret()).update(payload).digest("hex");
   return \`\${payload}.\${signature}\`;
 }
 
@@ -205,8 +202,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
               return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
             const plain = \`strp_\${randomBytes(24).toString("hex")}\`;
-            // API_TOKEN_DEFAULT_EXPIRY_DAYS (30 in .env.example) bounds every minted token.
-            // Unset means no expiry; the production guard requires it to be set.
+            // API_TOKEN_DEFAULT_EXPIRY_DAYS bounds every minted token; unset means no expiry.
             const expiryDays = resolveDefaultTokenExpiryDays();
             const expiresAt = expiryDays
               ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
@@ -667,8 +663,18 @@ export default authModule;
 function renderSiteModule(_layers: StarterLayers): string {
   return `import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { withErrorHandling } from "@getstrata/core/http/response";
-import { pingDatabase } from "../../bootstrap/database.ts";
+import { getSql, pingDatabase } from "../../bootstrap/database.ts";
 import { plainText, renderPage } from "../../lib/view.ts";
+
+// Proves the database answers and the schema is migrated. Point it at a table your app owns.
+async function schemaReady(): Promise<boolean> {
+  try {
+    await getSql().unsafe("SELECT 1 FROM notes LIMIT 1");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const siteModule: AppModule = {
   name: "site",
@@ -676,8 +682,8 @@ const siteModule: AppModule = {
   routes({ kernel }) {
     return {
       "/health": kernel.wrap("api", withErrorHandling(async () => {
-        const dbOk = await pingDatabase();
-        return plainText(dbOk ? "ok" : "degraded");
+        const ok = (await pingDatabase()) && (await schemaReady());
+        return plainText(ok ? "ok" : "degraded", ok ? 200 : 503);
       })),
     };
   },

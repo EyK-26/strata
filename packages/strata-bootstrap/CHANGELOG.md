@@ -6,6 +6,9 @@
 - Cookie sessions write timestamps through the active dialect, so `CookieSessionStore.create()` works on MySQL.
 - Removed the `createRoutes` subpath. It was in-repo fixture HTTP, documented as not an app API, and it packed a stray `dist/_.._/_.._/index.html` asset and dogfood helpers into the tarball.
 - Removed leftover third-party product token strings from the production blocklist.
+- `assertProductionSecrets()` requires `APP_URL` to be a public `http(s)` origin (localhost rejected, plain http warns). Signed links and redirects are built from it.
+- `createWebServer()` records the socket address (IPv4-mapped addresses normalized) in the request context, so throttles, request logs, and session rows see the real client.
+- `CookieSessionAuthManager.signIn()` fills `ip_address` and `user_agent` from the request context when the caller passes no meta. The `Secure` cookie flag now keys on `APP_ENV=production` (or `NODE_ENV`), matching the rest of the framework; generated apps never set `NODE_ENV`, so production cookies were not marked `Secure`.
 - `engines.bun` is declared.
 
 ## 1.0.0

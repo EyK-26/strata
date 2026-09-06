@@ -74,7 +74,7 @@ describe("SQL dialect", () => {
       expect(dialect.placeholder(1)).toBe("?");
       expect(dialect.quoteIdentifier("users")).toBe('"users"');
       expect(dialect.ilikeOperator()).toBe("LIKE");
-      expect(dialect.nowExpression()).toBe("CURRENT_TIMESTAMP");
+      expect(dialect.nowExpression()).toBe("strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
       expect(dialect.returningClause("id")).toBe(" RETURNING id");
       expect(dialect.nullsLastSuffix()).toBe("");
 
