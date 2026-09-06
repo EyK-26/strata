@@ -1,5 +1,13 @@
 # @getstrata/bootstrap changelog
 
+## 1.0.1
+
+- `assertProductionSecrets()` rejects secrets still holding a generated `change-me` placeholder. The shipped `SESSION_SECRET` placeholder was 38 characters, so it passed the length check and booted in production unchanged.
+- Cookie sessions write timestamps through the active dialect, so `CookieSessionStore.create()` works on MySQL.
+- Removed the `createRoutes` subpath. It was in-repo fixture HTTP, documented as not an app API, and it packed a stray `dist/_.._/_.._/index.html` asset and dogfood helpers into the tarball.
+- Removed leftover third-party product token strings from the production blocklist.
+- `engines.bun` is declared.
+
 ## 1.0.0
 
 - First stable release of `@getstrata/bootstrap`.

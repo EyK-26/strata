@@ -68,7 +68,8 @@ function createAppContext(): AppContext {
 }
 
 export async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
-  const { migrate: runMigrate = true } = options;
+  const isProduction = process.env.APP_ENV === "production";
+  const { migrate: runMigrate = !isProduction } = options;
 
   const appConfig = loadConfig();
   const context = createAppContext();

@@ -1,4 +1,4 @@
-import { getSql } from "../bootstrap/database.ts";
+import { closeDatabase, getSql } from "../bootstrap/database.ts";
 
 const migrations = [
   `CREATE TABLE IF NOT EXISTS notes (
@@ -10,7 +10,7 @@ const migrations = [
 
 export async function seed() {
   const sql = getSql();
-  const [{ count }] = await sql.unsafe<Array<{ count: string | number }>>(
+  const [{ count }] = await sql.unsafe<{ count: string | number }>(
     "SELECT COUNT(*) AS count FROM notes",
   );
   if (Number(count) === 0) {
@@ -26,8 +26,14 @@ export async function migrate() {
   await seed();
 }
 
+/** The CLI calls this after migrate() so pooled drivers do not hold the process open. */
+export async function close() {
+  await closeDatabase();
+}
+
 if (import.meta.main) {
   await migrate();
   console.log("Database migrated and seeded.");
+  await close();
   process.exit(0);
 }

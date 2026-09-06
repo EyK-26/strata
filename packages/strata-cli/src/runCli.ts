@@ -7,6 +7,8 @@ import { startCommand } from "./commands/start.ts";
 import { loadAppCommands, resolveApp } from "./resolveApp.ts";
 import type { RunCliOptions, StrataAppConfig, StrataCommandMap } from "./types.ts";
 
+const HELP_FLAGS = new Set(["--help", "-h", "help"]);
+
 function builtinCommands(app: StrataAppConfig): StrataCommandMap {
   const commands: StrataCommandMap = {
     dev: async () => async () => {
@@ -60,7 +62,8 @@ async function runCli(options: RunCliOptions = {}): Promise<number> {
     printHelp(commandNames);
   };
 
-  const [command = "help", ...args] = options.argv ?? process.argv.slice(2);
+  const [requested = "help", ...args] = options.argv ?? process.argv.slice(2);
+  const command = HELP_FLAGS.has(requested) ? "help" : requested;
   const loadHandler = registry[command];
 
   const fail = (code: number): number => {

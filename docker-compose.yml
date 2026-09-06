@@ -53,6 +53,7 @@ services:
     entrypoint: ["sh", "scripts/docker-dev-entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
+      APP_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hiroapp_test
       REDIS_URL: redis://redis:6379
       CACHE_DRIVER: redis
       QUEUE_DRIVER: redis
@@ -81,6 +82,7 @@ services:
     entrypoint: ["sh", "scripts/docker-dev-entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
+      APP_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hiroapp_test
       REDIS_URL: redis://redis:6379
       CACHE_DRIVER: redis
       QUEUE_DRIVER: redis

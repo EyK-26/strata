@@ -1,4 +1,4 @@
-import { getSql } from "../bootstrap/database.ts";
+import { closeDatabase, getSql } from "../bootstrap/database.ts";
 import { migrate } from "./migrate.ts";
 
 const tables = ["notes"];
@@ -11,8 +11,14 @@ export async function fresh() {
   await migrate();
 }
 
+/** The CLI calls this after fresh() so pooled drivers do not hold the process open. */
+export async function close() {
+  await closeDatabase();
+}
+
 if (import.meta.main) {
   await fresh();
   console.log("Database reset, migrated, and seeded.");
+  await close();
   process.exit(0);
 }

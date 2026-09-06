@@ -25,7 +25,8 @@ Modules that own process-wide state (database pool, auth/tenant async-local stor
 | `@getstrata/core` | Runtime: HTTP, database, auth, queue, mail |
 | `@getstrata/bootstrap` | HttpKernel, providers, cookie session helpers |
 | `@getstrata/cli` | `strata` CLI (`dev`, `start`, `migrate`, `run`, plus app-registered commands) |
-| `@getstrata/starter` | `bunx create-strata` interactive layers (one database engine per app) |
+| `@getstrata/starter` | The interactive layer generator (one database engine per app) |
+| `create-strata` | Same generator, same version, under the name `bunx create-strata` resolves |
 
 Versions are asserted by `scripts/verify-package-versions.ts`.
 

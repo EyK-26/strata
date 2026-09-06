@@ -9,7 +9,7 @@ const { routes, config } = await bootstrapApp();
 
 const server = createAppServer(routes, config.port);
 
-console.log(`${config.appUrl} (port ${server.port})`);
+console.log(`Listening on http://localhost:${server.port} (APP_URL ${config.appUrl})`);
 
 if (!(await pingDatabase())) {
   console.warn("Warning: database ping failed.");

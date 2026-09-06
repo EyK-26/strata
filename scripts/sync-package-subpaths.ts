@@ -52,6 +52,7 @@ const CORE_SUBPATHS = [
   "cache/simpleCacheStore",
   "config/envSchema",
   "contracts/serviceTokens",
+  "contracts/authUserDirectory",
   "contracts/container",
   "contracts/di",
   "crypto/fieldEncryption",
@@ -198,7 +199,9 @@ const BOOTSTRAP_SUBPATHS = [
   "context",
   "contracts",
   "createWebRoutes",
-  "createRoutes",
+  // "createRoutes" is deliberately unpublished: it is in-repo fixture HTTP that
+  // imports the repo-root index.html and the dogfood helpers, which leaked a
+  // dist/_.._/_.._/index.html asset into the published tarball.
   "createSpaRoutes",
   "dependencies",
   "discoverModules",
@@ -374,8 +377,10 @@ async function updatePackageJson(
   packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
     ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"
     : "tsc -p tsconfig.types.json";
+  // Clear dist first so a subpath removed from the map cannot linger from a
+  // previous build and get packed into the tarball.
   packageJson.scripts["build"] =
-    "bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";
+    "rm -rf dist && bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";
 
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }

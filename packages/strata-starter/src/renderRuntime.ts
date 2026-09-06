@@ -4,6 +4,7 @@ import {
   authUsesCookie,
   authUsesToken,
   type DatabaseLayer,
+  nowTimestampLiteral,
   type StarterLayers,
   usesTenantTable,
 } from "./types.ts";
@@ -27,6 +28,8 @@ function dialectFragments(database: DatabaseLayer) {
     return {
       id: "INTEGER PRIMARY KEY AUTOINCREMENT",
       text: "TEXT",
+      keyText: "TEXT",
+      defaultText: "TEXT",
       timestamp: "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
       timestampNull: "TEXT",
       bool: "INTEGER NOT NULL DEFAULT 0",
@@ -36,6 +39,10 @@ function dialectFragments(database: DatabaseLayer) {
     return {
       id: "INT AUTO_INCREMENT PRIMARY KEY",
       text: "TEXT",
+      // MySQL rejects TEXT in a key specification without a length (errno 1170)
+      // and refuses a DEFAULT on any TEXT column (ER_BLOB_CANT_HAVE_DEFAULT).
+      keyText: "VARCHAR(255)",
+      defaultText: "VARCHAR(1024)",
       timestamp: "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
       timestampNull: "DATETIME NULL",
       bool: "TINYINT(1) NOT NULL DEFAULT 0",
@@ -44,6 +51,8 @@ function dialectFragments(database: DatabaseLayer) {
   return {
     id: "SERIAL PRIMARY KEY",
     text: "TEXT",
+    keyText: "TEXT",
+    defaultText: "TEXT",
     timestamp: "TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     timestampNull: "TIMESTAMPTZ",
     bool: "BOOLEAN NOT NULL DEFAULT FALSE",
@@ -242,9 +251,9 @@ function renderMigrateTs(layers: StarterLayers): string {
   if (tenancyOn) {
     statements.push(`CREATE TABLE IF NOT EXISTS tenant (
     id ${d.id},
-    slug ${d.text} NOT NULL UNIQUE,
-    plan ${d.text} NOT NULL DEFAULT 'enterprise',
-    region ${d.text} NOT NULL DEFAULT 'eu'
+    slug ${d.keyText} NOT NULL UNIQUE,
+    plan ${d.defaultText} NOT NULL DEFAULT 'enterprise',
+    region ${d.defaultText} NOT NULL DEFAULT 'eu'
   )`);
   }
 
@@ -262,7 +271,7 @@ function renderMigrateTs(layers: StarterLayers): string {
     statements.push(`CREATE TABLE IF NOT EXISTS users (
     id ${d.id},
     name ${d.text} NOT NULL,
-    email ${d.text} NOT NULL UNIQUE,
+    email ${d.keyText} NOT NULL UNIQUE,
     password ${d.text} NOT NULL,
     is_admin ${d.bool},${tenantColumn}${mfaColumns}
     email_verified_at ${d.timestampNull},
@@ -272,7 +281,7 @@ function renderMigrateTs(layers: StarterLayers): string {
 
   if (authUsesCookie(layers.auth)) {
     statements.push(`CREATE TABLE IF NOT EXISTS sessions (
-    id ${d.text} PRIMARY KEY,
+    id ${d.keyText} PRIMARY KEY,
     user_id INTEGER NOT NULL,
     expires_at ${d.timestamp},
     user_agent ${d.text},
@@ -286,8 +295,8 @@ function renderMigrateTs(layers: StarterLayers): string {
     id ${d.id},
     user_id INTEGER NOT NULL,
     name ${d.text} NOT NULL,
-    token_hash ${d.text} NOT NULL UNIQUE,
-    abilities ${d.text} NOT NULL DEFAULT '[]',
+    token_hash ${d.keyText} NOT NULL UNIQUE,
+    abilities ${d.defaultText} NOT NULL DEFAULT '[]',
     expires_at ${d.timestampNull},
     last_used_at ${d.timestampNull},
     created_at ${d.timestamp}
@@ -311,14 +320,14 @@ function renderMigrateTs(layers: StarterLayers): string {
       : "?, ?, ?, ?), (?, ?, ?, ?";
   const adminFlag = ph ? "false" : "0";
   const adminTrue = ph ? "true" : "1";
-  const verifiedNow = "new Date().toISOString()";
+  const verifiedNow = nowTimestampLiteral(layers.database);
   const userValues = verifyOn
     ? `["Demo User", "demo@example.com", password, ${adminFlag}, ${verifiedNow}, "Admin User", "admin@example.test", password, ${adminTrue}, ${verifiedNow}]`
     : `["Demo User", "demo@example.com", password, ${adminFlag}, "Admin User", "admin@example.test", password, ${adminTrue}]`;
 
   const seedTenant = tenancyOn
     ? `
-  const [{ count: tenantCount }] = await sql.unsafe<Array<{ count: string | number }>>(
+  const [{ count: tenantCount }] = await sql.unsafe<{ count: string | number }>(
     "SELECT COUNT(*) AS count FROM tenant",
   );
   if (Number(tenantCount) === 0) {
@@ -331,7 +340,7 @@ function renderMigrateTs(layers: StarterLayers): string {
 
   const seedUsers = authNeedsUsers(layers.auth)
     ? `
-  const [{ count: userCount }] = await sql.unsafe<Array<{ count: string | number }>>(
+  const [{ count: userCount }] = await sql.unsafe<{ count: string | number }>(
     "SELECT COUNT(*) AS count FROM users",
   );
   if (Number(userCount) === 0) {
@@ -349,7 +358,7 @@ function renderMigrateTs(layers: StarterLayers): string {
 
   const seedBlock = `${seedTenant}${seedUsers}`;
 
-  return `${hashImport}${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";
+  return `${hashImport}${ensureImport(layers)}import { closeDatabase, getSql } from "../bootstrap/database.ts";
 
 const migrations = [
 ${list}
@@ -357,7 +366,7 @@ ${list}
 
 export async function seed() {
 ${ensureCall(layers)}  const sql = getSql();
-  const [{ count }] = await sql.unsafe<Array<{ count: string | number }>>(
+  const [{ count }] = await sql.unsafe<{ count: string | number }>(
     "SELECT COUNT(*) AS count FROM notes",
   );
   if (Number(count) === 0) {
@@ -375,9 +384,15 @@ ${ensureCall(layers)}  const sql = getSql();
   await seed();
 }
 
+/** The CLI calls this after migrate() so pooled drivers do not hold the process open. */
+export async function close() {
+  await closeDatabase();
+}
+
 if (import.meta.main) {
   await migrate();
   console.log("Database migrated and seeded.");
+  await close();
   process.exit(0);
 }
 `;
@@ -404,7 +419,7 @@ function dropTables(layers: StarterLayers): string[] {
 function renderFreshTs(layers: StarterLayers): string {
   const tables = dropTables(layers);
   const cascade = layers.database === "sqlite" ? "" : " CASCADE";
-  return `${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";
+  return `${ensureImport(layers)}import { closeDatabase, getSql } from "../bootstrap/database.ts";
 import { migrate } from "./migrate.ts";
 
 const tables = ${JSON.stringify(tables)};
@@ -417,9 +432,15 @@ ${ensureCall(layers)}  const sql = getSql();
   await migrate();
 }
 
+/** The CLI calls this after fresh() so pooled drivers do not hold the process open. */
+export async function close() {
+  await closeDatabase();
+}
+
 if (import.meta.main) {
   await fresh();
   console.log("Database reset, migrated, and seeded.");
+  await close();
   process.exit(0);
 }
 `;
@@ -449,7 +470,7 @@ ${ensureCall(layers)}  const sql = getSql();
   console.log("Starter schema (inline SQL, not a migration runner):");
   for (const table of tables) {
     try {
-      const rows = await sql.unsafe<Array<{ count: string | number }>>(
+      const rows = await sql.unsafe<{ count: string | number }>(
         \`SELECT COUNT(*) AS count FROM \${table}\`,
       );
       console.log(\`- [present] \${table} (rows: \${rows[0]?.count ?? 0})\`);
@@ -599,51 +620,64 @@ function renderEnsureDatabaseTs(layers: StarterLayers, projectName: string): str
       ? `mysql://root:root@localhost:3306/${database}`
       : `postgresql://postgres:postgres@localhost:5432/${database}`;
 
-  if (layers.database === "mysql") {
-    return `const APP_DATABASE = ${JSON.stringify(database)};
-
+  const resolveUrl = `/**
+ * The database name comes from DATABASE_URL. Set APP_DATABASE_URL to point
+ * migrations and the app at a different database than DATABASE_URL.
+ */
 function resolveAppDatabaseUrl(): string {
   const explicit = process.env.APP_DATABASE_URL?.trim();
   if (explicit) {
     return explicit;
   }
-
-  const base = process.env.DATABASE_URL?.trim() || ${JSON.stringify(fallback)};
-  try {
-    const url = new URL(base);
-    url.pathname = \`/\${APP_DATABASE}\`;
-    return url.toString();
-  } catch {
-    return base;
-  }
+  return process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
 }
 
+/** Reject anything we would have to quote before interpolating into DDL. */
+function safeDatabaseName(url: string): string {
+  let name = "";
+  try {
+    name = decodeURIComponent(new URL(url).pathname.replace(/^\\//, ""));
+  } catch {
+    throw new Error(\`DATABASE_URL is not a valid URL: \${url}\`);
+  }
+  if (!name) {
+    throw new Error("DATABASE_URL is missing a database name.");
+  }
+  if (name.replace(/[^A-Za-z0-9_]/g, "") !== name) {
+    throw new Error(\`Refusing to create a database with an unsafe name: \${name}\`);
+  }
+  return name;
+}
+`;
+
+  if (layers.database === "mysql") {
+    return `import { createConnection } from "mysql2/promise";
+
+const DEFAULT_DATABASE_URL = ${JSON.stringify(fallback)};
+
+${resolveUrl}
 export async function ensureAppDatabase(): Promise<string> {
   const url = resolveAppDatabaseUrl();
+  const name = safeDatabaseName(url);
+
+  const admin = new URL(url);
+  admin.pathname = "/";
+  const connection = await createConnection(admin.toString());
+  try {
+    await connection.query(\`CREATE DATABASE IF NOT EXISTS \${name}\`);
+  } finally {
+    await connection.end();
+  }
+
   process.env.DATABASE_URL = url;
   return url;
 }
 `;
   }
 
-  return `const APP_DATABASE = ${JSON.stringify(database)};
+  return `const DEFAULT_DATABASE_URL = ${JSON.stringify(fallback)};
 
-function resolveAppDatabaseUrl(): string {
-  const explicit = process.env.APP_DATABASE_URL?.trim();
-  if (explicit) {
-    return explicit;
-  }
-
-  const base = process.env.DATABASE_URL?.trim() || ${JSON.stringify(fallback)};
-  try {
-    const url = new URL(base);
-    url.pathname = \`/\${APP_DATABASE}\`;
-    return url.toString();
-  } catch {
-    return base;
-  }
-}
-
+${resolveUrl}
 function adminCandidateUrls(url: string): string[] {
   const names = ["postgres", "template1"];
   try {
@@ -679,16 +713,7 @@ async function openAdminConnection(url: string): Promise<Bun.SQL> {
 
 export async function ensureAppDatabase(): Promise<string> {
   const url = resolveAppDatabaseUrl();
-  const parsed = new URL(url);
-  const name = decodeURIComponent(parsed.pathname.replace(/^\\//, ""));
-  if (!name) {
-    throw new Error("DATABASE_URL is missing a database name.");
-  }
-
-  const identifier = name.replace(/[^A-Za-z0-9_]/g, "");
-  if (identifier !== name) {
-    throw new Error(\`Refusing to create a database with an unsafe name: \${name}\`);
-  }
+  const name = safeDatabaseName(url);
 
   const adminSql = await openAdminConnection(url);
   try {
@@ -696,14 +721,13 @@ export async function ensureAppDatabase(): Promise<string> {
       SELECT 1 AS ok FROM pg_database WHERE datname = \${name}
     \`;
     if (rows.length === 0) {
-      await adminSql.unsafe(\`CREATE DATABASE \${identifier}\`);
+      await adminSql.unsafe(\`CREATE DATABASE \${name}\`);
     }
   } finally {
     await adminSql.close();
   }
 
   process.env.DATABASE_URL = url;
-  process.env.APP_DATABASE_URL = url;
   return url;
 }
 `;
@@ -821,9 +845,12 @@ function createAppContext(): AppContext {
 }
 
 export async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
-  const { migrate: runMigrate = true } = options;
+  const isProduction = process.env.APP_ENV === "production";
+  // Dev boots migrate for convenience. Production must not mutate schema on
+  // start, so run \`strata migrate\` as an explicit deploy step instead.
+  const { migrate: runMigrate = !isProduction } = options;
 
-  if (process.env.APP_ENV === "production") {
+  if (isProduction) {
     assertProductionSecrets();
   }
 

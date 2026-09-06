@@ -165,8 +165,8 @@ jobs:
         run: |
           bun run --filter @getstrata/core build
           bun run --filter @getstrata/bootstrap build
-          bun run --filter @getstrata/cli build
           bun run --filter @getstrata/starter build
+          bun run --filter create-strata build
 
       - name: Publish to npm
         run: |
@@ -185,5 +185,6 @@ jobs:
           publish_package packages/strata-bootstrap
           publish_package packages/strata-cli
           publish_package packages/strata-starter
+          publish_package packages/create-strata
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -59,9 +59,16 @@
         "typescript": "^5.9.2",
       },
     },
+    "packages/create-strata": {
+      "name": "create-strata",
+      "version": "1.0.1",
+      "bin": {
+        "create-strata": "./dist/cli.js",
+      },
+    },
     "packages/strata-bootstrap": {
       "name": "@getstrata/bootstrap",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "peerDependencies": {
         "@getstrata/core": "^1.0.0",
         "typescript": "^5.9.0",
@@ -69,14 +76,14 @@
     },
     "packages/strata-cli": {
       "name": "@getstrata/cli",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "bin": {
         "strata": "./cli.ts",
       },
     },
     "packages/strata-core": {
       "name": "@getstrata/core",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "eta": "^4.6.0",
         "mysql2": "^3.24.3",
@@ -87,7 +94,7 @@
     },
     "packages/strata-starter": {
       "name": "@getstrata/starter",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "bin": {
         "create-strata": "./dist/cli.js",
       },
@@ -129,6 +136,8 @@
     "aws-ssl-profiles": ["aws-ssl-profiles@1.1.2", "", {}, "sha512-NZKeq9AfyQvEeNlN0zSYAaWrmBffJh3IELMZfRpJVWgrpEbtEpnjvzqBPf+mxoI287JohRDoa+/nsfqqiZmF6g=="],
 
     "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "create-strata": ["create-strata@workspace:packages/create-strata"],
 
     "eta": ["eta@4.6.0", "", {}, "sha512-lW6is4T1NFOYnmqGZIfvixqj7A7sSvScF+DN8EK6K58xI5MZ5UvYe0GjopxOXQtZvUn4eDdVuZ8XSoYWTMEKwA=="],
 

@@ -49,7 +49,7 @@ AUTH_DEV_HEADERS=false
 docker compose up -d postgres redis --wait
 ```
 
-Default host ports: Postgres `54329`, Redis `6379`. HiroApp migrate creates `hiroapp_test` on that Postgres server so it does not share tables with the framework fixture database.
+Default host ports: Postgres `54329`, Redis `6379`. The framework fixture uses `DATABASE_URL` (`bun_testing_test`). HiroApp uses `APP_DATABASE_URL` (`hiroapp_test` in `.env.host.example` and `scripts/with-host-env.sh`) so its generated schema does not replace the fixture tables. Generated apps outside this repo do not need `APP_DATABASE_URL`; they use the database named in `DATABASE_URL`.
 
 ## 4. Build the framework packages
 
@@ -66,7 +66,7 @@ bun run build:bootstrap
 bun run hiroapp:fresh
 ```
 
-This creates `hiroapp_test` if needed, runs the generated starter schema, and seeds people you can log in as.
+This creates the database named in `APP_DATABASE_URL` (falling back to `DATABASE_URL`) if needed, runs the generated starter schema, and seeds people you can log in as. Source `.env.host` first, or run it as `scripts/with-host-env.sh bun run hiroapp:fresh`, so it targets `hiroapp_test` and not the fixture database.
 
 ## 6. Start the app
 

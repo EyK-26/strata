@@ -11,9 +11,11 @@ bunx create-strata my-app
 cd my-app
 cp .env.example .env
 bun install
-strata migrate
-strata dev
+bun run db:migrate
+bun run dev
 ```
+
+`strata` installs into the app rather than globally, so use the `bun run` scripts above, or `bunx strata <command>` from inside the app directory.
 
 The wizard asks each layer (frontend, database, auth, tenancy, cache, queue, mail, extras). In a terminal, move with arrow keys and Enter, or type a number. `--docker` with Postgres or MySQL also writes Adminer at http://localhost:8080.
 
@@ -26,14 +28,15 @@ Guides: [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDIN
 
 ## Packages
 
-Published as **1.0.0**:
+Published as **1.0.1**:
 
 | Package | What it is |
 |---------|------------|
 | `@getstrata/core` | Runtime: auth, HTTP, database, queue, mail, security |
 | `@getstrata/bootstrap` | App boot: kernel, providers, cookie session helpers |
 | `@getstrata/cli` | `strata` commands: `dev`, `start`, `migrate`, `run` |
-| `@getstrata/starter` | `bunx create-strata` |
+| `@getstrata/starter` | The generator, also published as `create-strata` |
+| `create-strata` | What `bunx create-strata my-app` resolves |
 
 Application code should import **subpaths**, not the root `@getstrata/core` barrel:
 

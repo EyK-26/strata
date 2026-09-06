@@ -17,8 +17,22 @@ const PRUNE_TOP_LEVEL = [
   "types",
 ] as const;
 
+/** In-repo fixture and dogfood declarations that are not part of the public surface. */
+const PRUNE_FILES = [
+  "bootstrap/dogfoodApp.d.ts",
+  "bootstrap/createRoutes.d.ts",
+  "bootstrap/routes.d.ts",
+  "bootstrap/preloadModules.d.ts",
+] as const;
+
 for (const directory of PRUNE_TOP_LEVEL) {
   await rm(join(BOOTSTRAP_DIST, directory), { recursive: true, force: true });
 }
 
-console.log(`Pruned ${PRUNE_TOP_LEVEL.length} duplicate directories from bootstrap dist.`);
+for (const file of PRUNE_FILES) {
+  await rm(join(BOOTSTRAP_DIST, file), { force: true });
+}
+
+console.log(
+  `Pruned ${PRUNE_TOP_LEVEL.length} duplicate directories and ${PRUNE_FILES.length} internal declarations from bootstrap dist.`,
+);

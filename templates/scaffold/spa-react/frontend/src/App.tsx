@@ -1,10 +1,8 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
+import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import OrganizationsPage from "./pages/OrganizationsPage";
-import ProjectsPage from "./pages/ProjectsPage";
-import TasksPage from "./pages/TasksPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth();
@@ -28,9 +26,7 @@ function AppShell() {
       <header className="site-header">
         <strong>Strata SPA</strong>
         <nav>
-          <Link to="/organizations">Organizations</Link>
-          <Link to="/projects">Projects</Link>
-          <Link to="/tasks">Tasks</Link>
+          <Link to="/">Home</Link>
           {user ? (
             <>
               <span className="hint">{user.email}</span>
@@ -43,29 +39,12 @@ function AppShell() {
       </header>
 
       <Routes>
-        <Route path="/" element={<Navigate to="/organizations" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route
-          path="/organizations"
+          path="/"
           element={
             <ProtectedRoute>
-              <OrganizationsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/projects"
-          element={
-            <ProtectedRoute>
-              <ProjectsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/tasks"
-          element={
-            <ProtectedRoute>
-              <TasksPage />
+              <HomePage />
             </ProtectedRoute>
           }
         />

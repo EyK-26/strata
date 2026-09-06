@@ -9,6 +9,7 @@ import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import { protectMfaSecret, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { sqlTimestamp } from "@getstrata/core/database/dialect";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { absoluteTemporarySignedUrl, assertValidSignature } from "@getstrata/core/http/signedUrl";
@@ -18,6 +19,7 @@ import {
   hashRecoveryCode,
   recoveryCodeMatches,
 } from "@getstrata/core/security/recoveryCodes";
+import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
 import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core/security/totp";
 import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";
 import { getSql } from "../../bootstrap/database.ts";
@@ -77,11 +79,23 @@ const authModule: AppModule = {
               return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
             const plain = `strp_${randomBytes(24).toString("hex")}`;
+            // API_TOKEN_DEFAULT_EXPIRY_DAYS (30 in .env.example) bounds every minted token.
+            // Unset means no expiry; the production guard requires it to be set.
+            const expiryDays = resolveDefaultTokenExpiryDays();
+            const expiresAt = expiryDays
+              ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
+              : null;
             await getSql().unsafe(
-              "INSERT INTO api_tokens (user_id, name, token_hash, abilities) VALUES ($1, $2, $3, $4)",
-              [user.id, "spa", hashApiToken(plain), JSON.stringify(["profile:read"])],
+              "INSERT INTO api_tokens (user_id, name, token_hash, abilities, expires_at) VALUES ($1, $2, $3, $4, $5)",
+              [
+                user.id,
+                "spa",
+                hashApiToken(plain),
+                JSON.stringify(["profile:read"]),
+                expiresAt ? sqlTimestamp(expiresAt) : null,
+              ],
             );
-            return jsonResponse({ token: plain });
+            return jsonResponse({ token: plain, expires_at: expiresAt?.toISOString() ?? null });
           }),
         ),
       },

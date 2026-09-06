@@ -1,21 +1,32 @@
-const APP_DATABASE = "hiroapp_team_test";
+const DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/hiroapp_team";
 
+/**
+ * The database name comes from DATABASE_URL. Set APP_DATABASE_URL to point
+ * migrations and the app at a different database than DATABASE_URL.
+ */
 function resolveAppDatabaseUrl(): string {
   const explicit = process.env.APP_DATABASE_URL?.trim();
   if (explicit) {
     return explicit;
   }
+  return process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
+}
 
-  const base =
-    process.env.DATABASE_URL?.trim() ||
-    "postgresql://postgres:postgres@localhost:5432/hiroapp_team_test";
+/** Reject anything we would have to quote before interpolating into DDL. */
+function safeDatabaseName(url: string): string {
+  let name = "";
   try {
-    const url = new URL(base);
-    url.pathname = `/${APP_DATABASE}`;
-    return url.toString();
+    name = decodeURIComponent(new URL(url).pathname.replace(/^\//, ""));
   } catch {
-    return base;
+    throw new Error(`DATABASE_URL is not a valid URL: ${url}`);
   }
+  if (!name) {
+    throw new Error("DATABASE_URL is missing a database name.");
+  }
+  if (name.replace(/[^A-Za-z0-9_]/g, "") !== name) {
+    throw new Error(`Refusing to create a database with an unsafe name: ${name}`);
+  }
+  return name;
 }
 
 function adminCandidateUrls(url: string): string[] {
@@ -52,16 +63,7 @@ async function openAdminConnection(url: string): Promise<Bun.SQL> {
 
 export async function ensureAppDatabase(): Promise<string> {
   const url = resolveAppDatabaseUrl();
-  const parsed = new URL(url);
-  const name = decodeURIComponent(parsed.pathname.replace(/^\//, ""));
-  if (!name) {
-    throw new Error("DATABASE_URL is missing a database name.");
-  }
-
-  const identifier = name.replace(/[^A-Za-z0-9_]/g, "");
-  if (identifier !== name) {
-    throw new Error(`Refusing to create a database with an unsafe name: ${name}`);
-  }
+  const name = safeDatabaseName(url);
 
   const adminSql = await openAdminConnection(url);
   try {
@@ -69,13 +71,12 @@ export async function ensureAppDatabase(): Promise<string> {
       SELECT 1 AS ok FROM pg_database WHERE datname = ${name}
     `;
     if (rows.length === 0) {
-      await adminSql.unsafe(`CREATE DATABASE ${identifier}`);
+      await adminSql.unsafe(`CREATE DATABASE ${name}`);
     }
   } finally {
     await adminSql.close();
   }
 
   process.env.DATABASE_URL = url;
-  process.env.APP_DATABASE_URL = url;
   return url;
 }

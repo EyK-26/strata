@@ -27,6 +27,7 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "resetBoundDatabaseConnection",
   ],
   "database/bunSql": ["bindBunSql", "createBunSqlPool"],
+  "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],
 };
 
 function parseImportNames(specifier: string): string[] {
@@ -128,7 +129,7 @@ for (const subpath of CORE_SHARED_SUBPATHS) {
 
   const shimModule = await import(shimPath);
   for (const exportName of required) {
-    if (!(exportName in shimModule) || typeof shimModule[exportName] !== "function") {
+    if (!(exportName in shimModule) || shimModule[exportName] === undefined) {
       errors.push(
         `Shared subpath @getstrata/core/${subpath} missing runtime export "${exportName}"`,
       );
@@ -140,7 +141,7 @@ const barrelPath = join(ROOT, "packages/strata-core/dist/index.js");
 try {
   const barrel = await import(barrelPath);
   for (const exportName of REQUIRED_SHARED_RUNTIME_EXPORTS["database/boundConnection"] ?? []) {
-    if (!(exportName in barrel) || typeof barrel[exportName] !== "function") {
+    if (!(exportName in barrel) || barrel[exportName] === undefined) {
       errors.push(`@getstrata/core dist/index.js missing runtime export "${exportName}"`);
     }
   }

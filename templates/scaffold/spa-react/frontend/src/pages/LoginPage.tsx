@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   if (token) {
-    return <Navigate to="/organizations" replace />;
+    return <Navigate to="/" replace />;
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -22,7 +22,7 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      navigate("/organizations");
+      navigate("/");
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Login failed");
     } finally {
@@ -33,7 +33,10 @@ export default function LoginPage() {
   return (
     <section className="card">
       <h1>Sign in</h1>
-      <p className="hint">Use seeded credentials or your own API user.</p>
+      <p className="hint">
+        Seeded users are <code>demo@example.com</code> and <code>admin@example.test</code>, password
+        <code>password</code>.
+      </p>
 
       {error ? <p className="error">{error}</p> : null}
 

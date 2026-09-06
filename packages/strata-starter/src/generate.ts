@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
 import type { ParsedFlags } from "./parseArgs.ts";
 import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
@@ -22,6 +22,7 @@ import {
   renderVerifyEmailView,
 } from "./renderAuth.ts";
 import {
+  renderApiDocs,
   renderDockerCompose,
   renderEnvExample,
   renderGitignore,
@@ -49,7 +50,12 @@ import {
 } from "./renderRuntime.ts";
 import { renderScimModule } from "./renderScim.ts";
 import type { GenerateOptions, StarterLayers } from "./types.ts";
-import { htmlAuthKit, neededDockerServices, selectedDockerServices } from "./types.ts";
+import {
+  htmlAuthKit,
+  neededDockerServices,
+  needsFrontendBuild,
+  selectedDockerServices,
+} from "./types.ts";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]*$/i;
 
@@ -93,6 +99,20 @@ function assertProjectName(projectName: string): void {
   }
 }
 
+/**
+ * `my-app`, `./my-app`, and `/tmp/my-app` are all accepted. The last path
+ * segment becomes the project name; the rest selects where to write.
+ */
+function resolveProjectTarget(
+  rawTarget: string,
+  cwd: string,
+): { projectName: string; targetDir: string } {
+  const targetDir = resolve(cwd, rawTarget.trim());
+  const projectName = basename(targetDir);
+  assertProjectName(projectName);
+  return { projectName, targetDir };
+}
+
 function applyFrontendOverlays(
   overlayRoot: string,
   targetDir: string,
@@ -100,9 +120,6 @@ function applyFrontendOverlays(
 ): void {
   if (layers.frontend === "hybrid" || layers.frontend === "spa-react") {
     copyOverlayTree(join(overlayRoot, "spa-react"), targetDir);
-  }
-  if (layers.frontend === "api") {
-    copyOverlayTree(join(overlayRoot, "api"), targetDir);
   }
 }
 
@@ -117,6 +134,11 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     renderPackageJson(projectName, { ...options, layers }),
   );
   writeText(join(targetDir, "README.md"), renderReadme(projectName, layers));
+  if (layers.frontend === "api") {
+    writeText(join(targetDir, "docs/API.md"), renderApiDocs(projectName, layers));
+  } else {
+    removeIfExists(join(targetDir, "docs/API.md"));
+  }
   writeText(join(targetDir, "strata.layers.json"), renderLayersManifest(projectName, layers));
 
   const compose = renderDockerCompose(projectName, layers);
@@ -198,7 +220,12 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   writeText(join(targetDir, "storage/.gitkeep"), "");
 }
 
-function printNextSteps(projectName: string, layers: StarterLayers, compose: boolean): void {
+function printNextSteps(
+  projectName: string,
+  layers: StarterLayers,
+  compose: boolean,
+  cdTarget = projectName,
+): void {
   const dockerOn = selectedDockerServices(layers);
   const neededTools = neededDockerServices(layers);
   const localOn = neededTools.filter((name) => !dockerOn.includes(name));
@@ -209,7 +236,7 @@ function printNextSteps(projectName: string, layers: StarterLayers, compose: boo
     `frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}  docker=${dockerSummary}`,
   );
   console.log("\nNext steps:");
-  console.log(`  cd ${projectName}`);
+  console.log(`  cd ${cdTarget}`);
   console.log("  cp .env.example .env");
   if (compose) {
     console.log("  docker compose up -d");
@@ -221,8 +248,14 @@ function printNextSteps(projectName: string, layers: StarterLayers, compose: boo
     console.log(`  Point env at local ${localOn.join(", ")} (see README).`);
   }
   console.log("  bun install");
-  console.log("  strata migrate");
-  console.log("  strata dev\n");
+  if (needsFrontendBuild(layers.frontend)) {
+    console.log("  bun run frontend:install");
+    console.log("  bun run frontend:build");
+  }
+  console.log("  bun run db:migrate");
+  console.log("  bun run dev\n");
+  console.log("The strata binary is local to the app, so use the bun run scripts above.");
+  console.log("Run it directly with bunx strata <command> from inside the app directory.\n");
 }
 
 function generateProject(options: GenerateOptions): void {
@@ -255,9 +288,9 @@ async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<num
 
   try {
     const plan = await resolveStarterPlan(flags);
-    const targetDir = resolve(cwd, plan.projectName);
+    const { projectName, targetDir } = resolveProjectTarget(plan.projectName, cwd);
     generateProject({
-      projectName: plan.projectName,
+      projectName,
       targetDir,
       layers: plan.layers,
       templateRoot: resolveTemplateRoot(),
@@ -265,9 +298,10 @@ async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<num
       force: flags.force,
     });
     printNextSteps(
-      plan.projectName,
+      projectName,
       plan.layers,
-      renderDockerCompose(plan.projectName, plan.layers) !== null,
+      renderDockerCompose(projectName, plan.layers) !== null,
+      plan.projectName,
     );
     return 0;
   } catch (error) {
@@ -280,6 +314,7 @@ export {
   generateProject,
   printNextSteps,
   resolveOverlayRoot,
+  resolveProjectTarget,
   resolveTemplateRoot,
   runCreateStrata,
   starterPackageRoot,

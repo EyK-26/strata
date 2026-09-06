@@ -7,7 +7,7 @@ export async function status() {
   console.log("Starter schema (inline SQL, not a migration runner):");
   for (const table of tables) {
     try {
-      const rows = await sql.unsafe<Array<{ count: string | number }>>(
+      const rows = await sql.unsafe<{ count: string | number }>(
         `SELECT COUNT(*) AS count FROM ${table}`,
       );
       console.log(`- [present] ${table} (rows: ${rows[0]?.count ?? 0})`);
