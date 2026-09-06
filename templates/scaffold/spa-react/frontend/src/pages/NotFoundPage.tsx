@@ -5,7 +5,7 @@ export default function NotFoundPage() {
     <section className="card">
       <h1>Not found</h1>
       <p>
-        Return to <Link to="/organizations">organizations</Link>.
+        Return <Link to="/">home</Link>.
       </p>
     </section>
   );

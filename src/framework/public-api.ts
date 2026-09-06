@@ -91,6 +91,7 @@ export {
   dialectFor,
   resetSqlDialect,
   runWithSqlDialect,
+  sqlTimestamp,
   useSqlDialect,
 } from "../core/database/dialect.ts";
 export { Factory } from "../core/database/factory.ts";

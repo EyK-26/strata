@@ -1,10 +1,12 @@
 import {
+  authNeedsUsers,
   authUsesCookie,
   authUsesJwt,
   authUsesToken,
   DOCKER_SERVICE_LABELS,
   type DockerServiceName,
   neededDockerServices,
+  needsFrontendBuild,
   needsRedis,
   type StarterLayers,
   selectedDockerServices,
@@ -15,7 +17,7 @@ function envFlag(value: boolean): string {
 }
 
 function appDatabaseName(projectName: string): string {
-  return `${projectName.replace(/[^A-Za-z0-9_]/g, "_")}_test`;
+  return projectName.replace(/[^A-Za-z0-9_]/g, "_");
 }
 
 function defaultDatabaseUrl(layers: StarterLayers, projectName: string): string {
@@ -37,6 +39,12 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     "PORT=3000",
     "APP_URL=http://localhost:3000",
     `DATABASE_URL=${defaultDatabaseUrl(layers, projectName)}`,
+    ...(layers.database === "sqlite"
+      ? []
+      : [
+          "# Optional. Migrate and boot against a different database than DATABASE_URL.",
+          "# APP_DATABASE_URL=",
+        ]),
     `DB_CONNECTION=${layers.database === "postgres" ? "pgsql" : layers.database}`,
     `FRONTEND_MODE=${layers.frontend}`,
     `SPA_PREFIX=${layers.spaPrefix}`,
@@ -45,8 +53,17 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     `QUEUE_DRIVER=${layers.queue}`,
     `MAIL_DRIVER=${layers.mail}`,
     `AUTH_DEV_HEADERS=${envFlag(layers.auth === "headers")}`,
-    `FEATURE_PUBLIC_READS=${envFlag(layers.frontend !== "api")}`,
   ];
+
+  if (layers.frontend === "api") {
+    lines.push("FEATURE_PUBLIC_READS=false");
+  } else {
+    lines.push(
+      "# Local convenience so the welcome page reads without a login.",
+      "# Production boot is blocked unless this is false.",
+      "FEATURE_PUBLIC_READS=true",
+    );
+  }
 
   if (needsRedis(layers)) {
     lines.push("REDIS_URL=redis://127.0.0.1:6379");
@@ -215,12 +232,25 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^1.0.0",
-        "@getstrata/cli": "^1.0.0",
-        "@getstrata/core": "^1.0.0",
+        "@getstrata/bootstrap": "^1.0.1",
+        "@getstrata/cli": "^1.0.1",
+        "@getstrata/core": "^1.0.1",
       };
   if (options.layers?.database === "mysql") {
     coreDeps.mysql2 = "^3.24.3";
+  }
+
+  const scripts: Record<string, string> = {
+    dev: "strata dev",
+    start: "strata start",
+    "db:migrate": "strata migrate",
+    "db:fresh": "strata migrate:fresh",
+    check: "tsc --noEmit",
+  };
+  if (options.layers && needsFrontendBuild(options.layers.frontend)) {
+    scripts["frontend:install"] = "cd frontend && bun install";
+    scripts["frontend:build"] = "cd frontend && bun run build";
+    scripts["frontend:dev"] = "cd frontend && bun run dev";
   }
 
   return `${JSON.stringify(
@@ -229,13 +259,7 @@ function renderPackageJson(
       version: "0.1.0",
       private: true,
       type: "module",
-      scripts: {
-        dev: "strata dev",
-        start: "strata start",
-        "db:migrate": "strata migrate",
-        "db:fresh": "strata migrate:fresh",
-        check: "tsc --noEmit",
-      },
+      scripts,
       dependencies: coreDeps,
       devDependencies: {
         "@types/bun": "^1.4.0",
@@ -334,13 +358,112 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
   return `${lines.join("\n")}\n`;
 }
 
+/**
+ * Written per layer so it can only list routes this app actually serves.
+ * A static template drifts the moment the auth stack changes.
+ */
+function renderApiDocs(projectName: string, layers: StarterLayers): string {
+  const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
+  rows.push("| `GET` | `/health` | Plain text `ok`, or `degraded` if the database ping fails. |");
+  rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
+
+  if (authUsesToken(layers.auth)) {
+    rows.push(
+      "| `POST` | `/api/v1/auth/login` | `{ email, password }` returns `{ token }`. |",
+      "| `POST` | `/api/v1/auth/register` | Creates a user and returns a token. |",
+      "| `GET` | `/api/v1/auth/me` | Requires `Authorization: Bearer <token>`. |",
+    );
+  }
+  if (authUsesJwt(layers.auth)) {
+    rows.push("| `POST` | `/api/auth/token` | Mints a short-lived JWT. Not an HTML session. |");
+  }
+  if (authNeedsUsers(layers.auth)) {
+    rows.push(
+      "| `POST` | `/api/v1/auth/forgot-password` | Sends a signed reset link through the mail driver. |",
+      "| `POST` | `/api/v1/auth/reset-password` | Consumes the signed link. |",
+      "| `GET` | `/api/user` | Current user for the active guard. |",
+    );
+  }
+  if (layers.extras.metrics) {
+    rows.push(
+      "| `GET` | `/metrics` | Prometheus text. Production requires `Authorization: Bearer <METRICS_TOKEN>`. |",
+    );
+  }
+
+  const authNote =
+    layers.auth === "headers"
+      ? `Auth is \`headers\`. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`) for local work and tests. There are no login endpoints and no \`users\` table. Production must set \`AUTH_DEV_HEADERS=false\`, which turns those headers off and leaves you without a guard, so pick another auth layer before you ship.`
+      : authUsesToken(layers.auth)
+        ? `Sign in with \`POST /api/v1/auth/login\`, then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
+        : `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
+
+  return `# ${projectName} API
+
+\`FRONTEND_MODE=${layers.frontend}\`. ${
+    layers.frontend === "api"
+      ? "No server-rendered views beyond the welcome page and no SPA assets."
+      : `HTML is served alongside this API. The SPA is mounted at \`${layers.spaPrefix}\`.`
+  }
+
+## Routes this app serves today
+
+${rows.join("\n")}
+
+There is no CRUD endpoint for the seeded \`notes\` table. Adding your own routes is the first thing you do.
+
+## Auth
+
+${authNote}
+
+## Adding a route
+
+Create a module under \`src/modules/\` and return a route map. Modules are discovered on boot.
+
+\`\`\`typescript
+// src/modules/notes/index.ts
+import type { AppModule } from "@getstrata/bootstrap/contracts";
+import { jsonResponse } from "@getstrata/core/http/response";
+import { getSql } from "../../bootstrap/database.ts";
+
+const notesModule: AppModule = {
+  name: "notes",
+  order: 2,
+  routes({ kernel }) {
+    return {
+      "/api/v1/notes": kernel.wrap("api", async () => {
+        const rows = await getSql().unsafe<{ id: number; body: string }>(
+          "SELECT id, body FROM notes ORDER BY id DESC",
+        );
+        return jsonResponse({ data: rows });
+      }),
+    };
+  },
+};
+
+export default notesModule;
+\`\`\`
+
+Import from \`@getstrata/core/...\` subpaths rather than the package root, so singleton state such as the database pool stays shared.
+
+## Docs
+
+- [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md)
+- [Auth choices](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md)
+- [Databases](https://github.com/EyK-26/strata/blob/main/docs/DATABASE.md)
+`;
+}
+
 function renderReadme(projectName: string, layers: StarterLayers): string {
   const docker = renderDockerCompose(projectName, layers);
   const next = [`cd ${projectName}`, "cp .env.example .env"];
   if (docker) {
     next.push("docker compose up -d");
   }
-  next.push("bun install", "strata migrate", "strata dev");
+  next.push("bun install");
+  if (needsFrontendBuild(layers.frontend)) {
+    next.push("bun run frontend:install", "bun run frontend:build");
+  }
+  next.push("bun run db:migrate", "bun run dev");
 
   const extras = Object.entries(layers.extras)
     .filter(([, on]) => on)
@@ -425,16 +548,55 @@ JWT mint: \`POST /api/auth/token\` with email and password. Short-lived. Do not 
 Prometheus scrape: \`GET /metrics\`. Production requires \`Authorization: Bearer <METRICS_TOKEN>\`.
 `
     : ""
+}${
+  needsFrontendBuild(layers.frontend)
+    ? `
+## Frontend
+
+The React app lives in \`frontend/\` with its own \`package.json\`. It is not built by \`bun install\` at the root.
+
+\`\`\`bash
+bun run frontend:install
+bun run frontend:build
+\`\`\`
+
+Until \`frontend/dist\` exists, \`${layers.spaPrefix}\` answers 503. Use \`bun run frontend:dev\` for the Vite-style dev server with hot reload.${
+        layers.frontend === "hybrid"
+          ? ` HTML stays at \`/\` and the SPA is served under \`${layers.spaPrefix}/*\`.`
+          : ""
+      }
+`
+    : ""
+}${
+  layers.database === "sqlite"
+    ? ""
+    : `
+## Database
+
+The app uses the database named in \`DATABASE_URL\` and creates it on first migrate when the connection user may. Set \`APP_DATABASE_URL\` only when migrations and the app should target a different database than \`DATABASE_URL\`.
+`
 }
 ## Production
 
-\`createApp\` calls \`assertProductionSecrets()\` when \`APP_ENV=production\`. Set real secrets before you ship. Cookie HTML apps need \`SESSION_SECRET\` (32+ characters). Token apps need \`TOKEN_HASH_PEPPER\`. Set \`AUTH_DEV_HEADERS=false\`.
+\`createApp\` calls \`assertProductionSecrets()\` when \`APP_ENV=production\`. That check fails closed, so read this before your first production boot.
+
+- Replace every \`change-me\` placeholder in \`.env\`. The guard rejects the values this generator wrote, not just empty ones.
+- Set \`AUTH_DEV_HEADERS=false\`.
+- Set \`FEATURE_PUBLIC_READS=false\`. ${
+    layers.frontend === "api"
+      ? "This app already ships `false`."
+      : "This app ships `true` so the local welcome page reads without a login. Production requires `false`."
+  }
+- Set \`CORS_ALLOWED_ORIGINS\` to explicit origins if you set it at all. A \`*\` entry is rejected.
+${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}
+\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step.
 `;
 }
 
 export {
   appDatabaseName,
   defaultDatabaseUrl,
+  renderApiDocs,
   renderDockerCompose,
   renderEnvExample,
   renderGitignore,

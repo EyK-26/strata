@@ -158,6 +158,36 @@ describe("published strata CLI", () => {
     expect(errors.join("\n")).toContain("Unknown command: not-a-real-command");
   });
 
+  test.each([["--help"], ["-h"], ["help"]])("%s prints the command list", async (flag) => {
+    const workspace = await createTempApp();
+    const logs: string[] = [];
+    const errors: string[] = [];
+    const originalError = console.error;
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    };
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    };
+
+    try {
+      const code = await runCli({
+        cwd: workspace,
+        argv: [flag],
+        skipBoot: true,
+        exitProcess: false,
+      });
+      expect(code).toBe(0);
+    } finally {
+      console.error = originalError;
+      console.log = originalLog;
+    }
+
+    expect(logs.join("\n")).toContain("Available commands:");
+    expect(errors.join("\n")).not.toContain("Unknown command");
+  });
+
   test("run executes a file with the app preload", async () => {
     const workspace = await createTempApp();
     const proc = Bun.spawn(

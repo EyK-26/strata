@@ -20,8 +20,17 @@ function getDatabase(): DatabaseConnection {
 }
 
 function getDb(): DatabaseConnection {
-  getDatabase();
-  return getDefaultDatabaseQuery() as DatabaseConnection;
+  const connection = getDatabase();
+  try {
+    return getDefaultDatabaseQuery() as DatabaseConnection;
+  } catch {
+    // Another test file reset the shared default pool (for example the starter
+    // boot tests, which register a SQLite pool and clear it afterwards). The
+    // fixture connection is still open, so register it again instead of failing
+    // depending on test file order.
+    registerDefaultDatabasePool(connection);
+    return getDefaultDatabaseQuery() as DatabaseConnection;
+  }
 }
 
 async function pingDatabase(connection: DatabaseConnection = getDatabase()): Promise<boolean> {

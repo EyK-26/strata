@@ -26,8 +26,8 @@ cd hiroapp-team
 cp .env.example .env
 docker compose up -d
 bun install
-strata migrate
-strata dev
+bun run db:migrate
+bun run dev
 ```
 
 Open http://localhost:3000. Health check: `GET /health`.
@@ -60,6 +60,19 @@ Cookie name is `strata_session`. Forms send CSRF as `_token`.
 
 Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <METRICS_TOKEN>`.
 
+## Database
+
+The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`.
+
 ## Production
 
-`createApp` calls `assertProductionSecrets()` when `APP_ENV=production`. Set real secrets before you ship. Cookie HTML apps need `SESSION_SECRET` (32+ characters). Token apps need `TOKEN_HASH_PEPPER`. Set `AUTH_DEV_HEADERS=false`.
+`createApp` calls `assertProductionSecrets()` when `APP_ENV=production`. That check fails closed, so read this before your first production boot.
+
+- Replace every `change-me` placeholder in `.env`. The guard rejects the values this generator wrote, not just empty ones.
+- Set `AUTH_DEV_HEADERS=false`.
+- Set `FEATURE_PUBLIC_READS=false`. This app ships `true` so the local welcome page reads without a login. Production requires `false`.
+- Set `CORS_ALLOWED_ORIGINS` to explicit origins if you set it at all. A `*` entry is rejected.
+- Set `SESSION_SECRET` to 32+ characters.
+- Set `METRICS_TOKEN`.
+
+`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step.

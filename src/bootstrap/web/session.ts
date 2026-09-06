@@ -3,7 +3,7 @@ import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { type AuthGuard, AuthManager } from "@getstrata/core/auth/guard";
 import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
-import { currentSqlDialect } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, sqlTimestamp } from "@getstrata/core/database/dialect";
 import { readRequestCookie } from "@getstrata/core/http/cookies";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
 
@@ -193,7 +193,7 @@ export class CookieSessionStore {
     await this.sql().unsafe(
       `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at)
        VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()})`,
-      [id, user.id, expires.toISOString(), meta.userAgent ?? null, meta.ipAddress ?? null],
+      [id, user.id, sqlTimestamp(expires), meta.userAgent ?? null, meta.ipAddress ?? null],
     );
     return id;
   }

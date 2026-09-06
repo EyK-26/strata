@@ -6,6 +6,8 @@ interface SqlDialect {
   placeholder(index: number): string;
   quoteIdentifier(identifier: string): string;
   nowExpression(): string;
+  /** Render a Date as a literal this engine accepts for a timestamp column. */
+  timestampValue(value: Date): string;
   returningClause(columns: string): string;
   ilikeOperator(): "ILIKE" | "LIKE";
   nullsLastSuffix(): string;
@@ -30,6 +32,9 @@ const postgresDialect: SqlDialect = {
   },
   nowExpression(): string {
     return "NOW()";
+  },
+  timestampValue(value: Date): string {
+    return value.toISOString();
   },
   returningClause(columns: string): string {
     return ` RETURNING ${columns}`;
@@ -56,6 +61,9 @@ const mysqlDialect: SqlDialect = {
   nowExpression(): string {
     return "CURRENT_TIMESTAMP";
   },
+  timestampValue(value: Date): string {
+    return value.toISOString().slice(0, 19).replace("T", " ");
+  },
   returningClause(): string {
     return "";
   },
@@ -80,6 +88,9 @@ const sqliteDialect: SqlDialect = {
   },
   nowExpression(): string {
     return "CURRENT_TIMESTAMP";
+  },
+  timestampValue(value: Date): string {
+    return value.toISOString();
   },
   returningClause(columns: string): string {
     return ` RETURNING ${columns}`;
@@ -118,6 +129,11 @@ function useSqlDialect(driver: DatabaseDriver): SqlDialect {
   return dialectOverride;
 }
 
+/** Format a timestamp parameter for whichever engine is active. */
+function sqlTimestamp(value: Date = new Date()): string {
+  return currentSqlDialect().timestampValue(value);
+}
+
 function resetSqlDialect(): void {
   dialectOverride = null;
 }
@@ -130,4 +146,11 @@ function runWithSqlDialect<T>(
 }
 
 export type { SqlDialect };
-export { currentSqlDialect, dialectFor, resetSqlDialect, runWithSqlDialect, useSqlDialect };
+export {
+  currentSqlDialect,
+  dialectFor,
+  resetSqlDialect,
+  runWithSqlDialect,
+  sqlTimestamp,
+  useSqlDialect,
+};

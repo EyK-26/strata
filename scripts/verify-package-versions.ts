@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-/** Verify published @getstrata package versions match the Phase 6 release matrix. */
+/** Verify published package versions match the release matrix. */
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,10 +7,11 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 
 const EXPECTED: Record<string, string> = {
-  "@getstrata/core": "1.0.0",
-  "@getstrata/bootstrap": "1.0.0",
-  "@getstrata/cli": "1.0.0",
-  "@getstrata/starter": "1.0.0",
+  "@getstrata/core": "1.0.1",
+  "@getstrata/bootstrap": "1.0.1",
+  "@getstrata/cli": "1.0.1",
+  "@getstrata/starter": "1.0.1",
+  "create-strata": "1.0.1",
 };
 
 const PACKAGE_DIRS: Record<string, string> = {
@@ -18,6 +19,7 @@ const PACKAGE_DIRS: Record<string, string> = {
   "@getstrata/bootstrap": "packages/strata-bootstrap/package.json",
   "@getstrata/cli": "packages/strata-cli/package.json",
   "@getstrata/starter": "packages/strata-starter/package.json",
+  "create-strata": "packages/create-strata/package.json",
 };
 
 const mismatches: string[] = [];

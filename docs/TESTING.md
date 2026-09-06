@@ -35,7 +35,7 @@ docker compose up -d postgres redis --wait
 ## What CI migrates
 
 1. Fixture: `STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed` (database from `DATABASE_URL`, usually `bun_testing_test`)
-2. HiroApp: `DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed` (rewrites to `hiroapp_test`)
+2. HiroApp: `DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed` (database from `APP_DATABASE_URL`, `hiroapp_test` in `scripts/with-host-env.sh`; without it HiroApp would migrate into `DATABASE_URL` and replace the fixture tables)
 3. `SKIP_FIXTURE_TEST_BOOTSTRAP=1` so the Bun preload does not reset the fixture a second time
 
 A clean checkout must `bun run build:framework` before HiroApp migrate because `apps/hiroapp` imports `@getstrata/core/*` from `packages/strata-core/dist`.

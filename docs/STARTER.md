@@ -1,6 +1,6 @@
 # Starter
 
-`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space. If you see `Choose [1]:` instead, bunx did not get raw keyboard mode, or an older package is cached: `bunx create-strata@latest my-app`.
+`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space. If you see `Choose [1]:` instead, bunx did not get raw keyboard mode. Retry in a real terminal, or pass `--yes` with layer flags.
 
 HiroApp in this repo is one generated example (`apps/hiroapp`: Postgres + HTMX). It is not the source of the wizard. Sibling examples: `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis). Regenerate them with `bun run generate:example-apps`.
 
@@ -11,9 +11,11 @@ bunx create-strata my-app
 cd my-app
 cp .env.example .env
 bun install
-strata migrate
-strata dev
+bun run db:migrate
+bun run dev
 ```
+
+`strata` installs into the app rather than globally, so use the `bun run` scripts above, or `bunx strata <command>` from inside the app directory.
 
 In CI, pass `--yes` and the layers you want. Defaults (no flags) are SQLite, JSON API, header auth:
 

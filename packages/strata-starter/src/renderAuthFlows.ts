@@ -3,6 +3,7 @@ import {
   authUsesJwt,
   authUsesToken,
   htmlAuthKit,
+  nowTimestampLiteral,
   type StarterLayers,
   usesTenantTable,
 } from "./types.ts";
@@ -123,6 +124,10 @@ function renderAuthModule(layers: StarterLayers): string | null {
   imports.push(`import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";`);
   if (authUsesToken(layers.auth)) {
     imports.push(`import { hashApiToken } from "@getstrata/core/auth/tokenHash";`);
+    imports.push(`import { sqlTimestamp } from "@getstrata/core/database/dialect";`);
+    imports.push(
+      `import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";`,
+    );
   }
   if (mfa) {
     imports.push(
@@ -200,11 +205,23 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
               return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
             const plain = \`strp_\${randomBytes(24).toString("hex")}\`;
+            // API_TOKEN_DEFAULT_EXPIRY_DAYS (30 in .env.example) bounds every minted token.
+            // Unset means no expiry; the production guard requires it to be set.
+            const expiryDays = resolveDefaultTokenExpiryDays();
+            const expiresAt = expiryDays
+              ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
+              : null;
             await getSql().unsafe(
-              "INSERT INTO api_tokens (user_id, name, token_hash, abilities) VALUES (${ph(layers, 4)})",
-              [user.id, "spa", hashApiToken(plain), JSON.stringify(["profile:read"])],
+              "INSERT INTO api_tokens (user_id, name, token_hash, abilities, expires_at) VALUES (${ph(layers, 5)})",
+              [
+                user.id,
+                "spa",
+                hashApiToken(plain),
+                JSON.stringify(["profile:read"]),
+                expiresAt ? sqlTimestamp(expiresAt) : null,
+              ],
             );
-            return jsonResponse({ token: plain });
+            return jsonResponse({ token: plain, expires_at: expiresAt?.toISOString() ?? null });
           })),
         },
         "/api/v1/auth/me": {
@@ -332,7 +349,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
             }
             await getSql().unsafe(
               "UPDATE users SET email_verified_at = ${verifiedPh} WHERE id = ${idPh}",
-              [new Date().toISOString(), id],
+              [${nowTimestampLiteral(layers.database)}, id],
             );
             return jsonResponse({ ok: true });
           })),
@@ -507,7 +524,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
               if (Number.isInteger(id) && id > 0) {
                 await getSql().unsafe(
                   "UPDATE users SET email_verified_at = ${verifiedPh} WHERE id = ${idPh}",
-                  [new Date().toISOString(), id],
+                  [${nowTimestampLiteral(layers.database)}, id],
                 );
                 const record = await starterAuthDirectory.findByIdOrThrow(id);
                 return flashResponse(

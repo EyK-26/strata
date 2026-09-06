@@ -5,10 +5,21 @@ type MigrateModule = {
   migrate?: (...args: string[]) => Promise<void> | void;
   seed?: (...args: string[]) => Promise<void> | void;
   fresh?: (...args: string[]) => Promise<void> | void;
+  close?: () => Promise<void> | void;
 };
 
 async function importEntry(path: string): Promise<MigrateModule> {
   return (await import(pathToFileURL(path).href)) as MigrateModule;
+}
+
+/**
+ * Pooled drivers such as mysql2 keep the event loop alive, so a migrate that
+ * finished its work would otherwise hang until the process is killed.
+ */
+async function closeEntry(entry: MigrateModule): Promise<void> {
+  if (typeof entry.close === "function") {
+    await entry.close();
+  }
 }
 
 async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<void> {
@@ -23,10 +34,14 @@ async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<voi
     throw new Error(`${app.migrate} must export a migrate() function.`);
   }
 
-  await entry.migrate(...args);
+  try {
+    await entry.migrate(...args);
 
-  if (typeof entry.seed === "function") {
-    await entry.seed(...args);
+    if (typeof entry.seed === "function") {
+      await entry.seed(...args);
+    }
+  } finally {
+    await closeEntry(entry);
   }
 }
 
@@ -36,7 +51,11 @@ async function migrateFreshCommand(app: StrataAppConfig, args: string[]): Promis
     if (typeof entry.fresh !== "function") {
       throw new Error(`${app.fresh} must export a fresh() function.`);
     }
-    await entry.fresh(...args);
+    try {
+      await entry.fresh(...args);
+    } finally {
+      await closeEntry(entry);
+    }
     return;
   }
 

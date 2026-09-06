@@ -9,9 +9,11 @@ bunx create-strata my-app
 cd my-app
 cp .env.example .env
 bun install
-strata migrate
-strata dev
+bun run db:migrate
+bun run dev
 ```
+
+`strata` installs into the app rather than globally, so use the `bun run` scripts above, or `bunx strata <command>` from inside the app directory.
 
 The CLI is interactive in a terminal. Move with ↑/↓ and Enter, or type a number. Toggle extras that apply to your stack (MFA, email verification, SCIM, metrics) with Space. Header auth does not offer MFA or SCIM. `--no-metrics` skips the metrics extra and does not write `GET /metrics`. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`. `--docker` with Postgres or MySQL also writes Adminer at http://localhost:8080.
 

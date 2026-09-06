@@ -99,6 +99,21 @@ function htmlAuthKit(auth: AuthStack): boolean {
   return authUsesCookie(auth);
 }
 
+/** Frontends that ship a `frontend/` package the app must build before SPA_PREFIX serves. */
+function needsFrontendBuild(frontend: FrontendMode): boolean {
+  return frontend === "spa-react" || frontend === "hybrid";
+}
+
+/**
+ * A "now" timestamp parameter this engine accepts. MySQL DATETIME rejects the
+ * ISO-8601 "T" separator and trailing "Z"; Postgres and SQLite take it as-is.
+ */
+function nowTimestampLiteral(database: DatabaseLayer): string {
+  return database === "mysql"
+    ? `new Date().toISOString().slice(0, 19).replace("T", " ")`
+    : "new Date().toISOString()";
+}
+
 function extraApplies(extra: keyof CorporateExtras, auth: AuthStack): boolean {
   if (extra === "metrics") {
     return true;
@@ -221,7 +236,9 @@ export {
   htmlAuthKit,
   MAIL_DRIVERS,
   neededDockerServices,
+  needsFrontendBuild,
   needsRedis,
+  nowTimestampLiteral,
   QUEUE_DRIVERS,
   reconcileDocker,
   selectedDockerServices,

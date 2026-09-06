@@ -173,7 +173,7 @@ describe("newCommand", () => {
       }
 
       expect(existsSync(join(workspace, "kit-app/strata.layers.json"))).toBe(true);
-      expect(output.logs.some((line) => line.includes("strata migrate"))).toBe(true);
+      expect(output.logs.some((line) => line.includes("bun run db:migrate"))).toBe(true);
     });
   });
 

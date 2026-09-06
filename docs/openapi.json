@@ -144,7 +144,7 @@
     },
     "/api/user": {
       "get": {
-        "summary": "Current authenticated HiroApp user",
+        "summary": "Current authenticated user",
         "security": [
           {
             "bearerAuth": []

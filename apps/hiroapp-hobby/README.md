@@ -24,8 +24,8 @@ This file is the map for this app. Framework guides: [Building apps](https://git
 cd hiroapp-hobby
 cp .env.example .env
 bun install
-strata migrate
-strata dev
+bun run db:migrate
+bun run dev
 ```
 
 Open http://localhost:3000. Health check: `GET /health`.
@@ -35,4 +35,11 @@ Header auth is on for local use. Send `x-authenticated-user-id` (and optional `x
 
 ## Production
 
-`createApp` calls `assertProductionSecrets()` when `APP_ENV=production`. Set real secrets before you ship. Cookie HTML apps need `SESSION_SECRET` (32+ characters). Token apps need `TOKEN_HASH_PEPPER`. Set `AUTH_DEV_HEADERS=false`.
+`createApp` calls `assertProductionSecrets()` when `APP_ENV=production`. That check fails closed, so read this before your first production boot.
+
+- Replace every `change-me` placeholder in `.env`. The guard rejects the values this generator wrote, not just empty ones.
+- Set `AUTH_DEV_HEADERS=false`.
+- Set `FEATURE_PUBLIC_READS=false`. This app already ships `false`.
+- Set `CORS_ALLOWED_ORIGINS` to explicit origins if you set it at all. A `*` entry is rejected.
+
+`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step.

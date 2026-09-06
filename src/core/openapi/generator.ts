@@ -63,7 +63,7 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
   "GET /health": "Liveness probe",
   "GET /ready": "Readiness probe",
   "GET /metrics": "Prometheus metrics",
-  "GET /api/user": "Current authenticated HiroApp user",
+  "GET /api/user": "Current authenticated user",
   "POST /api/login": "Login with email and password",
   "POST /api/auth/token": "Mint a short-lived JWT with email and password",
   "POST /api/apply/login": "Candidate portal login (opaque token)",

@@ -11,6 +11,7 @@ import {
   dockerDatabaseService,
   dockerLayerForNeeded,
   enableDockerServices,
+  extraApplies,
   FRONTENDS,
   type FrontendMode,
   MAIL_DRIVERS,
@@ -312,6 +313,27 @@ function applyDockerFlags(layers: StarterLayers, flags: ParsedFlags): StarterLay
   return layers;
 }
 
+/**
+ * The wizard only offers extras that apply to the chosen auth stack. Flags have
+ * to agree, otherwise `--auth headers --mfa` writes FEATURE_MFA=true into an app
+ * that has no MFA code.
+ */
+function extraFlagName(extra: keyof StarterLayers["extras"]): string {
+  return extra === "emailVerification" ? "email-verification" : extra;
+}
+
+function dropInapplicableExtras(layers: StarterLayers, flags: ParsedFlags): void {
+  for (const key of Object.keys(layers.extras) as Array<keyof StarterLayers["extras"]>) {
+    if (extraApplies(key, layers.auth)) {
+      continue;
+    }
+    if (flags.extras[key] === true) {
+      console.warn(`Ignoring --${extraFlagName(key)}: not available with --auth ${layers.auth}.`);
+    }
+    layers.extras[key] = false;
+  }
+}
+
 function applyFlagOverrides(base: StarterLayers, flags: ParsedFlags): StarterLayers {
   const next: StarterLayers = {
     ...base,
@@ -326,8 +348,12 @@ function applyFlagOverrides(base: StarterLayers, flags: ParsedFlags): StarterLay
     extras: { ...base.extras, ...flags.extras },
   };
   if (next.database !== "postgres" && next.tenancy === "rls") {
+    console.warn(
+      `Using --tenancy column: rls is Postgres-only (SET LOCAL app.tenant_id) and ${next.database} has no equivalent.`,
+    );
     next.tenancy = "column";
   }
+  dropInapplicableExtras(next, flags);
   return reconcileDocker(applyDockerFlags(next, flags));
 }
 

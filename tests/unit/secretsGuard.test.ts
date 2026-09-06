@@ -229,4 +229,52 @@ describe("assertProductionSecrets", () => {
       }),
     ).toThrow(/FEATURE_PUBLIC_READS=false/);
   });
+
+  test("blocks the generator's own placeholder secrets in production", () => {
+    // These are long enough to pass the SESSION_SECRET length check, so before
+    // 1.0.1 a generated .env booted in production unchanged.
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "server-htmx",
+        FEATURE_PUBLIC_READS: "false",
+        SESSION_SECRET: "dev-session-secret-change-me-please-32ch",
+      }),
+    ).toThrow(/replace the generated placeholder values for SESSION_SECRET/);
+  });
+
+  test("names every unrotated placeholder at once", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_PUBLIC_READS: "false",
+        TOKEN_HASH_PEPPER: "dev-token-pepper-change-me",
+        METRICS_TOKEN: "dev-metrics-token-change-me",
+        SCIM_BEARER_TOKEN: "dev-scim-token-change-me",
+      }),
+    ).toThrow(/TOKEN_HASH_PEPPER, METRICS_TOKEN, SCIM_BEARER_TOKEN/);
+  });
+
+  test("allows placeholder secrets outside production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "local",
+        SESSION_SECRET: "dev-session-secret-change-me-please-32ch",
+      }),
+    ).not.toThrow();
+  });
+
+  test("accepts rotated secrets of the same length", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "server-htmx",
+        FEATURE_PUBLIC_READS: "false",
+        SESSION_SECRET: "a-real-rotated-session-secret-value-32ch",
+      }),
+    ).not.toThrow();
+  });
 });

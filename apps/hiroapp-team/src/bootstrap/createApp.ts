@@ -80,9 +80,12 @@ function createAppContext(): AppContext {
 }
 
 export async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
-  const { migrate: runMigrate = true } = options;
+  const isProduction = process.env.APP_ENV === "production";
+  // Dev boots migrate for convenience. Production must not mutate schema on
+  // start, so run `strata migrate` as an explicit deploy step instead.
+  const { migrate: runMigrate = !isProduction } = options;
 
-  if (process.env.APP_ENV === "production") {
+  if (isProduction) {
     assertProductionSecrets();
   }
 

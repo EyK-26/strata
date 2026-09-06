@@ -250,7 +250,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.0.0");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.0.1");
     expect(pkg.scripts.dev).toBe("strata dev");
   });
 
@@ -390,7 +390,7 @@ describe("create-strata generate", () => {
     expect(env).toContain("TENANCY_DRIVER=column");
   });
 
-  test("postgres rls writes a tenant table and isolates the database name", async () => {
+  test("postgres rls writes a tenant table and keeps the database name from DATABASE_URL", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "acme",
@@ -404,9 +404,13 @@ describe("create-strata generate", () => {
     expect(migrate).toContain("CREATE TABLE IF NOT EXISTS tenant");
     expect(existsSync(join(app, "src/bootstrap/ensureDatabase.ts"))).toBe(true);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
-    expect(ensure).toContain("acme_test");
+    // The database name must come from DATABASE_URL, never a hardcoded rename.
+    expect(ensure).toContain("resolveAppDatabaseUrl");
+    expect(ensure).not.toContain("acme_test");
+    expect(ensure).not.toMatch(/url\.pathname\s*=/);
     const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).toContain("acme_test");
+    expect(env).toContain("/acme");
+    expect(env).not.toContain("acme_test");
     expect(env).not.toContain("MYSQL_URL");
   });
 
@@ -494,7 +498,8 @@ describe("create-strata CLI", () => {
     });
     expect(result.exitCode).toBe(0);
     const out = result.stdout.toString();
-    expect(out).toContain("strata migrate");
+    expect(out).toContain("bun run db:migrate");
+    expect(out).toContain("bun run dev");
     expect(out).toContain("docker=none");
     expect(out).not.toContain("docker compose up -d");
     expect(existsSync(join(root, "cli-hobby/src/bootstrap/createApp.ts"))).toBe(true);
@@ -832,6 +837,96 @@ describe("create-strata CLI", () => {
         await closeDatabase();
       }
     } finally {
+      process.chdir(repoRoot);
+    }
+  });
+
+  test("token sqlite API app mints expiring tokens and rejects expired ones", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "token-app",
+      "--frontend=api",
+      "--database=sqlite",
+      "--auth=token",
+      "--yes",
+    ]);
+
+    const repo = repoRoot;
+    const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+    };
+    pkg.dependencies["@getstrata/core"] = `file:${join(repo, "packages/strata-core")}`;
+    pkg.dependencies["@getstrata/bootstrap"] = `file:${join(repo, "packages/strata-bootstrap")}`;
+    pkg.dependencies["@getstrata/cli"] = `file:${join(repo, "packages/strata-cli")}`;
+    await Bun.write(join(app, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+    const install = Bun.spawnSync({
+      cmd: ["bun", "install"],
+      cwd: app,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(install.exitCode).toBe(0);
+
+    process.chdir(app);
+    process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+    process.env.APP_ENV = "local";
+    process.env.FRONTEND_MODE = "api";
+    process.env.TENANCY_DRIVER = "none";
+    process.env.AUTH_DEV_HEADERS = "false";
+    process.env.FEATURE_API_TOKENS = "true";
+    process.env.TOKEN_HASH_PEPPER = "dev-token-pepper-change-me";
+    process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "30";
+
+    try {
+      const { bootstrapApp, createAppServer } = await import(
+        `${join(app, "src/bootstrap/createApp.ts")}`
+      );
+      const { closeDatabase, getSql } = await import(`${join(app, "src/bootstrap/database.ts")}`);
+      const { routes } = await bootstrapApp();
+      const server = createAppServer(routes, 0);
+      const origin = `http://127.0.0.1:${server.port}`;
+      try {
+        const login = await fetch(`${origin}/api/v1/auth/login`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "demo@example.com", password: "password" }),
+        });
+        expect(login.status).toBe(200);
+        const minted = (await login.json()) as { token: string; expires_at: string | null };
+        expect(minted.token.startsWith("strp_")).toBe(true);
+        expect(minted.expires_at).toBeTruthy();
+        const expiresAt = new Date(minted.expires_at ?? "");
+        const days = (expiresAt.getTime() - Date.now()) / 86_400_000;
+        expect(days).toBeGreaterThan(29);
+        expect(days).toBeLessThanOrEqual(30);
+
+        const stored = (await getSql().unsafe(
+          "SELECT expires_at FROM api_tokens ORDER BY id DESC LIMIT 1",
+        )) as Array<{ expires_at: string | null }>;
+        expect(stored[0]?.expires_at).toBeTruthy();
+
+        const me = await fetch(`${origin}/api/v1/auth/me`, {
+          headers: { authorization: `Bearer ${minted.token}` },
+        });
+        expect(me.status).toBe(200);
+
+        // Backdate the stored expiry: the same token must now be unauthorized.
+        await getSql().unsafe(
+          "UPDATE api_tokens SET expires_at = ? WHERE id = (SELECT MAX(id) FROM api_tokens)",
+          [new Date(Date.now() - 60_000).toISOString()],
+        );
+        const expired = await fetch(`${origin}/api/v1/auth/me`, {
+          headers: { authorization: `Bearer ${minted.token}` },
+        });
+        expect(expired.status).toBe(401);
+      } finally {
+        server.stop();
+        await closeDatabase();
+      }
+    } finally {
+      delete process.env.FEATURE_API_TOKENS;
+      delete process.env.TOKEN_HASH_PEPPER;
+      delete process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS;
       process.chdir(repoRoot);
     }
   });

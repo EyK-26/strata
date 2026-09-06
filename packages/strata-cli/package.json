@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Strata CLI: framework commands for Bun apps (dev, start, migrate, run)",
   "type": "module",
   "license": "MIT",
@@ -21,12 +21,10 @@
   "files": [
     "cli.ts",
     "src",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
-  "scripts": {
-    "build": "bun build cli.ts --outdir dist --target bun --external bun",
-    "prepublishOnly": "bun run build"
-  },
+  "scripts": {},
   "publishConfig": {
     "access": "public"
   },

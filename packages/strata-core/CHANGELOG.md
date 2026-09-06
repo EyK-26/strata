@@ -1,5 +1,12 @@
 # @getstrata/core changelog
 
+## 1.0.1
+
+- Publish the `contracts/authUserDirectory` subpath. Generated cookie and token apps import `AuthUserDirectory` from it, and without the export their `tsc --noEmit` failed with TS2307.
+- `SqlDialect` gains `timestampValue()`, plus a `sqlTimestamp()` helper. MySQL `DATETIME` rejects the ISO-8601 `T` separator and trailing `Z`, which broke cookie session inserts on MySQL.
+- `DatabaseConnection.close?()` now returns `void | Promise<void>`, matching the synchronous `close()` on the SQLite connection it is supposed to describe.
+- `engines.bun` is declared.
+
 ## 1.0.0
 
 - First stable release of the public `@getstrata/core` API.

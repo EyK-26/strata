@@ -9,13 +9,41 @@ const MIN_SESSION_SECRET_LENGTH = 32;
 const PUBLISHED_TEST_TOKENS = new Set([
   PUBLISHED_TEST_ADMIN_API_TOKEN,
   PUBLISHED_TEST_MEMBER_API_TOKEN,
-  "workhub-admin-test-token",
-  "workhub-member-test-token",
 ]);
-const PUBLISHED_TEST_SCIM_TOKENS = new Set([
-  PUBLISHED_TEST_SCIM_BEARER_TOKEN,
-  "workhub-scim-test-token",
-]);
+const PUBLISHED_TEST_SCIM_TOKENS = new Set([PUBLISHED_TEST_SCIM_BEARER_TOKEN]);
+
+/**
+ * Secrets the generator writes into `.env.example`. They are long enough to
+ * pass a length check, so production has to reject them by shape. Every
+ * generated placeholder carries "change-me"; keep that convention.
+ */
+const PLACEHOLDER_SECRET_PATTERN = /change-me/i;
+
+/** Secrets that must be rotated before an app boots with APP_ENV=production. */
+const SECRETS_TO_ROTATE = [
+  "SESSION_SECRET",
+  "TOKEN_HASH_PEPPER",
+  "METRICS_TOKEN",
+  "SCIM_BEARER_TOKEN",
+  "JWT_SECRET",
+  "OAUTH_STATE_SECRET",
+  "KMS_ENCRYPTION_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "ADMIN_API_TOKEN",
+  "MEMBER_API_TOKEN",
+] as const;
+
+function assertNoPlaceholderSecrets(env: Record<string, string | undefined>): void {
+  const unrotated = SECRETS_TO_ROTATE.filter((name) =>
+    PLACEHOLDER_SECRET_PATTERN.test(env[name]?.trim() ?? ""),
+  );
+
+  if (unrotated.length > 0) {
+    throw new Error(
+      `Production startup blocked: replace the generated placeholder values for ${unrotated.join(", ")}.`,
+    );
+  }
+}
 
 function isEnabled(value: string | undefined, defaultEnabled: boolean): boolean {
   if (value === undefined) {
@@ -154,6 +182,7 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
     return;
   }
 
+  assertNoPlaceholderSecrets(env);
   assertAuthDevHeadersDisabled(env);
 
   if (isTokenAuthEnabled(env)) {

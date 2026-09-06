@@ -1,0 +1,29 @@
+{
+  "name": "create-strata",
+  "version": "1.0.1",
+  "description": "Create a new Strata app. Interactive wizard; choose each layer; one database engine.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EyK-26/strata.git",
+    "directory": "packages/create-strata"
+  },
+  "bin": {
+    "create-strata": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun build ../strata-starter/cli.ts --outdir dist --target bun && rm -rf dist/templates && mkdir -p dist/templates/overlays && cp -r ../strata-starter/templates/. dist/templates && cp -r ../../templates/scaffold/. dist/templates/overlays",
+    "prepublishOnly": "bun run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
+  }
+}

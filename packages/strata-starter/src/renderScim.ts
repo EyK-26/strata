@@ -158,12 +158,12 @@ const scimModule: AppModule = {
             const match = /userName\\s+eq\\s+"([^"]+)"/i.exec(filter);
             let rows: UserRow[];
             if (match?.[1]) {
-              rows = await getSql().unsafe<UserRow[]>(
+              rows = await getSql().unsafe<UserRow>(
                 "SELECT id, name, email FROM users WHERE email = ${emailPh}",
                 [match[1].trim().toLowerCase()],
               );
             } else {
-              rows = await getSql().unsafe<UserRow[]>("SELECT id, name, email FROM users");
+              rows = await getSql().unsafe<UserRow>("SELECT id, name, email FROM users");
             }
             const startIndex = Math.max(1, Number.parseInt(url.searchParams.get("startIndex") ?? "1", 10) || 1);
             const count = Math.min(200, Math.max(1, Number.parseInt(url.searchParams.get("count") ?? String(rows.length || 1), 10) || 200));
@@ -186,7 +186,7 @@ const scimModule: AppModule = {
             if (!email) {
               return scimError("userName is required.", 400);
             }
-            const existing = await getSql().unsafe<UserRow[]>(
+            const existing = await getSql().unsafe<UserRow>(
               "SELECT id, name, email FROM users WHERE email = ${emailPh}",
               [email],
             );
@@ -199,7 +199,7 @@ const scimModule: AppModule = {
               "INSERT INTO users (${insertCols}) VALUES (${insertPh})",
               [name, email, hashed${insertTail}],
             );
-            const created = await getSql().unsafe<UserRow[]>(
+            const created = await getSql().unsafe<UserRow>(
               "SELECT id, name, email FROM users WHERE email = ${emailPh}",
               [email],
             );
@@ -216,7 +216,7 @@ const scimModule: AppModule = {
           "api",
           wrapScim(async (request) => {
             const id = Number.parseInt(routeParams(request).id ?? "", 10);
-            const rows = await getSql().unsafe<UserRow[]>(
+            const rows = await getSql().unsafe<UserRow>(
               "SELECT id, name, email FROM users WHERE id = ${idPh}",
               [id],
             );
@@ -241,7 +241,7 @@ const scimModule: AppModule = {
               "UPDATE users SET name = ${updatePh.split(", ")[0]}, email = ${updatePh.split(", ")[1]} WHERE id = ${updatePh.split(", ")[2]}",
               [name, email, id],
             );
-            const rows = await getSql().unsafe<UserRow[]>(
+            const rows = await getSql().unsafe<UserRow>(
               "SELECT id, name, email FROM users WHERE id = ${idPh}",
               [id],
             );
@@ -256,7 +256,7 @@ const scimModule: AppModule = {
           "api",
           wrapScim(async (request) => {
             const id = Number.parseInt(routeParams(request).id ?? "", 10);
-            const existing = await getSql().unsafe<UserRow[]>(
+            const existing = await getSql().unsafe<UserRow>(
               "SELECT id, name, email FROM users WHERE id = ${idPh}",
               [id],
             );

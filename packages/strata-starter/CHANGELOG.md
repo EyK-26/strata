@@ -1,6 +1,18 @@
-# create-strata 1.0.0
+# create-strata changelog
 
 Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script.
+
+## 1.0.1
+
+- Generated apps pass their own `bun run check`. Fixed `sql.unsafe<Array<T>>` double-wrapping (`unsafe<T>` already resolves to `T[]`) and the `AuthUserDirectory` import path.
+- Accept a directory path as the project name. `bunx create-strata /tmp/my-app` used to fail validation.
+- Printed next steps use `bun run db:migrate` and `bun run dev`. `strata` installs into the app, not onto `PATH`.
+- MySQL apps migrate and boot. Bounded the keyed and defaulted string columns MySQL cannot index or default, added the missing `CREATE DATABASE`, and formatted timestamps for `DATETIME`.
+- `ensureAppDatabase()` keeps the database name from `DATABASE_URL` instead of forcing a `<project>_test` rename.
+- Inapplicable extras passed as flags now warn and stay off, matching the wizard. `--auth headers --mfa` no longer writes `FEATURE_MFA=true` into an app with no MFA code.
+- `spa-react` and `hybrid` apps ship the `frontend:install` and `frontend:build` scripts the 503 page names, and the SPA calls only endpoints the generated backend serves.
+- `docs/API.md` is generated per layer, so it lists only routes the app actually has.
+- `strata start` does not migrate when `APP_ENV=production`.
 
 ## 1.0.0
 
