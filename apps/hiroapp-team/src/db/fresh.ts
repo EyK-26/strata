@@ -1,6 +1,6 @@
 import { getSql } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
-import { migrate, seed } from "./migrate.ts";
+import { migrate } from "./migrate.ts";
 
 const tables = ["sessions", "users", "notes"];
 
@@ -11,7 +11,6 @@ export async function fresh() {
     await sql.unsafe(`DROP TABLE IF EXISTS ${table} CASCADE`);
   }
   await migrate();
-  await seed();
 }
 
 if (import.meta.main) {

@@ -8,10 +8,18 @@ import {
   renderAuthDirectory,
   renderAuthModule,
   renderAuthProvider,
+  renderForgotPasswordView,
   renderHomeView,
   renderLayout,
   renderLoginView,
+  renderMfaChallengeView,
+  renderMfaSetupView,
+  renderPendingMfaTs,
+  renderRegisterView,
+  renderResetPasswordView,
+  renderSiteCss,
   renderSiteModule,
+  renderVerifyEmailView,
 } from "./renderAuth.ts";
 import {
   renderDockerCompose,
@@ -39,8 +47,9 @@ import {
   renderStatusTs,
   renderViewTs,
 } from "./renderRuntime.ts";
+import { renderScimModule } from "./renderScim.ts";
 import type { GenerateOptions, StarterLayers } from "./types.ts";
-import { authUsesCookie, neededDockerServices, selectedDockerServices } from "./types.ts";
+import { htmlAuthKit, neededDockerServices, selectedDockerServices } from "./types.ts";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]*$/i;
 
@@ -121,7 +130,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   }
 
   writeText(join(src, "routes.ts"), renderRoutesTs());
-  writeText(join(src, "lib/view.ts"), renderViewTs());
+  writeText(join(src, "lib/view.ts"), renderViewTs(layers));
   writeText(join(src, "bootstrap/config.ts"), renderConfigTs());
   writeText(join(src, "bootstrap/preload.ts"), renderPreloadTs(layers, projectName));
   writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(layers));
@@ -158,10 +167,34 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     writeText(join(src, "modules/auth/index.ts"), authModule);
   }
 
+  const scimModule = renderScimModule(layers);
+  if (scimModule) {
+    writeText(join(src, "modules/scim/index.ts"), scimModule);
+  } else {
+    removeIfExists(join(src, "modules/scim/index.ts"));
+  }
+
+  if (layers.extras.mfa && htmlAuthKit(layers.auth)) {
+    writeText(join(src, "bootstrap/pendingMfa.ts"), renderPendingMfaTs());
+  } else {
+    removeIfExists(join(src, "bootstrap/pendingMfa.ts"));
+  }
+
+  writeText(join(targetDir, "public/assets/site.css"), renderSiteCss());
   writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, layers));
   writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(layers, projectName));
-  if (authUsesCookie(layers.auth)) {
+  if (htmlAuthKit(layers.auth)) {
     writeText(join(targetDir, "views/auth/login.eta"), renderLoginView());
+    writeText(join(targetDir, "views/auth/register.eta"), renderRegisterView());
+    writeText(join(targetDir, "views/auth/forgot-password.eta"), renderForgotPasswordView());
+    writeText(join(targetDir, "views/auth/reset-password.eta"), renderResetPasswordView());
+    if (layers.extras.emailVerification) {
+      writeText(join(targetDir, "views/auth/verify-email.eta"), renderVerifyEmailView());
+    }
+    if (layers.extras.mfa) {
+      writeText(join(targetDir, "views/auth/mfa-challenge.eta"), renderMfaChallengeView());
+      writeText(join(targetDir, "views/auth/mfa-setup.eta"), renderMfaSetupView());
+    }
   }
 
   mkdirSync(join(targetDir, "storage"), { recursive: true });

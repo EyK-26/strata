@@ -1,6 +1,6 @@
 # HiroApp example
 
-`apps/hiroapp` is a **generated** Strata app: Postgres, server-rendered HTMX, cookie + token + JWT auth, Redis, SMTP, Postgres RLS env, and extras flags. It is produced by `bun run generate:example-apps` from the same layer flags as `create-strata`.
+`apps/hiroapp` is a **generated** Strata app: Postgres, server-rendered HTMX, cookie + token + JWT auth, Redis, SMTP, Postgres RLS, and extras (MFA, email verification, SCIM, metrics). It is produced by `bun run generate:example-apps` from the same layer flags as `create-strata`.
 
 The original hiring product (departments, applications, interviews, offers, candidate SPA, MySQL job-board mirror) was removed until it can be rebuilt on this generator without mixing two databases. Other guides describe this generated app, not that old product.
 
@@ -12,7 +12,7 @@ Sibling examples in this repo:
 | `apps/hiroapp-team` | Postgres, HTMX, cookie sessions, Redis, metrics |
 | `apps/hiroapp` | Postgres, HTMX, cookies + tokens + JWT, RLS, Redis, SMTP, extras MFA / email verification / SCIM / metrics |
 
-Extras on `apps/hiroapp` are env stubs (`FEATURE_MFA`, `FEATURE_EMAIL_VERIFICATION`, `FEATURE_SCIM`, `METRICS_TOKEN`). Metrics routes are wired. MFA enrollment, `/email/verify`, and SCIM adapters are yours to add.
+Cookie HTML apps include a restyleable welcome page, login, register, and password reset (`views/` and `public/assets/site.css`). HiroApp extras wire MFA pages, `/email/verify`, and `/scim/v2/Users`. Metrics routes are on every generated app and require `METRICS_TOKEN` in production.
 
 HTML cookie name is `strata_session`. Redis keys use `APP_KEY_PREFIX=hiroapp`. Seeded accounts use password `password`: `demo@example.com` (member) and `admin@example.test` (admin). HTML sign-in is `/login`.
 

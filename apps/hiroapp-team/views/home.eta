@@ -1,6 +1,15 @@
-<section class="section">
+<section class="section hero">
   <h1>Welcome to hiroapp-team</h1>
-  <p>Frontend <code>server-htmx</code>, database <code>postgres</code>, auth <code>cookie</code>.</p>
+  <% if (!it.currentUser) { %>
+  <p class="lede">Sign in or create an account. Edit <code>views/home.eta</code> and <code>public/assets/site.css</code> to restyle this page.</p>
+  <div class="actions">
+    <a class="button" href="/register">Create account</a>
+    <a class="button button-secondary" href="/login">Sign in</a>
+  </div>
+  <p class="muted">Seeded demo: <code>demo@example.com</code> / <code>password</code>.</p>
+<% } else { %>
+  <p class="lede">You are signed in as <strong><%= it.currentUser.email %></strong>.</p>
+  <p>Add routes in <code>src/modules</code>. This homepage is yours to restyle.</p>
+<% } %>
   <p>Health check: <a href="/health"><code>/health</code></a>.</p>
-  <p>HTML sign-in: <a href="/login">/login</a> (demo@example.com / password).</p>
 </section>

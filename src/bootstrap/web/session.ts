@@ -21,6 +21,7 @@ export interface SessionUser {
   email: string;
   learn_subscriber?: boolean;
   is_admin?: boolean;
+  email_verified_at?: Date | string | null;
 }
 
 interface SessionRow {
@@ -32,6 +33,7 @@ interface SessionRow {
   email?: string | null;
   learn_subscriber?: boolean | null;
   is_admin?: boolean | null;
+  email_verified_at?: Date | string | null;
   expires_at?: Date;
 }
 
@@ -85,6 +87,7 @@ function defaultMapSessionUser(user: SessionUser): AuthUser {
   return {
     id: user.id,
     role: user.is_admin ? "admin" : "member",
+    ...(user.email_verified_at !== undefined ? { emailVerifiedAt: user.email_verified_at } : {}),
   };
 }
 
@@ -107,6 +110,7 @@ function mapSessionUserRow(row: SessionRow): SessionUser {
     email,
     learn_subscriber: Boolean(row.learn_subscriber),
     is_admin: Boolean(row.is_admin),
+    ...(row.email_verified_at !== undefined ? { email_verified_at: row.email_verified_at } : {}),
   };
 }
 
@@ -189,7 +193,7 @@ export class CookieSessionStore {
     await this.sql().unsafe(
       `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at)
        VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()})`,
-      [id, user.id, expires, meta.userAgent ?? null, meta.ipAddress ?? null],
+      [id, user.id, expires.toISOString(), meta.userAgent ?? null, meta.ipAddress ?? null],
     );
     return id;
   }

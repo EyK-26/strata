@@ -56,22 +56,33 @@ export const starterAuthDirectory: AuthUserDirectory = {
     const rows = await getSql().unsafe<
       Array<{
         id: number;
+        name: string;
         email: string;
         is_admin: number | boolean;
         email_verified_at: Date | string | null;
         password: string;
+        mfa_enabled?: number | boolean;
+        mfa_secret?: string | null;
+        mfa_recovery_codes?: string | null;
       }>
-    >(`SELECT id, email, is_admin, email_verified_at, password FROM users WHERE id = $1`, [id]);
+    >(
+      `SELECT id, name, email, is_admin, email_verified_at, password, mfa_enabled, mfa_secret, mfa_recovery_codes FROM users WHERE id = $1`,
+      [id],
+    );
     const row = rows[0];
     if (!row) {
       throw new Error(`User ${id} not found.`);
     }
     return {
       id: Number(row.id),
+      name: row.name,
       email: row.email,
       role: mapRole(row.is_admin),
       email_verified_at: row.email_verified_at ?? null,
       password: row.password,
+      mfa_enabled: row.mfa_enabled === true || row.mfa_enabled === 1,
+      mfa_secret: row.mfa_secret ?? null,
+      mfa_recovery_codes: row.mfa_recovery_codes ?? null,
     };
   },
 
@@ -79,24 +90,33 @@ export const starterAuthDirectory: AuthUserDirectory = {
     const rows = await getSql().unsafe<
       Array<{
         id: number;
+        name: string;
         email: string;
         is_admin: number | boolean;
         email_verified_at: Date | string | null;
         password: string;
+        mfa_enabled?: number | boolean;
+        mfa_secret?: string | null;
+        mfa_recovery_codes?: string | null;
       }>
-    >(`SELECT id, email, is_admin, email_verified_at, password FROM users WHERE email = $1`, [
-      email.trim().toLowerCase(),
-    ]);
+    >(
+      `SELECT id, name, email, is_admin, email_verified_at, password, mfa_enabled, mfa_secret, mfa_recovery_codes FROM users WHERE email = $1`,
+      [email.trim().toLowerCase()],
+    );
     const row = rows[0];
     if (!row) {
       return null;
     }
     return {
       id: Number(row.id),
+      name: row.name,
       email: row.email,
       role: mapRole(row.is_admin),
       email_verified_at: row.email_verified_at ?? null,
       password: row.password,
+      mfa_enabled: row.mfa_enabled === true || row.mfa_enabled === 1,
+      mfa_secret: row.mfa_secret ?? null,
+      mfa_recovery_codes: row.mfa_recovery_codes ?? null,
     };
   },
 

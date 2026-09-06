@@ -46,7 +46,15 @@ Seeded login (password `password`):
 - `demo@example.com` (member)
 - `admin@example.test` (admin)
 
-HTML sign-in lives at `/login` (cookie session + CSRF when `FRONTEND_MODE` is `server-htmx` or `hybrid`).
+HTML auth kit (restyle `views/` and `public/assets/site.css`):
+
+- Welcome: `/`
+- Sign in: `/login`
+- Register: `/register`
+- Forgot password: `/forgot-password`
+- Reset password: signed `/reset-password` (mail log when `MAIL_DRIVER=log`)
+
+Cookie name is `strata_session`. Forms send CSRF as `_token`.
 
 ## Production
 

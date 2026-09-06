@@ -80,7 +80,7 @@ CI fails if `docs/openapi.json` drifts. Commit regenerated files.
 
 - Biome is the source of truth (`biome.json`)
 - Match neighboring files
-- Keep optional extras opt-in via `FEATURE_*` env flags. Generated extras are stubs unless you add adapters.
+- Keep optional extras opt-in via `FEATURE_*` env flags. The generator emits working MFA, email verification, and SCIM routes when those extras are selected.
 - Import `@getstrata/core/...` subpaths, never the root barrel, from app code
 
 ## Tests

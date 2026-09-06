@@ -49,4 +49,17 @@ describe("runWithTenantDatabase", () => {
       restoreEnvVar("TENANCY_DRIVER", previous);
     }
   });
+
+  test("skips SET LOCAL when TENANCY_DRIVER=column", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "column";
+
+    try {
+      await runWithTenantDatabase(defaultTestTenant, async () => {
+        expect(currentTenant()).toEqual(defaultTestTenant);
+      });
+    } finally {
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
+  });
 });

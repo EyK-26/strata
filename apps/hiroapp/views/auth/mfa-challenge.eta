@@ -1,0 +1,23 @@
+<section class="auth-card">
+  <h1>Two-factor code</h1>
+  <% if (it.status) { %>
+  <p class="ok"><%= it.status %></p>
+  <% } %>
+  <% if (it.errors && it.errors.form) { %>
+  <p class="error"><%= it.errors.form %></p>
+  <% } %>
+  <form method="post" action="/login/mfa">
+    <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+    <label>
+      Authenticator or recovery code
+      <% if (it.errors && it.errors.code) { %><span class="error"><%= it.errors.code %></span><% } %>
+      <input type="text" name="code" value="<%= it.code || "" %>" required autocomplete="one-time-code" />
+    </label>
+    <div class="actions">
+      <button type="submit">Continue</button>
+    </div>
+  </form>
+  <div class="auth-links">
+    <a href="/login">Cancel</a>
+  </div>
+</section>

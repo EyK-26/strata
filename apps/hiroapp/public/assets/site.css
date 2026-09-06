@@ -1,29 +1,138 @@
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
+  color-scheme: light;
+  --bg: #f4f1ea;
+  --ink: #1c1917;
+  --muted: #57534e;
+  --card: #fffdf8;
+  --line: #e7e0d4;
+  --accent: #1d4e4f;
+  --accent-ink: #f8faf8;
+  --danger: #9f1239;
+  --ok: #166534;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   line-height: 1.5;
 }
 
+* { box-sizing: border-box; }
+
 body {
   margin: 0;
-  padding: 0 1.5rem 2rem;
-  max-width: 48rem;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 .site-header {
-  padding: 1rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
 }
 
 .brand {
   font-weight: 700;
   text-decoration: none;
   color: inherit;
+  letter-spacing: 0.02em;
 }
 
-.section h1 {
-  margin-top: 0;
+.site-header nav {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.95rem;
 }
 
-code {
-  font-size: 0.9em;
+.site-header a { color: inherit; }
+
+.site-header form { display: inline; }
+
+main {
+  padding: 2rem 1.5rem 3rem;
 }
+
+.section, .auth-card {
+  max-width: 36rem;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1.5rem 1.5rem 1.75rem;
+}
+
+.hero {
+  max-width: 40rem;
+}
+
+.section h1, .auth-card h1, .hero h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.8rem;
+}
+
+.lede, .muted { color: var(--muted); }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+label {
+  display: block;
+  margin: 0.85rem 0;
+  font-size: 0.95rem;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: #fff;
+  font: inherit;
+}
+
+button, .button {
+  display: inline-block;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.error { color: var(--danger); }
+.ok, .flash-success { color: var(--ok); }
+.flash-error { color: var(--danger); }
+.flash {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+}
+
+.auth-links {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+code { font-size: 0.9em; }

@@ -1,0 +1,8 @@
+<section class="auth-card">
+  <h1>Verify your email</h1>
+  <p>We sent a signed link to your inbox (or the mail log when <code>MAIL_DRIVER=log</code>).</p>
+  <form method="post" action="/email/verification-notification">
+    <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+    <button type="submit">Resend link</button>
+  </form>
+</section>

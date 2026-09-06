@@ -424,7 +424,11 @@ export {
   StorageManager,
 } from "../core/storage/storage.ts";
 export type { TenancyDriver } from "../core/tenant/tenancyConfig.ts";
-export { isTenancyEnabled, readTenancyDriver } from "../core/tenant/tenancyConfig.ts";
+export {
+  isRlsTenancy,
+  isTenancyEnabled,
+  readTenancyDriver,
+} from "../core/tenant/tenancyConfig.ts";
 export type { TenantContext } from "../core/tenant/tenantContext.ts";
 export {
   currentTenant,

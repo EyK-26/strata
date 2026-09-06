@@ -27,14 +27,6 @@ const migrations = [
   )`,
 ];
 
-export async function migrate() {
-  await ensureAppDatabase();
-  const sql = getSql();
-  for (const statement of migrations) {
-    await sql.unsafe(statement);
-  }
-}
-
 export async function seed() {
   await ensureAppDatabase();
   const sql = getSql();
@@ -65,9 +57,17 @@ export async function seed() {
   }
 }
 
+export async function migrate() {
+  await ensureAppDatabase();
+  const sql = getSql();
+  for (const statement of migrations) {
+    await sql.unsafe(statement);
+  }
+  await seed();
+}
+
 if (import.meta.main) {
   await migrate();
-  await seed();
   console.log("Database migrated and seeded.");
   process.exit(0);
 }

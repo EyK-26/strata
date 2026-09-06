@@ -109,18 +109,30 @@ async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<Sta
     ],
     layers.auth,
   );
-  if (layers.database === "postgres") {
-    layers.tenancy = await prompter.select(
-      "Tenancy",
-      [
-        { value: "none", label: "none: no tenant table" },
-        { value: "rls", label: "rls: Postgres row-level security plus a tenant table" },
-      ],
-      layers.tenancy,
-    );
-  } else {
-    layers.tenancy = "none";
-  }
+  layers.tenancy = await prompter.select(
+    "Tenancy",
+    layers.database === "postgres"
+      ? [
+          { value: "none", label: "none: no tenant table" },
+          {
+            value: "column",
+            label: "column: tenant table + users.tenant_id (no Postgres SET LOCAL)",
+          },
+          { value: "rls", label: "rls: Postgres row-level security plus a tenant table" },
+        ]
+      : [
+          { value: "none", label: "none: no tenant table" },
+          {
+            value: "column",
+            label: "column: tenant table + users.tenant_id (SQLite/MySQL cannot run Postgres RLS)",
+          },
+        ],
+    layers.database === "postgres"
+      ? layers.tenancy
+      : layers.tenancy === "rls"
+        ? "column"
+        : layers.tenancy,
+  );
   layers.cache = await prompter.select(
     "Cache",
     [
@@ -153,12 +165,15 @@ async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<Sta
     flags.extrasPrompt || (await prompter.confirm("Configure extras (MFA, SCIM, metrics)?", false));
 
   if (askExtras) {
-    layers.extras.mfa = await prompter.confirm("Staff MFA env flag?", layers.extras.mfa);
+    layers.extras.mfa = await prompter.confirm(
+      "Authenticator MFA (cookie challenge + setup pages)?",
+      layers.extras.mfa,
+    );
     layers.extras.emailVerification = await prompter.confirm(
-      "Email verification env flag?",
+      "Email verification (signed links + /email/verify)?",
       layers.extras.emailVerification,
     );
-    layers.extras.scim = await prompter.confirm("SCIM env stubs?", layers.extras.scim);
+    layers.extras.scim = await prompter.confirm("SCIM /Users adapter?", layers.extras.scim);
     layers.extras.metrics = await prompter.confirm("Metrics token?", layers.extras.metrics);
   }
 

@@ -2,7 +2,7 @@
 
 Strata ships hooks for SCIM, billing webhooks, SIEM export, and SSO. Core routes and jobs exist. Provider SDKs and IdP-specific behavior are yours to finish in small adapters in **your app**. Keep vendor SDKs out of `src/core/` when you can.
 
-The generated examples set env flags (`FEATURE_SCIM`, `FEATURE_MFA`, and similar). They do not ship SCIM user adapters or a Stripe module. Copy patterns from [AUTH.md](./AUTH.md) and [BUILDING-APPS.md](./BUILDING-APPS.md).
+The generated examples set env flags (`FEATURE_SCIM`, `FEATURE_MFA`, and similar). Cookie apps with those extras on also ship MFA pages, email verification, and a SCIM `/Users` adapter against the `users` table. Copy patterns from [AUTH.md](./AUTH.md) and [BUILDING-APPS.md](./BUILDING-APPS.md).
 
 Production checklist: [PRODUCTION.md](./PRODUCTION.md)
 
@@ -10,7 +10,7 @@ Validate env: `APP_ENV=production bun run cli secrets:check`
 
 ## SCIM 2.0 (`FEATURE_SCIM=true`)
 
-Set `SCIM_BEARER_TOKEN` to a long random secret (not `strata-scim-test-token`). Optional multi-tenant tokens: `SCIM_TENANT_TOKENS=1:token-a,2:token-b`. Put user and group adapters in your app modules.
+Set `SCIM_BEARER_TOKEN` to a long random secret (not `strata-scim-test-token`). Optional multi-tenant tokens: `SCIM_TENANT_TOKENS=1:token-a,2:token-b`. Generated apps with `--scim` expose `/scim/v2/Users` and `/scim/v2/ServiceProviderConfig`. Extend that module if you need Groups.
 
 ## Billing (`FEATURE_BILLING=true`)
 

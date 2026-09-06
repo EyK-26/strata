@@ -8,13 +8,6 @@ const migrations = [
   )`,
 ];
 
-export async function migrate() {
-  const sql = getSql();
-  for (const statement of migrations) {
-    await sql.unsafe(statement);
-  }
-}
-
 export async function seed() {
   const sql = getSql();
   const [{ count }] = await sql.unsafe<Array<{ count: string | number }>>(
@@ -25,9 +18,16 @@ export async function seed() {
   }
 }
 
+export async function migrate() {
+  const sql = getSql();
+  for (const statement of migrations) {
+    await sql.unsafe(statement);
+  }
+  await seed();
+}
+
 if (import.meta.main) {
   await migrate();
-  await seed();
   console.log("Database migrated and seeded.");
   process.exit(0);
 }
