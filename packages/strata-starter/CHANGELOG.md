@@ -1,8 +1,8 @@
-# create-strata 0.1.10
+# create-strata 0.1.11
 
 Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script. The original hiring product is not the source of the generator.
 
-## Unreleased
+## 0.1.11
 
 - Interactive lists use ↑/↓ and Enter. Number keys still pick an option.
 - Extras (MFA, email verification, SCIM, metrics) are a toggle list: move with arrows, Space or 1-9 to enable one by one, Enter to continue.

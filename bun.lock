@@ -87,7 +87,7 @@
     },
     "packages/strata-starter": {
       "name": "@getstrata/starter",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "bin": {
         "create-strata": "./dist/cli.js",
       },
