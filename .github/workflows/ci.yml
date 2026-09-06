@@ -12,7 +12,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Build Docker install stage
-        run: docker build --target install -t strata-install .
+        run: docker build --pull --target install -t strata-install .
 
   test-parallel:
     runs-on: ubuntu-latest
@@ -25,7 +25,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.0"
+          bun-version-file: ".bun-version"
 
       - name: Start services
         run: docker compose up -d postgres redis --wait
@@ -57,7 +57,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.0"
+          bun-version-file: ".bun-version"
 
       - name: Start services
         run: docker compose up -d postgres redis --wait

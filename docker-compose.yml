@@ -47,7 +47,7 @@ services:
       start_period: 10s
 
   app:
-    image: oven/bun:1.4.0
+    image: oven/bun:1.4
     container_name: bun-testing-app
     working_dir: /workspace
     entrypoint: ["sh", "scripts/docker-dev-entrypoint.sh"]
@@ -75,7 +75,7 @@ services:
       ]
 
   worker:
-    image: oven/bun:1.4.0
+    image: oven/bun:1.4
     container_name: bun-testing-worker
     working_dir: /workspace
     entrypoint: ["sh", "scripts/docker-dev-entrypoint.sh"]

@@ -2,7 +2,7 @@
 # Cloud Agent install phase for Strata.
 #
 # Idempotent one-time setup that is captured in the environment snapshot:
-#   - Bun 1.4.0 (pinned)
+#   - Bun 1.4.x (latest 1.4 patch from .bun-version)
 #   - PostgreSQL 18 (host-native, listening on 54329 to match repo defaults)
 #   - Redis (host-native, port 6379)
 #   - JS dependencies (frozen lockfile)
@@ -14,7 +14,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
 
-BUN_VERSION=1.4.0
+BUN_VERSION="$("${REPO_ROOT}/scripts/resolve-bun-version.sh")"
 PG_VERSION=18
 PG_PORT=54329
 

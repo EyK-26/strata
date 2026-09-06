@@ -64,7 +64,7 @@ jobs:
           latest="${IMAGE}:latest"
           attempt=1
           while [ "$attempt" -le 4 ]; do
-            if docker build --tag "$image" --tag "$latest" .; then
+            if docker build --pull --tag "$image" --tag "$latest" .; then
               break
             fi
             if [ "$attempt" -eq 4 ]; then
@@ -130,7 +130,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.0"
+          bun-version-file: ".bun-version"
 
       - name: Set up Node.js for npm publish
         uses: actions/setup-node@v7

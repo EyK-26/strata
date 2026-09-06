@@ -50,7 +50,7 @@ CI rejects root-barrel imports in apps.
 
 ## Run HiroApp locally
 
-You need Docker for Postgres and Redis, and Bun 1.4+.
+You need Docker for Postgres and Redis, and Bun 1.4.x (CI and Compose use the latest 1.4 patch).
 
 ```bash
 cp .env.example .env
