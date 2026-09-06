@@ -2,6 +2,10 @@
 
 Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script.
 
+## 1.0.2
+
+- Generated `docs/API.md` lists `GET /health` only (plain text `ok`, or 503 `degraded` until the database ping and the `notes` table exist). It no longer claims a `GET /ready` JSON twin. Docker HEALTHCHECK already probes `/health`.
+
 ## 1.0.1
 
 - Generated apps pass their own `bun run check`. Fixed `sql.unsafe<Array<T>>` double-wrapping (`unsafe<T>` already resolves to `T[]`) and the `AuthUserDirectory` import path.

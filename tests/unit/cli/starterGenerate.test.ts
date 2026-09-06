@@ -250,7 +250,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.0.1");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.0.2");
     expect(pkg.scripts.dev).toBe("strata dev");
   });
 
@@ -720,9 +720,6 @@ describe("create-strata CLI", () => {
         const cold = await fetch(`http://127.0.0.1:${coldServer.port}/health`);
         expect(cold.status).toBe(503);
         expect(await cold.text()).toBe("degraded");
-        const ready = await fetch(`http://127.0.0.1:${coldServer.port}/ready`);
-        expect([200, 503]).toContain(ready.status);
-        expect(ready.headers.get("content-type")).toContain("application/json");
       } finally {
         coldServer.stop();
       }

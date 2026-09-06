@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.0.2
+
+- Lockstep with `create-strata` 1.0.2. No runtime changes.
+
 ## 1.0.1
 
 - Publish the `contracts/authUserDirectory` subpath. Generated cookie and token apps import `AuthUserDirectory` from it, and without the export their `tsc --noEmit` failed with TS2307.

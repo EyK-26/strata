@@ -304,9 +304,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^1.0.1",
-        "@getstrata/cli": "^1.0.1",
-        "@getstrata/core": "^1.0.1",
+        "@getstrata/bootstrap": "^1.0.2",
+        "@getstrata/cli": "^1.0.2",
+        "@getstrata/core": "^1.0.2",
       };
   if (options.layers?.database === "mysql") {
     coreDeps.mysql2 = "^3.24.3";
@@ -437,7 +437,7 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
 function renderApiDocs(projectName: string, layers: StarterLayers): string {
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
   rows.push(
-    "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) when the database or the migrated schema is unavailable. `/ready` returns the same checks as JSON. |",
+    "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) until the database ping succeeds and the migrated `notes` table exists. Docker HEALTHCHECK uses this path. |",
   );
   rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
 
