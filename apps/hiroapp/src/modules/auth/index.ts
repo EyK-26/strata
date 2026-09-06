@@ -79,8 +79,7 @@ const authModule: AppModule = {
               return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
             const plain = `strp_${randomBytes(24).toString("hex")}`;
-            // API_TOKEN_DEFAULT_EXPIRY_DAYS (30 in .env.example) bounds every minted token.
-            // Unset means no expiry; the production guard requires it to be set.
+            // API_TOKEN_DEFAULT_EXPIRY_DAYS bounds every minted token; unset means no expiry.
             const expiryDays = resolveDefaultTokenExpiryDays();
             const expiresAt = expiryDays
               ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)

@@ -6,6 +6,14 @@
 - `SqlDialect` gains `timestampValue()`, plus a `sqlTimestamp()` helper. MySQL `DATETIME` rejects the ISO-8601 `T` separator and trailing `Z`, which broke cookie session inserts on MySQL.
 - `DatabaseConnection.close?()` now returns `void | Promise<void>`, matching the synchronous `close()` on the SQLite connection it is supposed to describe.
 - `engines.bun` is declared.
+- MySQL pools are UTC end to end: `createMysqlConnection()` passes `timezone: "Z"` to mysql2 and runs `SET time_zone = '+00:00'` on every new connection. Before, `DATETIME` values written as UTC by `timestampValue()` were read back shifted by the host offset, and `expires_at > NOW()` depended on the server time zone. `createMysqlPool(url)` exposes the configured raw pool.
+- SQLite `nowExpression()` is `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')` instead of `CURRENT_TIMESTAMP`, matching the ISO-8601 text that `timestampValue()` writes. With `CURRENT_TIMESTAMP` the `T` separator sorted after the space, so an expired session compared as valid until the next UTC day.
+- Unknown exceptions map to `InternalServerError` (500, generic message) instead of a 400 that echoed the raw error text. SQLite (`SQLITE_CONSTRAINT_*`) and MySQL (`ER_DUP_ENTRY`, `ER_NO_REFERENCED_ROW_2`, `ER_ROW_IS_REFERENCED_2`, `ER_BAD_NULL_ERROR`, `ER_CHECK_CONSTRAINT_VIOLATED`) constraint errors map to 409/422/400 like Postgres SQLSTATEs. 5xx responses are logged with the original message and stack.
+- Client IP: `readClientIp()` falls back to the socket address the web server records in the request context, and with `TRUST_FORWARDED_FOR=true` takes the rightmost public `X-Forwarded-For` hop instead of the first (client-controlled) one. Throttles no longer collapse every client into an `unknown` bucket.
+- CORS: with `CORS_ALLOWED_ORIGINS` unset, production sends no `Access-Control-Allow-Origin` (same-origin only) instead of reflecting any origin; outside production the default stays `*`. Listed origins are reflected; unlisted ones get no header.
+- `TENANCY_DRIVER` must be `none`, `column`, or `rls`. Unknown values throw instead of enabling rls.
+- SQLite connections enable WAL, `busy_timeout = 5000`, and `synchronous = NORMAL` for file databases.
+- New subpath `runtime/appEnv` with `isProductionEnv()` (`APP_ENV` or `NODE_ENV`), used for the cookie `Secure` flag and for hiding 500 messages in HTML.
 
 ## 1.0.0
 

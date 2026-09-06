@@ -19,7 +19,7 @@ const siteModule: AppModule = {
       "/health": kernel.wrapWeb(
         withErrorHandling(async () => {
           const dbOk = await pingDatabase();
-          return plainText(dbOk ? "ok" : "degraded");
+          return plainText(dbOk ? "ok" : "degraded", dbOk ? 200 : 503);
         }),
       ),
     };

@@ -5,10 +5,11 @@ import { appLogger } from "./logger";
 
 function createRequestLoggingMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
+    const ipAddress = readClientIp(request) ?? null;
     return await runWithRequestMeta(
       {
         ...currentRequestMeta(),
-        ipAddress: readClientIp(request) ?? null,
+        ipAddress,
         userAgent: request.headers.get("user-agent"),
         request,
       },
@@ -24,6 +25,7 @@ function createRequestLoggingMiddleware(): Middleware {
           path: new URL(request.url).pathname,
           status: response.status,
           durationMs,
+          ipAddress,
         });
 
         return response;

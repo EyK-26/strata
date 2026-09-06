@@ -87,7 +87,8 @@ const sqliteDialect: SqlDialect = {
     return `"${assertSafeIdentifier(identifier)}"`;
   },
   nowExpression(): string {
-    return "CURRENT_TIMESTAMP";
+    // Same ISO-8601 text shape as timestampValue(); SQLite compares timestamps as strings.
+    return "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
   },
   timestampValue(value: Date): string {
     return value.toISOString();

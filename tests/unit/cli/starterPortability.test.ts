@@ -457,3 +457,75 @@ describe("production defaults", () => {
     }
   });
 });
+
+describe("generated deploy files", () => {
+  test("sqlite cookie app gets a production Dockerfile with a storage volume", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "deploy-lite",
+      "--frontend=server-htmx",
+      "--database=sqlite",
+      "--auth=cookie",
+      "--yes",
+    ]);
+    const dockerfile = await readFile(join(app, "Dockerfile"), "utf8");
+    expect(dockerfile).toContain("FROM oven/bun:1.4 AS deps");
+    expect(dockerfile).toContain("bun install --frozen-lockfile --production");
+    expect(dockerfile).toContain("ENV APP_ENV=production");
+    expect(dockerfile).toContain("ENV AUTH_DEV_HEADERS=false");
+    expect(dockerfile).toContain("USER bun");
+    expect(dockerfile).toContain('VOLUME ["/app/storage"]');
+    expect(dockerfile).toContain("HEALTHCHECK");
+    expect(dockerfile).toContain('CMD ["bun", "run", "start"]');
+    expect(dockerfile).not.toContain("AS frontend");
+
+    const ignore = await readFile(join(app, ".dockerignore"), "utf8");
+    expect(ignore.split("\n")).toEqual(
+      expect.arrayContaining([".env", "node_modules", ".git", "!.env.example"]),
+    );
+    expect(ignore).not.toContain("frontend/dist");
+
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("## Deploy");
+    expect(readme).toContain("docker build -t deploy-lite .");
+    expect(readme).toContain("mount a volume");
+
+    const gitignore = await readFile(join(app, ".gitignore"), "utf8");
+    expect(gitignore).toContain("storage/*.sqlite-wal");
+  });
+
+  test("postgres hybrid app builds the frontend inside the image and has no sqlite volume", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "deploy-hybrid",
+      "--frontend=hybrid",
+      "--database=postgres",
+      "--auth=cookie-token",
+      "--yes",
+    ]);
+    const dockerfile = await readFile(join(app, "Dockerfile"), "utf8");
+    expect(dockerfile).toContain("FROM oven/bun:1.4 AS frontend");
+    expect(dockerfile).toContain("COPY --from=frontend /app/frontend/dist ./frontend/dist");
+    expect(dockerfile).not.toContain("VOLUME");
+
+    const ignore = await readFile(join(app, ".dockerignore"), "utf8");
+    expect(ignore).toContain("frontend/node_modules");
+    expect(ignore).toContain("frontend/dist");
+
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("built inside the image");
+    expect(readme).not.toContain("mount a volume");
+  });
+
+  test("README production list covers APP_URL, proxies, CORS, and the 503 health gate", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, ["prod-notes", "--frontend=api", "--auth=token", "--yes"]);
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("Set `APP_URL` to the public origin");
+    expect(readme).toContain("TRUST_FORWARDED_FOR=true");
+    expect(readme).toContain("Cross-origin browser calls are off in production");
+    expect(readme).toContain("`GET /health` answers 503 until the schema exists");
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toContain("# TRUST_FORWARDED_FOR=true");
+  });
+});

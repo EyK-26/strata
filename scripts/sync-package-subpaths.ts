@@ -160,6 +160,7 @@ const CORE_SUBPATHS = [
   "queue/publicQueue",
   "queue/redisQueue",
   "queue/types",
+  "runtime/appEnv",
   "runtime/appKeyPrefix",
   "runtime/frontendMode",
   "runtime/applicationRegistry",
@@ -199,9 +200,7 @@ const BOOTSTRAP_SUBPATHS = [
   "context",
   "contracts",
   "createWebRoutes",
-  // "createRoutes" is deliberately unpublished: it is in-repo fixture HTTP that
-  // imports the repo-root index.html and the dogfood helpers, which leaked a
-  // dist/_.._/_.._/index.html asset into the published tarball.
+  // createRoutes is in-repo fixture HTTP (imports the repo-root index.html); never publish it.
   "createSpaRoutes",
   "dependencies",
   "discoverModules",
@@ -377,8 +376,7 @@ async function updatePackageJson(
   packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
     ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"
     : "tsc -p tsconfig.types.json";
-  // Clear dist first so a subpath removed from the map cannot linger from a
-  // previous build and get packed into the tarball.
+  // Clear dist so removed subpaths do not linger in the tarball.
   packageJson.scripts["build"] =
     "rm -rf dist && bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";
 

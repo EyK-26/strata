@@ -1,3 +1,4 @@
+import { isProductionEnv } from "../runtime/appEnv";
 import type { Middleware } from "./middleware";
 
 interface CorsConfig {
@@ -7,9 +8,14 @@ interface CorsConfig {
   maxAgeSeconds: number;
 }
 
+/** Unset means any origin while developing and same-origin only in production. */
+function defaultAllowedOrigins(): string {
+  return isProductionEnv() ? "" : "*";
+}
+
 function resolveCorsConfig(): CorsConfig {
   return {
-    allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS ?? "*")
+    allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS ?? defaultAllowedOrigins())
       .split(",")
       .map((origin) => origin.trim())
       .filter(Boolean),
@@ -57,16 +63,21 @@ function buildCorsHeaders(request: Request): Headers {
   const origin = request.headers.get("origin");
   const corsConfig = resolveCorsConfig();
   const allowedOrigins = corsConfig.allowedOrigins;
-  const allowOrigin =
-    allowedOrigins.includes("*") || (origin && allowedOrigins.includes(origin))
-      ? (origin ?? "*")
-      : (allowedOrigins[0] ?? "*");
+  headers.set("Vary", "Origin");
+
+  const allowOrigin = allowedOrigins.includes("*")
+    ? "*"
+    : origin && allowedOrigins.includes(origin)
+      ? origin
+      : null;
+  if (!allowOrigin) {
+    return headers;
+  }
 
   headers.set("Access-Control-Allow-Origin", allowOrigin);
   headers.set("Access-Control-Allow-Methods", corsConfig.allowedMethods.join(", "));
   headers.set("Access-Control-Allow-Headers", corsConfig.allowedHeaders.join(", "));
   headers.set("Access-Control-Max-Age", String(corsConfig.maxAgeSeconds));
-  headers.set("Vary", "Origin");
   return headers;
 }
 

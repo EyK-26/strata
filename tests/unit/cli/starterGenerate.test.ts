@@ -712,6 +712,21 @@ describe("create-strata CLI", () => {
         `${join(app, "src/bootstrap/createApp.ts")}`
       );
       const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
+
+      // Unmigrated database: the process is up but must not enter rotation.
+      const unmigrated = await bootstrapApp({ migrate: false });
+      const coldServer = createAppServer(unmigrated.routes, 0);
+      try {
+        const cold = await fetch(`http://127.0.0.1:${coldServer.port}/health`);
+        expect(cold.status).toBe(503);
+        expect(await cold.text()).toBe("degraded");
+        const ready = await fetch(`http://127.0.0.1:${coldServer.port}/ready`);
+        expect([200, 503]).toContain(ready.status);
+        expect(ready.headers.get("content-type")).toContain("application/json");
+      } finally {
+        coldServer.stop();
+      }
+
       const { routes } = await bootstrapApp();
       const server = createAppServer(routes, 0);
       try {

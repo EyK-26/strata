@@ -10,13 +10,14 @@ import {
   CORE_AUTH_USER_DIRECTORY_TOKEN,
 } from "@getstrata/core/contracts/serviceTokens";
 import { starterAuthDirectory } from "../authDirectory.ts";
+import { sessionSecret } from "../config.ts";
 
 const authProvider: ServiceProvider = {
   name: "starter.auth",
   register({ container }) {
     container.set(CORE_AUTH_USER_DIRECTORY_TOKEN, starterAuthDirectory);
     const auth = createCookieSessionAuthManager({
-      secret: process.env.SESSION_SECRET?.trim() || "dev-session-secret-change-me-please-32ch",
+      secret: sessionSecret(),
       cookieName: "strata_session",
       mapUser: (user) => ({
         id: user.id,

@@ -11,6 +11,7 @@ import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
 } from "@getstrata/core/database/boundConnection";
+import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 
 function createFakeSql(user: SessionUser) {
   const sessions = new Map<
@@ -248,6 +249,42 @@ describe("CookieSessionGuard", () => {
     expect(signedOut.setCookie).toContain("Max-Age=0");
     expect(sql.sessions.has(signedIn.sessionId)).toBe(false);
     expect(await auth.resolve(request)).toBeNull();
+  });
+
+  test("signIn records the client address and user agent from the request context", async () => {
+    const user: SessionUser = {
+      id: 9,
+      name: "Ida",
+      email: "ida@example.test",
+      is_admin: false,
+    };
+    const sql = createFakeSql(user);
+    const auth = createCookieSessionAuthManager({
+      sql,
+      secret: "session-secret",
+      cookieName: "strata_session",
+    });
+
+    const fromContext = await runWithRequestMeta(
+      { ipAddress: "203.0.113.9", userAgent: "probe/1.0" },
+      () => auth.signIn(user),
+    );
+    expect(sql.sessions.get(fromContext.sessionId)).toMatchObject({
+      ipAddress: "203.0.113.9",
+      userAgent: "probe/1.0",
+    });
+
+    const explicit = await runWithRequestMeta(
+      { ipAddress: "203.0.113.9", userAgent: "probe/1.0" },
+      () => auth.signIn(user, { ipAddress: "198.51.100.1" }),
+    );
+    expect(sql.sessions.get(explicit.sessionId)).toMatchObject({
+      ipAddress: "198.51.100.1",
+      userAgent: "probe/1.0",
+    });
+
+    const outside = await auth.signIn(user);
+    expect(sql.sessions.get(outside.sessionId)).toMatchObject({ ipAddress: null, userAgent: null });
   });
 
   test("signInRedirect and signOutRedirect attach Set-Cookie", async () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 
 const TEST_ADMIN_API_TOKEN = "strata-admin-test-token";
@@ -17,6 +17,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: TEST_ADMIN_API_TOKEN,
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -29,6 +30,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -44,6 +46,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -56,6 +59,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -73,6 +77,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -90,6 +95,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -108,6 +114,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -128,6 +135,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -148,6 +156,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         AUTH_DEV_HEADERS: "false",
@@ -162,6 +171,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         FRONTEND_MODE: "server-htmx",
         AUTH_DEV_HEADERS: "false",
         DATABASE_URL: "postgres://localhost/getstrata",
@@ -179,6 +189,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         FRONTEND_MODE: "server-htmx",
         AUTH_DEV_HEADERS: "false",
         DATABASE_URL: "postgres://localhost/getstrata",
@@ -190,6 +201,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         FRONTEND_MODE: "hybrid",
         AUTH_DEV_HEADERS: "false",
         DATABASE_URL: "postgres://localhost/getstrata",
@@ -198,6 +210,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         FRONTEND_MODE: "hybrid",
         AUTH_DEV_HEADERS: "false",
         DATABASE_URL: "postgres://localhost/getstrata",
@@ -215,6 +228,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         ADMIN_API_TOKEN: "rotated-admin-token",
         MEMBER_API_TOKEN: "rotated-member-token",
         SCIM_BEARER_TOKEN: "rotated-scim-token",
@@ -236,6 +250,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         AUTH_DEV_HEADERS: "false",
         FRONTEND_MODE: "server-htmx",
         FEATURE_PUBLIC_READS: "false",
@@ -248,6 +263,7 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         AUTH_DEV_HEADERS: "false",
         FEATURE_PUBLIC_READS: "false",
         TOKEN_HASH_PEPPER: "dev-token-pepper-change-me",
@@ -270,11 +286,52 @@ describe("assertProductionSecrets", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
+        APP_URL: "https://app.example",
         AUTH_DEV_HEADERS: "false",
         FRONTEND_MODE: "server-htmx",
         FEATURE_PUBLIC_READS: "false",
         SESSION_SECRET: "a-real-rotated-session-secret-value-32ch",
       }),
     ).not.toThrow();
+  });
+});
+
+describe("assertProductionSecrets APP_URL", () => {
+  const base = {
+    APP_ENV: "production",
+    AUTH_DEV_HEADERS: "false",
+    FEATURE_PUBLIC_READS: "false",
+    FRONTEND_MODE: "api",
+  };
+
+  test("blocks a missing, local, or malformed APP_URL", () => {
+    for (const APP_URL of [
+      undefined,
+      "",
+      "http://localhost:3000",
+      "http://127.0.0.1",
+      "not a url",
+      "ftp://app.example",
+    ]) {
+      expect(() => assertProductionSecrets({ ...base, APP_URL })).toThrow(
+        /set APP_URL to the public origin/,
+      );
+    }
+  });
+
+  test("accepts a public origin and only warns about plain http", () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(() =>
+        assertProductionSecrets({ ...base, APP_URL: "https://app.example.com" }),
+      ).not.toThrow();
+      expect(warn).not.toHaveBeenCalled();
+      expect(() =>
+        assertProductionSecrets({ ...base, APP_URL: "http://app.internal:8080/" }),
+      ).not.toThrow();
+      expect(String(warn.mock.calls[0]?.[0])).toContain("APP_URL uses http");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

@@ -16,3 +16,14 @@ export function loadConfig(): AppConfig {
     databaseUrl,
   };
 }
+
+/** Cookie sessions and signed cookies are keyed by this; there is no default. */
+export function sessionSecret(): string {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret) {
+    throw new Error(
+      "SESSION_SECRET is required. Copy .env.example to .env and set it (32+ characters).",
+    );
+  }
+  return secret;
+}

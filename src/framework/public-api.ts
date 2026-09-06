@@ -130,6 +130,7 @@ export {
 export {
   createMysqlConnection,
   createMysqlConnectionFromPool,
+  createMysqlPool,
 } from "../core/database/mysqlConnection.ts";
 export {
   getNamedConnection,
@@ -220,6 +221,7 @@ export {
   ConflictError,
   ForbiddenError,
   HttpError,
+  InternalServerError,
   isHttpErrorLike,
   NotFoundError,
   PayloadTooLargeError,

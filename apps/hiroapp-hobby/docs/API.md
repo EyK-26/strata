@@ -6,7 +6,7 @@
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/health` | Plain text `ok`, or `degraded` if the database ping fails. |
+| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) when the database or the migrated schema is unavailable. `/ready` returns the same checks as JSON. |
 | `GET` | `/` | Welcome page. Restyle or replace it. |
 
 There is no CRUD endpoint for the seeded `notes` table. Adding your own routes is the first thing you do.

@@ -3,6 +3,8 @@ import { secretsCheckCommand } from "../../../src/cli/commands/secretsCheck";
 
 const envKeys = [
   "APP_ENV",
+  "APP_URL",
+  "SESSION_SECRET",
   "AUTH_DEV_HEADERS",
   "ADMIN_API_TOKEN",
   "MEMBER_API_TOKEN",
@@ -35,6 +37,8 @@ afterEach(() => {
 describe("secretsCheckCommand", () => {
   test("passes when production secrets are configured", () => {
     process.env.APP_ENV = "production";
+    process.env.APP_URL = "https://app.example.com";
+    process.env.SESSION_SECRET = "rotated-session-secret-with-enough-length";
     process.env.AUTH_DEV_HEADERS = "false";
     process.env.ADMIN_API_TOKEN = "rotated-admin-token";
     process.env.MEMBER_API_TOKEN = "rotated-member-token";

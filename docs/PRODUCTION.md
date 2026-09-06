@@ -15,6 +15,7 @@ Fix every error until it prints that production secret checks passed.
 | Variable | When |
 |----------|------|
 | `APP_ENV=production` | Always |
+| `APP_URL` | Always. The public origin (`https://...`); signed links and redirects are built from it. Localhost is rejected. |
 | `APP_DEBUG=false` | Always (recommended) |
 | `AUTH_DEV_HEADERS=false` | Always in production |
 | `SESSION_SECRET` (32+ chars) | `FRONTEND_MODE=server-htmx` or `hybrid` |
@@ -22,7 +23,7 @@ Fix every error until it prints that production secret checks passed.
 | `TOKEN_HASH_PEPPER` | Token auth enabled |
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Token auth enabled |
 | `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled |
-| `CORS_ALLOWED_ORIGINS` | If you set this variable, it must not include `*` |
+| `CORS_ALLOWED_ORIGINS` | Only when browsers on other origins call the API. Unset means same-origin only in production (any origin while developing). `*` is rejected. |
 | `FEATURE_PUBLIC_READS=false` | Required in production. The flag only controls whether anonymous `x-tenant-id` is honored. Local `.env.example` may set `true` so `/login` can load. |
 
 A production HTML app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need API tokens, SCIM, OAuth, or CORS when those features are off.
@@ -44,9 +45,12 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 
 - `REDIS_URL` for cache, queue, and shared login throttle
 - `JWT_SECRET` if you mint JWTs (otherwise JWT falls back to `SESSION_SECRET`)
-- `TRUST_FORWARDED_FOR=true` only when a trusted reverse proxy sets `X-Forwarded-For`
+- `TRUST_FORWARDED_FOR=true` when a trusted reverse proxy sets `X-Forwarded-For`. Without it the socket peer is the client, which behind a proxy is the proxy itself, so every request shares one throttle bucket. With it, the rightmost public hop is used, so a client cannot pick its own key by prepending addresses.
+- `TENANCY_DRIVER` must be exactly `none`, `column`, or `rls`; unknown values refuse to boot instead of silently enabling rls
+- Generated apps ship a production `Dockerfile` (`APP_ENV=production`, `AUTH_DEV_HEADERS=false`, non-root user, `HEALTHCHECK`). `GET /health` answers 503 until the schema is migrated, so run `bun run db:migrate` as a deploy step
 - `METRICS_TOKEN` to authorize `GET /metrics` (production hides the endpoint unless this is set)
 - `TENANCY_DRIVER=none` for apps without a `tenant` table. HiroApp keeps `rls`
+- Unhandled exceptions return `500 {"error":"Internal server error."}` and are logged with their stack; driver constraint violations map to 409/422/400 with fixed messages on Postgres, MySQL, and SQLite
 - Off-site database backups: [DR.md](./DR.md)
 
 ## Deployment docs

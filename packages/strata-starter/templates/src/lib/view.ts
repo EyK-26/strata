@@ -16,6 +16,6 @@ export async function renderPage(
   return htmlResponse(html);
 }
 
-export function plainText(body: string): Response {
-  return new Response(body, { headers: { "content-type": "text/plain; charset=utf-8" } });
+export function plainText(body: string, status = 200): Response {
+  return new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 }

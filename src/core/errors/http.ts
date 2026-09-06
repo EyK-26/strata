@@ -64,6 +64,12 @@ class PreconditionFailedError extends HttpError {
   }
 }
 
+class InternalServerError extends HttpError {
+  constructor(message: string = "Internal server error.", details?: unknown) {
+    super(500, message, details);
+  }
+}
+
 interface HttpErrorLike {
   status: number;
   message: string;
@@ -103,6 +109,7 @@ export {
   ConflictError,
   ForbiddenError,
   HttpError,
+  InternalServerError,
   isHttpErrorLike,
   NotFoundError,
   PayloadTooLargeError,

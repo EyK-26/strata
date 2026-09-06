@@ -24,6 +24,8 @@ import {
 import {
   renderApiDocs,
   renderDockerCompose,
+  renderDockerfile,
+  renderDockerignore,
   renderEnvExample,
   renderGitignore,
   renderLayersManifest,
@@ -140,6 +142,9 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     removeIfExists(join(targetDir, "docs/API.md"));
   }
   writeText(join(targetDir, "strata.layers.json"), renderLayersManifest(projectName, layers));
+
+  writeText(join(targetDir, "Dockerfile"), renderDockerfile(layers));
+  writeText(join(targetDir, ".dockerignore"), renderDockerignore(layers));
 
   const compose = renderDockerCompose(projectName, layers);
   if (compose) {

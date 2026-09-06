@@ -2,6 +2,7 @@ import {
   BadRequestError,
   ConflictError,
   type HttpError,
+  InternalServerError,
   toHttpError,
   UnprocessableEntityError,
 } from "@getstrata/core/errors/http";
@@ -34,6 +35,47 @@ function getPostgresSqlState(error: PostgresErrorLike): string | undefined {
   return undefined;
 }
 
+const MYSQL_ERRNO_MESSAGES: Record<number, () => HttpError> = {
+  1062: () => new ConflictError("A record with these values already exists."),
+  1451: () => new UnprocessableEntityError("Record is still referenced by other records."),
+  1452: () => new UnprocessableEntityError("Referenced record does not exist."),
+  1048: () => new BadRequestError("Required field is missing."),
+  3819: () => new BadRequestError("Value violates a database constraint."),
+};
+
+function mapSqliteError(error: PostgresErrorLike): HttpError | null {
+  const code = typeof error.code === "string" ? error.code : "";
+  if (!code.startsWith("SQLITE_")) {
+    return null;
+  }
+  if (code === "SQLITE_CONSTRAINT_UNIQUE" || code === "SQLITE_CONSTRAINT_PRIMARYKEY") {
+    return new ConflictError("A record with these values already exists.");
+  }
+  if (code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+    return new UnprocessableEntityError("Referenced record does not exist.");
+  }
+  if (code === "SQLITE_CONSTRAINT_NOTNULL") {
+    return new BadRequestError("Required field is missing.");
+  }
+  if (code.startsWith("SQLITE_CONSTRAINT")) {
+    return new BadRequestError("Value violates a database constraint.");
+  }
+  return new InternalServerError("Database operation failed.");
+}
+
+function mapMysqlError(error: PostgresErrorLike): HttpError | null {
+  const code = typeof error.code === "string" ? error.code : "";
+  if (!code.startsWith("ER_")) {
+    return null;
+  }
+  const factory = typeof error.errno === "number" ? MYSQL_ERRNO_MESSAGES[error.errno] : undefined;
+  return factory ? factory() : new InternalServerError("Database operation failed.");
+}
+
+/**
+ * Constraint violations become 4xx with a fixed message. Anything else is a
+ * 500 with a generic message; the raw driver text never reaches the client.
+ */
 function mapDatabaseError(error: unknown): HttpError {
   const httpError = toHttpError(error);
 
@@ -42,8 +84,17 @@ function mapDatabaseError(error: unknown): HttpError {
   }
 
   if (!isPostgresError(error)) {
-    const message = error instanceof Error ? error.message : "Database operation failed.";
-    return new BadRequestError(message);
+    return new InternalServerError();
+  }
+
+  const sqlite = mapSqliteError(error);
+  if (sqlite) {
+    return sqlite;
+  }
+
+  const mysql = mapMysqlError(error);
+  if (mysql) {
+    return mysql;
   }
 
   const sqlState = getPostgresSqlState(error);
@@ -66,10 +117,7 @@ function mapDatabaseError(error: unknown): HttpError {
         constraint: error.constraint,
       });
     default:
-      return new BadRequestError(error.message ?? "Database operation failed.", {
-        code: error.code,
-        sqlState,
-      });
+      return new InternalServerError("Database operation failed.");
   }
 }
 

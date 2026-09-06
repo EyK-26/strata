@@ -5,6 +5,8 @@ import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnec
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { currentSqlDialect, sqlTimestamp } from "@getstrata/core/database/dialect";
 import { readRequestCookie } from "@getstrata/core/http/cookies";
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
 
 function sqlPlaceholder(index: number): string {
@@ -176,7 +178,7 @@ export class CookieSessionStore {
   }
 
   private withSecureFlag(header: string): string {
-    if (process.env.NODE_ENV !== "production") {
+    if (!isProductionEnv()) {
       return header;
     }
 
@@ -271,7 +273,11 @@ export class CookieSessionAuthManager extends AuthManager {
     user: SessionUser,
     meta: SessionCreateMeta = {},
   ): Promise<{ sessionId: string; setCookie: string }> {
-    const sessionId = await this.store.create(user, meta);
+    const current = currentRequestMeta();
+    const sessionId = await this.store.create(user, {
+      userAgent: meta.userAgent ?? current.userAgent ?? null,
+      ipAddress: meta.ipAddress ?? current.ipAddress ?? null,
+    });
     return { sessionId, setCookie: this.store.cookieHeader(user, sessionId) };
   }
 

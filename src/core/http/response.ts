@@ -1,6 +1,6 @@
 import { toHttpError } from "@getstrata/core/errors/http";
 import { mapDatabaseError } from "../database/errors";
-import { webErrorResponse } from "./webErrorResponse";
+import { logServerError, webErrorResponse } from "./webErrorResponse";
 
 function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
   return Response.json(data, {
@@ -19,6 +19,7 @@ function noContentResponse(): Response {
 
 function errorResponse(error: unknown): Response {
   const mappedError = toHttpError(error) ?? mapDatabaseError(error);
+  logServerError(error, mappedError);
 
   return Response.json(
     {

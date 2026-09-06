@@ -1,6 +1,6 @@
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
-import type { BunRequest } from "bun";
+import type { BunRequest, Server } from "bun";
 import type { AppRouteMap } from "../contracts.ts";
 
 export interface WebServerOptions {
@@ -11,18 +11,27 @@ export interface WebServerOptions {
   onRequest?: (request: Request) => Promise<void> | void;
 }
 
-type BunRouteHandler = (request: BunRequest) => Response | Promise<Response>;
+type BunRouteHandler = (
+  request: BunRequest,
+  server: Server<unknown>,
+) => Response | Promise<Response>;
+
+function socketAddress(server: Server<unknown> | undefined, request: Request): string | null {
+  const address = server?.requestIP(request)?.address;
+  return address ? address.replace(/^::ffff:/i, "") : null;
+}
 
 async function missingHtmlResponse(): Promise<Response> {
   return notFoundHtmlResponse();
 }
 
 function wrapRouteHandler(handler: (request: Request) => unknown): BunRouteHandler {
-  return async (request) => {
+  return async (request, server) => {
     return await runWithRequestMeta(
       {
         ...currentRequestMeta(),
         request,
+        ipAddress: socketAddress(server, request),
         userAgent: request.headers.get("user-agent"),
       },
       async () => {
@@ -73,11 +82,12 @@ export function createWebServer(options: WebServerOptions) {
   return Bun.serve({
     port: options.port,
     ...(bunRoutes ? { routes: bunRoutes } : {}),
-    async fetch(request) {
+    async fetch(request, server) {
       return await runWithRequestMeta(
         {
           ...currentRequestMeta(),
           request,
+          ipAddress: socketAddress(server, request),
           userAgent: request.headers.get("user-agent"),
         },
         async () => {

@@ -175,6 +175,29 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
   }
 }
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]);
+
+/** Signed links (password reset, email verification) and redirects are built from APP_URL. */
+function assertPublicAppUrl(env: Record<string, string | undefined>): void {
+  const raw = env.APP_URL?.trim() ?? "";
+  let url: URL | null = null;
+  try {
+    url = raw ? new URL(raw) : null;
+  } catch {
+    url = null;
+  }
+  if (!url || !/^https?:$/.test(url.protocol) || LOCAL_HOSTS.has(url.hostname)) {
+    throw new Error(
+      "Production startup blocked: set APP_URL to the public origin of this app (for example https://app.example.com). Signed links and redirects are built from it.",
+    );
+  }
+  if (url.protocol === "http:") {
+    console.warn(
+      `[secrets] APP_URL uses http; session cookies are marked Secure in production and will not be sent over ${raw}.`,
+    );
+  }
+}
+
 function assertProductionSecrets(env: Record<string, string | undefined> = process.env): void {
   const appEnv = env.APP_ENV ?? "local";
 
@@ -184,6 +207,7 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
 
   assertNoPlaceholderSecrets(env);
   assertAuthDevHeadersDisabled(env);
+  assertPublicAppUrl(env);
 
   if (isTokenAuthEnabled(env)) {
     assertTokenAuthProductionSecrets(env);
