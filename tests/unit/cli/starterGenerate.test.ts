@@ -85,6 +85,7 @@ function scriptedPrompter(script: {
   confirm?: boolean[];
   question?: string[];
   multiSelect?: string[][];
+  onMultiSelect?: (message: string, values: string[]) => void;
 }): Prompter {
   const select = [...(script.select ?? [])];
   const confirm = [...(script.confirm ?? [])];
@@ -117,6 +118,10 @@ function scriptedPrompter(script: {
       _message: string,
       choices: Array<{ value: T; label: string; enabled: boolean }>,
     ): Promise<T[]> {
+      script.onMultiSelect?.(
+        _message,
+        choices.map((choice) => choice.value),
+      );
       if (multiSelect.length === 0) {
         throw new Error(`unexpected multiSelect: ${_message}`);
       }
@@ -230,6 +235,10 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("Laravel");
     expect(readme).not.toContain("WorkHub");
     expect(readme).not.toContain("—");
+
+    const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(createApp).not.toContain("createMetricsRoutes");
+    expect(readme).not.toContain("GET /metrics");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");
     expect(database).toContain("createSqliteConnection");
@@ -396,6 +405,19 @@ describe("create-strata generate", () => {
     expect(auth).toContain("/register");
     expect(auth).toContain("/forgot-password");
     expect(auth).toContain("/email/verify");
+    const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(createApp).not.toContain("createMetricsRoutes");
+  });
+
+  test("metrics extra writes GET /metrics and a token", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, ["metrics-app", "--metrics", "--yes"]);
+    const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(createApp).toContain("createMetricsRoutes");
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toContain("METRICS_TOKEN=dev-metrics-token-change-me");
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("GET /metrics");
   });
 
   test("token API apps write JSON register and password reset", async () => {
@@ -523,7 +545,7 @@ describe("create-strata CLI", () => {
     const layers = await promptLayers(
       parseCreateStrataArgs(["demo"]),
       scriptedPrompter({
-        select: ["api", "sqlite", "headers", "none", "array", "sync", "log"],
+        select: ["api", "sqlite", "cookie", "none", "array", "sync", "log"],
         multiSelect: [["mfa", "scim"]],
       }),
     );
@@ -531,18 +553,82 @@ describe("create-strata CLI", () => {
     expect(layers.extras.scim).toBe(true);
     expect(layers.extras.emailVerification).toBe(false);
     expect(layers.extras.metrics).toBe(false);
+  });
 
-    const metricsOnly = await promptLayers(
+  test("wizard extras omit MFA and SCIM when auth has no users", async () => {
+    let extraValues: string[] = [];
+    const layers = await promptLayers(
       parseCreateStrataArgs(["demo"]),
       scriptedPrompter({
         select: ["api", "sqlite", "headers", "none", "array", "sync", "log"],
-        multiSelect: [["emailVerification", "metrics"]],
+        multiSelect: [["metrics"]],
+        onMultiSelect: (_message, values) => {
+          extraValues = values;
+        },
       }),
     );
-    expect(metricsOnly.extras.mfa).toBe(false);
-    expect(metricsOnly.extras.scim).toBe(false);
-    expect(metricsOnly.extras.emailVerification).toBe(true);
-    expect(metricsOnly.extras.metrics).toBe(true);
+    expect(extraValues).toEqual(["metrics"]);
+    expect(layers.extras.mfa).toBe(false);
+    expect(layers.extras.scim).toBe(false);
+    expect(layers.extras.emailVerification).toBe(false);
+    expect(layers.extras.metrics).toBe(true);
+  });
+
+  test("wizard extras skip items already set by flags", async () => {
+    let extraValues: string[] = [];
+    const layers = await promptLayers(
+      parseCreateStrataArgs(["demo", "--no-metrics"]),
+      scriptedPrompter({
+        select: ["api", "sqlite", "headers", "none", "array", "sync", "log"],
+        onMultiSelect: (_message, values) => {
+          extraValues = values;
+        },
+      }),
+    );
+    expect(extraValues).toEqual([]);
+    expect(layers.extras.metrics).toBe(false);
+
+    extraValues = [];
+    const cookie = await promptLayers(
+      parseCreateStrataArgs(["demo", "--no-metrics"]),
+      scriptedPrompter({
+        select: ["api", "sqlite", "cookie", "none", "array", "sync", "log"],
+        multiSelect: [[]],
+        onMultiSelect: (_message, values) => {
+          extraValues = values;
+        },
+      }),
+    );
+    expect(extraValues).toEqual(["mfa", "emailVerification", "scim"]);
+    expect(cookie.extras.metrics).toBe(false);
+
+    const allFlagged = await promptLayers(
+      parseCreateStrataArgs(["demo", "--mfa", "--email-verification", "--scim", "--metrics"]),
+      scriptedPrompter({
+        select: ["api", "sqlite", "cookie", "none", "array", "sync", "log"],
+      }),
+    );
+    expect(allFlagged.extras).toEqual({
+      mfa: true,
+      emailVerification: true,
+      scim: true,
+      metrics: true,
+    });
+  });
+
+  test("token auth extras omit MFA pages but still offer SCIM and metrics", async () => {
+    let extraValues: string[] = [];
+    await promptLayers(
+      parseCreateStrataArgs(["demo"]),
+      scriptedPrompter({
+        select: ["api", "sqlite", "token", "none", "array", "sync", "log"],
+        multiSelect: [[]],
+        onMultiSelect: (_message, values) => {
+          extraValues = values;
+        },
+      }),
+    );
+    expect(extraValues).toEqual(["emailVerification", "scim", "metrics"]);
   });
 
   test("sqlite API app boots and answers GET /health", async () => {

@@ -738,6 +738,10 @@ function renderCreateAppTs(layers: StarterLayers): string {
   const ensureLine = needsEnsure(layers)
     ? `import { ensureAppDatabase } from "./ensureDatabase.ts";\n`
     : "";
+  const metricsImport = layers.extras.metrics
+    ? `import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";\n`
+    : "";
+  const metricsSpread = layers.extras.metrics ? "\n    ...createMetricsRoutes()," : "";
   return `import { join } from "node:path";
 import "./preload.ts";
 import { runProviderPhase } from "@getstrata/bootstrap/context";
@@ -757,8 +761,7 @@ import {
   ensureModulesLoaded,
 } from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
-import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
-import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
+${metricsImport}import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { migrate } from "../db/migrate.ts";
@@ -837,8 +840,7 @@ ${needsEnsure(layers) ? "  await ensureAppDatabase();\n" : ""}  const appConfig 
 
   const routes = mergeSpaRoutes(context.dependencies, {
     ...createHealthRoutes(context.dependencies),
-    ...buildRoutes(context.dependencies),
-    ...createMetricsRoutes(),
+    ...buildRoutes(context.dependencies),${metricsSpread}
   }, {
     distDirectory: join(import.meta.dir, "../../frontend/dist"),
   });

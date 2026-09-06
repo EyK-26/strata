@@ -396,6 +396,12 @@ Opaque token login: \`POST /api/v1/auth/login\` with \`{ "email", "password" }\`
 JWT mint: \`POST /api/auth/token\` with email and password. Short-lived. Not a portal session.
 `
     : ""
+}${
+  layers.extras.metrics
+    ? `
+Prometheus scrape: \`GET /metrics\`. Production requires \`Authorization: Bearer <METRICS_TOKEN>\`.
+`
+    : ""
 }
 ## Production
 

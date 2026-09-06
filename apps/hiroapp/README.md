@@ -62,6 +62,8 @@ Opaque token login: `POST /api/v1/auth/login` with `{ "email", "password" }`. Re
 
 JWT mint: `POST /api/auth/token` with email and password. Short-lived. Not a portal session.
 
+Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <METRICS_TOKEN>`.
+
 ## Production
 
 `createApp` calls `assertProductionSecrets()` when `APP_ENV=production`. Set real secrets before you ship. Cookie HTML apps need `SESSION_SECRET` (32+ characters). Token apps need `TOKEN_HASH_PEPPER`. Set `AUTH_DEV_HEADERS=false`.

@@ -12,7 +12,7 @@ Sibling examples in this repo:
 | `apps/hiroapp-team` | Postgres, HTMX, cookie sessions, Redis, metrics |
 | `apps/hiroapp` | Postgres, HTMX, cookies + tokens + JWT, RLS, Redis, SMTP, extras MFA / email verification / SCIM / metrics |
 
-Cookie HTML apps include a restyleable welcome page, login, register, and password reset (`views/` and `public/assets/site.css`). HiroApp extras wire MFA pages, `/email/verify`, and `/scim/v2/Users`. Metrics routes are on every generated app and require `METRICS_TOKEN` in production.
+Cookie HTML apps include a restyleable welcome page, login, register, and password reset (`views/` and `public/assets/site.css`). HiroApp extras wire MFA pages, `/email/verify`, `/scim/v2/Users`, and `GET /metrics`. Apps that leave the metrics extra off do not get that route.
 
 HTML cookie name is `strata_session`. Redis keys use `APP_KEY_PREFIX=hiroapp`. Seeded accounts use password `password`: `demo@example.com` (member) and `admin@example.test` (admin). HTML sign-in is `/login`.
 

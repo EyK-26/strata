@@ -12,6 +12,7 @@ import {
   DOCKER_SERVICE_LABELS,
   dockerLayerForNeeded,
   emptyDockerServices,
+  extraApplies,
   neededDockerServices,
   type StarterLayers,
 } from "./types.ts";
@@ -140,14 +141,33 @@ function createReadlinePrompter(): Prompter {
   };
 }
 
+function extrasStillToAsk(
+  layers: StarterLayers,
+  flags: ParsedFlags,
+): Array<(typeof EXTRA_CHOICES)[number]> {
+  return EXTRA_CHOICES.filter((choice) => {
+    if (flags.extras[choice.value] !== undefined) {
+      return false;
+    }
+    return extraApplies(choice.value, layers.auth);
+  });
+}
+
 async function promptExtras(
   prompter: Prompter,
   extras: StarterLayers["extras"],
+  layers: StarterLayers,
+  flags: ParsedFlags,
 ): Promise<StarterLayers["extras"]> {
+  const choices = extrasStillToAsk(layers, flags);
+  if (choices.length === 0) {
+    return extras;
+  }
+
   const picked = new Set(
     await prompter.multiSelect(
       "Extras",
-      EXTRA_CHOICES.map((choice) => ({
+      choices.map((choice) => ({
         value: choice.value,
         label: choice.label,
         enabled: extras[choice.value],
@@ -155,8 +175,13 @@ async function promptExtras(
     ),
   );
   const next = { ...extras };
-  for (const choice of EXTRA_CHOICES) {
+  for (const choice of choices) {
     next[choice.value] = picked.has(choice.value);
+  }
+  for (const choice of EXTRA_CHOICES) {
+    if (!extraApplies(choice.value, layers.auth) && flags.extras[choice.value] === undefined) {
+      next[choice.value] = false;
+    }
   }
   return next;
 }
@@ -243,11 +268,14 @@ async function promptLayers(flags: ParsedFlags, prompter: Prompter): Promise<Sta
     ],
     layers.mail,
   );
-  if (layers.frontend === "spa-react" || layers.frontend === "hybrid") {
+  if (
+    flags.spaPrefix === undefined &&
+    (layers.frontend === "spa-react" || layers.frontend === "hybrid")
+  ) {
     layers.spaPrefix = await prompter.question("SPA prefix", layers.spaPrefix);
   }
 
-  layers.extras = await promptExtras(prompter, layers.extras);
+  layers.extras = await promptExtras(prompter, layers.extras, layers, flags);
 
   if (!dockerFlagsProvided(flags)) {
     layers.docker = await promptDockerLayer(prompter, layers);

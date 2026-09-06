@@ -6,6 +6,8 @@ Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue
 
 - Interactive lists use ↑/↓ and Enter. Number keys still pick an option.
 - Extras (MFA, email verification, SCIM, metrics) are a toggle list: move with arrows, Space or 1-9 to enable one by one, Enter to continue.
+- The extras list is filtered by earlier answers: header auth only offers metrics; MFA needs cookie HTML; SCIM and email verification need a users table. Flags such as `--no-metrics` remove that extra from the list.
+- Metrics `GET /metrics` is generated only when the metrics extra is on.
 - Yes/no prompts use ↑/↓ (or y / n) instead of only typing.
 
 ## 0.1.10

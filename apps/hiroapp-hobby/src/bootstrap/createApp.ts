@@ -17,7 +17,6 @@ import {
   ensureModulesLoaded,
 } from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
-import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
@@ -100,7 +99,6 @@ export async function bootstrapApp(options: BootstrapOptions = {}): Promise<Boot
     {
       ...createHealthRoutes(context.dependencies),
       ...buildRoutes(context.dependencies),
-      ...createMetricsRoutes(),
     },
     {
       distDirectory: join(import.meta.dir, "../../frontend/dist"),
