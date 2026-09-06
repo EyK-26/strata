@@ -24,8 +24,9 @@ const siteModule: AppModule = {
           "home.eta",
           {
             layout: {
-              title: "Home",
-              description: "A new Strata application. Sign in at /login.",
+              title: "Welcome",
+              description:
+                "Welcome to your Strata app. Restyle views/home.eta and public/assets/site.css.",
             },
           },
           request,

@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- `TENANCY_DRIVER=column`: tenant ALS without Postgres `SET LOCAL` / `set_config`. `isRlsTenancy()` is the RLS-only check.
+- `AuthUserRecord` may include `name` and optional MFA columns used by generated starters.
+
 ## 0.7.4
 
 - Default database pool and query handles live on `globalThis`, so the published `@getstrata/core` bundle and `src/core` share one pool in the same process.

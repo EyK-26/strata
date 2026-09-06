@@ -29,7 +29,7 @@ bunx create-strata html --frontend server-htmx --database postgres --auth cookie
 | `--frontend` | `api`, `server-htmx`, `spa-react`, `hybrid` |
 | `--database` | `sqlite`, `postgres`, `mysql` (one engine; not mixed) |
 | `--auth` | `headers`, `cookie`, `token`, `jwt`, `cookie-token`, `cookie-token-jwt` |
-| `--tenancy` | `none`, `rls` |
+| `--tenancy` | `none`, `column`, `rls` (`rls` is Postgres `SET LOCAL`; sqlite/mysql coerce `rls` to `column`) |
 | `--cache` | `array`, `redis` |
 | `--queue` | `sync`, `redis` |
 | `--mail` | `log`, `smtp` |
@@ -53,11 +53,14 @@ Postgres, MySQL, Redis, and SMTP can run in Docker Compose or as installs alread
 
 ## What you get that actually runs
 
-- `GET /health` after `strata migrate`
+- `GET /health` after `strata migrate` (migrate also seeds when the tables are empty)
 - Notes table on every app
-- Cookie apps: `users` + `sessions`, HTML `/login`, seed `demo@example.com` / `password`
-- Token apps: `POST /api/v1/auth/login`
-- JWT apps: `POST /api/auth/token`
+- Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Seed `demo@example.com` / `password`
+- Token apps: `POST /api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`
+- JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
+- Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
+- `--tenancy=column`: `tenant` table + `users.tenant_id` on any engine. `--tenancy=rls`: Postgres only (`SET LOCAL`). sqlite/mysql `rls` becomes `column`
+- Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa`), email verification (`/email/verify`), SCIM `/scim/v2/Users`
 - `strata.layers.json` records the choices
 
 `APP_ENV=production` calls `assertProductionSecrets()` on boot.

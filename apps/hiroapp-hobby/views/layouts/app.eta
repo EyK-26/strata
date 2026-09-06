@@ -16,6 +16,11 @@
         
       </nav>
     </header>
-    <main><%~ it.body %></main>
+    <main>
+      <% if (it.flash && it.flash.message) { %>
+      <p class="flash flash-<%= it.flash.level %>"><%= it.flash.message %></p>
+      <% } %>
+      <%~ it.body %>
+    </main>
   </body>
 </html>

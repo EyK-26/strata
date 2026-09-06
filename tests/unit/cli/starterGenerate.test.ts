@@ -247,6 +247,10 @@ describe("create-strata generate", () => {
     expect(compose).not.toContain("mysql:");
 
     expect(existsSync(join(app, "views/auth/login.eta"))).toBe(true);
+    expect(existsSync(join(app, "views/auth/register.eta"))).toBe(true);
+    expect(existsSync(join(app, "views/auth/forgot-password.eta"))).toBe(true);
+    const css = await readFile(join(app, "public/assets/site.css"), "utf8");
+    expect(css).toContain("--accent");
     expect(existsSync(join(app, "src/modules/careers"))).toBe(false);
     expect(existsSync(join(app, "resources/views/organizations"))).toBe(false);
     const env = await readFile(join(app, ".env.example"), "utf8");
@@ -303,11 +307,31 @@ describe("create-strata generate", () => {
     expect(defaultLayers().database).toBe("sqlite");
   });
 
-  test("sqlite ignores --tenancy=rls because RLS is Postgres-only", () => {
-    const layers = layersFromFlags(
+  test("sqlite coerces --tenancy=rls to column because RLS is Postgres-only", () => {
+    const sqlite = layersFromFlags(
       parseCreateStrataArgs(["demo", "--database=sqlite", "--tenancy=rls", "--yes"]),
     );
-    expect(layers.tenancy).toBe("none");
+    expect(sqlite.tenancy).toBe("column");
+    const mysql = layersFromFlags(
+      parseCreateStrataArgs(["demo", "--database=mysql", "--tenancy=rls", "--yes"]),
+    );
+    expect(mysql.tenancy).toBe("column");
+  });
+
+  test("sqlite --tenancy=column writes a tenant table", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "tenant-sqlite",
+      "--database=sqlite",
+      "--auth=cookie",
+      "--tenancy=column",
+      "--yes",
+    ]);
+    const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
+    expect(migrate).toContain("CREATE TABLE IF NOT EXISTS tenant");
+    expect(migrate).toContain("tenant_id");
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toContain("TENANCY_DRIVER=column");
   });
 
   test("postgres rls writes a tenant table and isolates the database name", async () => {
@@ -328,6 +352,42 @@ describe("create-strata generate", () => {
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("acme_test");
     expect(env).not.toContain("MYSQL_URL");
+  });
+
+  test("cookie extras write MFA schema, verify views, and a SCIM module", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "extras-app",
+      "--frontend=server-htmx",
+      "--database=sqlite",
+      "--auth=cookie",
+      "--mfa",
+      "--email-verification",
+      "--scim",
+      "--yes",
+    ]);
+    const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
+    expect(migrate).toContain("mfa_secret");
+    expect(migrate).toContain("mfa_enabled");
+    expect(existsSync(join(app, "views/auth/mfa-challenge.eta"))).toBe(true);
+    expect(existsSync(join(app, "views/auth/verify-email.eta"))).toBe(true);
+    expect(existsSync(join(app, "src/bootstrap/pendingMfa.ts"))).toBe(true);
+    const scim = await readFile(join(app, "src/modules/scim/index.ts"), "utf8");
+    expect(scim).toContain("/scim/v2/Users");
+    expect(scim).toContain("createScimAuthMiddleware");
+    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    expect(auth).toContain("/register");
+    expect(auth).toContain("/forgot-password");
+    expect(auth).toContain("/email/verify");
+  });
+
+  test("token API apps write JSON register and password reset", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, ["token-app", "--auth=token", "--yes"]);
+    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    expect(auth).toContain("/api/v1/auth/register");
+    expect(auth).toContain("/api/v1/auth/forgot-password");
+    expect(existsSync(join(app, "views/auth/login.eta"))).toBe(false);
   });
 
   test("refuses an existing directory without --force", async () => {
@@ -405,7 +465,7 @@ describe("create-strata CLI", () => {
     const layers = await promptLayers(
       parseCreateStrataArgs(["demo"]),
       scriptedPrompter({
-        select: ["api", "sqlite", "headers", "array", "sync", "log"],
+        select: ["api", "sqlite", "headers", "none", "array", "sync", "log"],
         confirm: [false],
       }),
     );
@@ -482,7 +542,7 @@ describe("create-strata CLI", () => {
     }
   });
 
-  test("cookie sqlite HTML app serves /login", async () => {
+  test("cookie sqlite HTML app serves welcome, login, register, and signs in", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "cookie-app",
@@ -515,6 +575,28 @@ describe("create-strata CLI", () => {
     process.env.TENANCY_DRIVER = "none";
     process.env.SESSION_SECRET = "dev-session-secret-change-me-please-32ch";
     process.env.AUTH_DEV_HEADERS = "false";
+    process.env.MAIL_DRIVER = "log";
+
+    function cookieHeader(response: Response, previous = ""): string {
+      const jar = new Map<string, string>();
+      for (const part of previous
+        .split(";")
+        .map((item) => item.trim())
+        .filter(Boolean)) {
+        const [name, ...rest] = part.split("=");
+        if (name) {
+          jar.set(name, rest.join("="));
+        }
+      }
+      for (const header of response.headers.getSetCookie()) {
+        const pair = header.split(";")[0] ?? "";
+        const [name, ...rest] = pair.split("=");
+        if (name) {
+          jar.set(name, rest.join("="));
+        }
+      }
+      return [...jar.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+    }
 
     try {
       const { bootstrapApp, createAppServer } = await import(
@@ -523,15 +605,48 @@ describe("create-strata CLI", () => {
       const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
       const { routes } = await bootstrapApp();
       const server = createAppServer(routes, 0);
+      const origin = `http://127.0.0.1:${server.port}`;
       try {
-        const login = await fetch(`http://127.0.0.1:${server.port}/login`);
-        const health = await fetch(`http://127.0.0.1:${server.port}/health`);
-        const html = await login.text();
+        const home = await fetch(`${origin}/`);
+        const login = await fetch(`${origin}/login`);
+        const register = await fetch(`${origin}/register`);
+        const forgot = await fetch(`${origin}/forgot-password`);
+        const health = await fetch(`${origin}/health`);
+        const loginHtml = await login.text();
+        expect(home.status).toBe(200);
+        expect(await home.text()).toContain("Welcome to cookie-app");
         expect(login.status).toBe(200);
-        expect(html).toContain("Sign in");
-        expect(html).toContain('name="_token"');
+        expect(loginHtml).toContain("Sign in");
+        expect(loginHtml).toContain('name="_token"');
+        expect(register.status).toBe(200);
+        expect(await register.text()).toContain("Create account");
+        expect(forgot.status).toBe(200);
+        expect(await forgot.text()).toContain("Forgot password");
         expect(health.status).toBe(200);
         expect(await health.text()).toBe("ok");
+
+        const token = /name="_token" value="([^"]+)"/.exec(loginHtml)?.[1];
+        expect(token).toBeTruthy();
+        const cookies = cookieHeader(login);
+        const signedIn = await fetch(`${origin}/login`, {
+          method: "POST",
+          headers: {
+            cookie: cookies,
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            _token: token ?? "",
+            email: "demo@example.com",
+            password: "password",
+          }),
+          redirect: "manual",
+        });
+        expect(signedIn.status).toBe(302);
+        expect(signedIn.headers.get("location")).toBe("/");
+        const sessionCookies = cookieHeader(signedIn, cookies);
+        const welcome = await fetch(`${origin}/`, { headers: { cookie: sessionCookies } });
+        expect(welcome.status).toBe(200);
+        expect(await welcome.text()).toContain("demo@example.com");
       } finally {
         server.stop();
         await closeDatabase();

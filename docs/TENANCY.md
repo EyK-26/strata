@@ -1,14 +1,22 @@
 # Tenancy and row-level security
 
-Postgres row-level security is a framework feature (`TENANCY_DRIVER=rls`, the default). Set `TENANCY_DRIVER=none` for apps that do not have a `tenant` table. In that mode, tenant middleware is async-local only. It does not run `SET LOCAL` or query `tenant`.
+`TENANCY_DRIVER` chooses how tenant context is stored:
 
-HTTP requests and background jobs must set `app.tenant_id` on the connection that runs queries (`runWithTenantDatabase()`) when RLS is on. Migrations and seeds use `runWithMigrationBypass()`.
+| Driver | Database | What it does |
+|--------|----------|--------------|
+| `none` | any | No `tenant` table. Middleware still sets an async-local default tenant (`id` 1). It does not query `tenant` or run `SET LOCAL`. |
+| `column` | any | Creates a `tenant` table and `users.tenant_id`. Requests resolve the tenant in application code (ALS). No Postgres `SET LOCAL` / `set_config`. Use this on SQLite and MySQL, or on Postgres when you do not want RLS. |
+| `rls` | Postgres | Same tenant table plus `SET LOCAL` / `set_config('app.tenant_id')` on the connection that runs queries. SQLite and MySQL cannot do this. `create-strata` coerces `--tenancy=rls` to `column` on those engines. |
+
+The default in core (unset env) is `rls`. Generated apps write the driver you picked into `.env.example`. Hobby SQLite defaults to `none`.
+
+HTTP requests and background jobs must call `runWithTenantDatabase()` when RLS is on so `app.tenant_id` is set on the connection. Migrations and seeds use `runWithMigrationBypass()`. `column` and `none` skip those Postgres session GUCs.
 
 ## Generated HiroApp
 
 `apps/hiroapp` sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`), and stores `users.tenant_id`. It does not emit `ENABLE ROW LEVEL SECURITY` policies or call a helper named `isolateTenantTable`.
 
-Sibling examples `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. SQLite and MySQL starters cannot choose RLS.
+Sibling examples `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. A SQLite or MySQL app that wants tenant rows should pass `--tenancy=column`.
 
 ## Fixture schema (framework tests)
 

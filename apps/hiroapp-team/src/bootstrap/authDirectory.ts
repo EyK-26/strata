@@ -16,18 +16,25 @@ export const starterAuthDirectory: AuthUserDirectory = {
     const rows = await getSql().unsafe<
       Array<{
         id: number;
+        name: string;
         email: string;
         is_admin: number | boolean;
         email_verified_at: Date | string | null;
         password: string;
+        mfa_enabled?: number | boolean;
+        mfa_secret?: string | null;
+        mfa_recovery_codes?: string | null;
       }>
-    >(`SELECT id, email, is_admin, email_verified_at, password FROM users WHERE id = $1`, [id]);
+    >(`SELECT id, name, email, is_admin, email_verified_at, password FROM users WHERE id = $1`, [
+      id,
+    ]);
     const row = rows[0];
     if (!row) {
       throw new Error(`User ${id} not found.`);
     }
     return {
       id: Number(row.id),
+      name: row.name,
       email: row.email,
       role: mapRole(row.is_admin),
       email_verified_at: row.email_verified_at ?? null,
@@ -39,12 +46,16 @@ export const starterAuthDirectory: AuthUserDirectory = {
     const rows = await getSql().unsafe<
       Array<{
         id: number;
+        name: string;
         email: string;
         is_admin: number | boolean;
         email_verified_at: Date | string | null;
         password: string;
+        mfa_enabled?: number | boolean;
+        mfa_secret?: string | null;
+        mfa_recovery_codes?: string | null;
       }>
-    >(`SELECT id, email, is_admin, email_verified_at, password FROM users WHERE email = $1`, [
+    >(`SELECT id, name, email, is_admin, email_verified_at, password FROM users WHERE email = $1`, [
       email.trim().toLowerCase(),
     ]);
     const row = rows[0];
@@ -53,6 +64,7 @@ export const starterAuthDirectory: AuthUserDirectory = {
     }
     return {
       id: Number(row.id),
+      name: row.name,
       email: row.email,
       role: mapRole(row.is_admin),
       email_verified_at: row.email_verified_at ?? null,

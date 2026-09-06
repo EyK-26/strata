@@ -21,6 +21,9 @@ const migrations = [
     password TEXT NOT NULL,
     is_admin BOOLEAN NOT NULL DEFAULT FALSE,
     tenant_id INTEGER NOT NULL DEFAULT 1,
+    mfa_secret TEXT,
+    mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    mfa_recovery_codes TEXT,
     email_verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
@@ -43,14 +46,6 @@ const migrations = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 ];
-
-export async function migrate() {
-  await ensureAppDatabase();
-  const sql = getSql();
-  for (const statement of migrations) {
-    await sql.unsafe(statement);
-  }
-}
 
 export async function seed() {
   await ensureAppDatabase();
@@ -77,24 +72,34 @@ export async function seed() {
   if (Number(userCount) === 0) {
     const password = await hashPassword("password");
     await sql.unsafe(
-      "INSERT INTO users (name, email, password, is_admin) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)",
+      "INSERT INTO users (name, email, password, is_admin, email_verified_at) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)",
       [
         "Demo User",
         "demo@example.com",
         password,
         false,
+        new Date(),
         "Admin User",
         "admin@example.test",
         password,
         true,
+        new Date(),
       ],
     );
   }
 }
 
+export async function migrate() {
+  await ensureAppDatabase();
+  const sql = getSql();
+  for (const statement of migrations) {
+    await sql.unsafe(statement);
+  }
+  await seed();
+}
+
 if (import.meta.main) {
   await migrate();
-  await seed();
   console.log("Database migrated and seeded.");
   process.exit(0);
 }

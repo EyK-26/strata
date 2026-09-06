@@ -8,7 +8,7 @@ const AUTH_STACKS = [
   "cookie-token",
   "cookie-token-jwt",
 ] as const;
-const TENANCY_DRIVERS = ["none", "rls"] as const;
+const TENANCY_DRIVERS = ["none", "column", "rls"] as const;
 const CACHE_DRIVERS = ["array", "redis"] as const;
 const QUEUE_DRIVERS = ["sync", "redis"] as const;
 const MAIL_DRIVERS = ["log", "smtp"] as const;
@@ -88,6 +88,14 @@ function authUsesJwt(auth: AuthStack): boolean {
 
 function authNeedsUsers(auth: AuthStack): boolean {
   return auth !== "headers";
+}
+
+function usesTenantTable(tenancy: TenancyLayer): boolean {
+  return tenancy === "rls" || tenancy === "column";
+}
+
+function htmlAuthKit(auth: AuthStack): boolean {
+  return authUsesCookie(auth);
 }
 
 function needsRedis(layers: Pick<StarterLayers, "cache" | "queue">): boolean {
@@ -181,6 +189,7 @@ export {
   emptyDockerServices,
   enableDockerServices,
   FRONTENDS,
+  htmlAuthKit,
   MAIL_DRIVERS,
   neededDockerServices,
   needsRedis,
@@ -188,4 +197,5 @@ export {
   reconcileDocker,
   selectedDockerServices,
   TENANCY_DRIVERS,
+  usesTenantTable,
 };

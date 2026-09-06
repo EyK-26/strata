@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## Unreleased
+
+- Cookie session `mapUser` / row mapping can pass `email_verified_at` through as `emailVerifiedAt` so HTML email verification works.
+
 ## 0.4.2
 
 - `HttpKernel.wrapApi` uses `withJsonErrorHandling`. Hybrid views do not turn API errors into HTML.

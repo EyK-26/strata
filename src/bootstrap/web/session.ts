@@ -21,6 +21,7 @@ export interface SessionUser {
   email: string;
   learn_subscriber?: boolean;
   is_admin?: boolean;
+  email_verified_at?: Date | string | null;
 }
 
 interface SessionRow {
@@ -32,6 +33,7 @@ interface SessionRow {
   email?: string | null;
   learn_subscriber?: boolean | null;
   is_admin?: boolean | null;
+  email_verified_at?: Date | string | null;
   expires_at?: Date;
 }
 
@@ -85,6 +87,7 @@ function defaultMapSessionUser(user: SessionUser): AuthUser {
   return {
     id: user.id,
     role: user.is_admin ? "admin" : "member",
+    ...(user.email_verified_at !== undefined ? { emailVerifiedAt: user.email_verified_at } : {}),
   };
 }
 
@@ -107,6 +110,7 @@ function mapSessionUserRow(row: SessionRow): SessionUser {
     email,
     learn_subscriber: Boolean(row.learn_subscriber),
     is_admin: Boolean(row.is_admin),
+    ...(row.email_verified_at !== undefined ? { email_verified_at: row.email_verified_at } : {}),
   };
 }
 

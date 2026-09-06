@@ -4,7 +4,11 @@ import { ValidationError } from "@getstrata/core/errors/http";
 import { cache } from "@getstrata/core/facades";
 import { readClientIp, trustForwardedFor } from "@getstrata/core/http/clientIp";
 import { createdResponse, jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
-import { isTenancyEnabled, readTenancyDriver } from "@getstrata/core/tenant/tenancyConfig";
+import {
+  isRlsTenancy,
+  isTenancyEnabled,
+  readTenancyDriver,
+} from "@getstrata/core/tenant/tenancyConfig";
 
 describe("published subpath surface", () => {
   test("http/response exports JSON helpers", () => {
@@ -32,8 +36,10 @@ describe("published subpath surface", () => {
     expect(trustForwardedFor({})).toBe(false);
   });
 
-  test("tenant/tenancyConfig exports the optional RLS driver", () => {
+  test("tenant/tenancyConfig exports rls, column, and none", () => {
     expect(readTenancyDriver({})).toBe("rls");
     expect(isTenancyEnabled({ TENANCY_DRIVER: "none" })).toBe(false);
+    expect(isRlsTenancy({ TENANCY_DRIVER: "column" })).toBe(false);
+    expect(isTenancyEnabled({ TENANCY_DRIVER: "column" })).toBe(true);
   });
 });

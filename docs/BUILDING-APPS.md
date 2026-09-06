@@ -49,6 +49,8 @@ Use `signIn` / `signOut` (or the redirect helpers). Do not mint cookies in contr
 
 `wrapWebGuest` sends already-signed-in people to `/` (pass a path if your home is not `/`). `wrapWebLogin` already includes throttle. Do not wrap it with `wrapWeb` again.
 
+Cookie apps from `create-strata` include restyleable welcome, login, register, and password reset screens in `views/` plus `public/assets/site.css`. Add more routes in `src/modules`.
+
 ## Adding API tokens, JWT, or Basic
 
 ```typescript

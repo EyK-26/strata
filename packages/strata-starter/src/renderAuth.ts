@@ -66,6 +66,14 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
     ? `import { hashApiToken } from "@getstrata/core/auth/tokenHash";\n`
     : "";
 
+  const mfaSelect = layers.extras.mfa ? ", mfa_enabled, mfa_secret, mfa_recovery_codes" : "";
+  const mfaReturn = layers.extras.mfa
+    ? `
+      mfa_enabled: row.mfa_enabled === true || row.mfa_enabled === 1,
+      mfa_secret: row.mfa_secret ?? null,
+      mfa_recovery_codes: row.mfa_recovery_codes ?? null,`
+    : "";
+
   return `import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 ${hashImport}import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
@@ -82,22 +90,27 @@ ${tokenLookup.replace("WHERE t.token_hash = ?", `WHERE t.token_hash = ${placehol
     const rows = await getSql().unsafe<
       Array<{
         id: number;
+        name: string;
         email: string;
         is_admin: number | boolean;
         email_verified_at: Date | string | null;
         password: string;
+        mfa_enabled?: number | boolean;
+        mfa_secret?: string | null;
+        mfa_recovery_codes?: string | null;
       }>
-    >(\`SELECT id, email, is_admin, email_verified_at, password FROM users WHERE id = ${placeholder}\`, [id]);
+    >(\`SELECT id, name, email, is_admin, email_verified_at, password${mfaSelect} FROM users WHERE id = ${placeholder}\`, [id]);
     const row = rows[0];
     if (!row) {
       throw new Error(\`User \${id} not found.\`);
     }
     return {
       id: Number(row.id),
+      name: row.name,
       email: row.email,
       role: mapRole(row.is_admin),
       email_verified_at: row.email_verified_at ?? null,
-      password: row.password,
+      password: row.password,${mfaReturn}
     };
   },
 
@@ -105,13 +118,17 @@ ${tokenLookup.replace("WHERE t.token_hash = ?", `WHERE t.token_hash = ${placehol
     const rows = await getSql().unsafe<
       Array<{
         id: number;
+        name: string;
         email: string;
         is_admin: number | boolean;
         email_verified_at: Date | string | null;
         password: string;
+        mfa_enabled?: number | boolean;
+        mfa_secret?: string | null;
+        mfa_recovery_codes?: string | null;
       }>
     >(
-      \`SELECT id, email, is_admin, email_verified_at, password FROM users WHERE email = ${placeholder}\`,
+      \`SELECT id, name, email, is_admin, email_verified_at, password${mfaSelect} FROM users WHERE email = ${placeholder}\`,
       [email.trim().toLowerCase()],
     );
     const row = rows[0];
@@ -120,10 +137,11 @@ ${tokenLookup.replace("WHERE t.token_hash = ?", `WHERE t.token_hash = ${placehol
     }
     return {
       id: Number(row.id),
+      name: row.name,
       email: row.email,
       role: mapRole(row.is_admin),
       email_verified_at: row.email_verified_at ?? null,
-      password: row.password,
+      password: row.password,${mfaReturn}
     };
   },
 
@@ -195,6 +213,7 @@ export default authProvider;
       mapUser: (user) => ({
         id: user.id,
         role: user.is_admin ? "admin" : "member",
+        ...(user.email_verified_at !== undefined ? { emailVerifiedAt: user.email_verified_at } : {}),
       }),
     });`
     : `    const fallback = ${
@@ -273,304 +292,21 @@ export default authProvider;
 `;
 }
 
-function renderAuthModule(layers: StarterLayers): string | null {
-  if (!authNeedsUsers(layers.auth)) {
-    return null;
-  }
-
-  const cookieRoutes = authUsesCookie(layers.auth)
-    ? `
-    webRoutes({ kernel, dependencies }) {
-      const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
-      return {
-        "/login": {
-          GET: kernel.wrapWebGuest(async (request) =>
-            renderPage(
-              "auth/login.eta",
-              { layout: { title: "Sign in" }, errors: {}, email: "" },
-              request,
-            ),
-          ),
-          POST: wrapWebLogin(
-            kernel,
-            async (request) => {
-              const { fields } = await parseFormBody(request);
-              const email = (fields.email ?? "").trim().toLowerCase();
-              const password = fields.password ?? "";
-              const user = await starterAuthDirectory.findByEmail?.(email);
-              if (!user?.password || !(await verifyPassword(password, user.password))) {
-                return renderPage(
-                  "auth/login.eta",
-                  {
-                    layout: { title: "Sign in" },
-                    errors: { email: "These credentials do not match our records." },
-                    email,
-                  },
-                  request,
-                );
-              }
-              return auth.signInRedirect(
-                {
-                  id: user.id,
-                  name: user.email ?? "",
-                  email: user.email ?? "",
-                  is_admin: user.role === "admin",
-                },
-                "/",
-              );
-            },
-            async () => new Response("Too many login attempts", { status: 429 }),
-          ),
-        },
-        "/logout": {
-          POST: kernel.wrapWebAuthenticatedAllowUnverified((request) =>
-            auth.signOutRedirect(request, "/login"),
-          ),
-        },
-      };
-    },`
-    : "";
-
-  const apiLogin = authUsesToken(layers.auth)
-    ? `
-        "/api/v1/auth/login": {
-          POST: kernel.wrap("api", withErrorHandling(async (request) => {
-            const body = (await request.json()) as { email?: string; password?: string };
-            const email = (body.email ?? "").trim().toLowerCase();
-            const password = body.password ?? "";
-            const user = await starterAuthDirectory.verifyCredentials?.(email, password);
-            if (!user) {
-              return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
-            }
-            const plain = \`strp_\${randomBytes(24).toString("hex")}\`;
-            await getSql().unsafe(
-              "INSERT INTO api_tokens (user_id, name, token_hash, abilities) VALUES (${layers.database === "postgres" ? "$1, $2, $3, $4" : "?, ?, ?, ?"})",
-              [user.id, "spa", hashApiToken(plain), JSON.stringify(["profile:read"])],
-            );
-            return jsonResponse({ token: plain });
-          })),
-        },
-        "/api/v1/auth/me": {
-          GET: kernel.wrapApi(async (request) => {
-            const user = await dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN).requireUser(request);
-            const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
-            return jsonResponse({
-              id: record.id,
-              name: record.email,
-              email: record.email,
-              role: record.role,
-            });
-          }),
-        },`
-    : "";
-
-  const jwtLogin = authUsesJwt(layers.auth)
-    ? `
-        "/api/auth/token": {
-          POST: kernel.wrap("api", withErrorHandling(async (request) => {
-            const body = (await request.json()) as { email?: string; password?: string };
-            const email = (body.email ?? "").trim().toLowerCase();
-            const password = body.password ?? "";
-            const user = await starterAuthDirectory.verifyCredentials?.(email, password);
-            if (!user) {
-              return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
-            }
-            const token = signJwt({
-              sub: user.id,
-              role: user.role,
-              abilities: user.role === "admin" ? ["profile:read", "reports:export"] : ["profile:read"],
-            });
-            return jsonResponse({
-              token,
-              token_type: "bearer",
-              expires_in: jwtTtlSeconds(),
-            });
-          })),
-        },`
-    : "";
-
-  const apiUser =
-    authUsesToken(layers.auth) || authUsesJwt(layers.auth)
-      ? `
-        "/api/user": {
-          GET: kernel.wrapApi(async (request) => {
-            const user = await dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN).requireUser(request);
-            return jsonResponse({ id: user.id, role: user.role ?? "member" });
-          }),
-        },`
-      : "";
-
-  const routesBlock =
-    apiLogin || jwtLogin || apiUser
-      ? `
-    routes({ kernel, dependencies }) {
-      return {${apiLogin}${jwtLogin}${apiUser}
-      };
-    },`
-      : "";
-
-  const imports: string[] = [];
-  if (authUsesToken(layers.auth)) {
-    imports.push(`import { randomBytes } from "node:crypto";`);
-  }
-  imports.push(`import type { AppModule } from "@getstrata/bootstrap/contracts";`);
-  imports.push(`import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";`);
-  if (authUsesCookie(layers.auth)) {
-    imports.push(`import { parseFormBody } from "@getstrata/bootstrap/web/forms";`);
-    imports.push(`import { wrapWebLogin } from "@getstrata/bootstrap/web/routing";`);
-    imports.push(
-      `import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";`,
-    );
-  }
-  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth)) {
-    imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
-  }
-  if (authUsesJwt(layers.auth)) {
-    imports.push(`import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";`);
-  }
-  if (authUsesCookie(layers.auth)) {
-    imports.push(`import { verifyPassword } from "@getstrata/core/auth/password";`);
-  }
-  if (authUsesToken(layers.auth)) {
-    imports.push(`import { hashApiToken } from "@getstrata/core/auth/tokenHash";`);
-  }
-  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth)) {
-    imports.push(
-      `import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";`,
-    );
-  }
-  imports.push(`import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";`);
-  if (authUsesToken(layers.auth)) {
-    imports.push(`import { getSql } from "../../bootstrap/database.ts";`);
-  }
-  if (authUsesCookie(layers.auth)) {
-    imports.push(`import { renderPage } from "../../lib/view.ts";`);
-  }
-
-  return `${imports.join("\n")}
-
-const authModule: AppModule = {
-  name: "auth",
-  order: 2,${routesBlock}${cookieRoutes}
-};
-
-export default authModule;
-`;
-}
-
-function renderSiteModule(layers: StarterLayers): string {
-  const loginHint =
-    authUsesCookie(layers.auth) &&
-    (layers.frontend === "server-htmx" || layers.frontend === "hybrid")
-      ? " Sign in at /login."
-      : "";
-
-  return `import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { withErrorHandling } from "@getstrata/core/http/response";
-import { pingDatabase } from "../../bootstrap/database.ts";
-import { plainText, renderPage } from "../../lib/view.ts";
-
-const siteModule: AppModule = {
-  name: "site",
-  order: 1,
-  routes({ kernel }) {
-    return {
-      "/health": kernel.wrap("api", withErrorHandling(async () => {
-        const dbOk = await pingDatabase();
-        return plainText(dbOk ? "ok" : "degraded");
-      })),
-    };
-  },
-  webRoutes({ kernel }) {
-    return {
-      "/": kernel.wrapWeb(async (request) =>
-        renderPage(
-          "home.eta",
-          {
-            layout: {
-              title: "Home",
-              description: "A new Strata application.${loginHint}",
-            },
-          },
-          request,
-        ),
-      ),
-    };
-  },
-};
-
-export default siteModule;
-`;
-}
-
-function renderLoginView(): string {
-  return `<section class="section">
-  <h1>Sign in</h1>
-  <p>Seeded accounts use password <code>password</code>.</p>
-  <% if (it.errors && it.errors.email) { %>
-  <p class="error"><%= it.errors.email %></p>
-  <% } %>
-  <form method="post" action="/login">
-    <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
-    <label>
-      Email
-      <input type="email" name="email" value="<%= it.email || "demo@example.com" %>" required />
-    </label>
-    <label>
-      Password
-      <input type="password" name="password" value="password" required />
-    </label>
-    <button type="submit">Sign in</button>
-  </form>
-</section>
-`;
-}
-
-function renderLayout(layers: StarterLayers, projectName: string): string {
-  const cookie = authUsesCookie(layers.auth);
-  return `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title><%= it.layout.title %> · ${projectName}</title>
-    <% if (it.layout.description) { %>
-    <meta name="description" content="<%= it.layout.description %>" />
-    <% } %>
-    <link rel="stylesheet" href="/assets/site.css" />
-  </head>
-  <body>
-    <header class="site-header">
-      <a class="brand" href="/">${projectName}</a>
-      <nav>
-        ${cookie ? '<a href="/login">Sign in</a>' : ""}
-      </nav>
-    </header>
-    <main><%~ it.body %></main>
-  </body>
-</html>
-`;
-}
-
-function renderHomeView(projectName: string, layers: StarterLayers): string {
-  const loginLine = authUsesCookie(layers.auth)
-    ? '<p>HTML sign-in: <a href="/login">/login</a> (demo@example.com / password).</p>'
-    : "";
-  return `<section class="section">
-  <h1>Welcome to ${projectName}</h1>
-  <p>Frontend <code>${layers.frontend}</code>, database <code>${layers.database}</code>, auth <code>${layers.auth}</code>.</p>
-  <p>Health check: <a href="/health"><code>/health</code></a>.</p>
-  ${loginLine}
-</section>
-`;
-}
-
 export {
-  renderAuthDirectory,
   renderAuthModule,
-  renderAuthProvider,
+  renderPendingMfaTs,
+  renderSiteModule,
+} from "./renderAuthFlows.ts";
+export {
+  renderForgotPasswordView,
   renderHomeView,
   renderLayout,
   renderLoginView,
-  renderSiteModule,
-};
+  renderMfaChallengeView,
+  renderMfaSetupView,
+  renderRegisterView,
+  renderResetPasswordView,
+  renderSiteCss,
+  renderVerifyEmailView,
+} from "./renderAuthViews.ts";
+export { renderAuthDirectory, renderAuthProvider };

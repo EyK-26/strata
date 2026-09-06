@@ -72,9 +72,9 @@ Use policies (`Policy` / `PolicyGate`) for resource authorization. That is not t
 
 ## Email verification and password confirm
 
-These are kernel helpers. Generated HiroApp turns the env flags on, but it does not ship `/email/verify` pages or account-mutation routes.
+These are kernel helpers. Cookie apps generated with `--email-verification` ship `/email/verify`, a signed-link handler, and a resend form. Token/JWT apps also get `POST /api/v1/auth/verify-email`.
 
-- `FEATURE_EMAIL_VERIFICATION=true` makes `wrapWebAuthenticated` send HTML users with `emailVerifiedAt: null` to `/email/verify`. You still have to add that page and a signed-link handler that calls `markEmailVerified`.
+- `FEATURE_EMAIL_VERIFICATION=true` makes `wrapWebAuthenticated` send HTML users with `emailVerifiedAt: null` to `/email/verify`.
 - Sensitive HTML actions can require a fresh password-confirm cookie (`wrapWebPasswordConfirm`). Add that wrap when you ship password-change HTML.
 
 ## Sessions table
@@ -89,7 +89,7 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 
 - `GuestGuard` (dev headers)
 - HMAC `SessionGuard` as the HTML login
-- `MembershipService` / org membership tables (HiroApp scopes rows with `users.tenant_id` when tenancy is `rls`)
+- `MembershipService` / org membership tables (HiroApp scopes rows with `users.tenant_id` when tenancy is `rls` or `column`)
 - Fixture table `api_token` (generated apps use `api_tokens`)
 
 ## Environment
@@ -102,8 +102,8 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 | `AUTH_DEV_HEADERS` | Must be `false` in production |
 | `TOKEN_HASH_PEPPER` | Required in production when token auth is on |
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Required in production when token auth is on |
-| `FEATURE_MFA` | Env stub in generated HiroApp. Core has TOTP helpers; you still wire enrollment UI |
-| `FEATURE_EMAIL_VERIFICATION` | Env stub plus kernel redirects. Add `/email/verify` yourself |
+| `FEATURE_MFA` | Cookie apps get `/login/mfa` and `/account/mfa`. Core TOTP helpers live in `@getstrata/core/security/totp` |
+| `FEATURE_EMAIL_VERIFICATION` | Kernel redirects plus generated verify pages / signed JSON verify |
 | `FEATURE_OAUTH` | Real OAuth/OIDC. Generated HiroApp does not ship `/auth/oauth/mock` |
 
 Production checks: [PRODUCTION.md](./PRODUCTION.md).

@@ -16,7 +16,7 @@ Pick **one** database engine. Docker Compose is optional and only includes servi
 
 ## What you get
 
-A Bun + TypeScript app on `@getstrata/core` and `@getstrata/bootstrap` that boots. Cookie apps include `/login`. Token apps include `POST /api/v1/auth/login`. Choices are stored in `strata.layers.json`.
+A Bun + TypeScript app on `@getstrata/core` and `@getstrata/bootstrap` that boots. Cookie apps include a restyleable welcome page, `/login`, `/register`, and password reset. Token apps include `POST /api/v1/auth/login` and register/reset. Tenancy is `none`, `column` (any engine), or `rls` (Postgres). Choices are stored in `strata.layers.json`.
 
 In-repo examples (`apps/hiroapp-hobby`, `apps/hiroapp-team`, `apps/hiroapp`) are generated from this same script. See [docs/STARTER.md](../../docs/STARTER.md).
 

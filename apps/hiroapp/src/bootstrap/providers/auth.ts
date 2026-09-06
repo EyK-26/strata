@@ -21,6 +21,9 @@ const authProvider: ServiceProvider = {
       mapUser: (user) => ({
         id: user.id,
         role: user.is_admin ? "admin" : "member",
+        ...(user.email_verified_at !== undefined
+          ? { emailVerifiedAt: user.email_verified_at }
+          : {}),
       }),
     });
     const apiGuard = new DatabaseTokenGuard(container);

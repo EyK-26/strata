@@ -5,6 +5,7 @@ import {
   authUsesToken,
   type DatabaseLayer,
   type StarterLayers,
+  usesTenantTable,
 } from "./types.ts";
 
 function needsEnsure(layers: StarterLayers): boolean {
@@ -235,8 +236,10 @@ export async function closeDatabase() {
 function renderMigrateTs(layers: StarterLayers): string {
   const d = dialectFragments(layers.database);
   const statements: string[] = [];
+  const tenancyOn = usesTenantTable(layers.tenancy);
+  const mfaOn = layers.extras.mfa && authNeedsUsers(layers.auth);
 
-  if (layers.tenancy === "rls") {
+  if (tenancyOn) {
     statements.push(`CREATE TABLE IF NOT EXISTS tenant (
     id ${d.id},
     slug ${d.text} NOT NULL UNIQUE,
@@ -252,14 +255,16 @@ function renderMigrateTs(layers: StarterLayers): string {
   )`);
 
   if (authNeedsUsers(layers.auth)) {
-    const tenantColumn =
-      layers.tenancy === "rls" ? "\n    tenant_id INTEGER NOT NULL DEFAULT 1," : "";
+    const tenantColumn = tenancyOn ? "\n    tenant_id INTEGER NOT NULL DEFAULT 1," : "";
+    const mfaColumns = mfaOn
+      ? `\n    mfa_secret ${d.text},\n    mfa_enabled ${d.bool},\n    mfa_recovery_codes ${d.text},`
+      : "";
     statements.push(`CREATE TABLE IF NOT EXISTS users (
     id ${d.id},
     name ${d.text} NOT NULL,
     email ${d.text} NOT NULL UNIQUE,
     password ${d.text} NOT NULL,
-    is_admin ${d.bool},${tenantColumn}
+    is_admin ${d.bool},${tenantColumn}${mfaColumns}
     email_verified_at ${d.timestampNull},
     created_at ${d.timestamp}
   )`);
@@ -293,13 +298,26 @@ function renderMigrateTs(layers: StarterLayers): string {
 
   const ph = layers.database === "postgres";
   const notePlaceholder = ph ? "$1" : "?";
-  const userPlaceholders = ph ? "$1, $2, $3, $4), ($5, $6, $7, $8" : "?, ?, ?, ?), (?, ?, ?, ?";
-  const adminFlag = ph ? "false, " : "0, ";
+  const verifyOn = layers.extras.emailVerification && authNeedsUsers(layers.auth);
+  const userColumns = verifyOn
+    ? "name, email, password, is_admin, email_verified_at"
+    : "name, email, password, is_admin";
+  const userPlaceholders = verifyOn
+    ? ph
+      ? "$1, $2, $3, $4, $5), ($6, $7, $8, $9, $10"
+      : "?, ?, ?, ?, ?), (?, ?, ?, ?, ?"
+    : ph
+      ? "$1, $2, $3, $4), ($5, $6, $7, $8"
+      : "?, ?, ?, ?), (?, ?, ?, ?";
+  const adminFlag = ph ? "false" : "0";
   const adminTrue = ph ? "true" : "1";
+  const verifiedNow = "new Date()";
+  const userValues = verifyOn
+    ? `["Demo User", "demo@example.com", password, ${adminFlag}, ${verifiedNow}, "Admin User", "admin@example.test", password, ${adminTrue}, ${verifiedNow}]`
+    : `["Demo User", "demo@example.com", password, ${adminFlag}, "Admin User", "admin@example.test", password, ${adminTrue}]`;
 
-  const seedTenant =
-    layers.tenancy === "rls"
-      ? `
+  const seedTenant = tenancyOn
+    ? `
   const [{ count: tenantCount }] = await sql.unsafe<Array<{ count: string | number }>>(
     "SELECT COUNT(*) AS count FROM tenant",
   );
@@ -309,7 +327,7 @@ function renderMigrateTs(layers: StarterLayers): string {
       ["default", "enterprise", "eu"],
     );
   }`
-      : "";
+    : "";
 
   const seedUsers = authNeedsUsers(layers.auth)
     ? `
@@ -319,8 +337,8 @@ function renderMigrateTs(layers: StarterLayers): string {
   if (Number(userCount) === 0) {
     const password = await hashPassword("password");
     await sql.unsafe(
-      "INSERT INTO users (name, email, password, is_admin) VALUES (${userPlaceholders})",
-      ["Demo User", "demo@example.com", password, ${adminFlag}"Admin User", "admin@example.test", password, ${adminTrue}],
+      "INSERT INTO users (${userColumns}) VALUES (${userPlaceholders})",
+      ${userValues},
     );
   }`
     : "";
@@ -337,13 +355,6 @@ const migrations = [
 ${list}
 ];
 
-export async function migrate() {
-${ensureCall(layers)}  const sql = getSql();
-  for (const statement of migrations) {
-    await sql.unsafe(statement);
-  }
-}
-
 export async function seed() {
 ${ensureCall(layers)}  const sql = getSql();
   const [{ count }] = await sql.unsafe<Array<{ count: string | number }>>(
@@ -356,9 +367,16 @@ ${ensureCall(layers)}  const sql = getSql();
   }${seedBlock}
 }
 
+export async function migrate() {
+${ensureCall(layers)}  const sql = getSql();
+  for (const statement of migrations) {
+    await sql.unsafe(statement);
+  }
+  await seed();
+}
+
 if (import.meta.main) {
   await migrate();
-  await seed();
   console.log("Database migrated and seeded.");
   process.exit(0);
 }
@@ -377,7 +395,7 @@ function dropTables(layers: StarterLayers): string[] {
     ordered.push("users");
   }
   ordered.push("notes");
-  if (layers.tenancy === "rls") {
+  if (usesTenantTable(layers.tenancy)) {
     ordered.push("tenant");
   }
   return ordered;
@@ -387,7 +405,7 @@ function renderFreshTs(layers: StarterLayers): string {
   const tables = dropTables(layers);
   const cascade = layers.database === "sqlite" ? "" : " CASCADE";
   return `${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";
-import { migrate, seed } from "./migrate.ts";
+import { migrate } from "./migrate.ts";
 
 const tables = ${JSON.stringify(tables)};
 
@@ -397,7 +415,6 @@ ${ensureCall(layers)}  const sql = getSql();
     await sql.unsafe(\`DROP TABLE IF EXISTS \${table}${cascade}\`);
   }
   await migrate();
-  await seed();
 }
 
 if (import.meta.main) {
@@ -860,11 +877,34 @@ export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
 `;
 }
 
-function renderViewTs(): string {
-  return `import { join } from "node:path";
+function renderViewTs(layers: StarterLayers): string {
+  const authImport = authNeedsUsers(layers.auth)
+    ? `import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { EtaViewEngine, htmlResponse } from "@getstrata/core/view";
+import { starterAuthDirectory } from "../bootstrap/authDirectory.ts";
+`
+    : `import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { EtaViewEngine, htmlResponse } from "@getstrata/core/view";
+`;
 
+  const userBlock = authNeedsUsers(layers.auth)
+    ? `  let currentUser: { id: number; email: string; name: string | null } | null = null;
+  const authUser = currentAuthUser();
+  if (authUser) {
+    try {
+      const row = await starterAuthDirectory.findByIdOrThrow(Number(authUser.id));
+      currentUser = { id: row.id, email: row.email ?? "", name: row.name ?? null };
+    } catch {
+      currentUser = null;
+    }
+  }`
+    : `  const currentUser = null;`;
+
+  return `import { join } from "node:path";
+${authImport}
 const engine = new EtaViewEngine(join(import.meta.dir, "../../views"));
 
 export interface LayoutData {
@@ -876,10 +916,17 @@ export async function renderPage(
   template: string,
   data: Record<string, unknown> & { layout: LayoutData },
   request?: Request,
+  status = 200,
 ): Promise<Response> {
   const csrfToken = request ? resolveCsrfTokenForRequest(request) : "";
-  const html = await engine.render(template, { ...data, csrfToken });
-  return htmlResponse(html);
+  const flash = currentRequestMeta().flash ?? null;
+${userBlock}
+  const html = await engine.render(
+    template,
+    { ...data, csrfToken, flash, currentUser },
+    { request },
+  );
+  return htmlResponse(html, { status });
 }
 
 export function plainText(body: string): Response {

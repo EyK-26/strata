@@ -1,5 +1,5 @@
 import { getSql } from "../bootstrap/database.ts";
-import { migrate, seed } from "./migrate.ts";
+import { migrate } from "./migrate.ts";
 
 const tables = ["notes"];
 
@@ -9,7 +9,6 @@ export async function fresh() {
     await sql.unsafe(`DROP TABLE IF EXISTS ${table}`);
   }
   await migrate();
-  await seed();
 }
 
 if (import.meta.main) {

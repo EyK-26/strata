@@ -1,0 +1,24 @@
+<section class="auth-card">
+  <h1>Authenticator app</h1>
+  <p class="muted">Scan this otpauth URL in your authenticator, then confirm a code. Restyle this page in <code>views/auth/mfa-setup.eta</code>.</p>
+  <p><code><%= it.otpauth %></code></p>
+  <form method="post" action="/account/mfa">
+    <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+    <input type="hidden" name="secret" value="<%= it.secret %>" />
+    <label>
+      Confirmation code
+      <% if (it.errors && it.errors.code) { %><span class="error"><%= it.errors.code %></span><% } %>
+      <input type="text" name="code" value="<%= it.code || "" %>" required />
+    </label>
+    <div class="actions"><button type="submit">Enable MFA</button></div>
+  </form>
+  <% if (it.recoveryCodes) { %>
+  <h2>Recovery codes</h2>
+  <p>Store these once. They will not be shown again.</p>
+  <ul>
+    <% for (const code of it.recoveryCodes) { %>
+    <li><code><%= code %></code></li>
+    <% } %>
+  </ul>
+  <% } %>
+</section>

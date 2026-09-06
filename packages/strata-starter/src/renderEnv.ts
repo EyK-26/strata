@@ -91,6 +91,7 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   if (layers.extras.scim) {
     lines.push("FEATURE_SCIM=true");
     lines.push("SCIM_BEARER_TOKEN=dev-scim-token-change-me");
+    lines.push("# SCIM_TENANT_TOKENS=1:token-a");
   } else {
     lines.push("# FEATURE_SCIM=false");
     lines.push("# SCIM_BEARER_TOKEN=");
@@ -372,13 +373,21 @@ Header auth is on for local use. Send \`x-authenticated-user-id\` (and optional 
 }${
   authUsesCookie(layers.auth)
     ? `
-HTML sign-in lives at \`/login\` (cookie session + CSRF when \`FRONTEND_MODE\` is \`server-htmx\` or \`hybrid\`).
+HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
+
+- Welcome: \`/\`
+- Sign in: \`/login\`
+- Register: \`/register\`
+- Forgot password: \`/forgot-password\`
+- Reset password: signed \`/reset-password\` (mail log when \`MAIL_DRIVER=log\`)
+${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}
+Cookie name is \`strata_session\`. Forms send CSRF as \`_token\`.
 `
     : ""
 }${
   authUsesToken(layers.auth)
     ? `
-Opaque token login: \`POST /api/v1/auth/login\` with \`{ "email", "password" }\`. Send \`Authorization: Bearer\`.
+Opaque token login: \`POST /api/v1/auth/login\` with \`{ "email", "password" }\`. Register: \`POST /api/v1/auth/register\`. Forgot/reset: \`POST /api/v1/auth/forgot-password\` and signed \`POST /api/v1/auth/reset-password\`. Send \`Authorization: Bearer\` after login.
 `
     : ""
 }${

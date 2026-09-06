@@ -53,7 +53,7 @@ Options:
   --frontend          api | server-htmx | spa-react | hybrid
   --database          sqlite | postgres | mysql (one database; not mixed)
   --auth              headers | cookie | token | jwt | cookie-token | cookie-token-jwt
-  --tenancy           none | rls
+  --tenancy           none | column | rls (rls is Postgres SET LOCAL; sqlite/mysql coerce rls to column)
   --cache             array | redis
   --queue             sync | redis
   --mail              log | smtp
@@ -314,8 +314,8 @@ function applyFlagOverrides(base: StarterLayers, flags: ParsedFlags): StarterLay
     spaPrefix: flags.spaPrefix ?? base.spaPrefix,
     extras: { ...base.extras, ...flags.extras },
   };
-  if (next.database !== "postgres") {
-    next.tenancy = "none";
+  if (next.database !== "postgres" && next.tenancy === "rls") {
+    next.tenancy = "column";
   }
   return reconcileDocker(applyDockerFlags(next, flags));
 }

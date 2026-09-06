@@ -13,9 +13,24 @@
     <header class="site-header">
       <a class="brand" href="/">hiroapp-team</a>
       <nav>
+        <% if (it.currentUser) { %>
+        <span class="muted"><%= it.currentUser.email %></span>
+        
+        <form method="post" action="/logout">
+          <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
+          <button class="button-secondary" type="submit">Sign out</button>
+        </form>
+      <% } else { %>
         <a href="/login">Sign in</a>
+        <a href="/register">Create account</a>
+      <% } %>
       </nav>
     </header>
-    <main><%~ it.body %></main>
+    <main>
+      <% if (it.flash && it.flash.message) { %>
+      <p class="flash flash-<%= it.flash.level %>"><%= it.flash.message %></p>
+      <% } %>
+      <%~ it.body %>
+    </main>
   </body>
 </html>
