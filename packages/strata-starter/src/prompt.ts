@@ -10,6 +10,7 @@ import { defaultLayers } from "./presets.ts";
 import { promptConfirm, promptMultiSelect, promptSelect } from "./selectPrompt.ts";
 import {
   DOCKER_SERVICE_LABELS,
+  dockerDatabaseService,
   dockerLayerForNeeded,
   emptyDockerServices,
   extraApplies,
@@ -319,7 +320,17 @@ async function promptDockerLayer(
       true,
     );
   }
+  const databaseService = dockerDatabaseService(layers.database);
+  if (databaseService && services[databaseService]) {
+    services.adminer = await prompter.confirm(
+      `Docker Compose for ${DOCKER_SERVICE_LABELS.adminer}?`,
+      true,
+    );
+  }
   const selected = needed.filter((name) => services[name]);
+  if (services.adminer) {
+    selected.push("adminer");
+  }
   return {
     enabled: selected.length > 0,
     services,

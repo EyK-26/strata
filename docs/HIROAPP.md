@@ -9,8 +9,8 @@ Sibling examples in this repo:
 | App | Layers |
 |-----|--------|
 | `apps/hiroapp-hobby` | SQLite, JSON API, header auth, tenancy none |
-| `apps/hiroapp-team` | Postgres, HTMX, cookie sessions, Redis, metrics |
-| `apps/hiroapp` | Postgres, HTMX, cookies + tokens + JWT, RLS, Redis, SMTP, extras MFA / email verification / SCIM / metrics |
+| `apps/hiroapp-team` | Postgres, HTMX, cookie sessions, Redis, metrics, Adminer |
+| `apps/hiroapp` | Postgres, HTMX, cookies + tokens + JWT, RLS, Redis, SMTP, extras MFA / email verification / SCIM / metrics, Adminer |
 
 Cookie HTML apps include a restyleable welcome page, login, register, and password reset (`views/` and `public/assets/site.css`). HiroApp extras wire MFA pages, `/email/verify`, `/scim/v2/Users`, and `GET /metrics`. Apps that leave the metrics extra off do not get that route.
 

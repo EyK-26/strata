@@ -41,13 +41,13 @@ You can add cache, SMTP, Redis, or another auth mode later by changing env and t
 
 ## Docker vs local tools
 
-Postgres, MySQL, Redis, and SMTP can run in Docker Compose or as installs already on the machine. The wizard asks after layers. It is skipped when those tools are not needed.
+Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is a database UI and is only offered when Postgres or MySQL is in Compose (not SQLite, and not when the database is a local install). The wizard asks after layers.
 
 | Flag | Effect |
 |------|--------|
-| `--docker` | Write Compose for every selected tool that needs a service |
+| `--docker` | Write Compose for every selected tool that needs a service, plus Adminer when the database is in Compose |
 | `--no-docker` | Do not write `docker-compose.yml`; point env at local installs |
-| `--docker-services=postgres,redis` | Compose only for that subset |
+| `--docker-services=postgres,redis` | Compose only for that subset. Add `adminer` to include the UI |
 
 `--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines.
 

@@ -206,7 +206,7 @@ function printNextSteps(projectName: string, layers: StarterLayers, compose: boo
   const neededTools = neededDockerServices(layers);
   const localOn = neededTools.filter((name) => !dockerOn.includes(name));
   const dockerSummary =
-    neededTools.length === 0 ? "none" : dockerOn.length > 0 ? dockerOn.join("+") : "local";
+    dockerOn.length > 0 ? dockerOn.join("+") : neededTools.length === 0 ? "none" : "local";
   console.log(`\nCreated Strata app in ${projectName}/\n`);
   console.log(
     `frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}  docker=${dockerSummary}`,
@@ -216,6 +216,9 @@ function printNextSteps(projectName: string, layers: StarterLayers, compose: boo
   console.log("  cp .env.example .env");
   if (compose) {
     console.log("  docker compose up -d");
+  }
+  if (dockerOn.includes("adminer")) {
+    console.log("  Adminer: http://localhost:8080");
   }
   if (localOn.length > 0) {
     console.log(`  Point env at local ${localOn.join(", ")} (see README).`);

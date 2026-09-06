@@ -22,7 +22,8 @@
         "postgres": true,
         "mysql": false,
         "redis": true,
-        "mailpit": true
+        "mailpit": true,
+        "adminer": true
       }
     }
   },
