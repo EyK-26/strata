@@ -8,6 +8,7 @@ import {
   type DatabaseLayer,
   DOCKER_SERVICE_NAMES,
   type DockerServiceName,
+  dockerDatabaseService,
   dockerLayerForNeeded,
   enableDockerServices,
   FRONTENDS,
@@ -65,7 +66,7 @@ Options:
   --extras            Interactive extras list (MFA, email verification, SCIM, metrics)
   --docker            Write Docker Compose for every selected tool that needs a service
   --no-docker         Skip docker-compose.yml; use installs already on this machine
-  --docker-services   Subset: postgres, mysql, redis, mailpit (comma-separated)
+  --docker-services   Subset: postgres, mysql, redis, mailpit, adminer (comma-separated)
   --force             Replace an existing directory
   --yes, --no-interactive
   -h, --help
@@ -281,7 +282,17 @@ function applyDockerFlags(layers: StarterLayers, flags: ParsedFlags): StarterLay
   }
 
   if (flags.dockerServices) {
-    const selected = flags.dockerServices.filter((name) => needed.includes(name));
+    const databaseService = dockerDatabaseService(layers.database);
+    const selected = flags.dockerServices.filter((name) => {
+      if (needed.includes(name)) {
+        return true;
+      }
+      return (
+        name === "adminer" &&
+        databaseService !== null &&
+        flags.dockerServices?.includes(databaseService) === true
+      );
+    });
     return {
       ...layers,
       docker: {

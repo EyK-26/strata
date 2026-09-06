@@ -167,6 +167,7 @@ describe("create-strata args", () => {
     expect(layers.docker.enabled).toBe(true);
     expect(layers.docker.services.postgres).toBe(false);
     expect(layers.docker.services.redis).toBe(true);
+    expect(layers.docker.services.adminer).toBe(false);
   });
 
   test("parses docker flags and last-wins --no-docker", () => {
@@ -181,6 +182,7 @@ describe("create-strata args", () => {
     expect(docker.docker).toBe(true);
     expect(layersFromFlags(docker).docker.services.postgres).toBe(true);
     expect(layersFromFlags(docker).docker.services.redis).toBe(true);
+    expect(layersFromFlags(docker).docker.services.adminer).toBe(true);
 
     const local = parseCreateStrataArgs([
       "acme",
@@ -252,7 +254,7 @@ describe("create-strata generate", () => {
     expect(pkg.scripts.dev).toBe("strata dev");
   });
 
-  test("postgres HTML with docker writes postgres and redis only", async () => {
+  test("postgres HTML with docker writes postgres, redis, mailpit, and adminer", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "ent-app",
@@ -270,7 +272,11 @@ describe("create-strata generate", () => {
     expect(compose).toContain("postgres:");
     expect(compose).toContain("redis:");
     expect(compose).toContain("mailpit:");
+    expect(compose).toContain("adminer:");
+    expect(compose).toContain("ADMINER_DEFAULT_SERVER: postgres");
     expect(compose).not.toContain("mysql:");
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("http://localhost:8080");
 
     expect(existsSync(join(app, "views/auth/login.eta"))).toBe(true);
     expect(existsSync(join(app, "views/auth/register.eta"))).toBe(true);
@@ -321,6 +327,27 @@ describe("create-strata generate", () => {
     const compose = await readFile(join(app, "docker-compose.yml"), "utf8");
     expect(compose).toContain("postgres:");
     expect(compose).not.toContain("redis:");
+    expect(compose).not.toContain("adminer:");
+  });
+
+  test("--docker-services=postgres,adminer writes Adminer next to Postgres", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "team-pg-ui",
+      "--database=postgres",
+      "--cache=redis",
+      "--queue=redis",
+      "--docker-services=postgres,adminer",
+      "--yes",
+    ]);
+
+    const compose = await readFile(join(app, "docker-compose.yml"), "utf8");
+    expect(compose).toContain("postgres:");
+    expect(compose).toContain("adminer:");
+    expect(compose).toContain("ADMINER_DEFAULT_SERVER: postgres");
+    expect(compose).not.toContain("redis:");
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("Adminer: http://localhost:8080");
   });
 
   test("example app maps are sqlite API, postgres HTML, and postgres HTMX enterprise", () => {
@@ -330,6 +357,9 @@ describe("create-strata generate", () => {
     expect(exampleAppLayers("hiroapp").database).toBe("postgres");
     expect(exampleAppLayers("hiroapp").tenancy).toBe("rls");
     expect(exampleAppLayers("hiroapp").docker.services.mysql).toBe(false);
+    expect(exampleAppLayers("hiroapp-hobby").docker.services.adminer).toBe(false);
+    expect(exampleAppLayers("hiroapp-team").docker.services.adminer).toBe(true);
+    expect(exampleAppLayers("hiroapp").docker.services.adminer).toBe(true);
     expect(defaultLayers().database).toBe("sqlite");
   });
 
@@ -449,6 +479,7 @@ describe("create-strata CLI", () => {
     expect(out).toContain("create-strata");
     expect(out).toContain("--frontend");
     expect(out).toContain("--docker");
+    expect(out).toContain("adminer");
     expect(out).not.toContain("--kit");
     expect(out).not.toContain("hiroapp-enterprise");
   });
@@ -534,11 +565,24 @@ describe("create-strata CLI", () => {
       scriptedPrompter({
         select: ["server-htmx", "postgres", "cookie", "none", "redis", "redis", "log", "mix"],
         multiSelect: [[]],
-        confirm: [true, false],
+        confirm: [true, false, true],
       }),
     );
     expect(mix.docker.services.postgres).toBe(true);
     expect(mix.docker.services.redis).toBe(false);
+    expect(mix.docker.services.adminer).toBe(true);
+
+    const dbLocal = await promptLayers(
+      parseCreateStrataArgs(["demo"]),
+      scriptedPrompter({
+        select: ["server-htmx", "postgres", "cookie", "none", "redis", "redis", "log", "mix"],
+        multiSelect: [[]],
+        confirm: [false, true],
+      }),
+    );
+    expect(dbLocal.docker.services.postgres).toBe(false);
+    expect(dbLocal.docker.services.redis).toBe(true);
+    expect(dbLocal.docker.services.adminer).toBe(false);
   });
 
   test("wizard extras list can enable MFA and SCIM one by one", async () => {

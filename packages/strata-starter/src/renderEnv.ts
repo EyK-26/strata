@@ -151,6 +151,18 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
       - mysqldata:/var/lib/mysql`);
   }
 
+  if (selectedSet.has("adminer")) {
+    const server = selectedSet.has("mysql") ? "mysql" : "postgres";
+    services.push(`  adminer:
+    image: adminer:5.4.2
+    environment:
+      ADMINER_DEFAULT_SERVER: ${server}
+    depends_on:
+      - ${server}
+    ports:
+      - "8080:8080"`);
+  }
+
   if (selectedSet.has("redis")) {
     services.push(`  redis:
     image: redis:7-alpine
@@ -295,6 +307,17 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
       "```",
       "",
     );
+    if (dockerSet.has("adminer")) {
+      const mysql = layers.database === "mysql";
+      const system = mysql ? "MySQL" : "PostgreSQL";
+      const server = mysql ? "mysql" : "postgres";
+      const username = mysql ? "root" : "postgres";
+      const password = mysql ? "root" : "postgres";
+      lines.push(
+        `Adminer: http://localhost:8080 (${system}, server \`${server}\`, username \`${username}\`, password \`${password}\`).`,
+        "",
+      );
+    }
   }
 
   if (localOn.length > 0) {

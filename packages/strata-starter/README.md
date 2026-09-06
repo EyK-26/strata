@@ -12,7 +12,7 @@ bunx create-strata html --frontend server-htmx --database postgres --auth cookie
 
 Layer flags: `--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`, `--spa-prefix`, plus extras (`--mfa`, `--scim`, `--metrics`, ...).
 
-Pick **one** database engine. Docker Compose is optional and only includes services for the tools you selected (`--docker`, `--no-docker`, `--docker-services=postgres,redis`).
+Pick **one** database engine. Docker Compose is optional and only includes services for the tools you selected (`--docker`, `--no-docker`, `--docker-services=postgres,redis`). `--docker` with Postgres or MySQL also writes Adminer.
 
 ## What you get
 

@@ -12,7 +12,7 @@ const TENANCY_DRIVERS = ["none", "column", "rls"] as const;
 const CACHE_DRIVERS = ["array", "redis"] as const;
 const QUEUE_DRIVERS = ["sync", "redis"] as const;
 const MAIL_DRIVERS = ["log", "smtp"] as const;
-const DOCKER_SERVICE_NAMES = ["postgres", "mysql", "redis", "mailpit"] as const;
+const DOCKER_SERVICE_NAMES = ["postgres", "mysql", "redis", "mailpit", "adminer"] as const;
 const EXAMPLE_APP_IDS = ["hiroapp-hobby", "hiroapp-team", "hiroapp"] as const;
 
 type FrontendMode = (typeof FRONTENDS)[number];
@@ -30,6 +30,7 @@ const DOCKER_SERVICE_LABELS: Record<DockerServiceName, string> = {
   mysql: "MySQL",
   redis: "Redis",
   mailpit: "SMTP (Mailpit)",
+  adminer: "Adminer (database UI)",
 };
 
 interface CorporateExtras {
@@ -113,7 +114,14 @@ function needsRedis(layers: Pick<StarterLayers, "cache" | "queue">): boolean {
 }
 
 function emptyDockerServices(): Record<DockerServiceName, boolean> {
-  return { postgres: false, mysql: false, redis: false, mailpit: false };
+  return { postgres: false, mysql: false, redis: false, mailpit: false, adminer: false };
+}
+
+function dockerDatabaseService(database: DatabaseLayer): "postgres" | "mysql" | null {
+  if (database === "postgres" || database === "mysql") {
+    return database;
+  }
+  return null;
 }
 
 function enableDockerServices(
@@ -147,7 +155,12 @@ function selectedDockerServices(layers: StarterLayers): DockerServiceName[] {
   if (!layers.docker.enabled) {
     return [];
   }
-  return neededDockerServices(layers).filter((name) => layers.docker.services[name]);
+  const selected = neededDockerServices(layers).filter((name) => layers.docker.services[name]);
+  const databaseService = dockerDatabaseService(layers.database);
+  if (databaseService && selected.includes(databaseService) && layers.docker.services.adminer) {
+    selected.push("adminer");
+  }
+  return selected;
 }
 
 function reconcileDocker(layers: StarterLayers): StarterLayers {
@@ -166,7 +179,11 @@ function dockerLayerForNeeded(layers: DockerNeedles, enabled: boolean): DockerLa
   if (!enabled || needed.length === 0) {
     return { enabled: false, services: emptyDockerServices() };
   }
-  return { enabled: true, services: enableDockerServices(needed) };
+  const names: DockerServiceName[] = [...needed];
+  if (dockerDatabaseService(layers.database)) {
+    names.push("adminer");
+  }
+  return { enabled: true, services: enableDockerServices(names) };
 }
 
 export type {
@@ -194,6 +211,7 @@ export {
   DATABASES,
   DOCKER_SERVICE_LABELS,
   DOCKER_SERVICE_NAMES,
+  dockerDatabaseService,
   dockerLayerForNeeded,
   EXAMPLE_APP_IDS,
   emptyDockerServices,
