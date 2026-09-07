@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 1.0.5
+
+- `@getstrata/core/database/mysqlConnection` re-exports the barrel so the barrel and the subpath share one lazy `mysql2` load. Importing both in one process no longer starts two independent loaders.
+- npm publish uses GitHub Actions OIDC trusted publishing and provenance. Configure trusted publishers on all five packages before tagging `v1.0.5`. A failed or partial publish can be retried with Actions, Release, Run workflow; versions already on npm are skipped. The GitHub Release waits until npm succeeds.
+
 ## 1.0.4
 
 - `isProductionEnv()` treats `APP_ENV` or `NODE_ENV` `production` as production (case-insensitive), treats `staging` as production, and default-denies unrecognized `APP_ENV` values such as `prod`.

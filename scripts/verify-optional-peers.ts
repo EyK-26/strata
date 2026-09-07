@@ -39,11 +39,20 @@ const mysqlEntry = await readFile(
   join(ROOT, "packages/strata-core/dist/entries/database/mysqlConnection.js"),
   "utf8",
 );
-if (!mysqlEntry.includes('import("mysql2/promise")')) {
-  errors.push("database/mysqlConnection must lazy-import mysql2/promise");
-}
-if (/from\s+["']mysql2/.test(mysqlEntry)) {
-  errors.push("database/mysqlConnection has a static mysql2 import");
+const mysqlIsSharedShim = /export \* from ["'][./]*index\.js["']/.test(mysqlEntry);
+if (mysqlIsSharedShim) {
+  if (!indexJs.includes('import("mysql2/promise")')) {
+    errors.push(
+      "shared mysqlConnection shim re-exports the barrel, which must lazy-import mysql2/promise",
+    );
+  }
+} else {
+  if (!mysqlEntry.includes('import("mysql2/promise")')) {
+    errors.push("database/mysqlConnection must lazy-import mysql2/promise");
+  }
+  if (/from\s+["']mysql2/.test(mysqlEntry)) {
+    errors.push("database/mysqlConnection has a static mysql2 import");
+  }
 }
 
 const mysqlTypes = await readFile(

@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/cli",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Strata CLI: framework commands for Bun apps (dev, start, migrate, run)",
   "type": "module",
   "license": "MIT",

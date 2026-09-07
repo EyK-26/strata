@@ -14,6 +14,7 @@ export const CORE_SHARED_SUBPATHS = [
   "auth/membershipContext",
   "database",
   "database/dialect",
+  "database/mysqlConnection",
   "database/baseRepository",
   "database/bindConnection",
   "database/boundConnection",
