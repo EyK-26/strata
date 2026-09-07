@@ -13,7 +13,8 @@
   "dependencies": {
     "@getstrata/bootstrap": "workspace:*",
     "@getstrata/cli": "workspace:*",
-    "@getstrata/core": "workspace:*"
+    "@getstrata/core": "workspace:*",
+    "eta": "^4.6.0"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",

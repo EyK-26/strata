@@ -11,9 +11,11 @@ describe("starter template CLI", () => {
       dependencies: Record<string, string>;
     };
 
-    expect(packageJson.dependencies["@getstrata/cli"]).toBe("^1.0.2");
-    expect(packageJson.dependencies["@getstrata/core"]).toBe("^1.0.2");
-    expect(packageJson.dependencies["@getstrata/bootstrap"]).toBe("^1.0.2");
+    expect(packageJson.dependencies["@getstrata/cli"]).toBe("^1.0.3");
+    expect(packageJson.dependencies["@getstrata/core"]).toBe("^1.0.3");
+    expect(packageJson.dependencies["@getstrata/bootstrap"]).toBe("^1.0.3");
+    expect(packageJson.dependencies.eta).toBe("^4.6.0");
+    expect(packageJson.dependencies.mysql2).toBeUndefined();
     expect(packageJson.scripts.dev).toBe("strata dev");
     expect(packageJson.scripts.start).toBe("strata start");
     expect(packageJson.scripts["db:migrate"]).toBe("strata migrate");

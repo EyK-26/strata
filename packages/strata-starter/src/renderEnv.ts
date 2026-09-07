@@ -304,10 +304,11 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^1.0.2",
-        "@getstrata/cli": "^1.0.2",
-        "@getstrata/core": "^1.0.2",
+        "@getstrata/bootstrap": "^1.0.3",
+        "@getstrata/cli": "^1.0.3",
+        "@getstrata/core": "^1.0.3",
       };
+  coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
     coreDeps.mysql2 = "^3.24.3";
   }
@@ -438,6 +439,7 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
   rows.push(
     "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) until the database ping succeeds and the migrated `notes` table exists. Docker HEALTHCHECK uses this path. |",
+    '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
   );
   rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
 

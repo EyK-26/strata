@@ -127,6 +127,11 @@ export {
   registerModelClass,
   registerModelRepository,
 } from "../core/database/model.ts";
+export type {
+  MysqlConnection,
+  MysqlExecutable,
+  MysqlPool,
+} from "../core/database/mysqlConnection.ts";
 export {
   createMysqlConnection,
   createMysqlConnectionFromPool,

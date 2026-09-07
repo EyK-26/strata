@@ -2,6 +2,12 @@
 
 Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script.
 
+## 1.0.3
+
+- Generated apps depend on `eta` themselves (welcome HTML). `mysql2` is added only for `--database mysql`. Core no longer ships either as a hard dependency.
+- Generated apps depend on `@getstrata/*@^1.0.3`.
+- Generated `docs/API.md` documents `GET /ready` again. 1.0.2 removed it on the premise that generated apps only serve `/health`; they spread `createHealthRoutes()`, so `/ready` is live. The row states what it checks (database ping, Redis ping only when `REDIS_URL` is set, no schema probe) and that `/health` remains the deploy gate. The boot test asserts `/ready` 200 JSON next to `/health` 503 on an unmigrated database.
+
 ## 1.0.2
 
 - Generated `docs/API.md` lists `GET /health` only (plain text `ok`, or 503 `degraded` until the database ping and the `notes` table exist). It no longer claims a `GET /ready` JSON twin. Docker HEALTHCHECK already probes `/health`.
