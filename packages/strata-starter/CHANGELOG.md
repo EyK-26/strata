@@ -6,6 +6,7 @@ Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue
 
 - Generated apps depend on `eta` themselves (welcome HTML). `mysql2` is added only for `--database mysql`. Core no longer ships either as a hard dependency.
 - Generated apps depend on `@getstrata/*@^1.0.3`.
+- Generated `docs/API.md` documents `GET /ready` again. 1.0.2 removed it on the premise that generated apps only serve `/health`; they spread `createHealthRoutes()`, so `/ready` is live. The row states what it checks (database ping, Redis ping only when `REDIS_URL` is set, no schema probe) and that `/health` remains the deploy gate. The boot test asserts `/ready` 200 JSON next to `/health` 503 on an unmigrated database.
 
 ## 1.0.2
 

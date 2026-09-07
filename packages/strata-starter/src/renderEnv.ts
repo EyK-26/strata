@@ -439,7 +439,7 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
   rows.push(
     "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) until the database ping succeeds and the migrated `notes` table exists. Docker HEALTHCHECK uses this path. |",
-    '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"ok"}}` (200) or `not_ready` (503). Pings the database and Redis when `REDIS_URL` is set; it does not check the schema, so use `/health` as the deploy gate. |',
+    '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
   );
   rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
 

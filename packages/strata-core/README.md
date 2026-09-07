@@ -39,7 +39,7 @@ The engine is your choice, and an app should have one primary engine. Postgres a
 
 Full-text `tsMatch` is PostgreSQL only.
 
-`eta` and `mysql2` are optional peers. Core loads them with `import()` the first time you render a view or open a MySQL connection. SQLite and Postgres apps do not install `mysql2`. Generated apps add `eta` because the welcome page uses it. MySQL apps also add `mysql2`. Import MySQL helpers from `@getstrata/core/database/mysqlConnection`, not the root barrel.
+`eta` and `mysql2` are optional peers. Core loads them with `import()` the first time you render a view or open a MySQL connection. SQLite and Postgres apps do not install `mysql2`. Generated apps add `eta` because the welcome page uses it. MySQL apps also add `mysql2`. The MySQL helpers are exported from `@getstrata/core/database/mysqlConnection`, `@getstrata/core/database`, and the root barrel; importing any of them does not install `mysql2`, and apps should prefer the subpath as with every other core module.
 
 ## Views
 
