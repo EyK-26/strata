@@ -1,15 +1,11 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { appDevSecret } from "../runtime/appKeyPrefix";
+import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 const OAUTH_STATE_COOKIE = "oauth_state";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 function resolveOAuthStateSecret(): string {
-  return (
-    process.env.OAUTH_STATE_SECRET?.trim() ||
-    process.env.ADMIN_API_TOKEN?.trim() ||
-    appDevSecret("oauth-state-secret")
-  );
+  return requireConfiguredSecret(["OAUTH_STATE_SECRET", "ADMIN_API_TOKEN"], "oauth-state-secret");
 }
 
 function signOAuthState(state: string, issuedAt: number): string {

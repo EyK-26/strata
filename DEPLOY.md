@@ -14,20 +14,20 @@ How to run HiroApp (or your Strata app) in staging and production.
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `REDIS_URL` | Yes (prod) | Redis for cache, queues, shared rate limiting |
-| `APP_ENV` | Yes | `local`, `staging`, or `production` |
+| `APP_ENV` | Yes | `local` or `production`. `staging` is treated as production for secret checks |
 | `APP_DEBUG` | No | Set `false` in staging/production |
-| `AUTH_DEV_HEADERS` | Prod | Must be `false` |
+| `AUTH_DEV_HEADERS` | Staging and prod | Must be `false` |
 | `API_PREFIX` | No | HiroApp uses `/api` |
 | `FRONTEND_MODE` | No | `api`, `server-htmx`, `spa-react`, or `hybrid` |
-| `SESSION_SECRET` | Prod (HTML) | Signs cookie-session payloads. Required when views are on (`server-htmx` or `hybrid`) |
-| `JWT_SECRET` | No | HS256 key for JWT mint. Falls back to `SESSION_SECRET` |
+| `SESSION_SECRET` | Staging and prod (HTML) | Signs cookie-session payloads. Required when views are on (`server-htmx` or `hybrid`) |
+| `JWT_SECRET` | Staging and prod if you mint JWTs | HS256 key. Locally falls back to `SESSION_SECRET`. Staging and production do not derive it from the app name |
 | `TRUST_FORWARDED_FOR` | No | Set `true` only behind a trusted proxy |
 | `METRICS_TOKEN` | Prod | Bearer token for `GET /metrics`. Production returns 404 when unset |
 | `SCIM_BEARER_TOKEN` | If SCIM on | Rotate from published test defaults |
 | `KMS_ENCRYPTION_KEY` | If encryption on | 32-byte hex/base64 key |
 | `SIEM_EXPORT_URL` | If SIEM on | Audit log HTTP ingest |
 
-Production startup refuses published seed tokens (`strata-*-test-token` and leftover historical strings). See `src/bootstrap/secretsGuard.ts` and [docs/PRODUCTION.md](docs/PRODUCTION.md).
+Production and staging startup refuse published seed tokens (`strata-*-test-token` and leftover historical strings). See `src/bootstrap/secretsGuard.ts` and [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
 ## Local development
 
@@ -41,6 +41,8 @@ bun run hiroapp:dev
 See [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
 
 ## Staging
+
+`APP_ENV=staging` runs the same secret checks as production. Set `SESSION_SECRET`, `AUTH_DEV_HEADERS=false`, and any feature secrets before booting.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --wait

@@ -55,11 +55,18 @@ if (/from\s+["']mysql2/.test(mysqlTypes)) {
 }
 
 const viewEntry = await readFile(join(ROOT, "packages/strata-core/dist/entries/view.js"), "utf8");
-if (!viewEntry.includes('import("eta")')) {
-  errors.push("view entry must lazy-import eta");
-}
-if (/from\s+["']eta["']/.test(viewEntry)) {
-  errors.push("view entry has a static eta import");
+const viewIsSharedShim = /export \* from ["'][./]*index\.js["']/.test(viewEntry);
+if (viewIsSharedShim) {
+  if (!indexJs.includes('import("eta")')) {
+    errors.push("shared view shim re-exports the barrel, which must lazy-import eta");
+  }
+} else {
+  if (!viewEntry.includes('import("eta")')) {
+    errors.push("view entry must lazy-import eta");
+  }
+  if (/from\s+["']eta["']/.test(viewEntry)) {
+    errors.push("view entry has a static eta import");
+  }
 }
 
 if (errors.length > 0) {

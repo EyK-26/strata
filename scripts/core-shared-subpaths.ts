@@ -28,15 +28,21 @@ export const CORE_SHARED_SUBPATHS = [
   "events",
   "http",
   "http/contentSecurityPolicy",
+  "http/loginThrottleMiddleware",
   "http/middleware",
   "http/requestMetaContext",
+  "http/webErrorResponse",
+  "lifecycle/gracefulShutdown",
   "notifications",
   "queue/jobRegistry",
+  "runtime/appKeyPrefix",
   "runtime/applicationRegistry",
+  "security/safeUrl",
   "security/securityEvents",
   "tenant/tenantContext",
   "tenant/tenantMiddleware",
   "tracing/traceContext",
+  "view",
 ] as const;
 
 export type CoreSharedSubpath = (typeof CORE_SHARED_SUBPATHS)[number];

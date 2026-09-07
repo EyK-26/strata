@@ -80,6 +80,15 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.createCacheStore).toBe("function");
     expect(typeof core.configureContentSecurityPolicy).toBe("function");
     expect(typeof core.configureWebErrorView).toBe("function");
+    expect(typeof core.isProductionEnv).toBe("function");
+    expect(typeof core.envFlagEnabled).toBe("function");
+    expect(typeof core.appDisplayName).toBe("function");
+    expect(typeof core.requireConfiguredSecret).toBe("function");
     expect(typeof core.loginRedirectLocation).toBe("function");
+    expect(typeof core.assertSafeOutboundUrl).toBe("function");
+    expect(typeof core.webErrorResponse).toBe("function");
+    expect(typeof core.renderWebErrorHtml).toBe("function");
+    expect(typeof core.createMemoryLoginThrottleMiddleware).toBe("function");
+    expect(typeof core.resolveLoginIdentity).toBe("function");
   });
 });

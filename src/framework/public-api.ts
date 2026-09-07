@@ -36,6 +36,9 @@ export {
   currentOrgRole,
   hasMinimumOrgRole,
   hasOrgMembership,
+  membershipContext,
+  membershipRepository,
+  resetMembershipLookupForTests,
   resolveMembershipLookup,
   runWithMembershipContext,
 } from "../core/auth/membershipContext.ts";
@@ -84,6 +87,7 @@ export {
   getDefaultDatabasePool,
   getDefaultDatabaseQuery,
   registerDefaultDatabasePool,
+  resetDefaultDatabasePoolForTests,
 } from "../core/database/defaultConnection.ts";
 export type { SqlDialect } from "../core/database/dialect.ts";
 export {
@@ -94,6 +98,7 @@ export {
   sqlTimestamp,
   useSqlDialect,
 } from "../core/database/dialect.ts";
+export { mapDatabaseError, withDatabaseErrorHandling } from "../core/database/errors.ts";
 export { Factory } from "../core/database/factory.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "../core/database/inflection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";
@@ -117,6 +122,7 @@ export {
   dehydrateValue,
   filterMassAssignable,
   HasManyRelationQuery,
+  HasManyThroughRelationQuery,
   HasOneRelationQuery,
   hydrateValue,
   Model,
@@ -145,11 +151,33 @@ export {
   runOnNamedConnection,
   unregisterNamedConnection,
 } from "../core/database/namedConnections.ts";
+export {
+  buildAdvancedWhereClause,
+  buildCountQuery,
+  buildDeleteByIdQuery,
+  buildGroupedCountQuery,
+  buildInsertQuery,
+  buildJoinClause,
+  buildOrderByClause,
+  buildProjectionQuery,
+  buildQueryWhereClause,
+  buildRestoreByIdQuery,
+  buildSelectQuery,
+  buildSoftDeleteByIdQuery,
+  buildUpdateQuery,
+  buildWhereClause,
+  parseQualifiedColumn,
+  qualifyColumn,
+  quoteIdentifier,
+  resolveQualifiedColumn,
+  resolveSoftDeleteColumn,
+} from "../core/database/query.ts";
 export { createDatabaseQueryProxy } from "../core/database/queryProxy.ts";
 export type {
   BelongsToManyRelation,
   BelongsToRelation,
   HasManyRelation,
+  HasManyThroughRelation,
   HasOneRelation,
   MorphManyRelation,
   MorphOneRelation,
@@ -159,10 +187,12 @@ export {
   belongsTo,
   belongsToMany,
   hasMany,
+  hasManyThrough,
   hasOne,
   indexBelongsToManyRelation,
   indexBelongsToRelation,
   indexHasManyRelation,
+  indexHasManyThroughRelation,
   indexHasOneRelation,
   indexMorphManyRelation,
   indexMorphOneRelation,
@@ -237,7 +267,7 @@ export {
   ValidationError,
 } from "../core/errors/http.ts";
 export type { EventListener } from "../core/events/eventBus.ts";
-export { EventBus, eventBus } from "../core/events/eventBus.ts";
+export { EventBus, eventBus, readSharedEventBus } from "../core/events/eventBus.ts";
 export { modelEventName } from "../core/events/index.ts";
 export {
   auth,
@@ -260,6 +290,8 @@ export type {
 export {
   configureContentSecurityPolicy,
   generateCspNonce,
+  HTMX_2_0_4_INDICATOR_STYLE_HASH,
+  resetContentSecurityPolicyForTests,
   resolveContentSecurityPolicy,
   resolveHtmlContentSecurityPolicy,
   serverHtmxContentSecurityPolicy,
@@ -281,20 +313,28 @@ export {
 export {
   applyConditionalGet,
   assertIfMatch,
+  computeEtagFromJson,
   type EtagVersioned,
   etagFromResource,
+  etagValuesMatch,
+  ifMatchSatisfied,
+  ifNoneMatchSatisfied,
   isEtagEnabled,
+  notModifiedResponse,
 } from "../core/http/etag.ts";
 export { createFlashMiddleware } from "../core/http/flashMiddleware.ts";
-export { FormRequest } from "../core/http/formRequest.ts";
+export { FormRequest, QueryFormRequest } from "../core/http/formRequest.ts";
 export {
   applyMiddlewareToRoutes,
   bindRouteModel,
+  buildPaginationMeta,
   buildRequestCacheKey,
   composeMiddleware,
   createAuthMiddleware,
   createAuthorizeMiddleware,
   createRequireAuthMiddleware,
+  DEFAULT_PER_PAGE,
+  MAX_PER_PAGE,
   paginatedResponse,
   parsePaginationQuery,
   parsePositiveIntParam,
@@ -304,16 +344,30 @@ export {
   withMiddleware,
   wrapRouteHandler,
 } from "../core/http/index.ts";
-export { createLoginThrottleMiddleware } from "../core/http/loginThrottleMiddleware.ts";
+export {
+  createLoginThrottleMiddleware,
+  createMemoryLoginThrottleMiddleware,
+  resetMemoryLoginThrottleForTests,
+  resolveLoginEmail,
+  resolveLoginIdentity,
+} from "../core/http/loginThrottleMiddleware.ts";
 export {
   createMemoryThrottleMiddleware,
   resetMemoryThrottleForTests,
 } from "../core/http/memoryThrottleMiddleware.ts";
 export { createMetricsMiddleware, normalizeMetricPath } from "../core/http/metricsMiddleware.ts";
 export type { Middleware, RouteHandler } from "../core/http/middleware.ts";
-export { type ParsedUpload, parseMultipartUpload } from "../core/http/parseMultipartUpload.ts";
+export {
+  type ParsedUpload,
+  parseMultipartUpload,
+  sanitizeUploadFileName,
+} from "../core/http/parseMultipartUpload.ts";
 export type { RequestMeta } from "../core/http/requestMetaContext.ts";
-export { currentRequestMeta, runWithRequestMeta } from "../core/http/requestMetaContext.ts";
+export {
+  currentRequestMeta,
+  requestMetaContext,
+  runWithRequestMeta,
+} from "../core/http/requestMetaContext.ts";
 export { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware.ts";
 export { createRequireGlobalAdminMiddleware } from "../core/http/requireGlobalAdminMiddleware.ts";
 export { createRequireWebAuthMiddleware } from "../core/http/requireWebAuthMiddleware.ts";
@@ -327,11 +381,13 @@ export {
 } from "../core/http/resources.ts";
 export {
   createdResponse,
+  errorResponse,
   jsonResponse,
   noContentResponse,
   withErrorHandling,
 } from "../core/http/response.ts";
 export type { RouteRequest } from "../core/http/route.ts";
+export { getRouteParams } from "../core/http/route.ts";
 export {
   loginRedirectLocation,
   safeInternalRedirectPath,
@@ -348,10 +404,30 @@ export {
   temporarySignedUrl,
 } from "../core/http/signedUrl.ts";
 export { createThrottleMiddleware } from "../core/http/throttleMiddleware.ts";
+export {
+  expectObject,
+  getQueryParams,
+  parseJsonBody,
+  parseOptionalBooleanQueryParam,
+  parseOptionalEnumQueryParam,
+  parseOptionalPositiveIntQueryParam,
+  readOptionalEnum,
+  readOptionalPositiveInt,
+  readOptionalString,
+  readRequiredEnum,
+  readRequiredPositiveInt,
+  readRequiredString,
+} from "../core/http/validation.ts";
+export {
+  logServerError,
+  normalizeFieldErrors,
+  webErrorResponse,
+} from "../core/http/webErrorResponse.ts";
 export { WebFormRequest } from "../core/http/webFormRequest.ts";
 export {
   installGracefulShutdownSignals,
   registerShutdownHandler,
+  resetGracefulShutdownForTests,
   runGracefulShutdown,
 } from "../core/lifecycle/gracefulShutdown.ts";
 export { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware.ts";
@@ -393,6 +469,7 @@ export type {
 } from "../core/pagination/index.ts";
 export type { Queue, QueuePriority } from "../core/queue/index.ts";
 export { AsyncQueue, createQueue, Job, SyncQueue } from "../core/queue/index.ts";
+export { JobRegistry } from "../core/queue/jobRegistry.ts";
 export {
   createFailedJobService,
   createProductionQueue,
@@ -408,6 +485,24 @@ export {
 } from "../core/queue/publicQueue.ts";
 export type { QueueMetricsSnapshot } from "../core/queue/queueMetrics.ts";
 export { collectQueueMetrics } from "../core/queue/queueMetrics.ts";
+export { envFlagEnabled, isProductionEnv } from "../core/runtime/appEnv.ts";
+export {
+  apiPrefix,
+  appCookieName,
+  appDevSecret,
+  appDisplayName,
+  appEnv,
+  appKeyPrefix,
+  appUrl,
+  appUserAgent,
+  namespacedRedisKey,
+  otelServiceName,
+  requireConfiguredSecret,
+  sdkClientClassName,
+  siemEventType,
+  smtpEhloHost,
+  webhookSignatureHeader,
+} from "../core/runtime/appKeyPrefix.ts";
 export {
   resolveApplicationAuth,
   resolveApplicationCache,
@@ -422,6 +517,14 @@ export {
 export type { ScheduledTask } from "../core/scheduler/schedule.ts";
 export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
 export { guestCanViewResource, isPublicReadsEnabled } from "../core/security/publicReads.ts";
+export {
+  assertSafeOutboundUrl,
+  assertSafeOutboundUrlResolved,
+  isBlockedHostname,
+  isBlockedIpAddress,
+  resetDnsLookupForTests,
+  setDnsLookupForTests,
+} from "../core/security/safeUrl.ts";
 export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
 export { logSecurityEvent } from "../core/security/securityEvents.ts";
 export type { StorageDriver } from "../core/storage/storage.ts";
@@ -443,6 +546,7 @@ export {
   currentTenantId,
   rateLimitMultiplierForPlan,
   runWithTenant,
+  tenantContext,
 } from "../core/tenant/tenantContext.ts";
 export {
   isInsideTenantDatabaseScope,
@@ -455,7 +559,11 @@ export {
   resolveUserTenantId,
 } from "../core/tenant/tenantMiddleware.ts";
 export type { TraceContext } from "../core/tracing/traceContext.ts";
-export { currentTraceId, runWithTraceContext } from "../core/tracing/traceContext.ts";
+export {
+  currentTraceId,
+  runWithTraceContext,
+  traceContextStorage,
+} from "../core/tracing/traceContext.ts";
 export { createTracingMiddleware } from "../core/tracing/tracingMiddleware.ts";
 export type { ValidationRule, ValidationSchema } from "../core/validation/rules.ts";
 export {
@@ -478,6 +586,7 @@ export {
   notFoundHtmlResponse,
   redirectResponse,
   renderKernelErrorChrome,
+  renderWebErrorHtml,
   resolveWebLayoutData,
   rssResponse,
   textResponse,

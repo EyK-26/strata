@@ -2,6 +2,12 @@
 
 Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script.
 
+## 1.0.4
+
+- Generated header auth enables `x-authenticated-user-id` only when `AUTH_DEV_HEADERS` is exactly `true`.
+- Generated `createApp` calls `isProductionEnv()` so `NODE_ENV=production` runs `assertProductionSecrets()` and skips auto-migrate.
+- Generated apps depend on `@getstrata/*@^1.0.4`.
+
 ## 1.0.3
 
 - Generated apps depend on `eta` themselves (welcome HTML). `mysql2` is added only for `--database mysql`. Core no longer ships either as a hard dependency.

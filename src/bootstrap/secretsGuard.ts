@@ -1,3 +1,4 @@
+import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isViewsMode, parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
 
 /** Published test-token strings that must never ship in production. */
@@ -19,7 +20,7 @@ const PUBLISHED_TEST_SCIM_TOKENS = new Set([PUBLISHED_TEST_SCIM_BEARER_TOKEN]);
  */
 const PLACEHOLDER_SECRET_PATTERN = /change-me/i;
 
-/** Secrets that must be rotated before an app boots with APP_ENV=production. */
+/** Secrets that must not still hold generated placeholders when production checks run. */
 const SECRETS_TO_ROTATE = [
   "SESSION_SECRET",
   "TOKEN_HASH_PEPPER",
@@ -45,26 +46,18 @@ function assertNoPlaceholderSecrets(env: Record<string, string | undefined>): vo
   }
 }
 
-function isEnabled(value: string | undefined, defaultEnabled: boolean): boolean {
-  if (value === undefined) {
-    return defaultEnabled;
-  }
-
-  return defaultEnabled ? value !== "false" : value === "true";
-}
-
 function isTokenAuthEnabled(env: Record<string, string | undefined>): boolean {
   return (
     Boolean(env.ADMIN_API_TOKEN?.trim()) ||
     Boolean(env.MEMBER_API_TOKEN?.trim()) ||
-    env.FEATURE_API_TOKENS === "true"
+    envFlagEnabled(env.FEATURE_API_TOKENS)
   );
 }
 
 function isOAuthEnabled(env: Record<string, string | undefined>): boolean {
   return (
-    isEnabled(env.FEATURE_OAUTH, false) ||
-    isEnabled(env.FEATURE_SAML, false) ||
+    envFlagEnabled(env.FEATURE_OAUTH) ||
+    envFlagEnabled(env.FEATURE_SAML) ||
     Boolean(env.GITHUB_CLIENT_ID?.trim()) ||
     Boolean(env.OIDC_ISSUER?.trim()) ||
     Boolean(env.SAML_LOGIN_URL?.trim())
@@ -76,7 +69,7 @@ function isCorsConfigured(env: Record<string, string | undefined>): boolean {
 }
 
 function assertAuthDevHeadersDisabled(env: Record<string, string | undefined>): void {
-  if (isEnabled(env.AUTH_DEV_HEADERS, true)) {
+  if (env.AUTH_DEV_HEADERS !== "false") {
     throw new Error(
       "Production startup blocked: set AUTH_DEV_HEADERS=false to disable development auth headers.",
     );
@@ -126,7 +119,7 @@ function assertTokenAuthProductionSecrets(env: Record<string, string | undefined
 }
 
 function assertFeatureProductionSecrets(env: Record<string, string | undefined>): void {
-  if (isEnabled(env.FEATURE_SCIM, false)) {
+  if (envFlagEnabled(env.FEATURE_SCIM)) {
     const scimToken = env.SCIM_BEARER_TOKEN ?? PUBLISHED_TEST_SCIM_BEARER_TOKEN;
 
     if (PUBLISHED_TEST_SCIM_TOKENS.has(scimToken) || !env.SCIM_BEARER_TOKEN?.trim()) {
@@ -136,13 +129,13 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
     }
   }
 
-  if (isEnabled(env.FEATURE_FIELD_ENCRYPTION, false) && !env.KMS_ENCRYPTION_KEY?.trim()) {
+  if (envFlagEnabled(env.FEATURE_FIELD_ENCRYPTION) && !env.KMS_ENCRYPTION_KEY?.trim()) {
     throw new Error(
       "Production startup blocked: set KMS_ENCRYPTION_KEY when field encryption is enabled.",
     );
   }
 
-  if (isEnabled(env.FEATURE_BILLING, false) && !env.STRIPE_WEBHOOK_SECRET?.trim()) {
+  if (envFlagEnabled(env.FEATURE_BILLING) && !env.STRIPE_WEBHOOK_SECRET?.trim()) {
     throw new Error(
       "Production startup blocked: set STRIPE_WEBHOOK_SECRET when billing webhooks are enabled.",
     );
@@ -164,13 +157,13 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
     }
   }
 
-  if (isEnabled(env.FEATURE_PUBLIC_READS, false)) {
+  if (envFlagEnabled(env.FEATURE_PUBLIC_READS)) {
     throw new Error(
       "Production startup blocked: set FEATURE_PUBLIC_READS=false for authenticated-only reads.",
     );
   }
 
-  if (!env.SIEM_EXPORT_URL?.trim() && isEnabled(env.FEATURE_SIEM_EXPORT, false)) {
+  if (!env.SIEM_EXPORT_URL?.trim() && envFlagEnabled(env.FEATURE_SIEM_EXPORT)) {
     console.warn("[secrets] SIEM_EXPORT_URL is not configured; audit logs remain database-only.");
   }
 }
@@ -199,9 +192,7 @@ function assertPublicAppUrl(env: Record<string, string | undefined>): void {
 }
 
 function assertProductionSecrets(env: Record<string, string | undefined> = process.env): void {
-  const appEnv = env.APP_ENV ?? "local";
-
-  if (appEnv !== "production") {
+  if (!isProductionEnv(env)) {
     return;
   }
 

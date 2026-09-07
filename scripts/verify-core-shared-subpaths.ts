@@ -7,7 +7,11 @@ import { CORE_SHARED_SUBPATHS } from "./core-shared-subpaths.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const ENTRIES_DIR = join(ROOT, "packages/strata-core/dist/entries");
-const CONSUMER_SCAN_ROOTS = [join(ROOT, "..", "getstrata", "src")];
+const CONSUMER_SCAN_ROOTS = [
+  join(ROOT, "apps"),
+  join(ROOT, "packages/strata-starter/templates"),
+  join(ROOT, "src"),
+];
 
 const IMPORT_PATTERN =
   /import\s+(?!type\s)\{([^}]+)\}\s+from\s+["']@getstrata\/core\/([^"']+)["']/g;
@@ -28,6 +32,20 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   ],
   "database/bunSql": ["bindBunSql", "createBunSqlPool"],
   "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],
+  "http/loginThrottleMiddleware": [
+    "createLoginThrottleMiddleware",
+    "createMemoryLoginThrottleMiddleware",
+    "resolveLoginEmail",
+    "resolveLoginIdentity",
+  ],
+  "http/webErrorResponse": ["logServerError", "normalizeFieldErrors", "webErrorResponse"],
+  "security/safeUrl": [
+    "assertSafeOutboundUrl",
+    "assertSafeOutboundUrlResolved",
+    "isBlockedHostname",
+    "isBlockedIpAddress",
+  ],
+  view: ["configureWebErrorView", "renderWebErrorHtml"],
 };
 
 function parseImportNames(specifier: string): string[] {
@@ -38,7 +56,7 @@ function parseImportNames(specifier: string): string[] {
     .filter((part) => !part.startsWith("type "))
     .map((part) => {
       const aliasMatch = part.match(/^(\w+)(?:\s+as\s+(\w+))?$/);
-      return aliasMatch?.[2] ?? aliasMatch?.[1] ?? part;
+      return aliasMatch?.[1] ?? part;
     });
 }
 
@@ -70,7 +88,9 @@ for (const scanRoot of CONSUMER_SCAN_ROOTS) {
   let files: string[] = [];
   try {
     files = await collectSourceFiles(scanRoot);
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.warn(`Skipping consumer scan root ${scanRoot}: ${detail}`);
     continue;
   }
 

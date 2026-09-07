@@ -1,6 +1,6 @@
 # Production readiness
 
-`assertProductionSecrets()` runs when `APP_ENV=production`. HiroApp calls it from `createApp()`. The check is feature-gated: flags that are off do not demand their secrets.
+`assertProductionSecrets()` runs when `isProductionEnv()` is true: `APP_ENV=production` or `NODE_ENV=production` (case-insensitive), `APP_ENV=staging`, or an unrecognized `APP_ENV` value. HiroApp and generated apps call it from `createApp()`. The check is feature-gated: flags that are off do not demand their secrets.
 
 Validate:
 

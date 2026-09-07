@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
+import { isProductionEnv } from "../runtime/appEnv";
+import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 const PASSWORD_CONFIRM_COOKIE = appCookieName("password_confirmed");
 const DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS = 3 * 60 * 60;
@@ -14,11 +15,7 @@ function passwordConfirmTtlSeconds(): number {
 }
 
 function resolvePasswordConfirmSecret(): string {
-  return (
-    process.env.SESSION_SECRET?.trim() ||
-    process.env.OAUTH_STATE_SECRET?.trim() ||
-    appDevSecret("session-secret")
-  );
+  return requireConfiguredSecret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
 }
 
 function signPasswordConfirm(userId: number, confirmedAt: number): string {
@@ -97,13 +94,13 @@ function hasFreshPasswordConfirmation(request: Request, userId: number): boolean
 function createPasswordConfirmCookie(userId: number): string {
   const confirmedAt = Date.now();
   const value = signPasswordConfirm(userId, confirmedAt);
-  const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
+  const secure = isProductionEnv() ? "; Secure" : "";
 
   return `${passwordConfirmCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${passwordConfirmTtlSeconds()}${secure}`;
 }
 
 function clearPasswordConfirmCookie(): string {
-  const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
+  const secure = isProductionEnv() ? "; Secure" : "";
 
   return `${passwordConfirmCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }

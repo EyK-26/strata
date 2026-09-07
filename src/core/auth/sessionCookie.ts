@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
+import { isProductionEnv } from "../runtime/appEnv";
+import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 const SESSION_COOKIE = appCookieName("session");
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -35,11 +36,9 @@ function sessionRememberTtlSeconds(): number {
 }
 
 function resolveSessionSecret(): string {
-  return (
-    process.env.SESSION_SECRET?.trim() ||
-    process.env.OAUTH_STATE_SECRET?.trim() ||
-    process.env.ADMIN_API_TOKEN?.trim() ||
-    appDevSecret("session-secret")
+  return requireConfiguredSecret(
+    ["SESSION_SECRET", "OAUTH_STATE_SECRET", "ADMIN_API_TOKEN"],
+    "session-secret",
   );
 }
 
@@ -187,7 +186,7 @@ function createSessionCookieDetails(
   const value = options.remember
     ? signSession(userId, issuedAt, ttlSeconds)
     : signSession(userId, issuedAt);
-  const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
+  const secure = isProductionEnv() ? "; Secure" : "";
 
   return {
     header: `${sessionCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}${secure}`,
@@ -202,7 +201,7 @@ function createSessionCookie(userId: number, options: CreateSessionCookieOptions
 }
 
 function clearSessionCookie(): string {
-  const secure = process.env.APP_ENV === "production" ? "; Secure" : "";
+  const secure = isProductionEnv() ? "; Secure" : "";
 
   return `${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }

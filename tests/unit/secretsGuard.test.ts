@@ -55,6 +55,53 @@ describe("assertProductionSecrets", () => {
     ).toThrow(/AUTH_DEV_HEADERS=false/);
   });
 
+  test("runs when NODE_ENV=production even if APP_ENV is unset", () => {
+    expect(() =>
+      assertProductionSecrets({
+        NODE_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "true",
+      }),
+    ).toThrow(/AUTH_DEV_HEADERS=false/);
+  });
+
+  test("runs when APP_ENV is Production or an unrecognized value", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "Production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "true",
+      }),
+    ).toThrow(/AUTH_DEV_HEADERS=false/);
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "prod",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "true",
+      }),
+    ).toThrow(/AUTH_DEV_HEADERS=false/);
+  });
+
+  test("still skips known non-production APP_ENV values", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "local",
+        AUTH_DEV_HEADERS: "true",
+        ADMIN_API_TOKEN: TEST_ADMIN_API_TOKEN,
+      }),
+    ).not.toThrow();
+  });
+
+  test("runs when APP_ENV is staging", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "staging",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "true",
+      }),
+    ).toThrow(/AUTH_DEV_HEADERS=false/);
+  });
+
   test("blocks missing STRIPE_WEBHOOK_SECRET when billing is enabled in production", () => {
     expect(() =>
       assertProductionSecrets({

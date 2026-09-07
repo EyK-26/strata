@@ -73,6 +73,20 @@ describe("jwt helpers", () => {
       delete process.env.SESSION_SECRET;
       const fromDev = signJwt({ sub: 3 });
       expect(verifyJwt(fromDev)?.sub).toBe(3);
+
+      const previousNode = process.env.NODE_ENV;
+      const previousApp = process.env.APP_ENV;
+      process.env.NODE_ENV = "production";
+      delete process.env.APP_ENV;
+      try {
+        expect(() => signJwt({ sub: 4 })).toThrow(/JWT_SECRET must be set outside development/);
+        process.env.NODE_ENV = "test";
+        process.env.APP_ENV = "staging";
+        expect(() => signJwt({ sub: 5 })).toThrow(/JWT_SECRET must be set outside development/);
+      } finally {
+        restoreEnvVar("NODE_ENV", previousNode);
+        restoreEnvVar("APP_ENV", previousApp);
+      }
     } finally {
       restoreEnvVar("JWT_SECRET", previousJwt);
       restoreEnvVar("SESSION_SECRET", previousSession);

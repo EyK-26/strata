@@ -16,6 +16,8 @@ The barrel file is `src/framework/public-api.ts`. The workspace package `package
 
 Do not import deep paths from other modules when a public export exists. Add the export to `public-api.ts` instead.
 
+Shared subpath shims are `export * from` the barrel. Every value those subpaths declare in `.d.ts` must also be exported from `public-api.ts`, or the import type-checks and then crashes at runtime. `scripts/verify-export-types.ts` compares `.d.ts` names to the built JS keys.
+
 Modules that own process-wide state (database pool, auth/tenant async-local storage, dialect override) belong in `scripts/core-shared-subpaths.ts`. After you add one, run `bun scripts/sync-package-subpaths.ts` and rebuild.
 
 ## Published packages

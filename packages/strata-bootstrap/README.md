@@ -20,7 +20,7 @@ bun add @getstrata/bootstrap @getstrata/core
 import { coreProviders, createAppContext, createHttpKernel } from "@getstrata/bootstrap";
 ```
 
-`createAppContext()` does not call `assertProductionSecrets`. Call that yourself when `APP_ENV=production`; it is feature-gated, so an HTML app with API tokens off is not asked for token secrets. It rejects empty secrets, short `SESSION_SECRET` values, wildcard `CORS_ALLOWED_ORIGINS`, `AUTH_DEV_HEADERS=true`, `FEATURE_PUBLIC_READS=true`, and any secret still holding a generated `change-me` placeholder.
+`createAppContext()` does not call `assertProductionSecrets`. Call that yourself when `isProductionEnv()` is true (`APP_ENV` or `NODE_ENV` production, `APP_ENV=staging`, or an unrecognized `APP_ENV`); it is feature-gated, so an HTML app with API tokens off is not asked for token secrets. It rejects empty secrets, short `SESSION_SECRET` values, wildcard `CORS_ALLOWED_ORIGINS`, `AUTH_DEV_HEADERS` other than `false`, `FEATURE_PUBLIC_READS=true`, and any secret still holding a generated `change-me` placeholder.
 
 Build routes with `buildWebModuleRoutes` and `buildModuleRoutes`.
 

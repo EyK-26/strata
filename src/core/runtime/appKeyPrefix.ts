@@ -1,3 +1,5 @@
+import { type EnvRecord, isProductionEnv } from "./appEnv";
+
 function appKeyPrefix(): string {
   return process.env.APP_KEY_PREFIX?.trim() || "strata";
 }
@@ -8,6 +10,32 @@ function appCookieName(kind: string): string {
 
 function appDevSecret(kind: string): string {
   return `${appKeyPrefix()}-dev-${kind}`;
+}
+
+/**
+ * Use a configured secret, or a predictable local fallback. Production,
+ * staging, and unrecognized APP_ENV values treated as production must set a
+ * real secret; never derive one from the app name.
+ */
+function requireConfiguredSecret(
+  names: readonly string[],
+  devKind: string,
+  env: EnvRecord = process.env,
+): string {
+  for (const name of names) {
+    const value = env[name]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  if (isProductionEnv(env)) {
+    throw new Error(
+      `${names[0]} must be set outside development. Do not derive secrets from the app name.`,
+    );
+  }
+
+  return appDevSecret(devKind);
 }
 
 function namespacedRedisKey(kind: string): string {
@@ -80,6 +108,7 @@ export {
   appUserAgent,
   namespacedRedisKey,
   otelServiceName,
+  requireConfiguredSecret,
   sdkClientClassName,
   siemEventType,
   smtpEhloHost,

@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { appCookieName, appDevSecret } from "../runtime/appKeyPrefix";
+import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 const FLASH_COOKIE = appCookieName("flash");
 const FLASH_TTL_MS = 60 * 1000;
@@ -16,11 +16,7 @@ interface FlashMessage {
 }
 
 function resolveFlashSecret(): string {
-  return (
-    process.env.SESSION_SECRET?.trim() ||
-    process.env.OAUTH_STATE_SECRET?.trim() ||
-    appDevSecret("flash-secret")
-  );
+  return requireConfiguredSecret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "flash-secret");
 }
 
 function signFlashPayload(payload: string, issuedAt: number): string {

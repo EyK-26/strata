@@ -77,7 +77,7 @@ Configure layout data (`currentUser`, `csrfToken`, `flash`) and error templates 
 
 ## Secrets
 
-Call `assertProductionSecrets()` from your `createApp` / `serve` path. It is feature-gated: a cookie HTML app with `SESSION_SECRET` and `AUTH_DEV_HEADERS=false` does not need API tokens if those features are off. HiroApp calls it at boot.
+Call `assertProductionSecrets()` from your `createApp` / `serve` path when `isProductionEnv()` is true. Staging counts as production for this check. It is feature-gated: a cookie HTML app with `SESSION_SECRET` and `AUTH_DEV_HEADERS=false` does not need API tokens if those features are off. Generated apps call it at boot.
 
 ## Identity env
 

@@ -15,7 +15,7 @@ From most locked down for browsers, to weaker or narrower tools:
 | 3 | HMAC signed session cookie (no `sessions` row) | JSON APIs that want a signed cookie without a table | Partial. `session_valid_after` or a custom directory check. | Not HiroApp HTML login. |
 | 4 | JWT HS256 | Service-to-service, short-lived scripts | Hard. Wait for `exp`, or keep a denylist (you build that). | HiroApp `POST /api/auth/token`. |
 | 5 | HTTP Basic over TLS | Private scripts, health cron, first-party tools | Change the password. | HiroApp `GET /api/user` accepts Basic when that guard is registered. Never on the public internet without TLS. |
-| 6 | `x-authenticated-user-id` headers | Automated tests | N/A | Only when `AUTH_DEV_HEADERS=true`. Production must set `false`. |
+| 6 | `x-authenticated-user-id` headers | Automated tests | N/A | Only when `AUTH_DEV_HEADERS=true` exactly. Unset, `false`, `0`, and `FALSE` leave headers off. Production must set `false`. |
 
 If you are building a browser app, start at rank 1. If you are building a SPA, use rank 2 with a tight ability list. JWT is for clients that cannot store a revocable server token and can live with expiry. Do not use JWT as an HTML cookie session.
 
@@ -97,7 +97,7 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 | Variable | Meaning |
 |----------|---------|
 | `SESSION_SECRET` | 32+ characters in production for HTMX cookie apps |
-| `JWT_SECRET` | HS256 key. Falls back to `SESSION_SECRET`, then a local dev secret |
+| `JWT_SECRET` | HS256 key. Falls back to `SESSION_SECRET` locally. Outside development (including staging) it must be set; it is not derived from the app name |
 | `JWT_TTL_SECONDS` | Default 3600 |
 | `AUTH_DEV_HEADERS` | Must be `false` in production |
 | `TOKEN_HASH_PEPPER` | Required in production when token auth is on |

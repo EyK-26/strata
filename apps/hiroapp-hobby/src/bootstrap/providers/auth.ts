@@ -2,10 +2,11 @@ import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
+import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
 
 class StarterAuthManager {
   async resolve(request?: Request): Promise<AuthUser | null> {
-    if (process.env.AUTH_DEV_HEADERS === "false") {
+    if (!envFlagEnabled(process.env.AUTH_DEV_HEADERS)) {
       return request ? null : currentAuthUser();
     }
     if (request) {

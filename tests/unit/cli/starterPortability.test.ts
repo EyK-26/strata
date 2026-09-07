@@ -411,7 +411,7 @@ describe("production defaults", () => {
     const app = generateFromArgs(root, ["prod", "--yes"]);
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
 
-    expect(createApp).toContain('const isProduction = process.env.APP_ENV === "production"');
+    expect(createApp).toContain("const isProduction = isProductionEnv()");
     expect(createApp).toContain("migrate: runMigrate = !isProduction");
   });
 
