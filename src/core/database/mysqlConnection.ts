@@ -131,13 +131,17 @@ function createMysqlConnection(url: string): MysqlConnection {
     throw new Error("MYSQL_URL is not configured. Set url before creating a MySQL pool.");
   }
 
-  let pool: MysqlExecutable | undefined;
+  // Cache the promise, not the pool: concurrent first queries must share one pool.
+  let poolPending: Promise<MysqlPool> | undefined;
 
-  async function ensurePool(): Promise<MysqlExecutable> {
-    if (!pool) {
-      pool = await createMysqlPool(url);
+  function ensurePool(): Promise<MysqlPool> {
+    if (!poolPending) {
+      poolPending = createMysqlPool(url).catch((error: unknown) => {
+        poolPending = undefined;
+        throw error;
+      });
     }
-    return pool;
+    return poolPending;
   }
 
   return {
@@ -146,9 +150,13 @@ function createMysqlConnection(url: string): MysqlConnection {
       return rowsFromResult<T>(result);
     },
     async close(): Promise<void> {
-      if (pool && typeof pool.end === "function") {
-        await pool.end();
+      if (!poolPending) {
+        return;
       }
+      const pending = poolPending;
+      poolPending = undefined;
+      const pool = await pending.catch(() => undefined);
+      await pool?.end();
     },
   };
 }

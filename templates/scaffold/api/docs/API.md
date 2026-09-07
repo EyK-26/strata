@@ -5,6 +5,7 @@ This scaffold sets `FRONTEND_MODE=api`: no server-rendered views beyond the welc
 ## What exists after migrating
 
 - `GET /health` returns plain text `ok`, or `degraded` (503) until the database ping succeeds and the migrated `notes` table exists. Docker HEALTHCHECK uses `/health`.
+- `GET /ready` returns JSON `{"status":"ready","checks":{...}}` (200) or `not_ready` (503). It pings the database and Redis (when `REDIS_URL` is set) and does not check the schema, so `/health` is the deploy gate.
 - `GET /` returns the welcome page.
 - A `notes` table, with no routes on it yet.
 

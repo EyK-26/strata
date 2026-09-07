@@ -358,8 +358,10 @@ describe("generated API docs", () => {
     const docs = await readFile(join(app, "docs/API.md"), "utf8");
 
     expect(docs).toContain("`GET` | `/health`");
-    expect(docs).not.toContain("/ready");
     expect(docs).toContain("Docker HEALTHCHECK uses this path");
+    // /ready is served by createHealthRoutes() in every generated app; document what it checks.
+    expect(docs).toContain("`GET` | `/ready`");
+    expect(docs).toContain("does not check the schema");
     expect(docs).not.toContain("/api/v1/auth/login");
     expect(docs).not.toContain("actingAs");
     expect(docs).not.toContain("postJson");

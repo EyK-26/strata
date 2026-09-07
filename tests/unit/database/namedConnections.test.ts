@@ -234,6 +234,84 @@ describe("MySQL connection adapter", () => {
     expect(ended).toBe(1);
   });
 
+  test("concurrent first queries share one pool and close() ends exactly that pool", async () => {
+    let created = 0;
+    let ended = 0;
+    resetMysqlLoaderForTests(async () => ({
+      createPool() {
+        created += 1;
+        return {
+          async execute() {
+            return [[{ ok: 1 }]];
+          },
+          async end() {
+            ended += 1;
+          },
+          on() {},
+        };
+      },
+    }));
+    const { createMysqlConnection } = await import("@getstrata/core/database/mysqlConnection");
+    const connection = createMysqlConnection("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
+
+    await Promise.all([
+      connection.unsafe("SELECT 1"),
+      connection.unsafe("SELECT 2"),
+      connection.unsafe("SELECT 3"),
+    ]);
+    expect(created).toBe(1);
+
+    await connection.close();
+    expect(ended).toBe(1);
+
+    // A query after close opens a fresh pool instead of reusing the ended one.
+    expect(await connection.unsafe("SELECT 4")).toEqual([{ ok: 1 }]);
+    expect(created).toBe(2);
+    await connection.close();
+    expect(ended).toBe(2);
+  });
+
+  test("a failed pool load is retried on the next query", async () => {
+    let attempts = 0;
+    resetMysqlLoaderForTests(async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error("Cannot find module 'mysql2/promise'");
+      }
+      return {
+        createPool() {
+          return {
+            async execute() {
+              return [[{ ok: 1 }]];
+            },
+            async end() {},
+            on() {},
+          };
+        },
+      };
+    });
+    const { createMysqlConnection } = await import("@getstrata/core/database/mysqlConnection");
+    const connection = createMysqlConnection("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
+
+    await expect(connection.unsafe("SELECT 1")).rejects.toThrow(/Install mysql2/);
+    await connection.close();
+    expect(await connection.unsafe("SELECT 1")).toEqual([{ ok: 1 }]);
+    expect(attempts).toBe(2);
+    await connection.close();
+  });
+
+  test("close() while the first load is still failing does not throw", async () => {
+    resetMysqlLoaderForTests(
+      () => new Promise((_, reject) => setTimeout(() => reject(new Error("offline")), 10)),
+    );
+    const { createMysqlConnection } = await import("@getstrata/core/database/mysqlConnection");
+    const connection = createMysqlConnection("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
+
+    const query = connection.unsafe("SELECT 1");
+    await connection.close();
+    await expect(query).rejects.toThrow(/Install mysql2/);
+  });
+
   test("createMysqlPool accepts mysql2's default export", async () => {
     resetMysqlLoaderForTests(async () => ({
       default: {

@@ -3,8 +3,9 @@
 ## 1.0.3
 
 - `eta` and `mysql2` are optional peers, loaded with `import()` on first use. SQLite and Postgres apps no longer install `mysql2` through core. If a package is missing, the error names `bun add` for that package.
-- `createMysqlPool(url)` is async because it lazy-loads `mysql2`. `createMysqlConnection(url)` stays synchronous and opens the pool on the first query.
-- MySQL helpers are no longer re-exported from `@getstrata/core` or `@getstrata/core/database`. Import `@getstrata/core/database/mysqlConnection`.
+- Breaking: `createMysqlPool(url)` returns a `Promise` because it lazy-loads `mysql2`. It shipped synchronous in 1.0.1 and 1.0.2; `await` it. `createMysqlConnection(url)` stays synchronous and opens the pool on the first query.
+- `createMysqlConnection()` shares one pool across concurrent first queries by caching the pending promise. Before this fix, three requests arriving together opened three pools and `close()` ended only the last one. A failed load is retried on the next query, and a query after `close()` opens a fresh pool.
+- The MySQL helpers stay exported from `@getstrata/core` and `@getstrata/core/database`; the lazy import means those barrels no longer pull `mysql2` in.
 
 ## 1.0.2
 

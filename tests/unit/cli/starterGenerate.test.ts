@@ -722,6 +722,11 @@ describe("create-strata CLI", () => {
         const cold = await fetch(`http://127.0.0.1:${coldServer.port}/health`);
         expect(cold.status).toBe(503);
         expect(await cold.text()).toBe("degraded");
+        // /ready only pings; on an unmigrated SQLite file it is 200, which is why /health is the gate.
+        const ready = await fetch(`http://127.0.0.1:${coldServer.port}/ready`);
+        expect(ready.status).toBe(200);
+        expect(ready.headers.get("content-type")).toContain("application/json");
+        expect(await ready.json()).toMatchObject({ status: "ready", checks: { database: "ok" } });
       } finally {
         coldServer.stop();
       }
