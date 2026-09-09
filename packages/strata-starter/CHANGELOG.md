@@ -2,6 +2,10 @@
 
 Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script.
 
+## 1.0.6
+
+- Generated apps depend on `@getstrata/*@^1.0.6`.
+
 ## 1.0.5
 
 - Generated apps depend on `@getstrata/*@^1.0.5`.

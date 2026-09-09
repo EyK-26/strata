@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.0.6
+
+- Query `pluck` and `value` on `RepositoryQuery`, `ModelQuery`, and relation queries. `pluck(column)` returns `T[]`; `pluck(column, keyBy)` returns a `Map`. Models apply `$casts` and skip hydration/observers. Generated apps and lockstep packages move to `^1.0.6`.
+
 ## 1.0.5
 
 - `@getstrata/core/database/mysqlConnection` re-exports the barrel so the barrel and the subpath share one lazy `mysql2` load. Importing both in one process no longer starts two independent loaders.
