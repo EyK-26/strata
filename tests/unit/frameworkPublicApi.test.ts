@@ -36,6 +36,10 @@ describe("@getstrata/core public API", () => {
 
   test("exports RepositoryQuery for chainable with() loading", () => {
     expect(typeof core.RepositoryQuery).toBe("function");
+    expect(typeof core.projectPluck).toBe("function");
+    expect(typeof core.uniqueColumnSelect).toBe("function");
+    expect(typeof core.RepositoryQuery.prototype.pluck).toBe("function");
+    expect(typeof core.RepositoryQuery.prototype.value).toBe("function");
   });
 
   test("exports membership lookup used by published bootstrap", () => {

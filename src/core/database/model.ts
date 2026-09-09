@@ -393,6 +393,11 @@ function applyCasts(
   return result;
 }
 
+function castPluckedValue(modelClass: object, column: string, value: unknown): unknown {
+  const cast = modelStatics(modelClass).$casts?.[column];
+  return cast ? hydrateValue(value, cast) : value;
+}
+
 function applyTimestampsOnCreate(
   columns: readonly string[],
   values: LoadedAttributes,
@@ -620,6 +625,36 @@ class ModelQuery {
     this.query.limit(1);
     const models = await this.get();
     return models[0] ?? null;
+  }
+
+  async count(): Promise<number> {
+    return this.query.count();
+  }
+
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    if (keyBy === undefined) {
+      const values = await this.query.pluck(column);
+      return values.map((value) => castPluckedValue(this.modelClass, column, value));
+    }
+
+    const keyed = await this.query.pluck(column, keyBy);
+    const result = new Map<unknown, unknown>();
+
+    for (const [key, value] of keyed) {
+      result.set(
+        castPluckedValue(this.modelClass, keyBy, key),
+        castPluckedValue(this.modelClass, column, value),
+      );
+    }
+
+    return result;
+  }
+
+  async value(column: string): Promise<unknown> {
+    const value = await this.query.value(column);
+    return castPluckedValue(this.modelClass, column, value);
   }
 
   async find(id: unknown): Promise<Model<Record<string, unknown>, "id"> | null> {
@@ -1022,6 +1057,25 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static where(this: object, where: QueryWhere<object>): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).where(where);
+  }
+
+  static async count(this: object): Promise<number> {
+    return (Model.query as (this: object) => ModelQuery).call(this).count();
+  }
+
+  static pluck(this: object, column: string): Promise<unknown[]>;
+  static pluck(this: object, column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  static pluck(
+    this: object,
+    column: string,
+    keyBy?: string,
+  ): Promise<unknown[] | Map<unknown, unknown>> {
+    const query = (Model.query as (this: object) => ModelQuery).call(this);
+    return keyBy === undefined ? query.pluck(column) : query.pluck(column, keyBy);
+  }
+
+  static value(this: object, column: string): Promise<unknown> {
+    return (Model.query as (this: object) => ModelQuery).call(this).value(column);
   }
 
   static async firstWhere(

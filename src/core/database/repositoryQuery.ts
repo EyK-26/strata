@@ -1,5 +1,6 @@
 import type { PaginatedResult } from "../pagination/index.ts";
 import type BaseRepository from "./baseRepository.ts";
+import { projectPluck, uniqueColumnSelect } from "./pluck.ts";
 import { parseQualifiedColumn } from "./query.ts";
 import type {
   BelongsToManyRelation,
@@ -336,6 +337,45 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return await this.repository.count(this.buildOptions());
   }
 
+  async pluck<K extends keyof TEntity & string>(column: K): Promise<Array<TEntity[K]>>;
+  async pluck<K extends keyof TEntity & string, KK extends keyof TEntity & string>(
+    column: K,
+    keyBy: KK,
+  ): Promise<Map<TEntity[KK], TEntity[K]>>;
+  async pluck<K extends keyof TEntity & string>(
+    column: K,
+    keyBy?: keyof TEntity & string,
+  ): Promise<Array<TEntity[K]> | Map<TEntity[keyof TEntity & string], TEntity[K]>> {
+    const rows = await this.repository.findAll({
+      ...this.buildOptions(),
+      select: uniqueColumnSelect(
+        this.repository.getTable().name,
+        keyBy === undefined || keyBy === column ? [column] : [column, keyBy],
+      ),
+    });
+
+    if (keyBy === undefined) {
+      return projectPluck(rows, column);
+    }
+
+    return projectPluck(rows, column, keyBy);
+  }
+
+  async value<K extends keyof TEntity & string>(column: K): Promise<TEntity[K] | null> {
+    const rows = await this.repository.findAll({
+      ...this.buildOptions(),
+      select: uniqueColumnSelect(this.repository.getTable().name, [column]),
+      limit: 1,
+    });
+    const row = rows[0];
+
+    if (row === undefined) {
+      return null;
+    }
+
+    return row[column];
+  }
+
   async attachToRows(rows: readonly TEntity[]): Promise<Array<TEntity & LoadedRow>> {
     return await this.attach(rows);
   }
@@ -534,4 +574,5 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   }
 }
 
+export { projectPluck, uniqueColumnSelect } from "./pluck.ts";
 export { RepositoryQuery };
