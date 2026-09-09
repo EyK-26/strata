@@ -1,4 +1,5 @@
 import type BaseRepository from "./baseRepository.ts";
+import { projectPluck } from "./pluck.ts";
 import { buildAdvancedWhereClause, qualifyColumn, quoteIdentifier } from "./query.ts";
 import type {
   BelongsToManyRelation,
@@ -68,6 +69,18 @@ function thenGet<T>(
   onrejected?: ((reason: unknown) => unknown) | null,
 ): Promise<unknown> {
   return get().then(onfulfilled ?? undefined, onrejected ?? undefined);
+}
+
+function pluckFromQuery(
+  query: RepositoryQuery<Record<string, unknown>, string> | null | undefined,
+  column: string,
+  keyBy?: string,
+): Promise<unknown[] | Map<unknown, unknown>> {
+  if (!query) {
+    return Promise.resolve(keyBy === undefined ? [] : new Map());
+  }
+
+  return keyBy === undefined ? query.pluck(column) : query.pluck(column, keyBy);
 }
 
 class HasManyRelationQuery<
@@ -153,6 +166,16 @@ class HasManyRelationQuery<
 
   async count(): Promise<number> {
     return this.scopedQuery().count();
+  }
+
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    return pluckFromQuery(this.scopedQuery() as never, column, keyBy);
+  }
+
+  async value(column: string): Promise<unknown> {
+    return this.scopedQuery().value(column as never);
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
@@ -256,6 +279,17 @@ class HasOneRelationQuery<
     return this.inner.count();
   }
 
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    const query = this.inner.limit(1);
+    return keyBy === undefined ? query.pluck(column) : query.pluck(column, keyBy);
+  }
+
+  async value(column: string): Promise<unknown> {
+    return this.inner.limit(1).value(column);
+  }
+
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
@@ -322,6 +356,31 @@ class BelongsToRelationQuery<
   }
 
   async get(): Promise<RelatedRecord | null> {
+    const query = this.relatedQuery();
+
+    if (!query) {
+      return null;
+    }
+
+    const row = await query.first();
+    return row ? this.related.newFromRecord(row as TParent) : null;
+  }
+
+  async first(): Promise<RelatedRecord | null> {
+    return this.get();
+  }
+
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    return pluckFromQuery(this.relatedQuery() as never, column, keyBy);
+  }
+
+  async value(column: string): Promise<unknown> {
+    return this.relatedQuery()?.value(column as never) ?? null;
+  }
+
+  private relatedQuery(): RepositoryQuery<TParent, ParentKey> | null {
     const foreign = this.parent.get(this.relation.foreignKey);
 
     if (foreign === null || foreign === undefined) {
@@ -339,12 +398,7 @@ class BelongsToRelationQuery<
       query = query.orderBy(this.extraOptions.orderBy);
     }
 
-    const row = await query.first();
-    return row ? this.related.newFromRecord(row as TParent) : null;
-  }
-
-  async first(): Promise<RelatedRecord | null> {
-    return this.get();
+    return query;
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
@@ -478,6 +532,52 @@ class BelongsToManyRelationQuery<
       [parentId],
     );
     return Number(rows[0]?.count ?? 0);
+  }
+
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    return pluckFromQuery((await this.relatedQuery()) as never, column, keyBy);
+  }
+
+  async value(column: string): Promise<unknown> {
+    const query = await this.relatedQuery();
+    return query ? query.value(column as never) : null;
+  }
+
+  private async relatedQuery(): Promise<RepositoryQuery<TRelated, RelatedKey> | null> {
+    const parentId = this.parent.get(this.relation.parentKey);
+    const pivotRows = await this.connection().unsafe<Pivot>(
+      `SELECT * FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1`,
+      [parentId],
+    );
+
+    if (pivotRows.length === 0) {
+      return null;
+    }
+
+    const relatedIds = [
+      ...new Set(
+        pivotRows.map(
+          (row) => row[this.relation.relatedPivotKey] as unknown as TRelated[RelatedKey],
+        ),
+      ),
+    ];
+    let query = this.related
+      .repository()
+      .withConnection(this.connection())
+      .query(
+        asWhere<TRelated>({
+          [this.relation.relatedKey]: relatedIds,
+          ...this.extraWhere,
+        }),
+      );
+
+    if (this.extraOptions.orderBy) {
+      query = query.orderBy(this.extraOptions.orderBy);
+    }
+
+    return query;
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
@@ -616,19 +716,21 @@ class MorphManyRelationQuery<
     return { sql, params: extra.params };
   }
 
-  async get(): Promise<RelatedRecord[]> {
-    const repository = this.related
+  private scopedQuery(): RepositoryQuery<TChild, ChildKey> {
+    return this.related
       .repository()
-      .withConnection(this.parent.getRepository().getConnection());
-    const rows = await repository
+      .withConnection(this.parent.getRepository().getConnection())
       .query(
         asWhere<TChild>({
           [this.relation.morphTypeKey]: this.relation.morphType,
           [this.relation.morphIdKey]: this.parent.get(this.relation.localKey),
           ...this.extraWhere,
         }),
-      )
-      .get();
+      );
+  }
+
+  async get(): Promise<RelatedRecord[]> {
+    const rows = await this.scopedQuery().get();
     return rows.map((row) => this.related.newFromRecord(row as TChild));
   }
 
@@ -638,18 +740,17 @@ class MorphManyRelationQuery<
   }
 
   async count(): Promise<number> {
-    const repository = this.related
-      .repository()
-      .withConnection(this.parent.getRepository().getConnection());
-    return repository
-      .query(
-        asWhere<TChild>({
-          [this.relation.morphTypeKey]: this.relation.morphType,
-          [this.relation.morphIdKey]: this.parent.get(this.relation.localKey),
-          ...this.extraWhere,
-        }),
-      )
-      .count();
+    return this.scopedQuery().count();
+  }
+
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    return pluckFromQuery(this.scopedQuery() as never, column, keyBy);
+  }
+
+  async value(column: string): Promise<unknown> {
+    return this.scopedQuery().value(column as never);
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
@@ -728,6 +829,16 @@ class MorphOneRelationQuery<
     return this.inner.count();
   }
 
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    return keyBy === undefined ? this.inner.pluck(column) : this.inner.pluck(column, keyBy);
+  }
+
+  async value(column: string): Promise<unknown> {
+    return this.inner.value(column);
+  }
+
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
   then(
     onfulfilled?: ((value: RelatedRecord | null) => unknown) | null,
@@ -790,21 +901,44 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
   }
 
   async get(): Promise<RelatedRecord | null> {
+    const query = this.relatedQuery();
+
+    if (!query) {
+      return null;
+    }
+
+    const row = await query.first();
+    return row ? (this.relatedForCurrentType()?.newFromRecord(row) ?? null) : null;
+  }
+
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    return pluckFromQuery(this.relatedQuery(), column, keyBy);
+  }
+
+  async value(column: string): Promise<unknown> {
+    return this.relatedQuery()?.value(column) ?? null;
+  }
+
+  private relatedForCurrentType(): RelatedModelClass<Record<string, unknown>, "id"> | undefined {
     const type = String(this.parent.get(this.relation.morphTypeKey) ?? "");
+    return this.relatedByType[type];
+  }
+
+  private relatedQuery(): RepositoryQuery<Record<string, unknown>, "id"> | null {
     const id = this.parent.get(this.relation.morphIdKey);
-    const related = this.relatedByType[type];
+    const related = this.relatedForCurrentType();
 
     if (!related || id === null || id === undefined) {
       return null;
     }
 
     const table = related.repository().getTable();
-    const row = await related
+    return related
       .repository()
       .withConnection(this.parent.getRepository().getConnection())
-      .query(asWhere<object>({ [table.primaryKey]: id, ...this.extraWhere }))
-      .first();
-    return row ? related.newFromRecord(row) : null;
+      .query(asWhere<object>({ [table.primaryKey]: id, ...this.extraWhere }));
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
@@ -878,13 +1012,7 @@ class HasManyThroughRelationQuery<
   }
 
   async get(): Promise<RelatedRecord[]> {
-    const rows = await this.related
-      .repository()
-      .withConnection(this.parent.getRepository().getConnection())
-      .findHasManyThrough(this.parent.get(this.relation.localKey), this.relation, {
-        ...this.extraOptions,
-        where: this.extraWhere,
-      });
+    const rows = await this.farRows();
     return rows.map((row) => this.related.newFromRecord(row as TFar));
   }
 
@@ -896,6 +1024,28 @@ class HasManyThroughRelationQuery<
   async count(): Promise<number> {
     const rows = await this.get();
     return rows.length;
+  }
+
+  async pluck(column: string): Promise<unknown[]>;
+  async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    const rows = (await this.farRows()) as Array<Record<string, unknown>>;
+    return keyBy === undefined ? projectPluck(rows, column) : projectPluck(rows, column, keyBy);
+  }
+
+  async value(column: string): Promise<unknown> {
+    const values = await this.limit(1).pluck(column);
+    return values[0] ?? null;
+  }
+
+  private async farRows(): Promise<TFar[]> {
+    return this.related
+      .repository()
+      .withConnection(this.parent.getRepository().getConnection())
+      .findHasManyThrough(this.parent.get(this.relation.localKey), this.relation, {
+        ...this.extraOptions,
+        where: this.extraWhere,
+      });
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await department.applications()`).

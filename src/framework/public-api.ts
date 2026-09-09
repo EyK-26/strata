@@ -206,7 +206,11 @@ export {
   repositoryConnection,
   resolveRepositoryConnection,
 } from "../core/database/repositoryConnection.ts";
-export { RepositoryQuery } from "../core/database/repositoryQuery.ts";
+export {
+  projectPluck,
+  RepositoryQuery,
+  uniqueColumnSelect,
+} from "../core/database/repositoryQuery.ts";
 export type {
   BlueprintAction,
   BlueprintCallback,

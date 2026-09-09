@@ -64,6 +64,8 @@ const SYMBOL_TARGETS: Record<string, string> = {
   morphOne: "database/relationships",
   morphTo: "database/relationships",
   RepositoryQuery: "database/repositoryQuery",
+  projectPluck: "database/repositoryQuery",
+  uniqueColumnSelect: "database/repositoryQuery",
   Blueprint: "database/schema",
   ColumnDefinition: "database/schema",
   Schema: "database/schema",

@@ -52,6 +52,7 @@ export {
   runOnNamedConnection,
   unregisterNamedConnection,
 } from "./namedConnections.ts";
+export { projectPluck, uniqueColumnSelect } from "./pluck.ts";
 export {
   buildAdvancedWhereClause,
   buildCountQuery,
