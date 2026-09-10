@@ -8,5 +8,5 @@
       "command": "export PATH=\"$HOME/.bun/bin:$PATH\"; bun run dev:host"
     }
   ],
-  "ports": [3000]
+  "ports": [{ "name": "dev-server", "port": 3000 }]
 }
