@@ -12,6 +12,8 @@ interface SqlDialect {
   ilikeOperator(): "ILIKE" | "LIKE";
   nullsLastSuffix(): string;
   castToText(expression: string): string;
+  /** Conflict handling appended to an INSERT. Empty updates mean "do nothing". */
+  upsertSuffix(conflictColumns: readonly string[], updateColumns: readonly string[]): string;
 }
 
 function assertSafeIdentifier(identifier: string): string {
@@ -20,6 +22,13 @@ function assertSafeIdentifier(identifier: string): string {
   }
 
   return identifier;
+}
+
+function quoteIdentifierFor(
+  dialect: { quoteIdentifier(value: string): string },
+  column: string,
+): string {
+  return dialect.quoteIdentifier(column);
 }
 
 const postgresDialect: SqlDialect = {
@@ -47,6 +56,22 @@ const postgresDialect: SqlDialect = {
   },
   castToText(expression: string): string {
     return `${expression}::text`;
+  },
+  upsertSuffix(conflictColumns: readonly string[], updateColumns: readonly string[]): string {
+    const target = conflictColumns.map((column) => quoteIdentifierFor(this, column)).join(", ");
+
+    if (updateColumns.length === 0) {
+      return ` ON CONFLICT (${target}) DO NOTHING`;
+    }
+
+    const assignments = updateColumns
+      .map((column) => {
+        const quoted = quoteIdentifierFor(this, column);
+        return `${quoted} = excluded.${quoted}`;
+      })
+      .join(", ");
+
+    return ` ON CONFLICT (${target}) DO UPDATE SET ${assignments}`;
   },
 };
 
@@ -76,6 +101,21 @@ const mysqlDialect: SqlDialect = {
   castToText(expression: string): string {
     return `CAST(${expression} AS CHAR)`;
   },
+  upsertSuffix(conflictColumns: readonly string[], updateColumns: readonly string[]): string {
+    if (updateColumns.length === 0) {
+      const anchor = quoteIdentifierFor(this, conflictColumns[0] ?? "");
+      return ` ON DUPLICATE KEY UPDATE ${anchor} = ${anchor}`;
+    }
+
+    const assignments = updateColumns
+      .map((column) => {
+        const quoted = quoteIdentifierFor(this, column);
+        return `${quoted} = VALUES(${quoted})`;
+      })
+      .join(", ");
+
+    return ` ON DUPLICATE KEY UPDATE ${assignments}`;
+  },
 };
 
 const sqliteDialect: SqlDialect = {
@@ -104,6 +144,22 @@ const sqliteDialect: SqlDialect = {
   },
   castToText(expression: string): string {
     return `CAST(${expression} AS TEXT)`;
+  },
+  upsertSuffix(conflictColumns: readonly string[], updateColumns: readonly string[]): string {
+    const target = conflictColumns.map((column) => quoteIdentifierFor(this, column)).join(", ");
+
+    if (updateColumns.length === 0) {
+      return ` ON CONFLICT (${target}) DO NOTHING`;
+    }
+
+    const assignments = updateColumns
+      .map((column) => {
+        const quoted = quoteIdentifierFor(this, column);
+        return `${quoted} = excluded.${quoted}`;
+      })
+      .join(", ");
+
+    return ` ON CONFLICT (${target}) DO UPDATE SET ${assignments}`;
   },
 };
 

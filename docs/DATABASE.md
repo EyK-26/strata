@@ -51,6 +51,74 @@ runWithSqlDialect("mysql", () => {
 
 The dialect is stored in AsyncLocalStorage (`@getstrata/sqlDialect`) with a process fallback for `useSqlDialect`. Apps must import `@getstrata/core/database/dialect`, not a copied helper, or overrides will not match the query builder.
 
+### Filter operators
+
+`where` values accept a scalar, an array (shorthand for `in`), or an operator object:
+
+| Operator | SQL |
+|----------|-----|
+| `eq` | `= ?`, or `IS NULL` when the value is `null` |
+| `ne` | `<> ?`, or `IS NOT NULL` when the value is `null` |
+| `in` | `IN (...)`, or `1 = 0` when the list is empty |
+| `notIn` | `NOT IN (...)`, or `1 = 1` when the list is empty |
+| `gt` `gte` `lt` `lte` | `>` `>=` `<` `<=` |
+| `isNull` | `IS NULL` / `IS NOT NULL` |
+| `ilike` | case-insensitive match for the dialect |
+| `tsMatch` | `@@ plainto_tsquery`, PostgreSQL only |
+
+An unrecognized key throws rather than silently dropping the filter, so a typo cannot widen a result set.
+
+```typescript
+await repository.query().where({ status: { ne: "archived" } }).get();
+await repository.query().whereNotIn("status", ["draft", "void"]).get();
+```
+
+### Aggregates
+
+`count`, `sum`, `avg`, `min`, and `max` are available on the repository and accept an optional filter. They return the raw value; `avg` is not rounded.
+
+```typescript
+const revenue = await orders.sum("total", { status: "paid" });
+```
+
+### Writes
+
+`upsert` inserts or updates in one statement. Conflict columns need a unique index; passing an empty update list makes it insert-or-ignore. It compiles to `ON CONFLICT` on PostgreSQL and SQLite and to `ON DUPLICATE KEY UPDATE` on MySQL, and returns `null` when nothing was written.
+
+```typescript
+await counters.upsert({ slug: "home", hits: 1 }, ["slug"]);
+await counters.upsert({ slug: "home" }, ["slug"], []);
+```
+
+`incrementById` and `decrementById` update in place with `column = column + n`, so two concurrent callers cannot lose an update the way a read-then-write would.
+
+`Model.firstOrCreate` reads first, then inserts. If a concurrent writer wins that race the unique violation is caught and the existing row is returned, so a duplicate never surfaces as a conflict. Any other error propagates.
+
+### Walking large tables
+
+`chunkById` pages by keyset instead of `OFFSET`, so rows are neither skipped nor repeated when the callback mutates what it reads. Return `false` to stop early. Prefer it over `chunk` for anything that writes.
+
+```typescript
+await orders.chunkById(500, async (rows) => {
+  await archive(rows);
+});
+```
+
+### Relation counts
+
+`withCount` adds a correlated count as a selected column, without loading the relation.
+
+```typescript
+const squads = await Squad.query().withCount("members").get();
+squads[0].toObject().members_count;
+```
+
+### Models
+
+Mass assignment is opt-in. A model must declare `static $fillable = [...]` to allow specific columns, or `static $guarded = []` to allow all of them. A model that declares neither throws on `create`/`update` rather than silently discarding every attribute.
+
+`$casts` supports `date`, `datetime`, `json`, `bool`/`boolean`, `integer`/`int`, and `hashed`. `hashed` hashes the value with bcrypt on write and leaves an already-hashed value untouched, so re-saving a loaded model does not double-hash.
+
 ## Named connections
 
 Register extra engines without pointing HiroApp OLTP at them:

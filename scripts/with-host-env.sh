@@ -10,6 +10,9 @@ export MYSQL_URL="${MYSQL_URL:-mysql://strata:strata@localhost:33061/strata}"
 export PORT="${PORT:-3000}"
 export CACHE_DRIVER="${CACHE_DRIVER:-redis}"
 export QUEUE_DRIVER="${QUEUE_DRIVER:-sync}"
+# HiroApp's preload forces MAIL_DRIVER=smtp, which needs a MAIL_HOST. Host runs
+# have no SMTP server, so log to stdout unless the caller asked for something else.
+export MAIL_DRIVER="${MAIL_DRIVER:-log}"
 export APP_KEY_PREFIX="${APP_KEY_PREFIX:-hiroapp}"
 export APP_NAME="${APP_NAME:-HiroApp}"
 export DOGFOOD_APP="${DOGFOOD_APP:-hiroapp}"

@@ -25,7 +25,24 @@ describe("upload helpers", () => {
 
   test("isAllowedMimeType accepts common upload types", () => {
     expect(isAllowedMimeType("image/png")).toBe(true);
-    expect(isAllowedMimeType("application/octet-stream")).toBe(true);
     expect(isAllowedMimeType("application/x-msdownload")).toBe(false);
+  });
+
+  test("isAllowedMimeType rejects an undeclared type unless explicitly opted in", () => {
+    const previous = process.env.UPLOAD_ALLOW_UNKNOWN_MIME;
+    process.env.UPLOAD_ALLOW_UNKNOWN_MIME = undefined as unknown as string;
+    delete process.env.UPLOAD_ALLOW_UNKNOWN_MIME;
+
+    expect(isAllowedMimeType("application/octet-stream")).toBe(false);
+    expect(isAllowedMimeType("")).toBe(false);
+
+    process.env.UPLOAD_ALLOW_UNKNOWN_MIME = "true";
+    expect(isAllowedMimeType("application/octet-stream")).toBe(true);
+
+    if (previous === undefined) {
+      delete process.env.UPLOAD_ALLOW_UNKNOWN_MIME;
+    } else {
+      process.env.UPLOAD_ALLOW_UNKNOWN_MIME = previous;
+    }
   });
 });

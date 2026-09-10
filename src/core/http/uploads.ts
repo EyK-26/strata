@@ -1,5 +1,6 @@
-const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+import { envFlagEnabled } from "../runtime/appEnv.ts";
 
+const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const ALLOWED_UPLOAD_MIME_TYPES = new Set([
   "application/pdf",
   "application/json",
@@ -37,7 +38,7 @@ function isAllowedMimeType(mimeType: string): boolean {
   const normalized = normalizeMimeType(mimeType);
 
   if (!normalized || normalized === "application/octet-stream") {
-    return true;
+    return envFlagEnabled(process.env.UPLOAD_ALLOW_UNKNOWN_MIME);
   }
 
   return ALLOWED_UPLOAD_MIME_TYPES.has(normalized);

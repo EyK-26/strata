@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { captureConsole, repoRoot } from "./helpers";
@@ -19,8 +19,9 @@ afterEach(async () => {
 });
 
 async function withTempProject(run: (workspace: string) => Promise<void>): Promise<void> {
-  const workspace = await mkdtemp(join(tmpdir(), "strata-cli-generate-"));
-  tempDirectories.push(workspace);
+  const created = await mkdtemp(join(tmpdir(), "strata-cli-generate-"));
+  tempDirectories.push(created);
+  const workspace = await realpath(created);
   await mkdir(join(workspace, "docs"), { recursive: true });
   process.chdir(workspace);
 

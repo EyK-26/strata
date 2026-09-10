@@ -9,12 +9,14 @@ import {
   buildCountQuery,
   buildDeleteByIdQuery,
   buildGroupedCountQuery,
+  buildIncrementQuery,
   buildInsertQuery,
   buildProjectionQuery,
   buildRestoreByIdQuery,
   buildSelectQuery,
   buildSoftDeleteByIdQuery,
   buildUpdateQuery,
+  buildUpsertQuery,
   qualifyColumn,
   quoteIdentifier,
   resolveSoftDeleteColumn,
@@ -149,6 +151,40 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
   }
 
+  async chunkById(
+    count: number,
+    callback: (rows: TEntity[]) => Promise<boolean | undefined>,
+    options: Omit<ExtendedQueryOptions<TEntity>, "limit" | "offset" | "orderBy"> = {},
+  ): Promise<void> {
+    if (!Number.isInteger(count) || count <= 0) {
+      throw new Error("Chunk size must be a positive integer.");
+    }
+
+    let cursor: TEntity[PrimaryKey] | undefined;
+
+    while (true) {
+      const { data, meta } = await this.cursorPaginate({
+        ...options,
+        perPage: count,
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+
+      if (data.length === 0) {
+        return;
+      }
+
+      if ((await callback(data)) === false) {
+        return;
+      }
+
+      if (!meta.has_more || meta.next_cursor === null) {
+        return;
+      }
+
+      cursor = meta.next_cursor;
+    }
+  }
+
   async cursorPaginate(
     options: {
       perPage: number;
@@ -239,6 +275,48 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   ): Promise<TEntity | null> {
     const [record] = await this.findAll({ ...options, where, limit: 1 });
     return record ?? null;
+  }
+
+  async upsert(
+    values: MutationValues<TEntity>,
+    conflictColumns: readonly (keyof TEntity & string)[],
+    updateColumns?: readonly (keyof TEntity & string)[],
+  ): Promise<TEntity | null> {
+    return await withDatabaseErrorHandling(async () => {
+      const { text, params } = buildUpsertQuery(this.table, values, conflictColumns, updateColumns);
+      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+        text,
+        params,
+      );
+
+      return (record as TEntity | undefined) ?? null;
+    });
+  }
+
+  async incrementById(
+    id: TEntity[PrimaryKey],
+    column: keyof TEntity & string,
+    amount = 1,
+    extra: UpdateValues<TEntity, PrimaryKey> = {} as UpdateValues<TEntity, PrimaryKey>,
+  ): Promise<TEntity | null> {
+    return await withDatabaseErrorHandling(async () => {
+      const { text, params } = buildIncrementQuery(this.table, id, column, amount, extra);
+      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+        text,
+        params,
+      );
+
+      return (record as TEntity | undefined) ?? null;
+    });
+  }
+
+  async decrementById(
+    id: TEntity[PrimaryKey],
+    column: keyof TEntity & string,
+    amount = 1,
+    extra: UpdateValues<TEntity, PrimaryKey> = {} as UpdateValues<TEntity, PrimaryKey>,
+  ): Promise<TEntity | null> {
+    return await this.incrementById(id, column, -amount, extra);
   }
 
   async create(values: MutationValues<TEntity>): Promise<TEntity> {
@@ -408,7 +486,32 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       params,
     );
 
-    return Math.round(Number(row?.[alias] ?? 0));
+    return Number(row?.[alias] ?? 0);
+  }
+
+  async sum(column: keyof TEntity & string, where: QueryWhere<TEntity> = {}): Promise<number> {
+    return await this.aggregateColumn("SUM", column, where);
+  }
+
+  async avg(column: keyof TEntity & string, where: QueryWhere<TEntity> = {}): Promise<number> {
+    return await this.aggregateColumn("AVG", column, where);
+  }
+
+  async min(column: keyof TEntity & string, where: QueryWhere<TEntity> = {}): Promise<number> {
+    return await this.aggregateColumn("MIN", column, where);
+  }
+
+  async max(column: keyof TEntity & string, where: QueryWhere<TEntity> = {}): Promise<number> {
+    return await this.aggregateColumn("MAX", column, where);
+  }
+
+  private async aggregateColumn(
+    fn: "SUM" | "AVG" | "MIN" | "MAX",
+    column: keyof TEntity & string,
+    where: QueryWhere<TEntity>,
+  ): Promise<number> {
+    const qualifiedColumn = qualifyColumn(this.table.name, column);
+    return await this.averageExpression(`${fn}(${qualifiedColumn})`, "value", where);
   }
 
   protected async pluckNumberValues(

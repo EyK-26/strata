@@ -64,13 +64,32 @@ function pushParam(values: unknown[], value: unknown): string {
   return currentSqlDialect().placeholder(values.length);
 }
 
-function buildInClause(column: string, values: readonly unknown[], params: unknown[]): string {
+const SUPPORTED_OPERATORS: ReadonlySet<string> = new Set([
+  "eq",
+  "ne",
+  "in",
+  "notIn",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "isNull",
+  "ilike",
+  "tsMatch",
+]);
+
+function buildInClause(
+  column: string,
+  values: readonly unknown[],
+  params: unknown[],
+  negated = false,
+): string {
   if (values.length === 0) {
-    return "1 = 0";
+    return negated ? "1 = 1" : "1 = 0";
   }
 
   const placeholders = values.map((value) => pushParam(params, value)).join(", ");
-  return `${column} IN (${placeholders})`;
+  return `${column}${negated ? " NOT" : ""} IN (${placeholders})`;
 }
 
 function buildOperatorClauses(
@@ -79,6 +98,13 @@ function buildOperatorClauses(
   params: unknown[],
 ): string[] {
   const clauses: string[] = [];
+
+  const unsupported = Object.keys(operator).filter((key) => !SUPPORTED_OPERATORS.has(key));
+  if (unsupported.length > 0) {
+    throw new Error(
+      `Unsupported query operator(s) for ${column}: ${unsupported.join(", ")}. Supported: ${[...SUPPORTED_OPERATORS].join(", ")}.`,
+    );
+  }
 
   if (operator.isNull === true) {
     clauses.push(`${column} IS NULL`);
@@ -96,8 +122,20 @@ function buildOperatorClauses(
     }
   }
 
+  if (operator.ne !== undefined) {
+    if (operator.ne === null) {
+      clauses.push(`${column} IS NOT NULL`);
+    } else {
+      clauses.push(`${column} <> ${pushParam(params, operator.ne)}`);
+    }
+  }
+
   if (operator.in !== undefined) {
     clauses.push(buildInClause(column, operator.in, params));
+  }
+
+  if (operator.notIn !== undefined) {
+    clauses.push(buildInClause(column, operator.notIn, params, true));
   }
 
   if (operator.gt !== undefined) {
@@ -455,6 +493,11 @@ function buildSelectList<TEntity extends object>(
         return `${currentSqlDialect().castToText(pushParam(params, item.value))} AS ${quoteIdentifier(item.as)}`;
       }
 
+      if (item.kind === "subqueryCount") {
+        const body = remapExistsSql(item.sql, item.params, params);
+        return `(${body}) AS ${quoteIdentifier(item.as)}`;
+      }
+
       const column = qualifyColumn(item.table, item.column);
       const placeholder = pushParam(params, item.query);
       return `ts_rank(${column}, plainto_tsquery('english', ${placeholder})) AS ${quoteIdentifier(item.as)}`;
@@ -602,6 +645,79 @@ function buildInsertQuery<TEntity extends object, PrimaryKey extends keyof TEnti
   };
 }
 
+function buildUpsertQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  table: TableDefinition<TEntity, PrimaryKey>,
+  values: MutationValues<TEntity>,
+  conflictColumns: readonly string[],
+  updateColumns?: readonly string[],
+): { text: string; params: unknown[] } {
+  const entries = getDefinedColumnEntries(table, values);
+
+  if (entries.length === 0) {
+    throw new Error(`Cannot upsert into ${table.name} without any column values.`);
+  }
+
+  if (conflictColumns.length === 0) {
+    throw new Error(`Cannot upsert into ${table.name} without any conflict columns.`);
+  }
+
+  const insertable = new Set(entries.map(([column]) => column as string));
+  const conflict = new Set(conflictColumns as readonly string[]);
+  const updatable = (
+    updateColumns ?? entries.map(([column]) => column as string).filter((c) => !conflict.has(c))
+  ).filter((column) => insertable.has(column));
+
+  const params: unknown[] = [];
+  const columns = entries.map(([column]) => quoteIdentifier(column)).join(", ");
+  const placeholders = entries.map(([, value]) => pushParam(params, value)).join(", ");
+  const returningColumns = buildReturningColumns(table);
+  const suffix = currentSqlDialect().upsertSuffix(conflictColumns, updatable);
+
+  return {
+    text: `INSERT INTO ${quoteIdentifier(table.name)} (${columns}) VALUES (${placeholders})${suffix}${returningSuffix(returningColumns)}`,
+    params,
+  };
+}
+
+function buildIncrementQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  table: TableDefinition<TEntity, PrimaryKey>,
+  id: TEntity[PrimaryKey],
+  column: keyof TEntity & string,
+  amount: number,
+  extra: UpdateValues<TEntity, PrimaryKey> = {} as UpdateValues<TEntity, PrimaryKey>,
+): { text: string; params: unknown[] } {
+  if (!Number.isFinite(amount)) {
+    throw new Error("Increment amount must be a finite number.");
+  }
+
+  if (!table.columns.includes(column)) {
+    throw new Error(`Unknown column ${String(column)} on ${table.name}.`);
+  }
+
+  const params: unknown[] = [];
+  const target = quoteIdentifier(column);
+  const assignments = [`${target} = ${target} + ${pushParam(params, amount)}`];
+
+  for (const [name, value] of getDefinedColumnEntries(table, extra as Partial<TEntity>, {
+    exclude: [table.primaryKey, column],
+  })) {
+    assignments.push(`${quoteIdentifier(name)} = ${pushParam(params, value)}`);
+  }
+
+  const primaryKeyPlaceholder = pushParam(params, id);
+  const returningColumns = buildReturningColumns(table);
+  const scopeClauses: string[] = [];
+
+  appendSoftDeleteScope(table, {}, scopeClauses);
+
+  const scopeSuffix = scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
+
+  return {
+    text: `UPDATE ${quoteIdentifier(table.name)} SET ${assignments.join(", ")} WHERE ${quoteIdentifier(table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix}${returningSuffix(returningColumns)}`,
+    params,
+  };
+}
+
 function buildUpdateQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
@@ -704,6 +820,7 @@ export {
   buildCountQuery,
   buildDeleteByIdQuery,
   buildGroupedCountQuery,
+  buildIncrementQuery,
   buildInsertQuery,
   buildJoinClause,
   buildOrderByClause,
@@ -713,6 +830,7 @@ export {
   buildSelectQuery,
   buildSoftDeleteByIdQuery,
   buildUpdateQuery,
+  buildUpsertQuery,
   buildWhereClause,
   parseQualifiedColumn,
   qualifyColumn,

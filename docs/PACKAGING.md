@@ -45,11 +45,45 @@ Versions are asserted by `scripts/verify-package-versions.ts`.
 
 Merging a version-bump PR to `main` does not publish. npm, the GitHub Release, and GHCR start when you push a `v*` tag.
 
+### 1. Bump
+
+A release moves the same version through four different shapes: five `package.json` `version` fields, bootstrap's `@getstrata/core` peer range, the `EXPECTED` map in `scripts/verify-package-versions.ts`, the generated-app pins in the starter template and `renderEnv.ts`, the tests asserting those pins, and four changelogs. `bun run bump` edits all of them together:
+
+```bash
+bun run bump 1.0.7 --check                     # list what would change, write nothing
+bun run bump 1.0.7 --notes "- What shipped."   # apply
+```
+
+The bump refuses a version older than the current one, and is a no-op when every file already matches. Open it as its own PR and merge it before tagging.
+
+### 2. Check before tagging
+
+`v1.0.6` was tagged on a commit whose packages still said `1.0.5`. The release workflow rejected it, but only after the tag existed, so the tag had to be force-moved. Run the check first; it needs no network unless `--check-npm` is passed:
+
+```bash
+bun run release:check                                   # report the releasable version
+bun run release:check v1.0.7                            # assert the tag matches all five
+bun scripts/verify-release-ready.ts v1.0.7 --check-npm  # also refuse an already-published version
+```
+
+When a tag is passed, the versions are read from **`origin/main`**, not from your working tree, because `origin/main` is what gets tagged. Bumping on a branch and checking before the merge lands therefore fails:
+
+```
+- origin/main is at 1.0.6 but this working tree is at 1.0.7.
+  Tagging origin/main would publish 1.0.6. Merge the bump first.
+- HEAD is not contained in origin/main, so the code verified here is not
+  the code that would be tagged.
+```
+
+Nothing in `release.yml` enforces that a tag sits on `main`, so this check is the guard. Use `--ref=<ref>` to compare against a different branch, and `--no-target-check` to skip it. `bun run release:check` without a tag reads the working tree and is what `validate:ci` runs, so a branch build is unaffected.
+
+### 3. Tag
+
 Do this after the bump is on `main`, and tag the merge commit (not the PR branch). Trusted publishers on all five npm packages must already be saved (see below):
 
 ```bash
 git fetch origin main
-# Confirm packages/strata-core/package.json on origin/main is X.Y.Z
+bun scripts/verify-release-ready.ts vX.Y.Z
 git tag vX.Y.Z origin/main
 git push origin vX.Y.Z
 ```

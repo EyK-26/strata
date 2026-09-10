@@ -399,7 +399,7 @@ describe("base repository", () => {
     const repository = new CrewRepository(connection);
 
     connection.queue([{ value: "2.4" }]);
-    expect(await repository.averageSquad()).toBe(2);
+    expect(await repository.averageSquad()).toBe(2.4);
 
     connection.queue([{ value: 1 }, { value: null }, { value: 3 }]);
     expect(await repository.pluckSquadIds()).toEqual([1, 3]);

@@ -1,4 +1,4 @@
-import { NotFoundError } from "@getstrata/core/errors/http";
+import { ConflictError, NotFoundError } from "@getstrata/core/errors/http";
 import type BaseRepository from "./baseRepository.ts";
 import { foreignKeyFromTable, pivotTableName } from "./inflection.ts";
 import { resolveSoftDeleteColumn } from "./query.ts";
@@ -304,6 +304,22 @@ function getGlobalScopes(model: object): GlobalScopeFn<Record<string, unknown>, 
   return modelGlobalScopes.get(model) ?? [];
 }
 
+const PASSWORD_HASH_PATTERN = /^\$(?:2[aby]?|argon2(?:i|d|id)?)\$/;
+
+function isAlreadyHashed(value: string): boolean {
+  return PASSWORD_HASH_PATTERN.test(value);
+}
+
+function hashCastValue(value: unknown): string {
+  const plain = String(value);
+
+  if (isAlreadyHashed(plain)) {
+    return plain;
+  }
+
+  return Bun.password.hashSync(plain, { algorithm: "bcrypt", cost: 10 });
+}
+
 function hydrateValue(value: unknown, cast: CastType): unknown {
   if (value === null || value === undefined) {
     return value;
@@ -346,7 +362,7 @@ function dehydrateValue(value: unknown, cast: CastType): unknown {
     case "int":
       return value === "" ? null : Number(value);
     case "hashed":
-      return value;
+      return hashCastValue(value);
     default:
       return value;
   }
@@ -357,6 +373,12 @@ function filterMassAssignable(
   guarded: readonly string[] | true | undefined,
   input: LoadedAttributes,
 ): LoadedAttributes {
+  if (fillable === undefined && guarded === undefined && Object.keys(input).length > 0) {
+    throw new Error(
+      "Mass assignment is not configured for this model. Declare static $fillable = [...] to allow specific columns, or static $guarded = [] to allow all of them.",
+    );
+  }
+
   const resolvedGuarded = guarded ?? true;
 
   if (fillable && fillable.length > 0) {
@@ -509,9 +531,47 @@ class ModelQuery {
     return this;
   }
 
+  whereNotNull(column: string): this {
+    this.query.whereNotNull(column as never);
+    return this;
+  }
+
   whereIn(column: string, values: readonly unknown[]): this {
     this.query.whereIn(column, values);
     return this;
+  }
+
+  whereNotIn(column: string, values: readonly unknown[]): this {
+    this.query.whereNotIn(column as never, values);
+    return this;
+  }
+
+  groupBy(groupBy: QueryOptions<object>["groupBy"]): this {
+    this.query.groupBy(groupBy);
+    return this;
+  }
+
+  having(having: QueryWhere<object>): this {
+    this.query.having(having as QueryWhere<Record<string, unknown>>);
+    return this;
+  }
+
+  join(left: `${string}.${string}`, right: `${string}.${string}`): this {
+    this.query.join(left, right);
+    return this;
+  }
+
+  leftJoin(left: `${string}.${string}`, right: `${string}.${string}`): this {
+    this.query.leftJoin(left, right);
+    return this;
+  }
+
+  async paginate(options: { page: number; perPage: number }): Promise<{
+    data: Array<Model<Record<string, unknown>, "id">>;
+    meta: Awaited<ReturnType<RepositoryQuery<Record<string, unknown>, "id">["paginate"]>>["meta"];
+  }> {
+    const { data, meta } = await this.query.paginate(options);
+    return { data: await this.hydrateRows(data), meta };
   }
 
   whereExists(sql: string, params: readonly unknown[] = []): this {
@@ -600,8 +660,13 @@ class ModelQuery {
   }
 
   async get(): Promise<Array<Model<Record<string, unknown>, "id">>> {
+    return await this.hydrateRows(await this.query.get());
+  }
+
+  private async hydrateRows(
+    rows: readonly Record<string, unknown>[],
+  ): Promise<Array<Model<Record<string, unknown>, "id">>> {
     const statics = modelStatics(this.modelClass);
-    const rows = await this.query.get();
     const models: Array<Model<Record<string, unknown>, "id">> = [];
 
     for (const row of rows) {
@@ -684,6 +749,35 @@ class ModelQuery {
     onrejected?: ((reason: unknown) => unknown) | null,
   ): Promise<unknown> {
     return this.get().then(onfulfilled ?? undefined, onrejected ?? undefined);
+  }
+
+  withCount(name: string, alias = `${name}_count`): this {
+    const statics = modelStatics(this.modelClass);
+    ensureBooted(this.modelClass);
+    const repository = resolveModelRepository(this.modelClass);
+    const dummy = statics.newFromRecord({});
+    const method = (dummy as unknown as Record<string, unknown>)[name];
+
+    if (typeof method !== "function") {
+      throw new Error(
+        `${(this.modelClass as { name: string }).name} has no relation method ${name}().`,
+      );
+    }
+
+    const relationQuery = method.call(dummy) as AnyRelationQuery;
+    const exists = relationQuery.toExistsClause(repository.getTable().name);
+
+    if (!exists.sql.startsWith("SELECT 1 ")) {
+      throw new Error(`Cannot count relation ${name}: unexpected subquery shape.`);
+    }
+
+    this.query.withSubqueryCount(
+      alias,
+      `SELECT COUNT(*) ${exists.sql.slice("SELECT 1 ".length)}`,
+      exists.params,
+    );
+
+    return this;
   }
 
   private constrainExists(
@@ -1116,23 +1210,40 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     where: QueryWhere<object>,
     values: Record<string, unknown> = {},
   ): Promise<Model<Record<string, unknown>, "id">> {
-    const existing = await (
-      Model.firstWhere as (
-        this: object,
-        filter: QueryWhere<object>,
-      ) => Promise<Model<Record<string, unknown>, "id"> | null>
-    ).call(this, where);
+    const findExisting = () =>
+      (
+        Model.firstWhere as (
+          this: object,
+          filter: QueryWhere<object>,
+        ) => Promise<Model<Record<string, unknown>, "id"> | null>
+      ).call(this, where);
+
+    const existing = await findExisting();
 
     if (existing) {
       return existing;
     }
 
-    return (
-      Model.create as (
-        this: object,
-        attributes: Record<string, unknown>,
-      ) => Promise<Model<Record<string, unknown>, "id">>
-    ).call(this, { ...where, ...values });
+    try {
+      return await (
+        Model.create as (
+          this: object,
+          attributes: Record<string, unknown>,
+        ) => Promise<Model<Record<string, unknown>, "id">>
+      ).call(this, { ...where, ...values });
+    } catch (error) {
+      if (!(error instanceof ConflictError)) {
+        throw error;
+      }
+
+      const raced = await findExisting();
+
+      if (!raced) {
+        throw error;
+      }
+
+      return raced;
+    }
   }
 
   static async updateOrCreate(
