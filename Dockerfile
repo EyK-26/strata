@@ -1,3 +1,6 @@
+# check=skip=SecretsUsedInArgOrEnv
+# APP_KEY_PREFIX namespaces cookies and Redis keys. It is not a secret, but the
+# linter matches any ENV whose name contains KEY.
 FROM oven/bun:1.4 AS base
 WORKDIR /app
 
@@ -16,8 +19,9 @@ FROM base AS build
 COPY --from=install /app/node_modules ./node_modules
 COPY . .
 RUN bun run build:framework && bun run build:bootstrap
-# bun prune --production fails on this workspace ("bun.lock does not match
-# package.json") in Bun 1.4. The image runs TypeScript from source.
+# Drop devDependencies once the framework is built. This needs bun.lock to agree
+# with every package.json, which `bun run bump` keeps in sync.
+RUN bun prune --production
 ENV NODE_ENV=production
 
 FROM base AS release
@@ -35,4 +39,9 @@ ENV APP_NAME=HiroApp
 ENV API_PREFIX=/api
 USER bun
 EXPOSE 3000
-CMD ["bun", "run", "start"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD bun -e "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+# The install stage links bins from package.json alone, before the workspace
+# sources are copied, so node_modules/.bin/strata is never created. Invoke the
+# CLI directly instead of going through `bun run start`.
+CMD ["bun", "packages/strata-cli/cli.ts", "start"]

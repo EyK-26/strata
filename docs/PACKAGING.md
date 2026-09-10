@@ -139,6 +139,26 @@ Then:
 
 See `packages/strata-core/CHANGELOG.md` for release notes.
 
+## Container image
+
+The release stage installs production dependencies only (`bun prune --production`
+after the framework build), which needs `bun.lock` to agree with every
+`package.json`. `bun run bump` refreshes the lockfile for that reason; a
+hand-edited version will make the prune fail.
+
+`CMD` runs `bun packages/strata-cli/cli.ts start` rather than `bun run start`.
+The install stage copies the workspace `package.json` files alone so the
+dependency layer caches, which means bun links bins before any source exists and
+`node_modules/.bin/strata` is never created. Going through `bun run start` fails
+with `strata: command not found`.
+
+`src/` and `apps/hiroapp` both ship: the root server is a shim that imports the
+dogfood app through `src/bootstrap/dogfoodApp.ts`.
+
+If a GHCR push uploads every layer and then fails on the manifest with an
+empty-body `403`, the package storage quota is the first thing to check. Private
+packages count against it; public ones do not.
+
 ## OpenAPI and SDK
 
 ```bash

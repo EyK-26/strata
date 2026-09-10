@@ -103,6 +103,21 @@ for (const [file, contents] of pending) {
   await writeFile(join(ROOT, file), contents, "utf8");
 }
 
+const lockfile = Bun.spawn(["bun", "install", "--lockfile-only"], {
+  cwd: ROOT,
+  stdout: "ignore",
+  stderr: "pipe",
+});
+
+if ((await lockfile.exited) !== 0) {
+  console.error(
+    `Bumped the manifests but could not refresh bun.lock:\n${await new Response(lockfile.stderr).text()}`,
+  );
+  process.exit(1);
+}
+
+pending.set("bun.lock", "");
+
 console.log(`Bumped ${current} -> ${version} across ${pending.size} file(s):`);
 for (const file of [...pending.keys()].sort()) {
   console.log(`  ${file}`);
