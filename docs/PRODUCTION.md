@@ -49,6 +49,7 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 - `TENANCY_DRIVER` must be exactly `none`, `column`, or `rls`; unknown values refuse to boot instead of silently enabling rls
 - Generated apps ship a production `Dockerfile` (`APP_ENV=production`, `AUTH_DEV_HEADERS=false`, non-root user, `HEALTHCHECK`). `GET /health` answers 503 until the schema is migrated, so run `bun run db:migrate` as a deploy step
 - `METRICS_TOKEN` to authorize `GET /metrics` (production hides the endpoint unless this is set)
+- Multipart uploads are rejected unless the declared content type is on the allowlist. A missing content type and `application/octet-stream` are rejected too, because the client picks that value. Set `UPLOAD_ALLOW_UNKNOWN_MIME=true` only if you accept uploads from clients that cannot label them, and pair it with your own content inspection
 - `TENANCY_DRIVER=none` for apps without a `tenant` table. HiroApp keeps `rls`
 - Unhandled exceptions return `500 {"error":"Internal server error."}` and are logged with their stack; driver constraint violations map to 409/422/400 with fixed messages on Postgres, MySQL, and SQLite
 - Off-site database backups: [DR.md](./DR.md)

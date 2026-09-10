@@ -3,7 +3,9 @@ type DatabaseScalar = DatabaseComparable | boolean | null;
 
 type QueryOperator = {
   eq?: DatabaseScalar;
+  ne?: DatabaseScalar;
   in?: readonly DatabaseScalar[];
+  notIn?: readonly DatabaseScalar[];
   gt?: DatabaseComparable;
   gte?: DatabaseComparable;
   lt?: DatabaseComparable;
@@ -40,6 +42,7 @@ type QueryJoin = {
 type QuerySelectItem =
   | { kind: "column"; table: string; column: string; as?: string }
   | { kind: "literalText"; value: string; as: string }
+  | { kind: "subqueryCount"; sql: string; params: readonly unknown[]; as: string }
   | { kind: "tsRank"; table: string; column: string; query: string; as: string };
 
 interface QueryOptions<TEntity> {

@@ -111,6 +111,28 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return this.where({ [column]: { isNull: false } } as QueryWhere<TEntity>);
   }
 
+  whereNotIn(column: keyof TEntity & string, values: readonly unknown[]): this {
+    return this.where({ [column]: { notIn: values } } as QueryWhere<TEntity>);
+  }
+
+  withSubqueryCount(alias: string, sql: string, params: readonly unknown[] = []): this {
+    const table = this.repository.getTable();
+    const existing =
+      this.queryOptions.select ??
+      table.columns.map((column) => ({
+        kind: "column" as const,
+        table: table.name,
+        column,
+      }));
+
+    this.queryOptions = {
+      ...this.queryOptions,
+      select: [...existing, { kind: "subqueryCount", sql, params, as: alias }],
+    };
+
+    return this;
+  }
+
   whereIn(column: keyof TEntity & string, values: readonly unknown[]): this {
     return this.where({ [column]: values } as QueryWhere<TEntity>);
   }

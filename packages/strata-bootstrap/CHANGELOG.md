@@ -1,5 +1,7 @@
 # @getstrata/bootstrap changelog
 
+## 1.0.7
+
 ## 1.0.6
 
 - Lockstep with `create-strata` 1.0.6. No runtime changes.
