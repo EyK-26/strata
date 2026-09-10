@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 1.0.8
+
+- Container image starts and ships production dependencies only.
+
 ## 1.0.7
 
 Always-custom wizard: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then optional Docker Compose per selected tool. In-repo example apps are generated from the same script.
