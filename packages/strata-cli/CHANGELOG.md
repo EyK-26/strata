@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 1.0.8
+
+- Container image starts and ships production dependencies only.
+
 ## 1.0.7
 
 ## 1.0.6
