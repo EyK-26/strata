@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Strata Bun framework public API",
   "type": "module",
   "license": "MIT",
