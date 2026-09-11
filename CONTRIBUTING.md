@@ -51,7 +51,7 @@ Gate optional features with `isFeatureEnabled()` in `index.ts`. Put product-doma
 
 ## Migrations and seeds
 
-HiroApp:
+HiroApp is dogfood for internal end-to-end testing:
 
 ```bash
 docker compose exec app bun run hiroapp:fresh
@@ -67,7 +67,7 @@ Never edit an applied migration. Add a new file.
 
 ## OpenAPI
 
-When HiroApp routes change:
+When HiroApp (dogfood) routes change:
 
 ```bash
 DOGFOOD_APP=hiroapp APP_KEY_PREFIX=hiroapp APP_NAME=HiroApp API_PREFIX=/api strata openapi:generate

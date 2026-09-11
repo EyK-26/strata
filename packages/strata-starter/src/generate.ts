@@ -40,6 +40,7 @@ import {
   renderEnsureDatabaseTs,
   renderFreshTs,
   renderMigrateTs,
+  renderNoteModel,
   renderPreloadTs,
   renderProvidersIndex,
   renderQueueProvider,
@@ -135,7 +136,13 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     join(targetDir, "package.json"),
     renderPackageJson(projectName, { ...options, layers }),
   );
-  writeText(join(targetDir, "README.md"), renderReadme(projectName, layers));
+  writeText(
+    join(targetDir, "README.md"),
+    renderReadme(projectName, layers, {
+      inRepoExample: options.inRepoExample,
+      dogfood: options.dogfood,
+    }),
+  );
   if (layers.frontend === "api") {
     writeText(join(targetDir, "docs/API.md"), renderApiDocs(projectName, layers));
   } else {
@@ -169,6 +176,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   writeText(join(src, "bootstrap/providers/queue.ts"), renderQueueProvider());
   writeText(join(src, "bootstrap/providers/index.ts"), renderProvidersIndex());
   writeText(join(src, "bootstrap/providers/auth.ts"), renderAuthProvider(layers));
+  writeText(join(src, "models/Note.ts"), renderNoteModel());
   writeText(join(src, "db/migrate.ts"), renderMigrateTs(layers));
   writeText(join(src, "db/fresh.ts"), renderFreshTs(layers));
   writeText(join(src, "db/seed.ts"), renderSeedTs());

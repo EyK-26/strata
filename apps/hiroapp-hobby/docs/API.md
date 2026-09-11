@@ -24,7 +24,7 @@ Create a module under `src/modules/` and return a route map. Modules are discove
 // src/modules/notes/index.ts
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { getSql } from "../../bootstrap/database.ts";
+import { Note } from "../../models/Note.ts";
 
 const notesModule: AppModule = {
   name: "notes",
@@ -32,10 +32,8 @@ const notesModule: AppModule = {
   routes({ kernel }) {
     return {
       "/api/v1/notes": kernel.wrap("api", async () => {
-        const rows = await getSql().unsafe<{ id: number; body: string }>(
-          "SELECT id, body FROM notes ORDER BY id DESC",
-        );
-        return jsonResponse({ data: rows });
+        const bodiesById = await Note.query().orderBy({ id: "desc" }).pluck("body", "id");
+        return jsonResponse({ data: Object.fromEntries(bodiesById) });
       }),
     };
   },

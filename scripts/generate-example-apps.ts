@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 /**
  * Regenerate the three in-repo example apps from create-strata layer maps.
+ * `apps/hiroapp` is CI dogfood for internal end-to-end testing. The siblings
+ * are layer maps, not CI dogfood.
  * Usage: bun scripts/generate-example-apps.ts
  */
 
@@ -27,13 +29,15 @@ for (const id of EXAMPLE_APP_IDS) {
     overlayRoot: resolveOverlayRoot(),
     force: true,
     workspaceDependencies: true,
+    inRepoExample: true,
+    dogfood: id === "hiroapp",
   });
   appDirs.push(targetDir);
   console.log(`Wrote apps/${id} (${layers.frontend}, ${layers.database}, ${layers.auth})`);
 }
 
 const biome = Bun.spawnSync({
-  cmd: ["bunx", "biome", "check", "--write", ...appDirs],
+  cmd: ["bun", "x", "@biomejs/biome", "check", "--write", ...appDirs],
   cwd: repoRoot,
   stdout: "inherit",
   stderr: "inherit",

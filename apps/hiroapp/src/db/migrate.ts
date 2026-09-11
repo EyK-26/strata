@@ -1,6 +1,7 @@
 import { hashPassword } from "@getstrata/core/auth/password";
 import { closeDatabase, getSql } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
+import { Note } from "../models/Note.ts";
 
 const migrations = [
   `CREATE TABLE IF NOT EXISTS tenant (
@@ -50,11 +51,8 @@ const migrations = [
 export async function seed() {
   await ensureAppDatabase();
   const sql = getSql();
-  const [{ count }] = await sql.unsafe<{ count: string | number }>(
-    "SELECT COUNT(*) AS count FROM notes",
-  );
-  if (Number(count) === 0) {
-    await sql.unsafe("INSERT INTO notes (body) VALUES ($1)", ["Welcome to Strata!"]);
+  if ((await Note.query().value("id")) === null) {
+    await Note.create({ body: "Welcome to Strata!" });
   }
   const [{ count: tenantCount }] = await sql.unsafe<{ count: string | number }>(
     "SELECT COUNT(*) AS count FROM tenant",

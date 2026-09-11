@@ -73,6 +73,10 @@ interface GenerateOptions {
   overlayRoot: string;
   force?: boolean;
   workspaceDependencies?: boolean;
+  /** True when writing the in-repo apps under `apps/`. Product `create-strata` stays unset. */
+  inRepoExample?: boolean;
+  /** True only for `apps/hiroapp`. Product scaffolds and sibling examples stay unset. */
+  dogfood?: boolean;
 }
 
 function authUsesCookie(auth: AuthStack): boolean {

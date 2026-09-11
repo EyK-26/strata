@@ -306,7 +306,6 @@ function renderMigrateTs(layers: StarterLayers): string {
   const list = statements.map((sql) => `  \`${sql}\`,`).join("\n");
 
   const ph = layers.database === "postgres";
-  const notePlaceholder = ph ? "$1" : "?";
   const verifyOn = layers.extras.emailVerification && authNeedsUsers(layers.auth);
   const userColumns = verifyOn
     ? "name, email, password, is_admin, email_verified_at"
@@ -357,22 +356,18 @@ function renderMigrateTs(layers: StarterLayers): string {
     : "";
 
   const seedBlock = `${seedTenant}${seedUsers}`;
+  const bindSql = seedBlock.length > 0 ? "  const sql = getSql();\n" : "  getSql();\n";
 
   return `${hashImport}${ensureImport(layers)}import { closeDatabase, getSql } from "../bootstrap/database.ts";
+import { Note } from "../models/Note.ts";
 
 const migrations = [
 ${list}
 ];
 
 export async function seed() {
-${ensureCall(layers)}  const sql = getSql();
-  const [{ count }] = await sql.unsafe<{ count: string | number }>(
-    "SELECT COUNT(*) AS count FROM notes",
-  );
-  if (Number(count) === 0) {
-    await sql.unsafe("INSERT INTO notes (body) VALUES (${notePlaceholder})", [
-      "Welcome to Strata!",
-    ]);
+${ensureCall(layers)}${bindSql}  if ((await Note.query().value("id")) === null) {
+    await Note.create({ body: "Welcome to Strata!" });
   }${seedBlock}
 }
 
@@ -395,6 +390,44 @@ if (import.meta.main) {
   await close();
   process.exit(0);
 }
+`;
+}
+
+function renderNoteModel(): string {
+  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { defineTable } from "@getstrata/core/database/table";
+
+interface NoteRecord {
+  id: number;
+  body: string;
+  created_at: Date | string;
+}
+
+const notesTable = defineTable<NoteRecord, "id">({
+  name: "notes",
+  primaryKey: "id",
+  columns: ["id", "body", "created_at"],
+  defaultOrderBy: { column: "id", direction: "ASC" },
+});
+
+class NoteRepository extends BaseRepository<NoteRecord, "id"> {
+  constructor() {
+    super(notesTable);
+  }
+}
+
+class Note extends Model<NoteRecord, "id"> {
+  static $fillable = ["body"] as const;
+  // created_at uses the table default. Sending a JS Date from $timestamps
+  // is rejected by SQLite bindings.
+  static $timestamps = false;
+}
+
+registerModelRepository(Note, new NoteRepository());
+
+export type { NoteRecord };
+export { Note };
 `;
 }
 
@@ -984,6 +1017,7 @@ export {
   renderEnsureDatabaseTs,
   renderFreshTs,
   renderMigrateTs,
+  renderNoteModel,
   renderPreloadTs,
   renderProvidersIndex,
   renderQueueProvider,

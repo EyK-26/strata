@@ -1,6 +1,6 @@
 # Framework packaging
 
-**Strata** is the framework. **HiroApp** is the in-repo generated example. Framework code lives in `src/core/` and `src/bootstrap/`. Example apps live in `apps/`. Extraction to a separate repository is optional.
+**Strata** is the framework. **HiroApp** (`apps/hiroapp`) is in-repo dogfood for internal end-to-end testing. Framework code lives in `src/core/` and `src/bootstrap/`. Generated apps live in `apps/`. Extraction to a separate repository is optional.
 
 ## Public API
 
@@ -153,7 +153,7 @@ dependency layer caches, which means bun links bins before any source exists and
 with `strata: command not found`.
 
 `src/` and `apps/hiroapp` both ship: the root server is a shim that imports the
-dogfood app through `src/bootstrap/dogfoodApp.ts`.
+dogfood app (`apps/hiroapp`, internal end-to-end testing) through `src/bootstrap/dogfoodApp.ts`.
 
 If a GHCR push uploads every layer and then fails on the manifest with an
 empty-body `403`, the package storage quota is the first thing to check. Private

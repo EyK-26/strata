@@ -2,7 +2,7 @@
 
 `bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space. If you see `Choose [1]:` instead, bunx did not get raw keyboard mode. Retry in a real terminal, or pass `--yes` with layer flags.
 
-HiroApp in this repo is one generated example (`apps/hiroapp`: Postgres + HTMX). It is not the source of the wizard. Sibling examples: `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis). Regenerate them with `bun run generate:example-apps`.
+HiroApp in this repo (`apps/hiroapp`: Postgres + HTMX) is dogfood for internal end-to-end testing. It is not a product and it is not the source of the wizard. Sibling apps `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis) are generated layer maps and are not CI dogfood. Regenerate them with `bun run generate:example-apps`.
 
 ## Quick start
 
@@ -57,7 +57,7 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 
 - `GET /health` after `strata migrate` (plain text `ok`, or 503 `degraded` until the database ping and the `notes` table exist). Docker HEALTHCHECK uses `/health`. Migrate also seeds when the tables are empty.
 - `GET /ready` (from `@getstrata/bootstrap/health`): JSON database and Redis pings, 200 or 503. No schema check, so it can be 200 before the first migrate; `/health` is the gate.
-- Notes table on every app
+- Notes table and a `Note` model on every app. Seed and `/health` use `Note.query().value`. There is no notes CRUD route.
 - Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Seed `demo@example.com` / `password`
 - Token apps: `POST /api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`
 - JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
@@ -72,4 +72,4 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 
 `strata new my-app --yes` calls the same generator. `strata new --frontend=hybrid` (no project name) still overlays HTML/SPA files into the current directory.
 
-Example apps are generated from `scripts/generate-example-apps.ts`.
+In-repo apps are generated from `scripts/generate-example-apps.ts`. Only `apps/hiroapp` is CI dogfood.
