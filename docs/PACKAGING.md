@@ -47,7 +47,7 @@ Merging a version-bump PR to `main` does not publish. npm, the GitHub Release, a
 
 ### 1. Bump
 
-A release moves the same version through four different shapes: five `package.json` `version` fields, bootstrap's `@getstrata/core` peer range, the `EXPECTED` map in `scripts/verify-package-versions.ts`, the generated-app pins in the starter template and `renderEnv.ts`, the tests asserting those pins, and four changelogs. `bun run bump` edits all of them together:
+A release moves the same version through five `package.json` `version` fields, bootstrap's `@getstrata/core` peer range, the `EXPECTED` map in `scripts/verify-package-versions.ts`, the generated-app pins in the starter template and `renderEnv.ts`, the tests asserting those pins, the root README `Published as` line, and four changelogs. `bun run bump` edits all of them together:
 
 ```bash
 bun run bump 1.0.7 --check                     # list what would change, write nothing

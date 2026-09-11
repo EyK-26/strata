@@ -50,6 +50,12 @@ function setExpectedVersions(text: string, version: string): string {
   });
 }
 
+const PUBLISHED_README_PATTERN = /Published as \*\*\d+\.\d+\.\d+\*\*/;
+
+function setPublishedReadmeVersion(text: string, version: string): string {
+  return text.replace(PUBLISHED_README_PATTERN, `Published as **${version}**`);
+}
+
 function insertChangelogEntry(text: string, version: string, notes = ""): string {
   if (new RegExp(`^##\\s+${version.replace(/\./g, "\\.")}\\s*$`, "m").test(text)) {
     return text;
@@ -75,4 +81,5 @@ export {
   retargetStrataPins,
   setExpectedVersions,
   setPackageVersion,
+  setPublishedReadmeVersion,
 };

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   compareVersions,
   insertChangelogEntry,
@@ -6,6 +8,7 @@ import {
   retargetStrataPins,
   setExpectedVersions,
   setPackageVersion,
+  setPublishedReadmeVersion,
 } from "../../scripts/bump-version.ts";
 
 describe("parseVersion", () => {
@@ -124,6 +127,42 @@ const OTHER = { "@getstrata/core": "1.0.6" };`;
   test("is idempotent", () => {
     const once = setExpectedVersions(source, "1.0.7");
     expect(setExpectedVersions(once, "1.0.7")).toBe(once);
+  });
+});
+
+describe("setPublishedReadmeVersion", () => {
+  const readme = `# Strata
+
+Published as **1.0.8**:
+
+| Package | What it is |
+`;
+
+  test("rewrites the Published as line", () => {
+    expect(setPublishedReadmeVersion(readme, "1.0.9")).toContain("Published as **1.0.9**:");
+    expect(setPublishedReadmeVersion(readme, "1.0.9")).not.toContain("Published as **1.0.8**");
+  });
+
+  test("is idempotent", () => {
+    const once = setPublishedReadmeVersion(readme, "1.0.9");
+    expect(setPublishedReadmeVersion(once, "1.0.9")).toBe(once);
+  });
+
+  test("leaves unrelated version numbers alone", () => {
+    const mixed = `${readme}\nSee 1.0.8 in the changelog.\n`;
+    const after = setPublishedReadmeVersion(mixed, "1.0.9");
+    expect(after).toContain("See 1.0.8 in the changelog.");
+  });
+
+  test("the committed README matches the lockstep package version", async () => {
+    const root = join(import.meta.dir, "../..");
+    const pkg = JSON.parse(
+      await readFile(join(root, "packages/strata-core/package.json"), "utf8"),
+    ) as {
+      version: string;
+    };
+    const committed = await readFile(join(root, "README.md"), "utf8");
+    expect(committed).toContain(`Published as **${pkg.version}**:`);
   });
 });
 
