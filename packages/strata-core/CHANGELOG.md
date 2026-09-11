@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.0.9
+
+Label HiroApp as internal e2e dogfood and seed notes via Model
+
 ## 1.0.8
 
 - Container image starts and ships production dependencies only.
