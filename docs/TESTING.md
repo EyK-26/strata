@@ -1,6 +1,6 @@
 # Testing
 
-The in-repo HTML example is a generated Strata app (`apps/hiroapp`). Framework tests use a leftover **fixture** schema (`src/db`) so RLS and tenant helpers have tables. That fixture is not a product.
+`apps/hiroapp` is Strata dogfood for internal end-to-end testing. Framework tests use a leftover **fixture** schema (`src/db`) so RLS and tenant helpers have tables. That fixture is not a product.
 
 ## Seeded example users
 
@@ -73,7 +73,7 @@ const app = await createTestApp();
 const response = await fetch(`${app.baseUrl}/health`);
 ```
 
-That helper boots the **fixture** HTTP map for framework tests. The generated example boots with `createApp()` from `apps/hiroapp/src/bootstrap/createApp.ts`.
+That helper boots the **fixture** HTTP map for framework tests. The dogfood app boots with `createApp()` from `apps/hiroapp/src/bootstrap/createApp.ts`.
 
 Set env (`DATABASE_URL`, `QUEUE_DRIVER=sync`) before importing bootstrap modules.
 

@@ -28,7 +28,7 @@ Guides: [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDIN
 
 ## Packages
 
-Published as **1.0.6**:
+Published as **1.0.8**:
 
 | Package | What it is |
 |---------|------------|
@@ -51,13 +51,13 @@ Generated cookie apps include restyleable welcome, login, register, and password
 
 ## This repository
 
-This repo is the framework source and three generated examples:
+This repo is the framework source and three generated apps. `apps/hiroapp` is dogfood for internal end-to-end testing (CI migrate, seed, boot, OpenAPI, smoke). The siblings are layer maps, not CI dogfood.
 
-| App | Stack |
-|-----|--------|
-| `apps/hiroapp-hobby` | SQLite JSON API |
-| `apps/hiroapp-team` | Postgres HTML, Redis, Adminer |
-| `apps/hiroapp` | Postgres HTMX, cookies + tokens + JWT, RLS, Redis, SMTP, extras |
+| App | Stack | Role |
+|-----|--------|------|
+| `apps/hiroapp` | Postgres HTMX, cookies + tokens + JWT, RLS, Redis, SMTP, extras | Dogfood for internal end-to-end testing |
+| `apps/hiroapp-hobby` | SQLite JSON API | Generated sibling layer map (not CI dogfood) |
+| `apps/hiroapp-team` | Postgres HTML, Redis, Adminer | Generated sibling layer map (not CI dogfood) |
 
 Clone this repo only if you are changing Strata itself. For a product app, use `create-strata`. Contributor setup: [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md). Tests: [docs/TESTING.md](docs/TESTING.md). Production: [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
@@ -76,9 +76,9 @@ Open http://localhost:3000. Host-native Bun against published ports: `bun run de
 ## Layout
 
 ```
-apps/hiroapp/           Postgres + HTMX example (generated)
-apps/hiroapp-hobby/     SQLite JSON API example (generated)
-apps/hiroapp-team/      Postgres HTML + Redis example (generated)
+apps/hiroapp/           Dogfood for internal end-to-end testing (generated)
+apps/hiroapp-hobby/     SQLite JSON API sibling layer map (generated)
+apps/hiroapp-team/      Postgres HTML + Redis sibling layer map (generated)
 src/core/               Framework runtime
 src/bootstrap/          Kernel, providers, cookie sessions
 packages/               Published npm packages

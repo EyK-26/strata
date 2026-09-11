@@ -21,7 +21,7 @@ If `DB_CONNECTION` is unset, the URL scheme picks the dialect. If both are unset
 ## How to opt in
 
 ```bash
-# Postgres (in-repo HTML example uses hiroapp_test)
+# Postgres (in-repo dogfood uses hiroapp_test)
 DATABASE_URL=postgresql://postgres:postgres@localhost:54329/hiroapp_test
 
 # MySQL as the app's only engine (not mixed with Postgres)

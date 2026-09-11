@@ -1,5 +1,6 @@
 import { join } from "node:path";
 
+/** In-repo dogfood app used for internal end-to-end testing. Always HiroApp. */
 type DogfoodApp = "hiroapp";
 
 function readDogfoodApp(): DogfoodApp {

@@ -2,7 +2,7 @@
 
 You choose the frontend. You also choose how clients prove who they are. Register the guards you need. Do not enable every option "just in case."
 
-Generated HiroApp (`apps/hiroapp`) shows one working mix: cookie sessions for HTML, opaque tokens for JSON, and short-lived JWTs. Copy those patterns, not every class in `@getstrata/core/auth`.
+Generated HiroApp (`apps/hiroapp`) is dogfood for internal end-to-end testing. It shows one working mix: cookie sessions for HTML, opaque tokens for JSON, and short-lived JWTs. Copy those patterns, not every class in `@getstrata/core/auth`.
 
 ## Strength ladder
 

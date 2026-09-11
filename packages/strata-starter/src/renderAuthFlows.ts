@@ -665,11 +665,13 @@ function renderSiteModule(_layers: StarterLayers): string {
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { getSql, pingDatabase } from "../../bootstrap/database.ts";
 import { plainText, renderPage } from "../../lib/view.ts";
+import { Note } from "../../models/Note.ts";
 
 // Proves the database answers and the schema is migrated. Point it at a table your app owns.
 async function schemaReady(): Promise<boolean> {
   try {
-    await getSql().unsafe("SELECT 1 FROM notes LIMIT 1");
+    getSql();
+    await Note.query().value("id");
     return true;
   } catch {
     return false;

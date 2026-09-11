@@ -1,6 +1,6 @@
 # Getting started
 
-This guide is for running **this repository** (framework source plus generated examples). To start a product app, use [STARTER.md](./STARTER.md): `bunx create-strata my-app`.
+This guide is for running **this repository** (framework source plus generated apps). `apps/hiroapp` is dogfood for internal end-to-end testing. To start a product app, use [STARTER.md](./STARTER.md): `bunx create-strata my-app`.
 
 This guide assumes you can run a terminal, Docker, and Bun.
 
@@ -31,7 +31,7 @@ cp .env.host.example .env.host
 
 `bun run dev:host` and `bun run validate:host` load the host file for you.
 
-The in-repo HTML example (`apps/hiroapp`) should use:
+The in-repo dogfood app (`apps/hiroapp`) should use:
 
 ```bash
 APP_NAME=hiroapp
@@ -60,7 +60,7 @@ bun run build:framework
 bun run build:bootstrap
 ```
 
-## 5. Create the example database
+## 5. Create the dogfood database
 
 ```bash
 bun run hiroapp:fresh
@@ -87,7 +87,7 @@ Visit http://localhost:3000. HTML sign-in is `/login`.
 2. **Health.** `GET /health` returns `ok` when the database answers.
 3. **API token or JWT.** `POST /api/v1/auth/login` mints an opaque token. `POST /api/auth/token` mints a short-lived JWT. Call `GET /api/user` with `Authorization: Bearer <token>`. Details: [AUTH.md](./AUTH.md).
 
-Your own app should be generated with `bunx create-strata`, not copied from HiroApp. See [STARTER.md](./STARTER.md).
+Your own app should be generated with `bunx create-strata`, not copied from HiroApp. HiroApp is dogfood, not a product starter. See [STARTER.md](./STARTER.md).
 
 ## 8. When something fails
 
@@ -99,4 +99,4 @@ Your own app should be generated with `bunx create-strata`, not copied from Hiro
 | 403 on Bearer POST | Token missing the ability, or you sent CSRF-protected cookie API without a token |
 | Tests reset the wrong database | `DATABASE_URL` is not a test URL. See [TESTING.md](./TESTING.md) |
 
-Next: [HIROAPP.md](./HIROAPP.md) for the three example apps, or [BUILDING-APPS.md](./BUILDING-APPS.md) to start your own app.
+Next: [HIROAPP.md](./HIROAPP.md) for the dogfood app and sibling layer maps, or [BUILDING-APPS.md](./BUILDING-APPS.md) to start your own app.

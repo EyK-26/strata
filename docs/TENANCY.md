@@ -14,7 +14,7 @@ HTTP requests and background jobs must call `runWithTenantDatabase()` when RLS i
 
 ## Generated HiroApp
 
-`apps/hiroapp` sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`), and stores `users.tenant_id`. It does not emit `ENABLE ROW LEVEL SECURITY` policies or call a helper named `isolateTenantTable`.
+`apps/hiroapp` (dogfood for internal end-to-end testing) sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`), and stores `users.tenant_id`. It does not emit `ENABLE ROW LEVEL SECURITY` policies or call a helper named `isolateTenantTable`.
 
 Sibling examples `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. A SQLite or MySQL app that wants tenant rows should pass `--tenancy=column`.
 

@@ -1,6 +1,6 @@
 # Building your own app
 
-HiroApp is the in-repo generated example. For a product app, use `bunx create-strata` and the published packages.
+HiroApp (`apps/hiroapp`) is in-repo dogfood for internal end-to-end testing. For a product app, use `bunx create-strata` and the published packages.
 
 ## Scaffold
 
@@ -17,7 +17,7 @@ bun run dev
 
 The CLI is interactive in a terminal. Move with ↑/↓ and Enter, or type a number. Toggle extras that apply to your stack (MFA, email verification, SCIM, metrics) with Space. Header auth does not offer MFA or SCIM. `--no-metrics` skips the metrics extra and does not write `GET /metrics`. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`. `--docker` with Postgres or MySQL also writes Adminer at http://localhost:8080.
 
-Layer flags: [STARTER.md](./STARTER.md). The three in-repo examples are generated from that script (`bun run generate:example-apps`). Do not treat HiroApp as the source of the wizard.
+Layer flags: [STARTER.md](./STARTER.md). The three in-repo apps are generated from that script (`bun run generate:example-apps`). Do not treat HiroApp as the source of the wizard. Only `apps/hiroapp` is CI dogfood.
 
 ## Frontend shapes
 
