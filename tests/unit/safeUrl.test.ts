@@ -5,6 +5,7 @@ import {
   isBlockedHostname,
   pinUrlToAddress,
   resetDnsLookupForTests,
+  resolveSafeOutboundTarget,
   setDnsLookupForTests,
 } from "@getstrata/core/security/safeUrl";
 
@@ -52,6 +53,9 @@ describe("assertSafeOutboundUrl", () => {
     expect(() => assertSafeOutboundUrl("https://172.16.0.2/hook")).toThrow(/blocked host/);
     expect(() => assertSafeOutboundUrl("https://0.0.0.0/hook")).toThrow(/blocked host/);
     expect(() => assertSafeOutboundUrl("https://[::1]/hook")).toThrow(/blocked host/);
+    expect(assertSafeOutboundUrl("https://[2001:4860:4860::8888]/hook").hostname).toBe(
+      "[2001:4860:4860::8888]",
+    );
   });
 });
 
@@ -107,6 +111,21 @@ describe("assertSafeOutboundUrlResolved", () => {
     setDnsLookupForTests(async () => []);
     resetDnsLookupForTests();
   });
+
+  test("skips DNS lookup for public literal IP hostnames", async () => {
+    setDnsLookupForTests(async () => {
+      throw new Error("DNS should not run for literal IPs");
+    });
+
+    await expect(resolveSafeOutboundTarget("https://8.8.8.8/hook")).resolves.toMatchObject({
+      addresses: ["8.8.8.8"],
+    });
+    await expect(
+      resolveSafeOutboundTarget("https://[2001:4860:4860::8888]/hook"),
+    ).resolves.toMatchObject({
+      addresses: ["[2001:4860:4860::8888]"],
+    });
+  });
 });
 
 describe("isBlockedHostname", () => {
@@ -156,6 +175,9 @@ describe("isBlockedHostname", () => {
     expect(isBlockedHostname("1:2:3:4:5:6:7::8:9")).toBe(true);
     expect(isBlockedHostname("1::gggg")).toBe(true);
     expect(isBlockedHostname("1:2:3:4:5:6:7:8g")).toBe(true);
+    expect(isBlockedHostname("[::1]")).toBe(true);
+    expect(isBlockedHostname("[2001:4860:4860::8888]")).toBe(false);
+    expect(isBlockedHostname("[::ffff:10.0.0.1]")).toBe(true);
   });
 });
 
@@ -170,5 +192,8 @@ describe("pinUrlToAddress", () => {
     expect(
       pinUrlToAddress(new URL("https://example.com:8443/hook"), "2001:4860:4860::8888").href,
     ).toBe("https://[2001:4860:4860::8888]:8443/hook");
+    expect(
+      pinUrlToAddress(new URL("https://example.com/hook"), "[2001:4860:4860::8888]").href,
+    ).toBe("https://[2001:4860:4860::8888]/hook");
   });
 });

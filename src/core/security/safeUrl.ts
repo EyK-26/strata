@@ -78,11 +78,13 @@ function isBlockedIpv4Octets(octets: number[]): boolean {
 
 function expandIpv6(hostname: string): number[] | null {
   const trimmed = hostname.trim().toLowerCase();
-  if (trimmed.includes("%")) {
+  const unbracketed =
+    trimmed.startsWith("[") && trimmed.endsWith("]") ? trimmed.slice(1, -1) : trimmed;
+  if (unbracketed.includes("%")) {
     return null;
   }
 
-  const mapped = trimmed.match(/^::ffff:([0-9a-fx.]+)$/iu);
+  const mapped = unbracketed.match(/^::ffff:([0-9a-fx.]+)$/iu);
   if (mapped?.[1]) {
     const octets = parseDottedIpv4(mapped[1]);
     if (!octets) {
@@ -100,7 +102,7 @@ function expandIpv6(hostname: string): number[] | null {
     ];
   }
 
-  const halves = trimmed.split("::");
+  const halves = unbracketed.split("::");
   if (halves.length > 2) {
     return null;
   }
@@ -113,7 +115,7 @@ function expandIpv6(hostname: string): number[] | null {
   };
 
   if (halves.length === 1) {
-    const groups = trimmed.split(":");
+    const groups = unbracketed.split(":");
     if (groups.length !== 8) {
       return null;
     }

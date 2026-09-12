@@ -81,29 +81,21 @@ function publicKeyFromJwk(jwk: JsonWebKeyLike): KeyObject | null {
     return null;
   }
 
-  try {
-    return createPublicKey({
-      format: "jwk",
-      key: {
-        kty: "RSA",
-        n: jwk.n,
-        e: jwk.e,
-      },
-    });
-  } catch {
-    return null;
-  }
+  return createPublicKey({
+    format: "jwk",
+    key: {
+      kty: "RSA",
+      n: jwk.n,
+      e: jwk.e,
+    },
+  });
 }
 
 function verifyRs256Signature(signingInput: string, signature: string, key: KeyObject): boolean {
-  try {
-    const verifier = createVerify("RSA-SHA256");
-    verifier.update(signingInput);
-    verifier.end();
-    return verifier.verify(key, Buffer.from(signature, "base64url"));
-  } catch {
-    return false;
-  }
+  const verifier = createVerify("RSA-SHA256");
+  verifier.update(signingInput);
+  verifier.end();
+  return verifier.verify(key, Buffer.from(signature, "base64url"));
 }
 
 function assertIdTokenClaims(

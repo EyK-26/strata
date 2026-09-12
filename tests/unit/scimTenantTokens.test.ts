@@ -60,5 +60,7 @@ describe("scimTenantTokens", () => {
     expect(parseScimTenantTokens("   ")).toEqual(new Map());
     expect(parseScimTenantTokens("0:zero,abc:token,-2:neg")).toEqual(new Map());
     expect(resolveScimTenantFromToken("unknown-token")).toBeNull();
+    process.env.SCIM_BEARER_TOKEN = "global-scim-token";
+    expect(resolveScimTenantFromToken("unknown-token")).toBeNull();
   });
 });
