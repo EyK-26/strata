@@ -9,6 +9,7 @@ import {
   retargetStrataPins,
   setExpectedVersions,
   setPackageVersion,
+  setPublishedReadmeVersion,
 } from "./bump-version.ts";
 
 const ROOT = join(import.meta.dir, "..");
@@ -30,6 +31,7 @@ const PIN_FILES = [
 ];
 
 const EXPECTED_FILE = "scripts/verify-package-versions.ts";
+const README_FILE = "README.md";
 
 const CHANGELOGS = [
   "packages/strata-core/CHANGELOG.md",
@@ -81,6 +83,7 @@ for (const file of PIN_FILES) {
 }
 
 await edit(EXPECTED_FILE, (text) => setExpectedVersions(text, version));
+await edit(README_FILE, (text) => setPublishedReadmeVersion(text, version));
 
 for (const file of CHANGELOGS) {
   await edit(file, (text) => insertChangelogEntry(text, version, notes));
