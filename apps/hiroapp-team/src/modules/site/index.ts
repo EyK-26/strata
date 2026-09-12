@@ -1,15 +1,12 @@
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { withErrorHandling } from "@getstrata/core/http/response";
-import { getSql, pingDatabase } from "../../bootstrap/database.ts";
+import { pingDatabase } from "../../bootstrap/database.ts";
 import { plainText, renderPage } from "../../lib/view.ts";
 import { Note } from "../../models/Note.ts";
 
-// Proves the database answers and the schema is migrated. Point it at a table your app owns.
 async function schemaReady(): Promise<boolean> {
   try {
-    getSql();
-    await Note.query().value("id");
-    return true;
+    return (await Note.query().value("id")) !== null;
   } catch {
     return false;
   }

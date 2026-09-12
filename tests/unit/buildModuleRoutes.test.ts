@@ -13,7 +13,10 @@ import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { SyncQueue } from "@getstrata/core/queue";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockDependencies } from "./testHelpers";
 
 const fixtureModule: AppModule = {
@@ -43,7 +46,72 @@ function createTestDependencies() {
   return dependencies;
 }
 
+const loginModule: AppModule = {
+  name: "auth",
+  routes({ kernel }) {
+    return {
+      "/api/v1/auth/csrf": {
+        GET: kernel.wrap("api", async (request) =>
+          Response.json({ token: resolveCsrfTokenForRequest(request) }),
+        ),
+      },
+      "/api/v1/auth/login": {
+        POST: kernel.wrap("api", async () => Response.json({ ok: true })),
+      },
+    };
+  },
+};
+
 describe("buildModuleRoutes", () => {
+  test("maps guest CSRF failures on wrap(api) routes to JSON 403", async () => {
+    const previousTenancy = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "none";
+    try {
+      const dependencies = createTestDependencies();
+      const routes = buildModuleRoutes(dependencies, {
+        modules: [loginModule],
+      });
+      const login = (
+        routes["/api/v1/auth/login"] as { POST: (request: Request) => Promise<Response> }
+      ).POST;
+      const csrfGet = (
+        routes["/api/v1/auth/csrf"] as { GET: (request: Request) => Promise<Response> }
+      ).GET;
+      const blocked = await login(
+        new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
+      );
+      expect(blocked.status).toBe(403);
+      expect(await blocked.json()).toEqual({ error: "Invalid or missing CSRF token." });
+
+      const issued = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
+        csrfGet(new Request("http://example.test/api/v1/auth/csrf")),
+      );
+      expect(issued.status).toBe(200);
+      const body = (await issued.json()) as { token: string };
+      const cookie = issued.headers.getSetCookie()[0]?.split(";")[0] ?? "";
+      expect(decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1))).toBe(body.token);
+      expect(issued.headers.getSetCookie().filter((item) => item.includes("csrf="))).toHaveLength(
+        1,
+      );
+
+      const allowed = await login(
+        new Request("http://example.test/api/v1/auth/login", {
+          method: "POST",
+          headers: {
+            cookie,
+            "x-csrf-token": body.token,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ email: "demo@example.com" }),
+        }),
+      );
+      expect(allowed.status).toBe(200);
+      expect(await allowed.json()).toEqual({ ok: true });
+    } finally {
+      restoreEnvVar("TENANCY_DRIVER", previousTenancy);
+    }
+  });
+
   test("builds prefixed module routes from supplied modules", () => {
     const dependencies = createTestDependencies();
     const routes = buildModuleRoutes(dependencies, {

@@ -12,10 +12,7 @@ function csrfCookieName(): string {
 }
 
 function resolveCsrfSecret(): string {
-  return requireConfiguredSecret(
-    ["SESSION_SECRET", "OAUTH_STATE_SECRET", "ADMIN_API_TOKEN"],
-    "csrf-secret",
-  );
+  return requireConfiguredSecret(["SESSION_SECRET", "CSRF_SECRET"], "csrf-secret");
 }
 
 function csrfVerifyOptions() {
@@ -40,7 +37,7 @@ function createCsrfTokenCookie(): { token: string; cookie: string } {
 
   return {
     token,
-    cookie: `${csrfCookieName()}=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=${Math.floor(CSRF_TTL_MS / 1000)}${secure}`,
+    cookie: `${csrfCookieName()}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(CSRF_TTL_MS / 1000)}${secure}`,
   };
 }
 

@@ -56,6 +56,38 @@ function resolveSmtpConfig(): SmtpConfig {
   };
 }
 
+const EMAIL_SHAPE = /^[^\s@\r\n]+@[^\s@\r\n]+\.[^\s@\r\n]+$/u;
+
+function assertSafeSmtpField(value: string, field: string): string {
+  if (/[\r\n]/u.test(value)) {
+    throw new Error(`Mail ${field} must not contain CR or LF.`);
+  }
+
+  return value;
+}
+
+function smtpEnvelopeAddress(value: string, field: string): string {
+  const trimmed = assertSafeSmtpField(value, field).trim();
+  const address = trimmed.includes("<") ? (trimmed.match(/<([^>]+)>/u)?.[1] ?? trimmed) : trimmed;
+
+  if (!EMAIL_SHAPE.test(address)) {
+    throw new Error(`Mail ${field} must be a valid email address.`);
+  }
+
+  return address;
+}
+
+function assertSafeSmtpAddress(value: string, field: string): string {
+  smtpEnvelopeAddress(value, field);
+  return assertSafeSmtpField(value, field).trim();
+}
+
+function redactMailBody(body: string): string {
+  return body
+    .replace(/https?:\/\/[^\s]+/giu, "[redacted-url]")
+    .replace(/[?&](token|signature|expires|code)=[^&\s]+/giu, "[redacted-query]");
+}
+
 function encodeBase64(value: string): string {
   return Buffer.from(value, "utf8").toString("base64");
 }
@@ -158,14 +190,22 @@ async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): P
       await waitForSmtpResponse(readResponse, ["235"]);
     }
 
-    await socket.write(`MAIL FROM:<${config.from}>\r\n`);
+    const fromHeader = assertSafeSmtpAddress(config.from, "from");
+    const toHeader = assertSafeSmtpAddress(message.to, "to");
+    const from = smtpEnvelopeAddress(config.from, "from");
+    const to = smtpEnvelopeAddress(message.to, "to");
+    await socket.write(`MAIL FROM:<${from}>\r\n`);
     await waitForSmtpResponse(readResponse, ["250"]);
-    await socket.write(`RCPT TO:<${message.to}>\r\n`);
+    await socket.write(`RCPT TO:<${to}>\r\n`);
     await waitForSmtpResponse(readResponse, ["250", "251"]);
     await socket.write("DATA\r\n");
     await waitForSmtpResponse(readResponse, ["354"]);
 
-    const payload = buildSmtpPayload(config.from, message);
+    const payload = buildSmtpPayload(fromHeader, {
+      ...message,
+      to: toHeader,
+      subject: assertSafeSmtpField(message.subject, "subject"),
+    });
 
     await socket.write(payload);
     await waitForSmtpResponse(readResponse, ["250"]);
@@ -177,10 +217,13 @@ async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): P
 }
 
 function buildSmtpPayload(from: string, message: MailMessage): string {
+  const safeFrom = assertSafeSmtpAddress(from, "from");
+  const safeTo = assertSafeSmtpAddress(message.to, "to");
+  const safeSubject = assertSafeSmtpField(message.subject, "subject");
   const headers = [
-    `From: ${from}`,
-    `To: ${message.to}`,
-    `Subject: ${message.subject}`,
+    `From: ${safeFrom}`,
+    `To: ${safeTo}`,
+    `Subject: ${safeSubject}`,
     "MIME-Version: 1.0",
   ];
 
@@ -214,7 +257,7 @@ class LogMailDriver implements MailDriver {
         channel: "mail",
         to: message.to,
         subject: message.subject,
-        body: message.body,
+        body: redactMailBody(message.body),
         ...(message.html ? { htmlBytes: Buffer.byteLength(message.html, "utf8") } : {}),
       }),
     );
@@ -236,6 +279,8 @@ class Mailer {
   constructor(private readonly driver: MailDriver) {}
 
   send(message: MailMessage): Promise<void> {
+    assertSafeSmtpAddress(message.to, "to");
+    assertSafeSmtpField(message.subject, "subject");
     return this.driver.send(message);
   }
 }
@@ -258,11 +303,15 @@ function mailer(): Mailer {
 
 export type { MailDriver, MailMessage, SmtpConfig, SmtpTransport };
 export {
+  assertSafeSmtpAddress,
+  assertSafeSmtpField,
   buildSmtpPayload,
   createMailDriver,
   LogMailDriver,
   Mailer,
   mailer,
+  redactMailBody,
   resolveSmtpConfig,
   SmtpMailDriver,
+  smtpEnvelopeAddress,
 };

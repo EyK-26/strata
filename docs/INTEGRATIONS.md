@@ -10,7 +10,7 @@ Validate env: `APP_ENV=production bun run cli secrets:check`
 
 ## SCIM 2.0 (`FEATURE_SCIM=true`)
 
-Set `SCIM_BEARER_TOKEN` to a long random secret (not `strata-scim-test-token`). Optional multi-tenant tokens: `SCIM_TENANT_TOKENS=1:token-a,2:token-b`. Generated apps with `--scim` expose `/scim/v2/Users` and `/scim/v2/ServiceProviderConfig`. Extend that module if you need Groups.
+Set `SCIM_BEARER_TOKEN` to a long random secret (not `strata-scim-test-token`). Empty tokens are rejected. Optional multi-tenant tokens: `SCIM_TENANT_TOKENS=1:token-a,2:token-b`. The fallback bearer maps to tenant 1 and is platform-admin for that tenant only. Generated apps with `--scim` expose `/scim/v2/Users` and `/scim/v2/ServiceProviderConfig` and scope user SQL to `currentTenant().id` (throws if ALS is missing). `--tenancy=rls` FORCE RLS is on `users` as well as `notes`. Extend that module if you need Groups.
 
 ## Billing (`FEATURE_BILLING=true`)
 
@@ -24,7 +24,11 @@ Set `STRIPE_WEBHOOK_SECRET`. Signature verification lives in core. Plan sync and
 
 ## GitHub OAuth / OIDC / SAML
 
-Set the matching `GITHUB_*`, `OIDC_*`, or `SAML_LOGIN_URL` variables. Put IdP-specific parsing in an app adapter, not in `src/core/`.
+Set the matching `GITHUB_*` or `OIDC_*` variables. OIDC `getAuthorizationUrl()` throws. Use `createAuthorization()` (async) and pass the handshake to `exchangeCode()`. Authorization, token, and JWKS URLs come from discovery. ID tokens are verified as RS256 via discovery JWKS (`iss` / `aud` / `exp` / `nbf` / `nonce`). Missing or unverified email throws. GitHub OAuth uses `safeFetch`, always reads `/user/emails`, and throws unless a verified address exists (no `{login}@users.noreply.github.com`, and an unverified `profile.email` is ignored).
+
+SAML is a real service provider (`SamlServiceProvider`); set `FEATURE_SAML=true` plus `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, `SAML_ACS_URL`, and `SAML_IDP_ISSUER`. Signed responses are required; production boot rejects `SAML_WANT_RESPONSE_SIGNED=false`. ACS verifies HMAC RelayState without a cookie and checks assertion issuer. Replay stores assertion IDs in `auth_saml_assertions`. The old `saml:email:name` stub is gone. SAML ACS still challenges MFA when the user is already enrolled.
+
+Outbound URL helpers resolve DNS, reject blocked answers, and fetch the resolved IP with the original Host and TLS server name. `allowPrivate: true` is ignored in production.
 
 ## Design rule
 

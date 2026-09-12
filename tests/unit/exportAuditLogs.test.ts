@@ -3,14 +3,20 @@ import {
   exportPendingAuditLogs,
   resolveAuditExportConfig,
 } from "@getstrata/core/audit/exportAuditLogs";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import db from "../../src/db/connection";
 import { clearPendingAuditLogs } from "./testHelpers";
 
 const originalFetch = globalThis.fetch;
 
+function mockPublicDns(): void {
+  setDnsLookupForTests(async () => [{ address: "1.1.1.1", family: 4 }]);
+}
+
 afterEach(async () => {
   globalThis.fetch = originalFetch;
+  resetDnsLookupForTests();
   delete process.env.SIEM_EXPORT_URL;
   delete process.env.SIEM_EXPORT_FORMAT;
   delete process.env.SIEM_EXPORT_BATCH_SIZE;
@@ -71,6 +77,7 @@ describe("exportPendingAuditLogs", () => {
   });
 
   test("exports pending audit logs as json without an auth token", async () => {
+    mockPublicDns();
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-json-no-token";
 
     await runWithMigrationBypass(async () => {
@@ -91,9 +98,7 @@ describe("exportPendingAuditLogs", () => {
     let authorization = "unset";
 
     globalThis.fetch = mock((_url, init) => {
-      authorization = String(
-        (init?.headers as Record<string, string> | undefined)?.authorization ?? "",
-      );
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 
@@ -104,6 +109,7 @@ describe("exportPendingAuditLogs", () => {
   });
 
   test("exports pending audit logs as json and marks them exported", async () => {
+    mockPublicDns();
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-json";
     process.env.SIEM_EXPORT_TOKEN = "export-token";
 
@@ -129,9 +135,7 @@ describe("exportPendingAuditLogs", () => {
 
     globalThis.fetch = mock((_url, init) => {
       requestBody = String(init?.body ?? "");
-      authorization = String(
-        (init?.headers as Record<string, string> | undefined)?.authorization ?? "",
-      );
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 
@@ -155,6 +159,7 @@ describe("exportPendingAuditLogs", () => {
   });
 
   test("exports pending audit logs as cef", async () => {
+    mockPublicDns();
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-cef-export";
     process.env.SIEM_EXPORT_FORMAT = "cef";
 
@@ -176,9 +181,7 @@ describe("exportPendingAuditLogs", () => {
     let contentType = "";
 
     globalThis.fetch = mock((_url, init) => {
-      contentType = String(
-        (init?.headers as Record<string, string> | undefined)?.["content-type"] ?? "",
-      );
+      contentType = new Headers(init?.headers).get("content-type") ?? "";
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 
@@ -189,6 +192,7 @@ describe("exportPendingAuditLogs", () => {
   });
 
   test("throws when the SIEM endpoint returns a non-success status", async () => {
+    mockPublicDns();
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-failure";
 
     await runWithMigrationBypass(async () => {

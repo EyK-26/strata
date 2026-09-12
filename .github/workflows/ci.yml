@@ -72,6 +72,9 @@ jobs:
           SCIM_BEARER_TOKEN: strata-scim-test-token
           ADMIN_API_TOKEN: strata-admin-test-token
           MEMBER_API_TOKEN: strata-member-test-token
+          DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/bun_testing_test
+          APP_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/hiroapp_test
+          REDIS_URL: redis://:dev-redis-change-me@localhost:6379
         run: |
           bun install --frozen-lockfile
           bun dedupe
@@ -81,7 +84,8 @@ jobs:
             STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed &&
             DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
             bun run validate:ci &&
-            bun run verify:framework
+            bun run verify:framework &&
+            bun run test:e2e
           "
 
       - name: Start app for smoke tests
@@ -91,9 +95,10 @@ jobs:
           APP_KEY_PREFIX: hiroapp
           APP_NAME: HiroApp
           API_PREFIX: /api
-          REDIS_URL: redis://localhost:6379
-          DATABASE_URL: postgresql://postgres:postgres@localhost:54329/bun_testing_test
-          APP_DATABASE_URL: postgresql://postgres:postgres@localhost:54329/hiroapp_test
+          REDIS_URL: redis://:dev-redis-change-me@localhost:6379
+          DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/bun_testing_test
+          APP_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/hiroapp_test
+          METRICS_TOKEN: strata-metrics-test-token
         run: |
           scripts/with-host-env.sh sh -c "bun run start" &
           for i in $(seq 1 30); do
@@ -111,6 +116,7 @@ jobs:
           BASE_URL: http://localhost:3000
           APP_URL: http://localhost:3000
           FRONTEND_MODE: server-htmx
+          METRICS_TOKEN: strata-metrics-test-token
         run: |
           bun run smoke
-          bun run deps:audit || true
+          bun run deps:audit

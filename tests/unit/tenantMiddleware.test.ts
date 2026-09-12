@@ -2,23 +2,49 @@ import { describe, expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import { currentTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
+async function runTenant(
+  middleware: (request: Request, next: () => Promise<Response>) => Promise<Response>,
+  request: Request,
+): Promise<{ response: Response; tenant: TenantContext | null }> {
+  let tenant: TenantContext | null = null;
+  const response = await middleware(request, async () => {
+    tenant = currentTenant();
+    return Response.json({ ok: true });
+  });
+  return { response, tenant };
+}
+
 describe("createTenantMiddleware", () => {
+  test("DEFAULT_TENANT uses the free plan", async () => {
+    const { DEFAULT_TENANT } = await import("@getstrata/core/tenant/tenantMiddleware");
+    expect(DEFAULT_TENANT.plan).toBe("free");
+  });
+
   test("resolves tenant from header for anonymous requests", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
+    const previous = process.env.FEATURE_PUBLIC_READS;
+    process.env.FEATURE_PUBLIC_READS = "true";
+    try {
+      const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
+      const middleware = createTenantMiddleware();
 
-    const response = await middleware(
-      new Request("http://example.test/tasks", {
-        headers: { "x-tenant-id": "1" },
-      }),
-      async () => Response.json({ ok: true }),
-    );
+      const { response, tenant } = await runTenant(
+        middleware,
+        new Request("http://example.test/tasks", {
+          headers: { "x-tenant-id": "1" },
+        }),
+      );
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-tenant-id")).toBe("1");
-    expect(response.headers.get("x-tenant-region")).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-tenant-id")).toBeNull();
+      expect(response.headers.get("x-tenant-region")).toBeNull();
+      expect(tenant?.id).toBe(1);
+      expect(tenant?.region).toBeTruthy();
+    } finally {
+      restoreEnvVar("FEATURE_PUBLIC_READS", previous);
+    }
   });
 
   test("ignores anonymous x-tenant-id when public reads are disabled", async () => {
@@ -31,15 +57,16 @@ describe("createTenantMiddleware", () => {
       );
       const middleware = createTenantMiddleware();
 
-      const response = await middleware(
+      const { response, tenant } = await runTenant(
+        middleware,
         new Request("http://example.test/tasks", {
           headers: { "x-tenant-id": "999" },
         }),
-        async () => Response.json({ ok: true }),
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+      expect(response.headers.get("x-tenant-id")).toBeNull();
+      expect(tenant?.id).toBe(DEFAULT_TENANT.id);
     } finally {
       restoreEnvVar("FEATURE_PUBLIC_READS", previous);
     }
@@ -87,12 +114,14 @@ describe("createTenantMiddleware", () => {
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: 2, role: "member" }, async () => {
-      const response = await middleware(new Request("http://example.test/tasks"), async () =>
-        Response.json({ ok: true }),
+      const { response, tenant } = await runTenant(
+        middleware,
+        new Request("http://example.test/tasks"),
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBe("1");
+      expect(response.headers.get("x-tenant-id")).toBeNull();
+      expect(tenant?.id).toBe(1);
     });
   });
 
@@ -120,15 +149,16 @@ describe("createTenantMiddleware", () => {
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: 1, role: "admin" }, async () => {
-      const response = await middleware(
+      const { response, tenant } = await runTenant(
+        middleware,
         new Request("http://example.test/tasks", {
           headers: { "x-tenant-id": "1" },
         }),
-        async () => Response.json({ ok: true }),
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBe("1");
+      expect(response.headers.get("x-tenant-id")).toBeNull();
+      expect(tenant?.id).toBe(1);
     });
   });
 
@@ -137,12 +167,14 @@ describe("createTenantMiddleware", () => {
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: 1, role: "admin" }, async () => {
-      const response = await middleware(new Request("http://example.test/tasks"), async () =>
-        Response.json({ ok: true }),
+      const { response, tenant } = await runTenant(
+        middleware,
+        new Request("http://example.test/tasks"),
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBe("1");
+      expect(response.headers.get("x-tenant-id")).toBeNull();
+      expect(tenant?.id).toBe(1);
     });
   });
 
@@ -153,15 +185,16 @@ describe("createTenantMiddleware", () => {
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: 1, role: "admin" }, async () => {
-      const response = await middleware(
+      const { response, tenant } = await runTenant(
+        middleware,
         new Request("http://example.test/tasks", {
           headers: { "x-tenant-id": "999" },
         }),
-        async () => Response.json({ ok: true }),
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+      expect(response.headers.get("x-tenant-id")).toBeNull();
+      expect(tenant?.id).toBe(DEFAULT_TENANT.id);
     });
   });
 
@@ -175,15 +208,16 @@ describe("createTenantMiddleware", () => {
       );
       const middleware = createTenantMiddleware();
 
-      const response = await middleware(
+      const { response, tenant } = await runTenant(
+        middleware,
         new Request("http://example.test/tasks", {
           headers: { "x-tenant-id": "999" },
         }),
-        async () => Response.json({ ok: true }),
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+      expect(response.headers.get("x-tenant-id")).toBeNull();
+      expect(tenant?.id).toBe(DEFAULT_TENANT.id);
     } finally {
       restoreEnvVar("FEATURE_PUBLIC_READS", previous);
     }
@@ -216,12 +250,14 @@ describe("createTenantMiddleware", () => {
 
     try {
       await runWithAuthUser({ id: userId, role: "member" }, async () => {
-        const response = await middleware(new Request("http://example.test/tasks"), async () =>
-          Response.json({ ok: true }),
+        const { response, tenant } = await runTenant(
+          middleware,
+          new Request("http://example.test/tasks"),
         );
 
         expect(response.status).toBe(200);
-        expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+        expect(response.headers.get("x-tenant-id")).toBeNull();
+        expect(tenant?.id).toBe(DEFAULT_TENANT.id);
       });
     } finally {
       await runWithMigrationBypass(async () => {
@@ -257,12 +293,14 @@ describe("createTenantMiddleware", () => {
 
     try {
       await runWithAuthUser({ id: userId, role: "admin" }, async () => {
-        const response = await middleware(new Request("http://example.test/tasks"), async () =>
-          Response.json({ ok: true }),
+        const { response, tenant } = await runTenant(
+          middleware,
+          new Request("http://example.test/tasks"),
         );
 
         expect(response.status).toBe(200);
-        expect(response.headers.get("x-tenant-id")).toBe(String(DEFAULT_TENANT.id));
+        expect(response.headers.get("x-tenant-id")).toBeNull();
+        expect(tenant?.id).toBe(DEFAULT_TENANT.id);
       });
     } finally {
       await runWithMigrationBypass(async () => {
@@ -276,12 +314,14 @@ describe("createTenantMiddleware", () => {
     const middleware = createTenantMiddleware();
 
     await runWithAuthUser({ id: "invalid", role: "member" }, async () => {
-      const response = await middleware(new Request("http://example.test/tasks"), async () =>
-        Response.json({ ok: true }),
+      const { response, tenant } = await runTenant(
+        middleware,
+        new Request("http://example.test/tasks"),
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBe("1");
+      expect(response.headers.get("x-tenant-id")).toBeNull();
+      expect(tenant?.id).toBe(1);
     });
   });
 

@@ -51,14 +51,14 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 | `--no-docker` | Do not write `docker-compose.yml`; point env at local installs |
 | `--docker-services=postgres,redis` | Compose only for that subset. Add `adminer` to include the UI |
 
-`--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines.
+`--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines. Postgres Compose binds `127.0.0.1` and creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`) on first empty volume. `.env.example` points `DATABASE_URL` at that role. The `postgres` superuser is for init and Adminer.
 
 ## What you get that actually runs
 
 - `GET /health` after `strata migrate` (plain text `ok`, or 503 `degraded` until the database ping and the `notes` table exist). Docker HEALTHCHECK uses `/health`. Migrate also seeds when the tables are empty.
 - `GET /ready` (from `@getstrata/bootstrap/health`): JSON database and Redis pings, 200 or 503. No schema check, so it can be 200 before the first migrate; `/health` is the gate.
 - Notes table and a `Note` model on every app. Seed and `/health` use `Note.query().value`. There is no notes CRUD route.
-- Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Seed `demo@example.com` / `password`
+- Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Seed `demo@example.com` / `StrataDemo!ChangeMe`
 - Token apps: `POST /api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`
 - JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
 - Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)

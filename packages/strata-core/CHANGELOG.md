@@ -1,5 +1,52 @@
 # @getstrata/core changelog
 
+## 1.1.0
+
+Breaking security hardening. Claims below match the code.
+
+### Migration
+
+- JWT without `exp` is rejected.
+- Non-expiring `signedUrl()` is now invalid on verify. `signedUrl()` without `expires` always fails verification.
+- Existing API tokens hashed with unpeppered SHA256 will not match HMAC pepper hashes. Re-issue tokens after setting `TOKEN_HASH_PEPPER`.
+- CSRF and session secret fallbacks are gone. `ADMIN_API_TOKEN` is no longer a session or CSRF secret.
+- CORS no longer defaults to `*` outside production. Unset CORS is `APP_URL` locally and same-origin in production.
+- CSRF cookie is HttpOnly. JavaScript cannot read it.
+- Missing `emailVerifiedAt` now means unverified. This is a break for JWT and tokens that omitted the field.
+- Failed Bearer no longer authenticates via the session cookie.
+- `/ready` no longer returns checks unless `APP_DEBUG=true`.
+- Staging `/metrics` requires a token or returns 404.
+- Seed password is `StrataDemo!ChangeMe`.
+- SAML `saml:email:name` stub is gone.
+- MFA is when enrolled. Password login does not force enrollment.
+- `signedUrl()` without `expires` always fails verification.
+- SAML requires `SAML_IDP_ISSUER`. ACS compares assertion issuer to that value. Signed responses are required; production boot rejects `SAML_WANT_RESPONSE_SIGNED=false`.
+- OIDC ID tokens must be RS256 with JWKS. HS256 ID tokens are rejected.
+- Generated login tokens and JWTs mint `[]` abilities. SQL `api_tokens.abilities` default stays `[]`.
+- `--tenancy=rls` FORCE RLS is on `notes` and `users`. Auth directory lookups and cookie session loads use `runWithMigrationBypass`.
+- `GET /health` is degraded until a notes row is readable under the request tenant, not a bypassed `SELECT 1`.
+
+### Controls
+
+- SAML ACS verifies HMAC RelayState (no SameSite cookie). Replay inserts `auth_saml_assertions.assertion_id` (unique) and keeps live IDs. ACS rejects a signed assertion whose issuer does not match `SAML_IDP_ISSUER`. Signed assertions and signed responses are required. AuthnContext is requested. JIT uses `currentTenantId()` and is skipped when `FEATURE_REGISTRATION=false`. `GET /auth/saml` does not set an unused OAuth state cookie. Enrolled MFA still challenges after SAML ACS.
+- `completePasswordLogin` runs on HTML password POST, HTML MFA POST, API token, JWT, and Basic mint paths, and cookie JSON password login. Recovery-code consumption is persisted on those paths. `verifyCredentials` returns null when `mfa_enabled` is true. Basic `verifyCredentials` fallback still runs TOTP when the directory record is enrolled. MFA is when enrolled, not on every password login. JwtGuard does not run TOTP on each request; it requires a directory and rejects `iat` before `session_valid_after`. SAML ACS redirects enrolled users to `/login/mfa`. MFA enroll revokes sessions and API tokens.
+- Password reset and email verify consume one-time tokens with `UPDATE ... consumed_at IS NULL`. Cookie sessions compare aliased `sessions.created_at` (`session_created_at`) to `session_valid_after`. Reset deletes `sessions` and `api_tokens` (missing tables only are swallowed). JwtGuard looks up the user and rejects tokens whose `iat` is before `session_valid_after`. Verify GET does not sign the visitor in.
+- `--tenancy=rls` ENABLE+FORCE RLS is on `notes` and `users`. `sessions`, `api_tokens`, and `auth_one_time_tokens` get a user-join policy. Session create/destroy, token mint, password/email/MFA user writes, and one-time token insert/consume wrap `runWithMigrationBypass()`. SCIM isolation is tenant GUC plus `WHERE tenant_id`. `currentTenantId()` and generated SCIM `tenantId()` throw if ALS is missing. `/health` reads `Note.query().value("id")` under the request tenant. `runWithMigrationBypass()` always opens its own transaction. Generated Compose still creates a `postgres` superuser for volume init. It also creates `strata_app` (`NOBYPASSRLS`) and generated `DATABASE_URL` uses that role. Production boot rejects `DATABASE_URL` / `APP_DATABASE_URL` username `postgres` or `root` when `TENANCY_DRIVER=rls`. CI dogfood still uses `postgres` via `with-host-env.sh`.
+- SMTP rejects CR/LF. Envelope `MAIL FROM` / `RCPT TO` use the bare address. Display names stay on headers only.
+- SSRF blocks non-canonical IPv4 (including leading-zero / octal / hex forms), integer hosts, and mapped IPv6. DNS resolve defaults on. `safeFetch` then connects to a resolved public IP and sends the original Host plus TLS server name. `allowPrivate: true` skips DNS only outside production.
+- API CSRF middleware runs on guest and session mutating requests. `POST /api/v1/auth/login` and `POST /api/auth/token` require double-submit CSRF. Session-mutating API (logout after cookie login) requires CSRF. `GET /api/v1/auth/csrf` Set-Cookies the HttpOnly CSRF cookie and returns that same token in JSON (it does not mint a second cookie). Nested API CSRF (`buildModuleRoutes` plus `wrap("api")`) reuses the first issued token. CSRF failures on the API group are JSON 403. Failed Bearer still does not skip CSRF or fall through to the session. SCIM and SAML ACS skip CSRF by path. CORS allowlists `X-CSRF-Token` and, when reflecting a specific origin, sets `Access-Control-Allow-Credentials`. The CSRF cookie is still `SameSite=Lax`, so a different site cannot send it on fetch.
+- OIDC `getAuthorizationUrl()` throws. Use `createAuthorization()` and pass the handshake to `exchangeCode()`. Authorization, token, and JWKS URLs come from discovery. ID tokens are verified RS256 via discovery JWKS (`iss` / `aud` / `exp` / `nbf` / `nonce`). Missing or unverified email throws. JWKS is refetched once when the token `kid` is missing from the cache. GitHub OAuth uses `safeFetch`, always reads `/user/emails`, and throws when no verified address exists (no `{login}@users.noreply.github.com`; unverified `profile.email` is ignored).
+- `protectMfaSecret` always encrypts and requires `KMS_ENCRYPTION_KEY`. Local and dogfood with `FEATURE_MFA=true` must set the key. Legacy plaintext secrets still verify outside production and are rejected in production. `verifyTotp` compares every window slot with `timingSafeCompareString`.
+- Safer defaults: `FEATURE_PUBLIC_READS`, `FEATURE_SIEM_EXPORT`, and `APP_DEBUG` default off. `DEFAULT_TENANT.plan` is `free`. SQL token-ability default is `[]`. Generated token login and JWT mint insert `[]`.
+- Token hashes are HMAC-peppered. Recovery codes are 16 bytes. bcrypt cost is 12.
+- Identity response headers `x-authenticated-user-id`, `x-tenant-id`, and `x-tenant-region` are not set.
+- Postgres unique-violation `detail` is logged, not returned. Client JSON is a generic conflict message with no constraint name.
+- Local disk paths go through `assertPathUnderRoot`.
+- Client `x-trace-id` is ignored unless `APP_DEBUG=true` and the value is 32 hex characters.
+- OpenAPI documents registered routes only. Generated `docs/API.md` lists the layer's live paths and does not include leftover `/webhooks` or `/billing` strings.
+- Root Compose Redis requires `dev-redis-change-me`. Root Compose Postgres uses `dev-postgres-change-me`. Root Compose MySQL uses `dev-mysql-change-me`. Production Compose Redis requires `REDIS_PASSWORD` and requires `APP_ENV` to be set.
+
+
 ## 1.0.9
 
 Label HiroApp as internal e2e dogfood and seed notes via Model

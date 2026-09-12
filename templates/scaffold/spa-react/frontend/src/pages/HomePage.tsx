@@ -7,9 +7,8 @@ export default function HomePage() {
     <section>
       <h1>Signed in</h1>
       <p className="hint">
-        This page reads <code>GET /api/v1/auth/me</code> with the bearer token from the login
-        response. It is the only resource the generated backend serves, so it is the only one this
-        page shows.
+        This page reads <code>GET /api/v1/auth/me</code> with the HttpOnly session cookie. It is the
+        only resource the generated backend serves, so it is the only one this page shows.
       </p>
 
       <div className="card">
@@ -64,8 +63,8 @@ export default notesModule;`}</code>
       </pre>
 
       <p className="hint">
-        Then fetch it here with <code>apiFetch("/notes", {"{ token }"})</code>. The{" "}
-        <code>notes</code> table already exists after <code>bun run db:migrate</code>.
+        Then fetch it here with <code>apiFetch("/notes")</code>. The <code>notes</code> table
+        already exists after <code>bun run db:migrate</code>.
       </p>
     </section>
   );

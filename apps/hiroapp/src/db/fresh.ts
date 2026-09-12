@@ -2,7 +2,7 @@ import { closeDatabase, getSql } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { migrate } from "./migrate.ts";
 
-const tables = ["api_tokens", "sessions", "users", "notes", "tenant"];
+const tables = ["api_tokens", "sessions", "auth_one_time_tokens", "users", "notes", "tenant"];
 
 export async function fresh() {
   await ensureAppDatabase();

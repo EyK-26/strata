@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { appDisplayName } from "../runtime/appKeyPrefix";
+import { timingSafeCompareString } from "./timingSafeCompare";
 
 function decodeBase32(input: string): Buffer {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -61,7 +62,11 @@ function buildOtpauthUrl(options: { secret: string; account: string; issuer?: st
   return `otpauth://totp/${encodeURIComponent(label)}?${params.toString()}`;
 }
 
-function generateTotp(secret: string, counter: number, digits = 6): string {
+function generateTotp(
+  secret: string,
+  counter = Math.floor(Date.now() / 30_000),
+  digits = 6,
+): string {
   const key = decodeBase32(secret);
   const buffer = Buffer.alloc(8);
 
@@ -87,14 +92,15 @@ function verifyTotp(secret: string, token: string, window = 1): boolean {
   }
 
   const timestep = Math.floor(Date.now() / 30_000);
+  let matched = false;
 
   for (let offset = -window; offset <= window; offset += 1) {
-    if (generateTotp(secret, timestep + offset) === normalized) {
-      return true;
+    if (timingSafeCompareString(generateTotp(secret, timestep + offset), normalized)) {
+      matched = true;
     }
   }
 
-  return false;
+  return matched;
 }
 
 export { buildOtpauthUrl, generateTotp, generateTotpSecret, verifyTotp };

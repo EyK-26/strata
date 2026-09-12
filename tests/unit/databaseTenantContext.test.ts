@@ -85,7 +85,7 @@ describe("runWithMigrationBypass", () => {
     }
   });
 
-  test("reuses the active transaction instead of session-scoped set_config", async () => {
+  test("opens a nested transaction instead of setting bypass on the request connection", async () => {
     const previous = process.env.TENANCY_DRIVER;
     process.env.TENANCY_DRIVER = "rls";
     const restored = currentPoolOrNull();
@@ -97,10 +97,10 @@ describe("runWithMigrationBypass", () => {
       await runWithDatabaseConnection(pool, async () => {
         await expect(runWithMigrationBypass(async () => "nested")).resolves.toBe("nested");
       });
-      expect(calls.some((line) => line === "begin")).toBe(false);
-      expect(calls.filter((line) => line.includes("set_config")).length).toBe(2);
-      expect(calls[0]).toContain('["true"]');
-      expect(calls[1]).toContain('["false"]');
+      expect(calls.some((line) => line === "begin")).toBe(true);
+      expect(calls.filter((line) => line.includes("set_config")).length).toBe(1);
+      expect(calls.some((line) => line.includes('["true"]'))).toBe(true);
+      expect(calls.some((line) => line.includes('["false"]'))).toBe(false);
     } finally {
       restorePool(restored);
       restoreEnvVar("TENANCY_DRIVER", previous);

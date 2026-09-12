@@ -14,7 +14,7 @@ This in-repo app is a generated sibling layer map. It is not a product and it is
 | Queue | `redis` |
 | Mail | `log` |
 | SPA prefix | `/app` |
-| Docker Compose | postgres, redis, adminer |
+| Docker Compose | postgres, redis |
 | Extras | metrics |
 
 This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md).
@@ -34,16 +34,14 @@ Open http://localhost:3000. Health check: `GET /health`.
 
 ## Supporting tools
 
-Docker Compose includes Postgres, Redis, Adminer (database UI).
+Docker Compose includes Postgres, Redis.
 
 ```bash
 docker compose up -d
 ```
 
-Adminer: http://localhost:8080 (PostgreSQL, server `postgres`, username `postgres`, password `postgres`).
 
-
-Seeded login (password `password`):
+Seeded login (password `StrataDemo!ChangeMe`):
 
 - `demo@example.com` (member)
 - `admin@example.test` (admin)
@@ -62,7 +60,7 @@ Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <M
 
 ## Database
 
-The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`.
+The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`. Compose creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`) on first empty volume and `.env.example` points `DATABASE_URL` at that role. The `postgres` superuser is for volume init and Adminer.
 
 ## Deploy
 
@@ -89,4 +87,4 @@ The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything els
 - Set `SESSION_SECRET` to 32+ characters.
 - Set `METRICS_TOKEN`.
 
-`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` answers 503 until the schema exists, so a fresh deploy stays out of rotation until it is migrated.
+`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` answers 503 until a notes row is readable, so a fresh deploy stays out of rotation until it is migrated.

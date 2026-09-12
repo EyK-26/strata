@@ -197,4 +197,16 @@ describe("generateOpenApiSpec", () => {
       restoreEnvVar("APP_SDK_CLASS", previousClass);
     }
   });
+
+  test("does not invent webhook or billing paths that were not registered", () => {
+    const spec = generateOpenApiSpec([
+      { method: "GET", path: "/health", middleware: ["global"] },
+      { method: "POST", path: "/api/v1/auth/login", middleware: ["global", "api"] },
+    ]);
+    const serialized = JSON.stringify(spec);
+
+    expect(spec.paths["/health"]).toBeDefined();
+    expect(serialized).not.toContain("/webhooks");
+    expect(serialized).not.toContain("/billing");
+  });
 });

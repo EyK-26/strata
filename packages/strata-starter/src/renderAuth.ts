@@ -18,6 +18,7 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
       return null;
     }
     const hashed = hashApiToken(token);
+    return await runWithMigrationBypass(async () => {
     const rows = await getSql().unsafe<
       {
         id: number;
@@ -45,7 +46,7 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
     try {
       abilities = JSON.parse(String(row.abilities ?? "[]")) as string[];
     } catch {
-      abilities = ["profile:read"];
+      abilities = [];
     }
     return {
       id: Number(row.user_id),
@@ -54,6 +55,7 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
       tokenId: Number(row.id),
       emailVerifiedAt: row.email_verified_at ?? null,
     };
+    });
   },`
     : `
   async resolveUserFromToken() {
@@ -79,11 +81,17 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
     mfa_secret: row.mfa_secret ?? null,
     mfa_recovery_codes: row.mfa_recovery_codes ?? null,`
     : "";
-  const userColumns = `id, name, email, is_admin, email_verified_at, password${mfaSelect}`;
+  const sessionSelect = ", session_valid_after";
+  const sessionColumn = `
+  session_valid_after?: Date | string | null;`;
+  const sessionReturn = `
+    session_valid_after: row.session_valid_after ?? null,`;
+  const userColumns = `id, name, email, is_admin, email_verified_at, password${mfaSelect}${sessionSelect}`;
 
   return `import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 ${hashImport}import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { getSql } from "./database.ts";
 
 type UserRow = {
@@ -92,7 +100,7 @@ type UserRow = {
   email: string;
   is_admin: number | boolean;
   email_verified_at: Date | string | null;
-  password: string;${mfaColumns}
+  password: string;${mfaColumns}${sessionColumn}
 };
 
 function mapRole(isAdmin: unknown): string {
@@ -106,29 +114,33 @@ function mapUserRow(row: UserRow) {
     email: row.email,
     role: mapRole(row.is_admin),
     email_verified_at: row.email_verified_at ?? null,
-    password: row.password,${mfaReturn}
+    password: row.password,${mfaReturn}${sessionReturn}
   };
 }
 
 async function findUserById(id: number) {
-  const rows = await getSql().unsafe<UserRow>(
-    "SELECT ${userColumns} FROM users WHERE id = ${placeholder}",
-    [id],
-  );
-  const row = rows[0];
-  if (!row) {
-    throw new Error(\`User \${id} not found.\`);
-  }
-  return mapUserRow(row);
+  return await runWithMigrationBypass(async () => {
+    const rows = await getSql().unsafe<UserRow>(
+      "SELECT ${userColumns} FROM users WHERE id = ${placeholder}",
+      [id],
+    );
+    const row = rows[0];
+    if (!row) {
+      throw new Error(\`User \${id} not found.\`);
+    }
+    return mapUserRow(row);
+  });
 }
 
 async function findUserByEmail(email: string) {
-  const rows = await getSql().unsafe<UserRow>(
-    "SELECT ${userColumns} FROM users WHERE email = ${placeholder}",
-    [email.trim().toLowerCase()],
-  );
-  const row = rows[0];
-  return row ? mapUserRow(row) : null;
+  return await runWithMigrationBypass(async () => {
+    const rows = await getSql().unsafe<UserRow>(
+      "SELECT ${userColumns} FROM users WHERE email = ${placeholder}",
+      [email.trim().toLowerCase()],
+    );
+    const row = rows[0];
+    return row ? mapUserRow(row) : null;
+  });
 }
 
 export const starterAuthDirectory: AuthUserDirectory = {
@@ -141,6 +153,9 @@ ${tokenLookup.replace("WHERE t.token_hash = ?", `WHERE t.token_hash = ${placehol
   async verifyCredentials(email: string, password: string): Promise<AuthUser | null> {
     const user = await findUserByEmail(email);
     if (!user?.password || !(await verifyPassword(password, user.password))) {
+      return null;
+    }
+    if ("mfa_enabled" in user && user.mfa_enabled) {
       return null;
     }
     return {
@@ -162,6 +177,11 @@ import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
 
 class StarterAuthManager {
+  async resolveWithSource(request?: Request) {
+    const user = await this.resolve(request);
+    return { user, credentialSource: user ? "guest" as const : null };
+  }
+
   async resolve(request?: Request): Promise<AuthUser | null> {
     if (!envFlagEnabled(process.env.AUTH_DEV_HEADERS)) {
       return request ? null : currentAuthUser();
@@ -211,7 +231,7 @@ export default authProvider;
       }),
     });`
     : `    const fallback = ${
-        authUsesToken(layers.auth) ? "new DatabaseTokenGuard(container)" : "new JwtGuard()"
+        authUsesToken(layers.auth) ? "new DatabaseTokenGuard(container)" : "new JwtGuard(container)"
       };
     const auth = new AuthManager(fallback);`;
 
@@ -222,7 +242,9 @@ export default authProvider;
     auth.registerGuard("token", apiGuard);`
     : "";
 
-  const jwtReg = authUsesJwt(layers.auth) ? `    auth.registerGuard("jwt", new JwtGuard());` : "";
+  const jwtReg = authUsesJwt(layers.auth)
+    ? `    auth.registerGuard("jwt", new JwtGuard(container));`
+    : "";
 
   const basicReg =
     authUsesToken(layers.auth) || authUsesJwt(layers.auth)
@@ -295,6 +317,7 @@ export {
   renderSiteModule,
 } from "./renderAuthFlows.ts";
 export {
+  renderConfirmPasswordView,
   renderForgotPasswordView,
   renderHomeView,
   renderLayout,

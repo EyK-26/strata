@@ -5,6 +5,11 @@ import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
 
 class StarterAuthManager {
+  async resolveWithSource(request?: Request) {
+    const user = await this.resolve(request);
+    return { user, credentialSource: user ? ("guest" as const) : null };
+  }
+
   async resolve(request?: Request): Promise<AuthUser | null> {
     if (!envFlagEnabled(process.env.AUTH_DEV_HEADERS)) {
       return request ? null : currentAuthUser();

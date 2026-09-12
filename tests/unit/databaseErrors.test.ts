@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   isPostgresError,
+  isUniqueConstraintError,
   mapDatabaseError,
   withDatabaseErrorHandling,
 } from "@getstrata/core/database/errors";
@@ -11,6 +12,17 @@ import {
   HttpError,
   UnprocessableEntityError,
 } from "@getstrata/core/errors/http";
+
+describe("isUniqueConstraintError", () => {
+  test("detects postgres, sqlite, and mysql unique failures", () => {
+    expect(isUniqueConstraintError({ code: "23505" })).toBe(true);
+    expect(isUniqueConstraintError({ errno: "23505" })).toBe(true);
+    expect(isUniqueConstraintError({ code: "SQLITE_CONSTRAINT_UNIQUE" })).toBe(true);
+    expect(isUniqueConstraintError({ code: "SQLITE_CONSTRAINT_PRIMARYKEY" })).toBe(true);
+    expect(isUniqueConstraintError({ errno: 1062 })).toBe(true);
+    expect(isUniqueConstraintError(new Error("nope"))).toBe(false);
+  });
+});
 
 describe("isPostgresError", () => {
   test("detects postgres-like error objects", () => {
@@ -110,7 +122,9 @@ describe("mapDatabaseError", () => {
     });
 
     expect(error).toBeInstanceOf(ConflictError);
-    expect(error.message).toContain("already exists");
+    expect(error.message).toBe("A record with these values already exists.");
+    expect(error.message).not.toContain("acme");
+    expect(error.details).toBeUndefined();
   });
 
   test("maps postgres foreign key violations to unprocessable entity errors", () => {

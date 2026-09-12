@@ -17,16 +17,31 @@ class ApiError extends Error {
 }
 
 interface ApiFetchOptions extends RequestInit {
-  token?: string | null;
   etag?: string | null;
+}
+
+let csrfToken: string | null = null;
+
+async function resolveCsrfToken(): Promise<string> {
+  if (csrfToken) {
+    return csrfToken;
+  }
+
+  const response = await fetch(`${API_PREFIX}/auth/csrf`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, "Could not load a CSRF token.");
+  }
+
+  const body = (await response.json()) as { token?: string };
+  csrfToken = body.token ?? "";
+  return csrfToken;
 }
 
 async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
-
-  if (options.token) {
-    headers.set("authorization", `Bearer ${options.token}`);
-  }
+  const method = (options.method ?? "GET").toUpperCase();
 
   if (options.etag) {
     headers.set("if-match", options.etag);
@@ -36,10 +51,20 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
     headers.set("content-type", "application/json");
   }
 
+  if (method !== "GET" && method !== "HEAD") {
+    headers.set("x-csrf-token", await resolveCsrfToken());
+  }
+
   const response = await fetch(`${API_PREFIX}${path}`, {
     ...options,
+    credentials: "include",
     headers,
   });
+
+  const nextCsrf = response.headers.get("x-csrf-token");
+  if (nextCsrf) {
+    csrfToken = nextCsrf;
+  }
 
   if (response.status === 204) {
     return undefined as T;
@@ -64,9 +89,9 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
   return body;
 }
 
-async function fetchResourceEtag(path: string, token: string): Promise<string> {
+async function fetchResourceEtag(path: string): Promise<string> {
   const response = await fetch(`${API_PREFIX}${path}`, {
-    headers: { authorization: `Bearer ${token}` },
+    credentials: "include",
   });
 
   if (!response.ok) {

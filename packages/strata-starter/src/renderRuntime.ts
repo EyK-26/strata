@@ -1,4 +1,5 @@
-import { appDatabaseName } from "./renderEnv.ts";
+import { generatedRlsBootstrapSql } from "../../../src/core/tenant/enableTenantRls.ts";
+import { defaultDatabaseUrl } from "./renderEnv.ts";
 import {
   authNeedsUsers,
   authUsesCookie,
@@ -252,19 +253,21 @@ function renderMigrateTs(layers: StarterLayers): string {
     statements.push(`CREATE TABLE IF NOT EXISTS tenant (
     id ${d.id},
     slug ${d.keyText} NOT NULL UNIQUE,
-    plan ${d.defaultText} NOT NULL DEFAULT 'enterprise',
+    plan ${d.defaultText} NOT NULL DEFAULT 'free',
     region ${d.defaultText} NOT NULL DEFAULT 'eu'
   )`);
   }
 
+  const notesTenantColumn = tenancyOn ? `\n    tenant_id INTEGER NOT NULL DEFAULT 1,` : "";
   statements.push(`CREATE TABLE IF NOT EXISTS notes (
     id ${d.id},
-    body ${d.text} NOT NULL,
+    body ${d.text} NOT NULL,${notesTenantColumn}
     created_at ${d.timestamp}
   )`);
 
   if (authNeedsUsers(layers.auth)) {
-    const tenantColumn = tenancyOn ? "\n    tenant_id INTEGER NOT NULL DEFAULT 1," : "";
+    const tenantColumn =
+      tenancyOn || layers.extras.scim ? "\n    tenant_id INTEGER NOT NULL DEFAULT 1," : "";
     const mfaColumns = mfaOn
       ? `\n    mfa_secret ${d.text},\n    mfa_enabled ${d.bool},\n    mfa_recovery_codes ${d.text},`
       : "";
@@ -274,8 +277,17 @@ function renderMigrateTs(layers: StarterLayers): string {
     email ${d.keyText} NOT NULL UNIQUE,
     password ${d.text} NOT NULL,
     is_admin ${d.bool},${tenantColumn}${mfaColumns}
+    session_valid_after ${d.timestampNull},
     email_verified_at ${d.timestampNull},
     created_at ${d.timestamp}
+  )`);
+    statements.push(`CREATE TABLE IF NOT EXISTS auth_one_time_tokens (
+    id ${d.id},
+    purpose ${d.keyText} NOT NULL,
+    user_id INTEGER NOT NULL,
+    token_hash ${d.keyText} NOT NULL UNIQUE,
+    expires_at ${d.timestamp},
+    consumed_at ${d.timestampNull}
   )`);
   }
 
@@ -286,7 +298,17 @@ function renderMigrateTs(layers: StarterLayers): string {
     expires_at ${d.timestamp},
     user_agent ${d.text},
     ip_address ${d.text},
-    last_active_at ${d.timestamp}
+    last_active_at ${d.timestamp},
+    created_at ${d.timestamp}
+  )`);
+    if (layers.database === "postgres") {
+      statements.push(
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+      );
+    }
+    statements.push(`CREATE TABLE IF NOT EXISTS auth_saml_assertions (
+    assertion_id ${d.keyText} PRIMARY KEY,
+    consumed_at ${d.timestamp}
   )`);
   }
 
@@ -303,7 +325,23 @@ function renderMigrateTs(layers: StarterLayers): string {
   )`);
   }
 
-  const list = statements.map((sql) => `  \`${sql}\`,`).join("\n");
+  const rlsOn = layers.tenancy === "rls" && layers.database === "postgres";
+  if (rlsOn) {
+    const rlsTables = authNeedsUsers(layers.auth) ? ["notes", "users"] : ["notes"];
+    const userOwnedTables: string[] = [];
+    if (authNeedsUsers(layers.auth)) {
+      userOwnedTables.push("auth_one_time_tokens");
+    }
+    if (authUsesCookie(layers.auth)) {
+      userOwnedTables.push("sessions");
+    }
+    if (authUsesToken(layers.auth)) {
+      userOwnedTables.push("api_tokens");
+    }
+    statements.push(generatedRlsBootstrapSql(rlsTables, userOwnedTables).trim());
+  }
+
+  const list = statements.map((sql) => `  \`${sql.replace(/`/g, "\\`")}\`,`).join("\n");
 
   const ph = layers.database === "postgres";
   const verifyOn = layers.extras.emailVerification && authNeedsUsers(layers.auth);
@@ -332,7 +370,7 @@ function renderMigrateTs(layers: StarterLayers): string {
   if (Number(tenantCount) === 0) {
     await sql.unsafe(
       "INSERT INTO tenant (slug, plan, region) VALUES (${ph ? "$1, $2, $3" : "?, ?, ?"})",
-      ["default", "enterprise", "eu"],
+      ["default", "free", "eu"],
     );
   }`
     : "";
@@ -343,7 +381,7 @@ function renderMigrateTs(layers: StarterLayers): string {
     "SELECT COUNT(*) AS count FROM users",
   );
   if (Number(userCount) === 0) {
-    const password = await hashPassword("password");
+    const password = await hashPassword("StrataDemo!ChangeMe");
     await sql.unsafe(
       "INSERT INTO users (${userColumns}) VALUES (${userPlaceholders})",
       ${userValues},
@@ -355,10 +393,21 @@ function renderMigrateTs(layers: StarterLayers): string {
     ? `import { hashPassword } from "@getstrata/core/auth/password";\n`
     : "";
 
-  const seedBlock = `${seedTenant}${seedUsers}`;
-  const bindSql = seedBlock.length > 0 ? "  const sql = getSql();\n" : "  getSql();\n";
+  const rlsBypassImport =
+    layers.tenancy === "rls" && layers.database === "postgres"
+      ? `import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";\n`
+      : "";
+  const bindSql = seedTenant || seedUsers ? "  const sql = getSql();\n" : "";
+  const seedOpen =
+    layers.tenancy === "rls" && layers.database === "postgres"
+      ? "  await runWithMigrationBypass(async () => {\n"
+      : "";
+  const seedClose = layers.tenancy === "rls" && layers.database === "postgres" ? "\n  });" : "";
+  const noteCreate = tenancyOn
+    ? `await Note.create({ body: "Welcome to Strata!", tenant_id: 1 });`
+    : `await Note.create({ body: "Welcome to Strata!" });`;
 
-  return `${hashImport}${ensureImport(layers)}import { closeDatabase, getSql } from "../bootstrap/database.ts";
+  return `${hashImport}${rlsBypassImport}${ensureImport(layers)}import { closeDatabase, getSql } from "../bootstrap/database.ts";
 import { Note } from "../models/Note.ts";
 
 const migrations = [
@@ -366,9 +415,10 @@ ${list}
 ];
 
 export async function seed() {
-${ensureCall(layers)}${bindSql}  if ((await Note.query().value("id")) === null) {
-    await Note.create({ body: "Welcome to Strata!" });
-  }${seedBlock}
+${ensureCall(layers)}${seedOpen}${bindSql}${seedTenant}
+  if ((await Note.query().value("id")) === null) {
+    ${noteCreate}
+  }${seedUsers}${seedClose}
 }
 
 export async function migrate() {
@@ -393,21 +443,28 @@ if (import.meta.main) {
 `;
 }
 
-function renderNoteModel(): string {
+function renderNoteModel(layers: StarterLayers): string {
+  const tenancyOn = usesTenantTable(layers.tenancy);
+  const tenantField = tenancyOn
+    ? `
+  tenant_id: number;`
+    : "";
+  const tenantColumn = tenancyOn ? ', "tenant_id"' : "";
+  const fillable = tenancyOn ? '["body", "tenant_id"]' : '["body"]';
   return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface NoteRecord {
   id: number;
-  body: string;
+  body: string;${tenantField}
   created_at: Date | string;
 }
 
 const notesTable = defineTable<NoteRecord, "id">({
   name: "notes",
   primaryKey: "id",
-  columns: ["id", "body", "created_at"],
+  columns: ["id", "body"${tenantColumn}, "created_at"],
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
@@ -418,7 +475,7 @@ class NoteRepository extends BaseRepository<NoteRecord, "id"> {
 }
 
 class Note extends Model<NoteRecord, "id"> {
-  static $fillable = ["body"] as const;
+  static $fillable = ${fillable} as const;
   // created_at uses the table default. Sending a JS Date from $timestamps
   // is rejected by SQLite bindings.
   static $timestamps = false;
@@ -440,6 +497,7 @@ function dropTables(layers: StarterLayers): string[] {
     ordered.push("sessions");
   }
   if (authNeedsUsers(layers.auth)) {
+    ordered.push("auth_one_time_tokens");
     ordered.push("users");
   }
   ordered.push("notes");
@@ -544,13 +602,7 @@ if (import.meta.main) {
 }
 
 function renderPreloadTs(layers: StarterLayers, projectName: string): string {
-  const database = appDatabaseName(projectName);
-  const fallback =
-    layers.database === "sqlite"
-      ? "sqlite:./storage/app.sqlite"
-      : layers.database === "mysql"
-        ? `mysql://root:root@localhost:3306/${database}`
-        : `postgresql://postgres:postgres@localhost:5432/${database}`;
+  const fallback = defaultDatabaseUrl(layers, projectName);
 
   return `import { join } from "node:path";
 import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
@@ -658,11 +710,7 @@ function renderEnsureDatabaseTs(layers: StarterLayers, projectName: string): str
     return null;
   }
 
-  const database = appDatabaseName(projectName);
-  const fallback =
-    layers.database === "mysql"
-      ? `mysql://root:root@localhost:3306/${database}`
-      : `postgresql://postgres:postgres@localhost:5432/${database}`;
+  const fallback = defaultDatabaseUrl(layers, projectName);
 
   const resolveUrl = `/**
  * The database name comes from DATABASE_URL. Set APP_DATABASE_URL to point

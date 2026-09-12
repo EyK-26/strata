@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  assertSafeSmtpAddress,
+  assertSafeSmtpField,
   LogMailDriver,
   Mailer,
+  redactMailBody,
   resolveSmtpConfig,
   SmtpMailDriver,
+  smtpEnvelopeAddress,
 } from "@getstrata/core/mail/mailer";
 
 describe("Mailer", () => {
@@ -160,5 +164,58 @@ describe("Mailer", () => {
     expect(payload).toContain("multipart/alternative");
     expect(payload).toContain("Plain text");
     expect(payload).toContain("<p>HTML body</p>");
+  });
+
+  test("rejects CR or LF in SMTP envelope fields", () => {
+    const mailer = new Mailer(new LogMailDriver());
+    expect(() =>
+      mailer.send({
+        to: "victim@example.test\r\nBcc: attacker@evil.test",
+        subject: "Hello",
+        body: "Hi",
+      }),
+    ).toThrow("CR or LF");
+    expect(() =>
+      mailer.send({
+        to: "user@example.test",
+        subject: "Hello\nX-Injected: yes",
+        body: "Hi",
+      }),
+    ).toThrow("CR or LF");
+    expect(() => assertSafeSmtpField("ok\r", "subject")).toThrow("CR or LF");
+    expect(() => assertSafeSmtpAddress("not-an-email", "to")).toThrow("valid email address");
+    expect(assertSafeSmtpAddress("Name <user@example.test>", "from")).toBe(
+      "Name <user@example.test>",
+    );
+    expect(smtpEnvelopeAddress("Name <user@example.test>", "from")).toBe("user@example.test");
+    expect(() => smtpEnvelopeAddress("Name <not-an-email>", "from")).toThrow("valid email address");
+  });
+
+  test("redacts reset URLs and token-like query strings from the log body", async () => {
+    expect(
+      redactMailBody(
+        "Reset at https://app.example.test/reset-password?token=abc123&expires=99 and keep hello",
+      ),
+    ).toBe("Reset at [redacted-url] and keep hello");
+    expect(redactMailBody("fallback ?token=abc123 leftover")).toBe(
+      "fallback [redacted-query] leftover",
+    );
+
+    const messages: string[] = [];
+    const originalLog = console.log;
+    console.log = (value?: unknown) => {
+      messages.push(String(value));
+    };
+    try {
+      await new Mailer(new LogMailDriver()).send({
+        to: "user@example.test",
+        subject: "Reset",
+        body: "Click https://app.example.test/reset?token=super-secret",
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    expect(messages[0]).toContain("[redacted-url]");
+    expect(messages[0]).not.toContain("super-secret");
   });
 });

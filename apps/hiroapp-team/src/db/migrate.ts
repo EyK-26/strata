@@ -15,8 +15,17 @@ const migrations = [
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
     is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+    session_valid_after TIMESTAMPTZ,
     email_verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE TABLE IF NOT EXISTS auth_one_time_tokens (
+    id SERIAL PRIMARY KEY,
+    purpose TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    consumed_at TIMESTAMPTZ
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -24,13 +33,20 @@ const migrations = [
     expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     user_agent TEXT,
     ip_address TEXT,
-    last_active_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    last_active_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+  `CREATE TABLE IF NOT EXISTS auth_saml_assertions (
+    assertion_id TEXT PRIMARY KEY,
+    consumed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 ];
 
 export async function seed() {
   await ensureAppDatabase();
   const sql = getSql();
+
   if ((await Note.query().value("id")) === null) {
     await Note.create({ body: "Welcome to Strata!" });
   }
@@ -38,7 +54,7 @@ export async function seed() {
     "SELECT COUNT(*) AS count FROM users",
   );
   if (Number(userCount) === 0) {
-    const password = await hashPassword("password");
+    const password = await hashPassword("StrataDemo!ChangeMe");
     await sql.unsafe(
       "INSERT INTO users (name, email, password, is_admin) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)",
       [

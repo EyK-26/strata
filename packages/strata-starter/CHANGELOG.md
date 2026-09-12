@@ -1,5 +1,23 @@
 # create-strata changelog
 
+## 1.1.0
+
+Breaking security hardening for generated apps, lockstep with `@getstrata/core` 1.1.0. Read the core 1.1.0 migration list.
+
+CSRF on HTML and on mutating API routes, including guest JSON login (`POST /api/v1/auth/login`) and JWT mint (`POST /api/auth/token`). Fetch `GET /api/v1/auth/csrf` first. That response Set-Cookies the HttpOnly CSRF cookie and returns the same token in JSON. Send `X-CSRF-Token` (or form `_token`) plus the cookie. Nested API CSRF does not mint a second cookie. A missing token is JSON 403. CORS allowlists `X-CSRF-Token` and, when reflecting a specific origin, sets `Access-Control-Allow-Credentials`. The CSRF cookie is `SameSite=Lax`, so a different site cannot send it on fetch. Bearer and Basic skip CSRF only after that guard authenticates. SCIM and SAML ACS skip CSRF by path.
+
+SAML is HMAC RelayState without a Lax cookie. Replay uses `auth_saml_assertions`. Signed responses and a required IdP issuer are the default. ACS compares assertion issuer to `SAML_IDP_ISSUER`. JIT uses `currentTenantId()` and is skipped when `FEATURE_REGISTRATION=false`. Generated SAML ACS still challenges MFA when `mfa_enabled` is true. Completing MFA enrollment revokes sessions and API tokens. There is no generated OIDC cookie login.
+
+MFA is when enrolled, on HTML password POST, HTML MFA, API token mint, JWT mint, and Basic mint. Recovery hashes are persisted. `verifyCredentials` does not skip MFA. JwtGuard does not run TOTP on each request.
+
+Password reset consumes one-time tokens atomically, compares aliased `sessions.created_at` to `session_valid_after` (not `users.created_at`), and deletes `sessions` plus `api_tokens`. JwtGuard rejects tokens issued before `session_valid_after`. Verify GET does not sign in.
+
+`--tenancy=rls` FORCE RLS is on `notes` and `users`. `sessions`, `api_tokens`, and `auth_one_time_tokens` get a user-join policy. Auth lookups and those auth-table writes use `runWithMigrationBypass`. SCIM scopes by `tenant_id` and throws if tenant ALS is missing. `/health` is degraded until a notes row is readable under the request tenant. Generated Compose still has a `postgres` superuser for volume init and Adminer. It also creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`) on first empty volume and points `DATABASE_URL` at that role. Production boot rejects username `postgres` or `root` when `TENANCY_DRIVER=rls`.
+
+OIDC verifies RS256 ID tokens via discovery JWKS and a persisted PKCE handshake. GitHub OAuth uses `safeFetch`, always reads `/user/emails`, and rejects a missing verified address.
+
+MFA secrets require `KMS_ENCRYPTION_KEY` whenever `FEATURE_MFA` is on, including local. Seed password is `StrataDemo!ChangeMe`. HTMX is the unpkg 2.0.4 pin. Generated login tokens mint `[]` abilities. Generated Compose Postgres password is `dev-postgres-change-me`. Generated Compose application role is `strata_app` / `dev-strata-app-change-me`. Generated Compose MySQL root password is `dev-mysql-change-me`.
+
 ## 1.0.9
 
 Label HiroApp as internal e2e dogfood and seed notes via Model

@@ -12,7 +12,8 @@
       "!!**/docs/openapi.json",
       "!!**/sdk/typescript/client.ts",
       "!!**/apps/*/frontend",
-      "!!**/apps/*/public"
+      "!!**/apps/*/public",
+      "!!**/htmx.min.js"
     ]
   },
   "formatter": {

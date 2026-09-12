@@ -75,8 +75,10 @@ class HttpKernel {
       case "web":
         return isViewsEnabled() ? [createFlashMiddleware(), createCsrfMiddleware()] : [];
       case "api": {
+        const csrf = createCsrfMiddleware();
+
         if (!this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
-          return [];
+          return [csrf];
         }
 
         const config = this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
@@ -90,6 +92,7 @@ class HttpKernel {
               maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
               decaySeconds: 60,
             }),
+            csrf,
           ];
         }
 
@@ -101,6 +104,7 @@ class HttpKernel {
             maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
             decaySeconds: 60,
           }),
+          csrf,
         ];
       }
       default:
@@ -111,16 +115,17 @@ class HttpKernel {
   wrap(groups: MiddlewareGroupName | MiddlewareGroupName[], handler: RouteHandler): RouteHandler {
     const names = Array.isArray(groups) ? groups : [groups];
     const middleware = names.flatMap((name) => this.group(name));
+    const wrapped = middleware.length === 0 ? handler : withMiddleware(...middleware)(handler);
 
-    if (middleware.length === 0) {
-      return handler;
+    if (names.includes("api")) {
+      return withJsonErrorHandling(wrapped);
     }
 
-    return withMiddleware(...middleware)(handler);
+    return wrapped;
   }
 
   wrapApi(handler: RouteHandler): RouteHandler {
-    return withJsonErrorHandling(this.wrap(["api", "authenticated"], handler));
+    return this.wrap(["api", "authenticated"], handler);
   }
 
   wrapWeb(handler: RouteHandler): RouteHandler {

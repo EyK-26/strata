@@ -1,105 +1,63 @@
 import { describe, expect, test } from "bun:test";
 import {
   clearOAuthStateCookie,
+  createOAuthState,
   createOAuthStateCookie,
   verifyOAuthState,
 } from "@getstrata/core/security/oauthState";
 
 describe("oauth state", () => {
-  test("creates and verifies a signed oauth state cookie", () => {
-    const { state, cookie } = createOAuthStateCookie();
-    const request = new Request("http://example.test/auth/callback", {
-      headers: {
-        cookie,
-      },
-    });
+  test("verifies HMAC RelayState without a cookie", () => {
+    const { state } = createOAuthState();
+    const request = new Request("http://example.test/auth/saml/acs");
 
     expect(verifyOAuthState(request, state)).toBe(true);
     expect(verifyOAuthState(request, "wrong-state")).toBe(false);
   });
 
   test("rejects missing, empty, malformed, and expired oauth state", () => {
-    const { state, cookie } = createOAuthStateCookie();
-    const validRequest = new Request("http://example.test/auth/callback", {
-      headers: { cookie },
-    });
+    const { state } = createOAuthStateCookie();
+    const request = new Request("http://example.test/auth/callback");
 
-    expect(verifyOAuthState(validRequest, null)).toBe(false);
-    expect(verifyOAuthState(validRequest, "   ")).toBe(false);
-    expect(verifyOAuthState(new Request("http://example.test/auth/callback"), state)).toBe(false);
-    expect(
-      verifyOAuthState(
-        new Request("http://example.test/auth/callback", {
-          headers: { cookie: "oauth_state=abc.def.ghi" },
-        }),
-        "abc",
-      ),
-    ).toBe(false);
+    expect(verifyOAuthState(request, null)).toBe(false);
+    expect(verifyOAuthState(request, "   ")).toBe(false);
+    expect(verifyOAuthState(request, "abc.def.ghi")).toBe(false);
+    expect(verifyOAuthState(request, "abc.notanumber.ffff")).toBe(false);
     expect(clearOAuthStateCookie()).toContain("Max-Age=0");
-  });
 
-  test("rejects oauth state cookies with invalid part counts and mismatched signatures", () => {
-    const { state, cookie } = createOAuthStateCookie();
-    const validRequest = new Request("http://example.test/auth/callback", {
-      headers: { cookie },
-    });
-    const [cookiePair] = cookie.split(";");
-    const encodedValue = decodeURIComponent(cookiePair?.split("=")[1] ?? "");
-    const [cookieState, issuedAtRaw, signature] = encodedValue.split(".");
-
-    expect(
-      verifyOAuthState(
-        new Request("http://example.test/auth/callback", {
-          headers: { cookie: "other=1" },
-        }),
-        state,
-      ),
-    ).toBe(false);
-
-    expect(
-      verifyOAuthState(
-        new Request("http://example.test/auth/callback", {
-          headers: { cookie: `oauth_state=${encodeURIComponent(`.${issuedAtRaw}.${signature}`)}` },
-        }),
-        state,
-      ),
-    ).toBe(false);
-
-    expect(
-      verifyOAuthState(
-        new Request("http://example.test/auth/callback", {
-          headers: { cookie: `oauth_state=${encodeURIComponent(`${cookieState}.${issuedAtRaw}`)}` },
-        }),
-        state,
-      ),
-    ).toBe(false);
-
-    expect(
-      verifyOAuthState(
-        new Request("http://example.test/auth/callback", {
-          headers: {
-            cookie: `oauth_state=${encodeURIComponent(`${cookieState}.${issuedAtRaw}.${signature}x`)}`,
-          },
-        }),
-        state,
-      ),
-    ).toBe(false);
-
-    expect(
-      verifyOAuthState(
-        new Request("http://example.test/auth/callback", {
-          headers: { cookie: `other=1; ${cookiePair}` },
-        }),
-        state,
-      ),
-    ).toBe(true);
+    const [nonce, issuedAtRaw, signature] = state.split(".");
+    expect(verifyOAuthState(request, `.${issuedAtRaw}.${signature}`)).toBe(false);
+    expect(verifyOAuthState(request, `${nonce}.${issuedAtRaw}`)).toBe(false);
+    expect(verifyOAuthState(request, `${nonce}.${issuedAtRaw}.${signature}x`)).toBe(false);
 
     const originalNow = Date.now;
     Date.now = () => originalNow() + 11 * 60 * 1000;
     try {
-      expect(verifyOAuthState(validRequest, state)).toBe(false);
+      expect(verifyOAuthState(request, state)).toBe(false);
     } finally {
       Date.now = originalNow;
+    }
+  });
+
+  test("marks oauth state cookies Secure in production", () => {
+    const originalAppEnv = process.env.APP_ENV;
+    const originalSecret = process.env.SESSION_SECRET;
+    process.env.APP_ENV = "production";
+    process.env.SESSION_SECRET = "oauth-state-unit-test-secret-32ch";
+    try {
+      expect(createOAuthStateCookie().cookie).toContain("Secure");
+      expect(clearOAuthStateCookie()).toContain("Secure");
+    } finally {
+      if (originalAppEnv === undefined) {
+        delete process.env.APP_ENV;
+      } else {
+        process.env.APP_ENV = originalAppEnv;
+      }
+      if (originalSecret === undefined) {
+        delete process.env.SESSION_SECRET;
+      } else {
+        process.env.SESSION_SECRET = originalSecret;
+      }
     }
   });
 });

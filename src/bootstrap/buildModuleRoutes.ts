@@ -1,5 +1,6 @@
 import { conditionalJsonResponse } from "@getstrata/core/http/conditionalResponse";
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
+import { createJsonErrorMiddleware } from "@getstrata/core/http/response";
 import type { AppDependencies, AppModule, AppRouteMap, CachedJson } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { discoverModules } from "./modules";
@@ -67,7 +68,11 @@ function buildModuleRoutes(
   }
 
   const kernel = createHttpKernel(dependencies);
-  const middleware = [...kernel.globalMiddleware(), ...kernel.group("api")];
+  const middleware = [
+    ...kernel.globalMiddleware(),
+    createJsonErrorMiddleware(),
+    ...kernel.group("api"),
+  ];
   const cachedJson = createCachedJson(dependencies);
   const moduleRoutes: Record<string, unknown> = {};
 

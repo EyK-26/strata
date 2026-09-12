@@ -32,7 +32,10 @@ const CORE_SUBPATHS = [
   "auth/oauth/providers",
   "auth/oauth/samlProvider",
   "auth/oauth/types",
+  "auth/saml/samlServiceProvider",
   "auth/password",
+  "auth/passwordLogin",
+  "auth/oneTimeToken",
   "auth/intendedUrlCookie",
   "auth/passwordConfirmCookie",
   "auth/policy",
@@ -171,6 +174,7 @@ const CORE_SUBPATHS = [
   "security/publicReads",
   "security/recoveryCodes",
   "security/safeFetch",
+  "security/safePath",
   "security/safeUrl",
   "security/scimTenantTokens",
   "security/securityEvents",
@@ -184,6 +188,7 @@ const CORE_SUBPATHS = [
   "tenant/tenantDatabaseScope",
   "tenant/databaseTenantContext",
   "tenant/tenantMiddleware",
+  "tenant/enableTenantRls",
   "terminal/runShell",
   "tracing/traceContext",
   "tracing/tracingMiddleware",
@@ -359,8 +364,11 @@ async function updatePackageJson(
   packageJson.exports = exports;
 
   const relativeEntries = buildEntries.map((entry) => relative(packageDir, entry)).join(" ");
+  const optionalPeerExternals = packageDir.includes("bootstrap")
+    ? " --external @getstrata/core"
+    : " --external @node-saml/node-saml";
   packageJson.scripts["build:bundle"] =
-    `bun build index.ts --outdir dist --target bun --external bun --external eta --external mysql2${packageDir.includes("bootstrap") ? " --external @getstrata/core" : ""}`;
+    `bun build index.ts --outdir dist --target bun --external bun --external eta --external mysql2${optionalPeerExternals}`;
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
     ? "bun ../../scripts/write-core-shared-shims.ts"
     : "true";
@@ -371,7 +379,7 @@ async function updatePackageJson(
     ? ` ${bootstrapSubpathExternalFlags(BOOTSTRAP_SUBPATHS, CORE_SUBPATHS)}`
     : "";
   packageJson.scripts["build:subpaths"] = relativeEntries
-    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta --external mysql2${coreExternal}${bootstrapExternal}`
+    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun --external eta --external mysql2${packageDir.includes("strata-core") ? " --external @node-saml/node-saml" : ""}${coreExternal}${bootstrapExternal}`
     : "true";
   packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
     ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"

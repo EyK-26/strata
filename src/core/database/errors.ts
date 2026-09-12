@@ -101,21 +101,25 @@ function mapDatabaseError(error: unknown): HttpError {
 
   switch (sqlState) {
     case "23505":
-      return new ConflictError(error.detail ?? "A record with these values already exists.", {
-        constraint: error.constraint,
-      });
+      if (error.detail) {
+        console.error("[database] unique violation", error.detail);
+      }
+      return new ConflictError("A record with these values already exists.");
     case "23503":
-      return new UnprocessableEntityError(error.detail ?? "Referenced record does not exist.", {
-        constraint: error.constraint,
-      });
+      if (error.detail) {
+        console.error("[database] foreign-key violation", error.detail);
+      }
+      return new UnprocessableEntityError("Referenced record does not exist.");
     case "23502":
-      return new BadRequestError(error.detail ?? "Required field is missing.", {
-        constraint: error.constraint,
-      });
+      if (error.detail) {
+        console.error("[database] not-null violation", error.detail);
+      }
+      return new BadRequestError("Required field is missing.");
     case "23514":
-      return new BadRequestError(error.detail ?? "Value violates a database constraint.", {
-        constraint: error.constraint,
-      });
+      if (error.detail) {
+        console.error("[database] check violation", error.detail);
+      }
+      return new BadRequestError("Value violates a database constraint.");
     default:
       return new InternalServerError("Database operation failed.");
   }
@@ -131,4 +135,20 @@ async function withDatabaseErrorHandling<TValue>(
   }
 }
 
-export { isPostgresError, mapDatabaseError, withDatabaseErrorHandling };
+function isUniqueConstraintError(error: unknown): boolean {
+  if (!isPostgresError(error)) {
+    return false;
+  }
+
+  if (error.code === "SQLITE_CONSTRAINT_UNIQUE" || error.code === "SQLITE_CONSTRAINT_PRIMARYKEY") {
+    return true;
+  }
+
+  if (error.errno === 1062) {
+    return true;
+  }
+
+  return getPostgresSqlState(error) === "23505";
+}
+
+export { isPostgresError, isUniqueConstraintError, mapDatabaseError, withDatabaseErrorHandling };

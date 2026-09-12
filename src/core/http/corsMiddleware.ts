@@ -1,4 +1,4 @@
-import { isProductionEnv } from "../runtime/appEnv";
+import { appUrl } from "../runtime/appKeyPrefix";
 import type { Middleware } from "./middleware";
 
 interface CorsConfig {
@@ -8,9 +8,9 @@ interface CorsConfig {
   maxAgeSeconds: number;
 }
 
-/** Unset means any origin while developing and same-origin only in production. */
+/** Unset means same-origin (`APP_URL`) only. Never default to `*`. */
 function defaultAllowedOrigins(): string {
-  return isProductionEnv() ? "" : "*";
+  return appUrl();
 }
 
 function resolveCorsConfig(): CorsConfig {
@@ -29,6 +29,7 @@ function resolveCorsConfig(): CorsConfig {
       "X-Authenticated-User-Role",
       "If-Match",
       "If-None-Match",
+      "X-CSRF-Token",
     ],
     maxAgeSeconds: 86_400,
   };
@@ -78,6 +79,9 @@ function buildCorsHeaders(request: Request): Headers {
   headers.set("Access-Control-Allow-Methods", corsConfig.allowedMethods.join(", "));
   headers.set("Access-Control-Allow-Headers", corsConfig.allowedHeaders.join(", "));
   headers.set("Access-Control-Max-Age", String(corsConfig.maxAgeSeconds));
+  if (allowOrigin !== "*") {
+    headers.set("Access-Control-Allow-Credentials", "true");
+  }
   return headers;
 }
 

@@ -102,6 +102,47 @@ describe("assertProductionSecrets", () => {
     ).toThrow(/AUTH_DEV_HEADERS=false/);
   });
 
+  test("blocks missing SAML_IDP_ISSUER when SAML is enabled in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_PUBLIC_READS: "false",
+        FEATURE_SAML: "true",
+        FRONTEND_MODE: "api",
+        SAML_IDP_SSO_URL: "https://idp.example.test/sso",
+        SAML_IDP_CERT: "cert",
+        SAML_SP_ENTITY_ID: "https://sp.example.test/metadata",
+        SAML_ACS_URL: "https://app.example/auth/saml/acs",
+      }),
+    ).toThrow(/SAML_IDP_ISSUER/);
+  });
+
+  test("blocks SAML_WANT_RESPONSE_SIGNED=false when SAML is enabled in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_PUBLIC_READS: "false",
+        FEATURE_SAML: "true",
+        FRONTEND_MODE: "api",
+        OAUTH_STATE_SECRET: "rotated-oauth-state-secret",
+        SAML_IDP_SSO_URL: "https://idp.example.test/sso",
+        SAML_IDP_CERT: "cert",
+        SAML_SP_ENTITY_ID: "https://sp.example.test/metadata",
+        SAML_ACS_URL: "https://app.example/auth/saml/acs",
+        SAML_IDP_ISSUER: "https://idp.example.test/metadata",
+        SAML_WANT_RESPONSE_SIGNED: "false",
+      }),
+    ).toThrow(/signed SAML responses are required/);
+  });
+
   test("blocks missing STRIPE_WEBHOOK_SECRET when billing is enabled in production", () => {
     expect(() =>
       assertProductionSecrets({
@@ -338,6 +379,83 @@ describe("assertProductionSecrets", () => {
         FRONTEND_MODE: "server-htmx",
         FEATURE_PUBLIC_READS: "false",
         SESSION_SECRET: "a-real-rotated-session-secret-value-32ch",
+      }),
+    ).not.toThrow();
+  });
+
+  test("blocks DATABASE_URL user postgres when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).toThrow(/DATABASE_URL for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not postgres/);
+  });
+
+  test("blocks APP_DATABASE_URL user postgres even when DATABASE_URL is an app role", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+        APP_DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).toThrow(/APP_DATABASE_URL for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not postgres/);
+  });
+
+  test("blocks generated change-me in DATABASE_URL in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/app",
+      }),
+    ).toThrow(/replace the generated placeholder values for DATABASE_URL/);
+  });
+
+  test("allows a NOBYPASSRLS DATABASE_URL when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+      }),
+    ).not.toThrow();
+  });
+
+  test("allows DATABASE_URL user postgres when TENANCY_DRIVER=none", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        TENANCY_DRIVER: "none",
+        DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).not.toThrow();
+  });
+
+  test("allows postgres user locally even when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "local",
+        TENANCY_DRIVER: "rls",
+        DATABASE_URL: "postgresql://postgres:postgres@localhost:54329/hiroapp_test",
       }),
     ).not.toThrow();
   });

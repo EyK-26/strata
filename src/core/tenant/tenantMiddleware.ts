@@ -13,7 +13,7 @@ import { runWithTenantDatabase } from "./tenantDatabaseScope";
 const DEFAULT_TENANT: TenantContext = {
   id: 1,
   slug: "default",
-  plan: "enterprise",
+  plan: "free",
   region: "eu",
 };
 
@@ -110,15 +110,7 @@ function createTenantMiddleware() {
       const tenant = await resolveTenantForRequest(request);
 
       return await runWithTenantDatabase(tenant, async () => {
-        const response = await next();
-        const headers = new Headers(response.headers);
-        headers.set("x-tenant-id", String(tenant.id));
-        headers.set("x-tenant-region", tenant.region);
-        return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-        });
+        return await next();
       });
     } catch (error) {
       const httpError = toHttpError(error);

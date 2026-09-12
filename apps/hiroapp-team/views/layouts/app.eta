@@ -8,6 +8,7 @@
     <meta name="description" content="<%= it.layout.description %>" />
     <% } %>
     <link rel="stylesheet" href="/assets/site.css" />
+    <script src="/assets/htmx.min.js"></script>
   </head>
   <body>
     <header class="site-header">

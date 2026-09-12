@@ -1,3 +1,5 @@
+import { sanitizeInternalPath } from "../http/safeInternalPath";
+
 function withCharset(contentType: string): string {
   return contentType.includes("charset=") ? contentType : `${contentType}; charset=utf-8`;
 }
@@ -17,10 +19,14 @@ function isHtmxRequest(request: Request): boolean {
 }
 
 function redirectResponse(location: string, status = 302): Response {
+  if (!location.startsWith("/") || location.startsWith("//")) {
+    throw new Error("Redirect location must be an internal path.");
+  }
+
   return new Response(null, {
     status,
     headers: {
-      Location: location,
+      Location: sanitizeInternalPath(location, "/"),
     },
   });
 }

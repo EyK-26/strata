@@ -1,9 +1,5 @@
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
-import {
-  getActiveDatabaseConnection,
-  hasActiveDatabaseConnection,
-  runWithDatabaseConnection,
-} from "../database/connectionContext";
+import { runWithDatabaseConnection } from "../database/connectionContext";
 import { isRlsTenancy } from "./tenancyConfig";
 
 type TransactionHandle = {
@@ -22,16 +18,6 @@ async function applyBypassToTransaction(
 async function runWithMigrationBypass<T>(callback: () => T | Promise<T>): Promise<T> {
   if (!isRlsTenancy()) {
     return await callback();
-  }
-
-  if (hasActiveDatabaseConnection()) {
-    const activeConnection = getActiveDatabaseConnection(getDefaultDatabasePool());
-    await applyBypassToTransaction(activeConnection, true);
-    try {
-      return await callback();
-    } finally {
-      await applyBypassToTransaction(activeConnection, false);
-    }
   }
 
   const pool = getDefaultDatabasePool();

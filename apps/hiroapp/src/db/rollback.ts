@@ -1,7 +1,7 @@
 import { getSql } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 
-const tables = ["api_tokens", "sessions", "users", "notes", "tenant"];
+const tables = ["api_tokens", "sessions", "auth_one_time_tokens", "users", "notes", "tenant"];
 
 export async function rollback() {
   await ensureAppDatabase();

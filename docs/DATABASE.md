@@ -35,6 +35,8 @@ DATABASE_URL=sqlite://tmp/dev.sqlite
 
 Pick **one** primary database per app. Named connections can attach another engine for a sidecar, but that is not how the in-repo examples run.
 
+When `TENANCY_DRIVER=rls`, production `DATABASE_URL` must not use the `postgres` superuser. Generated Compose creates `strata_app` for that. See [TENANCY.md](./TENANCY.md).
+
 ## Query builder
 
 `@getstrata/core/database/query` compiles SQL through `currentSqlDialect()`. Tests can wrap a block:
