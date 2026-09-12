@@ -167,5 +167,8 @@ describe("pinUrlToAddress", () => {
     expect(pinUrlToAddress(new URL("https://example.com/hook"), "2001:4860:4860::8888").href).toBe(
       "https://[2001:4860:4860::8888]/hook",
     );
+    expect(
+      pinUrlToAddress(new URL("https://example.com:8443/hook"), "2001:4860:4860::8888").href,
+    ).toBe("https://[2001:4860:4860::8888]:8443/hook");
   });
 });

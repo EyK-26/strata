@@ -98,9 +98,7 @@ describe("exportPendingAuditLogs", () => {
     let authorization = "unset";
 
     globalThis.fetch = mock((_url, init) => {
-      authorization = String(
-        (init?.headers as Record<string, string> | undefined)?.authorization ?? "",
-      );
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 
@@ -137,9 +135,7 @@ describe("exportPendingAuditLogs", () => {
 
     globalThis.fetch = mock((_url, init) => {
       requestBody = String(init?.body ?? "");
-      authorization = String(
-        (init?.headers as Record<string, string> | undefined)?.authorization ?? "",
-      );
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 
@@ -185,9 +181,7 @@ describe("exportPendingAuditLogs", () => {
     let contentType = "";
 
     globalThis.fetch = mock((_url, init) => {
-      contentType = String(
-        (init?.headers as Record<string, string> | undefined)?.["content-type"] ?? "",
-      );
+      contentType = new Headers(init?.headers).get("content-type") ?? "";
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 

@@ -270,7 +270,8 @@ function isLiteralIpHostname(hostname: string): boolean {
 
 function pinUrlToAddress(url: URL, address: string): URL {
   const pinned = new URL(url.toString());
-  pinned.hostname = address;
+  const ipv6 = expandIpv6(address.replace(/^\[|\]$/gu, ""));
+  pinned.hostname = ipv6 ? `[${address.replace(/^\[|\]$/gu, "")}]` : address;
   return pinned;
 }
 
