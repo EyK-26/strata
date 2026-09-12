@@ -150,6 +150,7 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
       "SAML_IDP_SSO_URL",
       "SAML_SP_ENTITY_ID",
       "SAML_ACS_URL",
+      "SAML_IDP_ISSUER",
     ] as const;
     const missing = required.filter((name) => !env[name]?.trim());
     if (missing.length > 0) {

@@ -358,75 +358,84 @@ describe("HiroApp security", () => {
     process.env.SAML_WANT_RESPONSE_SIGNED = "false";
     process.env.SAML_SP_ENTITY_ID = "https://hiroapp.test/saml/metadata";
     process.env.SAML_ACS_URL = `${origin}/auth/saml/acs`;
+    process.env.SAML_IDP_ISSUER = "https://idp.example.test/metadata";
 
-    const start = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
-    expect(start.status).toBe(302);
-    const location = start.headers.get("location") ?? "";
-    const relayState = new URL(location).searchParams.get("RelayState") ?? "";
-    const cookies = cookieHeader(start);
+    try {
+      const start = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
+      expect(start.status).toBe(302);
+      const location = start.headers.get("location") ?? "";
+      const relayState = new URL(location).searchParams.get("RelayState") ?? "";
+      const cookies = cookieHeader(start);
 
-    const unsigned = await createSignedSamlResponse({
-      audience: "https://hiroapp.test/saml/metadata",
-      destination: `${origin}/auth/saml/acs`,
-      signed: false,
-    });
-    const unsignedRes = await fetch(`${origin}/auth/saml/acs`, {
-      method: "POST",
-      headers: {
-        cookie: cookies,
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ SAMLResponse: unsigned.responseB64, RelayState: relayState }),
-    });
-    expect(unsignedRes.status).toBeGreaterThanOrEqual(400);
+      const unsigned = await createSignedSamlResponse({
+        audience: "https://hiroapp.test/saml/metadata",
+        destination: `${origin}/auth/saml/acs`,
+        signed: false,
+      });
+      const unsignedRes = await fetch(`${origin}/auth/saml/acs`, {
+        method: "POST",
+        headers: {
+          cookie: cookies,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ SAMLResponse: unsigned.responseB64, RelayState: relayState }),
+      });
+      expect(unsignedRes.status).toBeGreaterThanOrEqual(400);
 
-    const wrongAud = await createSignedSamlResponse({
-      audience: "https://other.test/metadata",
-      destination: `${origin}/auth/saml/acs`,
-    });
-    const wrong = await fetch(`${origin}/auth/saml/acs`, {
-      method: "POST",
-      headers: {
-        cookie: cookies,
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ SAMLResponse: wrongAud.responseB64, RelayState: relayState }),
-    });
-    expect(wrong.status).toBeGreaterThanOrEqual(400);
+      const wrongAud = await createSignedSamlResponse({
+        audience: "https://other.test/metadata",
+        destination: `${origin}/auth/saml/acs`,
+      });
+      const wrong = await fetch(`${origin}/auth/saml/acs`, {
+        method: "POST",
+        headers: {
+          cookie: cookies,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ SAMLResponse: wrongAud.responseB64, RelayState: relayState }),
+      });
+      expect(wrong.status).toBeGreaterThanOrEqual(400);
 
-    const valid = await fetch(`${origin}/auth/saml/acs`, {
-      method: "POST",
-      headers: {
-        cookie: cookies,
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ SAMLResponse: fixture.responseB64, RelayState: relayState }),
-      redirect: "manual",
-    });
-    expect([302, 200]).toContain(valid.status);
+      const valid = await fetch(`${origin}/auth/saml/acs`, {
+        method: "POST",
+        headers: {
+          cookie: cookies,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ SAMLResponse: fixture.responseB64, RelayState: relayState }),
+        redirect: "manual",
+      });
+      expect([302, 200]).toContain(valid.status);
 
-    const cookielessFixture = await createSignedSamlResponse({
-      audience: "https://hiroapp.test/saml/metadata",
-      destination: `${origin}/auth/saml/acs`,
-      cert: fixture.cert,
-      privateKey: fixture.privateKey,
-    });
-    const cookielessStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
-    const cookielessRelay =
-      new URL(cookielessStart.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
-    const cookieless = await fetch(`${origin}/auth/saml/acs`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        SAMLResponse: cookielessFixture.responseB64,
-        RelayState: cookielessRelay,
-      }),
-      redirect: "manual",
-    });
-    expect([302, 200]).toContain(cookieless.status);
-    process.env.FEATURE_SAML = "false";
+      const cookielessFixture = await createSignedSamlResponse({
+        audience: "https://hiroapp.test/saml/metadata",
+        destination: `${origin}/auth/saml/acs`,
+        cert: fixture.cert,
+        privateKey: fixture.privateKey,
+      });
+      const cookielessStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
+      const cookielessRelay =
+        new URL(cookielessStart.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
+      const cookieless = await fetch(`${origin}/auth/saml/acs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          SAMLResponse: cookielessFixture.responseB64,
+          RelayState: cookielessRelay,
+        }),
+        redirect: "manual",
+      });
+      expect([302, 200]).toContain(cookieless.status);
+    } finally {
+      process.env.FEATURE_SAML = "false";
+      delete process.env.SAML_IDP_SSO_URL;
+      delete process.env.SAML_IDP_CERT;
+      delete process.env.SAML_SP_ENTITY_ID;
+      delete process.env.SAML_ACS_URL;
+      delete process.env.SAML_IDP_ISSUER;
+    }
   });
 });
 

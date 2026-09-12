@@ -102,6 +102,25 @@ describe("assertProductionSecrets", () => {
     ).toThrow(/AUTH_DEV_HEADERS=false/);
   });
 
+  test("blocks missing SAML_IDP_ISSUER when SAML is enabled in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_PUBLIC_READS: "false",
+        FEATURE_SAML: "true",
+        FRONTEND_MODE: "api",
+        SAML_IDP_SSO_URL: "https://idp.example.test/sso",
+        SAML_IDP_CERT: "cert",
+        SAML_SP_ENTITY_ID: "https://sp.example.test/metadata",
+        SAML_ACS_URL: "https://app.example/auth/saml/acs",
+      }),
+    ).toThrow(/SAML_IDP_ISSUER/);
+  });
+
   test("blocks missing STRIPE_WEBHOOK_SECRET when billing is enabled in production", () => {
     expect(() =>
       assertProductionSecrets({
