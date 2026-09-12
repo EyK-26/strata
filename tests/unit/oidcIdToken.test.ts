@@ -167,14 +167,21 @@ describe("oidcIdToken", () => {
   test("rejects a token whose signature does not match the JWKS key", async () => {
     mockPublicDns();
     mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const token = signRs256IdToken({
+    const payload = {
       sub: "user-1",
       iss: "https://issuer.example.com",
       aud: "client-id",
       nonce: "nonce-1",
-    });
-    const tampered = `${token.slice(0, -2)}aa`;
-    await expect(verifyOidcIdToken(tampered, options)).rejects.toThrow("signature is invalid");
+    };
+    const valid = signRs256IdToken(payload);
+    const { privateKey: otherKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const signingInput = valid.slice(0, valid.lastIndexOf("."));
+    const foreignSignature = createSign("RSA-SHA256")
+      .update(signingInput)
+      .sign(otherKey, "base64url");
+    const foreign = `${signingInput}.${foreignSignature}`;
+    expect(foreign).not.toBe(valid);
+    await expect(verifyOidcIdToken(foreign, options)).rejects.toThrow("signature is invalid");
   });
 
   test("rejects expired and not-yet-valid ID tokens", async () => {
