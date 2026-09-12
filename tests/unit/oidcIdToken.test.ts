@@ -41,6 +41,7 @@ function mockOidcDocuments(jwks: unknown, discovery: Record<string, unknown> = {
       return Promise.resolve(
         Response.json({
           issuer: "https://issuer.example.com",
+          authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
           token_endpoint: "https://issuer.example.com/token",
           jwks_uri: "https://issuer.example.com/jwks",
           ...discovery,
@@ -65,11 +66,14 @@ describe("oidcIdToken", () => {
     jwksUri: "https://issuer.example.com/jwks",
   };
 
-  test("rejects discovery documents that omit jwks_uri or token_endpoint", async () => {
+  test("rejects discovery documents that omit required endpoints", async () => {
     mockPublicDns();
-    mockOidcDocuments({ keys: [] }, { jwks_uri: "", token_endpoint: "" });
+    mockOidcDocuments(
+      { keys: [] },
+      { jwks_uri: "", token_endpoint: "", authorization_endpoint: "" },
+    );
     await expect(loadOidcDiscovery("https://issuer.example.com")).rejects.toThrow(
-      "jwks_uri and token_endpoint",
+      "authorization_endpoint, jwks_uri, and token_endpoint",
     );
   });
 
@@ -90,6 +94,7 @@ describe("oidcIdToken", () => {
         return Promise.resolve(
           Response.json({
             issuer: "https://issuer.example.com",
+            authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
             token_endpoint: "https://issuer.example.com/token",
             jwks_uri: "https://issuer.example.com/jwks",
           }),
@@ -182,7 +187,7 @@ describe("oidcIdToken", () => {
       nonce: "nonce-1",
       exp: Math.floor(Date.now() / 1000) - 30,
     });
-    await expect(verifyOidcIdToken(expired, options)).rejects.toThrow("signature is invalid");
+    await expect(verifyOidcIdToken(expired, options)).rejects.toThrow("is expired");
 
     const notYet = signRs256IdToken({
       sub: "user-1",
@@ -191,7 +196,7 @@ describe("oidcIdToken", () => {
       nonce: "nonce-1",
       nbf: Math.floor(Date.now() / 1000) + 3600,
     });
-    await expect(verifyOidcIdToken(notYet, options)).rejects.toThrow("signature is invalid");
+    await expect(verifyOidcIdToken(notYet, options)).rejects.toThrow("not yet valid");
   });
 
   test("rejects a signed token without a subject", async () => {
@@ -223,5 +228,41 @@ describe("oidcIdToken", () => {
       "",
     );
     await expect(verifyOidcIdToken(token, options)).resolves.toMatchObject({ sub: "user-1" });
+  });
+
+  test("refetches JWKS when the token kid is missing from the cache", async () => {
+    mockPublicDns();
+    let jwksCalls = 0;
+    const token = signRs256IdToken({
+      sub: "user-1",
+      iss: "https://issuer.example.com",
+      aud: "client-id",
+      nonce: "nonce-1",
+    });
+    globalThis.fetch = mock((input: string | URL | Request) => {
+      const path = requestPath(input);
+      if (path.includes("openid-configuration")) {
+        return Promise.resolve(
+          Response.json({
+            issuer: "https://issuer.example.com",
+            authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
+            token_endpoint: "https://issuer.example.com/token",
+            jwks_uri: "https://issuer.example.com/jwks",
+          }),
+        );
+      }
+      jwksCalls += 1;
+      if (jwksCalls === 1) {
+        return Promise.resolve(
+          Response.json({ keys: [{ ...rsaJwk, kid: "old-key", alg: "RS256" }] }),
+        );
+      }
+      return Promise.resolve(
+        Response.json({ keys: [{ ...rsaJwk, kid: "test-key", alg: "RS256" }] }),
+      );
+    }) as unknown as typeof fetch;
+
+    await expect(verifyOidcIdToken(token, options)).resolves.toMatchObject({ sub: "user-1" });
+    expect(jwksCalls).toBe(2);
   });
 });

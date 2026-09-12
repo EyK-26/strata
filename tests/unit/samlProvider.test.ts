@@ -205,6 +205,22 @@ describe("SamlServiceProvider", () => {
     await expect(provider.consumePost(fixture.responseB64, "relay")).rejects.toThrow("replay");
   });
 
+  test("consumePost rejects a signed assertion from a different IdP issuer", async () => {
+    const fixture = await createSignedSamlResponse({
+      audience: SP_ENTITY,
+      destination: ACS,
+      issuer: "https://evil.example/idp",
+    });
+    const provider = new SamlServiceProvider({
+      idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
+      idpCert: fixture.cert,
+      spEntityId: SP_ENTITY,
+      acsUrl: ACS,
+    });
+    await expect(provider.consumePost(fixture.responseB64)).rejects.toThrow("issuer is invalid");
+  });
+
   test("consumePost surfaces logged-out and missing-email profiles", async () => {
     setNodeSamlLoaderForTests(async () => ({
       SAML: class {
@@ -212,7 +228,10 @@ describe("SamlServiceProvider", () => {
           return SSO;
         }
         async validatePostResponseAsync() {
-          return { profile: { ID: "assert-missing-email", nameID: "x" }, loggedOut: false };
+          return {
+            profile: { ID: "assert-missing-email", nameID: "x", issuer: IDP_ISSUER },
+            loggedOut: false,
+          };
         }
       },
     }));
@@ -224,6 +243,33 @@ describe("SamlServiceProvider", () => {
       acsUrl: ACS,
     });
     await expect(provider.consumePost("Zg==")).rejects.toThrow("email address");
+
+    setNodeSamlLoaderForTests(async () => ({
+      SAML: class {
+        async getAuthorizeUrlAsync() {
+          return SSO;
+        }
+        async validatePostResponseAsync() {
+          return {
+            profile: {
+              ID: "assert-wrong-issuer",
+              nameID: "x",
+              email: "stolen@example.test",
+              issuer: "https://evil.example/idp",
+            },
+            loggedOut: false,
+          };
+        }
+      },
+    }));
+    const wrongIssuer = new SamlServiceProvider({
+      idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
+      idpCert: "cert",
+      spEntityId: SP_ENTITY,
+      acsUrl: ACS,
+    });
+    await expect(wrongIssuer.consumePost("Zg==")).rejects.toThrow("issuer is invalid");
 
     setNodeSamlLoaderForTests(async () => ({
       SAML: class {
@@ -245,7 +291,7 @@ describe("SamlServiceProvider", () => {
     await expect(loggedOut.consumePost("Zg==")).rejects.toThrow("signed user profile");
   });
 
-  test("maps the email OID attribute and expires the replay cache", async () => {
+  test("maps the email OID attribute and keeps replay IDs after the old cache TTL", async () => {
     const now = Date.now();
     const originalNow = Date.now;
     Date.now = () => now;
@@ -259,6 +305,7 @@ describe("SamlServiceProvider", () => {
             profile: {
               ID: "assert-1",
               nameID: "nid",
+              issuer: IDP_ISSUER,
               "urn:oid:0.9.2342.19200300.100.1.3": "oid@example.test",
               sessionIndex: ["s1"],
             },
@@ -282,8 +329,7 @@ describe("SamlServiceProvider", () => {
         name: "oid@example.test",
       });
       Date.now = () => now + 11 * 60 * 1000;
-      const again = await provider.consumePost("Zg==");
-      expect(again.email).toBe("oid@example.test");
+      await expect(provider.consumePost("Zg==")).rejects.toThrow("replay");
     } finally {
       Date.now = originalNow;
     }
@@ -295,7 +341,12 @@ describe("SamlServiceProvider", () => {
         }
         async validatePostResponseAsync() {
           return {
-            profile: { email: "fallback@example.test", name: "Pat", sessionIndex: "s" },
+            profile: {
+              email: "fallback@example.test",
+              name: "Pat",
+              sessionIndex: "s",
+              issuer: IDP_ISSUER,
+            },
             loggedOut: false,
           };
         }
@@ -319,6 +370,7 @@ describe("SamlServiceProvider", () => {
           return {
             profile: {
               email: "from-assertion@example.test",
+              issuer: IDP_ISSUER,
               getAssertion: () => ({ Assertion: { $: { ID: "assert-from-xml" } } }),
             },
             loggedOut: false,

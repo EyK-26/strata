@@ -109,6 +109,72 @@ USING (
 WITH CHECK (
   app_bypass_rls()
   OR tenant_id = app_current_tenant_id()
+);
+
+
+ALTER TABLE auth_one_time_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_one_time_tokens FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON auth_one_time_tokens;
+CREATE POLICY tenant_isolation ON auth_one_time_tokens
+USING (
+  app_bypass_rls()
+  OR EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.id = auth_one_time_tokens.user_id
+      AND u.tenant_id = app_current_tenant_id()
+  )
+)
+WITH CHECK (
+  app_bypass_rls()
+  OR EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.id = auth_one_time_tokens.user_id
+      AND u.tenant_id = app_current_tenant_id()
+  )
+);
+
+
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sessions;
+CREATE POLICY tenant_isolation ON sessions
+USING (
+  app_bypass_rls()
+  OR EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.id = sessions.user_id
+      AND u.tenant_id = app_current_tenant_id()
+  )
+)
+WITH CHECK (
+  app_bypass_rls()
+  OR EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.id = sessions.user_id
+      AND u.tenant_id = app_current_tenant_id()
+  )
+);
+
+
+ALTER TABLE api_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_tokens FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON api_tokens;
+CREATE POLICY tenant_isolation ON api_tokens
+USING (
+  app_bypass_rls()
+  OR EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.id = api_tokens.user_id
+      AND u.tenant_id = app_current_tenant_id()
+  )
+)
+WITH CHECK (
+  app_bypass_rls()
+  OR EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.id = api_tokens.user_id
+      AND u.tenant_id = app_current_tenant_id()
+  )
 );`,
 ];
 

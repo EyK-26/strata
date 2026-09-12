@@ -1,5 +1,6 @@
 import { lookup as dnsLookupImpl } from "node:dns/promises";
 import { BadRequestError } from "@getstrata/core/errors/http";
+import { isProductionEnv } from "../runtime/appEnv";
 
 type DnsLookupResult = { address: string; family: number };
 type DnsLookup = (
@@ -235,10 +236,21 @@ function isBlockedHostname(hostname: string): boolean {
   return false;
 }
 
+function productionSafeOutboundOptions<
+  T extends { allowHttp?: boolean; resolveDns?: boolean; allowPrivate?: boolean },
+>(options: T): T {
+  if (!isProductionEnv()) {
+    return options;
+  }
+
+  return { ...options, allowPrivate: false, resolveDns: true };
+}
+
 function assertSafeOutboundUrl(
   rawUrl: string,
   options: { allowHttp?: boolean; allowPrivate?: boolean } = {},
 ): URL {
+  const resolved = productionSafeOutboundOptions(options);
   let parsed: URL;
 
   try {
@@ -247,7 +259,7 @@ function assertSafeOutboundUrl(
     throw new BadRequestError("Webhook URL is invalid.");
   }
 
-  if (parsed.protocol !== "https:" && !(options.allowHttp && parsed.protocol === "http:")) {
+  if (parsed.protocol !== "https:" && !(resolved.allowHttp && parsed.protocol === "http:")) {
     throw new BadRequestError("Webhook URL must use HTTPS.");
   }
 
@@ -255,7 +267,7 @@ function assertSafeOutboundUrl(
     throw new BadRequestError("Webhook URL must not include credentials.");
   }
 
-  if (!options.allowPrivate && isBlockedHostname(parsed.hostname)) {
+  if (!resolved.allowPrivate && isBlockedHostname(parsed.hostname)) {
     throw new BadRequestError("Webhook URL targets a blocked host.");
   }
 
@@ -286,9 +298,10 @@ async function resolveSafeOutboundTarget(
   rawUrl: string,
   options: { allowHttp?: boolean; resolveDns?: boolean; allowPrivate?: boolean } = {},
 ): Promise<ResolvedOutboundUrl> {
-  const parsed = assertSafeOutboundUrl(rawUrl, options);
+  const resolvedOptions = productionSafeOutboundOptions(options);
+  const parsed = assertSafeOutboundUrl(rawUrl, resolvedOptions);
 
-  if (options.resolveDns === false || options.allowPrivate) {
+  if (resolvedOptions.resolveDns === false || resolvedOptions.allowPrivate) {
     return { url: parsed, addresses: [] };
   }
 

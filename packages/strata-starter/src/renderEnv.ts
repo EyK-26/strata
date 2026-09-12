@@ -27,9 +27,9 @@ function defaultDatabaseUrl(layers: StarterLayers, projectName: string): string 
   }
   const database = appDatabaseName(projectName);
   if (layers.database === "mysql") {
-    return `mysql://root:root@localhost:3306/${database}`;
+    return `mysql://root:dev-mysql-change-me@localhost:3306/${database}`;
   }
-  return `postgresql://postgres:postgres@localhost:5432/${database}`;
+  return `postgresql://postgres:dev-postgres-change-me@localhost:5432/${database}`;
 }
 
 function renderEnvExample(projectName: string, layers: StarterLayers): string {
@@ -163,7 +163,7 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: dev-postgres-change-me
       POSTGRES_DB: ${database}
     ports:
       - "127.0.0.1:5432:5432"
@@ -176,7 +176,7 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
     services.push(`  mysql:
     image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: dev-mysql-change-me
       MYSQL_DATABASE: ${database}
     ports:
       - "127.0.0.1:3306:3306"
@@ -461,13 +461,15 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
 
   if (authUsesToken(layers.auth)) {
     rows.push(
-      "| `POST` | `/api/v1/auth/login` | `{ email, password }` returns `{ token }`. |",
+      "| `POST` | `/api/v1/auth/login` | `{ email, password }` returns `{ token }`. Requires `GET /api/v1/auth/csrf` then `X-CSRF-Token`. |",
       "| `POST` | `/api/v1/auth/register` | Creates a user and returns a token. |",
       "| `GET` | `/api/v1/auth/me` | Requires `Authorization: Bearer <token>`. |",
     );
   }
   if (authUsesJwt(layers.auth)) {
-    rows.push("| `POST` | `/api/auth/token` | Mints a short-lived JWT. Not an HTML session. |");
+    rows.push(
+      "| `POST` | `/api/auth/token` | Mints a short-lived JWT. Not an HTML session. Requires CSRF like JSON login. |",
+    );
   }
   if (authNeedsUsers(layers.auth)) {
     rows.push(
@@ -486,7 +488,7 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
     layers.auth === "headers"
       ? `Auth is \`headers\`. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`) for local work and tests. There are no login endpoints and no \`users\` table. Production must set \`AUTH_DEV_HEADERS=false\`, which turns those headers off and leaves you without a guard, so pick another auth layer before you ship.`
       : authUsesToken(layers.auth)
-        ? `Sign in with \`POST /api/v1/auth/login\`, then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
+        ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\` (send \`X-CSRF-Token\`), then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
         : `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
 
   return `# ${projectName} API

@@ -44,6 +44,15 @@ function codeChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
+function requireOidcEndpoint(value: string | undefined, name: string): string {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) {
+    throw new Error(`OIDC discovery document did not include ${name}.`);
+  }
+
+  return trimmed;
+}
+
 class OidcProvider implements OAuthProvider {
   readonly name: string;
 
@@ -57,13 +66,19 @@ class OidcProvider implements OAuthProvider {
     );
   }
 
-  createAuthorization(
+  async createAuthorization(
     state = createOidcHandshake().state,
     redirectUri = this.options.redirectUri,
-  ): { url: string; handshake: OidcHandshake } {
+  ): Promise<{ url: string; handshake: OidcHandshake }> {
+    const discovery = await loadOidcDiscovery(this.options.issuer);
     const handshake = { ...createOidcHandshake(), state };
     return {
-      url: this.buildAuthorizationUrl(state, handshake, redirectUri),
+      url: this.buildAuthorizationUrl(
+        state,
+        handshake,
+        redirectUri,
+        requireOidcEndpoint(discovery.authorization_endpoint, "authorization_endpoint"),
+      ),
       handshake,
     };
   }
@@ -72,6 +87,7 @@ class OidcProvider implements OAuthProvider {
     state: string,
     handshake: OidcHandshake,
     redirectUri: string,
+    authorizationEndpoint: string,
   ): string {
     const params = new URLSearchParams({
       client_id: this.options.clientId,
@@ -84,7 +100,7 @@ class OidcProvider implements OAuthProvider {
       code_challenge_method: "S256",
     });
 
-    return `${this.options.issuer.replace(/\/$/, "")}/authorize?${params.toString()}`;
+    return `${authorizationEndpoint}?${params.toString()}`;
   }
 
   async exchangeCode(
@@ -109,7 +125,7 @@ class OidcProvider implements OAuthProvider {
     });
 
     const tokenResponse = await safeFetch(
-      discovery.token_endpoint ?? `${this.options.issuer.replace(/\/$/, "")}/token`,
+      requireOidcEndpoint(discovery.token_endpoint, "token_endpoint"),
       {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -132,11 +148,15 @@ class OidcProvider implements OAuthProvider {
       issuer: this.options.issuer,
       clientId: this.options.clientId,
       nonce: handshake.nonce,
-      jwksUri: discovery.jwks_uri ?? "",
+      jwksUri: requireOidcEndpoint(discovery.jwks_uri, "jwks_uri"),
     });
 
     if (typeof payload.email !== "string" || !payload.email.trim()) {
       throw new Error("OIDC ID token did not include an email address.");
+    }
+
+    if (payload.email_verified !== true) {
+      throw new Error("OIDC ID token email is not verified.");
     }
 
     return {

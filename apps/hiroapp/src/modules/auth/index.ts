@@ -35,6 +35,7 @@ import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oau
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
 import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core/security/totp";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { emailRule } from "@getstrata/core/validation/rules";
 import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";
@@ -50,6 +51,10 @@ function isValidEmail(value: string): boolean {
   return emailRule()("email", value, {}) === undefined;
 }
 
+async function runAuthWrite<T>(callback: () => Promise<T>): Promise<T> {
+  return await runWithMigrationBypass(callback);
+}
+
 async function issueSignedAuthMail(
   to: string,
   subject: string,
@@ -60,10 +65,12 @@ async function issueSignedAuthMail(
 ) {
   const issued = generateOneTimeToken();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-  await getSql().unsafe(
-    "INSERT INTO auth_one_time_tokens (purpose, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)",
-    [purpose, userId, issued.hash, expiresAt.toISOString()],
-  );
+  await runAuthWrite(async () => {
+    await getSql().unsafe(
+      "INSERT INTO auth_one_time_tokens (purpose, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)",
+      [purpose, userId, issued.hash, expiresAt.toISOString()],
+    );
+  });
   const link = absoluteTemporarySignedUrl(path, 3600, { ...extra, token: issued.plain });
   await mailer().send({
     to,
@@ -78,11 +85,23 @@ async function consumeSignedAuthToken(request: Request, purpose: string): Promis
   if (!token) {
     return null;
   }
-  return consumeOneTimeToken(getSql(), purpose, token);
+  return await runAuthWrite(async () => consumeOneTimeToken(getSql(), purpose, token));
 }
 
 async function revokeUserSessions(userId: number) {
-  await revokeStoredUserSessions(getSql(), userId);
+  await runAuthWrite(async () => {
+    await revokeStoredUserSessions(getSql(), userId);
+  });
+}
+
+async function persistAuthRecovery(
+  userId: number,
+  currentRaw: string | null | undefined,
+  consumedHash: string | undefined,
+) {
+  await runAuthWrite(async () => {
+    await persistConsumedRecoveryHash(getSql(), userId, currentRaw, consumedHash);
+  });
 }
 
 function redirectTo(path: string, status = 302): Response {
@@ -168,6 +187,11 @@ const authModule: AppModule = {
             if (!record) {
               return jsonResponse({ error: "Could not complete SAML login." }, { status: 500 });
             }
+            if (record.mfa_enabled) {
+              const pending = redirectTo("/login/mfa");
+              pending.headers.append("set-cookie", pendingMfaSetCookie(record.id));
+              return pending;
+            }
             const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
             return auth.signInRedirect(sessionUser(record), "/");
           }),
@@ -196,8 +220,7 @@ const authModule: AppModule = {
                   { status: mfaResult.error === "mfa_required" ? 401 : 422 },
                 );
               }
-              await persistConsumedRecoveryHash(
-                getSql(),
+              await persistAuthRecovery(
                 record.id,
                 record.mfa_recovery_codes,
                 mfaResult.consumedRecoveryHash,
@@ -209,16 +232,18 @@ const authModule: AppModule = {
               const expiresAt = expiryDays
                 ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
                 : null;
-              await getSql().unsafe(
-                "INSERT INTO api_tokens (user_id, name, token_hash, abilities, expires_at) VALUES ($1, $2, $3, $4, $5)",
-                [
-                  user.id,
-                  "spa",
-                  hashApiToken(plain),
-                  JSON.stringify([]),
-                  expiresAt ? sqlTimestamp(expiresAt) : null,
-                ],
-              );
+              await runAuthWrite(async () => {
+                await getSql().unsafe(
+                  "INSERT INTO api_tokens (user_id, name, token_hash, abilities, expires_at) VALUES ($1, $2, $3, $4, $5)",
+                  [
+                    user.id,
+                    "spa",
+                    hashApiToken(plain),
+                    JSON.stringify([]),
+                    expiresAt ? sqlTimestamp(expiresAt) : null,
+                  ],
+                );
+              });
               const payload = jsonResponse({
                 token: plain,
                 expires_at: expiresAt?.toISOString() ?? null,
@@ -317,8 +342,7 @@ const authModule: AppModule = {
                   { status: mfaResult.error === "mfa_required" ? 401 : 422 },
                 );
               }
-              await persistConsumedRecoveryHash(
-                getSql(),
+              await persistAuthRecovery(
                 record.id,
                 record.mfa_recovery_codes,
                 mfaResult.consumedRecoveryHash,
@@ -397,10 +421,12 @@ const authModule: AppModule = {
             if (!userId || !(body.password && body.password.length >= 8)) {
               return jsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
             }
-            await getSql().unsafe("UPDATE users SET password = $1 WHERE id = $2", [
-              await hashPassword(body.password),
-              userId,
-            ]);
+            await runAuthWrite(async () => {
+              await getSql().unsafe("UPDATE users SET password = $1 WHERE id = $2", [
+                await hashPassword(body.password),
+                userId,
+              ]);
+            });
             await revokeUserSessions(userId);
             return jsonResponse({ ok: true });
           }),
@@ -417,10 +443,12 @@ const authModule: AppModule = {
                 { status: 403 },
               );
             }
-            await getSql().unsafe("UPDATE users SET email_verified_at = $1 WHERE id = $2", [
-              new Date().toISOString(),
-              id,
-            ]);
+            await runAuthWrite(async () => {
+              await getSql().unsafe("UPDATE users SET email_verified_at = $1 WHERE id = $2", [
+                new Date().toISOString(),
+                id,
+              ]);
+            });
             return jsonResponse({ ok: true });
           }),
         ),
@@ -475,8 +503,7 @@ const authModule: AppModule = {
                 request,
               );
             }
-            await persistConsumedRecoveryHash(
-              getSql(),
+            await persistAuthRecovery(
               user.id,
               user.mfa_recovery_codes,
               mfaResult.consumedRecoveryHash,
@@ -643,10 +670,12 @@ const authModule: AppModule = {
               request,
             );
           }
-          await getSql().unsafe("UPDATE users SET password = $1 WHERE id = $2", [
-            await hashPassword(password),
-            userId,
-          ]);
+          await runAuthWrite(async () => {
+            await getSql().unsafe("UPDATE users SET password = $1 WHERE id = $2", [
+              await hashPassword(password),
+              userId,
+            ]);
+          });
           await revokeUserSessions(userId);
           return flashResponse(redirectTo("/login"), {
             level: "success",
@@ -665,10 +694,12 @@ const authModule: AppModule = {
           if (url.searchParams.get("signature")) {
             const id = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.emailVerify);
             if (id) {
-              await getSql().unsafe("UPDATE users SET email_verified_at = $1 WHERE id = $2", [
-                new Date().toISOString(),
-                id,
-              ]);
+              await runAuthWrite(async () => {
+                await getSql().unsafe("UPDATE users SET email_verified_at = $1 WHERE id = $2", [
+                  new Date().toISOString(),
+                  id,
+                ]);
+              });
               return flashResponse(redirectTo("/login"), {
                 level: "success",
                 message: "Email verified. Sign in.",
@@ -735,8 +766,7 @@ const authModule: AppModule = {
                 request,
               );
             }
-            await persistConsumedRecoveryHash(
-              getSql(),
+            await persistAuthRecovery(
               pendingId,
               record.mfa_recovery_codes,
               mfaResult.consumedRecoveryHash,
@@ -839,15 +869,18 @@ const authModule: AppModule = {
           }
           const recoveryCodes = generateRecoveryCodes();
           const stored = protectMfaSecret(secret);
-          await getSql().unsafe(
-            "UPDATE users SET mfa_secret = $1, mfa_enabled = $2, mfa_recovery_codes = $3 WHERE id = $4",
-            [
-              stored,
-              true,
-              JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
-              Number(user.id),
-            ],
-          );
+          await runAuthWrite(async () => {
+            await getSql().unsafe(
+              "UPDATE users SET mfa_secret = $1, mfa_enabled = $2, mfa_recovery_codes = $3 WHERE id = $4",
+              [
+                stored,
+                true,
+                JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
+                Number(user.id),
+              ],
+            );
+          });
+          await revokeUserSessions(Number(user.id));
           return renderPage(
             "auth/mfa-setup.eta",
             {

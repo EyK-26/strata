@@ -23,7 +23,7 @@ Layer flags: [STARTER.md](./STARTER.md). The three in-repo apps are generated fr
 
 Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMode` (`parseFrontendMode`, `FRONTEND_MODE_PATTERN`). Apps should reuse that pattern in their env schema instead of copying a regex.
 
-1. **`api`.** JSON routes only. Clients send Bearer or Basic. Guest JSON login has no CSRF (SameSite=Lax plus CORS). Session-mutating cookie API requires CSRF.
+1. **`api`.** JSON routes only. Clients send Bearer or Basic. Guest JSON login (`POST /api/v1/auth/login` and `POST /api/auth/token`) needs `GET /api/v1/auth/csrf` first, then `X-CSRF-Token` plus the CSRF cookie. Bearer and Basic skip CSRF only after that guard authenticates.
 2. **`server-htmx`.** Eta HTML + HTMX. Cookie session + CSRF.
 3. **`spa-react`.** JSON API plus a SPA document under `SPA_PREFIX` (default `/app`). Prefer opaque tokens for the SPA. Cookie JSON after login needs `GET /api/v1/auth/csrf`.
 4. **`hybrid`.** HTML at `/` plus a SPA prefix. Framework SPA routes stay under `SPA_PREFIX` (`/app`, `/app/`, `/app/*` by default) and do not redirect `/`. Apps call `mergeSpaRoutes` with `distDirectory` and `wrap`. Do not copy a second static-file server.

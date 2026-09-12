@@ -75,7 +75,7 @@ class HttpKernel {
       case "web":
         return isViewsEnabled() ? [createFlashMiddleware(), createCsrfMiddleware()] : [];
       case "api": {
-        const csrf = createCsrfMiddleware({ mutating: "session" });
+        const csrf = createCsrfMiddleware();
 
         if (!this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
           return [csrf];

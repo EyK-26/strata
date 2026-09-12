@@ -19,6 +19,7 @@ import {
   resetWebLayoutDataConfigForTests,
   resolveWebLayoutData,
 } from "@getstrata/core/view/webLayoutData";
+import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
 import { createMockDependencies } from "./testHelpers";
 
 describe("ability checker vs auth user directory tokens", () => {
@@ -69,24 +70,29 @@ describe("ability checker vs auth user directory tokens", () => {
       kernel.wrapAbility("projects:delete", async () => Response.json({ ok: true })),
     );
 
-    const denied = await handler(
-      new Request("http://example.test/projects/1", {
-        headers: { "x-authenticated-user-id": "7", "x-authenticated-user-role": "member" },
-      }),
-    );
-    expect(denied.status).toBe(403);
-    expect(checkerCalls).toEqual(["projects:delete"]);
+    const previous = enableDevAuthHeaders();
+    try {
+      const denied = await handler(
+        new Request("http://example.test/projects/1", {
+          headers: { "x-authenticated-user-id": "7", "x-authenticated-user-role": "member" },
+        }),
+      );
+      expect(denied.status).toBe(403);
+      expect(checkerCalls).toEqual(["projects:delete"]);
 
-    const layout = await runWithAuthUser({ id: 7, role: "member", abilities: [] }, async () =>
-      resolveWebLayoutData(container),
-    );
+      const layout = await runWithAuthUser({ id: 7, role: "member", abilities: [] }, async () =>
+        resolveWebLayoutData(container),
+      );
 
-    expect(layout.authUser).toEqual({
-      id: 7,
-      email: "sibling@example.test",
-      role: "member",
-    });
-    expect(directoryCalls).toEqual([7]);
+      expect(layout.authUser).toEqual({
+        id: 7,
+        email: "sibling@example.test",
+        role: "member",
+      });
+      expect(directoryCalls).toEqual([7]);
+    } finally {
+      restoreDevAuthHeaders(previous);
+    }
   });
 
   test("does not call findByIdOrThrow on an AbilityChecker bound to CORE_TOKEN_SERVICE_TOKEN", async () => {

@@ -7,26 +7,18 @@ interface SamlAssertionReplayStore {
   consume(assertionId: string): Promise<void>;
 }
 
-const REPLAY_TTL_MS = 10 * 60 * 1000;
+/** Drop stored IDs only after SAML NotOnOrAfter would already reject them. */
+const REPLAY_RETENTION_MS = 60 * 60 * 1000;
 
 class InMemorySamlAssertionReplayStore implements SamlAssertionReplayStore {
-  private readonly seen = new Map<string, number>();
-
-  constructor(private readonly ttlMs = REPLAY_TTL_MS) {}
+  private readonly seen = new Set<string>();
 
   async consume(assertionId: string): Promise<void> {
-    const now = Date.now();
-    for (const [key, seenAt] of this.seen) {
-      if (now - seenAt > this.ttlMs) {
-        this.seen.delete(key);
-      }
-    }
-
     if (this.seen.has(assertionId)) {
       throw new Error("SAML assertion replay detected.");
     }
 
-    this.seen.set(assertionId, now);
+    this.seen.add(assertionId);
   }
 
   clear(): void {
@@ -41,8 +33,8 @@ class SqlSamlAssertionReplayStore implements SamlAssertionReplayStore {
 
     try {
       await sql.unsafe(
-        `INSERT INTO auth_saml_assertions (assertion_id) VALUES (${dialect.placeholder(1)})`,
-        [assertionId],
+        `INSERT INTO auth_saml_assertions (assertion_id, consumed_at) VALUES (${dialect.placeholder(1)}, ${dialect.placeholder(2)})`,
+        [assertionId, new Date().toISOString()],
       );
     } catch (error) {
       if (isUniqueConstraintError(error)) {
@@ -51,6 +43,11 @@ class SqlSamlAssertionReplayStore implements SamlAssertionReplayStore {
 
       throw error;
     }
+
+    await sql.unsafe(
+      `DELETE FROM auth_saml_assertions WHERE consumed_at < ${dialect.placeholder(1)}`,
+      [new Date(Date.now() - REPLAY_RETENTION_MS).toISOString()],
+    );
   }
 }
 
@@ -82,6 +79,7 @@ export type { SamlAssertionReplayStore };
 export {
   consumeSamlAssertion,
   InMemorySamlAssertionReplayStore,
+  REPLAY_RETENTION_MS,
   resetSamlReplayCacheForTests,
   setSamlAssertionReplayStoreForTests,
 };

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import {
   type AppDependencies,
@@ -20,6 +20,7 @@ import { etagFromResource } from "@getstrata/core/http/etag";
 import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
+import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
 
 interface WidgetRecord {
   id: number;
@@ -60,6 +61,13 @@ function bootstrapPolicyGate(): AppDependencies {
 }
 
 describe("securedBindRouteModel", () => {
+  let previousHeaders: string | undefined;
+  beforeEach(() => {
+    previousHeaders = enableDevAuthHeaders();
+  });
+  afterEach(() => {
+    restoreDevAuthHeaders(previousHeaders);
+  });
   test("authorizes against the resolved model before running the handler", async () => {
     bootstrapPolicyGate();
 

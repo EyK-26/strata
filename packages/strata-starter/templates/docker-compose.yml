@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: dev-postgres-change-me
       POSTGRES_DB: {{PROJECT_NAME}}
     ports:
       - "5432:5432"

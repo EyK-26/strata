@@ -2,6 +2,7 @@ import { UnauthorizedError } from "@getstrata/core/errors/http";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
+import { envFlagEnabled } from "../runtime/appEnv";
 import { timingSafeCompareString } from "../security/timingSafeCompare";
 import { abilityCatalog } from "./abilityCatalog";
 import type { AuthUser, CredentialSource } from "./authContext";
@@ -25,6 +26,10 @@ interface AuthGuard {
 
 class GuestGuard implements AuthGuard {
   resolve(request: Request): AuthUser | null {
+    if (!envFlagEnabled(process.env.AUTH_DEV_HEADERS)) {
+      return null;
+    }
+
     const userId = request.headers.get("x-authenticated-user-id");
 
     if (!userId) {

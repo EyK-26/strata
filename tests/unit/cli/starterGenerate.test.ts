@@ -18,6 +18,7 @@ import {
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { defaultLayers, exampleAppLayers } from "../../../packages/strata-starter/src/presets.ts";
 import { type Prompter, promptLayers } from "../../../packages/strata-starter/src/prompt.ts";
+import { jsonCsrfHeaders } from "../../helpers/jsonCsrf";
 import { repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -480,9 +481,16 @@ describe("create-strata generate", () => {
     expect(migrate).toContain("CREATE TABLE IF NOT EXISTS tenant");
     expect(migrate).toContain("ALTER TABLE notes FORCE ROW LEVEL SECURITY");
     expect(migrate).toContain("ALTER TABLE users FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("ALTER TABLE sessions FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("ALTER TABLE api_tokens FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("ALTER TABLE auth_one_time_tokens FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("u.id = sessions.user_id");
+    expect(migrate).toContain("u.id = auth_one_time_tokens.user_id");
     expect(migrate).toContain("auth_saml_assertions");
     const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
     expect(authModule).toContain("completePasswordLogin");
+    expect(authModule).toContain("runWithMigrationBypass");
+    expect(authModule).toContain("runAuthWrite");
     expect(authModule).toContain("createOAuthState()");
     expect(authModule).not.toContain("createOAuthStateCookie");
     expect(authModule).toContain("JSON.stringify([])");
@@ -527,6 +535,9 @@ describe("create-strata generate", () => {
     expect(auth).toContain("/register");
     expect(auth).toContain("/forgot-password");
     expect(auth).toContain("/email/verify");
+    expect(auth).toContain("if (record.mfa_enabled)");
+    expect(auth).toContain("pendingMfaSetCookie(record.id)");
+    expect(auth).toContain("await revokeUserSessions(Number(user.id))");
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
   });
@@ -993,9 +1004,17 @@ describe("create-strata CLI", () => {
       const server = createAppServer(routes, 0);
       const origin = `http://127.0.0.1:${server.port}`;
       try {
-        const login = await fetch(`${origin}/api/v1/auth/login`, {
+        const blocked = await fetch(`${origin}/api/v1/auth/login`, {
           method: "POST",
           headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
+        });
+        expect(blocked.status).toBe(403);
+
+        const csrf = await jsonCsrfHeaders(origin);
+        const login = await fetch(`${origin}/api/v1/auth/login`, {
+          method: "POST",
+          headers: csrf.headers,
           body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
         });
         expect(login.status).toBe(200);

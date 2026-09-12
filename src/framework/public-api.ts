@@ -568,6 +568,7 @@ export {
 } from "../core/storage/storage.ts";
 export {
   enableTenantRlsSql,
+  enableUserOwnedRlsSql,
   generatedRlsBootstrapSql,
   RLS_HELPER_SQL,
 } from "../core/tenant/enableTenantRls.ts";

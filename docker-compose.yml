@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: bun_testing_test
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: dev-postgres-change-me
     ports:
       - "127.0.0.1:54329:5432"
     volumes:
@@ -34,14 +34,14 @@ services:
     image: mysql:8.4
     container_name: bun-testing-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: dev-mysql-change-me
       MYSQL_DATABASE: strata
       MYSQL_USER: strata
-      MYSQL_PASSWORD: strata
+      MYSQL_PASSWORD: dev-mysql-change-me
     ports:
       - "127.0.0.1:33061:3306"
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -ustrata -pstrata --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -ustrata -pdev-mysql-change-me --silent"]
       interval: 2s
       timeout: 5s
       retries: 30
@@ -53,8 +53,8 @@ services:
     working_dir: /workspace
     entrypoint: ["sh", "scripts/docker-dev-entrypoint.sh"]
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
-      APP_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hiroapp_test
+      DATABASE_URL: postgresql://postgres:dev-postgres-change-me@postgres:5432/bun_testing_test
+      APP_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@postgres:5432/hiroapp_test
       REDIS_URL: redis://:dev-redis-change-me@redis:6379
       CACHE_DRIVER: redis
       QUEUE_DRIVER: redis
@@ -82,8 +82,8 @@ services:
     working_dir: /workspace
     entrypoint: ["sh", "scripts/docker-dev-entrypoint.sh"]
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
-      APP_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hiroapp_test
+      DATABASE_URL: postgresql://postgres:dev-postgres-change-me@postgres:5432/bun_testing_test
+      APP_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@postgres:5432/hiroapp_test
       REDIS_URL: redis://:dev-redis-change-me@redis:6379
       CACHE_DRIVER: redis
       QUEUE_DRIVER: redis

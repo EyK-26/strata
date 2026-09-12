@@ -1,11 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { MEMBER_ABILITIES } from "@getstrata/core/auth/abilityCatalog";
 import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/authContext";
 import { ApiTokenGuard, AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
+import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
 
 describe("GuestGuard", () => {
+  let previousHeaders: string | undefined;
+  beforeEach(() => {
+    previousHeaders = enableDevAuthHeaders();
+  });
+  afterEach(() => {
+    restoreDevAuthHeaders(previousHeaders);
+  });
   test("resolves users from development auth headers", async () => {
     const auth = new AuthManager(new GuestGuard());
     const user = await auth.resolve(

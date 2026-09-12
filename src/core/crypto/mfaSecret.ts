@@ -1,3 +1,4 @@
+import { isProductionEnv } from "../runtime/appEnv";
 import { decryptField, encryptField, resolveEncryptionKey } from "./fieldEncryption";
 
 function protectMfaSecret(secret: string): string {
@@ -16,6 +17,10 @@ function revealMfaSecret(stored: string | null | undefined): string | null {
   }
 
   if (!stored.startsWith("enc:v1:")) {
+    if (isProductionEnv()) {
+      throw new Error("MFA secrets must be encrypted.");
+    }
+
     return stored;
   }
 

@@ -158,6 +158,12 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
         `Production startup blocked: set ${missing.join(", ")} when FEATURE_SAML=true.`,
       );
     }
+
+    if (env.SAML_WANT_RESPONSE_SIGNED === "false") {
+      throw new Error(
+        "Production startup blocked: signed SAML responses are required (do not set SAML_WANT_RESPONSE_SIGNED=false).",
+      );
+    }
   }
 
   if (envFlagEnabled(env.UPLOAD_ALLOW_UNKNOWN_MIME)) {

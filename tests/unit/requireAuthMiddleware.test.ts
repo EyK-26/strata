@@ -1,9 +1,17 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMiddleware";
+import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
 
 describe("createRequireAuthMiddleware", () => {
+  let previousHeaders: string | undefined;
+  beforeEach(() => {
+    previousHeaders = enableDevAuthHeaders();
+  });
+  afterEach(() => {
+    restoreDevAuthHeaders(previousHeaders);
+  });
   test("allows authenticated requests through", async () => {
     const auth = new AuthManager(new GuestGuard());
     const handler = composeMiddleware(createRequireAuthMiddleware(auth))(async () =>

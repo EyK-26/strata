@@ -1,4 +1,5 @@
 import { missingOptionalPeer } from "../../runtime/optionalPeer";
+import { timingSafeCompareString } from "../../security/timingSafeCompare";
 import type { OAuthProfile } from "../oauth/types";
 import {
   consumeSamlAssertion,
@@ -23,6 +24,7 @@ interface NodeSamlProfile {
   nameID?: string;
   email?: string;
   name?: string;
+  issuer?: string;
   sessionIndex?: string | string[];
   getAssertion?: () => { Assertion?: { $?: { ID?: string } } };
   [key: string]: unknown;
@@ -153,6 +155,11 @@ class SamlServiceProvider {
 
     if (loggedOut || !profile) {
       throw new Error("SAML assertion did not contain a signed user profile.");
+    }
+
+    const issuer = typeof profile.issuer === "string" ? profile.issuer.trim() : "";
+    if (!issuer || !timingSafeCompareString(issuer, this.options.idpIssuer)) {
+      throw new Error("SAML assertion issuer is invalid.");
     }
 
     const assertionId = readAssertionId(profile);

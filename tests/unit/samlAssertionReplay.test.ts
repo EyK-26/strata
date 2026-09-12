@@ -1,40 +1,108 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   consumeSamlAssertion,
   InMemorySamlAssertionReplayStore,
+  resetSamlReplayCacheForTests,
   setSamlAssertionReplayStoreForTests,
 } from "@getstrata/core/auth/saml/samlServiceProvider";
+import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
-  bindDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
+  getDefaultDatabasePool,
+  registerDefaultDatabasePool,
+  resetDefaultDatabasePoolForTests,
+} from "@getstrata/core/database/defaultConnection";
+import { getDatabase } from "../../src/db/connection";
 
-afterEach(() => {
-  setSamlAssertionReplayStoreForTests(null);
-  resetBoundDatabaseConnection();
-});
+function currentPoolOrNull(): SqlDatabaseConnection | null {
+  try {
+    return getDefaultDatabasePool();
+  } catch {
+    return null;
+  }
+}
 
-describe("SAML assertion replay store", () => {
-  test("memory store rejects a second consume of the same assertion", async () => {
-    const store = new InMemorySamlAssertionReplayStore();
-    await store.consume("assert-1");
-    await expect(store.consume("assert-1")).rejects.toThrow("replay");
+function restorePool(previous: SqlDatabaseConnection | null): void {
+  if (previous) {
+    registerDefaultDatabasePool(previous);
+    return;
+  }
+  resetDefaultDatabasePoolForTests();
+  if (process.env.DATABASE_URL) {
+    getDatabase();
+  }
+}
+
+function fakePool(calls: string[], uniqueOn = ""): SqlDatabaseConnection {
+  const seen = new Set<string>();
+  const pool = Object.assign(async () => [] as unknown[], {
+    async begin<T>(callback: (tx: typeof pool) => Promise<T>) {
+      return await callback(pool);
+    },
+    async close() {},
+    async unsafe<T>(query: string, params?: readonly unknown[]) {
+      calls.push(`${query} ${JSON.stringify(params ?? [])}`);
+      const assertionId = String(params?.[0] ?? "");
+      if (query.includes("INSERT INTO auth_saml_assertions") && seen.has(assertionId)) {
+        throw Object.assign(new Error("duplicate"), { code: "23505" });
+      }
+      if (query.includes("INSERT INTO auth_saml_assertions")) {
+        seen.add(assertionId);
+        if (uniqueOn && assertionId === uniqueOn) {
+          throw Object.assign(new Error("duplicate"), { code: "23505" });
+        }
+      }
+      return [] as T[];
+    },
+  });
+  return pool as SqlDatabaseConnection;
+}
+
+describe("SqlSamlAssertionReplayStore", () => {
+  test("inserts consumed_at and garbage-collects stale rows after a live insert", async () => {
+    const restored = currentPoolOrNull();
+    const calls: string[] = [];
+    registerDefaultDatabasePool(fakePool(calls));
+    setSamlAssertionReplayStoreForTests(null);
+    try {
+      await consumeSamlAssertion("assert-live");
+      expect(calls[0]).toContain("INSERT INTO auth_saml_assertions");
+      expect(calls[0]).toContain("consumed_at");
+      expect(calls[1]).toContain("DELETE FROM auth_saml_assertions");
+      expect(calls[1]).toContain("consumed_at <");
+    } finally {
+      resetSamlReplayCacheForTests();
+      restorePool(restored);
+    }
   });
 
-  test("SQL store maps unique constraint errors to replay", async () => {
-    const seen = new Set<string>();
-    bindDatabaseConnection({
-      async unsafe(_query: string, params: readonly unknown[] = []) {
-        const id = String(params[0]);
-        if (seen.has(id)) {
-          throw { code: "23505" };
-        }
-        seen.add(id);
-        return [];
-      },
-    } as never);
+  test("treats a unique constraint as replay", async () => {
+    const restored = currentPoolOrNull();
+    const calls: string[] = [];
+    registerDefaultDatabasePool(fakePool(calls, "assert-dup"));
     setSamlAssertionReplayStoreForTests(null);
-    await consumeSamlAssertion("assert-sql");
-    await expect(consumeSamlAssertion("assert-sql")).rejects.toThrow("replay");
+    try {
+      await expect(consumeSamlAssertion("assert-dup")).rejects.toThrow("replay");
+      expect(calls.some((line) => line.includes("DELETE"))).toBe(false);
+    } finally {
+      resetSamlReplayCacheForTests();
+      restorePool(restored);
+    }
+  });
+
+  test("in-memory store still detects replay after the former TTL window", async () => {
+    const store = new InMemorySamlAssertionReplayStore();
+    setSamlAssertionReplayStoreForTests(store);
+    const now = Date.now();
+    const originalNow = Date.now;
+    Date.now = () => now;
+    try {
+      await consumeSamlAssertion("assert-ttl");
+      Date.now = () => now + 11 * 60 * 1000;
+      await expect(consumeSamlAssertion("assert-ttl")).rejects.toThrow("replay");
+    } finally {
+      Date.now = originalNow;
+      resetSamlReplayCacheForTests();
+      restorePool(currentPoolOrNull());
+    }
   });
 });

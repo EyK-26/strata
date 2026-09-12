@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
@@ -16,6 +16,7 @@ import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 import { createMockDependencies } from "./testHelpers";
@@ -35,6 +36,13 @@ function createKernelDependencies(config?: ConfigStore): AppDependencies {
 }
 
 describe("HttpKernel", () => {
+  let previousHeaders: string | undefined;
+  beforeEach(() => {
+    previousHeaders = enableDevAuthHeaders();
+  });
+  afterEach(() => {
+    restoreDevAuthHeaders(previousHeaders);
+  });
   test("registers global middleware for logging, request id, and auth", () => {
     const kernel = createHttpKernel(createKernelDependencies());
     const middleware = kernel.globalMiddleware();

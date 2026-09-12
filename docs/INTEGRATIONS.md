@@ -24,11 +24,11 @@ Set `STRIPE_WEBHOOK_SECRET`. Signature verification lives in core. Plan sync and
 
 ## GitHub OAuth / OIDC / SAML
 
-Set the matching `GITHUB_*` or `OIDC_*` variables. OIDC `getAuthorizationUrl()` throws. Use `createAuthorization()` and pass the handshake to `exchangeCode()`. ID tokens are verified as RS256 via discovery JWKS (`iss` / `aud` / `exp` / `nonce`). Missing email throws. GitHub OAuth uses `safeFetch`, reads `/user/emails` when the profile omits email, and throws when no verified address exists (no `{login}@users.noreply.github.com`).
+Set the matching `GITHUB_*` or `OIDC_*` variables. OIDC `getAuthorizationUrl()` throws. Use `createAuthorization()` (async) and pass the handshake to `exchangeCode()`. Authorization, token, and JWKS URLs come from discovery. ID tokens are verified as RS256 via discovery JWKS (`iss` / `aud` / `exp` / `nbf` / `nonce`). Missing or unverified email throws. GitHub OAuth uses `safeFetch`, always reads `/user/emails`, and throws unless a verified address exists (no `{login}@users.noreply.github.com`, and an unverified `profile.email` is ignored).
 
-SAML is a real service provider (`SamlServiceProvider`); set `FEATURE_SAML=true` plus `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, `SAML_ACS_URL`, and `SAML_IDP_ISSUER`. Signed responses are required unless `SAML_WANT_RESPONSE_SIGNED=false`. ACS verifies HMAC RelayState without a cookie. Replay stores assertion IDs in `auth_saml_assertions`. The old `saml:email:name` stub is gone. SAML and OIDC skip password MFA (SSO).
+SAML is a real service provider (`SamlServiceProvider`); set `FEATURE_SAML=true` plus `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, `SAML_ACS_URL`, and `SAML_IDP_ISSUER`. Signed responses are required; production boot rejects `SAML_WANT_RESPONSE_SIGNED=false`. ACS verifies HMAC RelayState without a cookie and checks assertion issuer. Replay stores assertion IDs in `auth_saml_assertions`. The old `saml:email:name` stub is gone. SAML ACS still challenges MFA when the user is already enrolled.
 
-Outbound URL helpers resolve DNS, reject blocked answers, and fetch the resolved IP with the original Host and TLS server name. `allowPrivate: true` skips DNS.
+Outbound URL helpers resolve DNS, reject blocked answers, and fetch the resolved IP with the original Host and TLS server name. `allowPrivate: true` is ignored in production.
 
 ## Design rule
 

@@ -5,6 +5,7 @@ import type { JwtPayload } from "../jwt";
 
 interface OidcDiscovery {
   issuer?: string;
+  authorization_endpoint?: string;
   token_endpoint?: string;
   jwks_uri?: string;
 }
@@ -44,17 +45,26 @@ async function loadOidcDiscovery(issuer: string): Promise<OidcDiscovery> {
   }
 
   const discovery = (await fetchJson(`${key}/.well-known/openid-configuration`)) as OidcDiscovery;
-  if (!discovery?.jwks_uri?.trim() || !discovery.token_endpoint?.trim()) {
-    throw new Error("OIDC discovery document did not include jwks_uri and token_endpoint.");
+  if (
+    !discovery?.authorization_endpoint?.trim() ||
+    !discovery.jwks_uri?.trim() ||
+    !discovery.token_endpoint?.trim()
+  ) {
+    throw new Error(
+      "OIDC discovery document did not include authorization_endpoint, jwks_uri, and token_endpoint.",
+    );
   }
 
   discoveryCache.set(key, { discovery, fetchedAt: Date.now() });
   return discovery;
 }
 
-async function loadOidcJwks(jwksUri: string): Promise<JsonWebKeyLike[]> {
+async function loadOidcJwks(
+  jwksUri: string,
+  options: { force?: boolean } = {},
+): Promise<JsonWebKeyLike[]> {
   const cached = jwksCache.get(jwksUri);
-  if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) {
+  if (!options.force && cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) {
     return cached.keys;
   }
 
@@ -125,11 +135,11 @@ function assertIdTokenClaims(
     !Number.isFinite(payload.exp) ||
     payload.exp * 1000 <= Date.now()
   ) {
-    throw new Error("OIDC ID token signature is invalid.");
+    throw new Error("OIDC ID token is expired.");
   }
 
   if (typeof payload.nbf === "number" && payload.nbf * 1000 > Date.now()) {
-    throw new Error("OIDC ID token signature is invalid.");
+    throw new Error("OIDC ID token is not yet valid.");
   }
 }
 
@@ -147,8 +157,12 @@ async function verifyOidcIdToken(
     throw new Error("OIDC ID token algorithm must be RS256.");
   }
 
-  const keys = await loadOidcJwks(options.jwksUri);
-  const candidates = header.kid ? keys.filter((key) => key.kid === header.kid) : keys;
+  let keys = await loadOidcJwks(options.jwksUri);
+  let candidates = header.kid ? keys.filter((key) => key.kid === header.kid) : keys;
+  if (header.kid && candidates.length === 0) {
+    keys = await loadOidcJwks(options.jwksUri, { force: true });
+    candidates = keys.filter((key) => key.kid === header.kid);
+  }
   const signingInput = `${parts[0]}.${parts[1]}`;
   let verified = false;
   for (const jwk of candidates) {

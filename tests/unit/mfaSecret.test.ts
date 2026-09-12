@@ -66,12 +66,24 @@ describe("mfaSecret", () => {
     expect(revealMfaSecret(protectedSecret)).toBe("JBSWY3DPEHPK3PXP");
   });
 
-  test("returns stored value when ciphertext is not encrypted", async () => {
+  test("returns stored plaintext outside production", async () => {
     process.env.KMS_ENCRYPTION_KEY = "d".repeat(64);
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
 
     const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
 
     expect(revealMfaSecret("legacy-plain-secret")).toBe("legacy-plain-secret");
+  });
+
+  test("rejects plaintext MFA secrets in production", async () => {
+    const previous = process.env.APP_ENV;
+    process.env.APP_ENV = "production";
+    process.env.KMS_ENCRYPTION_KEY = "d".repeat(64);
+    try {
+      const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
+      expect(() => revealMfaSecret("legacy-plain-secret")).toThrow("must be encrypted");
+    } finally {
+      restoreEnvVar("APP_ENV", previous);
+    }
   });
 });

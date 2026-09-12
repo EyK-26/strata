@@ -40,7 +40,7 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 | `FEATURE_BILLING=true` | `STRIPE_WEBHOOK_SECRET` | Stripe SDK stays in the app, not core |
 | `FEATURE_SIEM_EXPORT=true` | `SIEM_EXPORT_URL` (optional `SIEM_EXPORT_TOKEN`) | Warns if missing; export job no-ops |
 | `FEATURE_OAUTH=true` | Provider credentials (`GITHUB_*`, `OIDC_*`) | See `.env.example` |
-| `FEATURE_SAML=true` | `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, `SAML_ACS_URL`, `SAML_IDP_ISSUER` | Signed responses default on (`SAML_WANT_RESPONSE_SIGNED=false` opts out). Install `@node-saml/node-saml`. |
+| `FEATURE_SAML=true` | `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, `SAML_ACS_URL`, `SAML_IDP_ISSUER` | Signed responses are required. Production boot rejects `SAML_WANT_RESPONSE_SIGNED=false`. Install `@node-saml/node-saml`. |
 
 ## Recommended (not all enforced at boot)
 
@@ -51,6 +51,7 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 - Generated apps ship a production `Dockerfile` (`APP_ENV=production`, `AUTH_DEV_HEADERS=false`, non-root user, `HEALTHCHECK`). `GET /health` answers 503 until a notes row is readable, so run `bun run db:migrate` as a deploy step
 - `METRICS_TOKEN` to authorize `GET /metrics` (production hides the endpoint unless this is set)
 - Multipart uploads are rejected unless the declared content type is on the allowlist. A missing content type and `application/octet-stream` are rejected too, because the client picks that value. Set `UPLOAD_ALLOW_UNKNOWN_MIME=true` only if you accept uploads from clients that cannot label them, and pair it with your own content inspection
+- `TENANCY_DRIVER=rls` emits FORCE RLS policies. They apply to roles without `BYPASSRLS`. The generated Compose `postgres` user is a superuser and skips them. Production `DATABASE_URL` must use a `NOBYPASSRLS` role.
 - `TENANCY_DRIVER=none` for apps without a `tenant` table. HiroApp keeps `rls`
 - Unhandled exceptions return `500 {"error":"Internal server error."}` and are logged with their stack; driver constraint violations map to 409/422/400 with fixed messages on Postgres, MySQL, and SQLite
 - Off-site database backups: [DR.md](./DR.md)

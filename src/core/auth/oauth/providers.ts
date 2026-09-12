@@ -98,9 +98,9 @@ class GitHubOAuthProvider implements OAuthProvider {
       name?: string | null;
     };
 
-    const email = profile.email?.trim() || (await githubVerifiedEmail(tokenBody.access_token));
+    const email = await githubVerifiedEmail(tokenBody.access_token);
     if (!email) {
-      throw new Error("GitHub OAuth profile did not include an email address.");
+      throw new Error("GitHub OAuth profile did not include a verified email address.");
     }
 
     return {

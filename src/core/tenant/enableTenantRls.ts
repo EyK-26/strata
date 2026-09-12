@@ -28,8 +28,7 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 `;
 
-function enableTenantRlsSql(tableName: string): string {
-  const table = assertSafeIdentifier(tableName);
+function tenantIsolationPolicy(table: string, predicate: string): string {
   return `
 ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
@@ -37,17 +36,42 @@ DROP POLICY IF EXISTS tenant_isolation ON ${table};
 CREATE POLICY tenant_isolation ON ${table}
 USING (
   app_bypass_rls()
-  OR tenant_id = app_current_tenant_id()
+  OR ${predicate}
 )
 WITH CHECK (
   app_bypass_rls()
-  OR tenant_id = app_current_tenant_id()
+  OR ${predicate}
 );
 `;
 }
 
-function generatedRlsBootstrapSql(tables: readonly string[]): string {
-  return [RLS_HELPER_SQL, ...tables.map((table) => enableTenantRlsSql(table))].join("\n");
+function enableTenantRlsSql(tableName: string): string {
+  const table = assertSafeIdentifier(tableName);
+  return tenantIsolationPolicy(table, `tenant_id = app_current_tenant_id()`);
 }
 
-export { enableTenantRlsSql, generatedRlsBootstrapSql, RLS_HELPER_SQL };
+function enableUserOwnedRlsSql(tableName: string, userIdColumn = "user_id"): string {
+  const table = assertSafeIdentifier(tableName);
+  const column = assertSafeIdentifier(userIdColumn);
+  return tenantIsolationPolicy(
+    table,
+    `EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.id = ${table}.${column}
+      AND u.tenant_id = app_current_tenant_id()
+  )`,
+  );
+}
+
+function generatedRlsBootstrapSql(
+  tables: readonly string[],
+  userOwnedTables: readonly string[] = [],
+): string {
+  return [
+    RLS_HELPER_SQL,
+    ...tables.map((table) => enableTenantRlsSql(table)),
+    ...userOwnedTables.map((table) => enableUserOwnedRlsSql(table)),
+  ].join("\n");
+}
+
+export { enableTenantRlsSql, enableUserOwnedRlsSql, generatedRlsBootstrapSql, RLS_HELPER_SQL };

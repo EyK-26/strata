@@ -74,6 +74,7 @@ describe("createCorsMiddleware", () => {
     const allowed = await run("https://admin.example");
     expect(allowed.headers.get("access-control-allow-origin")).toBe("https://admin.example");
     expect(allowed.headers.get("access-control-allow-headers")).toContain("Authorization");
+    expect(allowed.headers.get("access-control-allow-headers")).toContain("X-CSRF-Token");
     expect(allowed.headers.get("access-control-max-age")).toBe("86400");
 
     const denied = await run("https://evil.example");

@@ -8,6 +8,7 @@ import {
   resolveSafeOutboundTarget,
   setDnsLookupForTests,
 } from "@getstrata/core/security/safeUrl";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 afterEach(() => {
   resetDnsLookupForTests();
@@ -105,6 +106,25 @@ describe("assertSafeOutboundUrlResolved", () => {
     await expect(
       assertSafeOutboundUrlResolved("https://10.0.0.8/hook", { allowPrivate: true }),
     ).resolves.toMatchObject({ hostname: "10.0.0.8" });
+  });
+
+  test("ignores allowPrivate and skipped DNS in production", async () => {
+    const previous = process.env.APP_ENV;
+    process.env.APP_ENV = "production";
+    setDnsLookupForTests(async () => [{ address: "10.0.0.1", family: 4 }]);
+    try {
+      expect(() => assertSafeOutboundUrl("https://10.0.0.8/hook", { allowPrivate: true })).toThrow(
+        /blocked host/,
+      );
+      await expect(
+        resolveSafeOutboundTarget("https://public.example.com/hook", {
+          allowPrivate: true,
+          resolveDns: false,
+        }),
+      ).rejects.toThrow(/blocked host/);
+    } finally {
+      restoreEnvVar("APP_ENV", previous);
+    }
   });
 
   test("resetDnsLookupForTests restores the default resolver", () => {

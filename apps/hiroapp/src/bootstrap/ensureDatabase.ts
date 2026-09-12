@@ -1,4 +1,4 @@
-const DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/hiroapp";
+const DEFAULT_DATABASE_URL = "postgresql://postgres:dev-postgres-change-me@localhost:5432/hiroapp";
 
 /**
  * The database name comes from DATABASE_URL. Set APP_DATABASE_URL to point

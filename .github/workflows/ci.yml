@@ -72,6 +72,9 @@ jobs:
           SCIM_BEARER_TOKEN: strata-scim-test-token
           ADMIN_API_TOKEN: strata-admin-test-token
           MEMBER_API_TOKEN: strata-member-test-token
+          DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/bun_testing_test
+          APP_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/hiroapp_test
+          REDIS_URL: redis://:dev-redis-change-me@localhost:6379
         run: |
           bun install --frozen-lockfile
           bun dedupe
@@ -93,8 +96,8 @@ jobs:
           APP_NAME: HiroApp
           API_PREFIX: /api
           REDIS_URL: redis://:dev-redis-change-me@localhost:6379
-          DATABASE_URL: postgresql://postgres:postgres@localhost:54329/bun_testing_test
-          APP_DATABASE_URL: postgresql://postgres:postgres@localhost:54329/hiroapp_test
+          DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/bun_testing_test
+          APP_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/hiroapp_test
           METRICS_TOKEN: strata-metrics-test-token
         run: |
           scripts/with-host-env.sh sh -c "bun run start" &

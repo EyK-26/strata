@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { generateOneTimeToken } from "@getstrata/core/auth/oneTimeToken";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
+import { jsonCsrfHeaders } from "../helpers/jsonCsrf";
 import { createSignedSamlResponse } from "../helpers/samlFixture";
 
 const repoRoot = join(import.meta.dir, "../..");
@@ -53,6 +54,9 @@ beforeAll(async () => {
   process.env.SCIM_TENANT_TOKENS = "1:hiroapp-scim-tenant-1,2:hiroapp-scim-tenant-2";
   process.env.FEATURE_REGISTRATION = "true";
   process.env.FEATURE_SAML = "false";
+  process.env.FEATURE_MFA = "true";
+  process.env.KMS_ENCRYPTION_KEY =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   process.env.FEATURE_PUBLIC_READS = "false";
   process.env.MAIL_DRIVER = "log";
   process.env.APP_ENV_METRICS = "local";
@@ -133,22 +137,114 @@ describe("HiroApp security", () => {
     expect(signedIn.headers.get("location")).toBe("/");
   });
 
-  test("API login requires MFA when enabled", async () => {
+  test("MFA enroll revokes existing sessions", async () => {
+    const loginPage = await fetch(`${origin}/login`);
+    const html = await loginPage.text();
+    const csrf = /name="_token" value="([^"]+)"/.exec(html)?.[1] ?? "";
+    let cookies = cookieHeader(loginPage);
+    const signedIn = await fetch(`${origin}/login`, {
+      method: "POST",
+      headers: {
+        cookie: cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        _token: csrf,
+        email: "demo@example.com",
+        password: "StrataDemo!ChangeMe",
+      }),
+      redirect: "manual",
+    });
+    expect(signedIn.status).toBe(302);
+    cookies = cookieHeader(signedIn, cookies);
+
+    const confirmPage = await fetch(`${origin}/confirm-password?redirect=/account/mfa`, {
+      headers: { cookie: cookies },
+    });
+    const confirmHtml = await confirmPage.text();
+    const confirmCsrf = /name="_token" value="([^"]+)"/.exec(confirmHtml)?.[1] ?? "";
+    cookies = cookieHeader(confirmPage, cookies);
+    const confirmed = await fetch(`${origin}/confirm-password?redirect=/account/mfa`, {
+      method: "POST",
+      headers: {
+        cookie: cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        _token: confirmCsrf,
+        password: "StrataDemo!ChangeMe",
+      }),
+      redirect: "manual",
+    });
+    expect(confirmed.status).toBe(302);
+    cookies = cookieHeader(confirmed, cookies);
+
+    const setupPage = await fetch(`${origin}/account/mfa`, { headers: { cookie: cookies } });
+    expect(setupPage.status).toBe(200);
+    const setupHtml = await setupPage.text();
+    const setupCsrf = /name="_token" value="([^"]+)"/.exec(setupHtml)?.[1] ?? "";
+    const secret = /name="secret" value="([^"]+)"/.exec(setupHtml)?.[1] ?? "";
+    expect(secret).toBeTruthy();
+    cookies = cookieHeader(setupPage, cookies);
+
+    const enrolled = await fetch(`${origin}/account/mfa`, {
+      method: "POST",
+      headers: {
+        cookie: cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        _token: setupCsrf,
+        secret,
+        code: generateTotp(secret),
+      }),
+    });
+    expect(enrolled.status).toBe(200);
+    expect(await enrolled.text()).toContain("Recovery codes");
+
+    const remaining = (await sql.unsafe(
+      "SELECT id FROM sessions WHERE user_id = $1",
+      [1],
+    )) as unknown[];
+    expect(remaining).toHaveLength(0);
+
+    const stale = await fetch(`${origin}/confirm-password`, {
+      headers: { cookie: cookies },
+      redirect: "manual",
+    });
+    expect(stale.status).toBe(302);
+    expect(stale.headers.get("location") ?? "").toMatch(/\/login/);
+
+    await sql.unsafe(
+      "UPDATE users SET mfa_enabled = false, mfa_secret = NULL, mfa_recovery_codes = NULL, session_valid_after = NULL WHERE email = $1",
+      ["demo@example.com"],
+    );
+  });
+
+  test("API login requires CSRF and MFA when enabled", async () => {
     const secret = generateTotpSecret();
     await sql.unsafe("UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2", [
       secret,
       "demo@example.com",
     ]);
-    const missing = await fetch(`${origin}/api/v1/auth/login`, {
+    const unauthenticated = await fetch(`${origin}/api/v1/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
+    });
+    expect(unauthenticated.status).toBe(403);
+
+    const csrf = await jsonCsrfHeaders(origin);
+    const missing = await fetch(`${origin}/api/v1/auth/login`, {
+      method: "POST",
+      headers: csrf.headers,
       body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
     });
     expect(missing.status).toBe(401);
 
     const ok = await fetch(`${origin}/api/v1/auth/login`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: csrf.headers,
       body: JSON.stringify({
         email: "demo@example.com",
         password: "StrataDemo!ChangeMe",
@@ -394,6 +490,26 @@ describe("HiroApp security", () => {
       });
       expect(wrong.status).toBeGreaterThanOrEqual(400);
 
+      const evilIssuer = await createSignedSamlResponse({
+        audience: "https://hiroapp.test/saml/metadata",
+        destination: `${origin}/auth/saml/acs`,
+        issuer: "https://evil.example/idp",
+        cert: fixture.cert,
+        privateKey: fixture.privateKey,
+      });
+      const evil = await fetch(`${origin}/auth/saml/acs`, {
+        method: "POST",
+        headers: {
+          cookie: cookies,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          SAMLResponse: evilIssuer.responseB64,
+          RelayState: relayState,
+        }),
+      });
+      expect(evil.status).toBeGreaterThanOrEqual(400);
+
       const valid = await fetch(`${origin}/auth/saml/acs`, {
         method: "POST",
         headers: {
@@ -418,6 +534,8 @@ describe("HiroApp security", () => {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
+          origin: "https://idp.example.test",
+          referer: "https://idp.example.test/sso",
         },
         body: new URLSearchParams({
           SAMLResponse: cookielessFixture.responseB64,
@@ -426,6 +544,42 @@ describe("HiroApp security", () => {
         redirect: "manual",
       });
       expect([302, 200]).toContain(cookieless.status);
+
+      await sql.unsafe("UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2", [
+        generateTotpSecret(),
+        "demo@example.com",
+      ]);
+      const mfaStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
+      const mfaRelay =
+        new URL(mfaStart.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
+      const mfaFixture = await createSignedSamlResponse({
+        audience: "https://hiroapp.test/saml/metadata",
+        destination: `${origin}/auth/saml/acs`,
+        email: "demo@example.com",
+        cert: fixture.cert,
+        privateKey: fixture.privateKey,
+      });
+      const mfaAcs = await fetch(`${origin}/auth/saml/acs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://idp.example.test",
+          referer: "https://idp.example.test/sso",
+        },
+        body: new URLSearchParams({
+          SAMLResponse: mfaFixture.responseB64,
+          RelayState: mfaRelay,
+        }),
+        redirect: "manual",
+      });
+      expect(mfaAcs.status).toBe(302);
+      expect(mfaAcs.headers.get("location")).toBe("/login/mfa");
+      expect(
+        mfaAcs.headers.getSetCookie().some((item) => item.startsWith("strata_mfa_pending=")),
+      ).toBe(true);
+      await sql.unsafe("UPDATE users SET mfa_enabled = false, mfa_secret = NULL WHERE email = $1", [
+        "demo@example.com",
+      ]);
     } finally {
       process.env.FEATURE_SAML = "false";
       delete process.env.SAML_IDP_SSO_URL;
@@ -434,6 +588,128 @@ describe("HiroApp security", () => {
       delete process.env.SAML_ACS_URL;
       delete process.env.SAML_IDP_ISSUER;
     }
+  });
+
+  test("JWT mint requires CSRF", async () => {
+    const blocked = await fetch(`${origin}/api/auth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
+    });
+    expect(blocked.status).toBe(403);
+
+    const csrf = await jsonCsrfHeaders(origin);
+    const minted = await fetch(`${origin}/api/auth/token`, {
+      method: "POST",
+      headers: csrf.headers,
+      body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
+    });
+    expect(minted.status).toBe(200);
+    const body = (await minted.json()) as { token: string };
+    expect(body.token.split(".").length).toBe(3);
+  });
+
+  test("cookie login still works for a user in another tenant", async () => {
+    await sql.unsafe(
+      "INSERT INTO tenant (slug, plan, region) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING",
+      ["second", "free", "eu"],
+    );
+    const tenants = (await sql.unsafe("SELECT id FROM tenant WHERE slug = $1", [
+      "second",
+    ])) as Array<{ id: number }>;
+    const tenantId = tenants[0]?.id;
+    expect(tenantId).toBeTruthy();
+    const demo = (await sql.unsafe("SELECT password FROM users WHERE email = $1", [
+      "demo@example.com",
+    ])) as Array<{ password: string }>;
+    await sql.unsafe(
+      "INSERT INTO users (name, email, password, is_admin, tenant_id, email_verified_at) VALUES ($1, $2, $3, false, $4, $5) ON CONFLICT (email) DO UPDATE SET tenant_id = $4, password = $3",
+      [
+        "Second Tenant",
+        "second-tenant@example.test",
+        demo[0]?.password,
+        tenantId,
+        new Date().toISOString(),
+      ],
+    );
+
+    const loginPage = await fetch(`${origin}/login`);
+    const html = await loginPage.text();
+    const csrf = /name="_token" value="([^"]+)"/.exec(html)?.[1] ?? "";
+    const cookies = cookieHeader(loginPage);
+    const signedIn = await fetch(`${origin}/login`, {
+      method: "POST",
+      headers: {
+        cookie: cookies,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        _token: csrf,
+        email: "second-tenant@example.test",
+        password: "StrataDemo!ChangeMe",
+      }),
+      redirect: "manual",
+    });
+    expect(signedIn.status).toBe(302);
+    expect(signedIn.headers.get("location")).toBe("/");
+    const userRows = (await sql.unsafe("SELECT id FROM users WHERE email = $1", [
+      "second-tenant@example.test",
+    ])) as Array<{ id: number }>;
+    const sessions = (await sql.unsafe("SELECT id FROM sessions WHERE user_id = $1", [
+      userRows[0]?.id,
+    ])) as unknown[];
+    expect(sessions.length).toBeGreaterThan(0);
+  });
+
+  test("FORCE RLS hides other-tenant notes from a NOBYPASSRLS role", async () => {
+    await sql.unsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'strata_rls_probe') THEN
+          CREATE ROLE strata_rls_probe NOLOGIN NOBYPASSRLS;
+        END IF;
+      END $$;
+    `);
+    await sql.unsafe("GRANT USAGE ON SCHEMA public TO strata_rls_probe");
+    await sql.unsafe("GRANT SELECT ON notes TO strata_rls_probe");
+
+    await sql.unsafe(
+      "INSERT INTO tenant (slug, plan, region) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING",
+      ["rls-probe", "free", "eu"],
+    );
+    const tenants = (await sql.unsafe("SELECT id FROM tenant WHERE slug = $1", [
+      "rls-probe",
+    ])) as Array<{ id: number }>;
+    const otherTenantId = tenants[0]?.id;
+    await sql.unsafe("INSERT INTO notes (body, tenant_id) VALUES ($1, $2)", [
+      "other-tenant-note",
+      otherTenantId,
+    ]);
+
+    const { getDefaultDatabasePool } = await import("@getstrata/core/database/defaultConnection");
+    const pool = getDefaultDatabasePool();
+    if (typeof pool.begin !== "function") {
+      throw new Error("expected pool.begin for RLS probe");
+    }
+
+    const hidden = await pool.begin(async (tx) => {
+      await tx.unsafe("SET LOCAL ROLE strata_rls_probe");
+      await tx.unsafe(`SELECT set_config('app.tenant_id', $1, true)`, ["1"]);
+      await tx.unsafe(`SELECT set_config('app.bypass_rls', $1, true)`, ["false"]);
+      return await tx.unsafe<{ body: string }>("SELECT body FROM notes WHERE body = $1", [
+        "other-tenant-note",
+      ]);
+    });
+    expect(hidden).toHaveLength(0);
+
+    const visible = await pool.begin(async (tx) => {
+      await tx.unsafe("SET LOCAL ROLE strata_rls_probe");
+      await tx.unsafe(`SELECT set_config('app.tenant_id', $1, true)`, ["1"]);
+      await tx.unsafe(`SELECT set_config('app.bypass_rls', $1, true)`, ["false"]);
+      return await tx.unsafe<{ body: string }>("SELECT body FROM notes WHERE body = $1", [
+        "Welcome to Strata!",
+      ]);
+    });
+    expect(visible.some((row) => row.body === "Welcome to Strata!")).toBe(true);
   });
 });
 

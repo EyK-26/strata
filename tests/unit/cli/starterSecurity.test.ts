@@ -16,6 +16,7 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
+import { jsonCsrfHeaders } from "../../helpers/jsonCsrf";
 import { repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -219,7 +220,14 @@ describe("starter security flows", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: "A", email: "a@example.com", password: "long-password" }),
       });
-      expect(apiRegister.status).toBe(404);
+      expect(apiRegister.status).toBe(403);
+      const registerCsrf = await jsonCsrfHeaders(origin);
+      const apiRegisterWithCsrf = await fetch(`${origin}/api/v1/auth/register`, {
+        method: "POST",
+        headers: registerCsrf.headers,
+        body: JSON.stringify({ name: "A", email: "a@example.com", password: "long-password" }),
+      });
+      expect(apiRegisterWithCsrf.status).toBe(404);
       process.env.FEATURE_REGISTRATION = "true";
 
       expect((await fetch(`${origin}/scim/v2/Users`)).status).toBe(401);
@@ -236,9 +244,10 @@ describe("starter security flows", () => {
         secret,
         "demo@example.com",
       ]);
+      const loginCsrf = await jsonCsrfHeaders(origin);
       const withoutMfa = await fetch(`${origin}/api/v1/auth/login`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: loginCsrf.headers,
         body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
       });
       expect(withoutMfa.status).toBe(401);
@@ -246,7 +255,7 @@ describe("starter security flows", () => {
 
       const withMfa = await fetch(`${origin}/api/v1/auth/login`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: loginCsrf.headers,
         body: JSON.stringify({
           email: "demo@example.com",
           password: "StrataDemo!ChangeMe",

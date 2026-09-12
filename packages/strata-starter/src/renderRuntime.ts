@@ -328,7 +328,17 @@ function renderMigrateTs(layers: StarterLayers): string {
   const rlsOn = layers.tenancy === "rls" && layers.database === "postgres";
   if (rlsOn) {
     const rlsTables = authNeedsUsers(layers.auth) ? ["notes", "users"] : ["notes"];
-    statements.push(generatedRlsBootstrapSql(rlsTables).trim());
+    const userOwnedTables: string[] = [];
+    if (authNeedsUsers(layers.auth)) {
+      userOwnedTables.push("auth_one_time_tokens");
+    }
+    if (authUsesCookie(layers.auth)) {
+      userOwnedTables.push("sessions");
+    }
+    if (authUsesToken(layers.auth)) {
+      userOwnedTables.push("api_tokens");
+    }
+    statements.push(generatedRlsBootstrapSql(rlsTables, userOwnedTables).trim());
   }
 
   const list = statements.map((sql) => `  \`${sql.replace(/`/g, "\\`")}\`,`).join("\n");
@@ -597,8 +607,8 @@ function renderPreloadTs(layers: StarterLayers, projectName: string): string {
     layers.database === "sqlite"
       ? "sqlite:./storage/app.sqlite"
       : layers.database === "mysql"
-        ? `mysql://root:root@localhost:3306/${database}`
-        : `postgresql://postgres:postgres@localhost:5432/${database}`;
+        ? `mysql://root:dev-mysql-change-me@localhost:3306/${database}`
+        : `postgresql://postgres:dev-postgres-change-me@localhost:5432/${database}`;
 
   return `import { join } from "node:path";
 import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
@@ -709,8 +719,8 @@ function renderEnsureDatabaseTs(layers: StarterLayers, projectName: string): str
   const database = appDatabaseName(projectName);
   const fallback =
     layers.database === "mysql"
-      ? `mysql://root:root@localhost:3306/${database}`
-      : `postgresql://postgres:postgres@localhost:5432/${database}`;
+      ? `mysql://root:dev-mysql-change-me@localhost:3306/${database}`
+      : `postgresql://postgres:dev-postgres-change-me@localhost:5432/${database}`;
 
   const resolveUrl = `/**
  * The database name comes from DATABASE_URL. Set APP_DATABASE_URL to point

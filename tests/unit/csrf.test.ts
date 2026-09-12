@@ -156,6 +156,15 @@ describe("createCsrfMiddleware", () => {
     expect(response.status).toBe(200);
   });
 
+  test("skips CSRF on SCIM mutating paths that use their own bearer", async () => {
+    const middleware = createCsrfMiddleware();
+    const response = await middleware(
+      new Request("http://example.test/scim/v2/Users", { method: "POST" }),
+      async () => new Response("ok"),
+    );
+    expect(response.status).toBe(200);
+  });
+
   test("skips CSRF on the configured SAML ACS pathname", async () => {
     const previous = process.env.SAML_ACS_URL;
     process.env.SAML_ACS_URL = "https://app.example.test/sso/acs";
@@ -194,17 +203,36 @@ describe("createCsrfMiddleware", () => {
     }
   });
 
-  test("session-only CSRF skips guest mutating requests", async () => {
-    const middleware = createCsrfMiddleware({ mutating: "session" });
+  test("rejects guest mutating requests without a csrf token", async () => {
+    const middleware = createCsrfMiddleware();
+    await expect(
+      middleware(
+        new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
+        async () => new Response("ok"),
+      ),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  test("accepts guest JSON mutating requests with a matching CSRF header", async () => {
+    const middleware = createCsrfMiddleware();
+    const { token, cookie } = createCsrfTokenCookie();
     const response = await middleware(
-      new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
+      new Request("http://example.test/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          cookie: cookie.split(";")[0] ?? "",
+          "x-csrf-token": token,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ email: "demo@example.com" }),
+      }),
       async () => new Response("ok"),
     );
     expect(response.status).toBe(200);
   });
 
-  test("session-only CSRF still requires a token after cookie login", async () => {
-    const middleware = createCsrfMiddleware({ mutating: "session" });
+  test("requires a token after cookie login", async () => {
+    const middleware = createCsrfMiddleware();
     await expect(
       runWithAuthContext({ id: 3 }, "session", () =>
         middleware(

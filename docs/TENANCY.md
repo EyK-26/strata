@@ -14,7 +14,7 @@ HTTP requests and background jobs must call `runWithTenantDatabase()` when RLS i
 
 ## Generated HiroApp
 
-`apps/hiroapp` (dogfood for internal end-to-end testing) sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`, plan `free`), stores `users.tenant_id`, and puts `tenant_id` on **data** tables such as `notes`. Postgres RLS apps emit `app_current_tenant_id` / `app_bypass_rls` helpers and `ENABLE` + `FORCE ROW LEVEL SECURITY` on `notes` and `users` via `enableTenantRlsSql`. Auth directory lookups and cookie session user loads use `runWithMigrationBypass()` because auth middleware runs before tenant GUC. `sessions` and `api_tokens` stay without RLS so bearer and session lookup can find the user before a tenant is known. SCIM isolation is tenant GUC plus `WHERE tenant_id`. `currentTenantId()` throws if ALS is missing. Generated `/health` reads `Note.query().value("id")` under the request tenant (anonymous requests use tenant `1`), so empty or filtered notes are degraded.
+`apps/hiroapp` (dogfood for internal end-to-end testing) sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`, plan `free`), stores `users.tenant_id`, and puts `tenant_id` on **data** tables such as `notes`. Postgres RLS apps emit `app_current_tenant_id` / `app_bypass_rls` helpers and `ENABLE` + `FORCE ROW LEVEL SECURITY` on `notes` and `users` via `enableTenantRlsSql`. Cookie `sessions`, `api_tokens`, and `auth_one_time_tokens` get a join policy (`users.tenant_id = app_current_tenant_id()`). Auth directory lookups, cookie session reads and writes, token mint, password reset, email verify, and one-time token consume/insert use `runWithMigrationBypass()`, which always opens its own transaction so `app.bypass_rls` is not set on the request connection. Those policies apply to non-superuser, non-`BYPASSRLS` roles. The generated Compose `postgres` role is a superuser and skips them; production `DATABASE_URL` must use a `NOBYPASSRLS` role. SCIM isolation is tenant GUC plus `WHERE tenant_id`. `currentTenantId()` throws if ALS is missing. Generated `/health` reads `Note.query().value("id")` under the request tenant (anonymous requests use tenant `1`), so empty or filtered notes are degraded.
 
 Sibling examples `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. A SQLite or MySQL app that wants tenant rows should pass `--tenancy=column`.
 
@@ -28,9 +28,10 @@ Auth middleware runs before tenant middleware. Lookups that must succeed before 
 
 | Table | Why |
 |-------|-----|
-| Generated `users` | `ENABLE` + `FORCE ROW LEVEL SECURITY` on `--tenancy=rls`. Auth directory `findById` / `findByEmail` / token joins and cookie session user loads wrap `runWithMigrationBypass()`. After tenant GUC is set, user queries (including SCIM) are tenant-scoped. |
-| Generated `api_tokens` (fixture name `api_token`) | Stay without RLS. Bearer lookup runs in auth middleware **before** tenant middleware. The token finds the user. The user row then supplies `tenant_id`. |
-| Generated `sessions` | Stay without RLS. Cookie session load runs before tenant GUC. |
+| Generated `users` | `ENABLE` + `FORCE ROW LEVEL SECURITY` on `--tenancy=rls`. Auth directory `findById` / `findByEmail` / token joins wrap `runWithMigrationBypass()`. Password reset, email verify, MFA enroll, and recovery-hash updates also wrap that bypass so guest requests (tenant `1`) can update a user in another tenant. After tenant GUC is set, ordinary user queries (including SCIM) are tenant-scoped. |
+| Generated `api_tokens` (fixture name `api_token`) | `ENABLE` + `FORCE ROW LEVEL SECURITY` with a join to `users.tenant_id`. Bearer lookup runs in auth middleware **before** tenant middleware, so it wraps `runWithMigrationBypass()`. Token mint also wraps that bypass so a guest request (tenant `1`) can insert a row for a user in another tenant. |
+| Generated `sessions` | Same join policy as `api_tokens`. Cookie session load and session create/destroy wrap `runWithMigrationBypass()`. |
+| Generated `auth_one_time_tokens` | Same join policy. Insert and consume wrap `runWithMigrationBypass()` so guest password-reset and verify links work for users outside tenant `1`. |
 | Optional membership joins | If your app uses membership middleware, it also runs **before** tenant middleware so roles exist for the rest of the request. Generated HiroApp does not use org membership. It stores `users.tenant_id`. |
 
 Global middleware order: auth, then membership, then tenant. Do not reverse that order.

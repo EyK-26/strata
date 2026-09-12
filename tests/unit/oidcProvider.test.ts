@@ -22,7 +22,7 @@ function mockPublicDns() {
 
 function signRs256IdToken(payload: Record<string, unknown>, kid = "test-key"): string {
   const now = Math.floor(Date.now() / 1000);
-  const body = { iat: now, exp: now + 3600, ...payload };
+  const body = { iat: now, exp: now + 3600, email_verified: true, ...payload };
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid })).toString(
     "base64url",
   );
@@ -43,6 +43,7 @@ function mockOidcNetwork(idToken?: string, tokenBody?: Record<string, unknown>) 
       return Promise.resolve(
         Response.json({
           issuer: "https://issuer.example.com",
+          authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
           token_endpoint: "https://issuer.example.com/token",
           jwks_uri: "https://issuer.example.com/jwks",
         }),
@@ -77,12 +78,14 @@ describe("OidcProvider", () => {
     expect(() => provider.getAuthorizationUrl("state-123")).toThrow("createAuthorization");
   });
 
-  test("builds an authorization url with default scopes", () => {
+  test("builds an authorization url from discovery", async () => {
+    mockPublicDns();
+    mockOidcNetwork();
     const provider = new OidcProvider(options);
-    const url = new URL(provider.createAuthorization("state-123").url);
+    const url = new URL((await provider.createAuthorization("state-123")).url);
 
     expect(url.origin).toBe("https://issuer.example.com");
-    expect(url.pathname).toBe("/authorize");
+    expect(url.pathname).toBe("/oauth/v2/authorize");
     expect(url.searchParams.get("client_id")).toBe("client-id");
     expect(url.searchParams.get("scope")).toBe("openid email profile");
     expect(url.searchParams.get("state")).toBe("state-123");
@@ -92,27 +95,36 @@ describe("OidcProvider", () => {
     expect(url.searchParams.get("redirect_uri")).toBe(options.redirectUri);
 
     const webUrl = new URL(
-      provider.createAuthorization("state-123", "https://app.example.com/oauth/oidc/callback").url,
+      (
+        await provider.createAuthorization(
+          "state-123",
+          "https://app.example.com/oauth/oidc/callback",
+        )
+      ).url,
     );
     expect(webUrl.searchParams.get("redirect_uri")).toBe(
       "https://app.example.com/oauth/oidc/callback",
     );
   });
 
-  test("builds an authorization url with custom scopes", () => {
+  test("builds an authorization url with custom scopes", async () => {
+    mockPublicDns();
+    mockOidcNetwork();
     const provider = new OidcProvider({
       ...options,
       scopes: ["openid", "groups"],
     });
 
-    const url = new URL(provider.createAuthorization("state-456").url);
+    const url = new URL((await provider.createAuthorization("state-456")).url);
 
     expect(url.searchParams.get("scope")).toBe("openid groups");
   });
 
-  test("createAuthorization returns a handshake with PKCE and nonce", () => {
+  test("createAuthorization returns a handshake with PKCE and nonce", async () => {
+    mockPublicDns();
+    mockOidcNetwork();
     const provider = new OidcProvider(options);
-    const { url, handshake } = provider.createAuthorization("fixed-state");
+    const { url, handshake } = await provider.createAuthorization("fixed-state");
     const parsed = new URL(url);
     expect(handshake.state).toBe("fixed-state");
     expect(handshake.nonce).toHaveLength(48);
@@ -140,6 +152,7 @@ describe("OidcProvider", () => {
         return Promise.resolve(
           Response.json({
             issuer: "https://issuer.example.com",
+            authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
             token_endpoint: "https://issuer.example.com/token",
             jwks_uri: "https://issuer.example.com/jwks",
           }),
@@ -222,6 +235,24 @@ describe("OidcProvider", () => {
     await expect(
       provider.exchangeCode("auth-code", options.redirectUri, handshake),
     ).rejects.toThrow("did not include an email address");
+  });
+
+  test("rejects an ID token whose email is not verified", async () => {
+    mockPublicDns();
+    const handshake = createOidcHandshake();
+    const idToken = signRs256IdToken({
+      sub: "user-2",
+      iss: "https://issuer.example.com",
+      aud: "client-id",
+      nonce: handshake.nonce,
+      email: "user@example.com",
+      email_verified: false,
+    });
+    mockOidcNetwork(idToken);
+    const provider = new OidcProvider(options);
+    await expect(
+      provider.exchangeCode("auth-code", options.redirectUri, handshake),
+    ).rejects.toThrow("email is not verified");
   });
 
   test("rejects an unsigned userinfo-only token response", async () => {

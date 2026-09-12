@@ -212,45 +212,59 @@ export class CookieSessionStore {
   async create(user: SessionUser, meta: SessionCreateMeta = {}): Promise<string> {
     const id = randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + this.maxAgeSeconds * 1000);
-    await this.sql().unsafe(
-      `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at, created_at)
+    await runWithMigrationBypass(async () => {
+      await this.sql().unsafe(
+        `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at, created_at)
        VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()}, ${sqlNow()})`,
-      [id, user.id, sqlTimestamp(expires), meta.userAgent ?? null, meta.ipAddress ?? null],
-    );
+        [id, user.id, sqlTimestamp(expires), meta.userAgent ?? null, meta.ipAddress ?? null],
+      );
+    });
     return id;
   }
 
   async destroy(sessionId: string): Promise<void> {
-    await this.sql().unsafe(`DELETE FROM sessions WHERE id = ${sqlPlaceholder(1)}`, [sessionId]);
+    await runWithMigrationBypass(async () => {
+      await this.sql().unsafe(`DELETE FROM sessions WHERE id = ${sqlPlaceholder(1)}`, [sessionId]);
+    });
   }
 
   async destroyAllSessions(userId: number): Promise<void> {
-    await this.sql().unsafe(`DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)}`, [userId]);
+    await runWithMigrationBypass(async () => {
+      await this.sql().unsafe(`DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)}`, [
+        userId,
+      ]);
+    });
   }
 
   async destroyOtherSessions(userId: number, keepSessionId: string): Promise<void> {
-    await this.sql().unsafe(
-      `DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)} AND id <> ${sqlPlaceholder(2)}`,
-      [userId, keepSessionId],
-    );
+    await runWithMigrationBypass(async () => {
+      await this.sql().unsafe(
+        `DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)} AND id <> ${sqlPlaceholder(2)}`,
+        [userId, keepSessionId],
+      );
+    });
   }
 
   async listForUser(userId: number): Promise<BrowserSessionRecord[]> {
     const dialect = currentSqlDialect();
-    return this.sql().unsafe<BrowserSessionRecord>(
-      `SELECT id, user_id, user_agent, ip_address, last_active_at, expires_at
+    return await runWithMigrationBypass(async () =>
+      this.sql().unsafe<BrowserSessionRecord>(
+        `SELECT id, user_id, user_agent, ip_address, last_active_at, expires_at
        FROM sessions
        WHERE user_id = ${dialect.placeholder(1)} AND expires_at > ${dialect.nowExpression()}
        ORDER BY last_active_at DESC${dialect.nullsLastSuffix()}, expires_at DESC`,
-      [userId],
+        [userId],
+      ),
     );
   }
 
   async touch(sessionId: string): Promise<void> {
-    await this.sql().unsafe(
-      `UPDATE sessions SET last_active_at = ${sqlNow()} WHERE id = ${sqlPlaceholder(1)}`,
-      [sessionId],
-    );
+    await runWithMigrationBypass(async () => {
+      await this.sql().unsafe(
+        `UPDATE sessions SET last_active_at = ${sqlNow()} WHERE id = ${sqlPlaceholder(1)}`,
+        [sessionId],
+      );
+    });
   }
 
   async read(request: Request): Promise<SessionUser | null> {

@@ -62,7 +62,7 @@ Cookie sessions need CSRF on POST, PUT, PATCH, and DELETE. HTML forms send `_tok
 
 `Authorization: Bearer` and `Authorization: Basic` skip CSRF only after that guard actually authenticates. A garbage Bearer plus a session cookie is not CSRF-exempt.
 
-The API group runs CSRF for session-mutating requests. Guest JSON login (`POST /api/v1/auth/login` without a session) relies on SameSite=Lax plus CORS, not double-submit. After cookie login, JSON logout and other session POSTs need `_token` or `x-csrf-token`. `GET /api/v1/auth/csrf` Set-Cookies the HttpOnly CSRF cookie. JavaScript cannot read that cookie; send the JSON token in the header.
+The API group runs CSRF on mutating guest and session requests. `POST /api/v1/auth/login` needs `GET /api/v1/auth/csrf` first, then `_token` or `x-csrf-token` plus the HttpOnly CSRF cookie. Bearer and Basic skip CSRF only after that guard authenticates. SCIM and SAML ACS skip CSRF by path because those authenticators run after CSRF. After cookie login, JSON logout and other session POSTs still need the token. JavaScript cannot read the CSRF cookie; send the JSON token in `x-csrf-token`.
 
 ## Abilities
 
@@ -81,7 +81,7 @@ These are kernel helpers. Cookie apps generated with `--email-verification` ship
 - Password reset updates the hash, sets `users.session_valid_after`, deletes `sessions` rows, and deletes `api_tokens` for that user. JwtGuard rejects JWTs issued before that watermark. Cookie sessions compare `sessions.created_at` to the watermark, not last-seen.
 - Sensitive HTML actions can require a fresh password-confirm cookie (`wrapWebPasswordConfirm`). MFA enroll requires that cookie.
 
-SAML ACS verifies HMAC RelayState without a SameSite cookie so a cross-site IdP POST can succeed. Replay stores assertion IDs in `auth_saml_assertions`. Signed responses are required (`SAML_WANT_RESPONSE_SIGNED=false` opts out). `SAML_IDP_ISSUER` is required. JIT is skipped when `FEATURE_REGISTRATION=false`. New users and SAML JIT use `currentTenantId()`.
+SAML ACS verifies HMAC RelayState without a SameSite cookie so a cross-site IdP POST can succeed. Replay stores assertion IDs in `auth_saml_assertions` and does not expire live IDs. ACS also checks `profile.issuer` against `SAML_IDP_ISSUER`. Signed responses are required in production (`SAML_WANT_RESPONSE_SIGNED=false` is rejected at boot). `SAML_IDP_ISSUER` is required. JIT is skipped when `FEATURE_REGISTRATION=false`. New users and SAML JIT use `currentTenantId()`. If the account already has MFA enrolled, ACS redirects to `/login/mfa` instead of creating a session.
 
 ## Sessions table
 
@@ -108,10 +108,10 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 | `AUTH_DEV_HEADERS` | Must be `false` in production |
 | `TOKEN_HASH_PEPPER` | Required in production when token auth is on |
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Required in production when token auth is on |
-| `FEATURE_MFA` | Cookie apps get `/login/mfa` and `/account/mfa`. Password login (HTML MFA, token, JWT, Basic) goes through `completePasswordLogin` when the user is enrolled. Does not force enrollment. Requires `KMS_ENCRYPTION_KEY` to store TOTP secrets. SAML and OIDC skip MFA (SSO). |
+| `FEATURE_MFA` | Cookie apps get `/login/mfa` and `/account/mfa`. Password login (HTML MFA, token, JWT, and Basic mint) goes through `completePasswordLogin` when the user is enrolled. Does not force enrollment. JwtGuard does not run TOTP on each request. Requires `KMS_ENCRYPTION_KEY` to store TOTP secrets. Generated SAML ACS redirects enrolled users to `/login/mfa`. There is no generated OIDC cookie login. |
 | `FEATURE_EMAIL_VERIFICATION` | Kernel redirects plus generated verify pages / one-time JSON verify |
 | `FEATURE_REGISTRATION` | `false` 404s HTML and JSON register routes and blocks SAML JIT |
-| `FEATURE_OAUTH` | OIDC uses `createAuthorization()` plus a PKCE handshake. ID tokens are RS256 via JWKS. GitHub OAuth reads `/user/emails` when the profile omits email and rejects a missing verified address. |
-| `FEATURE_SAML` | Real SP via optional peer `@node-saml/node-saml`. Routes `GET /auth/saml` and `POST /auth/saml/acs` 404 when the flag is off. Requires `SAML_IDP_ISSUER`. Signed responses default on. |
+| `FEATURE_OAUTH` | OIDC uses `createAuthorization()` plus a PKCE handshake. ID tokens are RS256 via JWKS. GitHub OAuth always reads `/user/emails` and throws unless a verified address exists (unverified `profile.email` is ignored). |
+| `FEATURE_SAML` | Real SP via optional peer `@node-saml/node-saml`. Routes `GET /auth/saml` and `POST /auth/saml/acs` 404 when the flag is off. Requires `SAML_IDP_ISSUER`. ACS compares assertion issuer. Signed responses default on; production boot rejects `SAML_WANT_RESPONSE_SIGNED=false`. |
 
 Production checks: [PRODUCTION.md](./PRODUCTION.md).

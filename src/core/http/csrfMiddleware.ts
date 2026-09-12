@@ -6,8 +6,6 @@ import { currentRequestMeta } from "./requestMetaContext";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-type CsrfMutatingMode = "all" | "session";
-
 function samlAcsPathname(): string {
   const configured = process.env.SAML_ACS_URL?.trim();
   if (!configured) {
@@ -21,6 +19,10 @@ function samlAcsPathname(): string {
   }
 }
 
+function skipsCsrfPath(pathname: string): boolean {
+  return pathname === samlAcsPathname() || pathname.startsWith("/scim/");
+}
+
 function appendSetCookie(response: Response, cookie: string): Response {
   const headers = new Headers(response.headers);
   headers.append("set-cookie", cookie);
@@ -32,7 +34,7 @@ function appendSetCookie(response: Response, cookie: string): Response {
   });
 }
 
-function createCsrfMiddleware(options: { mutating?: CsrfMutatingMode } = {}): Middleware {
+function createCsrfMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const credentialSource = currentCredentialSource();
     if (credentialSource === "bearer" || credentialSource === "basic") {
@@ -40,7 +42,7 @@ function createCsrfMiddleware(options: { mutating?: CsrfMutatingMode } = {}): Mi
     }
 
     const pathname = new URL(request.url).pathname;
-    if (pathname === samlAcsPathname()) {
+    if (skipsCsrfPath(pathname)) {
       return await next();
     }
 
@@ -57,10 +59,6 @@ function createCsrfMiddleware(options: { mutating?: CsrfMutatingMode } = {}): Mi
       }
 
       return appendSetCookie(response, csrf.cookie);
-    }
-
-    if (options.mutating === "session" && credentialSource !== "session") {
-      return await next();
     }
 
     const submitted = await readSubmittedCsrfTokenFromBody(request);

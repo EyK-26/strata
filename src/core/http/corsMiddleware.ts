@@ -29,6 +29,7 @@ function resolveCorsConfig(): CorsConfig {
       "X-Authenticated-User-Role",
       "If-Match",
       "If-None-Match",
+      "X-CSRF-Token",
     ],
     maxAgeSeconds: 86_400,
   };

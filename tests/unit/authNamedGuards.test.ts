@@ -32,6 +32,8 @@ function jwtDirectory(
     id: number;
     role: string;
     session_valid_after?: Date | string | null;
+    mfa_enabled?: boolean;
+    mfa_secret?: string | null;
   } = (id) => ({ id, role: "admin" }),
 ): AuthUserDirectory {
   return {
@@ -109,6 +111,24 @@ describe("JWT tokens", () => {
           new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } }),
         ),
       ).toBeNull();
+      const enrolled = new JwtGuard({
+        directory: jwtDirectory(() => ({
+          id: 9,
+          role: "admin",
+          mfa_enabled: true,
+          mfa_secret: "secret",
+        })),
+      });
+      expect(
+        await enrolled.resolve(
+          new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } }),
+        ),
+      ).toEqual({
+        id: 9,
+        role: "admin",
+        abilities: ["*"],
+        emailVerifiedAt: null,
+      });
       const revoked = new JwtGuard({
         directory: jwtDirectory(() => ({
           id: 9,

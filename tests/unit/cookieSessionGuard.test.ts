@@ -7,11 +7,19 @@ import {
   type SessionUser,
 } from "@getstrata/bootstrap/web/session";
 import { createSessionCookie, sessionCookieName } from "@getstrata/core/auth/sessionCookie";
+import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
 } from "@getstrata/core/database/boundConnection";
+import {
+  getDefaultDatabasePool,
+  registerDefaultDatabasePool,
+  resetDefaultDatabasePoolForTests,
+} from "@getstrata/core/database/defaultConnection";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { getDatabase } from "../../src/db/connection";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 function createFakeSql(user: SessionUser & { session_valid_after?: Date | string | null }) {
   const sessions = new Map<
@@ -482,5 +490,49 @@ describe("CookieSessionGuard", () => {
     expect(
       await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
     ).toEqual({ id: 24, role: "member" });
+  });
+
+  test("session create opens a bypass transaction when RLS is on", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "rls";
+    const calls: string[] = [];
+    let previousPool: SqlDatabaseConnection | null = null;
+    try {
+      previousPool = getDefaultDatabasePool();
+    } catch {
+      previousPool = null;
+    }
+    const pool = Object.assign(async () => [] as unknown[], {
+      async begin<T>(callback: (tx: typeof pool) => Promise<T>) {
+        calls.push("begin");
+        return await callback(pool);
+      },
+      async close() {},
+      async unsafe<T>(query: string, params?: readonly unknown[]) {
+        calls.push(`${query} ${JSON.stringify(params ?? [])}`);
+        return [] as T[];
+      },
+    }) as SqlDatabaseConnection;
+    registerDefaultDatabasePool(pool);
+    const user: SessionUser = { id: 31, name: "Rls", email: "rls@example.test" };
+    const sql = createFakeSql(user);
+    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
+    try {
+      const sessionId = await store.create(user);
+      expect(sessionId).toBeTruthy();
+      expect(sql.sessions.has(sessionId)).toBe(true);
+      expect(calls).toContain("begin");
+      expect(calls.some((line) => line.includes("set_config('app.bypass_rls'"))).toBe(true);
+    } finally {
+      if (previousPool) {
+        registerDefaultDatabasePool(previousPool);
+      } else {
+        resetDefaultDatabasePoolForTests();
+        if (process.env.DATABASE_URL) {
+          getDatabase();
+        }
+      }
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
   });
 });
