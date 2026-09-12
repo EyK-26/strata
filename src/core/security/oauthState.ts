@@ -50,14 +50,19 @@ function verifySignedOAuthStateValue(value: string): boolean {
   return timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
-function createOAuthStateCookie(): { state: string; cookie: string } {
+function createOAuthState(): { state: string } {
   const nonce = randomBytes(24).toString("hex");
   const issuedAt = Date.now();
-  const value = signOAuthState(nonce, issuedAt);
+
+  return { state: signOAuthState(nonce, issuedAt) };
+}
+
+function createOAuthStateCookie(): { state: string; cookie: string } {
+  const { state } = createOAuthState();
 
   return {
-    state: value,
-    cookie: `${OAUTH_STATE_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${isProductionEnv() ? "; Secure" : ""}`,
+    state,
+    cookie: `${OAUTH_STATE_COOKIE}=${encodeURIComponent(state)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${isProductionEnv() ? "; Secure" : ""}`,
   };
 }
 
@@ -75,6 +80,7 @@ function clearOAuthStateCookie(): string {
 
 export {
   clearOAuthStateCookie,
+  createOAuthState,
   createOAuthStateCookie,
   OAUTH_STATE_COOKIE,
   verifyOAuthState,

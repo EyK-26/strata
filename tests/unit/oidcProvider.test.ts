@@ -1,18 +1,67 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { createSign, generateKeyPairSync } from "node:crypto";
 import { signJwt } from "@getstrata/core/auth/jwt";
-import { createOidcHandshake, OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
+import {
+  createOidcHandshake,
+  OidcProvider,
+  resetOidcDiscoveryCacheForTests,
+} from "@getstrata/core/auth/oauth/oidcProvider";
 import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
 
 const originalFetch = globalThis.fetch;
 
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-  resetDnsLookupForTests();
-});
+const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const rsaJwk = publicKey.export({ format: "jwk" });
+const JWKS = {
+  keys: [{ ...rsaJwk, kid: "test-key", use: "sig", alg: "RS256" }],
+};
 
 function mockPublicDns() {
   setDnsLookupForTests(async () => [{ address: "1.1.1.1", family: 4 }]);
 }
+
+function signRs256IdToken(payload: Record<string, unknown>, kid = "test-key"): string {
+  const now = Math.floor(Date.now() / 1000);
+  const body = { iat: now, exp: now + 3600, ...payload };
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid })).toString(
+    "base64url",
+  );
+  const data = Buffer.from(JSON.stringify(body)).toString("base64url");
+  const signingInput = `${header}.${data}`;
+  const signature = createSign("RSA-SHA256").update(signingInput).sign(privateKey, "base64url");
+  return `${signingInput}.${signature}`;
+}
+
+function requestPath(input: string | URL | Request): string {
+  return new URL(String(input)).pathname;
+}
+
+function mockOidcNetwork(idToken?: string, tokenBody?: Record<string, unknown>) {
+  globalThis.fetch = mock((input: string | URL | Request) => {
+    const path = requestPath(input);
+    if (path.includes("openid-configuration")) {
+      return Promise.resolve(
+        Response.json({
+          issuer: "https://issuer.example.com",
+          token_endpoint: "https://issuer.example.com/token",
+          jwks_uri: "https://issuer.example.com/jwks",
+        }),
+      );
+    }
+    if (path === "/jwks") {
+      return Promise.resolve(Response.json(JWKS));
+    }
+    return Promise.resolve(
+      Response.json(tokenBody ?? { access_token: "access-token", id_token: idToken }),
+    );
+  }) as unknown as typeof fetch;
+}
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  resetDnsLookupForTests();
+  resetOidcDiscoveryCacheForTests();
+});
 
 describe("OidcProvider", () => {
   const options = {
@@ -76,19 +125,29 @@ describe("OidcProvider", () => {
     mockPublicDns();
     let tokenBody = "";
     const handshake = createOidcHandshake();
-    const idToken = signJwt(
-      {
-        sub: "user-web",
-        iss: "https://issuer.example.com",
-        aud: ["client-id", "other"],
-        nonce: handshake.nonce,
-        email: "web@example.com",
-        name: "Web OIDC",
-      },
-      { secret: "client-secret" },
-    );
+    const idToken = signRs256IdToken({
+      sub: "user-web",
+      iss: "https://issuer.example.com",
+      aud: ["client-id", "other"],
+      nonce: handshake.nonce,
+      email: "web@example.com",
+      name: "Web OIDC",
+    });
 
-    globalThis.fetch = mock((_input: string | URL | Request, init?: RequestInit) => {
+    globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
+      const path = requestPath(input);
+      if (path.includes("openid-configuration")) {
+        return Promise.resolve(
+          Response.json({
+            issuer: "https://issuer.example.com",
+            token_endpoint: "https://issuer.example.com/token",
+            jwks_uri: "https://issuer.example.com/jwks",
+          }),
+        );
+      }
+      if (path === "/jwks") {
+        return Promise.resolve(Response.json(JWKS));
+      }
       tokenBody = String(init?.body ?? "");
       return Promise.resolve(Response.json({ access_token: "access-token", id_token: idToken }));
     }) as unknown as typeof fetch;
@@ -107,20 +166,15 @@ describe("OidcProvider", () => {
   test("exchanges a code for a profile from a signed ID token", async () => {
     mockPublicDns();
     const handshake = createOidcHandshake();
-    const idToken = signJwt(
-      {
-        sub: "user-1",
-        iss: "https://issuer.example.com",
-        aud: "client-id",
-        nonce: handshake.nonce,
-        email: "user@example.com",
-        name: "OIDC User",
-      },
-      { secret: "client-secret" },
-    );
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token", id_token: idToken })),
-    ) as unknown as typeof fetch;
+    const idToken = signRs256IdToken({
+      sub: "user-1",
+      iss: "https://issuer.example.com",
+      aud: "client-id",
+      nonce: handshake.nonce,
+      email: "user@example.com",
+      name: "OIDC User",
+    });
+    mockOidcNetwork(idToken);
 
     const provider = new OidcProvider(options);
     const profile = await provider.exchangeCode("auth-code", options.redirectUri, handshake);
@@ -135,19 +189,14 @@ describe("OidcProvider", () => {
   test("falls back to sub when the ID token omits name", async () => {
     mockPublicDns();
     const handshake = createOidcHandshake();
-    const idToken = signJwt(
-      {
-        sub: "user-3",
-        iss: "https://issuer.example.com",
-        aud: "client-id",
-        nonce: handshake.nonce,
-        email: "noname@example.com",
-      },
-      { secret: "client-secret" },
-    );
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token", id_token: idToken })),
-    ) as unknown as typeof fetch;
+    const idToken = signRs256IdToken({
+      sub: "user-3",
+      iss: "https://issuer.example.com",
+      aud: "client-id",
+      nonce: handshake.nonce,
+      email: "noname@example.com",
+    });
+    mockOidcNetwork(idToken);
 
     const provider = new OidcProvider(options);
     await expect(
@@ -162,19 +211,13 @@ describe("OidcProvider", () => {
   test("rejects an ID token without an email address", async () => {
     mockPublicDns();
     const handshake = createOidcHandshake();
-    const idToken = signJwt(
-      {
-        sub: "user-2",
-        iss: "https://issuer.example.com",
-        aud: "client-id",
-        nonce: handshake.nonce,
-      },
-      { secret: "client-secret" },
-    );
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token", id_token: idToken })),
-    ) as unknown as typeof fetch;
-
+    const idToken = signRs256IdToken({
+      sub: "user-2",
+      iss: "https://issuer.example.com",
+      aud: "client-id",
+      nonce: handshake.nonce,
+    });
+    mockOidcNetwork(idToken);
     const provider = new OidcProvider(options);
     await expect(
       provider.exchangeCode("auth-code", options.redirectUri, handshake),
@@ -183,9 +226,7 @@ describe("OidcProvider", () => {
 
   test("rejects an unsigned userinfo-only token response", async () => {
     mockPublicDns();
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token" })),
-    ) as unknown as typeof fetch;
+    mockOidcNetwork(undefined, { access_token: "access-token" });
 
     const provider = new OidcProvider(options);
     await expect(provider.exchangeCode("auth-code")).rejects.toThrow("PKCE handshake");
@@ -194,20 +235,15 @@ describe("OidcProvider", () => {
   test("validates a signed ID token when a handshake is present", async () => {
     mockPublicDns();
     const handshake = createOidcHandshake();
-    const idToken = signJwt(
-      {
-        sub: "user-jwt",
-        iss: "https://issuer.example.com",
-        aud: "client-id",
-        nonce: handshake.nonce,
-        email: "jwt@example.com",
-        name: "JWT User",
-      },
-      { secret: "client-secret" },
-    );
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token", id_token: idToken })),
-    ) as unknown as typeof fetch;
+    const idToken = signRs256IdToken({
+      sub: "user-jwt",
+      iss: "https://issuer.example.com",
+      aud: "client-id",
+      nonce: handshake.nonce,
+      email: "jwt@example.com",
+      name: "JWT User",
+    });
+    mockOidcNetwork(idToken);
 
     const provider = new OidcProvider(options);
     await expect(
@@ -222,9 +258,7 @@ describe("OidcProvider", () => {
   test("rejects a handshake that omits the ID token", async () => {
     mockPublicDns();
     const handshake = createOidcHandshake();
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token" })),
-    ) as unknown as typeof fetch;
+    mockOidcNetwork(undefined, { access_token: "access-token" });
 
     const provider = new OidcProvider(options);
     await expect(
@@ -235,14 +269,32 @@ describe("OidcProvider", () => {
   test("rejects a handshake without a verifiable ID token", async () => {
     mockPublicDns();
     const handshake = createOidcHandshake();
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token", id_token: "not-a-jwt" })),
-    ) as unknown as typeof fetch;
+    mockOidcNetwork("not-a-jwt");
 
     const provider = new OidcProvider(options);
     await expect(
       provider.exchangeCode("auth-code", options.redirectUri, handshake),
     ).rejects.toThrow("OIDC ID token signature is invalid");
+  });
+
+  test("rejects HS256 ID tokens", async () => {
+    mockPublicDns();
+    const handshake = createOidcHandshake();
+    const idToken = signJwt(
+      {
+        sub: "user-jwt",
+        iss: "https://issuer.example.com",
+        aud: "client-id",
+        nonce: handshake.nonce,
+        email: "jwt@example.com",
+      },
+      { secret: "client-secret" },
+    );
+    mockOidcNetwork(idToken);
+    const provider = new OidcProvider(options);
+    await expect(
+      provider.exchangeCode("auth-code", options.redirectUri, handshake),
+    ).rejects.toThrow("OIDC ID token algorithm must be RS256");
   });
 
   test("rejects claim mismatches on a signed ID token", async () => {
@@ -256,6 +308,7 @@ describe("OidcProvider", () => {
           iss: "https://other-issuer.example.com",
           aud: "client-id",
           nonce: handshake.nonce,
+          email: "jwt@example.com",
         },
         error: "issuer mismatch",
       },
@@ -265,6 +318,7 @@ describe("OidcProvider", () => {
           iss: "https://issuer.example.com",
           aud: "other-client",
           nonce: handshake.nonce,
+          email: "jwt@example.com",
         },
         error: "audience mismatch",
       },
@@ -274,16 +328,14 @@ describe("OidcProvider", () => {
           iss: "https://issuer.example.com",
           aud: "client-id",
           nonce: "wrong-nonce",
+          email: "jwt@example.com",
         },
         error: "nonce mismatch",
       },
     ] as const;
 
     for (const item of cases) {
-      const idToken = signJwt(item.claims, { secret: "client-secret" });
-      globalThis.fetch = mock(() =>
-        Promise.resolve(Response.json({ access_token: "access-token", id_token: idToken })),
-      ) as unknown as typeof fetch;
+      mockOidcNetwork(signRs256IdToken(item.claims));
       await expect(
         provider.exchangeCode("auth-code", options.redirectUri, handshake),
       ).rejects.toThrow(item.error);
@@ -293,17 +345,13 @@ describe("OidcProvider", () => {
   test("rejects a nonce-less ID token when a handshake is present", async () => {
     mockPublicDns();
     const handshake = createOidcHandshake();
-    const noNonce = signJwt(
-      {
-        sub: "user-jwt",
-        iss: "https://issuer.example.com",
-        aud: "client-id",
-      },
-      { secret: "client-secret" },
-    );
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token", id_token: noNonce })),
-    ) as unknown as typeof fetch;
+    const noNonce = signRs256IdToken({
+      sub: "user-jwt",
+      iss: "https://issuer.example.com",
+      aud: "client-id",
+      email: "jwt@example.com",
+    });
+    mockOidcNetwork(noNonce);
     const provider = new OidcProvider(options);
     await expect(
       provider.exchangeCode("auth-code", options.redirectUri, handshake),
@@ -312,26 +360,19 @@ describe("OidcProvider", () => {
 
   test("rejects a nonce-less ID token", async () => {
     mockPublicDns();
-    const noNonce = signJwt(
-      {
-        sub: "user-jwt",
-        iss: "https://issuer.example.com",
-        aud: "client-id",
-      },
-      { secret: "client-secret" },
-    );
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ access_token: "access-token", id_token: noNonce })),
-    ) as unknown as typeof fetch;
+    const noNonce = signRs256IdToken({
+      sub: "user-jwt",
+      iss: "https://issuer.example.com",
+      aud: "client-id",
+    });
+    mockOidcNetwork(noNonce);
     const provider = new OidcProvider(options);
     await expect(provider.exchangeCode("auth-code")).rejects.toThrow("PKCE handshake");
   });
 
   test("throws when token exchange does not return an access token", async () => {
     mockPublicDns();
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ error: "invalid_grant" })),
-    ) as unknown as typeof fetch;
+    mockOidcNetwork(undefined, { error: "invalid_grant" });
 
     const provider = new OidcProvider(options);
 

@@ -18,6 +18,7 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
       return null;
     }
     const hashed = hashApiToken(token);
+    return await runWithMigrationBypass(async () => {
     const rows = await getSql().unsafe<
       {
         id: number;
@@ -45,7 +46,7 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
     try {
       abilities = JSON.parse(String(row.abilities ?? "[]")) as string[];
     } catch {
-      abilities = ["profile:read"];
+      abilities = [];
     }
     return {
       id: Number(row.user_id),
@@ -54,6 +55,7 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
       tokenId: Number(row.id),
       emailVerifiedAt: row.email_verified_at ?? null,
     };
+    });
   },`
     : `
   async resolveUserFromToken() {
@@ -79,20 +81,17 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
     mfa_secret: row.mfa_secret ?? null,
     mfa_recovery_codes: row.mfa_recovery_codes ?? null,`
     : "";
-  const sessionSelect = authUsesCookie(layers.auth) ? ", session_valid_after" : "";
-  const sessionColumn = authUsesCookie(layers.auth)
-    ? `
-  session_valid_after?: Date | string | null;`
-    : "";
-  const sessionReturn = authUsesCookie(layers.auth)
-    ? `
-    session_valid_after: row.session_valid_after ?? null,`
-    : "";
+  const sessionSelect = ", session_valid_after";
+  const sessionColumn = `
+  session_valid_after?: Date | string | null;`;
+  const sessionReturn = `
+    session_valid_after: row.session_valid_after ?? null,`;
   const userColumns = `id, name, email, is_admin, email_verified_at, password${mfaSelect}${sessionSelect}`;
 
   return `import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 ${hashImport}import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { getSql } from "./database.ts";
 
 type UserRow = {
@@ -120,24 +119,28 @@ function mapUserRow(row: UserRow) {
 }
 
 async function findUserById(id: number) {
-  const rows = await getSql().unsafe<UserRow>(
-    "SELECT ${userColumns} FROM users WHERE id = ${placeholder}",
-    [id],
-  );
-  const row = rows[0];
-  if (!row) {
-    throw new Error(\`User \${id} not found.\`);
-  }
-  return mapUserRow(row);
+  return await runWithMigrationBypass(async () => {
+    const rows = await getSql().unsafe<UserRow>(
+      "SELECT ${userColumns} FROM users WHERE id = ${placeholder}",
+      [id],
+    );
+    const row = rows[0];
+    if (!row) {
+      throw new Error(\`User \${id} not found.\`);
+    }
+    return mapUserRow(row);
+  });
 }
 
 async function findUserByEmail(email: string) {
-  const rows = await getSql().unsafe<UserRow>(
-    "SELECT ${userColumns} FROM users WHERE email = ${placeholder}",
-    [email.trim().toLowerCase()],
-  );
-  const row = rows[0];
-  return row ? mapUserRow(row) : null;
+  return await runWithMigrationBypass(async () => {
+    const rows = await getSql().unsafe<UserRow>(
+      "SELECT ${userColumns} FROM users WHERE email = ${placeholder}",
+      [email.trim().toLowerCase()],
+    );
+    const row = rows[0];
+    return row ? mapUserRow(row) : null;
+  });
 }
 
 export const starterAuthDirectory: AuthUserDirectory = {
@@ -228,7 +231,7 @@ export default authProvider;
       }),
     });`
     : `    const fallback = ${
-        authUsesToken(layers.auth) ? "new DatabaseTokenGuard(container)" : "new JwtGuard()"
+        authUsesToken(layers.auth) ? "new DatabaseTokenGuard(container)" : "new JwtGuard(container)"
       };
     const auth = new AuthManager(fallback);`;
 
@@ -239,7 +242,9 @@ export default authProvider;
     auth.registerGuard("token", apiGuard);`
     : "";
 
-  const jwtReg = authUsesJwt(layers.auth) ? `    auth.registerGuard("jwt", new JwtGuard());` : "";
+  const jwtReg = authUsesJwt(layers.auth)
+    ? `    auth.registerGuard("jwt", new JwtGuard(container));`
+    : "";
 
   const basicReg =
     authUsesToken(layers.auth) || authUsesJwt(layers.auth)

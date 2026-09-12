@@ -306,6 +306,10 @@ function renderMigrateTs(layers: StarterLayers): string {
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
       );
     }
+    statements.push(`CREATE TABLE IF NOT EXISTS auth_saml_assertions (
+    assertion_id ${d.keyText} PRIMARY KEY,
+    consumed_at ${d.timestamp}
+  )`);
   }
 
   if (authUsesToken(layers.auth)) {
@@ -323,7 +327,8 @@ function renderMigrateTs(layers: StarterLayers): string {
 
   const rlsOn = layers.tenancy === "rls" && layers.database === "postgres";
   if (rlsOn) {
-    statements.push(generatedRlsBootstrapSql(["notes"]).trim());
+    const rlsTables = authNeedsUsers(layers.auth) ? ["notes", "users"] : ["notes"];
+    statements.push(generatedRlsBootstrapSql(rlsTables).trim());
   }
 
   const list = statements.map((sql) => `  \`${sql.replace(/`/g, "\\`")}\`,`).join("\n");

@@ -2,7 +2,7 @@
 
 ## 1.1.0
 
-Breaking security hardening. Claims below match the code. Residual risk is in the same sentence as the control.
+Breaking security hardening. Claims below match the code.
 
 ### Migration
 
@@ -20,26 +20,31 @@ Breaking security hardening. Claims below match the code. Residual risk is in th
 - SAML `saml:email:name` stub is gone.
 - MFA is when enrolled. Password login does not force enrollment.
 - `signedUrl()` without `expires` always fails verification.
+- SAML requires `SAML_IDP_ISSUER`. Signed responses are required unless `SAML_WANT_RESPONSE_SIGNED=false`.
+- OIDC ID tokens must be RS256 with JWKS. HS256 ID tokens are rejected.
+- Generated login tokens and JWTs mint `[]` abilities. SQL `api_tokens.abilities` default stays `[]`.
+- `--tenancy=rls` FORCE RLS is on `notes` and `users`. Auth directory lookups and cookie session loads use `runWithMigrationBypass`.
+- `GET /health` is degraded until a notes row is readable under the request tenant, not a bypassed `SELECT 1`.
 
 ### Controls
 
-- SAML ACS verifies HMAC RelayState without a SameSite cookie, so a cross-site IdP POST can succeed. Replay requires the assertion ID and is process-local only (not shared across workers). `wantAuthnResponseSigned` defaults false (assertion-only) and can be set with `SAML_WANT_RESPONSE_SIGNED=true`. JIT provisioning is skipped when `FEATURE_REGISTRATION=false`. SAML and OIDC do not enforce MFA (SSO).
-- `completePasswordLogin` runs on HTML MFA, API token, JWT, Basic, and cookie JSON password login. Recovery-code consumption is persisted on those paths. `verifyCredentials` returns null when `mfa_enabled` is true. MFA is when enrolled, not on every password login.
-- Password reset and email verify consume one-time tokens with `UPDATE ... consumed_at IS NULL`. Cookie sessions compare aliased `sessions.created_at` (`session_created_at`) to `session_valid_after`, so `users.created_at` from `u.*` cannot keep a new login invalidated. Reset deletes `sessions` and `api_tokens` (missing tables only are swallowed). JWTs stay valid until `exp`. Verify GET does not sign the visitor in.
-- `--tenancy=rls` FORCE RLS is on data tables such as `notes`, not `users`, `sessions`, or `api_tokens`. SCIM isolation is application `WHERE tenant_id`. `currentTenantId()` and generated SCIM `tenantId()` throw if ALS is missing. `/health` notes probe is schema existence; empty or filtered notes still look healthy.
+- SAML ACS verifies HMAC RelayState (no SameSite cookie). Replay inserts `auth_saml_assertions.assertion_id` (unique). Signed assertions and signed responses are required. AuthnContext is requested. JIT uses `currentTenantId()` and is skipped when `FEATURE_REGISTRATION=false`. `GET /auth/saml` does not set an unused OAuth state cookie.
+- `completePasswordLogin` runs on HTML password POST, HTML MFA POST, API token, JWT, Basic, and cookie JSON password login. Recovery-code consumption is persisted on those paths. `verifyCredentials` returns null when `mfa_enabled` is true. Basic `verifyCredentials` fallback still runs TOTP when the directory record is enrolled. MFA is when enrolled, not on every password login. SAML and OIDC do not enforce password MFA (SSO).
+- Password reset and email verify consume one-time tokens with `UPDATE ... consumed_at IS NULL`. Cookie sessions compare aliased `sessions.created_at` (`session_created_at`) to `session_valid_after`. Reset deletes `sessions` and `api_tokens` (missing tables only are swallowed). JwtGuard looks up the user and rejects tokens whose `iat` is before `session_valid_after`. Verify GET does not sign the visitor in.
+- `--tenancy=rls` ENABLE+FORCE RLS is on `notes` and `users`. SCIM isolation is tenant GUC plus `WHERE tenant_id`. `currentTenantId()` and generated SCIM `tenantId()` throw if ALS is missing. `/health` reads `Note.query().value("id")` under the request tenant.
 - SMTP rejects CR/LF. Envelope `MAIL FROM` / `RCPT TO` use the bare address. Display names stay on headers only.
-- SSRF blocks non-canonical IPv4, integer hosts, and mapped IPv6 forms that are not dotted-decimal. DNS resolve defaults on. This is still check-then-fetch, not connect-time IP pin. `allowPrivate: true` skips DNS.
+- SSRF blocks non-canonical IPv4 (including leading-zero / octal / hex forms), integer hosts, and mapped IPv6. DNS resolve defaults on. `safeFetch` then connects to a resolved public IP and sends the original Host plus TLS server name. `allowPrivate: true` skips DNS.
 - API CSRF middleware runs with `{ mutating: "session" }`. Guest JSON login relies on SameSite=Lax plus CORS, not double-submit. Session-mutating API (logout after cookie login) requires CSRF. `GET /api/v1/auth/csrf` Set-Cookies the HttpOnly CSRF cookie. Failed Bearer still does not skip CSRF or fall through to the session.
-- OIDC `getAuthorizationUrl()` throws. Use `createAuthorization()` and pass the handshake to `exchangeCode()`. ID tokens are HS256 with the client secret only, not JWKS/RS256. Missing email throws. GitHub OAuth also throws when GitHub omits email (no `{login}@users.noreply.github.com`).
-- `protectMfaSecret` always encrypts and requires `KMS_ENCRYPTION_KEY`. Local and dogfood with `FEATURE_MFA=true` must set the key. Legacy plaintext secrets still verify.
-- Safer defaults: `FEATURE_PUBLIC_READS`, `FEATURE_SIEM_EXPORT`, and `APP_DEBUG` default off. `DEFAULT_TENANT.plan` is `free`. SQL token-ability default is `[]`; generated token login still inserts `["profile:read"]`. JWT mint still hard-codes `profile:read` and admin `reports:export`.
+- OIDC `getAuthorizationUrl()` throws. Use `createAuthorization()` and pass the handshake to `exchangeCode()`. ID tokens are verified RS256 via discovery JWKS (`iss` / `aud` / `exp` / `nonce`). Missing email throws. GitHub OAuth uses `safeFetch`, reads `/user/emails` when the profile omits email, and throws when no verified address exists (no `{login}@users.noreply.github.com`).
+- `protectMfaSecret` always encrypts and requires `KMS_ENCRYPTION_KEY`. Local and dogfood with `FEATURE_MFA=true` must set the key. Legacy plaintext secrets still verify. `verifyTotp` compares every window slot with `timingSafeCompareString`.
+- Safer defaults: `FEATURE_PUBLIC_READS`, `FEATURE_SIEM_EXPORT`, and `APP_DEBUG` default off. `DEFAULT_TENANT.plan` is `free`. SQL token-ability default is `[]`. Generated token login and JWT mint insert `[]`.
 - Token hashes are HMAC-peppered. Recovery codes are 16 bytes. bcrypt cost is 12.
 - Identity response headers `x-authenticated-user-id`, `x-tenant-id`, and `x-tenant-region` are not set.
 - Postgres unique-violation `detail` is logged, not returned. Client JSON is a generic conflict message with no constraint name.
 - Local disk paths go through `assertPathUnderRoot`.
 - Client `x-trace-id` is ignored unless `APP_DEBUG=true` and the value is 32 hex characters.
-- OpenAPI summary tables still include leftover `/webhooks` and `/billing` strings. Generated apps do not serve those routes unless the app adds them.
-- TOTP comparison is not constant-time (6-digit space).
+- OpenAPI documents registered routes only. Generated `docs/API.md` lists the layer's live paths and does not include leftover `/webhooks` or `/billing` strings.
+- Root Compose Redis requires `dev-redis-change-me`. Production Compose Redis requires `REDIS_PASSWORD` and requires `APP_ENV` to be set.
 
 
 ## 1.0.9

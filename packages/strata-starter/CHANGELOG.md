@@ -6,17 +6,17 @@ Breaking security hardening for generated apps, lockstep with `@getstrata/core` 
 
 CSRF on HTML plus session-mutating API. Guest JSON login relies on SameSite=Lax plus CORS, not double-submit. `GET /api/v1/auth/csrf` Set-Cookies the HttpOnly CSRF cookie.
 
-SAML is HMAC RelayState without a Lax cookie. Replay is process-local and requires an assertion ID. `wantAuthnResponseSigned` defaults false. JIT is skipped when `FEATURE_REGISTRATION=false`. SAML and OIDC skip MFA (SSO).
+SAML is HMAC RelayState without a Lax cookie. Replay uses `auth_saml_assertions`. Signed responses and a required IdP issuer are the default. JIT uses `currentTenantId()` and is skipped when `FEATURE_REGISTRATION=false`. SAML and OIDC skip password MFA (SSO).
 
-MFA is when enrolled, on HTML MFA, API, JWT, and Basic. Recovery hashes are persisted. `verifyCredentials` does not skip MFA.
+MFA is when enrolled, on HTML password POST, HTML MFA, API, JWT, and Basic. Recovery hashes are persisted. `verifyCredentials` does not skip MFA.
 
-Password reset consumes one-time tokens atomically, compares aliased `sessions.created_at` to `session_valid_after` (not `users.created_at`), and deletes `sessions` plus `api_tokens`. JWTs stay valid until `exp`. Verify GET does not sign in.
+Password reset consumes one-time tokens atomically, compares aliased `sessions.created_at` to `session_valid_after` (not `users.created_at`), and deletes `sessions` plus `api_tokens`. JwtGuard rejects tokens issued before `session_valid_after`. Verify GET does not sign in.
 
-`--tenancy=rls` FORCE RLS is on `notes`, not users or tokens. SCIM scopes by `tenant_id` and throws if tenant ALS is missing. `/health` empty notes still look healthy.
+`--tenancy=rls` FORCE RLS is on `notes` and `users`. Auth lookups use `runWithMigrationBypass`. SCIM scopes by `tenant_id` and throws if tenant ALS is missing. `/health` is degraded until a notes row is readable under the request tenant.
 
-OIDC is HS256 with the client secret and a persisted PKCE handshake. It is not JWKS/RS256. GitHub OAuth rejects a missing email.
+OIDC verifies RS256 ID tokens via discovery JWKS and a persisted PKCE handshake. GitHub OAuth uses `safeFetch`, reads `/user/emails` when the profile omits email, and rejects a missing verified address.
 
-MFA secrets require `KMS_ENCRYPTION_KEY` whenever `FEATURE_MFA` is on, including local. Seed password is `StrataDemo!ChangeMe`. HTMX is the unpkg 2.0.4 pin.
+MFA secrets require `KMS_ENCRYPTION_KEY` whenever `FEATURE_MFA` is on, including local. Seed password is `StrataDemo!ChangeMe`. HTMX is the unpkg 2.0.4 pin. Generated login tokens mint `[]` abilities.
 
 ## 1.0.9
 

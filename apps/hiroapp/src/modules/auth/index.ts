@@ -31,10 +31,11 @@ import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";
 import { absoluteTemporarySignedUrl, assertValidSignature } from "@getstrata/core/http/signedUrl";
 import { mailer } from "@getstrata/core/mail/mailer";
-import { createOAuthStateCookie, verifyOAuthState } from "@getstrata/core/security/oauthState";
+import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
 import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core/security/totp";
+import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { emailRule } from "@getstrata/core/validation/rules";
 import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";
 import { getSql } from "../../bootstrap/database.ts";
@@ -127,11 +128,9 @@ const authModule: AppModule = {
             if (process.env.FEATURE_SAML !== "true") {
               return new Response("Not found", { status: 404 });
             }
-            const issued = createOAuthStateCookie();
+            const issued = createOAuthState();
             const url = await createSamlServiceProvider().authorizationUrl(issued.state);
-            const redirect = new Response(null, { status: 302, headers: { location: url } });
-            redirect.headers.append("set-cookie", issued.cookie);
-            return redirect;
+            return new Response(null, { status: 302, headers: { location: url } });
           }),
         ),
       },
@@ -162,7 +161,7 @@ const authModule: AppModule = {
               const hashed = await hashPassword(randomBytes(18).toString("hex"));
               await getSql().unsafe(
                 "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-                [profile.name, profile.email, hashed, false, 1],
+                [profile.name, profile.email, hashed, false, currentTenantId()],
               );
               record = await starterAuthDirectory.findByEmail?.(profile.email);
             }
@@ -216,7 +215,7 @@ const authModule: AppModule = {
                   user.id,
                   "spa",
                   hashApiToken(plain),
-                  JSON.stringify(["profile:read"]),
+                  JSON.stringify([]),
                   expiresAt ? sqlTimestamp(expiresAt) : null,
                 ],
               );
@@ -277,7 +276,7 @@ const authModule: AppModule = {
               const hashed = await hashPassword(password);
               await getSql().unsafe(
                 "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-                [name, email, hashed, false, 1],
+                [name, email, hashed, false, currentTenantId()],
               );
               const created = await starterAuthDirectory.findByEmail?.(email);
               if (created) {
@@ -332,8 +331,7 @@ const authModule: AppModule = {
               const token = signJwt({
                 sub: user.id,
                 role: user.role,
-                abilities:
-                  user.role === "admin" ? ["profile:read", "reports:export"] : ["profile:read"],
+                abilities: [],
                 emailVerifiedAt: user.emailVerifiedAt ?? null,
               });
               return jsonResponse({
@@ -459,11 +457,30 @@ const authModule: AppModule = {
                 request,
               );
             }
-            if (user.mfa_enabled) {
-              const pending = redirectTo("/login/mfa");
-              pending.headers.append("set-cookie", pendingMfaSetCookie(user.id));
-              return pending;
+            const mfaResult = completePasswordLogin(user, { mfaCode: fields.mfa_code });
+            if (!mfaResult.ok) {
+              if (mfaResult.error === "mfa_required") {
+                const pending = redirectTo("/login/mfa");
+                pending.headers.append("set-cookie", pendingMfaSetCookie(user.id));
+                return pending;
+              }
+              return renderPage(
+                "auth/login.eta",
+                {
+                  layout: { title: "Sign in" },
+                  errors: { email: "These credentials do not match our records." },
+                  email,
+                  password: "",
+                },
+                request,
+              );
             }
+            await persistConsumedRecoveryHash(
+              getSql(),
+              user.id,
+              user.mfa_recovery_codes,
+              mfaResult.consumedRecoveryHash,
+            );
             return auth.signInRedirect(sessionUser(user), "/");
           },
           async (request) =>
@@ -529,7 +546,7 @@ const authModule: AppModule = {
             const hashed = await hashPassword(password);
             await getSql().unsafe(
               "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-              [name, email, hashed, false, 1],
+              [name, email, hashed, false, currentTenantId()],
             );
             const created = await starterAuthDirectory.findByEmail?.(email);
             const insertedId = created?.id ?? 0;

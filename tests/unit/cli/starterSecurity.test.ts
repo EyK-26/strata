@@ -255,6 +255,29 @@ describe("starter security flows", () => {
       });
       expect(withMfa.status).toBe(200);
       expect(((await withMfa.json()) as { token: string }).token.startsWith("strp_")).toBe(true);
+
+      const htmlLoginPage = await fetch(`${origin}/login`);
+      const htmlLoginHtml = await htmlLoginPage.text();
+      const htmlCsrf = /name="_token" value="([^"]+)"/.exec(htmlLoginHtml)?.[1] ?? "";
+      const htmlCookies = cookieHeader(htmlLoginPage);
+      const htmlWithoutMfa = await fetch(`${origin}/login`, {
+        method: "POST",
+        headers: {
+          cookie: htmlCookies,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          _token: htmlCsrf,
+          email: "demo@example.com",
+          password: "StrataDemo!ChangeMe",
+        }),
+        redirect: "manual",
+      });
+      expect(htmlWithoutMfa.status).toBe(302);
+      expect(htmlWithoutMfa.headers.get("location") ?? "").toContain("/login/mfa");
+      expect(
+        htmlWithoutMfa.headers.getSetCookie().some((item) => item.includes("strata_mfa_pending")),
+      ).toBe(true);
     } finally {
       server.stop();
       await closeDatabase();

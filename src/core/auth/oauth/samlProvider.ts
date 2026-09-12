@@ -11,7 +11,7 @@ class SamlProvider implements OAuthProvider {
   constructor(options: SamlServiceProviderOptions | string) {
     if (typeof options === "string") {
       throw new Error(
-        "SamlProvider now requires IdP metadata (idpSsoUrl, idpCert, spEntityId, acsUrl). The string constructor login stub has been removed.",
+        "SamlProvider now requires IdP metadata (idpSsoUrl, idpCert, spEntityId, acsUrl, idpIssuer). The string constructor login stub has been removed.",
       );
     }
 

@@ -92,7 +92,7 @@ jobs:
           APP_KEY_PREFIX: hiroapp
           APP_NAME: HiroApp
           API_PREFIX: /api
-          REDIS_URL: redis://localhost:6379
+          REDIS_URL: redis://:dev-redis-change-me@localhost:6379
           DATABASE_URL: postgresql://postgres:postgres@localhost:54329/bun_testing_test
           APP_DATABASE_URL: postgresql://postgres:postgres@localhost:54329/hiroapp_test
           METRICS_TOKEN: strata-metrics-test-token

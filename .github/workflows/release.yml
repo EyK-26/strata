@@ -176,7 +176,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bun_testing
           APP_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hiroapp_test
-          REDIS_URL: redis://localhost:6379
+          REDIS_URL: redis://:dev-redis-change-me@localhost:6379
           SKIP_FIXTURE_TEST_BOOTSTRAP: 1
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync

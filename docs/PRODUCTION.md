@@ -40,7 +40,7 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 | `FEATURE_BILLING=true` | `STRIPE_WEBHOOK_SECRET` | Stripe SDK stays in the app, not core |
 | `FEATURE_SIEM_EXPORT=true` | `SIEM_EXPORT_URL` (optional `SIEM_EXPORT_TOKEN`) | Warns if missing; export job no-ops |
 | `FEATURE_OAUTH=true` | Provider credentials (`GITHUB_*`, `OIDC_*`) | See `.env.example` |
-| `FEATURE_SAML=true` | `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, `SAML_ACS_URL` | Optional `SAML_IDP_ISSUER`. Install `@node-saml/node-saml`. |
+| `FEATURE_SAML=true` | `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, `SAML_ACS_URL`, `SAML_IDP_ISSUER` | Signed responses default on (`SAML_WANT_RESPONSE_SIGNED=false` opts out). Install `@node-saml/node-saml`. |
 
 ## Recommended (not all enforced at boot)
 
@@ -48,7 +48,7 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 - `JWT_SECRET` if you mint JWTs (otherwise JWT falls back to `SESSION_SECRET`)
 - `TRUST_FORWARDED_FOR=true` when a trusted reverse proxy sets `X-Forwarded-For`. Without it the socket peer is the client, which behind a proxy is the proxy itself, so every request shares one throttle bucket. With it, the rightmost public hop is used, so a client cannot pick its own key by prepending addresses.
 - `TENANCY_DRIVER` must be exactly `none`, `column`, or `rls`; unknown values refuse to boot instead of silently enabling rls
-- Generated apps ship a production `Dockerfile` (`APP_ENV=production`, `AUTH_DEV_HEADERS=false`, non-root user, `HEALTHCHECK`). `GET /health` answers 503 until the schema is migrated, so run `bun run db:migrate` as a deploy step
+- Generated apps ship a production `Dockerfile` (`APP_ENV=production`, `AUTH_DEV_HEADERS=false`, non-root user, `HEALTHCHECK`). `GET /health` answers 503 until a notes row is readable, so run `bun run db:migrate` as a deploy step
 - `METRICS_TOKEN` to authorize `GET /metrics` (production hides the endpoint unless this is set)
 - Multipart uploads are rejected unless the declared content type is on the allowlist. A missing content type and `application/octet-stream` are rejected too, because the client picks that value. Set `UPLOAD_ALLOW_UNKNOWN_MIME=true` only if you accept uploads from clients that cannot label them, and pair it with your own content inspection
 - `TENANCY_DRIVER=none` for apps without a `tenant` table. HiroApp keeps `rls`

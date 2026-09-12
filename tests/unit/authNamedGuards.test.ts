@@ -27,6 +27,23 @@ function directoryContainer(directory: AuthUserDirectory | null) {
   };
 }
 
+function jwtDirectory(
+  lookup: (id: number) => {
+    id: number;
+    role: string;
+    session_valid_after?: Date | string | null;
+  } = (id) => ({ id, role: "admin" }),
+): AuthUserDirectory {
+  return {
+    async resolveUserFromToken() {
+      return null;
+    },
+    async findByIdOrThrow(id) {
+      return lookup(id);
+    },
+  };
+}
+
 describe("JWT tokens", () => {
   test("signs and verifies a payload", () => {
     const previous = process.env.JWT_SECRET;
@@ -42,7 +59,7 @@ describe("JWT tokens", () => {
     }
   });
 
-  test("JwtGuard authenticates a bearer JWT and ignores opaque tokens", () => {
+  test("JwtGuard authenticates a bearer JWT and ignores opaque tokens", async () => {
     const previous = process.env.JWT_SECRET;
     process.env.JWT_SECRET = "unit-test-jwt-secret-unit-test-jwt";
     try {
@@ -52,16 +69,19 @@ describe("JWT tokens", () => {
         abilities: ["*"],
         emailVerifiedAt: null,
       });
-      const guard = new JwtGuard();
-      const custom = new JwtGuard({ secret: "a-different-jwt-secret-value" });
-      expect(guard.resolve(new Request("http://example.test"))).toBeNull();
+      const guard = new JwtGuard({ directory: jwtDirectory() });
+      const custom = new JwtGuard({
+        secret: "a-different-jwt-secret-value",
+        directory: jwtDirectory(),
+      });
+      expect(await guard.resolve(new Request("http://example.test"))).toBeNull();
       expect(
-        guard.resolve(
+        await guard.resolve(
           new Request("http://example.test", { headers: { authorization: "Bearer abc" } }),
         ),
       ).toBeNull();
       expect(
-        guard.resolve(
+        await guard.resolve(
           new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } }),
         ),
       ).toEqual({
@@ -71,12 +91,12 @@ describe("JWT tokens", () => {
         emailVerifiedAt: null,
       });
       expect(
-        custom.resolve(
+        await custom.resolve(
           new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } }),
         ),
       ).toBeNull();
       expect(
-        guard.resolve(
+        await guard.resolve(
           new Request("http://example.test", {
             headers: {
               authorization: `Bearer ${signJwt({ sub: 5 }, { secret: process.env.JWT_SECRET })}`,
@@ -84,6 +104,23 @@ describe("JWT tokens", () => {
           }),
         ),
       ).toEqual({ id: 5 });
+      expect(
+        await new JwtGuard().resolve(
+          new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } }),
+        ),
+      ).toBeNull();
+      const revoked = new JwtGuard({
+        directory: jwtDirectory(() => ({
+          id: 9,
+          role: "admin",
+          session_valid_after: new Date(Date.now() + 60_000),
+        })),
+      });
+      expect(
+        await revoked.resolve(
+          new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } }),
+        ),
+      ).toBeNull();
     } finally {
       restoreEnvVar("JWT_SECRET", previous);
     }
@@ -105,7 +142,7 @@ describe("named auth guards", () => {
       };
       const auth = new AuthManager(new DatabaseTokenGuard(directoryContainer(directory)));
       auth.registerGuard("api", new DatabaseTokenGuard(directoryContainer(directory)));
-      auth.registerGuard("jwt", new JwtGuard());
+      auth.registerGuard("jwt", new JwtGuard({ directory }));
 
       expect(
         await auth.resolve(
@@ -123,7 +160,7 @@ describe("named auth guards", () => {
       expect(auth.guardNames()).toContain("api");
       expect(auth.use("jwt")).toBeInstanceOf(JwtGuard);
       expect(() => auth.use("missing")).toThrow('Unknown auth guard "missing"');
-      expect(() => auth.registerGuard("  ", new JwtGuard())).toThrow(
+      expect(() => auth.registerGuard("  ", new JwtGuard({ directory }))).toThrow(
         "Auth guard name must not be empty.",
       );
 
@@ -294,6 +331,19 @@ describe("HTTP Basic guard", () => {
         new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
       ),
     ).toEqual({ id: 4, role: "recruiter" });
+
+    const mfaDirectory: AuthUserDirectory = {
+      ...directory,
+      async findByIdOrThrow(id) {
+        return { id, role: "recruiter", mfa_enabled: true, mfa_secret: "secret" };
+      },
+    };
+    const mfaGuard = new BasicAuthGuard(directoryContainer(mfaDirectory));
+    expect(
+      await mfaGuard.resolve(
+        new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
+      ),
+    ).toBeNull();
   });
 
   test("returns null without a user directory", async () => {

@@ -1,6 +1,7 @@
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { getSql } from "./database.ts";
 
 type UserRow = {
@@ -30,24 +31,28 @@ function mapUserRow(row: UserRow) {
 }
 
 async function findUserById(id: number) {
-  const rows = await getSql().unsafe<UserRow>(
-    "SELECT id, name, email, is_admin, email_verified_at, password, session_valid_after FROM users WHERE id = $1",
-    [id],
-  );
-  const row = rows[0];
-  if (!row) {
-    throw new Error(`User ${id} not found.`);
-  }
-  return mapUserRow(row);
+  return await runWithMigrationBypass(async () => {
+    const rows = await getSql().unsafe<UserRow>(
+      "SELECT id, name, email, is_admin, email_verified_at, password, session_valid_after FROM users WHERE id = $1",
+      [id],
+    );
+    const row = rows[0];
+    if (!row) {
+      throw new Error(`User ${id} not found.`);
+    }
+    return mapUserRow(row);
+  });
 }
 
 async function findUserByEmail(email: string) {
-  const rows = await getSql().unsafe<UserRow>(
-    "SELECT id, name, email, is_admin, email_verified_at, password, session_valid_after FROM users WHERE email = $1",
-    [email.trim().toLowerCase()],
-  );
-  const row = rows[0];
-  return row ? mapUserRow(row) : null;
+  return await runWithMigrationBypass(async () => {
+    const rows = await getSql().unsafe<UserRow>(
+      "SELECT id, name, email, is_admin, email_verified_at, password, session_valid_after FROM users WHERE email = $1",
+      [email.trim().toLowerCase()],
+    );
+    const row = rows[0];
+    return row ? mapUserRow(row) : null;
+  });
 }
 
 export const starterAuthDirectory: AuthUserDirectory = {

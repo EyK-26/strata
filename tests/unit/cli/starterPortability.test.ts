@@ -534,7 +534,7 @@ describe("generated deploy files", () => {
     expect(readme).toContain("Set `APP_URL` to the public origin");
     expect(readme).toContain("TRUST_FORWARDED_FOR=true");
     expect(readme).toContain("Cross-origin browser calls are off in production");
-    expect(readme).toContain("`GET /health` answers 503 until the schema exists");
+    expect(readme).toContain("`GET /health` answers 503 until a notes row is readable");
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("# TRUST_FORWARDED_FOR=true");
   });

@@ -1,33 +1,47 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { BadRequestError } from "@getstrata/core/errors/http";
 import { DEFAULT_FETCH_TIMEOUT_MS, safeFetch } from "@getstrata/core/security/safeFetch";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
 
 const originalFetch = globalThis.fetch;
 
+function mockPublicDns(address = "1.1.1.1") {
+  setDnsLookupForTests(async () => [{ address, family: 4 }]);
+}
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  resetDnsLookupForTests();
 });
 
 describe("safeFetch", () => {
   test("returns a successful response", async () => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(new Response("ok", { status: 200 })),
-    ) as unknown as typeof fetch;
+    mockPublicDns();
+    let fetched = "";
+    let host = "";
+    globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
+      fetched = String(input);
+      host = new Headers(init?.headers).get("host") ?? "";
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    }) as unknown as typeof fetch;
 
     const response = await safeFetch("https://example.com/hook");
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("ok");
+    expect(fetched).toBe("https://1.1.1.1/hook");
+    expect(host).toBe("example.com");
   });
 
   test("follows redirects up to maxRedirects", async () => {
+    mockPublicDns();
     let callCount = 0;
 
     globalThis.fetch = mock((input: string | URL | Request) => {
       callCount += 1;
-      const url = String(input);
+      const url = new URL(String(input));
 
-      if (url === "https://example.com/start") {
+      if (url.pathname === "/start") {
         return Promise.resolve(
           new Response(null, {
             status: 302,
@@ -46,6 +60,7 @@ describe("safeFetch", () => {
   });
 
   test("returns redirect response when location header is missing", async () => {
+    mockPublicDns();
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 302 })),
     ) as unknown as typeof fetch;
@@ -56,6 +71,7 @@ describe("safeFetch", () => {
   });
 
   test("returns redirect response when maxRedirects is exceeded", async () => {
+    mockPublicDns();
     globalThis.fetch = mock(() =>
       Promise.resolve(
         new Response(null, {
@@ -70,13 +86,14 @@ describe("safeFetch", () => {
     expect(response.status).toBe(302);
   });
 
-  test("resolves relative redirect locations against the current url", async () => {
+  test("resolves relative redirect locations against the original host", async () => {
+    mockPublicDns();
     let secondUrl = "";
 
     globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = String(input);
+      const url = new URL(String(input));
 
-      if (url.endsWith("/start")) {
+      if (url.pathname.endsWith("/start")) {
         return Promise.resolve(
           new Response(null, {
             status: 301,
@@ -85,16 +102,17 @@ describe("safeFetch", () => {
         );
       }
 
-      secondUrl = url;
+      secondUrl = String(input);
       return Promise.resolve(new Response("ok", { status: 200 }));
     }) as unknown as typeof fetch;
 
     await safeFetch("https://example.com/start", {}, { maxRedirects: 1 });
 
-    expect(secondUrl).toBe("https://example.com/next");
+    expect(secondUrl).toBe("https://1.1.1.1/next");
   });
 
   test("aborts when the timeout elapses", async () => {
+    mockPublicDns();
     globalThis.fetch = mock(
       (_input, init) =>
         new Promise<Response>((_resolve, reject) => {
@@ -120,10 +138,11 @@ describe("safeFetch", () => {
   });
 
   test("rejects redirects to blocked hosts", async () => {
+    mockPublicDns();
     globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = String(input);
+      const url = new URL(String(input));
 
-      if (url === "https://example.com/start") {
+      if (url.pathname === "/start") {
         return Promise.resolve(
           new Response(null, {
             status: 302,
@@ -141,10 +160,11 @@ describe("safeFetch", () => {
   });
 
   test("rejects relative redirects to blocked hosts", async () => {
+    mockPublicDns();
     globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = String(input);
+      const url = new URL(String(input));
 
-      if (url.endsWith("/start")) {
+      if (url.pathname.endsWith("/start")) {
         return Promise.resolve(
           new Response(null, {
             status: 302,

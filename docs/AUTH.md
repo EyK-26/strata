@@ -13,7 +13,7 @@ From most locked down for browsers, to weaker or narrower tools:
 | 1 | Cookie session stored in `sessions` + CSRF | HTML apps, same-site browsers | Yes. Delete the row. | Generated HiroApp HTML login. Cookie name is `strata_session`. `SameSite=Lax`, `HttpOnly`. |
 | 2 | Opaque access token (hashed in `api_tokens`) | SPA, mobile, machine clients | Yes. Delete or expire the row. | Send `Authorization: Bearer`. Skip CSRF. Scope with abilities. `POST /api/v1/auth/login`. |
 | 3 | HMAC signed session cookie (no `sessions` row) | JSON APIs that want a signed cookie without a table | Partial. `session_valid_after` or a custom directory check. | Not HiroApp HTML login. |
-| 4 | JWT HS256 | Service-to-service, short-lived scripts | Hard. Wait for `exp`, or keep a denylist (you build that). | HiroApp `POST /api/auth/token`. |
+| 4 | JWT HS256 | Service-to-service, short-lived scripts | Password reset sets `session_valid_after`; JwtGuard rejects older `iat`. Also wait for `exp`. | HiroApp `POST /api/auth/token`. |
 | 5 | HTTP Basic over TLS | Private scripts, health cron, first-party tools | Change the password. | HiroApp `GET /api/user` accepts Basic when that guard is registered. Never on the public internet without TLS. |
 | 6 | `x-authenticated-user-id` headers | Automated tests | N/A | Only when `AUTH_DEV_HEADERS=true` exactly. Unset, `false`, `0`, and `FALSE` leave headers off. Production must set `false`. |
 
@@ -27,11 +27,11 @@ The leftover fixture schema still uses the table name `api_token`. Generated app
 
 ```typescript
 auth.registerGuard("api", new DatabaseTokenGuard(container));
-auth.registerGuard("jwt", new JwtGuard());
+auth.registerGuard("jwt", new JwtGuard(container));
 auth.registerGuard("basic", new BasicAuthGuard(container));
 ```
 
-Generated HiroApp does this in `apps/hiroapp/src/bootstrap/providers/auth.ts`. It does not call `configureAbilityCatalog`. Default token abilities for HMAC sessions and test headers stay `profile:read` plus `auth:tokens:*` unless you replace the catalog:
+Generated HiroApp does this in `apps/hiroapp/src/bootstrap/providers/auth.ts`. `JwtGuard` needs a directory (or container) so it can reject tokens whose `iat` is before `session_valid_after`. A `JwtGuard` without a directory returns null. It does not call `configureAbilityCatalog`. Default token abilities for HMAC sessions and test headers stay `profile:read` plus `auth:tokens:*` unless you replace the catalog:
 
 ```typescript
 import { configureAbilityCatalog } from "@getstrata/core/auth/abilityCatalog";
@@ -68,7 +68,7 @@ The API group runs CSRF for session-mutating requests. Guest JSON login (`POST /
 
 Opaque tokens store an ability list. `*` means all.
 
-Generated HiroApp JWT mint uses `profile:read` plus `reports:export` for admin, and `profile:read` for member. JWT claims are not revoked until expiry. Opaque login tokens are stored with `["profile:read"]`.
+Generated HiroApp JWT mint stores `[]` abilities. JwtGuard looks up the user and rejects tokens whose `iat` is before `session_valid_after`. Opaque login tokens are stored with `[]`.
 
 Use policies (`Policy` / `PolicyGate`) for resource authorization. That is not the same as a token ability.
 
@@ -78,10 +78,10 @@ These are kernel helpers. Cookie apps generated with `--email-verification` ship
 
 - `FEATURE_EMAIL_VERIFICATION=true` makes `wrapWebAuthenticated` send HTML users with `emailVerifiedAt: null` to `/email/verify`.
 - `GET /email/verify` consumes the one-time token and redirects to `/login`. It does not create a session.
-- Password reset updates the hash, sets `users.session_valid_after`, deletes `sessions` rows, and deletes `api_tokens` for that user. JWTs stay valid until `exp`. Cookie sessions compare `sessions.created_at` to the watermark, not last-seen.
+- Password reset updates the hash, sets `users.session_valid_after`, deletes `sessions` rows, and deletes `api_tokens` for that user. JwtGuard rejects JWTs issued before that watermark. Cookie sessions compare `sessions.created_at` to the watermark, not last-seen.
 - Sensitive HTML actions can require a fresh password-confirm cookie (`wrapWebPasswordConfirm`). MFA enroll requires that cookie.
 
-SAML ACS verifies HMAC RelayState without a SameSite cookie so a cross-site IdP POST can succeed. Replay is process-local and requires an assertion ID. `wantAuthnResponseSigned` defaults false (assertion-only). JIT is skipped when `FEATURE_REGISTRATION=false`. New users and SAML JIT still use `tenant_id = 1` when registration is on.
+SAML ACS verifies HMAC RelayState without a SameSite cookie so a cross-site IdP POST can succeed. Replay stores assertion IDs in `auth_saml_assertions`. Signed responses are required (`SAML_WANT_RESPONSE_SIGNED=false` opts out). `SAML_IDP_ISSUER` is required. JIT is skipped when `FEATURE_REGISTRATION=false`. New users and SAML JIT use `currentTenantId()`.
 
 ## Sessions table
 
@@ -111,7 +111,7 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 | `FEATURE_MFA` | Cookie apps get `/login/mfa` and `/account/mfa`. Password login (HTML MFA, token, JWT, Basic) goes through `completePasswordLogin` when the user is enrolled. Does not force enrollment. Requires `KMS_ENCRYPTION_KEY` to store TOTP secrets. SAML and OIDC skip MFA (SSO). |
 | `FEATURE_EMAIL_VERIFICATION` | Kernel redirects plus generated verify pages / one-time JSON verify |
 | `FEATURE_REGISTRATION` | `false` 404s HTML and JSON register routes and blocks SAML JIT |
-| `FEATURE_OAUTH` | OIDC uses `createAuthorization()` plus a PKCE handshake. ID tokens are HS256 with the client secret, not JWKS/RS256. GitHub OAuth rejects a missing email. |
-| `FEATURE_SAML` | Real SP via optional peer `@node-saml/node-saml`. Routes `GET /auth/saml` and `POST /auth/saml/acs` 404 when the flag is off. Optional `SAML_IDP_ISSUER` and `SAML_WANT_RESPONSE_SIGNED`. |
+| `FEATURE_OAUTH` | OIDC uses `createAuthorization()` plus a PKCE handshake. ID tokens are RS256 via JWKS. GitHub OAuth reads `/user/emails` when the profile omits email and rejects a missing verified address. |
+| `FEATURE_SAML` | Real SP via optional peer `@node-saml/node-saml`. Routes `GET /auth/saml` and `POST /auth/saml/acs` 404 when the flag is off. Requires `SAML_IDP_ISSUER`. Signed responses default on. |
 
 Production checks: [PRODUCTION.md](./PRODUCTION.md).

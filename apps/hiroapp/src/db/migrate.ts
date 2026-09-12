@@ -49,6 +49,10 @@ const migrations = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
   `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+  `CREATE TABLE IF NOT EXISTS auth_saml_assertions (
+    assertion_id TEXT PRIMARY KEY,
+    consumed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
   `CREATE TABLE IF NOT EXISTS api_tokens (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -84,6 +88,20 @@ ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notes FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON notes;
 CREATE POLICY tenant_isolation ON notes
+USING (
+  app_bypass_rls()
+  OR tenant_id = app_current_tenant_id()
+)
+WITH CHECK (
+  app_bypass_rls()
+  OR tenant_id = app_current_tenant_id()
+);
+
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON users;
+CREATE POLICY tenant_isolation ON users
 USING (
   app_bypass_rls()
   OR tenant_id = app_current_tenant_id()

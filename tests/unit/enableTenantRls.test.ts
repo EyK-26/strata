@@ -26,5 +26,13 @@ describe("enableTenantRls", () => {
     expect(sql).toContain("app_current_tenant_id");
     expect(sql).toContain("ALTER TABLE notes ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain("ALTER TABLE projects ENABLE ROW LEVEL SECURITY");
+    expect(sql).toContain("ALTER TABLE notes FORCE ROW LEVEL SECURITY");
+    expect(sql).toContain("ALTER TABLE projects FORCE ROW LEVEL SECURITY");
+  });
+
+  test("generated bootstrap FORCE RLS includes users when listed", () => {
+    const sql = generatedRlsBootstrapSql(["notes", "users"]);
+    expect(sql).toContain("ALTER TABLE users ENABLE ROW LEVEL SECURITY");
+    expect(sql).toContain("ALTER TABLE users FORCE ROW LEVEL SECURITY");
   });
 });

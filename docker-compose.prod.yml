@@ -1,6 +1,6 @@
-# Production-shaped local stack. Do not set APP_ENV=production unless the host
-# also injects every secret secretsGuard requires (SESSION_SECRET, TOKEN_HASH_PEPPER,
-# METRICS_TOKEN, and so on). Default APP_ENV=local keeps the file bootable.
+# Production-shaped local stack. Set APP_ENV explicitly: local for a bootable
+# stack, production only when the host also injects every secret secretsGuard
+# requires (SESSION_SECRET, TOKEN_HASH_PEPPER, METRICS_TOKEN, and so on).
 
 services:
   postgres:
@@ -29,7 +29,7 @@ services:
   app:
     build: .
     environment:
-      APP_ENV: ${APP_ENV:-local}
+      APP_ENV: ${APP_ENV:?Set APP_ENV to local or production}
       APP_DEBUG: "false"
       AUTH_DEV_HEADERS: "false"
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
@@ -51,7 +51,7 @@ services:
   worker:
     build: .
     environment:
-      APP_ENV: ${APP_ENV:-local}
+      APP_ENV: ${APP_ENV:?Set APP_ENV to local or production}
       AUTH_DEV_HEADERS: "false"
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379

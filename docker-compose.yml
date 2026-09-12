@@ -20,10 +20,11 @@ services:
   redis:
     image: redis:7.4-alpine
     container_name: bun-testing-redis
+    command: ["redis-server", "--requirepass", "dev-redis-change-me"]
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "dev-redis-change-me", "ping"]
       interval: 2s
       timeout: 5s
       retries: 20
@@ -54,7 +55,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
       APP_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hiroapp_test
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:dev-redis-change-me@redis:6379
       CACHE_DRIVER: redis
       QUEUE_DRIVER: redis
       PORT: 3000
@@ -83,7 +84,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
       APP_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hiroapp_test
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:dev-redis-change-me@redis:6379
       CACHE_DRIVER: redis
       QUEUE_DRIVER: redis
     depends_on:

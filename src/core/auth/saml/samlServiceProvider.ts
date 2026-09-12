@@ -1,14 +1,21 @@
 import { missingOptionalPeer } from "../../runtime/optionalPeer";
 import type { OAuthProfile } from "../oauth/types";
+import {
+  consumeSamlAssertion,
+  InMemorySamlAssertionReplayStore,
+  resetSamlReplayCacheForTests,
+  setSamlAssertionReplayStoreForTests,
+} from "./samlAssertionReplay";
 
 interface SamlServiceProviderOptions {
   idpSsoUrl: string;
   idpCert: string;
   spEntityId: string;
   acsUrl: string;
-  idpIssuer?: string;
+  idpIssuer: string;
   wantAssertionsSigned?: boolean;
   wantAuthnResponseSigned?: boolean;
+  disableRequestedAuthnContext?: boolean;
 }
 
 interface NodeSamlProfile {
@@ -43,19 +50,25 @@ type NodeSamlClient = {
   }>;
 };
 
-/** Process-local assertion replay cache. Not shared across workers or instances. */
-const replayCache = new Map<string, number>();
-const REPLAY_TTL_MS = 10 * 60 * 1000;
+function requireSamlOption(value: string | undefined, name: string): string {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) {
+    throw new Error(`${name} is required.`);
+  }
+
+  return trimmed;
+}
 
 function readSamlEnvOptions(): SamlServiceProviderOptions {
   const idpSsoUrl = process.env.SAML_IDP_SSO_URL?.trim() ?? "";
   const idpCert = process.env.SAML_IDP_CERT?.trim() ?? "";
   const spEntityId = process.env.SAML_SP_ENTITY_ID?.trim() ?? "";
   const acsUrl = process.env.SAML_ACS_URL?.trim() ?? "";
+  const idpIssuer = process.env.SAML_IDP_ISSUER?.trim() ?? "";
 
-  if (!idpSsoUrl || !idpCert || !spEntityId || !acsUrl) {
+  if (!idpSsoUrl || !idpCert || !spEntityId || !acsUrl || !idpIssuer) {
     throw new Error(
-      "SAML requires SAML_IDP_SSO_URL, SAML_IDP_CERT, SAML_SP_ENTITY_ID, and SAML_ACS_URL.",
+      "SAML requires SAML_IDP_SSO_URL, SAML_IDP_CERT, SAML_SP_ENTITY_ID, SAML_ACS_URL, and SAML_IDP_ISSUER.",
     );
   }
 
@@ -64,30 +77,10 @@ function readSamlEnvOptions(): SamlServiceProviderOptions {
     idpCert,
     spEntityId,
     acsUrl,
-    ...(process.env.SAML_IDP_ISSUER?.trim()
-      ? { idpIssuer: process.env.SAML_IDP_ISSUER.trim() }
-      : {}),
-    ...(process.env.SAML_WANT_RESPONSE_SIGNED === "true" ? { wantAuthnResponseSigned: true } : {}),
+    idpIssuer,
+    wantAuthnResponseSigned: process.env.SAML_WANT_RESPONSE_SIGNED !== "false",
+    disableRequestedAuthnContext: process.env.SAML_DISABLE_REQUESTED_AUTHN_CONTEXT === "true",
   };
-}
-
-function rememberAssertion(id: string): void {
-  const now = Date.now();
-  for (const [key, seenAt] of replayCache) {
-    if (now - seenAt > REPLAY_TTL_MS) {
-      replayCache.delete(key);
-    }
-  }
-
-  if (replayCache.has(id)) {
-    throw new Error("SAML assertion replay detected.");
-  }
-
-  replayCache.set(id, now);
-}
-
-function resetSamlReplayCacheForTests(): void {
-  replayCache.clear();
 }
 
 type NodeSamlModule = { SAML: new (options: Record<string, unknown>) => NodeSamlClient };
@@ -113,7 +106,13 @@ function setNodeSamlLoaderForTests(loader: (() => Promise<NodeSamlModule>) | nul
 class SamlServiceProvider {
   private client: NodeSamlClient | null = null;
 
-  constructor(private readonly options: SamlServiceProviderOptions) {}
+  constructor(private readonly options: SamlServiceProviderOptions) {
+    requireSamlOption(options.idpSsoUrl, "idpSsoUrl");
+    requireSamlOption(options.idpCert, "idpCert");
+    requireSamlOption(options.spEntityId, "spEntityId");
+    requireSamlOption(options.acsUrl, "acsUrl");
+    requireSamlOption(options.idpIssuer, "idpIssuer");
+  }
 
   private async getClient(): Promise<NodeSamlClient> {
     if (this.client) {
@@ -127,11 +126,11 @@ class SamlServiceProvider {
       issuer: this.options.spEntityId,
       idpCert: this.options.idpCert,
       audience: this.options.spEntityId,
+      idpIssuer: this.options.idpIssuer,
       acceptedClockSkewMs: 5000,
       wantAssertionsSigned: this.options.wantAssertionsSigned ?? true,
-      wantAuthnResponseSigned: this.options.wantAuthnResponseSigned ?? false,
-      disableRequestedAuthnContext: true,
-      ...(this.options.idpIssuer ? { idpIssuer: this.options.idpIssuer } : {}),
+      wantAuthnResponseSigned: this.options.wantAuthnResponseSigned ?? true,
+      disableRequestedAuthnContext: this.options.disableRequestedAuthnContext ?? false,
     });
     return this.client;
   }
@@ -160,7 +159,7 @@ class SamlServiceProvider {
     if (!assertionId) {
       throw new Error("SAML assertion did not include an ID.");
     }
-    rememberAssertion(assertionId);
+    await consumeSamlAssertion(assertionId);
 
     const email =
       profile.email ||
@@ -189,9 +188,12 @@ function createSamlServiceProvider(
 
 export type { SamlServiceProviderOptions };
 export {
+  consumeSamlAssertion,
   createSamlServiceProvider,
+  InMemorySamlAssertionReplayStore,
   readSamlEnvOptions,
   resetSamlReplayCacheForTests,
   SamlServiceProvider,
   setNodeSamlLoaderForTests,
+  setSamlAssertionReplayStoreForTests,
 };

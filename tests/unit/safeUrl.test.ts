@@ -3,6 +3,7 @@ import {
   assertSafeOutboundUrl,
   assertSafeOutboundUrlResolved,
   isBlockedHostname,
+  pinUrlToAddress,
   resetDnsLookupForTests,
   setDnsLookupForTests,
 } from "@getstrata/core/security/safeUrl";
@@ -150,10 +151,21 @@ describe("isBlockedHostname", () => {
     expect(isBlockedHostname("::ffff:1.2.3")).toBe(true);
     expect(isBlockedHostname("::ffff:10.0.0.abc")).toBe(true);
     expect(isBlockedHostname("::ffff:256.1.1.1")).toBe(true);
-    expect(isBlockedHostname("::ffff:010.010.010.010")).toBe(false);
+    expect(isBlockedHostname("::ffff:010.010.010.010")).toBe(true);
     expect(isBlockedHostname("::ffff:999.1.1.1")).toBe(true);
     expect(isBlockedHostname("1:2:3:4:5:6:7::8:9")).toBe(true);
     expect(isBlockedHostname("1::gggg")).toBe(true);
     expect(isBlockedHostname("1:2:3:4:5:6:7:8g")).toBe(true);
+  });
+});
+
+describe("pinUrlToAddress", () => {
+  test("rewrites the hostname to the resolved address and keeps the original path", () => {
+    expect(pinUrlToAddress(new URL("https://example.com/hook"), "1.1.1.1").toString()).toBe(
+      "https://1.1.1.1/hook",
+    );
+    expect(pinUrlToAddress(new URL("https://example.com/hook"), "2001:4860:4860::8888").href).toBe(
+      "https://[2001:4860:4860::8888]/hook",
+    );
   });
 });

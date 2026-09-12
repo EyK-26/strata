@@ -92,14 +92,15 @@ function verifyTotp(secret: string, token: string, window = 1): boolean {
   }
 
   const timestep = Math.floor(Date.now() / 30_000);
+  let matched = false;
 
   for (let offset = -window; offset <= window; offset += 1) {
     if (timingSafeCompareString(generateTotp(secret, timestep + offset), normalized)) {
-      return true;
+      matched = true;
     }
   }
 
-  return false;
+  return matched;
 }
 
 export { buildOtpauthUrl, generateTotp, generateTotpSecret, verifyTotp };

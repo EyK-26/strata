@@ -91,7 +91,9 @@ function renderAuthModule(layers: StarterLayers): string | null {
     ? "name, email, password, is_admin, tenant_id"
     : "name, email, password, is_admin";
   const insertPh = tenantInsert ? ph(layers, 5) : ph(layers, 4);
-  const insertTail = tenantInsert ? `, ${sqlFalse(layers)}, 1` : `, ${sqlFalse(layers)}`;
+  const insertTail = tenantInsert
+    ? `, ${sqlFalse(layers)}, currentTenantId()`
+    : `, ${sqlFalse(layers)}`;
   const passwordPh = `${ph(layers, 1)}`;
   const idPh = `${ph(layers, 1, 2)}`;
   const verifiedPh = `${ph(layers, 1)}`;
@@ -151,7 +153,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
       imports.push(`import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";`);
     }
     imports.push(
-      `import { createOAuthStateCookie, verifyOAuthState } from "@getstrata/core/security/oauthState";`,
+      `import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";`,
     );
   }
   if (jsonApi || cookie) {
@@ -171,6 +173,9 @@ function renderAuthModule(layers: StarterLayers): string | null {
     imports.push(
       `import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core/security/totp";`,
     );
+  }
+  if (tenantInsert) {
+    imports.push(`import { currentTenantId } from "@getstrata/core/tenant/tenantContext";`);
   }
   imports.push(`import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";`);
   imports.push(`import { getSql } from "../../bootstrap/database.ts";`);
@@ -264,7 +269,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
                 user.id,
                 "spa",
                 hashApiToken(plain),
-                JSON.stringify(["profile:read"]),
+                JSON.stringify([]),
                 expiresAt ? sqlTimestamp(expiresAt) : null,
               ],
             );
@@ -350,7 +355,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
             const token = signJwt({
               sub: user.id,
               role: user.role,
-              abilities: user.role === "admin" ? ["profile:read", "reports:export"] : ["profile:read"],${
+              abilities: [],${
                 verify ? "\n              emailVerifiedAt: user.emailVerifiedAt ?? null," : ""
               }
             });
@@ -500,11 +505,9 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
             if (process.env.FEATURE_SAML !== "true") {
               return new Response("Not found", { status: 404 });
             }
-            const issued = createOAuthStateCookie();
+            const issued = createOAuthState();
             const url = await createSamlServiceProvider().authorizationUrl(issued.state);
-            const redirect = new Response(null, { status: 302, headers: { location: url } });
-            redirect.headers.append("set-cookie", issued.cookie);
-            return redirect;
+            return new Response(null, { status: 302, headers: { location: url } });
           })),
         },
         "/auth/saml/acs": {
@@ -554,13 +557,24 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
     },`
       : "";
 
-  const mfaLoginBranch = mfa
-    ? `if (user.mfa_enabled) {
-                const pending = redirectTo("/login/mfa");
-                pending.headers.append("set-cookie", pendingMfaSetCookie(user.id));
-                return pending;
-              }`
-    : "";
+  const mfaLoginBranch = `const mfaResult = completePasswordLogin(user, { mfaCode: fields.mfa_code });
+              if (!mfaResult.ok) {
+                ${
+                  mfa
+                    ? `if (mfaResult.error === "mfa_required") {
+                  const pending = redirectTo("/login/mfa");
+                  pending.headers.append("set-cookie", pendingMfaSetCookie(user.id));
+                  return pending;
+                }`
+                    : ""
+                }
+                return renderPage(
+                  "auth/login.eta",
+                  { layout: { title: "Sign in" }, errors: { email: "These credentials do not match our records." }, email, password: "" },
+                  request,
+                );
+              }
+              await persistConsumedRecoveryHash(getSql(), user.id, user.mfa_recovery_codes, mfaResult.consumedRecoveryHash);`;
 
   const registerSuccessExisting = `return flashResponse(
                 redirectTo("/login"),
@@ -907,17 +921,13 @@ export default authModule;
 function renderSiteModule(_layers: StarterLayers): string {
   return `import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { withErrorHandling } from "@getstrata/core/http/response";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
-import { getSql, pingDatabase } from "../../bootstrap/database.ts";
+import { pingDatabase } from "../../bootstrap/database.ts";
+import { Note } from "../../models/Note.ts";
 import { plainText, renderPage } from "../../lib/view.ts";
 
-// Schema existence only. Empty or tenant-filtered notes still look healthy.
 async function schemaReady(): Promise<boolean> {
   try {
-    await runWithMigrationBypass(async () => {
-      await getSql().unsafe("SELECT 1 FROM notes LIMIT 1");
-    });
-    return true;
+    return (await Note.query().value("id")) !== null;
   } catch {
     return false;
   }

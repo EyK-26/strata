@@ -20,6 +20,8 @@ describe("totp", () => {
     const timestep = Math.floor(Date.now() / 30_000);
     const code = generateTotp(secret, timestep);
     expect(verifyTotp(secret, code)).toBe(true);
+    expect(verifyTotp(secret, generateTotp(secret, timestep - 1))).toBe(true);
+    expect(verifyTotp(secret, generateTotp(secret, timestep + 1))).toBe(true);
   });
 
   test("rejects invalid codes", () => {

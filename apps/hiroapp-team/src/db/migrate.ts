@@ -37,6 +37,10 @@ const migrations = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
   `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+  `CREATE TABLE IF NOT EXISTS auth_saml_assertions (
+    assertion_id TEXT PRIMARY KEY,
+    consumed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
 ];
 
 export async function seed() {

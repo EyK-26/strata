@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const originalFetch = globalThis.fetch;
 
+function mockPublicDns() {
+  setDnsLookupForTests(async () => [{ address: "1.1.1.1", family: 4 }]);
+}
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  resetDnsLookupForTests();
 });
 
 describe("GitHubOAuthProvider", () => {
@@ -34,6 +40,7 @@ describe("GitHubOAuthProvider", () => {
   });
 
   test("exchanges a code using an override redirect uri", async () => {
+    mockPublicDns();
     let tokenBody = "";
 
     globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
@@ -61,6 +68,7 @@ describe("GitHubOAuthProvider", () => {
   });
 
   test("exchanges a code for a profile", async () => {
+    mockPublicDns();
     const previousUserAgent = process.env.APP_USER_AGENT;
     const previousPrefix = process.env.APP_KEY_PREFIX;
     delete process.env.APP_USER_AGENT;
@@ -102,12 +110,55 @@ describe("GitHubOAuthProvider", () => {
     }
   });
 
-  test("falls back when GitHub profile fields are missing", async () => {
+  test("falls back to a verified GitHub email list when the profile omits email", async () => {
+    mockPublicDns();
     globalThis.fetch = mock((input: string | URL | Request) => {
       const url = String(input);
 
       if (url.includes("/login/oauth/access_token")) {
         return Promise.resolve(Response.json({ access_token: "gh-token" }));
+      }
+
+      if (url.includes("/user/emails")) {
+        return Promise.resolve(
+          Response.json([
+            { email: "other@github.com", primary: false, verified: true },
+            { email: "primary@github.com", primary: true, verified: true },
+          ]),
+        );
+      }
+
+      return Promise.resolve(
+        Response.json({
+          id: 99,
+          login: "ghost",
+          email: null,
+          name: null,
+        }),
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = new GitHubOAuthProvider(options);
+    await expect(provider.exchangeCode("gh-code")).resolves.toEqual({
+      providerUserId: "99",
+      email: "primary@github.com",
+      name: "ghost",
+    });
+  });
+
+  test("throws when GitHub has no verified email instead of inventing a noreply address", async () => {
+    mockPublicDns();
+    globalThis.fetch = mock((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (url.includes("/login/oauth/access_token")) {
+        return Promise.resolve(Response.json({ access_token: "gh-token" }));
+      }
+
+      if (url.includes("/user/emails")) {
+        return Promise.resolve(
+          Response.json([{ email: "unverified@github.com", primary: true, verified: false }]),
+        );
       }
 
       return Promise.resolve(
@@ -127,6 +178,7 @@ describe("GitHubOAuthProvider", () => {
   });
 
   test("uses login as the display name when GitHub omits name", async () => {
+    mockPublicDns();
     globalThis.fetch = mock((input: string | URL | Request) => {
       const url = String(input);
       if (url.includes("/login/oauth/access_token")) {
@@ -151,6 +203,7 @@ describe("GitHubOAuthProvider", () => {
   });
 
   test("throws when token exchange fails", async () => {
+    mockPublicDns();
     globalThis.fetch = mock(() =>
       Promise.resolve(Response.json({ error: "bad_verification_code" })),
     ) as unknown as typeof fetch;

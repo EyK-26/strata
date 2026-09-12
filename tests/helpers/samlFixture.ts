@@ -60,6 +60,30 @@ async function createSelfSignedCert(privateKey: string, publicKey: string): Prom
   );
 }
 
+function signSamlElement(xml: string, localName: string, privateKey: string, cert: string): string {
+  const sig = new SignedXml({
+    privateKey,
+    publicCert: cert,
+  });
+  sig.canonicalizationAlgorithm = "http://www.w3.org/2001/10/xml-exc-c14n#";
+  sig.signatureAlgorithm = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+  sig.addReference({
+    xpath: `//*[local-name(.)='${localName}']`,
+    digestAlgorithm: "http://www.w3.org/2001/04/xmlenc#sha256",
+    transforms: [
+      "http://www.w3.org/2000/09/xmldsig#enveloped-signature",
+      "http://www.w3.org/2001/10/xml-exc-c14n#",
+    ],
+  });
+  sig.computeSignature(xml, {
+    location: {
+      reference: `//*[local-name(.)='${localName}']/*[local-name(.)='Issuer']`,
+      action: "after",
+    },
+  });
+  return sig.getSignedXml();
+}
+
 async function createSignedSamlResponse(options: SamlFixtureOptions = {}): Promise<{
   cert: string;
   privateKey: string;
@@ -119,27 +143,8 @@ async function createSignedSamlResponse(options: SamlFixtureOptions = {}): Promi
 
   let xml = unsigned;
   if (options.signed !== false) {
-    const sig = new SignedXml({
-      privateKey,
-      publicCert: cert,
-    });
-    sig.canonicalizationAlgorithm = "http://www.w3.org/2001/10/xml-exc-c14n#";
-    sig.signatureAlgorithm = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
-    sig.addReference({
-      xpath: "//*[local-name(.)='Assertion']",
-      digestAlgorithm: "http://www.w3.org/2001/04/xmlenc#sha256",
-      transforms: [
-        "http://www.w3.org/2000/09/xmldsig#enveloped-signature",
-        "http://www.w3.org/2001/10/xml-exc-c14n#",
-      ],
-    });
-    sig.computeSignature(unsigned, {
-      location: {
-        reference: "//*[local-name(.)='Assertion']/*[local-name(.)='Issuer']",
-        action: "after",
-      },
-    });
-    xml = sig.getSignedXml();
+    xml = signSamlElement(unsigned, "Assertion", privateKey, cert);
+    xml = signSamlElement(xml, "Response", privateKey, cert);
   }
 
   return {

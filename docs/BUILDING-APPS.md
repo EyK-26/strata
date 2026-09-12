@@ -61,7 +61,7 @@ import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 
 auth.registerGuard("api", new DatabaseTokenGuard(container));
-auth.registerGuard("jwt", new JwtGuard());
+auth.registerGuard("jwt", new JwtGuard(container));
 auth.registerGuard("basic", new BasicAuthGuard(container));
 ```
 

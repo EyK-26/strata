@@ -72,11 +72,14 @@ export {
 export { completePasswordLogin } from "../core/auth/passwordLogin.ts";
 export { Policy, PolicyGate } from "../core/auth/policy.ts";
 export {
+  consumeSamlAssertion,
   createSamlServiceProvider,
+  InMemorySamlAssertionReplayStore,
   readSamlEnvOptions,
   resetSamlReplayCacheForTests,
   SamlServiceProvider,
   setNodeSamlLoaderForTests,
+  setSamlAssertionReplayStoreForTests,
 } from "../core/auth/saml/samlServiceProvider.ts";
 export { createScimAuthMiddleware } from "../core/auth/scimAuthMiddleware.ts";
 export { createTokenAbilityChecker } from "../core/auth/tokenAbilityChecker.ts";
@@ -549,7 +552,9 @@ export {
   assertSafeOutboundUrlResolved,
   isBlockedHostname,
   isBlockedIpAddress,
+  pinUrlToAddress,
   resetDnsLookupForTests,
+  resolveSafeOutboundTarget,
   setDnsLookupForTests,
 } from "../core/security/safeUrl.ts";
 export type { SecurityEventDetails } from "../core/security/securityEvents.ts";

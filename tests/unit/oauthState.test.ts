@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
   clearOAuthStateCookie,
+  createOAuthState,
   createOAuthStateCookie,
   verifyOAuthState,
 } from "@getstrata/core/security/oauthState";
 
 describe("oauth state", () => {
   test("verifies HMAC RelayState without a cookie", () => {
-    const { state } = createOAuthStateCookie();
+    const { state } = createOAuthState();
     const request = new Request("http://example.test/auth/saml/acs");
 
     expect(verifyOAuthState(request, state)).toBe(true);
@@ -40,7 +41,9 @@ describe("oauth state", () => {
 
   test("marks oauth state cookies Secure in production", () => {
     const originalAppEnv = process.env.APP_ENV;
+    const originalSecret = process.env.SESSION_SECRET;
     process.env.APP_ENV = "production";
+    process.env.SESSION_SECRET = "oauth-state-unit-test-secret-32ch";
     try {
       expect(createOAuthStateCookie().cookie).toContain("Secure");
       expect(clearOAuthStateCookie()).toContain("Secure");
@@ -49,6 +52,11 @@ describe("oauth state", () => {
         delete process.env.APP_ENV;
       } else {
         process.env.APP_ENV = originalAppEnv;
+      }
+      if (originalSecret === undefined) {
+        delete process.env.SESSION_SECRET;
+      } else {
+        process.env.SESSION_SECRET = originalSecret;
       }
     }
   });

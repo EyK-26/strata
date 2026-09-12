@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { SamlProvider } from "@getstrata/core/auth/oauth/samlProvider";
 import {
   createSamlServiceProvider,
+  InMemorySamlAssertionReplayStore,
   readSamlEnvOptions,
   resetSamlReplayCacheForTests,
   SamlServiceProvider,
   setNodeSamlLoaderForTests,
+  setSamlAssertionReplayStoreForTests,
 } from "@getstrata/core/auth/saml/samlServiceProvider";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createSignedSamlResponse } from "../helpers/samlFixture";
@@ -13,9 +15,15 @@ import { createSignedSamlResponse } from "../helpers/samlFixture";
 const SP_ENTITY = "https://sp.example.test/metadata";
 const ACS = "https://app.example.test/auth/saml/acs";
 const SSO = "https://idp.example.test/sso";
+const IDP_ISSUER = "https://idp.example.test/metadata";
+
+beforeEach(() => {
+  setSamlAssertionReplayStoreForTests(new InMemorySamlAssertionReplayStore());
+});
 
 afterEach(() => {
   resetSamlReplayCacheForTests();
+  setSamlAssertionReplayStoreForTests(null);
   setNodeSamlLoaderForTests(null);
 });
 
@@ -30,6 +38,7 @@ describe("SamlProvider", () => {
     const fixture = await createSignedSamlResponse();
     const provider = new SamlProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -53,11 +62,13 @@ describe("SamlServiceProvider", () => {
       cert: process.env.SAML_IDP_CERT,
       entity: process.env.SAML_SP_ENTITY_ID,
       acs: process.env.SAML_ACS_URL,
+      issuer: process.env.SAML_IDP_ISSUER,
     };
     delete process.env.SAML_IDP_SSO_URL;
     delete process.env.SAML_IDP_CERT;
     delete process.env.SAML_SP_ENTITY_ID;
     delete process.env.SAML_ACS_URL;
+    delete process.env.SAML_IDP_ISSUER;
     try {
       expect(() => readSamlEnvOptions()).toThrow("SAML requires");
     } finally {
@@ -65,6 +76,7 @@ describe("SamlServiceProvider", () => {
       restoreEnvVar("SAML_IDP_CERT", previous.cert);
       restoreEnvVar("SAML_SP_ENTITY_ID", previous.entity);
       restoreEnvVar("SAML_ACS_URL", previous.acs);
+      restoreEnvVar("SAML_IDP_ISSUER", previous.issuer);
     }
   });
 
@@ -107,11 +119,14 @@ describe("SamlServiceProvider", () => {
     process.env.SAML_SP_ENTITY_ID = SP_ENTITY;
     process.env.SAML_ACS_URL = ACS;
     process.env.SAML_IDP_ISSUER = "https://idp.example.test";
-    process.env.SAML_WANT_RESPONSE_SIGNED = "true";
+    delete process.env.SAML_WANT_RESPONSE_SIGNED;
     try {
       const opts = readSamlEnvOptions();
       expect(opts.idpIssuer).toBe("https://idp.example.test");
       expect(opts.wantAuthnResponseSigned).toBe(true);
+      expect(opts.disableRequestedAuthnContext).toBe(false);
+      process.env.SAML_WANT_RESPONSE_SIGNED = "false";
+      expect(readSamlEnvOptions().wantAuthnResponseSigned).toBe(false);
     } finally {
       restoreEnvVar("SAML_IDP_SSO_URL", previous.sso);
       restoreEnvVar("SAML_IDP_CERT", previous.cert);
@@ -126,6 +141,7 @@ describe("SamlServiceProvider", () => {
     const fixture = await createSignedSamlResponse();
     const provider = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -139,6 +155,7 @@ describe("SamlServiceProvider", () => {
     const fixture = await createSignedSamlResponse();
     const provider = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -150,6 +167,7 @@ describe("SamlServiceProvider", () => {
     const fixture = await createSignedSamlResponse({ signed: false });
     const provider = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -161,6 +179,7 @@ describe("SamlServiceProvider", () => {
     const fixture = await createSignedSamlResponse({ audience: "https://other.example/metadata" });
     const provider = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -175,10 +194,10 @@ describe("SamlServiceProvider", () => {
     });
     const provider = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
-      idpIssuer: "https://idp.example.test/metadata",
     });
     const profile = await provider.consumePost(fixture.responseB64, "relay");
     expect(profile.email).toBe(fixture.email);
@@ -199,6 +218,7 @@ describe("SamlServiceProvider", () => {
     }));
     const provider = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: "cert",
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -217,6 +237,7 @@ describe("SamlServiceProvider", () => {
     }));
     const loggedOut = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: "cert",
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -249,6 +270,7 @@ describe("SamlServiceProvider", () => {
     try {
       const provider = new SamlServiceProvider({
         idpSsoUrl: SSO,
+        idpIssuer: IDP_ISSUER,
         idpCert: "cert",
         spEntityId: SP_ENTITY,
         acsUrl: ACS,
@@ -281,6 +303,7 @@ describe("SamlServiceProvider", () => {
     }));
     const fallback = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: "cert",
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -305,6 +328,7 @@ describe("SamlServiceProvider", () => {
     }));
     const fromXml = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: "cert",
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -330,6 +354,7 @@ describe("SamlServiceProvider", () => {
     }));
     const provider = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: "cert",
       spEntityId: SP_ENTITY,
       acsUrl: ACS,
@@ -337,6 +362,48 @@ describe("SamlServiceProvider", () => {
     });
     await provider.authorizationUrl("relay");
     expect(captured?.wantAuthnResponseSigned).toBe(true);
+    expect(captured?.disableRequestedAuthnContext).toBe(false);
+    expect(captured?.idpIssuer).toBe(IDP_ISSUER);
+  });
+
+  test("defaults wantAuthnResponseSigned to true and requests AuthnContext", async () => {
+    let captured: Record<string, unknown> | undefined;
+    setNodeSamlLoaderForTests(async () => ({
+      SAML: class {
+        constructor(options: Record<string, unknown>) {
+          captured = options;
+        }
+        async getAuthorizeUrlAsync() {
+          return SSO;
+        }
+        async validatePostResponseAsync() {
+          return { profile: null, loggedOut: false };
+        }
+      },
+    }));
+    const provider = new SamlServiceProvider({
+      idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
+      idpCert: "cert",
+      spEntityId: SP_ENTITY,
+      acsUrl: ACS,
+    });
+    await provider.authorizationUrl("relay");
+    expect(captured?.wantAuthnResponseSigned).toBe(true);
+    expect(captured?.disableRequestedAuthnContext).toBe(false);
+  });
+
+  test("rejects a missing IdP issuer", () => {
+    expect(
+      () =>
+        new SamlServiceProvider({
+          idpSsoUrl: SSO,
+          idpIssuer: "  ",
+          idpCert: "cert",
+          spEntityId: SP_ENTITY,
+          acsUrl: ACS,
+        }),
+    ).toThrow("idpIssuer is required");
   });
 
   test("missing optional peer becomes a missingOptionalPeer error", async () => {
@@ -345,6 +412,7 @@ describe("SamlServiceProvider", () => {
     });
     const provider = new SamlServiceProvider({
       idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
       idpCert: "cert",
       spEntityId: SP_ENTITY,
       acsUrl: ACS,

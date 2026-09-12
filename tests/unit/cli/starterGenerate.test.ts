@@ -277,12 +277,15 @@ describe("create-strata generate", () => {
     expect(migrate).not.toContain("INSERT INTO notes");
 
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
-    expect(site).toContain("SELECT 1 FROM notes LIMIT 1");
-    expect(site).not.toContain('Note.query().value("id")');
+    expect(site).toContain('Note.query().value("id")');
+    expect(site).not.toContain("SELECT 1 FROM notes LIMIT 1");
 
     const api = await readFile(join(app, "docs/API.md"), "utf8");
     expect(api).toContain('.pluck("body", "id")');
+    expect(api).toContain("until a notes row is readable under the request tenant");
     expect(api).not.toContain("SELECT id, body FROM notes");
+    expect(api).not.toContain("/webhooks");
+    expect(api).not.toContain("/billing");
   });
 
   test("in-repo sibling README is not dogfood copy", async () => {
@@ -475,6 +478,18 @@ describe("create-strata generate", () => {
     ]);
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
     expect(migrate).toContain("CREATE TABLE IF NOT EXISTS tenant");
+    expect(migrate).toContain("ALTER TABLE notes FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("ALTER TABLE users FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("auth_saml_assertions");
+    const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    expect(authModule).toContain("completePasswordLogin");
+    expect(authModule).toContain("createOAuthState()");
+    expect(authModule).not.toContain("createOAuthStateCookie");
+    expect(authModule).toContain("JSON.stringify([])");
+    expect(authModule).toContain("abilities: []");
+    expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
+      "new JwtGuard(container)",
+    );
     expect(existsSync(join(app, "src/bootstrap/ensureDatabase.ts"))).toBe(true);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
     // The database name must come from DATABASE_URL, never a hardcoded rename.

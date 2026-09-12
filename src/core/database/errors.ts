@@ -135,4 +135,20 @@ async function withDatabaseErrorHandling<TValue>(
   }
 }
 
-export { isPostgresError, mapDatabaseError, withDatabaseErrorHandling };
+function isUniqueConstraintError(error: unknown): boolean {
+  if (!isPostgresError(error)) {
+    return false;
+  }
+
+  if (error.code === "SQLITE_CONSTRAINT_UNIQUE" || error.code === "SQLITE_CONSTRAINT_PRIMARYKEY") {
+    return true;
+  }
+
+  if (error.errno === 1062) {
+    return true;
+  }
+
+  return getPostgresSqlState(error) === "23505";
+}
+
+export { isPostgresError, isUniqueConstraintError, mapDatabaseError, withDatabaseErrorHandling };

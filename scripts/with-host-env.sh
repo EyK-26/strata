@@ -5,7 +5,7 @@ set -eu
 export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:54329/bun_testing_test}"
 # HiroApp uses its own database so it never replaces the fixture tables in DATABASE_URL.
 export APP_DATABASE_URL="${APP_DATABASE_URL:-postgresql://postgres:postgres@localhost:54329/hiroapp_test}"
-export REDIS_URL="${REDIS_URL:-redis://localhost:6379}"
+export REDIS_URL="${REDIS_URL:-redis://:dev-redis-change-me@localhost:6379}"
 export MYSQL_URL="${MYSQL_URL:-mysql://strata:strata@localhost:33061/strata}"
 export PORT="${PORT:-3000}"
 export CACHE_DRIVER="${CACHE_DRIVER:-redis}"

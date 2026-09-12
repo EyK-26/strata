@@ -1,7 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import { isProductionEnv } from "../../runtime/appEnv";
 import { safeFetch } from "../../security/safeFetch";
-import { type JwtPayload, verifyJwt } from "../jwt";
+import {
+  loadOidcDiscovery,
+  resetOidcDiscoveryCacheForTests,
+  verifyOidcIdToken,
+} from "./oidcIdToken";
 import type { OAuthProfile, OAuthProvider } from "./types";
 
 interface OidcProviderOptions {
@@ -40,29 +44,6 @@ function codeChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
-function assertIdTokenClaims(
-  payload: JwtPayload,
-  options: { issuer: string; clientId: string; nonce?: string },
-): void {
-  if (payload.iss !== options.issuer.replace(/\/$/, "")) {
-    throw new Error("OIDC ID token issuer mismatch.");
-  }
-
-  const audience = payload.aud;
-  const audiences = Array.isArray(audience) ? audience : [audience];
-  if (!audiences.includes(options.clientId)) {
-    throw new Error("OIDC ID token audience mismatch.");
-  }
-
-  if (typeof payload.nonce !== "string" || payload.nonce.length === 0) {
-    throw new Error("OIDC ID token nonce mismatch.");
-  }
-
-  if (options.nonce && payload.nonce !== options.nonce) {
-    throw new Error("OIDC ID token nonce mismatch.");
-  }
-}
-
 class OidcProvider implements OAuthProvider {
   readonly name: string;
 
@@ -72,7 +53,7 @@ class OidcProvider implements OAuthProvider {
 
   getAuthorizationUrl(_state: string, _redirectUri = this.options.redirectUri): string {
     throw new Error(
-      "OidcProvider.getAuthorizationUrl cannot complete PKCE. Use createAuthorization() and pass the handshake to exchangeCode(). ID tokens are verified as HS256 with the client secret only.",
+      "OidcProvider.getAuthorizationUrl cannot complete PKCE. Use createAuthorization() and pass the handshake to exchangeCode().",
     );
   }
 
@@ -117,6 +98,7 @@ class OidcProvider implements OAuthProvider {
       );
     }
 
+    const discovery = await loadOidcDiscovery(this.options.issuer);
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code,
@@ -127,7 +109,7 @@ class OidcProvider implements OAuthProvider {
     });
 
     const tokenResponse = await safeFetch(
-      `${this.options.issuer.replace(/\/$/, "")}/token`,
+      discovery.token_endpoint ?? `${this.options.issuer.replace(/\/$/, "")}/token`,
       {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -146,15 +128,11 @@ class OidcProvider implements OAuthProvider {
       throw new Error("OIDC token exchange did not return an ID token.");
     }
 
-    const payload = verifyJwt(tokenBody.id_token, this.options.clientSecret);
-    if (!payload) {
-      throw new Error("OIDC ID token signature is invalid.");
-    }
-
-    assertIdTokenClaims(payload, {
+    const payload = await verifyOidcIdToken(tokenBody.id_token, {
       issuer: this.options.issuer,
       clientId: this.options.clientId,
       nonce: handshake.nonce,
+      jwksUri: discovery.jwks_uri ?? "",
     });
 
     if (typeof payload.email !== "string" || !payload.email.trim()) {
@@ -170,4 +148,4 @@ class OidcProvider implements OAuthProvider {
 }
 
 export type { OidcHandshake, OidcProviderOptions };
-export { createOidcHandshake, OidcProvider };
+export { createOidcHandshake, OidcProvider, resetOidcDiscoveryCacheForTests };

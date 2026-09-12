@@ -43,53 +43,7 @@ function parseCanonicalDottedDecimal(hostname: string): number[] | null {
 }
 
 function parseDottedIpv4(hostname: string): number[] | null {
-  const parts = hostname.split(".");
-
-  if (parts.length !== 4) {
-    return null;
-  }
-
-  const octets: number[] = [];
-
-  for (const part of parts) {
-    if (part.length === 0) {
-      return null;
-    }
-
-    if (/^0[0-7]+$/u.test(part)) {
-      const value = Number.parseInt(part, 8);
-      if (!Number.isInteger(value) || value < 0 || value > 255) {
-        return null;
-      }
-      octets.push(value);
-      continue;
-    }
-
-    if (/^0x[0-9a-f]+$/iu.test(part)) {
-      const value = Number.parseInt(part, 16);
-      if (!Number.isInteger(value) || value < 0 || value > 255) {
-        return null;
-      }
-      octets.push(value);
-      continue;
-    }
-
-    if (!/^\d+$/u.test(part)) {
-      return null;
-    }
-
-    if (part.length > 1 && part.startsWith("0")) {
-      return null;
-    }
-
-    const value = Number.parseInt(part, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 255) {
-      return null;
-    }
-    octets.push(value);
-  }
-
-  return octets;
+  return parseCanonicalDottedDecimal(hostname);
 }
 
 function isBlockedIpv4Octets(octets: number[]): boolean {
@@ -310,17 +264,36 @@ function isBlockedIpAddress(address: string): boolean {
   return isBlockedHostname(address.trim().toLowerCase());
 }
 
-async function assertSafeOutboundUrlResolved(
+function isLiteralIpHostname(hostname: string): boolean {
+  return parseCanonicalDottedDecimal(hostname) !== null || expandIpv6(hostname) !== null;
+}
+
+function pinUrlToAddress(url: URL, address: string): URL {
+  const pinned = new URL(url.toString());
+  pinned.hostname = address;
+  return pinned;
+}
+
+interface ResolvedOutboundUrl {
+  url: URL;
+  addresses: string[];
+}
+
+async function resolveSafeOutboundTarget(
   rawUrl: string,
   options: { allowHttp?: boolean; resolveDns?: boolean; allowPrivate?: boolean } = {},
-): Promise<URL> {
+): Promise<ResolvedOutboundUrl> {
   const parsed = assertSafeOutboundUrl(rawUrl, options);
 
   if (options.resolveDns === false || options.allowPrivate) {
-    return parsed;
+    return { url: parsed, addresses: [] };
   }
 
   const hostname = parsed.hostname.trim().toLowerCase();
+  if (isLiteralIpHostname(hostname)) {
+    return { url: parsed, addresses: [hostname] };
+  }
+
   let results: DnsLookupResult[];
   try {
     results = await dnsLookup(hostname, { all: true, verbatim: true });
@@ -332,7 +305,14 @@ async function assertSafeOutboundUrlResolved(
     throw new BadRequestError("Webhook URL targets a blocked host.");
   }
 
-  return parsed;
+  return { url: parsed, addresses: results.map((result) => result.address) };
+}
+
+async function assertSafeOutboundUrlResolved(
+  rawUrl: string,
+  options: { allowHttp?: boolean; resolveDns?: boolean; allowPrivate?: boolean } = {},
+): Promise<URL> {
+  return (await resolveSafeOutboundTarget(rawUrl, options)).url;
 }
 
 function setDnsLookupForTests(lookupFn: DnsLookup): void {
@@ -343,11 +323,14 @@ function resetDnsLookupForTests(): void {
   dnsLookup = dnsLookupImpl;
 }
 
+export type { ResolvedOutboundUrl };
 export {
   assertSafeOutboundUrl,
   assertSafeOutboundUrlResolved,
   isBlockedHostname,
   isBlockedIpAddress,
+  pinUrlToAddress,
   resetDnsLookupForTests,
+  resolveSafeOutboundTarget,
   setDnsLookupForTests,
 };

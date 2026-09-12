@@ -14,7 +14,7 @@ HTTP requests and background jobs must call `runWithTenantDatabase()` when RLS i
 
 ## Generated HiroApp
 
-`apps/hiroapp` (dogfood for internal end-to-end testing) sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`, plan `free`), stores `users.tenant_id`, and puts `tenant_id` on **data** tables such as `notes`. Postgres RLS apps also emit `app_current_tenant_id` / `app_bypass_rls` helpers and `ENABLE` + `FORCE ROW LEVEL SECURITY` on those data tables via `enableTenantRlsSql`. Auth-global tables (`users`, `sessions`, `api_tokens`) stay without RLS, so `--tenancy=rls` does not isolate users at the database. SCIM isolation is application `WHERE tenant_id`. `currentTenantId()` throws if ALS is missing. Generated `/health` probes `notes` inside `runWithMigrationBypass`; empty or filtered notes still look healthy.
+`apps/hiroapp` (dogfood for internal end-to-end testing) sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`, plan `free`), stores `users.tenant_id`, and puts `tenant_id` on **data** tables such as `notes`. Postgres RLS apps emit `app_current_tenant_id` / `app_bypass_rls` helpers and `ENABLE` + `FORCE ROW LEVEL SECURITY` on `notes` and `users` via `enableTenantRlsSql`. Auth directory lookups and cookie session user loads use `runWithMigrationBypass()` because auth middleware runs before tenant GUC. `sessions` and `api_tokens` stay without RLS so bearer and session lookup can find the user before a tenant is known. SCIM isolation is tenant GUC plus `WHERE tenant_id`. `currentTenantId()` throws if ALS is missing. Generated `/health` reads `Note.query().value("id")` under the request tenant (anonymous requests use tenant `1`), so empty or filtered notes are degraded.
 
 Sibling examples `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. A SQLite or MySQL app that wants tenant rows should pass `--tenancy=column`.
 
@@ -22,13 +22,15 @@ Sibling examples `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. A
 
 Core tests still isolate a leftover fixture schema (users, audit, webhooks, and similar) with `app_bypass_rls()` or `tenant_id = app_current_tenant_id()`. That fixture is not a second product. Do not copy those fixture tables into a generated app.
 
-## Auth-global tables (no RLS)
+## Auth lookups before tenant GUC
 
-Bearer lookup and optional membership joins stay global on purpose.
+Auth middleware runs before tenant middleware. Lookups that must succeed before `app.tenant_id` is set either bypass RLS or stay off RLS.
 
 | Table | Why |
 |-------|-----|
-| Generated `api_tokens` (fixture name `api_token`) | Bearer lookup runs in auth middleware **before** tenant middleware. The token finds the user. The user row then supplies `tenant_id`. RLS here would hide tokens until a tenant was already known. |
+| Generated `users` | `ENABLE` + `FORCE ROW LEVEL SECURITY` on `--tenancy=rls`. Auth directory `findById` / `findByEmail` / token joins and cookie session user loads wrap `runWithMigrationBypass()`. After tenant GUC is set, user queries (including SCIM) are tenant-scoped. |
+| Generated `api_tokens` (fixture name `api_token`) | Stay without RLS. Bearer lookup runs in auth middleware **before** tenant middleware. The token finds the user. The user row then supplies `tenant_id`. |
+| Generated `sessions` | Stay without RLS. Cookie session load runs before tenant GUC. |
 | Optional membership joins | If your app uses membership middleware, it also runs **before** tenant middleware so roles exist for the rest of the request. Generated HiroApp does not use org membership. It stores `users.tenant_id`. |
 
 Global middleware order: auth, then membership, then tenant. Do not reverse that order.

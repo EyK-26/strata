@@ -9,6 +9,7 @@ import { readRequestCookie } from "@getstrata/core/http/cookies";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 
 function sqlPlaceholder(index: number): string {
   return currentSqlDialect().placeholder(index);
@@ -125,30 +126,32 @@ async function defaultLoadSessionUser(
   sql: SqlClient,
   sessionId: string,
 ): Promise<SessionUser | null> {
-  const rows = (await sql.unsafe(
-    `SELECT s.user_id, s.expires_at, s.created_at AS session_created_at, u.*
+  return await runWithMigrationBypass(async () => {
+    const rows = (await sql.unsafe(
+      `SELECT s.user_id, s.expires_at, s.created_at AS session_created_at, u.*
      FROM sessions s
      INNER JOIN users u ON u.id = s.user_id
      WHERE s.id = ${sqlPlaceholder(1)} AND s.expires_at > ${sqlNow()}`,
-    [sessionId],
-  )) as SessionRow[];
+      [sessionId],
+    )) as SessionRow[];
 
-  const row = rows[0];
-  if (!row) return null;
+    const row = rows[0];
+    if (!row) return null;
 
-  const createdSource = row.session_created_at ?? row.created_at;
-  const createdAt =
-    createdSource instanceof Date
-      ? createdSource.getTime()
-      : createdSource
-        ? Date.parse(String(createdSource))
-        : Number.NaN;
+    const createdSource = row.session_created_at ?? row.created_at;
+    const createdAt =
+      createdSource instanceof Date
+        ? createdSource.getTime()
+        : createdSource
+          ? Date.parse(String(createdSource))
+          : Number.NaN;
 
-  if (!Number.isFinite(createdAt) || isSessionInvalidated(createdAt, row.session_valid_after)) {
-    return null;
-  }
+    if (!Number.isFinite(createdAt) || isSessionInvalidated(createdAt, row.session_valid_after)) {
+      return null;
+    }
 
-  return mapSessionUserRow(row);
+    return mapSessionUserRow(row);
+  });
 }
 
 function redirectWithCookie(location: string, setCookie: string, status: number): Response {

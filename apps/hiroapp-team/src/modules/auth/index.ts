@@ -21,7 +21,7 @@ import { flashResponse } from "@getstrata/core/http/flashSession";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { absoluteTemporarySignedUrl, assertValidSignature } from "@getstrata/core/http/signedUrl";
 import { mailer } from "@getstrata/core/mail/mailer";
-import { createOAuthStateCookie, verifyOAuthState } from "@getstrata/core/security/oauthState";
+import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";
 import { emailRule } from "@getstrata/core/validation/rules";
 import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";
 import { getSql } from "../../bootstrap/database.ts";
@@ -109,11 +109,9 @@ const authModule: AppModule = {
             if (process.env.FEATURE_SAML !== "true") {
               return new Response("Not found", { status: 404 });
             }
-            const issued = createOAuthStateCookie();
+            const issued = createOAuthState();
             const url = await createSamlServiceProvider().authorizationUrl(issued.state);
-            const redirect = new Response(null, { status: 302, headers: { location: url } });
-            redirect.headers.append("set-cookie", issued.cookie);
-            return redirect;
+            return new Response(null, { status: 302, headers: { location: url } });
           }),
         ),
       },
@@ -254,7 +252,25 @@ const authModule: AppModule = {
                 request,
               );
             }
-
+            const mfaResult = completePasswordLogin(user, { mfaCode: fields.mfa_code });
+            if (!mfaResult.ok) {
+              return renderPage(
+                "auth/login.eta",
+                {
+                  layout: { title: "Sign in" },
+                  errors: { email: "These credentials do not match our records." },
+                  email,
+                  password: "",
+                },
+                request,
+              );
+            }
+            await persistConsumedRecoveryHash(
+              getSql(),
+              user.id,
+              user.mfa_recovery_codes,
+              mfaResult.consumedRecoveryHash,
+            );
             return auth.signInRedirect(sessionUser(user), "/");
           },
           async (request) =>

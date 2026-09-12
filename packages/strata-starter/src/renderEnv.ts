@@ -66,7 +66,8 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   lines.push("# SAML_SP_ENTITY_ID=");
   lines.push("# SAML_ACS_URL=");
   lines.push("# SAML_IDP_ISSUER=");
-  lines.push("# SAML_WANT_RESPONSE_SIGNED=false");
+  lines.push("# SAML_WANT_RESPONSE_SIGNED=");
+  lines.push("# SAML_DISABLE_REQUESTED_AUTHN_CONTEXT=");
 
   if (needsRedis(layers)) {
     lines.push("REDIS_PASSWORD=dev-redis-change-me");
@@ -453,7 +454,7 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
 function renderApiDocs(projectName: string, layers: StarterLayers): string {
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
   rows.push(
-    "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) until the database ping succeeds and the migrated `notes` table exists. Docker HEALTHCHECK uses this path. |",
+    "| `GET` | `/health` | Plain text `ok` (200), or `degraded` (503) until a notes row is readable under the request tenant. Docker HEALTHCHECK uses this path. |",
     '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
   );
   rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
@@ -721,7 +722,7 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
 - Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
 ${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}
-\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` answers 503 until the schema exists, so a fresh deploy stays out of rotation until it is migrated.
+\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` answers 503 until a notes row is readable, so a fresh deploy stays out of rotation until it is migrated.
 `;
 }
 
