@@ -51,7 +51,7 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 | `--no-docker` | Do not write `docker-compose.yml`; point env at local installs |
 | `--docker-services=postgres,redis` | Compose only for that subset. Add `adminer` to include the UI |
 
-`--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines.
+`--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines. Postgres Compose binds `127.0.0.1` and creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`) on first empty volume. `.env.example` points `DATABASE_URL` at that role. The `postgres` superuser is for init and Adminer.
 
 ## What you get that actually runs
 

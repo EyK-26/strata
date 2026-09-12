@@ -18,6 +18,7 @@ Fix every error until it prints that production secret checks passed.
 | `APP_URL` | Always. The public origin (`https://...`); signed links and redirects are built from it. Localhost is rejected. |
 | `APP_DEBUG=false` | Always (recommended) |
 | `AUTH_DEV_HEADERS=false` | Always in production |
+| `DATABASE_URL` | Always at runtime. When `TENANCY_DRIVER=rls`, production boot rejects username `postgres` or `root` (FORCE RLS does not apply to those roles). Generated Compose uses `strata_app`. |
 | `SESSION_SECRET` (32+ chars) | `FRONTEND_MODE=server-htmx` or `hybrid` |
 | `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN` | When those env vars are set or `FEATURE_API_TOKENS=true`. Rotate away from `strata-*-test-token` and any leftover published seed strings |
 | `TOKEN_HASH_PEPPER` | Token auth enabled |
@@ -51,7 +52,7 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 - Generated apps ship a production `Dockerfile` (`APP_ENV=production`, `AUTH_DEV_HEADERS=false`, non-root user, `HEALTHCHECK`). `GET /health` answers 503 until a notes row is readable, so run `bun run db:migrate` as a deploy step
 - `METRICS_TOKEN` to authorize `GET /metrics` (production hides the endpoint unless this is set)
 - Multipart uploads are rejected unless the declared content type is on the allowlist. A missing content type and `application/octet-stream` are rejected too, because the client picks that value. Set `UPLOAD_ALLOW_UNKNOWN_MIME=true` only if you accept uploads from clients that cannot label them, and pair it with your own content inspection
-- `TENANCY_DRIVER=rls` emits FORCE RLS policies. They apply to roles without `BYPASSRLS`. The generated Compose `postgres` user is a superuser and skips them. Production `DATABASE_URL` must use a `NOBYPASSRLS` role.
+- `TENANCY_DRIVER=rls` emits FORCE RLS policies. They apply to roles without `BYPASSRLS`. Generated Compose still has a `postgres` superuser for volume init and Adminer. Generated `DATABASE_URL` uses `strata_app` (`NOBYPASSRLS`). Production boot rejects `DATABASE_URL` or `APP_DATABASE_URL` username `postgres` or `root`.
 - `TENANCY_DRIVER=none` for apps without a `tenant` table. HiroApp keeps `rls`
 - Unhandled exceptions return `500 {"error":"Internal server error."}` and are logged with their stack; driver constraint violations map to 409/422/400 with fixed messages on Postgres, MySQL, and SQLite
 - Off-site database backups: [DR.md](./DR.md)

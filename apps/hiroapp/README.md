@@ -66,7 +66,7 @@ Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <M
 
 ## Database
 
-The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`.
+The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`. Compose creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`) on first empty volume and `.env.example` points `DATABASE_URL` at that role. The `postgres` superuser is for volume init and Adminer.
 
 ## Deploy
 
@@ -94,5 +94,6 @@ The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything els
 - Set `TOKEN_HASH_PEPPER`.
 - Set `SCIM_BEARER_TOKEN`.
 - Set `METRICS_TOKEN`.
+- `DATABASE_URL` must use a `NOBYPASSRLS` role, not the `postgres` superuser. Generated Compose creates `strata_app`. Production boot rejects username `postgres` or `root`.
 
 `strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` answers 503 until a notes row is readable, so a fresh deploy stays out of rotation until it is migrated.

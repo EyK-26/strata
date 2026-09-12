@@ -676,16 +676,42 @@ describe("HiroApp security", () => {
     expect(sessions.length).toBeGreaterThan(0);
   });
 
-  test("FORCE RLS hides other-tenant notes from a NOBYPASSRLS role", async () => {
+  test("FORCE RLS hides other-tenant notes from a NOBYPASSRLS login role", async () => {
+    const adminUrl = process.env.APP_DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim();
+    if (!adminUrl) {
+      throw new Error("APP_DATABASE_URL or DATABASE_URL is required for the RLS login probe");
+    }
+    const role = "strata_app_e2e";
+    const password = "strata-app-e2e-secret";
+    const databases = (await sql.unsafe("SELECT current_database() AS name")) as Array<{
+      name: string;
+    }>;
+    const database = databases[0]?.name;
+    if (!database || database.replace(/[^A-Za-z0-9_]/g, "") !== database) {
+      throw new Error(`Refusing GRANT CONNECT on unsafe database name: ${database}`);
+    }
+
     await sql.unsafe(`
       DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'strata_rls_probe') THEN
-          CREATE ROLE strata_rls_probe NOLOGIN NOBYPASSRLS;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN
+          CREATE ROLE ${role} LOGIN PASSWORD '${password}'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+        ELSE
+          ALTER ROLE ${role} WITH LOGIN PASSWORD '${password}'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
         END IF;
       END $$;
     `);
-    await sql.unsafe("GRANT USAGE ON SCHEMA public TO strata_rls_probe");
-    await sql.unsafe("GRANT SELECT ON notes TO strata_rls_probe");
+    await sql.unsafe(`GRANT CONNECT ON DATABASE ${database} TO ${role}`);
+    await sql.unsafe("GRANT USAGE ON SCHEMA public TO strata_app_e2e");
+    await sql.unsafe("GRANT SELECT ON notes TO strata_app_e2e");
+
+    const attrs = (await sql.unsafe(
+      "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1",
+      [role],
+    )) as Array<{ rolsuper: boolean; rolbypassrls: boolean }>;
+    expect(attrs[0]?.rolsuper).toBe(false);
+    expect(attrs[0]?.rolbypassrls).toBe(false);
 
     await sql.unsafe(
       "INSERT INTO tenant (slug, plan, region) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING",
@@ -700,31 +726,30 @@ describe("HiroApp security", () => {
       otherTenantId,
     ]);
 
-    const { getDefaultDatabasePool } = await import("@getstrata/core/database/defaultConnection");
-    const pool = getDefaultDatabasePool();
-    if (typeof pool.begin !== "function") {
-      throw new Error("expected pool.begin for RLS probe");
-    }
+    const asSuperuser = (await sql.unsafe("SELECT body FROM notes WHERE body = $1", [
+      "other-tenant-note",
+    ])) as Array<{ body: string }>;
+    expect(asSuperuser.some((row) => row.body === "other-tenant-note")).toBe(true);
 
-    const hidden = await pool.begin(async (tx) => {
-      await tx.unsafe("SET LOCAL ROLE strata_rls_probe");
-      await tx.unsafe(`SELECT set_config('app.tenant_id', $1, true)`, ["1"]);
-      await tx.unsafe(`SELECT set_config('app.bypass_rls', $1, true)`, ["false"]);
-      return await tx.unsafe<{ body: string }>("SELECT body FROM notes WHERE body = $1", [
+    const appUrl = new URL(adminUrl);
+    appUrl.username = role;
+    appUrl.password = password;
+    const appSql = new Bun.SQL(appUrl.toString());
+    try {
+      await appSql.unsafe("SELECT set_config('app.tenant_id', $1, false)", ["1"]);
+      await appSql.unsafe("SELECT set_config('app.bypass_rls', $1, false)", ["false"]);
+      const hidden = (await appSql.unsafe("SELECT body FROM notes WHERE body = $1", [
         "other-tenant-note",
-      ]);
-    });
-    expect(hidden).toHaveLength(0);
+      ])) as Array<{ body: string }>;
+      expect(hidden).toHaveLength(0);
 
-    const visible = await pool.begin(async (tx) => {
-      await tx.unsafe("SET LOCAL ROLE strata_rls_probe");
-      await tx.unsafe(`SELECT set_config('app.tenant_id', $1, true)`, ["1"]);
-      await tx.unsafe(`SELECT set_config('app.bypass_rls', $1, true)`, ["false"]);
-      return await tx.unsafe<{ body: string }>("SELECT body FROM notes WHERE body = $1", [
+      const visible = (await appSql.unsafe("SELECT body FROM notes WHERE body = $1", [
         "Welcome to Strata!",
-      ]);
-    });
-    expect(visible.some((row) => row.body === "Welcome to Strata!")).toBe(true);
+      ])) as Array<{ body: string }>;
+      expect(visible.some((row) => row.body === "Welcome to Strata!")).toBe(true);
+    } finally {
+      await appSql.close();
+    }
   });
 });
 

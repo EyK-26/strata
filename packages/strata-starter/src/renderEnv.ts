@@ -17,8 +17,17 @@ function envFlag(value: boolean): string {
   return value ? "true" : "false";
 }
 
+const GENERATED_POSTGRES_APP_ROLE = "strata_app";
+const GENERATED_POSTGRES_APP_PASSWORD = "dev-strata-app-change-me";
+const GENERATED_POSTGRES_SUPERUSER_PASSWORD = "dev-postgres-change-me";
+const GENERATED_MYSQL_ROOT_PASSWORD = "dev-mysql-change-me";
+
 function appDatabaseName(projectName: string): string {
   return projectName.replace(/[^A-Za-z0-9_]/g, "_");
+}
+
+function usesComposePostgres(layers: StarterLayers): boolean {
+  return selectedDockerServices(layers).includes("postgres");
 }
 
 function defaultDatabaseUrl(layers: StarterLayers, projectName: string): string {
@@ -27,9 +36,54 @@ function defaultDatabaseUrl(layers: StarterLayers, projectName: string): string 
   }
   const database = appDatabaseName(projectName);
   if (layers.database === "mysql") {
-    return `mysql://root:dev-mysql-change-me@localhost:3306/${database}`;
+    return `mysql://root:${GENERATED_MYSQL_ROOT_PASSWORD}@localhost:3306/${database}`;
   }
-  return `postgresql://postgres:dev-postgres-change-me@localhost:5432/${database}`;
+  if (usesComposePostgres(layers)) {
+    return `postgresql://${GENERATED_POSTGRES_APP_ROLE}:${GENERATED_POSTGRES_APP_PASSWORD}@localhost:5432/${database}`;
+  }
+  return `postgresql://postgres:${GENERATED_POSTGRES_SUPERUSER_PASSWORD}@localhost:5432/${database}`;
+}
+
+function postgresAppRoleEnvNotes(layers: StarterLayers): string[] {
+  if (layers.database !== "postgres") {
+    return [];
+  }
+  if (usesComposePostgres(layers)) {
+    return [
+      `# Compose creates ${GENERATED_POSTGRES_APP_ROLE} (NOSUPERUSER NOBYPASSRLS) on first empty volume.`,
+      "# Do not point DATABASE_URL at POSTGRES_USER when TENANCY_DRIVER=rls; production boot rejects it.",
+    ];
+  }
+  return [
+    "# Production TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not the postgres superuser.",
+  ];
+}
+
+function renderPostgresAppRoleInitSql(projectName: string, layers: StarterLayers): string | null {
+  if (!usesComposePostgres(layers)) {
+    return null;
+  }
+  const database = appDatabaseName(projectName);
+  const role = GENERATED_POSTGRES_APP_ROLE;
+  const password = GENERATED_POSTGRES_APP_PASSWORD;
+  return `-- Application login role. FORCE RLS applies because this role is NOSUPERUSER and NOBYPASSRLS.
+-- Compose POSTGRES_USER is a superuser and skips FORCE RLS; do not use it as DATABASE_URL.
+-- This file runs only on an empty Postgres volume.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN
+    CREATE ROLE ${role} LOGIN PASSWORD '${password}'
+      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+  END IF;
+END
+$$;
+
+GRANT CONNECT ON DATABASE ${database} TO ${role};
+GRANT USAGE, CREATE ON SCHEMA public TO ${role};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${role};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${role};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO ${role};
+`;
 }
 
 function renderEnvExample(projectName: string, layers: StarterLayers): string {
@@ -40,6 +94,7 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     "PORT=3000",
     "APP_URL=http://localhost:3000",
     `DATABASE_URL=${defaultDatabaseUrl(layers, projectName)}`,
+    ...postgresAppRoleEnvNotes(layers),
     ...(layers.database === "sqlite"
       ? []
       : [
@@ -163,12 +218,14 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: dev-postgres-change-me
+      POSTGRES_PASSWORD: ${GENERATED_POSTGRES_SUPERUSER_PASSWORD}
       POSTGRES_DB: ${database}
     ports:
+      # Localhost only. Do not publish this port on a production host.
       - "127.0.0.1:5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data`);
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro`);
   }
 
   if (selectedSet.has("mysql")) {
@@ -176,7 +233,7 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
     services.push(`  mysql:
     image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: dev-mysql-change-me
+      MYSQL_ROOT_PASSWORD: ${GENERATED_MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${database}
     ports:
       - "127.0.0.1:3306:3306"
@@ -425,11 +482,19 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
       const system = mysql ? "MySQL" : "PostgreSQL";
       const server = mysql ? "mysql" : "postgres";
       const username = mysql ? "root" : "postgres";
-      const password = mysql ? "root" : "postgres";
+      const password = mysql
+        ? GENERATED_MYSQL_ROOT_PASSWORD
+        : GENERATED_POSTGRES_SUPERUSER_PASSWORD;
       lines.push(
         `Adminer: http://localhost:8080 (${system}, server \`${server}\`, username \`${username}\`, password \`${password}\`).`,
         "",
       );
+      if (!mysql) {
+        lines.push(
+          "Adminer uses the Compose `postgres` superuser, which skips FORCE RLS. Application traffic should use `strata_app`.",
+          "",
+        );
+      }
     }
   }
 
@@ -688,7 +753,11 @@ Until \`frontend/dist\` exists, \`${layers.spaPrefix}\` answers 503. Use \`bun r
     : `
 ## Database
 
-The app uses the database named in \`DATABASE_URL\` and creates it on first migrate when the connection user may. Set \`APP_DATABASE_URL\` only when migrations and the app should target a different database than \`DATABASE_URL\`.
+The app uses the database named in \`DATABASE_URL\` and creates it on first migrate when the connection user may. Set \`APP_DATABASE_URL\` only when migrations and the app should target a different database than \`DATABASE_URL\`.${
+        usesComposePostgres(layers)
+          ? ` Compose creates \`${GENERATED_POSTGRES_APP_ROLE}\` (\`NOSUPERUSER\` \`NOBYPASSRLS\`) on first empty volume and \`.env.example\` points \`DATABASE_URL\` at that role. The \`postgres\` superuser is for volume init and Adminer.`
+          : ""
+      }
 `
 }
 ## Deploy
@@ -723,7 +792,12 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
   }
 - Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
-${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}
+${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${
+  layers.tenancy === "rls"
+    ? `- \`DATABASE_URL\` must use a \`NOBYPASSRLS\` role, not the \`postgres\` superuser. Generated Compose creates \`${GENERATED_POSTGRES_APP_ROLE}\`. Production boot rejects username \`postgres\` or \`root\`.
+`
+    : ""
+}
 \`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` answers 503 until a notes row is readable, so a fresh deploy stays out of rotation until it is migrated.
 `;
 }
@@ -731,6 +805,8 @@ ${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : 
 export {
   appDatabaseName,
   defaultDatabaseUrl,
+  GENERATED_POSTGRES_APP_PASSWORD,
+  GENERATED_POSTGRES_APP_ROLE,
   renderApiDocs,
   renderDockerCompose,
   renderDockerfile,
@@ -739,5 +815,6 @@ export {
   renderGitignore,
   renderLayersManifest,
   renderPackageJson,
+  renderPostgresAppRoleInitSql,
   renderReadme,
 };

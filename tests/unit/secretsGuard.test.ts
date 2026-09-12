@@ -382,6 +382,83 @@ describe("assertProductionSecrets", () => {
       }),
     ).not.toThrow();
   });
+
+  test("blocks DATABASE_URL user postgres when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).toThrow(/DATABASE_URL for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not postgres/);
+  });
+
+  test("blocks APP_DATABASE_URL user postgres even when DATABASE_URL is an app role", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+        APP_DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).toThrow(/APP_DATABASE_URL for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not postgres/);
+  });
+
+  test("blocks generated change-me in DATABASE_URL in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/app",
+      }),
+    ).toThrow(/replace the generated placeholder values for DATABASE_URL/);
+  });
+
+  test("allows a NOBYPASSRLS DATABASE_URL when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+      }),
+    ).not.toThrow();
+  });
+
+  test("allows DATABASE_URL user postgres when TENANCY_DRIVER=none", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        TENANCY_DRIVER: "none",
+        DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).not.toThrow();
+  });
+
+  test("allows postgres user locally even when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "local",
+        TENANCY_DRIVER: "rls",
+        DATABASE_URL: "postgresql://postgres:postgres@localhost:54329/hiroapp_test",
+      }),
+    ).not.toThrow();
+  });
 });
 
 describe("assertProductionSecrets APP_URL", () => {

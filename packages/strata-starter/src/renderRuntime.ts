@@ -1,5 +1,5 @@
 import { generatedRlsBootstrapSql } from "../../../src/core/tenant/enableTenantRls.ts";
-import { appDatabaseName } from "./renderEnv.ts";
+import { defaultDatabaseUrl } from "./renderEnv.ts";
 import {
   authNeedsUsers,
   authUsesCookie,
@@ -602,13 +602,7 @@ if (import.meta.main) {
 }
 
 function renderPreloadTs(layers: StarterLayers, projectName: string): string {
-  const database = appDatabaseName(projectName);
-  const fallback =
-    layers.database === "sqlite"
-      ? "sqlite:./storage/app.sqlite"
-      : layers.database === "mysql"
-        ? `mysql://root:dev-mysql-change-me@localhost:3306/${database}`
-        : `postgresql://postgres:dev-postgres-change-me@localhost:5432/${database}`;
+  const fallback = defaultDatabaseUrl(layers, projectName);
 
   return `import { join } from "node:path";
 import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
@@ -716,11 +710,7 @@ function renderEnsureDatabaseTs(layers: StarterLayers, projectName: string): str
     return null;
   }
 
-  const database = appDatabaseName(projectName);
-  const fallback =
-    layers.database === "mysql"
-      ? `mysql://root:dev-mysql-change-me@localhost:3306/${database}`
-      : `postgresql://postgres:dev-postgres-change-me@localhost:5432/${database}`;
+  const fallback = defaultDatabaseUrl(layers, projectName);
 
   const resolveUrl = `/**
  * The database name comes from DATABASE_URL. Set APP_DATABASE_URL to point

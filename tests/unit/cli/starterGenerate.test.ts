@@ -352,8 +352,26 @@ describe("create-strata generate", () => {
     expect(compose).not.toContain("adminer:");
     expect(compose).toContain("127.0.0.1:5432:5432");
     expect(compose).not.toContain("mysql:");
+    expect(compose).toContain("./docker/postgres-init:/docker-entrypoint-initdb.d:ro");
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).not.toContain("http://localhost:8080");
+    expect(readme).toContain("strata_app");
+
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toContain(
+      "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/ent_app",
+    );
+    expect(env).toContain("NOSUPERUSER NOBYPASSRLS");
+    expect(env).not.toContain("MYSQL_URL");
+    const init = await readFile(join(app, "docker/postgres-init/01-strata-app-role.sql"), "utf8");
+    expect(init).toContain("CREATE ROLE strata_app LOGIN");
+    expect(init).toContain("NOBYPASSRLS");
+    expect(init).toContain("NOSUPERUSER");
+    expect(init).toContain("GRANT CONNECT ON DATABASE ent_app TO strata_app");
+    const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
+    expect(preload).toContain(
+      "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/ent_app",
+    );
 
     expect(existsSync(join(app, "views/auth/login.eta"))).toBe(true);
     expect(existsSync(join(app, "views/auth/register.eta"))).toBe(true);
@@ -362,8 +380,6 @@ describe("create-strata generate", () => {
     expect(css).toContain("--accent");
     expect(existsSync(join(app, "src/modules/careers"))).toBe(false);
     expect(existsSync(join(app, "resources/views/organizations"))).toBe(false);
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).not.toContain("MYSQL_URL");
 
     const auth = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
     expect(auth).toContain("createCookieSessionAuthManager");
@@ -384,6 +400,9 @@ describe("create-strata generate", () => {
     ]);
 
     expect(existsSync(join(app, "docker-compose.yml"))).toBe(false);
+    expect(existsSync(join(app, "docker/postgres-init/01-strata-app-role.sql"))).toBe(false);
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toContain("postgresql://postgres:dev-postgres-change-me@localhost:5432/team_local");
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).toContain("off (local installs)");
     expect(readme).toContain("Use local installs for Postgres, Redis");
@@ -425,6 +444,8 @@ describe("create-strata generate", () => {
     expect(compose).not.toContain("redis:");
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).toContain("Adminer: http://localhost:8080");
+    expect(readme).toContain("password `dev-postgres-change-me`");
+    expect(readme).toContain("skips FORCE RLS");
   });
 
   test("example app maps are sqlite API, postgres HTML, and postgres HTMX enterprise", () => {
@@ -506,8 +527,10 @@ describe("create-strata generate", () => {
     expect(ensure).not.toMatch(/url\.pathname\s*=/);
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("/acme");
+    expect(env).toContain("postgresql://postgres:dev-postgres-change-me@localhost:5432/acme");
     expect(env).not.toContain("acme_test");
     expect(env).not.toContain("MYSQL_URL");
+    expect(existsSync(join(app, "docker/postgres-init/01-strata-app-role.sql"))).toBe(false);
   });
 
   test("cookie extras write MFA schema, verify views, and a SCIM module", async () => {

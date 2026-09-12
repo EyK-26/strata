@@ -60,7 +60,7 @@ Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <M
 
 ## Database
 
-The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`.
+The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`. Compose creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`) on first empty volume and `.env.example` points `DATABASE_URL` at that role. The `postgres` superuser is for volume init and Adminer.
 
 ## Deploy
 

@@ -12,11 +12,11 @@ MFA is when enrolled, on HTML password POST, HTML MFA, API token mint, JWT mint,
 
 Password reset consumes one-time tokens atomically, compares aliased `sessions.created_at` to `session_valid_after` (not `users.created_at`), and deletes `sessions` plus `api_tokens`. JwtGuard rejects tokens issued before `session_valid_after`. Verify GET does not sign in.
 
-`--tenancy=rls` FORCE RLS is on `notes` and `users`. `sessions`, `api_tokens`, and `auth_one_time_tokens` get a user-join policy. Auth lookups and those auth-table writes use `runWithMigrationBypass`. SCIM scopes by `tenant_id` and throws if tenant ALS is missing. `/health` is degraded until a notes row is readable under the request tenant. FORCE RLS is not applied to PostgreSQL superusers (the generated Compose `postgres` role).
+`--tenancy=rls` FORCE RLS is on `notes` and `users`. `sessions`, `api_tokens`, and `auth_one_time_tokens` get a user-join policy. Auth lookups and those auth-table writes use `runWithMigrationBypass`. SCIM scopes by `tenant_id` and throws if tenant ALS is missing. `/health` is degraded until a notes row is readable under the request tenant. Generated Compose still has a `postgres` superuser for volume init and Adminer. It also creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`) on first empty volume and points `DATABASE_URL` at that role. Production boot rejects username `postgres` or `root` when `TENANCY_DRIVER=rls`.
 
 OIDC verifies RS256 ID tokens via discovery JWKS and a persisted PKCE handshake. GitHub OAuth uses `safeFetch`, always reads `/user/emails`, and rejects a missing verified address.
 
-MFA secrets require `KMS_ENCRYPTION_KEY` whenever `FEATURE_MFA` is on, including local. Seed password is `StrataDemo!ChangeMe`. HTMX is the unpkg 2.0.4 pin. Generated login tokens mint `[]` abilities. Generated Compose Postgres password is `dev-postgres-change-me`. Generated Compose MySQL root password is `dev-mysql-change-me`.
+MFA secrets require `KMS_ENCRYPTION_KEY` whenever `FEATURE_MFA` is on, including local. Seed password is `StrataDemo!ChangeMe`. HTMX is the unpkg 2.0.4 pin. Generated login tokens mint `[]` abilities. Generated Compose Postgres password is `dev-postgres-change-me`. Generated Compose application role is `strata_app` / `dev-strata-app-change-me`. Generated Compose MySQL root password is `dev-mysql-change-me`.
 
 ## 1.0.9
 

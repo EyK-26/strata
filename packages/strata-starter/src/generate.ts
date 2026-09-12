@@ -31,6 +31,7 @@ import {
   renderGitignore,
   renderLayersManifest,
   renderPackageJson,
+  renderPostgresAppRoleInitSql,
   renderReadme,
 } from "./renderEnv.ts";
 import {
@@ -159,6 +160,12 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     writeText(join(targetDir, "docker-compose.yml"), compose);
   } else {
     removeIfExists(join(targetDir, "docker-compose.yml"));
+  }
+  const postgresInit = renderPostgresAppRoleInitSql(projectName, layers);
+  if (postgresInit) {
+    writeText(join(targetDir, "docker/postgres-init/01-strata-app-role.sql"), postgresInit);
+  } else {
+    removeIfExists(join(targetDir, "docker/postgres-init"));
   }
 
   writeText(join(src, "routes.ts"), renderRoutesTs());
