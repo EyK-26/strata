@@ -354,6 +354,8 @@ describe("HiroApp security", () => {
     process.env.FEATURE_SAML = "true";
     process.env.SAML_IDP_SSO_URL = "https://idp.example.test/sso";
     process.env.SAML_IDP_CERT = fixture.cert;
+    process.env.SAML_IDP_ISSUER = "https://idp.example.test/metadata";
+    process.env.SAML_WANT_RESPONSE_SIGNED = "false";
     process.env.SAML_SP_ENTITY_ID = "https://hiroapp.test/saml/metadata";
     process.env.SAML_ACS_URL = `${origin}/auth/saml/acs`;
 
