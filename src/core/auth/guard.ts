@@ -2,9 +2,12 @@ import { UnauthorizedError } from "@getstrata/core/errors/http";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
+import { timingSafeCompareString } from "../security/timingSafeCompare";
 import { abilityCatalog } from "./abilityCatalog";
-import type { AuthUser } from "./authContext";
+import type { AuthUser, CredentialSource } from "./authContext";
 import { currentAuthUser } from "./authContext";
+import { BasicAuthGuard } from "./basicAuthGuard";
+import { JwtGuard } from "./jwtGuard";
 
 function devHeaderAbilities(role: string | null): string[] {
   const catalog = abilityCatalog();
@@ -35,7 +38,7 @@ class GuestGuard implements AuthGuard {
       id: userId,
       abilities: devHeaderAbilities(role),
       ...(role ? { role } : {}),
-      ...(verified === "false" ? { emailVerifiedAt: null } : {}),
+      emailVerifiedAt: verified === "true" ? new Date(0) : null,
     };
   }
 }
@@ -51,7 +54,7 @@ class ApiTokenGuard implements AuthGuard {
   resolve(request: Request): AuthUser | null {
     const token = readBearerToken(request);
 
-    if (!token || token !== this.options.token) {
+    if (!token || !timingSafeCompareString(token, this.options.token)) {
       return null;
     }
 
@@ -132,11 +135,18 @@ class AuthManager {
   }
 
   async resolve(request?: Request): Promise<AuthUser | null> {
-    if (request) {
-      return await this.authenticateRequest(request);
+    const result = await this.resolveWithSource(request);
+    return result.user;
+  }
+
+  async resolveWithSource(
+    request?: Request,
+  ): Promise<{ user: AuthUser | null; credentialSource: CredentialSource }> {
+    if (!request) {
+      return { user: currentAuthUser(), credentialSource: null };
     }
 
-    return currentAuthUser();
+    return await this.authenticateRequest(request);
   }
 
   user(request?: Request): Promise<AuthUser | null> {
@@ -157,27 +167,51 @@ class AuthManager {
     return user;
   }
 
-  private async authenticateRequest(request: Request): Promise<AuthUser | null> {
+  private async authenticateRequest(
+    request: Request,
+  ): Promise<{ user: AuthUser | null; credentialSource: CredentialSource }> {
     const scheme = authorizationScheme(request);
 
     if (scheme === "bearer") {
-      const fromBearer = await this.tryNamedGuards(request, BEARER_GUARD_NAMES);
-      if (fromBearer) {
-        return fromBearer;
+      const fromNamed = await this.tryNamedGuards(request, BEARER_GUARD_NAMES);
+      if (fromNamed) {
+        return { user: fromNamed, credentialSource: "bearer" };
       }
-    } else if (scheme === "basic") {
-      const fromBasic = await this.tryNamedGuards(request, BASIC_GUARD_NAMES);
-      if (fromBasic) {
-        return fromBasic;
+
+      if (isBearerCapableGuard(this.guard)) {
+        const fromDefault = await Promise.resolve(this.guard.resolve(request));
+        return { user: fromDefault, credentialSource: fromDefault ? "bearer" : null };
       }
-    } else {
-      const fromSession = await this.tryNamedGuards(request, SESSION_GUARD_NAMES);
-      if (fromSession) {
-        return fromSession;
-      }
+
+      return { user: null, credentialSource: null };
     }
 
-    return await Promise.resolve(this.guard.resolve(request));
+    if (scheme === "basic") {
+      const fromNamed = await this.tryNamedGuards(request, BASIC_GUARD_NAMES);
+      if (fromNamed) {
+        return { user: fromNamed, credentialSource: "basic" };
+      }
+
+      if (this.guard instanceof BasicAuthGuard) {
+        const fromDefault = await this.guard.resolve(request);
+        return { user: fromDefault, credentialSource: fromDefault ? "basic" : null };
+      }
+
+      return { user: null, credentialSource: null };
+    }
+
+    const fromSession = await this.tryNamedGuards(request, SESSION_GUARD_NAMES);
+    if (fromSession) {
+      return { user: fromSession, credentialSource: "session" };
+    }
+
+    const fromDefault = await Promise.resolve(this.guard.resolve(request));
+    if (!fromDefault) {
+      return { user: null, credentialSource: null };
+    }
+
+    const source: CredentialSource = this.guard instanceof GuestGuard ? "guest" : "session";
+    return { user: fromDefault, credentialSource: source };
   }
 
   private async tryNamedGuards(
@@ -203,6 +237,14 @@ class AuthManager {
 
     return null;
   }
+}
+
+function isBearerCapableGuard(guard: AuthGuard): boolean {
+  return (
+    guard instanceof ApiTokenGuard ||
+    guard instanceof DatabaseTokenGuard ||
+    guard instanceof JwtGuard
+  );
 }
 
 export type { AuthGuard, AuthUser };

@@ -10,6 +10,7 @@ type UserRow = {
   is_admin: number | boolean;
   email_verified_at: Date | string | null;
   password: string;
+  session_valid_after?: Date | string | null;
 };
 
 function mapRole(isAdmin: unknown): string {
@@ -24,12 +25,13 @@ function mapUserRow(row: UserRow) {
     role: mapRole(row.is_admin),
     email_verified_at: row.email_verified_at ?? null,
     password: row.password,
+    session_valid_after: row.session_valid_after ?? null,
   };
 }
 
 async function findUserById(id: number) {
   const rows = await getSql().unsafe<UserRow>(
-    "SELECT id, name, email, is_admin, email_verified_at, password FROM users WHERE id = $1",
+    "SELECT id, name, email, is_admin, email_verified_at, password, session_valid_after FROM users WHERE id = $1",
     [id],
   );
   const row = rows[0];
@@ -41,7 +43,7 @@ async function findUserById(id: number) {
 
 async function findUserByEmail(email: string) {
   const rows = await getSql().unsafe<UserRow>(
-    "SELECT id, name, email, is_admin, email_verified_at, password FROM users WHERE email = $1",
+    "SELECT id, name, email, is_admin, email_verified_at, password, session_valid_after FROM users WHERE email = $1",
     [email.trim().toLowerCase()],
   );
   const row = rows[0];
@@ -60,6 +62,9 @@ export const starterAuthDirectory: AuthUserDirectory = {
   async verifyCredentials(email: string, password: string): Promise<AuthUser | null> {
     const user = await findUserByEmail(email);
     if (!user?.password || !(await verifyPassword(password, user.password))) {
+      return null;
+    }
+    if ("mfa_enabled" in user && user.mfa_enabled) {
       return null;
     }
     return {

@@ -426,8 +426,8 @@ describe("production defaults", () => {
     const env = await readFile(join(html, ".env.example"), "utf8");
     const readme = await readFile(join(html, "README.md"), "utf8");
 
-    expect(env).toContain("FEATURE_PUBLIC_READS=true");
-    expect(env).toContain("Production boot is blocked unless this is false.");
+    expect(env).toContain("FEATURE_PUBLIC_READS=false");
+    expect(env).toContain("FEATURE_SAML=false");
     expect(readme).toContain("FEATURE_PUBLIC_READS=false");
   });
 

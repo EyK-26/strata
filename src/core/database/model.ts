@@ -317,7 +317,7 @@ function hashCastValue(value: unknown): string {
     return plain;
   }
 
-  return Bun.password.hashSync(plain, { algorithm: "bcrypt", cost: 10 });
+  return Bun.password.hashSync(plain, { algorithm: "bcrypt", cost: 12 });
 }
 
 function hydrateValue(value: unknown, cast: CastType): unknown {

@@ -50,7 +50,6 @@ class NotificationDispatcher {
       to: String(routed),
       subject: message.subject,
       body: message.body ?? "",
-      ...(message.html ? { html: message.html } : {}),
     });
   }
 

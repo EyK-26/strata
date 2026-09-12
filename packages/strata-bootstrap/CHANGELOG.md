@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 1.1.0
+
+Lockstep with `@getstrata/core` 1.1.0. Cookie sessions select `s.created_at AS session_created_at` so `users.created_at` from `u.*` cannot clobber the session issued-at. API group always includes session-mutating CSRF. Path confinement on the web server and safer production defaults.
+
 ## 1.0.9
 
 Label HiroApp as internal e2e dogfood and seed notes via Model

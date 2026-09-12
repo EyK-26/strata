@@ -14,7 +14,7 @@ This in-repo app is Strata dogfood for internal end-to-end testing (migrate, see
 | Queue | `redis` |
 | Mail | `smtp` |
 | SPA prefix | `/app` |
-| Docker Compose | postgres, redis, mailpit, adminer |
+| Docker Compose | postgres, redis, mailpit |
 | Extras | mfa, emailVerification, scim, metrics |
 
 This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md).
@@ -34,16 +34,14 @@ Open http://localhost:3000. Health check: `GET /health`.
 
 ## Supporting tools
 
-Docker Compose includes Postgres, Redis, SMTP (Mailpit), Adminer (database UI).
+Docker Compose includes Postgres, Redis, SMTP (Mailpit).
 
 ```bash
 docker compose up -d
 ```
 
-Adminer: http://localhost:8080 (PostgreSQL, server `postgres`, username `postgres`, password `postgres`).
 
-
-Seeded login (password `password`):
+Seeded login (password `StrataDemo!ChangeMe`):
 
 - `demo@example.com` (member)
 - `admin@example.test` (admin)

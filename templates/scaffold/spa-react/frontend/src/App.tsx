@@ -5,13 +5,13 @@ import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { token, loading } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return <p className="hint">Loading session…</p>;
   }
 
-  if (!token) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 

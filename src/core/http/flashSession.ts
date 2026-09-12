@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 const FLASH_COOKIE = appCookieName("flash");
@@ -105,11 +106,13 @@ function createFlashCookie(message: FlashMessage): string {
   const issuedAt = Date.now();
   const value = signFlashPayload(payload, issuedAt);
 
-  return `${flashCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=60`;
+  const secure = isProductionEnv() ? "; Secure" : "";
+  return `${flashCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=60${secure}`;
 }
 
 function clearFlashCookie(): string {
-  return `${flashCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  const secure = isProductionEnv() ? "; Secure" : "";
+  return `${flashCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 function pullFlash(request: Request): FlashMessage | null {

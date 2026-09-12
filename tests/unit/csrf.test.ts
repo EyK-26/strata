@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { runWithAuthContext } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import {
@@ -17,6 +18,7 @@ describe("csrfToken", () => {
       headers: { cookie: cookie.split(";")[0] ?? "" },
     });
 
+    expect(cookie).toContain("HttpOnly");
     expect(verifyCsrfToken(request, token)).toBe(true);
     expect(verifyCsrfToken(request, "wrong-token")).toBe(false);
   });
@@ -120,24 +122,112 @@ describe("createCsrfMiddleware", () => {
     expect(response.status).toBe(302);
   });
 
-  test("skips CSRF when the request uses a bearer or basic credential", async () => {
+  test("skips CSRF only after bearer or basic authentication succeeds", async () => {
     const middleware = createCsrfMiddleware();
-    const bearer = await middleware(
-      new Request("http://example.test/api/applications", {
-        method: "POST",
-        headers: { authorization: "Bearer hiring-token" },
-      }),
-      async () => new Response("ok"),
+    const bearer = await runWithAuthContext({ id: 9 }, "bearer", () =>
+      middleware(
+        new Request("http://example.test/api/applications", {
+          method: "POST",
+          headers: { authorization: "Bearer hiring-token" },
+        }),
+        async () => new Response("ok"),
+      ),
     );
-    const basic = await middleware(
-      new Request("http://example.test/api/applications", {
-        method: "POST",
-        headers: { authorization: `Basic ${Buffer.from("a:b").toString("base64")}` },
-      }),
-      async () => new Response("ok"),
+    const basic = await runWithAuthContext({ id: 9 }, "basic", () =>
+      middleware(
+        new Request("http://example.test/api/applications", {
+          method: "POST",
+          headers: { authorization: `Basic ${Buffer.from("a:b").toString("base64")}` },
+        }),
+        async () => new Response("ok"),
+      ),
     );
 
     expect(bearer.status).toBe(200);
     expect(basic.status).toBe(200);
+  });
+
+  test("skips CSRF on the SAML ACS callback path", async () => {
+    const middleware = createCsrfMiddleware();
+    const response = await middleware(
+      new Request("http://example.test/auth/saml/acs", { method: "POST" }),
+      async () => new Response("ok"),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  test("skips CSRF on the configured SAML ACS pathname", async () => {
+    const previous = process.env.SAML_ACS_URL;
+    process.env.SAML_ACS_URL = "https://app.example.test/sso/acs";
+    try {
+      const middleware = createCsrfMiddleware();
+      const response = await middleware(
+        new Request("http://example.test/sso/acs", { method: "POST" }),
+        async () => new Response("ok"),
+      );
+      expect(response.status).toBe(200);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SAML_ACS_URL;
+      } else {
+        process.env.SAML_ACS_URL = previous;
+      }
+    }
+  });
+
+  test("treats an unparsable SAML ACS URL as the default path", async () => {
+    const previous = process.env.SAML_ACS_URL;
+    process.env.SAML_ACS_URL = "http://%";
+    try {
+      const middleware = createCsrfMiddleware();
+      const response = await middleware(
+        new Request("http://example.test/auth/saml/acs", { method: "POST" }),
+        async () => new Response("ok"),
+      );
+      expect(response.status).toBe(200);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SAML_ACS_URL;
+      } else {
+        process.env.SAML_ACS_URL = previous;
+      }
+    }
+  });
+
+  test("session-only CSRF skips guest mutating requests", async () => {
+    const middleware = createCsrfMiddleware({ mutating: "session" });
+    const response = await middleware(
+      new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
+      async () => new Response("ok"),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  test("session-only CSRF still requires a token after cookie login", async () => {
+    const middleware = createCsrfMiddleware({ mutating: "session" });
+    await expect(
+      runWithAuthContext({ id: 3 }, "session", () =>
+        middleware(
+          new Request("http://example.test/api/v1/auth/logout", { method: "POST" }),
+          async () => new Response("ok"),
+        ),
+      ),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  test("does not skip CSRF for an unused Authorization header", async () => {
+    const middleware = createCsrfMiddleware();
+
+    await expect(
+      runWithAuthContext(null, null, () =>
+        middleware(
+          new Request("http://example.test/login", {
+            method: "POST",
+            headers: { authorization: "Bearer garbage" },
+          }),
+          async () => new Response("ok"),
+        ),
+      ),
+    ).rejects.toThrow(ForbiddenError);
   });
 });

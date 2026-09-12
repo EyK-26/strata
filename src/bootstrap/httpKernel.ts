@@ -75,8 +75,10 @@ class HttpKernel {
       case "web":
         return isViewsEnabled() ? [createFlashMiddleware(), createCsrfMiddleware()] : [];
       case "api": {
+        const csrf = createCsrfMiddleware({ mutating: "session" });
+
         if (!this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
-          return [];
+          return [csrf];
         }
 
         const config = this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
@@ -90,6 +92,7 @@ class HttpKernel {
               maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
               decaySeconds: 60,
             }),
+            csrf,
           ];
         }
 
@@ -101,6 +104,7 @@ class HttpKernel {
             maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
             decaySeconds: 60,
           }),
+          csrf,
         ];
       }
       default:

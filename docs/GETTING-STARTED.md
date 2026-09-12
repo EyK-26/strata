@@ -78,8 +78,8 @@ Visit http://localhost:3000. HTML sign-in is `/login`.
 
 | Email | Password | Role |
 |-------|----------|------|
-| `demo@example.com` | `password` | member |
-| `admin@example.test` | `password` | admin |
+| `demo@example.com` | `StrataDemo!ChangeMe` | member |
+| `admin@example.test` | `StrataDemo!ChangeMe` | admin |
 
 ## 7. Try the generated paths
 

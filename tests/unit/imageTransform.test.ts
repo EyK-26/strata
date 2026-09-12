@@ -44,6 +44,22 @@ describe("imageTransform", () => {
     expect(result.body.byteLength).toBeGreaterThan(0);
   });
 
+  test("resizeImageContents rejects oversized payloads", async () => {
+    const huge = new Uint8Array(8 * 1024 * 1024 + 1);
+    await expect(resizeImageContents(huge, 64, "image/png")).rejects.toThrow(
+      "maximum allowed size",
+    );
+  });
+
+  test("resizeImageContents rejects images with too many pixels", async () => {
+    const source = decodeBase64(PNG_BASE64);
+    const inflated = await new Bun.Image(source).resize(4097, 4097).jpeg().bytes();
+    expect(inflated.byteLength).toBeLessThanOrEqual(8 * 1024 * 1024);
+    await expect(resizeImageContents(inflated, 64, "image/jpeg")).rejects.toThrow(
+      "maximum allowed dimensions",
+    );
+  });
+
   test("resizeImageContents returns jpeg bytes for other image types", async () => {
     const source = decodeBase64(PNG_BASE64);
     const result = await resizeImageContents(source, 64, "image/jpeg");

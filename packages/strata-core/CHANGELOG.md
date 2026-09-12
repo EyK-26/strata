@@ -1,5 +1,47 @@
 # @getstrata/core changelog
 
+## 1.1.0
+
+Breaking security hardening. Claims below match the code. Residual risk is in the same sentence as the control.
+
+### Migration
+
+- JWT without `exp` is rejected.
+- Non-expiring `signedUrl()` is now invalid on verify. `signedUrl()` without `expires` always fails verification.
+- Existing API tokens hashed with unpeppered SHA256 will not match HMAC pepper hashes. Re-issue tokens after setting `TOKEN_HASH_PEPPER`.
+- CSRF and session secret fallbacks are gone. `ADMIN_API_TOKEN` is no longer a session or CSRF secret.
+- CORS no longer defaults to `*` outside production. Unset CORS is `APP_URL` locally and same-origin in production.
+- CSRF cookie is HttpOnly. JavaScript cannot read it.
+- Missing `emailVerifiedAt` now means unverified. This is a break for JWT and tokens that omitted the field.
+- Failed Bearer no longer authenticates via the session cookie.
+- `/ready` no longer returns checks unless `APP_DEBUG=true`.
+- Staging `/metrics` requires a token or returns 404.
+- Seed password is `StrataDemo!ChangeMe`.
+- SAML `saml:email:name` stub is gone.
+- MFA is when enrolled. Password login does not force enrollment.
+- `signedUrl()` without `expires` always fails verification.
+
+### Controls
+
+- SAML ACS verifies HMAC RelayState without a SameSite cookie, so a cross-site IdP POST can succeed. Replay requires the assertion ID and is process-local only (not shared across workers). `wantAuthnResponseSigned` defaults false (assertion-only) and can be set with `SAML_WANT_RESPONSE_SIGNED=true`. JIT provisioning is skipped when `FEATURE_REGISTRATION=false`. SAML and OIDC do not enforce MFA (SSO).
+- `completePasswordLogin` runs on HTML MFA, API token, JWT, Basic, and cookie JSON password login. Recovery-code consumption is persisted on those paths. `verifyCredentials` returns null when `mfa_enabled` is true. MFA is when enrolled, not on every password login.
+- Password reset and email verify consume one-time tokens with `UPDATE ... consumed_at IS NULL`. Cookie sessions compare aliased `sessions.created_at` (`session_created_at`) to `session_valid_after`, so `users.created_at` from `u.*` cannot keep a new login invalidated. Reset deletes `sessions` and `api_tokens` (missing tables only are swallowed). JWTs stay valid until `exp`. Verify GET does not sign the visitor in.
+- `--tenancy=rls` FORCE RLS is on data tables such as `notes`, not `users`, `sessions`, or `api_tokens`. SCIM isolation is application `WHERE tenant_id`. `currentTenantId()` and generated SCIM `tenantId()` throw if ALS is missing. `/health` notes probe is schema existence; empty or filtered notes still look healthy.
+- SMTP rejects CR/LF. Envelope `MAIL FROM` / `RCPT TO` use the bare address. Display names stay on headers only.
+- SSRF blocks non-canonical IPv4, integer hosts, and mapped IPv6 forms that are not dotted-decimal. DNS resolve defaults on. This is still check-then-fetch, not connect-time IP pin. `allowPrivate: true` skips DNS.
+- API CSRF middleware runs with `{ mutating: "session" }`. Guest JSON login relies on SameSite=Lax plus CORS, not double-submit. Session-mutating API (logout after cookie login) requires CSRF. `GET /api/v1/auth/csrf` Set-Cookies the HttpOnly CSRF cookie. Failed Bearer still does not skip CSRF or fall through to the session.
+- OIDC `getAuthorizationUrl()` throws. Use `createAuthorization()` and pass the handshake to `exchangeCode()`. ID tokens are HS256 with the client secret only, not JWKS/RS256. Missing email throws. GitHub OAuth also throws when GitHub omits email (no `{login}@users.noreply.github.com`).
+- `protectMfaSecret` always encrypts and requires `KMS_ENCRYPTION_KEY`. Local and dogfood with `FEATURE_MFA=true` must set the key. Legacy plaintext secrets still verify.
+- Safer defaults: `FEATURE_PUBLIC_READS`, `FEATURE_SIEM_EXPORT`, and `APP_DEBUG` default off. `DEFAULT_TENANT.plan` is `free`. SQL token-ability default is `[]`; generated token login still inserts `["profile:read"]`. JWT mint still hard-codes `profile:read` and admin `reports:export`.
+- Token hashes are HMAC-peppered. Recovery codes are 16 bytes. bcrypt cost is 12.
+- Identity response headers `x-authenticated-user-id`, `x-tenant-id`, and `x-tenant-region` are not set.
+- Postgres unique-violation `detail` is logged, not returned. Client JSON is a generic conflict message with no constraint name.
+- Local disk paths go through `assertPathUnderRoot`.
+- Client `x-trace-id` is ignored unless `APP_DEBUG=true` and the value is 32 hex characters.
+- OpenAPI summary tables still include leftover `/webhooks` and `/billing` strings. Generated apps do not serve those routes unless the app adds them.
+- TOTP comparison is not constant-time (6-digit space).
+
+
 ## 1.0.9
 
 Label HiroApp as internal e2e dogfood and seed notes via Model

@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "54329:5432"
+      - "127.0.0.1:54329:5432"
     volumes:
       - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
@@ -21,7 +21,7 @@ services:
     image: redis:7.4-alpine
     container_name: bun-testing-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
@@ -38,7 +38,7 @@ services:
       MYSQL_USER: strata
       MYSQL_PASSWORD: strata
     ports:
-      - "33061:3306"
+      - "127.0.0.1:33061:3306"
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -ustrata -pstrata --silent"]
       interval: 2s
@@ -64,7 +64,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - .:/workspace
       - bun_node_modules:/workspace/node_modules
@@ -98,12 +98,14 @@ services:
 
   adminer:
     image: adminer:5.4.2
+    profiles:
+      - debug
     container_name: bun-testing-adminer
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
 
 volumes:
   bun_node_modules:

@@ -1,4 +1,3 @@
-import { appEnv } from "../runtime/appKeyPrefix.ts";
 import { assertSafeOutboundUrlResolved } from "./safeUrl.ts";
 
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
@@ -8,6 +7,7 @@ interface SafeFetchOptions {
   maxRedirects?: number;
   allowHttp?: boolean;
   resolveDns?: boolean;
+  allowPrivate?: boolean;
 }
 
 async function safeFetch(
@@ -17,8 +17,12 @@ async function safeFetch(
 ): Promise<Response> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
   const maxRedirects = options.maxRedirects ?? 0;
-  const resolveDns = options.resolveDns ?? appEnv() === "production";
-  const urlOptions = { allowHttp: options.allowHttp, resolveDns };
+  const resolveDns = options.resolveDns ?? true;
+  const urlOptions = {
+    allowHttp: options.allowHttp,
+    resolveDns,
+    allowPrivate: options.allowPrivate,
+  };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 

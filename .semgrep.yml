@@ -11,3 +11,33 @@ rules:
       exclude:
         - tests/
         - src/domain/
+
+  - id: strata-empty-scim-token
+    message: Reject empty SCIM bearer tokens; do not treat an empty string as configured.
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include:
+        - src/core/security/scimTenantTokens.ts
+    patterns:
+      - pattern: process.env.SCIM_BEARER_TOKEN ?? ""
+      - pattern-not: process.env.SCIM_BEARER_TOKEN?.trim()
+
+  - id: strata-saml-login-stub
+    message: The saml:email:name login stub is removed. Use a signature-checked SAML SP.
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      exclude:
+        - tests/
+    pattern-regex: saml:[^"'\s]+:[^"'\s]+
+
+  - id: strata-unscoped-scim-users
+    message: Generated SCIM user queries must be tenant-scoped (tenant_id = current tenant).
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include:
+        - apps/**/src/modules/scim/**
+        - packages/strata-starter/src/renderScim.ts
+    pattern-regex: SELECT id, name, email FROM users(?! WHERE)

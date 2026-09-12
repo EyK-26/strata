@@ -59,9 +59,13 @@ class GitHubOAuthProvider implements OAuthProvider {
       name?: string | null;
     };
 
+    if (!profile.email?.trim()) {
+      throw new Error("GitHub OAuth profile did not include an email address.");
+    }
+
     return {
       providerUserId: String(profile.id),
-      email: profile.email ?? `${profile.login}@users.noreply.github.com`,
+      email: profile.email,
       name: profile.name ?? profile.login,
     };
   }

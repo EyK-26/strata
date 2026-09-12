@@ -3,6 +3,7 @@ import { createCorsMiddleware, resolveCorsConfig } from "@getstrata/core/http/co
 
 const previous = {
   CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS,
+  APP_URL: process.env.APP_URL,
   APP_ENV: process.env.APP_ENV,
   NODE_ENV: process.env.NODE_ENV,
 };
@@ -31,17 +32,29 @@ async function run(origin: string | null, method = "GET"): Promise<Response> {
 }
 
 describe("createCorsMiddleware", () => {
-  test("outside production an unset allow list means any origin, sent as a literal *", async () => {
-    setEnv({ CORS_ALLOWED_ORIGINS: undefined, APP_ENV: "local", NODE_ENV: undefined });
-    expect(resolveCorsConfig().allowedOrigins).toEqual(["*"]);
-    const response = await run("https://evil.example");
-    expect(response.headers.get("access-control-allow-origin")).toBe("*");
-    expect(response.headers.get("vary")).toBe("Origin");
+  test("an unset allow list is APP_URL only and never *", async () => {
+    setEnv({
+      CORS_ALLOWED_ORIGINS: undefined,
+      APP_URL: "https://app.example",
+      APP_ENV: "local",
+      NODE_ENV: undefined,
+    });
+    expect(resolveCorsConfig().allowedOrigins).toEqual(["https://app.example"]);
+    const allowed = await run("https://app.example");
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.example");
+    const denied = await run("https://evil.example");
+    expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+    expect(denied.headers.get("vary")).toBe("Origin");
   });
 
-  test("in production an unset allow list means same-origin only", async () => {
-    setEnv({ CORS_ALLOWED_ORIGINS: undefined, APP_ENV: "production", NODE_ENV: undefined });
-    expect(resolveCorsConfig().allowedOrigins).toEqual([]);
+  test("in production an unset allow list is still APP_URL only", async () => {
+    setEnv({
+      CORS_ALLOWED_ORIGINS: undefined,
+      APP_URL: "https://app.example",
+      APP_ENV: "production",
+      NODE_ENV: undefined,
+    });
+    expect(resolveCorsConfig().allowedOrigins).toEqual(["https://app.example"]);
     const response = await run("https://evil.example");
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBeNull();

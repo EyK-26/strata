@@ -14,7 +14,7 @@ This in-repo app is a generated sibling layer map. It is not a product and it is
 | Queue | `redis` |
 | Mail | `log` |
 | SPA prefix | `/app` |
-| Docker Compose | postgres, redis, adminer |
+| Docker Compose | postgres, redis |
 | Extras | metrics |
 
 This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md).
@@ -34,16 +34,14 @@ Open http://localhost:3000. Health check: `GET /health`.
 
 ## Supporting tools
 
-Docker Compose includes Postgres, Redis, Adminer (database UI).
+Docker Compose includes Postgres, Redis.
 
 ```bash
 docker compose up -d
 ```
 
-Adminer: http://localhost:8080 (PostgreSQL, server `postgres`, username `postgres`, password `postgres`).
 
-
-Seeded login (password `password`):
+Seeded login (password `StrataDemo!ChangeMe`):
 
 - `demo@example.com` (member)
 - `admin@example.test` (admin)

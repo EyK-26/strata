@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
+import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
 import { buildWebModuleRoutes } from "./buildWebModuleRoutes";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
@@ -28,14 +29,18 @@ function createWebRoutes(
     registerRoute("GET", "/assets/*", ["global", "web"]);
 
     const pathname = new URL(request.url).pathname;
-    const relativePath = pathname.replace(/^\//, "");
-    const file = Bun.file(join(process.cwd(), "public", relativePath));
+    try {
+      const filePath = assertUrlPathUnderRoot(join(process.cwd(), "public"), pathname);
+      const file = Bun.file(filePath);
 
-    if (!(await file.exists())) {
+      if (!(await file.exists())) {
+        return notFoundHtmlResponse();
+      }
+
+      return new Response(file);
+    } catch {
       return notFoundHtmlResponse();
     }
-
-    return new Response(file);
   };
 
   registerRoute("GET", "/assets/*", ["global", "web"]);

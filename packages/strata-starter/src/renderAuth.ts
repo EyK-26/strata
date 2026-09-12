@@ -79,7 +79,16 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
     mfa_secret: row.mfa_secret ?? null,
     mfa_recovery_codes: row.mfa_recovery_codes ?? null,`
     : "";
-  const userColumns = `id, name, email, is_admin, email_verified_at, password${mfaSelect}`;
+  const sessionSelect = authUsesCookie(layers.auth) ? ", session_valid_after" : "";
+  const sessionColumn = authUsesCookie(layers.auth)
+    ? `
+  session_valid_after?: Date | string | null;`
+    : "";
+  const sessionReturn = authUsesCookie(layers.auth)
+    ? `
+    session_valid_after: row.session_valid_after ?? null,`
+    : "";
+  const userColumns = `id, name, email, is_admin, email_verified_at, password${mfaSelect}${sessionSelect}`;
 
   return `import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
@@ -92,7 +101,7 @@ type UserRow = {
   email: string;
   is_admin: number | boolean;
   email_verified_at: Date | string | null;
-  password: string;${mfaColumns}
+  password: string;${mfaColumns}${sessionColumn}
 };
 
 function mapRole(isAdmin: unknown): string {
@@ -106,7 +115,7 @@ function mapUserRow(row: UserRow) {
     email: row.email,
     role: mapRole(row.is_admin),
     email_verified_at: row.email_verified_at ?? null,
-    password: row.password,${mfaReturn}
+    password: row.password,${mfaReturn}${sessionReturn}
   };
 }
 
@@ -143,6 +152,9 @@ ${tokenLookup.replace("WHERE t.token_hash = ?", `WHERE t.token_hash = ${placehol
     if (!user?.password || !(await verifyPassword(password, user.password))) {
       return null;
     }
+    if ("mfa_enabled" in user && user.mfa_enabled) {
+      return null;
+    }
     return {
       id: user.id,
       role: user.role,
@@ -162,6 +174,11 @@ import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
 
 class StarterAuthManager {
+  async resolveWithSource(request?: Request) {
+    const user = await this.resolve(request);
+    return { user, credentialSource: user ? "guest" as const : null };
+  }
+
   async resolve(request?: Request): Promise<AuthUser | null> {
     if (!envFlagEnabled(process.env.AUTH_DEV_HEADERS)) {
       return request ? null : currentAuthUser();
@@ -295,6 +312,7 @@ export {
   renderSiteModule,
 } from "./renderAuthFlows.ts";
 export {
+  renderConfirmPasswordView,
   renderForgotPasswordView,
   renderHomeView,
   renderLayout,

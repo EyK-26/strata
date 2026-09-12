@@ -14,7 +14,7 @@ HTTP requests and background jobs must call `runWithTenantDatabase()` when RLS i
 
 ## Generated HiroApp
 
-`apps/hiroapp` (dogfood for internal end-to-end testing) sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`), and stores `users.tenant_id`. It does not emit `ENABLE ROW LEVEL SECURITY` policies or call a helper named `isolateTenantTable`.
+`apps/hiroapp` (dogfood for internal end-to-end testing) sets `TENANCY_DRIVER=rls`. The generated schema creates a `tenant` table, seeds slug `default` (id `1`, plan `free`), stores `users.tenant_id`, and puts `tenant_id` on **data** tables such as `notes`. Postgres RLS apps also emit `app_current_tenant_id` / `app_bypass_rls` helpers and `ENABLE` + `FORCE ROW LEVEL SECURITY` on those data tables via `enableTenantRlsSql`. Auth-global tables (`users`, `sessions`, `api_tokens`) stay without RLS, so `--tenancy=rls` does not isolate users at the database. SCIM isolation is application `WHERE tenant_id`. `currentTenantId()` throws if ALS is missing. Generated `/health` probes `notes` inside `runWithMigrationBypass`; empty or filtered notes still look healthy.
 
 Sibling examples `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. A SQLite or MySQL app that wants tenant rows should pass `--tenancy=column`.
 
@@ -37,7 +37,7 @@ Global middleware order: auth, then membership, then tenant. Do not reverse that
 
 Unauthenticated requests still need a tenant (login, register, CSRF). They use tenant `1` (`DEFAULT_TENANT`).
 
-`x-tenant-id` on anonymous requests is honored only when `FEATURE_PUBLIC_READS=true`. Generated HTML apps set that flag in `.env.example` so local guests can load `/login`. Production boot requires `FEATURE_PUBLIC_READS=false` so guests cannot probe other tenants via that header.
+`x-tenant-id` on anonymous requests is honored only when `FEATURE_PUBLIC_READS=true`. Guests already pin to tenant `1`, so `/login` works with `FEATURE_PUBLIC_READS=false` (the code and `.env.example` default). Production boot requires the flag to stay false so guests cannot probe other tenants via that header.
 
 Authenticated non-admin users are pinned to their account tenant. Global admins may override with `x-tenant-id`.
 

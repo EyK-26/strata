@@ -25,6 +25,9 @@ describe("assertSafeOutboundUrl", () => {
     expect(() => assertSafeOutboundUrl("https://169.254.169.254/latest/meta-data")).toThrow(
       /blocked host/,
     );
+    expect(() => assertSafeOutboundUrl("https://100.64.0.1/hook")).toThrow(/blocked host/);
+    expect(() => assertSafeOutboundUrl("https://198.18.0.1/hook")).toThrow(/blocked host/);
+    expect(() => assertSafeOutboundUrl("https://2130706433/hook")).toThrow(/blocked host/);
   });
 
   test("rejects non-https URLs by default", () => {
@@ -80,6 +83,25 @@ describe("assertSafeOutboundUrlResolved", () => {
     ).resolves.toMatchObject({ hostname: "public.example.com" });
   });
 
+  test("treats DNS resolution failures as a blocked host", async () => {
+    setDnsLookupForTests(async () => {
+      throw new Error("ENOTFOUND");
+    });
+    await expect(assertSafeOutboundUrlResolved("https://missing.example.com/hook")).rejects.toThrow(
+      /blocked host/,
+    );
+  });
+
+  test("rejects empty DNS results and skips lookup for private allowlists", async () => {
+    setDnsLookupForTests(async () => []);
+    await expect(assertSafeOutboundUrlResolved("https://public.example.com/hook")).rejects.toThrow(
+      /blocked host/,
+    );
+    await expect(
+      assertSafeOutboundUrlResolved("https://10.0.0.8/hook", { allowPrivate: true }),
+    ).resolves.toMatchObject({ hostname: "10.0.0.8" });
+  });
+
   test("resetDnsLookupForTests restores the default resolver", () => {
     setDnsLookupForTests(async () => []);
     resetDnsLookupForTests();
@@ -94,5 +116,44 @@ describe("isBlockedHostname", () => {
     expect(isBlockedHostname("0.1.2.3")).toBe(true);
     expect(isBlockedHostname("8.8.8.8")).toBe(false);
     expect(isBlockedHostname("hooks.example.com")).toBe(false);
+    expect(isBlockedHostname("100.64.1.2")).toBe(true);
+    expect(isBlockedHostname("2130706433")).toBe(true);
+    expect(isBlockedHostname("0x7f.0.0.1")).toBe(true);
+    expect(isBlockedHostname("012.0.0.1")).toBe(true);
+    expect(isBlockedHostname("198.19.1.1")).toBe(true);
+    expect(isBlockedHostname("fe80::1")).toBe(true);
+    expect(isBlockedHostname("fc00::1")).toBe(true);
+    expect(isBlockedHostname("ff00::1")).toBe(true);
+    expect(isBlockedHostname("::")).toBe(true);
+    expect(isBlockedHostname("::1")).toBe(true);
+    expect(isBlockedHostname("0:0:0:0:0:0:0:1")).toBe(true);
+    expect(isBlockedHostname("::ffff:10.0.0.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:8.8.8.8")).toBe(false);
+    expect(isBlockedHostname("2001:4860:4860::8888")).toBe(false);
+    expect(isBlockedHostname("fe80::1%eth0")).toBe(true);
+    expect(isBlockedHostname("1:2:3:4:5:6:7:8:9")).toBe(true);
+    expect(isBlockedHostname("1::2::3")).toBe(true);
+    expect(isBlockedHostname("gggg::1")).toBe(true);
+    expect(isBlockedHostname("1:2:3:4:5:6:7:zzzz")).toBe(true);
+    expect(isBlockedHostname("256.1.1.1")).toBe(true);
+    expect(isBlockedHostname("08.1.1.1")).toBe(true);
+    expect(isBlockedHostname("0x100.1.1.1")).toBe(true);
+    expect(isBlockedHostname("4294967296")).toBe(true);
+    expect(isBlockedHostname("10..0.1")).toBe(true);
+    expect(isBlockedHostname("0400.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:012.0.0.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:0x7f.0.0.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:08.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:0x100.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:0400.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:10..0.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:1.2.3")).toBe(true);
+    expect(isBlockedHostname("::ffff:10.0.0.abc")).toBe(true);
+    expect(isBlockedHostname("::ffff:256.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:010.010.010.010")).toBe(false);
+    expect(isBlockedHostname("::ffff:999.1.1.1")).toBe(true);
+    expect(isBlockedHostname("1:2:3:4:5:6:7::8:9")).toBe(true);
+    expect(isBlockedHostname("1::gggg")).toBe(true);
+    expect(isBlockedHostname("1:2:3:4:5:6:7:8g")).toBe(true);
   });
 });

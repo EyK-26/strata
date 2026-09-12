@@ -1,11 +1,12 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { isProductionEnv } from "../runtime/appEnv";
 import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 const OAUTH_STATE_COOKIE = "oauth_state";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 function resolveOAuthStateSecret(): string {
-  return requireConfiguredSecret(["OAUTH_STATE_SECRET", "ADMIN_API_TOKEN"], "oauth-state-secret");
+  return requireConfiguredSecret(["OAUTH_STATE_SECRET", "SESSION_SECRET"], "oauth-state-secret");
 }
 
 function signOAuthState(state: string, issuedAt: number): string {
@@ -15,61 +16,22 @@ function signOAuthState(state: string, issuedAt: number): string {
   return `${payload}.${signature}`;
 }
 
-function createOAuthStateCookie(): { state: string; cookie: string } {
-  const state = randomBytes(24).toString("hex");
-  const issuedAt = Date.now();
-  const value = signOAuthState(state, issuedAt);
-
-  return {
-    state,
-    cookie: `${OAUTH_STATE_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
-  };
-}
-
-function readOAuthStateCookie(request: Request): string | null {
-  const cookieHeader = request.headers.get("cookie");
-
-  if (!cookieHeader) {
-    return null;
-  }
-
-  for (const part of cookieHeader.split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-
-    if (name === OAUTH_STATE_COOKIE) {
-      return decodeURIComponent(rest.join("="));
-    }
-  }
-
-  return null;
-}
-
-function verifyOAuthState(request: Request, returnedState: string | null): boolean {
-  if (!returnedState || returnedState.trim().length === 0) {
-    return false;
-  }
-
-  const cookieValue = readOAuthStateCookie(request);
-
-  if (!cookieValue) {
-    return false;
-  }
-
-  const parts = cookieValue.split(".");
+function verifySignedOAuthStateValue(value: string): boolean {
+  const parts = value.split(".");
 
   if (parts.length !== 3) {
     return false;
   }
 
-  const [cookieState, issuedAtRaw, cookieSignature] = parts;
+  const [nonce, issuedAtRaw, signature] = parts;
 
-  if (!cookieState || !issuedAtRaw || !cookieSignature) {
+  if (!nonce || !issuedAtRaw || !signature) {
     return false;
   }
 
   const issuedAt = Number.parseInt(issuedAtRaw, 10);
 
-  if (cookieState !== returnedState || !Number.isFinite(issuedAt)) {
+  if (!Number.isFinite(issuedAt)) {
     return false;
   }
 
@@ -77,10 +39,9 @@ function verifyOAuthState(request: Request, returnedState: string | null): boole
     return false;
   }
 
-  const expectedSignature = signOAuthState(cookieState, issuedAt).split(".").pop()!;
-
+  const expectedSignature = signOAuthState(nonce, issuedAt).split(".").at(-1) ?? "";
   const expectedBuffer = Buffer.from(expectedSignature);
-  const actualBuffer = Buffer.from(cookieSignature);
+  const actualBuffer = Buffer.from(signature);
 
   if (expectedBuffer.length !== actualBuffer.length) {
     return false;
@@ -89,8 +50,33 @@ function verifyOAuthState(request: Request, returnedState: string | null): boole
   return timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
-function clearOAuthStateCookie(): string {
-  return `${OAUTH_STATE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+function createOAuthStateCookie(): { state: string; cookie: string } {
+  const nonce = randomBytes(24).toString("hex");
+  const issuedAt = Date.now();
+  const value = signOAuthState(nonce, issuedAt);
+
+  return {
+    state: value,
+    cookie: `${OAUTH_STATE_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${isProductionEnv() ? "; Secure" : ""}`,
+  };
 }
 
-export { clearOAuthStateCookie, createOAuthStateCookie, OAUTH_STATE_COOKIE, verifyOAuthState };
+function verifyOAuthState(_request: Request, returnedState: string | null): boolean {
+  if (!returnedState || returnedState.trim().length === 0) {
+    return false;
+  }
+
+  return verifySignedOAuthStateValue(returnedState.trim());
+}
+
+function clearOAuthStateCookie(): string {
+  return `${OAUTH_STATE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${isProductionEnv() ? "; Secure" : ""}`;
+}
+
+export {
+  clearOAuthStateCookie,
+  createOAuthStateCookie,
+  OAUTH_STATE_COOKIE,
+  verifyOAuthState,
+  verifySignedOAuthStateValue,
+};

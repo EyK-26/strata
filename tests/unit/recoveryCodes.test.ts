@@ -15,7 +15,7 @@ describe("recoveryCodes", () => {
     expect(new Set(codes).size).toBe(DEFAULT_RECOVERY_CODE_COUNT);
 
     for (const code of codes) {
-      expect(code).toMatch(/^[a-f0-9]{4}-[a-f0-9]{4}$/u);
+      expect(code).toMatch(/^([a-f0-9]{4}-){7}[a-f0-9]{4}$/u);
       expect(recoveryCodeMatches(code, hashRecoveryCode(code))).toBe(true);
     }
   });
@@ -23,7 +23,9 @@ describe("recoveryCodes", () => {
   test("normalizes spacing, case, and missing dashes", () => {
     expect(normalizeRecoveryCode(" ABCD-EF12 ")).toBe("abcdef12");
     expect(normalizeRecoveryCode("AbCdEf12")).toBe("abcdef12");
-    expect(formatRecoveryCode("abcdef12")).toBe("abcd-ef12");
+    expect(formatRecoveryCode("abcdef12abcdef12abcdef12abcdef12")).toBe(
+      "abcd-ef12-abcd-ef12-abcd-ef12-abcd-ef12",
+    );
     expect(formatRecoveryCode("short")).toBe("short");
   });
 

@@ -60,8 +60,14 @@ function isOAuthEnabled(env: Record<string, string | undefined>): boolean {
     envFlagEnabled(env.FEATURE_SAML) ||
     Boolean(env.GITHUB_CLIENT_ID?.trim()) ||
     Boolean(env.OIDC_ISSUER?.trim()) ||
+    Boolean(env.SAML_IDP_SSO_URL?.trim()) ||
     Boolean(env.SAML_LOGIN_URL?.trim())
   );
+}
+
+function isHeaderOnlyAuth(env: Record<string, string | undefined>): boolean {
+  const frontend = env.FRONTEND_MODE?.trim() ?? "";
+  return env.AUTH_MODE === "headers" || (frontend === "api" && env.AUTH_DEV_HEADERS === "true");
 }
 
 function isCorsConfigured(env: Record<string, string | undefined>): boolean {
@@ -129,9 +135,33 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
     }
   }
 
-  if (envFlagEnabled(env.FEATURE_FIELD_ENCRYPTION) && !env.KMS_ENCRYPTION_KEY?.trim()) {
+  if (
+    (envFlagEnabled(env.FEATURE_FIELD_ENCRYPTION) || envFlagEnabled(env.FEATURE_MFA)) &&
+    !env.KMS_ENCRYPTION_KEY?.trim()
+  ) {
     throw new Error(
-      "Production startup blocked: set KMS_ENCRYPTION_KEY when field encryption is enabled.",
+      "Production startup blocked: set KMS_ENCRYPTION_KEY when field encryption or MFA is enabled.",
+    );
+  }
+
+  if (envFlagEnabled(env.FEATURE_SAML)) {
+    const required = [
+      "SAML_IDP_CERT",
+      "SAML_IDP_SSO_URL",
+      "SAML_SP_ENTITY_ID",
+      "SAML_ACS_URL",
+    ] as const;
+    const missing = required.filter((name) => !env[name]?.trim());
+    if (missing.length > 0) {
+      throw new Error(
+        `Production startup blocked: set ${missing.join(", ")} when FEATURE_SAML=true.`,
+      );
+    }
+  }
+
+  if (envFlagEnabled(env.UPLOAD_ALLOW_UNKNOWN_MIME)) {
+    throw new Error(
+      "Production startup blocked: set UPLOAD_ALLOW_UNKNOWN_MIME=false (unknown MIME types are not allowed).",
     );
   }
 
@@ -199,6 +229,12 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
   assertNoPlaceholderSecrets(env);
   assertAuthDevHeadersDisabled(env);
   assertPublicAppUrl(env);
+
+  if (isHeaderOnlyAuth(env)) {
+    throw new Error(
+      "Production startup blocked: header-only authentication is not allowed. Configure cookie, token, or JWT auth.",
+    );
+  }
 
   if (isTokenAuthEnabled(env)) {
     assertTokenAuthProductionSecrets(env);

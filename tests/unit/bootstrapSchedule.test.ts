@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { appSchedule } from "@getstrata/bootstrap/schedule";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import db from "../../src/db/connection";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -55,6 +56,7 @@ async function insertPendingAuditLogs(count: number): Promise<void> {
 
 afterEach(async () => {
   globalThis.fetch = originalFetch;
+  resetDnsLookupForTests();
   delete process.env.SIEM_EXPORT_URL;
   delete process.env.SIEM_EXPORT_FORMAT;
   delete process.env.SIEM_EXPORT_BATCH_SIZE;
@@ -84,6 +86,7 @@ describe("bootstrap schedule", () => {
 
       process.env.FEATURE_SIEM_EXPORT = "true";
       process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-schedule";
+      setDnsLookupForTests(async () => [{ address: "1.1.1.1", family: 4 }]);
       await clearPendingAuditLogs();
       await insertPendingAuditLogs(3);
 

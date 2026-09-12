@@ -21,6 +21,14 @@ function scimEnabled(): boolean {
   return (process.env.FEATURE_SCIM ?? "false") === "true";
 }
 
+function tenantId(): number {
+  const tenant = currentTenant();
+  if (!tenant) {
+    throw new Error("SCIM requires a tenant context.");
+  }
+  return tenant.id;
+}
+
 function scimJson(body: unknown, status = 200): Response {
   return Response.json(body, {
     status,
@@ -138,11 +146,14 @@ const scimModule: AppModule = {
             let rows: UserRow[];
             if (match?.[1]) {
               rows = await getSql().unsafe<UserRow>(
-                "SELECT id, name, email FROM users WHERE email = $1",
-                [match[1].trim().toLowerCase()],
+                "SELECT id, name, email FROM users WHERE email = $1 AND tenant_id = $2",
+                [match[1].trim().toLowerCase(), tenantId()],
               );
             } else {
-              rows = await getSql().unsafe<UserRow>("SELECT id, name, email FROM users");
+              rows = await getSql().unsafe<UserRow>(
+                "SELECT id, name, email FROM users WHERE tenant_id = $1",
+                [tenantId()],
+              );
             }
             const startIndex = Math.max(
               1,
@@ -176,21 +187,20 @@ const scimModule: AppModule = {
               return scimError("userName is required.", 400);
             }
             const existing = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE email = $1",
-              [email],
+              "SELECT id, name, email FROM users WHERE email = $1 AND tenant_id = $2",
+              [email, tenantId()],
             );
             if (existing[0]) {
               return scimError("User already exists.", 409);
             }
             const hashed = await hashPassword(randomBytes(18).toString("hex"));
-            const tenantId = currentTenant()?.id ?? 1;
             await getSql().unsafe(
               "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-              [name, email, hashed, false, tenantId],
+              [name, email, hashed, false, tenantId()],
             );
             const created = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE email = $1",
-              [email],
+              "SELECT id, name, email FROM users WHERE email = $1 AND tenant_id = $2",
+              [email, tenantId()],
             );
             const row = created[0];
             if (!row) {
@@ -206,8 +216,8 @@ const scimModule: AppModule = {
           wrapScim(async (request) => {
             const id = Number.parseInt(routeParams(request).id ?? "", 10);
             const rows = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE id = $1",
-              [id],
+              "SELECT id, name, email FROM users WHERE id = $1 AND tenant_id = $2",
+              [id, tenantId()],
             );
             const row = rows[0];
             if (!row) {
@@ -226,14 +236,13 @@ const scimModule: AppModule = {
             if (!email || !name) {
               return scimError("userName and name are required.", 400);
             }
-            await getSql().unsafe("UPDATE users SET name = $1, email = $2 WHERE id = $3", [
-              name,
-              email,
-              id,
-            ]);
+            await getSql().unsafe(
+              "UPDATE users SET name = $1, email = $2 WHERE id = $3 AND tenant_id = $4",
+              [name, email, id, tenantId()],
+            );
             const rows = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE id = $1",
-              [id],
+              "SELECT id, name, email FROM users WHERE id = $1 AND tenant_id = $2",
+              [id, tenantId()],
             );
             const row = rows[0];
             if (!row) {
@@ -247,8 +256,8 @@ const scimModule: AppModule = {
           wrapScim(async (request) => {
             const id = Number.parseInt(routeParams(request).id ?? "", 10);
             const existing = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE id = $1",
-              [id],
+              "SELECT id, name, email FROM users WHERE id = $1 AND tenant_id = $2",
+              [id, tenantId()],
             );
             const row = existing[0];
             if (!row) {
@@ -285,11 +294,10 @@ const scimModule: AppModule = {
                 name = readName(value, name);
               }
             }
-            await getSql().unsafe("UPDATE users SET name = $1, email = $2 WHERE id = $3", [
-              name,
-              email,
-              id,
-            ]);
+            await getSql().unsafe(
+              "UPDATE users SET name = $1, email = $2 WHERE id = $3 AND tenant_id = $4",
+              [name, email, id, tenantId()],
+            );
             return scimJson(toScimUser({ id: row.id, name, email }));
           }),
         ),
@@ -297,7 +305,10 @@ const scimModule: AppModule = {
           "api",
           wrapScim(async (request) => {
             const id = Number.parseInt(routeParams(request).id ?? "", 10);
-            await getSql().unsafe("DELETE FROM users WHERE id = $1", [id]);
+            await getSql().unsafe("DELETE FROM users WHERE id = $1 AND tenant_id = $2", [
+              id,
+              tenantId(),
+            ]);
             return new Response(null, { status: 204 });
           }),
         ),

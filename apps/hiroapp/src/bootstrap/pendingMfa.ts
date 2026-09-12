@@ -11,11 +11,15 @@ function sign(userId: number, issuedAt: number): string {
 
 export function pendingMfaSetCookie(userId: number): string {
   const issuedAt = Date.now();
-  return `${COOKIE}=${sign(userId, issuedAt)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`;
+  const secure =
+    process.env.APP_ENV === "production" || process.env.APP_ENV === "staging" ? "; Secure" : "";
+  return `${COOKIE}=${sign(userId, issuedAt)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure}`;
 }
 
 export function pendingMfaClearCookie(): string {
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  const secure =
+    process.env.APP_ENV === "production" || process.env.APP_ENV === "staging" ? "; Secure" : "";
+  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 export function readPendingMfaUserId(request: Request): number | null {

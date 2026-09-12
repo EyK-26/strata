@@ -6,7 +6,7 @@
     <a class="button" href="/register">Create account</a>
     <a class="button button-secondary" href="/login">Sign in</a>
   </div>
-  <p class="muted">Seeded demo: <code>demo@example.com</code> / <code>password</code>.</p>
+  <p class="muted">Seeded demo: <code>demo@example.com</code> / <code>StrataDemo!ChangeMe</code>.</p>
 <% } else { %>
   <p class="lede">You are signed in as <strong><%= it.currentUser.email %></strong>.</p>
   <p>Add routes in <code>src/modules</code>. This homepage is yours to restyle.</p>

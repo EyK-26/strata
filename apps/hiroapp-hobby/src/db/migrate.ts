@@ -10,7 +10,6 @@ const migrations = [
 ];
 
 export async function seed() {
-  getSql();
   if ((await Note.query().value("id")) === null) {
     await Note.create({ body: "Welcome to Strata!" });
   }

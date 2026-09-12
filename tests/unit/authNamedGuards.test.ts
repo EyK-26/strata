@@ -6,6 +6,11 @@ import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { hashPassword } from "@getstrata/core/auth/password";
 import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
 import { CORE_AUTH_USER_DIRECTORY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import {
+  bindDatabaseConnection,
+  resetBoundDatabaseConnection,
+} from "@getstrata/core/database/boundConnection";
+import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 function directoryContainer(directory: AuthUserDirectory | null) {
@@ -131,7 +136,12 @@ describe("named auth guards", () => {
         await bearerMiss.resolve(
           new Request("http://example.test", { headers: { authorization: "Bearer nope" } }),
         ),
-      ).toEqual({ id: 99, role: "fallback" });
+      ).toBeNull();
+      expect(
+        await bearerMiss.resolveWithSource(
+          new Request("http://example.test", { headers: { authorization: "Bearer nope" } }),
+        ),
+      ).toEqual({ user: null, credentialSource: null });
 
       const basicDirectory: AuthUserDirectory = {
         async resolveUserFromToken() {
@@ -195,6 +205,71 @@ describe("HTTP Basic guard", () => {
       role: "admin",
       emailVerifiedAt: "2026-01-01T00:00:00.000Z",
     });
+
+    const mfaDirectory: AuthUserDirectory = {
+      ...directory,
+      async findByEmail(email) {
+        const row = await directory.findByEmail?.(email);
+        return row ? { ...row, mfa_enabled: true, mfa_secret: "secret" } : null;
+      },
+    };
+    const mfaGuard = new BasicAuthGuard(directoryContainer(mfaDirectory));
+    expect(
+      await mfaGuard.resolve(
+        new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
+      ),
+    ).toBeNull();
+  });
+
+  test("persists a consumed recovery code on Basic login", async () => {
+    const password = await hashPassword("secret-pass");
+    const [code] = generateRecoveryCodes(1);
+    const hash = hashRecoveryCode(String(code));
+    const directory: AuthUserDirectory = {
+      async resolveUserFromToken() {
+        return null;
+      },
+      async findByIdOrThrow(id) {
+        return { id, role: "admin", password };
+      },
+      async findByEmail(email) {
+        if (email !== "admin@hiroapp.test") {
+          return null;
+        }
+        return {
+          id: 1,
+          role: "admin",
+          password,
+          mfa_enabled: true,
+          mfa_secret: "unused",
+          mfa_recovery_codes: JSON.stringify([hash]),
+        };
+      },
+    };
+    let stored = "";
+    bindDatabaseConnection({
+      async unsafe(_query: string, params: readonly unknown[] = []) {
+        stored = String(params[0]);
+        return [];
+      },
+    } as never);
+    try {
+      const guard = new BasicAuthGuard(directoryContainer(directory));
+      const encoded = Buffer.from("admin@hiroapp.test:secret-pass").toString("base64");
+      expect(
+        await guard.resolve(
+          new Request("http://example.test", {
+            headers: {
+              authorization: `Basic ${encoded}`,
+              "x-mfa-code": String(code),
+            },
+          }),
+        ),
+      ).toEqual({ id: 1, role: "admin", emailVerifiedAt: null });
+      expect(JSON.parse(stored)).toEqual([]);
+    } finally {
+      resetBoundDatabaseConnection();
+    }
   });
 
   test("uses verifyCredentials when the directory provides it", async () => {

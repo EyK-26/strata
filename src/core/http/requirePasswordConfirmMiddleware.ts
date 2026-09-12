@@ -13,7 +13,11 @@ function createRequirePasswordConfirmMiddleware(): Middleware {
     const user = currentAuthUser();
 
     if (!user) {
-      return await next();
+      if (requestPrefersJson(request)) {
+        return Response.json({ error: "Authentication required." }, { status: 401 });
+      }
+
+      return Response.redirect("/login", 302);
     }
 
     const userId = resolveUserId(user);

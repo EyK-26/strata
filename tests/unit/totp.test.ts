@@ -13,6 +13,7 @@ describe("totp", () => {
   test("generates six digit codes", () => {
     const code = generateTotp(secret, 59_999_999);
     expect(code).toMatch(/^\d{6}$/u);
+    expect(generateTotp(secret)).toMatch(/^\d{6}$/u);
   });
 
   test("verifies generated codes within the default window", () => {

@@ -56,19 +56,23 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     `AUTH_DEV_HEADERS=${envFlag(layers.auth === "headers")}`,
   ];
 
-  if (layers.frontend === "api") {
-    lines.push("FEATURE_PUBLIC_READS=false");
-  } else {
-    lines.push(
-      "# Local convenience so the welcome page reads without a login.",
-      "# Production boot is blocked unless this is false.",
-      "FEATURE_PUBLIC_READS=true",
-    );
-  }
+  lines.push("APP_DEBUG=false");
+  lines.push("FEATURE_PUBLIC_READS=false");
+  lines.push("FEATURE_SIEM_EXPORT=false");
+  lines.push("FEATURE_REGISTRATION=true");
+  lines.push("FEATURE_SAML=false");
+  lines.push("# SAML_IDP_SSO_URL=");
+  lines.push("# SAML_IDP_CERT=");
+  lines.push("# SAML_SP_ENTITY_ID=");
+  lines.push("# SAML_ACS_URL=");
+  lines.push("# SAML_IDP_ISSUER=");
+  lines.push("# SAML_WANT_RESPONSE_SIGNED=false");
 
   if (needsRedis(layers)) {
-    lines.push("REDIS_URL=redis://127.0.0.1:6379");
+    lines.push("REDIS_PASSWORD=dev-redis-change-me");
+    lines.push("REDIS_URL=redis://:dev-redis-change-me@127.0.0.1:6379");
   } else {
+    lines.push("# REDIS_PASSWORD=");
     lines.push("# REDIS_URL=redis://127.0.0.1:6379");
   }
 
@@ -98,6 +102,13 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   }
 
   lines.push(`FEATURE_MFA=${envFlag(layers.extras.mfa)}`);
+  if (layers.extras.mfa) {
+    lines.push(
+      "KMS_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    );
+  } else {
+    lines.push("# KMS_ENCRYPTION_KEY=");
+  }
   lines.push(`FEATURE_EMAIL_VERIFICATION=${envFlag(layers.extras.emailVerification)}`);
 
   if (layers.extras.metrics) {
@@ -154,7 +165,7 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ${database}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data`);
   }
@@ -167,7 +178,7 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: ${database}
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysqldata:/var/lib/mysql`);
   }
@@ -176,27 +187,30 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
     const server = selectedSet.has("mysql") ? "mysql" : "postgres";
     services.push(`  adminer:
     image: adminer:5.4.2
+    profiles:
+      - debug
     environment:
       ADMINER_DEFAULT_SERVER: ${server}
     depends_on:
       - ${server}
     ports:
-      - "8080:8080"`);
+      - "127.0.0.1:8080:8080"`);
   }
 
   if (selectedSet.has("redis")) {
     services.push(`  redis:
     image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "\${REDIS_PASSWORD:-dev-redis-change-me}"]
     ports:
-      - "6379:6379"`);
+      - "127.0.0.1:6379:6379"`);
   }
 
   if (selectedSet.has("mailpit")) {
     services.push(`  mailpit:
     image: axllent/mailpit:latest
     ports:
-      - "1025:1025"
-      - "8025:8025"`);
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"`);
   }
 
   const volumes: string[] = [];
@@ -305,9 +319,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^1.0.9",
-        "@getstrata/cli": "^1.0.9",
-        "@getstrata/core": "^1.0.9",
+        "@getstrata/bootstrap": "^1.1.0",
+        "@getstrata/cli": "^1.1.0",
+        "@getstrata/core": "^1.1.0",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
@@ -606,7 +620,7 @@ Open http://localhost:3000. Health check: \`GET /health\`.
 ${renderSupportingToolsReadme(layers)}${
   layers.auth !== "headers"
     ? `
-Seeded login (password \`password\`):
+Seeded login (password \`StrataDemo!ChangeMe\`):
 
 - \`demo@example.com\` (member)
 - \`admin@example.test\` (admin)

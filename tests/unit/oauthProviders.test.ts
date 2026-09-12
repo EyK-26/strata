@@ -121,12 +121,32 @@ describe("GitHubOAuthProvider", () => {
     }) as unknown as typeof fetch;
 
     const provider = new GitHubOAuthProvider(options);
-    const profile = await provider.exchangeCode("gh-code");
+    await expect(provider.exchangeCode("gh-code")).rejects.toThrow(
+      "did not include an email address",
+    );
+  });
 
-    expect(profile).toEqual({
-      providerUserId: "99",
-      email: "ghost@users.noreply.github.com",
-      name: "ghost",
+  test("uses login as the display name when GitHub omits name", async () => {
+    globalThis.fetch = mock((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/login/oauth/access_token")) {
+        return Promise.resolve(Response.json({ access_token: "gh-token" }));
+      }
+      return Promise.resolve(
+        Response.json({
+          id: 11,
+          login: "nameless",
+          email: "nameless@github.com",
+          name: null,
+        }),
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = new GitHubOAuthProvider(options);
+    await expect(provider.exchangeCode("gh-code")).resolves.toEqual({
+      providerUserId: "11",
+      email: "nameless@github.com",
+      name: "nameless",
     });
   });
 

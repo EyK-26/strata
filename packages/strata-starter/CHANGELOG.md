@@ -1,5 +1,23 @@
 # create-strata changelog
 
+## 1.1.0
+
+Breaking security hardening for generated apps, lockstep with `@getstrata/core` 1.1.0. Read the core 1.1.0 migration list.
+
+CSRF on HTML plus session-mutating API. Guest JSON login relies on SameSite=Lax plus CORS, not double-submit. `GET /api/v1/auth/csrf` Set-Cookies the HttpOnly CSRF cookie.
+
+SAML is HMAC RelayState without a Lax cookie. Replay is process-local and requires an assertion ID. `wantAuthnResponseSigned` defaults false. JIT is skipped when `FEATURE_REGISTRATION=false`. SAML and OIDC skip MFA (SSO).
+
+MFA is when enrolled, on HTML MFA, API, JWT, and Basic. Recovery hashes are persisted. `verifyCredentials` does not skip MFA.
+
+Password reset consumes one-time tokens atomically, compares aliased `sessions.created_at` to `session_valid_after` (not `users.created_at`), and deletes `sessions` plus `api_tokens`. JWTs stay valid until `exp`. Verify GET does not sign in.
+
+`--tenancy=rls` FORCE RLS is on `notes`, not users or tokens. SCIM scopes by `tenant_id` and throws if tenant ALS is missing. `/health` empty notes still look healthy.
+
+OIDC is HS256 with the client secret and a persisted PKCE handshake. It is not JWKS/RS256. GitHub OAuth rejects a missing email.
+
+MFA secrets require `KMS_ENCRYPTION_KEY` whenever `FEATURE_MFA` is on, including local. Seed password is `StrataDemo!ChangeMe`. HTMX is the unpkg 2.0.4 pin.
+
 ## 1.0.9
 
 Label HiroApp as internal e2e dogfood and seed notes via Model

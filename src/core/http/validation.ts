@@ -1,6 +1,6 @@
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { BadRequestError } from "@getstrata/core/errors/http";
-import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
+import { currentTenant } from "@getstrata/core/tenant/tenantContext";
 
 function buildRequestCacheKey(fallbackPath: string, request?: Request): string {
   if (!request) {
@@ -10,7 +10,7 @@ function buildRequestCacheKey(fallbackPath: string, request?: Request): string {
   const url = new URL(request.url);
   const user = currentAuthUser();
   const authScope = user ? `u:${user.id}` : "guest";
-  const tenantScope = `t:${currentTenantId()}`;
+  const tenantScope = `t:${currentTenant()?.id ?? "none"}`;
 
   return `${authScope}|${tenantScope}|${url.pathname}${url.search}`;
 }

@@ -1,6 +1,7 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { S3Client } from "bun";
+import { assertPathUnderRoot } from "../security/safePath";
 
 interface StorageDriver {
   put(path: string, contents: string | Uint8Array): Promise<string>;
@@ -24,7 +25,7 @@ class LocalStorageDriver implements StorageDriver {
   }
 
   private resolvePath(path: string): string {
-    return join(this.resolveRootDirectory(), path.replace(/^\/+/, ""));
+    return assertPathUnderRoot(this.resolveRootDirectory(), path);
   }
 
   async put(path: string, contents: string | Uint8Array): Promise<string> {

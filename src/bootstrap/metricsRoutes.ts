@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 
 function tokensMatch(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
@@ -23,7 +24,7 @@ function authorizeMetrics(request: Request): boolean {
     return presented.length > 0 && tokensMatch(presented, expected);
   }
 
-  if ((process.env.APP_ENV ?? "local") === "production") {
+  if (isProductionEnv()) {
     return false;
   }
 

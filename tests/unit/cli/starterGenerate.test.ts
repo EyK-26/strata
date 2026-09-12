@@ -182,7 +182,7 @@ describe("create-strata args", () => {
     expect(docker.docker).toBe(true);
     expect(layersFromFlags(docker).docker.services.postgres).toBe(true);
     expect(layersFromFlags(docker).docker.services.redis).toBe(true);
-    expect(layersFromFlags(docker).docker.services.adminer).toBe(true);
+    expect(layersFromFlags(docker).docker.services.adminer).toBe(false);
 
     const local = parseCreateStrataArgs([
       "acme",
@@ -255,7 +255,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.0.9");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.1.0");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -277,8 +277,8 @@ describe("create-strata generate", () => {
     expect(migrate).not.toContain("INSERT INTO notes");
 
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
-    expect(site).toContain('Note.query().value("id")');
-    expect(site).not.toContain("SELECT 1 FROM notes");
+    expect(site).toContain("SELECT 1 FROM notes LIMIT 1");
+    expect(site).not.toContain('Note.query().value("id")');
 
     const api = await readFile(join(app, "docs/API.md"), "utf8");
     expect(api).toContain('.pluck("body", "id")');
@@ -327,7 +327,7 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("—");
   });
 
-  test("postgres HTML with docker writes postgres, redis, mailpit, and adminer", async () => {
+  test("postgres HTML with docker writes postgres, redis, and mailpit", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "ent-app",
@@ -345,11 +345,11 @@ describe("create-strata generate", () => {
     expect(compose).toContain("postgres:");
     expect(compose).toContain("redis:");
     expect(compose).toContain("mailpit:");
-    expect(compose).toContain("adminer:");
-    expect(compose).toContain("ADMINER_DEFAULT_SERVER: postgres");
+    expect(compose).not.toContain("adminer:");
+    expect(compose).toContain("127.0.0.1:5432:5432");
     expect(compose).not.toContain("mysql:");
     const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("http://localhost:8080");
+    expect(readme).not.toContain("http://localhost:8080");
 
     expect(existsSync(join(app, "views/auth/login.eta"))).toBe(true);
     expect(existsSync(join(app, "views/auth/register.eta"))).toBe(true);
@@ -431,8 +431,8 @@ describe("create-strata generate", () => {
     expect(exampleAppLayers("hiroapp").tenancy).toBe("rls");
     expect(exampleAppLayers("hiroapp").docker.services.mysql).toBe(false);
     expect(exampleAppLayers("hiroapp-hobby").docker.services.adminer).toBe(false);
-    expect(exampleAppLayers("hiroapp-team").docker.services.adminer).toBe(true);
-    expect(exampleAppLayers("hiroapp").docker.services.adminer).toBe(true);
+    expect(exampleAppLayers("hiroapp-team").docker.services.adminer).toBe(false);
+    expect(exampleAppLayers("hiroapp").docker.services.adminer).toBe(false);
     expect(defaultLayers().database).toBe("sqlite");
   });
 
@@ -797,7 +797,9 @@ describe("create-strata CLI", () => {
         const ready = await fetch(`http://127.0.0.1:${coldServer.port}/ready`);
         expect(ready.status).toBe(200);
         expect(ready.headers.get("content-type")).toContain("application/json");
-        expect(await ready.json()).toMatchObject({ status: "ready", checks: { database: "ok" } });
+        const readyBody = (await ready.json()) as { status: string; checks?: unknown };
+        expect(readyBody).toMatchObject({ status: "ready" });
+        expect(readyBody.checks).toBeUndefined();
       } finally {
         coldServer.stop();
       }
@@ -912,7 +914,7 @@ describe("create-strata CLI", () => {
           body: new URLSearchParams({
             _token: token ?? "",
             email: "demo@example.com",
-            password: "password",
+            password: "StrataDemo!ChangeMe",
           }),
           redirect: "manual",
         });
@@ -979,7 +981,7 @@ describe("create-strata CLI", () => {
         const login = await fetch(`${origin}/api/v1/auth/login`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: "demo@example.com", password: "password" }),
+          body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
         });
         expect(login.status).toBe(200);
         const minted = (await login.json()) as { token: string; expires_at: string | null };

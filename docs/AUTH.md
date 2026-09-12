@@ -60,7 +60,9 @@ You can still call `auth.use("jwt")` when a route must accept only JWTs.
 
 Cookie sessions need CSRF on POST, PUT, PATCH, and DELETE. HTML forms send `_token`. JSON with a cookie sends `x-csrf-token`.
 
-`Authorization: Bearer` and `Authorization: Basic` skip CSRF. Those clients are not using the cookie as the credential.
+`Authorization: Bearer` and `Authorization: Basic` skip CSRF only after that guard actually authenticates. A garbage Bearer plus a session cookie is not CSRF-exempt.
+
+The API group runs CSRF for session-mutating requests. Guest JSON login (`POST /api/v1/auth/login` without a session) relies on SameSite=Lax plus CORS, not double-submit. After cookie login, JSON logout and other session POSTs need `_token` or `x-csrf-token`. `GET /api/v1/auth/csrf` Set-Cookies the HttpOnly CSRF cookie. JavaScript cannot read that cookie; send the JSON token in the header.
 
 ## Abilities
 
@@ -72,10 +74,14 @@ Use policies (`Policy` / `PolicyGate`) for resource authorization. That is not t
 
 ## Email verification and password confirm
 
-These are kernel helpers. Cookie apps generated with `--email-verification` ship `/email/verify`, a signed-link handler, and a resend form. Token/JWT apps also get `POST /api/v1/auth/verify-email`.
+These are kernel helpers. Cookie apps generated with `--email-verification` ship `/email/verify`, a one-time hashed token plus HMAC-signed link, and a resend form. Token/JWT apps also get `POST /api/v1/auth/verify-email`.
 
 - `FEATURE_EMAIL_VERIFICATION=true` makes `wrapWebAuthenticated` send HTML users with `emailVerifiedAt: null` to `/email/verify`.
-- Sensitive HTML actions can require a fresh password-confirm cookie (`wrapWebPasswordConfirm`). Add that wrap when you ship password-change HTML.
+- `GET /email/verify` consumes the one-time token and redirects to `/login`. It does not create a session.
+- Password reset updates the hash, sets `users.session_valid_after`, deletes `sessions` rows, and deletes `api_tokens` for that user. JWTs stay valid until `exp`. Cookie sessions compare `sessions.created_at` to the watermark, not last-seen.
+- Sensitive HTML actions can require a fresh password-confirm cookie (`wrapWebPasswordConfirm`). MFA enroll requires that cookie.
+
+SAML ACS verifies HMAC RelayState without a SameSite cookie so a cross-site IdP POST can succeed. Replay is process-local and requires an assertion ID. `wantAuthnResponseSigned` defaults false (assertion-only). JIT is skipped when `FEATURE_REGISTRATION=false`. New users and SAML JIT still use `tenant_id = 1` when registration is on.
 
 ## Sessions table
 
@@ -102,8 +108,10 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 | `AUTH_DEV_HEADERS` | Must be `false` in production |
 | `TOKEN_HASH_PEPPER` | Required in production when token auth is on |
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Required in production when token auth is on |
-| `FEATURE_MFA` | Cookie apps get `/login/mfa` and `/account/mfa`. Core TOTP helpers live in `@getstrata/core/security/totp` |
-| `FEATURE_EMAIL_VERIFICATION` | Kernel redirects plus generated verify pages / signed JSON verify |
-| `FEATURE_OAUTH` | Real OAuth/OIDC. Generated HiroApp does not ship `/auth/oauth/mock` |
+| `FEATURE_MFA` | Cookie apps get `/login/mfa` and `/account/mfa`. Password login (HTML MFA, token, JWT, Basic) goes through `completePasswordLogin` when the user is enrolled. Does not force enrollment. Requires `KMS_ENCRYPTION_KEY` to store TOTP secrets. SAML and OIDC skip MFA (SSO). |
+| `FEATURE_EMAIL_VERIFICATION` | Kernel redirects plus generated verify pages / one-time JSON verify |
+| `FEATURE_REGISTRATION` | `false` 404s HTML and JSON register routes and blocks SAML JIT |
+| `FEATURE_OAUTH` | OIDC uses `createAuthorization()` plus a PKCE handshake. ID tokens are HS256 with the client secret, not JWKS/RS256. GitHub OAuth rejects a missing email. |
+| `FEATURE_SAML` | Real SP via optional peer `@node-saml/node-saml`. Routes `GET /auth/saml` and `POST /auth/saml/acs` 404 when the flag is off. Optional `SAML_IDP_ISSUER` and `SAML_WANT_RESPONSE_SIGNED`. |
 
 Production checks: [PRODUCTION.md](./PRODUCTION.md).

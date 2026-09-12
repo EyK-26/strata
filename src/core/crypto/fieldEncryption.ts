@@ -35,7 +35,7 @@ function isFieldEncryptionEnabled(): boolean {
     return true;
   }
 
-  return (process.env.APP_ENV ?? "local") === "production";
+  return Boolean(resolveEncryptionKey());
 }
 
 function encryptField(plaintext: string, key: Buffer): string {

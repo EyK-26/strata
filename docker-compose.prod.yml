@@ -1,16 +1,16 @@
-# Production-shaped local stack for this repository. Default credentials match
-# docker-compose.yml. A real deploy should inject DATABASE_URL, REDIS_URL,
-# SESSION_SECRET, and AUTH_DEV_HEADERS=false from the host.
+# Production-shaped local stack. Do not set APP_ENV=production unless the host
+# also injects every secret secretsGuard requires (SESSION_SECRET, TOKEN_HASH_PEPPER,
+# METRICS_TOKEN, and so on). Default APP_ENV=local keeps the file bootable.
 
 services:
   postgres:
     image: postgres:18.4
     environment:
-      POSTGRES_DB: bun_testing_test
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d bun_testing_test"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 2s
       timeout: 5s
       retries: 20
@@ -18,8 +18,9 @@ services:
 
   redis:
     image: redis:7.4-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 2s
       timeout: 5s
       retries: 20
@@ -28,29 +29,32 @@ services:
   app:
     build: .
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-local}
       APP_DEBUG: "false"
       AUTH_DEV_HEADERS: "false"
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       CACHE_DRIVER: redis
       QUEUE_DRIVER: redis
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     command: ["sh", "-c", "bun run cli migrate && bun run start"]
 
   worker:
     build: .
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-local}
       AUTH_DEV_HEADERS: "false"
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bun_testing_test
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       QUEUE_DRIVER: redis
     depends_on:
       postgres:

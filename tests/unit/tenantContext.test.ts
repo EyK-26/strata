@@ -7,9 +7,9 @@ import {
 } from "@getstrata/core/tenant/tenantContext";
 
 describe("tenantContext", () => {
-  test("returns default tenant id outside tenant scope", () => {
+  test("refuses to invent a tenant id outside tenant scope", () => {
     expect(currentTenant()).toBeNull();
-    expect(currentTenantId()).toBe(1);
+    expect(() => currentTenantId()).toThrow("Tenant context is required.");
   });
 
   test("runs callbacks within tenant scope", () => {

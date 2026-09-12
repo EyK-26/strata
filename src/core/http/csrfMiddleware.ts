@@ -1,10 +1,25 @@
+import { currentCredentialSource } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { readSubmittedCsrfTokenFromBody, resolveCsrfToken, verifyCsrfToken } from "./csrfToken";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";
-import { requestUsesHeaderCredentials } from "./statelessAuth";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+type CsrfMutatingMode = "all" | "session";
+
+function samlAcsPathname(): string {
+  const configured = process.env.SAML_ACS_URL?.trim();
+  if (!configured) {
+    return "/auth/saml/acs";
+  }
+
+  try {
+    return new URL(configured, "http://strata.invalid").pathname;
+  } catch {
+    return "/auth/saml/acs";
+  }
+}
 
 function appendSetCookie(response: Response, cookie: string): Response {
   const headers = new Headers(response.headers);
@@ -17,9 +32,15 @@ function appendSetCookie(response: Response, cookie: string): Response {
   });
 }
 
-function createCsrfMiddleware(): Middleware {
+function createCsrfMiddleware(options: { mutating?: CsrfMutatingMode } = {}): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    if (requestUsesHeaderCredentials(request)) {
+    const credentialSource = currentCredentialSource();
+    if (credentialSource === "bearer" || credentialSource === "basic") {
+      return await next();
+    }
+
+    const pathname = new URL(request.url).pathname;
+    if (pathname === samlAcsPathname()) {
       return await next();
     }
 
@@ -36,6 +57,10 @@ function createCsrfMiddleware(): Middleware {
       }
 
       return appendSetCookie(response, csrf.cookie);
+    }
+
+    if (options.mutating === "session" && credentialSource !== "session") {
+      return await next();
     }
 
     const submitted = await readSubmittedCsrfTokenFromBody(request);

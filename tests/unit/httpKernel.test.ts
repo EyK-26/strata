@@ -45,7 +45,7 @@ describe("HttpKernel", () => {
   test("skips api throttle middleware when config is not registered", () => {
     const kernel = createHttpKernel(createKernelDependencies());
 
-    expect(kernel.group("api")).toEqual([]);
+    expect(kernel.group("api")).toHaveLength(1);
   });
 
   test("falls back to memory throttle middleware when redis url is missing", () => {
@@ -53,7 +53,7 @@ describe("HttpKernel", () => {
     config.set(REDIS_URL_CONFIG_KEY, "");
     const kernel = createHttpKernel(createKernelDependencies(config));
 
-    expect(kernel.group("api")).toHaveLength(1);
+    expect(kernel.group("api")).toHaveLength(2);
   });
 
   test("wrapWeb applies the web middleware group when views are enabled", async () => {
@@ -330,7 +330,10 @@ describe("HttpKernel", () => {
 
       const verified = await handler(
         new Request("http://example.test/organizations", {
-          headers: { "x-authenticated-user-id": "1" },
+          headers: {
+            "x-authenticated-user-id": "1",
+            "x-authenticated-email-verified": "true",
+          },
         }),
       );
       expect(verified.status).toBe(200);

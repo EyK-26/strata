@@ -110,7 +110,9 @@ describe("mapDatabaseError", () => {
     });
 
     expect(error).toBeInstanceOf(ConflictError);
-    expect(error.message).toContain("already exists");
+    expect(error.message).toBe("A record with these values already exists.");
+    expect(error.message).not.toContain("acme");
+    expect(error.details).toBeUndefined();
   });
 
   test("maps postgres foreign key violations to unprocessable entity errors", () => {

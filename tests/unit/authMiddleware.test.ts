@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { MEMBER_ABILITIES } from "@getstrata/core/auth/abilityCatalog";
+import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/authContext";
 import { ApiTokenGuard, AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
@@ -20,12 +21,13 @@ describe("GuestGuard", () => {
       id: "7",
       role: "member",
       abilities: [...MEMBER_ABILITIES],
+      emailVerifiedAt: null,
     });
   });
 });
 
 describe("createAuthMiddleware", () => {
-  test("sets x-authenticated-user-id for valid bearer tokens", async () => {
+  test("stores the authenticated user in ALS without identity response headers", async () => {
     const auth = new AuthManager(
       new ApiTokenGuard({
         token: "secret-token",
@@ -33,7 +35,10 @@ describe("createAuthMiddleware", () => {
       }),
     );
     const handler = composeMiddleware(createAuthMiddleware(auth))(async () => {
-      return Response.json({ ok: true });
+      return Response.json({
+        id: currentAuthUser()?.id,
+        source: currentCredentialSource(),
+      });
     });
 
     const response = await handler(
@@ -42,6 +47,7 @@ describe("createAuthMiddleware", () => {
       }),
     );
 
-    expect(response.headers.get("x-authenticated-user-id")).toBe("42");
+    expect(response.headers.get("x-authenticated-user-id")).toBeNull();
+    expect(await response.json()).toEqual({ id: 42, source: "bearer" });
   });
 });

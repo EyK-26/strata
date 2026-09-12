@@ -10,7 +10,7 @@ Validate env: `APP_ENV=production bun run cli secrets:check`
 
 ## SCIM 2.0 (`FEATURE_SCIM=true`)
 
-Set `SCIM_BEARER_TOKEN` to a long random secret (not `strata-scim-test-token`). Optional multi-tenant tokens: `SCIM_TENANT_TOKENS=1:token-a,2:token-b`. Generated apps with `--scim` expose `/scim/v2/Users` and `/scim/v2/ServiceProviderConfig`. Extend that module if you need Groups.
+Set `SCIM_BEARER_TOKEN` to a long random secret (not `strata-scim-test-token`). Empty tokens are rejected. Optional multi-tenant tokens: `SCIM_TENANT_TOKENS=1:token-a,2:token-b`. The fallback bearer maps to tenant 1 and is platform-admin for that tenant only. Generated apps with `--scim` expose `/scim/v2/Users` and `/scim/v2/ServiceProviderConfig` and scope user SQL to `currentTenant().id` (throws if ALS is missing). Users table has no FORCE RLS. Extend that module if you need Groups.
 
 ## Billing (`FEATURE_BILLING=true`)
 
@@ -24,7 +24,11 @@ Set `STRIPE_WEBHOOK_SECRET`. Signature verification lives in core. Plan sync and
 
 ## GitHub OAuth / OIDC / SAML
 
-Set the matching `GITHUB_*`, `OIDC_*`, or `SAML_LOGIN_URL` variables. Put IdP-specific parsing in an app adapter, not in `src/core/`.
+Set the matching `GITHUB_*` or `OIDC_*` variables. OIDC `getAuthorizationUrl()` throws. Use `createAuthorization()` and pass the handshake to `exchangeCode()`. ID tokens are verified as HS256 with the client secret (`iss` / `aud` / `exp` / `nonce`). This is not JWKS/RS256. Missing email throws. GitHub OAuth also throws when GitHub omits email.
+
+SAML is a real service provider (`SamlServiceProvider`); set `FEATURE_SAML=true` plus `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, and `SAML_ACS_URL`. Optional `SAML_IDP_ISSUER` and `SAML_WANT_RESPONSE_SIGNED=true` (default is assertion-only). ACS verifies HMAC RelayState without a cookie. Replay is process-local and requires an assertion ID. The old `saml:email:name` stub is gone. SAML and OIDC skip MFA (SSO).
+
+Outbound URL helpers still resolve DNS then fetch (no connect-time IP pin). `allowPrivate: true` skips DNS.
 
 ## Design rule
 
