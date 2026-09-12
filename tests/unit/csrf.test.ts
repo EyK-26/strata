@@ -6,8 +6,10 @@ import {
   createCsrfTokenCookie,
   csrfCookieName,
   resolveCsrfToken,
+  resolveCsrfTokenForRequest,
   verifyCsrfToken,
 } from "@getstrata/core/http/csrfToken";
+import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { appCookieName } from "@getstrata/core/runtime/appKeyPrefix";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -33,13 +35,16 @@ describe("csrfToken", () => {
   });
 
   test("marks the CSRF cookie Secure in production", () => {
-    const previous = process.env.APP_ENV;
+    const previousEnv = process.env.APP_ENV;
+    const previousSecret = process.env.SESSION_SECRET;
     process.env.APP_ENV = "production";
+    process.env.SESSION_SECRET = "production-csrf-secret-at-least-32-chars";
 
     try {
       expect(createCsrfTokenCookie().cookie).toContain("; Secure");
     } finally {
-      restoreEnvVar("APP_ENV", previous);
+      restoreEnvVar("APP_ENV", previousEnv);
+      restoreEnvVar("SESSION_SECRET", previousSecret);
     }
   });
 
@@ -241,6 +246,30 @@ describe("createCsrfMiddleware", () => {
         ),
       ),
     ).rejects.toThrow(ForbiddenError);
+  });
+
+  test("nested GET CSRF reuses the first issued token instead of minting a second cookie", async () => {
+    const middleware = createCsrfMiddleware();
+    const request = new Request("http://example.test/api/v1/auth/csrf");
+    const response = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
+      middleware(request, async () =>
+        middleware(request, async () =>
+          Response.json({ token: resolveCsrfTokenForRequest(request) }),
+        ),
+      ),
+    );
+    const cookies = response.headers.getSetCookie().filter((item) => item.includes("csrf="));
+    expect(cookies).toHaveLength(1);
+    const cookiePair = cookies[0]?.split(";")[0] ?? "";
+    const cookieToken = decodeURIComponent(cookiePair.slice(cookiePair.indexOf("=") + 1));
+    const body = (await response.json()) as { token: string };
+    expect(body.token).toBe(cookieToken);
+    expect(
+      verifyCsrfToken(
+        new Request("http://example.test/", { headers: { cookie: cookiePair } }),
+        body.token,
+      ),
+    ).toBe(true);
   });
 
   test("does not skip CSRF for an unused Authorization header", async () => {

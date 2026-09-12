@@ -4,7 +4,7 @@
 
 Breaking security hardening for generated apps, lockstep with `@getstrata/core` 1.1.0. Read the core 1.1.0 migration list.
 
-CSRF on HTML and on mutating API routes, including guest JSON login (`POST /api/v1/auth/login`) and JWT mint (`POST /api/auth/token`). Fetch `GET /api/v1/auth/csrf` first, then send `X-CSRF-Token` (or form `_token`) plus the HttpOnly CSRF cookie. CORS allowlists `X-CSRF-Token`. Bearer and Basic skip CSRF only after that guard authenticates. SCIM and SAML ACS skip CSRF by path.
+CSRF on HTML and on mutating API routes, including guest JSON login (`POST /api/v1/auth/login`) and JWT mint (`POST /api/auth/token`). Fetch `GET /api/v1/auth/csrf` first. That response Set-Cookies the HttpOnly CSRF cookie and returns the same token in JSON. Send `X-CSRF-Token` (or form `_token`) plus the cookie. Nested API CSRF does not mint a second cookie. A missing token is JSON 403. CORS allowlists `X-CSRF-Token` and, when reflecting a specific origin, sets `Access-Control-Allow-Credentials`. The CSRF cookie is `SameSite=Lax`, so a different site cannot send it on fetch. Bearer and Basic skip CSRF only after that guard authenticates. SCIM and SAML ACS skip CSRF by path.
 
 SAML is HMAC RelayState without a Lax cookie. Replay uses `auth_saml_assertions`. Signed responses and a required IdP issuer are the default. ACS compares assertion issuer to `SAML_IDP_ISSUER`. JIT uses `currentTenantId()` and is skipped when `FEATURE_REGISTRATION=false`. Generated SAML ACS still challenges MFA when `mfa_enabled` is true. Completing MFA enrollment revokes sessions and API tokens. There is no generated OIDC cookie login.
 

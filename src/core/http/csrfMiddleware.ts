@@ -49,8 +49,8 @@ function createCsrfMiddleware(): Middleware {
     const method = request.method.toUpperCase();
 
     if (!MUTATING_METHODS.has(method)) {
-      const csrf = resolveCsrfToken(request);
       const meta = currentRequestMeta();
+      const csrf = meta.csrfToken ? { token: meta.csrfToken } : resolveCsrfToken(request);
       meta.csrfToken = csrf.token;
       const response = await next();
 

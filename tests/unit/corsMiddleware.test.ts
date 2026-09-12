@@ -42,6 +42,7 @@ describe("createCorsMiddleware", () => {
     expect(resolveCorsConfig().allowedOrigins).toEqual(["https://app.example"]);
     const allowed = await run("https://app.example");
     expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.example");
+    expect(allowed.headers.get("access-control-allow-credentials")).toBe("true");
     const denied = await run("https://evil.example");
     expect(denied.headers.get("access-control-allow-origin")).toBeNull();
     expect(denied.headers.get("vary")).toBe("Origin");
@@ -73,6 +74,7 @@ describe("createCorsMiddleware", () => {
     });
     const allowed = await run("https://admin.example");
     expect(allowed.headers.get("access-control-allow-origin")).toBe("https://admin.example");
+    expect(allowed.headers.get("access-control-allow-credentials")).toBe("true");
     expect(allowed.headers.get("access-control-allow-headers")).toContain("Authorization");
     expect(allowed.headers.get("access-control-allow-headers")).toContain("X-CSRF-Token");
     expect(allowed.headers.get("access-control-max-age")).toBe("86400");
@@ -90,5 +92,16 @@ describe("createCorsMiddleware", () => {
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get("access-control-allow-origin")).toBe("https://app.example");
     expect(preflight.headers.get("access-control-allow-methods")).toContain("PATCH");
+    expect(preflight.headers.get("access-control-allow-credentials")).toBe("true");
+  });
+
+  test("does not send credentials when the allow list is *", async () => {
+    setEnv({
+      CORS_ALLOWED_ORIGINS: "*",
+      APP_ENV: "local",
+    });
+    const response = await run("https://app.example");
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response.headers.get("access-control-allow-credentials")).toBeNull();
   });
 });

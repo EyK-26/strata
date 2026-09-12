@@ -115,16 +115,17 @@ class HttpKernel {
   wrap(groups: MiddlewareGroupName | MiddlewareGroupName[], handler: RouteHandler): RouteHandler {
     const names = Array.isArray(groups) ? groups : [groups];
     const middleware = names.flatMap((name) => this.group(name));
+    const wrapped = middleware.length === 0 ? handler : withMiddleware(...middleware)(handler);
 
-    if (middleware.length === 0) {
-      return handler;
+    if (names.includes("api")) {
+      return withJsonErrorHandling(wrapped);
     }
 
-    return withMiddleware(...middleware)(handler);
+    return wrapped;
   }
 
   wrapApi(handler: RouteHandler): RouteHandler {
-    return withJsonErrorHandling(this.wrap(["api", "authenticated"], handler));
+    return this.wrap(["api", "authenticated"], handler);
   }
 
   wrapWeb(handler: RouteHandler): RouteHandler {

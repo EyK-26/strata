@@ -62,7 +62,11 @@ Cookie sessions need CSRF on POST, PUT, PATCH, and DELETE. HTML forms send `_tok
 
 `Authorization: Bearer` and `Authorization: Basic` skip CSRF only after that guard actually authenticates. A garbage Bearer plus a session cookie is not CSRF-exempt.
 
-The API group runs CSRF on mutating guest and session requests. `POST /api/v1/auth/login` needs `GET /api/v1/auth/csrf` first, then `_token` or `x-csrf-token` plus the HttpOnly CSRF cookie. Bearer and Basic skip CSRF only after that guard authenticates. SCIM and SAML ACS skip CSRF by path because those authenticators run after CSRF. After cookie login, JSON logout and other session POSTs still need the token. JavaScript cannot read the CSRF cookie; send the JSON token in `x-csrf-token`.
+The API group runs CSRF on mutating guest and session requests. `POST /api/v1/auth/login` needs `GET /api/v1/auth/csrf` first. That GET Set-Cookies the HttpOnly CSRF cookie and returns the same token in JSON. Send it as `x-csrf-token` (or form `_token`). Bearer and Basic skip CSRF only after that guard authenticates. SCIM and SAML ACS skip CSRF by path; those authenticators still run. After cookie login, JSON logout and other session POSTs still need the token. JavaScript cannot read the CSRF cookie.
+
+CORS allowlists `X-CSRF-Token`. When it reflects a specific origin it also sends `Access-Control-Allow-Credentials`. That does not make cross-site cookie JSON work: the CSRF cookie is `SameSite=Lax`, so a different site cannot send it on fetch. Same-site cross-origin clients (another subdomain of the same site) can.
+
+A missing CSRF token on an API route is JSON 403, not a 500.
 
 ## Abilities
 

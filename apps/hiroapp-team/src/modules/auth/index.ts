@@ -16,7 +16,7 @@ import {
   persistConsumedRecoveryHash,
 } from "@getstrata/core/auth/passwordLogin";
 import { createSamlServiceProvider } from "@getstrata/core/auth/saml/samlServiceProvider";
-import { resolveCsrfToken } from "@getstrata/core/http/csrfToken";
+import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { absoluteTemporarySignedUrl, assertValidSignature } from "@getstrata/core/http/signedUrl";
@@ -112,12 +112,7 @@ const authModule: AppModule = {
         GET: kernel.wrap(
           "api",
           withErrorHandling(async (request) => {
-            const csrf = resolveCsrfToken(request);
-            const response = jsonResponse({ token: csrf.token });
-            if (csrf.cookie) {
-              response.headers.append("set-cookie", csrf.cookie);
-            }
-            return response;
+            return jsonResponse({ token: resolveCsrfTokenForRequest(request) });
           }),
         ),
       },
@@ -159,10 +154,16 @@ const authModule: AppModule = {
                 return jsonResponse({ error: "SAML user is not provisioned." }, { status: 403 });
               }
               const hashed = await hashPassword(randomBytes(18).toString("hex"));
-              await getSql().unsafe(
-                "INSERT INTO users (name, email, password, is_admin) VALUES ($1, $2, $3, $4)",
-                [profile.name, profile.email, hashed, false],
-              );
+              try {
+                await runAuthWrite(async () => {
+                  await getSql().unsafe(
+                    "INSERT INTO users (name, email, password, is_admin) VALUES ($1, $2, $3, $4)",
+                    [profile.name, profile.email, hashed, false],
+                  );
+                });
+              } catch {
+                // Unique email: another request already provisioned this user.
+              }
               record = await starterAuthDirectory.findByEmail?.(profile.email);
             }
             if (!record) {
@@ -351,10 +352,12 @@ const authModule: AppModule = {
               });
             }
             const hashed = await hashPassword(password);
-            await getSql().unsafe(
-              "INSERT INTO users (name, email, password, is_admin) VALUES ($1, $2, $3, $4)",
-              [name, email, hashed, false],
-            );
+            await runAuthWrite(async () => {
+              await getSql().unsafe(
+                "INSERT INTO users (name, email, password, is_admin) VALUES ($1, $2, $3, $4)",
+                [name, email, hashed, false],
+              );
+            });
             return flashResponse(redirectTo("/login"), {
               level: "success",
               message: "If that email is available, continue from the sign-in page.",

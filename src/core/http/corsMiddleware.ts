@@ -79,6 +79,9 @@ function buildCorsHeaders(request: Request): Headers {
   headers.set("Access-Control-Allow-Methods", corsConfig.allowedMethods.join(", "));
   headers.set("Access-Control-Allow-Headers", corsConfig.allowedHeaders.join(", "));
   headers.set("Access-Control-Max-Age", String(corsConfig.maxAgeSeconds));
+  if (allowOrigin !== "*") {
+    headers.set("Access-Control-Allow-Credentials", "true");
+  }
   return headers;
 }
 

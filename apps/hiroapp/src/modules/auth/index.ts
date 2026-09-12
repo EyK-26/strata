@@ -25,7 +25,7 @@ import { createSamlServiceProvider } from "@getstrata/core/auth/saml/samlService
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { sqlTimestamp } from "@getstrata/core/database/dialect";
-import { resolveCsrfToken } from "@getstrata/core/http/csrfToken";
+import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";
@@ -131,12 +131,7 @@ const authModule: AppModule = {
         GET: kernel.wrap(
           "api",
           withErrorHandling(async (request) => {
-            const csrf = resolveCsrfToken(request);
-            const response = jsonResponse({ token: csrf.token });
-            if (csrf.cookie) {
-              response.headers.append("set-cookie", csrf.cookie);
-            }
-            return response;
+            return jsonResponse({ token: resolveCsrfTokenForRequest(request) });
           }),
         ),
       },
@@ -178,10 +173,16 @@ const authModule: AppModule = {
                 return jsonResponse({ error: "SAML user is not provisioned." }, { status: 403 });
               }
               const hashed = await hashPassword(randomBytes(18).toString("hex"));
-              await getSql().unsafe(
-                "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-                [profile.name, profile.email, hashed, false, currentTenantId()],
-              );
+              try {
+                await runAuthWrite(async () => {
+                  await getSql().unsafe(
+                    "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
+                    [profile.name, profile.email, hashed, false, currentTenantId()],
+                  );
+                });
+              } catch {
+                // Unique email: another request already provisioned this user.
+              }
               record = await starterAuthDirectory.findByEmail?.(profile.email);
             }
             if (!record) {
@@ -299,10 +300,12 @@ const authModule: AppModule = {
                 return jsonResponse({ ok: true }, { status: 201 });
               }
               const hashed = await hashPassword(password);
-              await getSql().unsafe(
-                "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-                [name, email, hashed, false, currentTenantId()],
-              );
+              await runAuthWrite(async () => {
+                await getSql().unsafe(
+                  "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
+                  [name, email, hashed, false, currentTenantId()],
+                );
+              });
               const created = await starterAuthDirectory.findByEmail?.(email);
               if (created) {
                 await issueSignedAuthMail(
@@ -572,10 +575,12 @@ const authModule: AppModule = {
               });
             }
             const hashed = await hashPassword(password);
-            await getSql().unsafe(
-              "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-              [name, email, hashed, false, currentTenantId()],
-            );
+            await runAuthWrite(async () => {
+              await getSql().unsafe(
+                "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
+                [name, email, hashed, false, currentTenantId()],
+              );
+            });
             const created = await starterAuthDirectory.findByEmail?.(email);
             const insertedId = created?.id ?? 0;
             await issueSignedAuthMail(

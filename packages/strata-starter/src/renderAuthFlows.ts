@@ -160,7 +160,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
     imports.push(
       `import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";`,
     );
-    imports.push(`import { resolveCsrfToken } from "@getstrata/core/http/csrfToken";`);
+    imports.push(`import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";`);
   }
   imports.push(
     `import { absoluteTemporarySignedUrl, assertValidSignature } from "@getstrata/core/http/signedUrl";`,
@@ -341,10 +341,12 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
               return jsonResponse({ ok: true }, { status: 201 });
             }
             const hashed = await hashPassword(password);
-            await getSql().unsafe(
+            await runAuthWrite(async () => {
+              await getSql().unsafe(
               "INSERT INTO users (${insertCols}) VALUES (${insertPh})",
               [name, email, hashed${insertTail}],
             );
+            });
             const created = await starterAuthDirectory.findByEmail?.(email);
             ${
               verify
@@ -470,12 +472,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
   const csrfRoute = `
         "/api/v1/auth/csrf": {
           GET: kernel.wrap("api", withErrorHandling(async (request) => {
-            const csrf = resolveCsrfToken(request);
-            const response = jsonResponse({ token: csrf.token });
-            if (csrf.cookie) {
-              response.headers.append("set-cookie", csrf.cookie);
-            }
-            return response;
+            return jsonResponse({ token: resolveCsrfTokenForRequest(request) });
           })),
         },`;
 
@@ -561,10 +558,16 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
                 return jsonResponse({ error: "SAML user is not provisioned." }, { status: 403 });
               }
               const hashed = await hashPassword(randomBytes(18).toString("hex"));
-              await getSql().unsafe(
+              try {
+                await runAuthWrite(async () => {
+                  await getSql().unsafe(
                 "INSERT INTO users (${insertCols}) VALUES (${insertPh})",
                 [profile.name, profile.email, hashed${insertTail}],
               );
+                });
+              } catch {
+                // Unique email: another request already provisioned this user.
+              }
               record = await starterAuthDirectory.findByEmail?.(profile.email);
             }
             if (!record) {
@@ -704,10 +707,12 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
                 ${registerSuccessExisting}
               }
               const hashed = await hashPassword(password);
-              await getSql().unsafe(
+              await runAuthWrite(async () => {
+                await getSql().unsafe(
                 "INSERT INTO users (${insertCols}) VALUES (${insertPh})",
                 [name, email, hashed${insertTail}],
               );
+              });
               ${
                 verify
                   ? `const created = await starterAuthDirectory.findByEmail?.(email);

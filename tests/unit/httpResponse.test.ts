@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { ConflictError } from "@getstrata/core/errors/http";
-import { withErrorHandling } from "@getstrata/core/http/response";
+import { ConflictError, ForbiddenError } from "@getstrata/core/errors/http";
+import { createJsonErrorMiddleware, withErrorHandling } from "@getstrata/core/http/response";
 
 const previousFrontendMode = process.env.FRONTEND_MODE;
 
@@ -61,5 +61,19 @@ describe("withErrorHandling", () => {
     const body = (await response.json()) as { error: string };
     expect(body.error).toBe("A record with these values already exists.");
     expect(body.error).not.toContain("users.email");
+  });
+});
+
+describe("createJsonErrorMiddleware", () => {
+  test("maps thrown ForbiddenError to JSON 403", async () => {
+    const middleware = createJsonErrorMiddleware();
+    const response = await middleware(
+      new Request("http://app.test/api/v1/auth/login"),
+      async () => {
+        throw new ForbiddenError("Invalid or missing CSRF token.");
+      },
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "Invalid or missing CSRF token." });
   });
 });

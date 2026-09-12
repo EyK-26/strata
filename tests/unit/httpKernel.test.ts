@@ -15,6 +15,8 @@ import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
+import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -81,6 +83,42 @@ describe("HttpKernel", () => {
       );
       expect(postResponse.status).toBe(403);
       expect(await postResponse.text()).toContain("Invalid or missing CSRF token.");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
+  test("wrap api maps CSRF failures to JSON 403", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "api";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrap("api", async () => Response.json({ ok: true }));
+      const response = await handler(
+        new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
+      );
+      expect(response.status).toBe(403);
+      expect(response.headers.get("content-type")).toContain("json");
+      expect(await response.json()).toEqual({ error: "Invalid or missing CSRF token." });
+
+      const get = kernel.wrap("api", async (request) =>
+        Response.json({ token: resolveCsrfTokenForRequest(request) }),
+      );
+      const issued = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
+        get(new Request("http://example.test/api/v1/auth/csrf")),
+      );
+      const issuedBody = (await issued.json()) as { token: string };
+      const cookie = issued.headers.getSetCookie()[0]?.split(";")[0] ?? "";
+      expect(decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1))).toBe(issuedBody.token);
+      const allowed = await handler(
+        new Request("http://example.test/api/v1/auth/login", {
+          method: "POST",
+          headers: { cookie, "x-csrf-token": issuedBody.token },
+        }),
+      );
+      expect(allowed.status).toBe(200);
+      expect(await allowed.json()).toEqual({ ok: true });
     } finally {
       restoreEnvVar("FRONTEND_MODE", previous);
     }

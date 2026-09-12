@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { generateOneTimeToken } from "@getstrata/core/auth/oneTimeToken";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
@@ -92,6 +92,13 @@ afterAll(async () => {
 });
 
 describe("HiroApp security", () => {
+  afterEach(async () => {
+    await sql.unsafe(
+      "UPDATE users SET mfa_enabled = false, mfa_secret = NULL, mfa_recovery_codes = NULL WHERE email = $1",
+      ["demo@example.com"],
+    );
+  });
+
   test("health is ok after migrate even with notes RLS", async () => {
     const response = await fetch(`${origin}/health`);
     expect(response.status).toBe(200);
@@ -227,34 +234,39 @@ describe("HiroApp security", () => {
       secret,
       "demo@example.com",
     ]);
-    const unauthenticated = await fetch(`${origin}/api/v1/auth/login`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
-    });
-    expect(unauthenticated.status).toBe(403);
+    try {
+      const unauthenticated = await fetch(`${origin}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
+      });
+      expect(unauthenticated.status).toBe(403);
 
-    const csrf = await jsonCsrfHeaders(origin);
-    const missing = await fetch(`${origin}/api/v1/auth/login`, {
-      method: "POST",
-      headers: csrf.headers,
-      body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
-    });
-    expect(missing.status).toBe(401);
+      const csrf = await jsonCsrfHeaders(origin);
+      const missing = await fetch(`${origin}/api/v1/auth/login`, {
+        method: "POST",
+        headers: csrf.headers,
+        body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
+      });
+      expect(missing.status).toBe(401);
 
-    const ok = await fetch(`${origin}/api/v1/auth/login`, {
-      method: "POST",
-      headers: csrf.headers,
-      body: JSON.stringify({
-        email: "demo@example.com",
-        password: "StrataDemo!ChangeMe",
-        mfa_code: generateTotp(secret),
-      }),
-    });
-    expect(ok.status).toBe(200);
-    await sql.unsafe("UPDATE users SET mfa_enabled = false, mfa_secret = NULL WHERE email = $1", [
-      "demo@example.com",
-    ]);
+      const ok = await fetch(`${origin}/api/v1/auth/login`, {
+        method: "POST",
+        headers: csrf.headers,
+        body: JSON.stringify({
+          email: "demo@example.com",
+          password: "StrataDemo!ChangeMe",
+          mfa_code: generateTotp(secret),
+        }),
+      });
+      expect(ok.status).toBe(200);
+      const minted = (await ok.json()) as { token?: string };
+      expect(minted.token?.startsWith("strp_")).toBe(true);
+    } finally {
+      await sql.unsafe("UPDATE users SET mfa_enabled = false, mfa_secret = NULL WHERE email = $1", [
+        "demo@example.com",
+      ]);
+    }
   });
 
   test("password reset works once and rejects the previous session", async () => {
@@ -360,6 +372,7 @@ describe("HiroApp security", () => {
       redirect: "manual",
     });
     expect(signedInAgain.status).toBe(302);
+    expect(signedInAgain.headers.get("location")).toBe("/");
     freshCookies = cookieHeader(signedInAgain, freshCookies);
     const newProtected = await fetch(`${origin}/confirm-password`, {
       headers: { cookie: freshCookies },
@@ -519,7 +532,8 @@ describe("HiroApp security", () => {
         body: new URLSearchParams({ SAMLResponse: fixture.responseB64, RelayState: relayState }),
         redirect: "manual",
       });
-      expect([302, 200]).toContain(valid.status);
+      expect(valid.status).toBe(302);
+      expect(valid.headers.get("location")).toBe("/");
 
       const cookielessFixture = await createSignedSamlResponse({
         audience: "https://hiroapp.test/saml/metadata",
@@ -543,7 +557,8 @@ describe("HiroApp security", () => {
         }),
         redirect: "manual",
       });
-      expect([302, 200]).toContain(cookieless.status);
+      expect(cookieless.status).toBe(302);
+      expect(cookieless.headers.get("location")).toBe("/");
 
       await sql.unsafe("UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2", [
         generateTotpSecret(),
@@ -577,10 +592,10 @@ describe("HiroApp security", () => {
       expect(
         mfaAcs.headers.getSetCookie().some((item) => item.startsWith("strata_mfa_pending=")),
       ).toBe(true);
+    } finally {
       await sql.unsafe("UPDATE users SET mfa_enabled = false, mfa_secret = NULL WHERE email = $1", [
         "demo@example.com",
       ]);
-    } finally {
       process.env.FEATURE_SAML = "false";
       delete process.env.SAML_IDP_SSO_URL;
       delete process.env.SAML_IDP_CERT;
