@@ -418,12 +418,13 @@ const authModule: AppModule = {
               AUTH_ONE_TIME_PURPOSES.passwordReset,
             );
             const body = (await request.json()) as { password?: string };
-            if (!userId || !(body.password && body.password.length >= 8)) {
+            const nextPassword = body.password ?? "";
+            if (!userId || nextPassword.length < 8) {
               return jsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
             }
             await runAuthWrite(async () => {
               await getSql().unsafe("UPDATE users SET password = $1 WHERE id = $2", [
-                await hashPassword(body.password),
+                await hashPassword(nextPassword),
                 userId,
               ]);
             });

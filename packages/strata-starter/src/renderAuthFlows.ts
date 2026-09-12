@@ -431,13 +431,14 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
           POST: kernel.wrap("api", withErrorHandling(async (request) => {
             const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.passwordReset);
             const body = (await request.json()) as { password?: string };
-            if (!userId || !(body.password && body.password.length >= 8)) {
+            const nextPassword = body.password ?? "";
+            if (!userId || nextPassword.length < 8) {
               return jsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
             }
             await runAuthWrite(async () => {
               await getSql().unsafe(
               "UPDATE users SET password = ${passwordPh} WHERE id = ${idPh}",
-              [await hashPassword(body.password), userId],
+              [await hashPassword(nextPassword), userId],
             );
             });
             await revokeUserSessions(userId);
