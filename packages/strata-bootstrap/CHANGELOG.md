@@ -2,7 +2,7 @@
 
 ## 1.1.0
 
-Lockstep with `@getstrata/core` 1.1.0. Cookie sessions select `s.created_at AS session_created_at` so `users.created_at` from `u.*` cannot clobber the session issued-at. API group always includes session-mutating CSRF. `buildModuleRoutes` maps thrown API middleware errors (including CSRF `ForbiddenError`) to JSON. `HttpKernel.wrap("api")` does the same for routes used outside that builder. Path confinement on the web server and safer production defaults.
+Lockstep with `@getstrata/core` 1.1.0. Cookie sessions select `s.created_at AS session_created_at` so `users.created_at` from `u.*` cannot clobber the session issued-at. API group always includes session-mutating CSRF. `buildModuleRoutes` maps thrown API middleware errors (including CSRF `ForbiddenError`) to JSON. `HttpKernel.wrap("api")` does the same for routes used outside that builder. Path confinement on the web server and safer production defaults. The rls role denylist checks the runtime URL (`APP_DATABASE_URL` when set, otherwise `DATABASE_URL`) so fixture admin `DATABASE_URL` can stay `postgres`.
 
 ## 1.0.9
 
