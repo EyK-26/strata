@@ -75,7 +75,7 @@ When a tag is passed, the versions are read from **`origin/main`**, not from you
   the code that would be tagged.
 ```
 
-Nothing in `release.yml` enforces that a tag sits on `main`, so this check is the guard. Use `--ref=<ref>` to compare against a different branch, and `--no-target-check` to skip it. `bun run release:check` without a tag reads the working tree and is what `validate:ci` runs, so a branch build is unaffected.
+Nothing in `release.yml` enforces that a tag sits on `main`, so this check is the guard. Use `--ref=<ref>` to compare against a different branch, and `--no-target-check` to skip it. `bun run release:check` without a tag reads the working tree and is what `validate:ci` runs, so a branch build is unaffected. The release quality gate starts compose Postgres/Redis and uses the same URLs as CI: fixture `DATABASE_URL` is `postgres@bun_testing_test`, HiroApp `APP_DATABASE_URL` is `strata_app@hiroapp_test`. Do not point `APP_DATABASE_URL` at the `postgres` superuser. `openapi:validate` boots HiroApp (`TENANCY_DRIVER=rls`) and the runtime role denylist rejects that.
 
 ### 3. Tag
 

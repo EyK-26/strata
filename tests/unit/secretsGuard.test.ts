@@ -410,6 +410,20 @@ describe("assertProductionSecrets", () => {
     ).toThrow(/APP_DATABASE_URL for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not postgres/);
   });
 
+  test("allows fixture DATABASE_URL postgres when APP_DATABASE_URL is the rls runtime role", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@localhost/bun_testing_test",
+        APP_DATABASE_URL: "postgresql://strata_app:rotated-app-secret@localhost/hiroapp_test",
+      }),
+    ).not.toThrow();
+  });
+
   test("blocks generated change-me in DATABASE_URL in production", () => {
     expect(() =>
       assertProductionSecrets({
@@ -536,6 +550,17 @@ describe("assertProductionSecrets", () => {
         },
       ),
     ).rejects.toThrow(/not postgres/);
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "local",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "postgresql://postgres:postgres@localhost/bun_testing_test",
+          APP_DATABASE_URL: "postgresql://strata_app:rotated-app-secret@localhost/hiroapp_test",
+        },
+        async () => ({ rolname: "strata_app", rolsuper: false, rolbypassrls: false }),
+      ),
+    ).resolves.toBeUndefined();
     await expect(
       assertRlsLiveDatabaseRole(
         {

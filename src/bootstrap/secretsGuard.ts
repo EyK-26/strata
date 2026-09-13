@@ -233,6 +233,25 @@ function setLivePostgresRoleInspectorForTests(inspect: LivePostgresRoleInspector
 }
 
 /**
+ * HiroApp request traffic uses APP_DATABASE_URL when set, otherwise DATABASE_URL.
+ * Fixture DATABASE_URL may stay a superuser for migrate:fresh DROP. That URL is
+ * not the rls runtime pool. MIGRATION_DATABASE_URL may stay a superuser.
+ */
+function rlsRuntimeDatabaseUrl(
+  env: Record<string, string | undefined>,
+): { name: "APP_DATABASE_URL" | "DATABASE_URL"; raw: string } | null {
+  const app = env.APP_DATABASE_URL?.trim();
+  if (app) {
+    return { name: "APP_DATABASE_URL", raw: app };
+  }
+  const database = env.DATABASE_URL?.trim();
+  if (database) {
+    return { name: "DATABASE_URL", raw: database };
+  }
+  return null;
+}
+
+/**
  * FORCE RLS does not apply to PostgreSQL superusers or BYPASSRLS roles.
  * Username postgres/root is a fast path. Empty username on a postgres URL
  * must not skip. Named superusers (deploy, app) are caught by the live
@@ -243,25 +262,23 @@ function assertRlsUsesAppDatabaseRole(env: Record<string, string | undefined>): 
     return;
   }
 
-  for (const name of ["DATABASE_URL", "APP_DATABASE_URL"] as const) {
-    const raw = env[name]?.trim();
-    if (!raw) {
-      continue;
-    }
-    const user = postgresUrlUsername(raw);
-    if (user === null) {
-      continue;
-    }
-    if (user === "") {
-      throw new Error(
-        `TENANCY_DRIVER=rls startup blocked: ${name} must include a NOBYPASSRLS role username.`,
-      );
-    }
-    if (RLS_BYPASS_DATABASE_USERS.has(user.toLowerCase())) {
-      throw new Error(
-        `TENANCY_DRIVER=rls startup blocked: ${name} for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not ${user}. FORCE RLS does not apply to PostgreSQL superusers.`,
-      );
-    }
+  const runtime = rlsRuntimeDatabaseUrl(env);
+  if (!runtime) {
+    return;
+  }
+  const user = postgresUrlUsername(runtime.raw);
+  if (user === null) {
+    return;
+  }
+  if (user === "") {
+    throw new Error(
+      `TENANCY_DRIVER=rls startup blocked: ${runtime.name} must include a NOBYPASSRLS role username.`,
+    );
+  }
+  if (RLS_BYPASS_DATABASE_USERS.has(user.toLowerCase())) {
+    throw new Error(
+      `TENANCY_DRIVER=rls startup blocked: ${runtime.name} for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not ${user}. FORCE RLS does not apply to PostgreSQL superusers.`,
+    );
   }
 }
 
@@ -286,11 +303,11 @@ async function assertRlsLiveDatabaseRole(
     return;
   }
 
-  const source = env.APP_DATABASE_URL?.trim() ? "APP_DATABASE_URL" : "DATABASE_URL";
-  const raw = (env.APP_DATABASE_URL ?? env.DATABASE_URL)?.trim();
-  if (!raw || !isPostgresUrl(raw)) {
+  const runtime = rlsRuntimeDatabaseUrl(env);
+  if (!runtime || !isPostgresUrl(runtime.raw)) {
     return;
   }
+  const source = runtime.name;
 
   assertRlsUsesAppDatabaseRole(env);
 
