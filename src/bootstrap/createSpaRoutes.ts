@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { isSpaEnabled, isViewsEnabled, readSpaPrefix } from "@getstrata/core/runtime/frontendMode";
+import { assertPathUnderRoot } from "@getstrata/core/security/safePath";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 
 const SPA_DIST_DIRECTORY = join(process.cwd(), "frontend/dist");
@@ -32,10 +33,15 @@ function createSpaDocumentHandler(prefix: string, distDirectory: string): RouteH
     }
 
     const relativePath = relativeSpaPath(pathname, prefix);
-    const assetFile = Bun.file(join(distDirectory, relativePath));
-
-    if (relativePath.length > 0 && (await assetFile.exists())) {
-      return new Response(assetFile);
+    if (relativePath.length > 0) {
+      try {
+        const assetFile = Bun.file(assertPathUnderRoot(distDirectory, relativePath));
+        if (await assetFile.exists()) {
+          return new Response(assetFile);
+        }
+      } catch {
+        return new Response("Not found", { status: 404 });
+      }
     }
 
     const indexFile = Bun.file(indexFilePath);

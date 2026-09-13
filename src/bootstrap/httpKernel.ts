@@ -75,8 +75,10 @@ class HttpKernel {
       case "web":
         return isViewsEnabled() ? [createFlashMiddleware(), createCsrfMiddleware()] : [];
       case "api": {
+        const csrf = createCsrfMiddleware();
+
         if (!this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
-          return [];
+          return [csrf];
         }
 
         const config = this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
@@ -90,6 +92,7 @@ class HttpKernel {
               maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
               decaySeconds: 60,
             }),
+            csrf,
           ];
         }
 
@@ -101,6 +104,7 @@ class HttpKernel {
             maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
             decaySeconds: 60,
           }),
+          csrf,
         ];
       }
       default:
@@ -111,16 +115,17 @@ class HttpKernel {
   wrap(groups: MiddlewareGroupName | MiddlewareGroupName[], handler: RouteHandler): RouteHandler {
     const names = Array.isArray(groups) ? groups : [groups];
     const middleware = names.flatMap((name) => this.group(name));
+    const wrapped = middleware.length === 0 ? handler : withMiddleware(...middleware)(handler);
 
-    if (middleware.length === 0) {
-      return handler;
+    if (names.includes("api")) {
+      return withJsonErrorHandling(wrapped);
     }
 
-    return withMiddleware(...middleware)(handler);
+    return wrapped;
   }
 
   wrapApi(handler: RouteHandler): RouteHandler {
-    return withJsonErrorHandling(this.wrap(["api", "authenticated"], handler));
+    return this.wrap(["api", "authenticated"], handler);
   }
 
   wrapWeb(handler: RouteHandler): RouteHandler {
@@ -271,53 +276,42 @@ class HttpKernel {
     rateLimit: { maxAttempts: number; decaySeconds: number },
     handler: RouteHandler,
   ): RouteHandler {
-    const middleware: Middleware[] = [];
     const memoryKeyPrefix = scope === "login" ? "login-throttle:" : "register-throttle:";
+    const redisUrl = this.dependencies.container.has(CORE_CONFIG_TOKEN)
+      ? (this.dependencies.container
+          .resolve<ConfigStore>(CORE_CONFIG_TOKEN)
+          .get<string>(REDIS_URL_CONFIG_KEY)
+          ?.trim() ?? "")
+      : "";
 
-    if (this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
-      const config = this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
-      const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? "";
+    if (scope === "login") {
+      return withMiddleware(
+        createLoginThrottleMiddleware({
+          ...(redisUrl ? { redisUrl } : {}),
+          maxAttempts: rateLimit.maxAttempts,
+          decaySeconds: rateLimit.decaySeconds,
+        }),
+      )(handler);
+    }
 
-      if (redisUrl) {
-        const throttle =
-          scope === "login"
-            ? createLoginThrottleMiddleware({
-                redisUrl,
-                maxAttempts: rateLimit.maxAttempts,
-                decaySeconds: rateLimit.decaySeconds,
-              })
-            : createThrottleMiddleware({
-                redisUrl,
-                maxAttempts: rateLimit.maxAttempts,
-                decaySeconds: rateLimit.decaySeconds,
-                keyPrefix: memoryKeyPrefix,
-              });
-
-        middleware.push(throttle);
-      } else {
-        middleware.push(
-          createMemoryThrottleMiddleware({
-            maxAttempts: rateLimit.maxAttempts,
-            decaySeconds: rateLimit.decaySeconds,
-            keyPrefix: memoryKeyPrefix,
-          }),
-        );
-      }
-    } else {
-      middleware.push(
-        createMemoryThrottleMiddleware({
+    if (redisUrl) {
+      return withMiddleware(
+        createThrottleMiddleware({
+          redisUrl,
           maxAttempts: rateLimit.maxAttempts,
           decaySeconds: rateLimit.decaySeconds,
           keyPrefix: memoryKeyPrefix,
         }),
-      );
+      )(handler);
     }
 
-    if (middleware.length === 0) {
-      return handler;
-    }
-
-    return withMiddleware(...middleware)(handler);
+    return withMiddleware(
+      createMemoryThrottleMiddleware({
+        maxAttempts: rateLimit.maxAttempts,
+        decaySeconds: rateLimit.decaySeconds,
+        keyPrefix: memoryKeyPrefix,
+      }),
+    )(handler);
   }
 }
 

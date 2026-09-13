@@ -1,9 +1,5 @@
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
-import {
-  getActiveDatabaseConnection,
-  hasActiveDatabaseConnection,
-  runWithDatabaseConnection,
-} from "../database/connectionContext";
+import { runWithDatabaseConnection } from "../database/connectionContext";
 import { isRlsTenancy } from "./tenancyConfig";
 
 type TransactionHandle = {
@@ -19,19 +15,41 @@ async function applyBypassToTransaction(
   ]);
 }
 
-async function runWithMigrationBypass<T>(callback: () => T | Promise<T>): Promise<T> {
+function stringifyBypassIdentifier(identifier: string | number): string {
+  if (typeof identifier === "number") {
+    return String(identifier);
+  }
+  return identifier.trim();
+}
+
+async function applyIdentifierToTransaction(
+  transaction: TransactionHandle,
+  identifier: string | number,
+): Promise<void> {
+  await transaction.unsafe(`SELECT set_config('app.bypass_identifier', $1, true)`, [
+    stringifyBypassIdentifier(identifier),
+  ]);
+}
+
+function assertBypassIdentifier(identifier: string | number): void {
+  if (typeof identifier === "number") {
+    if (!Number.isInteger(identifier) || identifier <= 0) {
+      throw new Error("RLS bypass requires a caller-supplied identifier that pins the row.");
+    }
+    return;
+  }
+  if (typeof identifier === "string" && identifier.trim() !== "") {
+    return;
+  }
+  throw new Error("RLS bypass requires a caller-supplied identifier that pins the row.");
+}
+
+async function runWithScopedTenantTransaction<T>(
+  apply: (transaction: TransactionHandle) => Promise<void>,
+  callback: () => T | Promise<T>,
+): Promise<T> {
   if (!isRlsTenancy()) {
     return await callback();
-  }
-
-  if (hasActiveDatabaseConnection()) {
-    const activeConnection = getActiveDatabaseConnection(getDefaultDatabasePool());
-    await applyBypassToTransaction(activeConnection, true);
-    try {
-      return await callback();
-    } finally {
-      await applyBypassToTransaction(activeConnection, false);
-    }
   }
 
   const pool = getDefaultDatabasePool();
@@ -42,9 +60,27 @@ async function runWithMigrationBypass<T>(callback: () => T | Promise<T>): Promis
   }
 
   return await pool.begin(async (transaction) => {
-    await applyBypassToTransaction(transaction, true);
+    await apply(transaction);
     return await runWithDatabaseConnection(transaction, callback);
   });
 }
 
-export { runWithMigrationBypass };
+async function runWithMigrationBypass<T>(callback: () => T | Promise<T>): Promise<T> {
+  return await runWithScopedTenantTransaction(
+    (transaction) => applyBypassToTransaction(transaction, true),
+    callback,
+  );
+}
+
+async function runWithMigrationBypassForIdentifier<T>(
+  identifier: string | number,
+  callback: () => T | Promise<T>,
+): Promise<T> {
+  assertBypassIdentifier(identifier);
+  return await runWithScopedTenantTransaction(
+    (transaction) => applyIdentifierToTransaction(transaction, identifier),
+    callback,
+  );
+}
+
+export { runWithMigrationBypass, runWithMigrationBypassForIdentifier };

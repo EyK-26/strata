@@ -24,6 +24,21 @@ describe("createMetricsRoutes", () => {
     expect(await response.text()).toContain("http_requests_total");
   });
 
+  test("hides metrics in staging unless METRICS_TOKEN is presented", async () => {
+    const previousEnv = process.env.APP_ENV;
+    const previousToken = process.env.METRICS_TOKEN;
+    process.env.APP_ENV = "staging";
+    delete process.env.METRICS_TOKEN;
+
+    try {
+      const routes = createMetricsRoutes();
+      expect((await routes["/metrics"](metricsRequest())).status).toBe(404);
+    } finally {
+      restoreEnvVar("APP_ENV", previousEnv);
+      restoreEnvVar("METRICS_TOKEN", previousToken);
+    }
+  });
+
   test("hides metrics in production unless METRICS_TOKEN is presented", async () => {
     const previousEnv = process.env.APP_ENV;
     const previousToken = process.env.METRICS_TOKEN;

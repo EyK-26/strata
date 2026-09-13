@@ -6,7 +6,7 @@
     <title><%= it.title ?? "Strata" %></title>
     <meta name="csrf-token" content="<%= it.csrfToken ?? "" %>" />
     <meta name="htmx-config" content='{"inlineStyleNonce":"<%= it.cspNonce ?? "" %>"}' />
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="/assets/htmx.min.js"></script>
     <script nonce="<%= it.cspNonce ?? "" %>">
       document.addEventListener("htmx:configRequest", (event) => {
         const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");

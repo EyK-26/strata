@@ -1,4 +1,5 @@
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
 import type { BunRequest, Server } from "bun";
 import type { AppRouteMap } from "../contracts.ts";
@@ -95,9 +96,14 @@ export function createWebServer(options: WebServerOptions) {
 
           const url = new URL(request.url);
           if (url.pathname.startsWith("/assets/")) {
-            const file = Bun.file(`${publicDir}${url.pathname}`);
-            if (await file.exists()) {
-              return new Response(file);
+            try {
+              const filePath = assertUrlPathUnderRoot(publicDir, url.pathname);
+              const file = Bun.file(filePath);
+              if (await file.exists()) {
+                return new Response(file);
+              }
+            } catch {
+              return await missingHtmlResponse();
             }
           }
 

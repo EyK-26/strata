@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { RedisClient } from "bun";
 import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
@@ -12,11 +13,16 @@ interface ScimThrottleOptions {
 const memoryBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function resolveScimIdentity(request: Request): string {
-  return (
-    request.headers.get("authorization")?.slice("Bearer ".length, "Bearer ".length + 16) ??
-    readClientIp(request) ??
-    "unknown"
-  );
+  const authorization = request.headers.get("authorization") ?? "";
+  const presented = authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+
+  if (presented.length > 0) {
+    return createHash("sha256").update(presented).digest("hex");
+  }
+
+  return readClientIp(request) ?? "unknown";
 }
 
 function throttleFromMemory(

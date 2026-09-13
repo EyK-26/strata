@@ -426,8 +426,8 @@ describe("production defaults", () => {
     const env = await readFile(join(html, ".env.example"), "utf8");
     const readme = await readFile(join(html, "README.md"), "utf8");
 
-    expect(env).toContain("FEATURE_PUBLIC_READS=true");
-    expect(env).toContain("Production boot is blocked unless this is false.");
+    expect(env).toContain("FEATURE_PUBLIC_READS=false");
+    expect(env).toContain("FEATURE_SAML=false");
     expect(readme).toContain("FEATURE_PUBLIC_READS=false");
   });
 
@@ -527,14 +527,14 @@ describe("generated deploy files", () => {
     expect(readme).not.toContain("mount a volume");
   });
 
-  test("README production list covers APP_URL, proxies, CORS, and the 503 health gate", async () => {
+  test("README production list covers APP_URL, proxies, CORS, and the health gate", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["prod-notes", "--frontend=api", "--auth=token", "--yes"]);
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).toContain("Set `APP_URL` to the public origin");
     expect(readme).toContain("TRUST_FORWARDED_FOR=true");
     expect(readme).toContain("Cross-origin browser calls are off in production");
-    expect(readme).toContain("`GET /health` answers 503 until the schema exists");
+    expect(readme).toContain("`GET /health` is 200 when `notes` is readable (including zero rows)");
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("# TRUST_FORWARDED_FOR=true");
   });

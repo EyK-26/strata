@@ -7,13 +7,21 @@ import {
   type SessionUser,
 } from "@getstrata/bootstrap/web/session";
 import { createSessionCookie, sessionCookieName } from "@getstrata/core/auth/sessionCookie";
+import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
 } from "@getstrata/core/database/boundConnection";
+import {
+  getDefaultDatabasePool,
+  registerDefaultDatabasePool,
+  resetDefaultDatabasePoolForTests,
+} from "@getstrata/core/database/defaultConnection";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { getDatabase } from "../../src/db/connection";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
-function createFakeSql(user: SessionUser) {
+function createFakeSql(user: SessionUser & { session_valid_after?: Date | string | null }) {
   const sessions = new Map<
     string,
     {
@@ -22,6 +30,7 @@ function createFakeSql(user: SessionUser) {
       userAgent: string | null;
       ipAddress: string | null;
       lastActiveAt: Date | null;
+      createdAt: Date;
     }
   >();
   let lastInsertExpires: unknown;
@@ -45,6 +54,7 @@ function createFakeSql(user: SessionUser) {
           userAgent: userAgent ?? null,
           ipAddress: ipAddress ?? null,
           lastActiveAt: new Date(),
+          createdAt: new Date(),
         });
         return [] as T[];
       }
@@ -89,6 +99,26 @@ function createFakeSql(user: SessionUser) {
           })) as T[];
       }
 
+      if (query.includes("FROM users")) {
+        return [
+          {
+            id: user.id,
+            user_id: user.id,
+            name: user.name,
+            first_name: (user as SessionUser & { first_name?: string }).first_name,
+            last_name: (user as SessionUser & { last_name?: string }).last_name,
+            email: user.email,
+            learn_subscriber: user.learn_subscriber ?? false,
+            is_admin: user.is_admin ?? false,
+            created_at: new Date(0),
+            session_valid_after: user.session_valid_after ?? null,
+            ...(user.email_verified_at !== undefined
+              ? { email_verified_at: user.email_verified_at }
+              : {}),
+          },
+        ] as T[];
+      }
+
       if (query.includes("FROM sessions")) {
         const sessionId = String(params[0]);
         const session = sessions.get(sessionId);
@@ -99,15 +129,9 @@ function createFakeSql(user: SessionUser) {
 
         return [
           {
-            id: sessionId,
-            user_id: user.id,
-            name: user.name,
-            first_name: (user as SessionUser & { first_name?: string }).first_name,
-            last_name: (user as SessionUser & { last_name?: string }).last_name,
-            email: user.email,
-            learn_subscriber: user.learn_subscriber ?? false,
-            is_admin: user.is_admin ?? false,
+            user_id: session.userId,
             expires_at: session.expiresAt,
+            session_created_at: session.createdAt,
           },
         ] as T[];
       }
@@ -406,5 +430,134 @@ describe("CookieSessionGuard", () => {
       await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
     ).toEqual({ id: 21, role: "admin" });
     expect(loadedName).toBe("Ada Lovelace");
+  });
+
+  test("rejects a session row that has no created_at", async () => {
+    const user: SessionUser = {
+      id: 22,
+      name: "Missing",
+      email: "missing@example.test",
+    };
+    const sql = {
+      async unsafe<T>(query: string): Promise<T[]> {
+        if (query.includes("INSERT INTO sessions")) {
+          return [] as T[];
+        }
+        if (query.includes("FROM sessions")) {
+          return [
+            {
+              user_id: user.id,
+              name: user.name,
+              email: user.email,
+              expires_at: new Date(Date.now() + 60_000),
+            },
+          ] as T[];
+        }
+        return [] as T[];
+      },
+    };
+    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
+    const auth = createCookieSessionAuthManager({ store });
+    const cookie = store.cookieHeader(user, "session-without-created").split(";")[0] ?? "";
+    expect(
+      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+    ).toBeNull();
+  });
+
+  test("compares session created_at to session_valid_after", async () => {
+    const user: SessionUser & { session_valid_after: Date } = {
+      id: 23,
+      name: "Watermark",
+      email: "watermark@example.test",
+      session_valid_after: new Date(Date.now() + 60_000),
+    };
+    const sql = createFakeSql(user);
+    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
+    const auth = createCookieSessionAuthManager({ store });
+    const sessionId = await store.create(user);
+    const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
+    expect(
+      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+    ).toBeNull();
+
+    user.session_valid_after = new Date(Date.now() - 60_000);
+    expect(
+      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+    ).toEqual({ id: 23, role: "member" });
+  });
+
+  test("does not treat users.created_at as the session issued-at", async () => {
+    const user: SessionUser & { session_valid_after: Date } = {
+      id: 24,
+      name: "Join",
+      email: "join@example.test",
+      session_valid_after: new Date(Date.now() - 5_000),
+    };
+    const sql = createFakeSql(user);
+    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
+    const auth = createCookieSessionAuthManager({ store });
+    const sessionId = await store.create(user);
+    const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
+    expect(
+      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+    ).toEqual({ id: 24, role: "member" });
+  });
+
+  test("session create opens a bypass transaction when RLS is on", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "rls";
+    const calls: string[] = [];
+    let previousPool: SqlDatabaseConnection | null = null;
+    try {
+      previousPool = getDefaultDatabasePool();
+    } catch {
+      previousPool = null;
+    }
+    const pool = Object.assign(async () => [] as unknown[], {
+      async begin<T>(callback: (tx: { unsafe: typeof pool.unsafe }) => Promise<T>) {
+        calls.push("begin");
+        const tx = {
+          async unsafe<TRow>(query: string, params?: readonly unknown[]) {
+            calls.push(`tx:${query} ${JSON.stringify(params ?? [])}`);
+            return [] as TRow[];
+          },
+        };
+        return await callback(tx);
+      },
+      async close() {},
+      async unsafe<T>(query: string, params?: readonly unknown[]) {
+        calls.push(`pool:${query} ${JSON.stringify(params ?? [])}`);
+        return [] as T[];
+      },
+    }) as SqlDatabaseConnection;
+    registerDefaultDatabasePool(pool);
+    resetBoundDatabaseConnection();
+    const user: SessionUser = { id: 31, name: "Rls", email: "rls@example.test" };
+    const auth = createCookieSessionAuthManager({
+      secret: "session-secret",
+      cookieName: "strata_session",
+    });
+    try {
+      await auth.signIn(user);
+      expect(calls).toContain("begin");
+      expect(calls.some((line) => line.includes("set_config('app.bypass_identifier'"))).toBe(true);
+      expect(calls.some((line) => line.includes("set_config('app.bypass_rls'"))).toBe(false);
+      expect(
+        calls.some((line) => line.startsWith("tx:") && line.includes("INSERT INTO sessions")),
+      ).toBe(true);
+      expect(
+        calls.some((line) => line.startsWith("pool:") && line.includes("INSERT INTO sessions")),
+      ).toBe(false);
+    } finally {
+      if (previousPool) {
+        registerDefaultDatabasePool(previousPool);
+      } else {
+        resetDefaultDatabasePoolForTests();
+        if (process.env.DATABASE_URL) {
+          getDatabase();
+        }
+      }
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
   });
 });

@@ -27,11 +27,11 @@ describe("signed URLs", () => {
     expect(hasValidSignature(`http://example.test${url}`)).toBe(true);
   });
 
-  test("signedUrl without expiry stays valid", () => {
+  test("signedUrl without expiry is rejected", () => {
     process.env.SIGNED_URL_SECRET = "test-signed-url-secret";
     const path = signedUrl("/verify-email", { id: 4 });
 
-    expect(hasValidSignature(new Request(`http://example.test${path}`))).toBe(true);
+    expect(hasValidSignature(new Request(`http://example.test${path}`))).toBe(false);
   });
 
   test("rejects tampered query params and expired links", () => {

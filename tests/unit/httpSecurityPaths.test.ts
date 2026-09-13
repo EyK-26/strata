@@ -86,8 +86,12 @@ describe("safeInternalRedirectPath", () => {
 });
 
 describe("signed URLs", () => {
-  test("a freshly signed URL verifies", () => {
-    expect(hasValidSignature(signedUrl("/invoices/9"))).toBe(true);
+  test("a freshly signed URL without expires does not verify", () => {
+    expect(hasValidSignature(signedUrl("/invoices/9"))).toBe(false);
+  });
+
+  test("a freshly temporary signed URL verifies", () => {
+    expect(hasValidSignature(temporarySignedUrl("/invoices/9", 60))).toBe(true);
   });
 
   test("a tampered path does not verify", () => {
@@ -109,12 +113,17 @@ describe("signed URLs", () => {
   });
 
   test("query parameter order does not change the outcome", () => {
-    const signed = new URL(signedUrl("/report", { b: "2", a: "1" }), "https://app.example.com");
+    const signed = new URL(
+      temporarySignedUrl("/report", 60, { b: "2", a: "1" }),
+      "https://app.example.com",
+    );
     const reordered = new URL("https://app.example.com/report");
     const signature = signed.searchParams.get("signature") ?? "";
+    const expires = signed.searchParams.get("expires") ?? "";
 
     reordered.searchParams.set("b", "2");
     reordered.searchParams.set("a", "1");
+    reordered.searchParams.set("expires", expires);
     reordered.searchParams.set("signature", signature);
 
     expect(hasValidSignature(reordered)).toBe(true);
@@ -153,6 +162,6 @@ describe("signed URLs", () => {
 
   test("assertValidSignature throws for a bad signature and passes for a good one", () => {
     expect(() => assertValidSignature("/invoices/9?signature=nope")).toThrow();
-    expect(() => assertValidSignature(signedUrl("/invoices/9"))).not.toThrow();
+    expect(() => assertValidSignature(temporarySignedUrl("/invoices/9", 60))).not.toThrow();
   });
 });

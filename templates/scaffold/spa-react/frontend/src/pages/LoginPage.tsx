@@ -4,14 +4,14 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
 export default function LoginPage() {
-  const { login, token } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("admin@example.test");
-  const [password, setPassword] = useState("password");
+  const [password, setPassword] = useState("StrataDemo!ChangeMe");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  if (token) {
+  if (user) {
     return <Navigate to="/" replace />;
   }
 
@@ -35,7 +35,7 @@ export default function LoginPage() {
       <h1>Sign in</h1>
       <p className="hint">
         Seeded users are <code>demo@example.com</code> and <code>admin@example.test</code>, password
-        <code>password</code>.
+        <code>StrataDemo!ChangeMe</code>.
       </p>
 
       {error ? <p className="error">{error}</p> : null}

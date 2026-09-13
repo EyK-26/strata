@@ -493,7 +493,7 @@ class BelongsToManyRelationQuery<
   async get(): Promise<RelatedRecord[]> {
     const parentId = this.parent.get(this.relation.parentKey);
     const pivotRows = await this.connection().unsafe<Pivot>(
-      `SELECT * FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1`,
+      `SELECT * FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1`,
       [parentId],
     );
 
@@ -528,7 +528,7 @@ class BelongsToManyRelationQuery<
   async count(): Promise<number> {
     const parentId = this.parent.get(this.relation.parentKey);
     const rows = await this.connection().unsafe<{ count: number | string }>(
-      `SELECT COUNT(*) AS count FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1`,
+      `SELECT COUNT(*) AS count FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1`,
       [parentId],
     );
     return Number(rows[0]?.count ?? 0);
@@ -548,7 +548,7 @@ class BelongsToManyRelationQuery<
   private async relatedQuery(): Promise<RepositoryQuery<TRelated, RelatedKey> | null> {
     const parentId = this.parent.get(this.relation.parentKey);
     const pivotRows = await this.connection().unsafe<Pivot>(
-      `SELECT * FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1`,
+      `SELECT * FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1`,
       [parentId],
     );
 
@@ -592,15 +592,16 @@ class BelongsToManyRelationQuery<
     const list = Array.isArray(ids) ? ids : [ids];
     const parentId = this.parent.get(this.relation.parentKey);
     const extraKeys = Object.keys(this.pivotValues);
-    const extraColumns = extraKeys.length > 0 ? `, ${extraKeys.join(", ")}` : "";
+    const extraColumns =
+      extraKeys.length > 0 ? `, ${extraKeys.map((key) => quoteIdentifier(key)).join(", ")}` : "";
     const extraPlaceholders = extraKeys.map((_, index) => `$${index + 3}`).join(", ");
     const extraValues = extraKeys.map((key) => this.pivotValues[key]);
 
     for (const id of list) {
       await this.connection().unsafe(
         extraKeys.length > 0
-          ? `INSERT INTO ${this.relation.pivotTable} (${String(this.relation.foreignPivotKey)}, ${String(this.relation.relatedPivotKey)}${extraColumns}) VALUES ($1, $2, ${extraPlaceholders})`
-          : `INSERT INTO ${this.relation.pivotTable} (${String(this.relation.foreignPivotKey)}, ${String(this.relation.relatedPivotKey)}) VALUES ($1, $2)`,
+          ? `INSERT INTO ${quoteIdentifier(this.relation.pivotTable)} (${quoteIdentifier(String(this.relation.foreignPivotKey))}, ${quoteIdentifier(String(this.relation.relatedPivotKey))}${extraColumns}) VALUES ($1, $2, ${extraPlaceholders})`
+          : `INSERT INTO ${quoteIdentifier(this.relation.pivotTable)} (${quoteIdentifier(String(this.relation.foreignPivotKey))}, ${quoteIdentifier(String(this.relation.relatedPivotKey))}) VALUES ($1, $2)`,
         [parentId, id, ...extraValues],
       );
     }
@@ -612,7 +613,7 @@ class BelongsToManyRelationQuery<
 
     for (const id of list) {
       const existing = await this.connection().unsafe(
-        `SELECT 1 FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1 AND ${String(this.relation.relatedPivotKey)} = $2 LIMIT 1`,
+        `SELECT 1 FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1 AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} = $2 LIMIT 1`,
         [parentId, id],
       );
 
@@ -629,7 +630,7 @@ class BelongsToManyRelationQuery<
 
     if (ids === undefined) {
       await this.connection().unsafe(
-        `DELETE FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1`,
+        `DELETE FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1`,
         [parentId],
       );
       return;
@@ -638,7 +639,7 @@ class BelongsToManyRelationQuery<
     const list = Array.isArray(ids) ? ids : [ids];
     const placeholders = list.map((_, index) => `$${index + 2}`).join(", ");
     await this.connection().unsafe(
-      `DELETE FROM ${this.relation.pivotTable} WHERE ${String(this.relation.foreignPivotKey)} = $1 AND ${String(this.relation.relatedPivotKey)} IN (${placeholders})`,
+      `DELETE FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1 AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} IN (${placeholders})`,
       [parentId, ...list],
     );
   }

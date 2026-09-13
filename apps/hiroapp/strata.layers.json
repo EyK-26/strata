@@ -23,7 +23,7 @@
         "mysql": false,
         "redis": true,
         "mailpit": true,
-        "adminer": true
+        "adminer": false
       }
     }
   },

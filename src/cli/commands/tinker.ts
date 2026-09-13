@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { createAppDependencies } from "@getstrata/bootstrap/dependencies";
 import { mailer } from "../../core/mail/mailer";
+import { envFlagEnabled, isProductionEnv } from "../../core/runtime/appEnv";
 import { storage } from "../../core/storage/storage";
 
 interface TinkerContext {
@@ -30,6 +31,12 @@ function assignTinkerGlobals(context: TinkerContext): void {
 }
 
 async function tinkerCommand(): Promise<void> {
+  if (isProductionEnv() && !envFlagEnabled(process.env.STRATA_TINKER_FORCE)) {
+    throw new Error(
+      "tinker is disabled in production. Set STRATA_TINKER_FORCE=true only for an emergency break-glass session.",
+    );
+  }
+
   const context = createTinkerContext();
   assignTinkerGlobals(context);
 

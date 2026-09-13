@@ -5,7 +5,7 @@ import {
   resolveContentSecurityPolicy,
 } from "@getstrata/core/http/contentSecurityPolicy";
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { appEnv } from "../runtime/appKeyPrefix";
+import { isProductionEnv } from "../runtime/appEnv";
 import type { Middleware } from "./middleware";
 
 function createSecurityHeadersMiddleware(options: ContentSecurityPolicyOptions = {}): Middleware {
@@ -27,12 +27,17 @@ function createSecurityHeadersMiddleware(options: ContentSecurityPolicyOptions =
         headers.set("X-Frame-Options", "DENY");
         headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
         headers.set("X-XSS-Protection", "0");
+        headers.set("Cross-Origin-Opener-Policy", "same-origin");
+        headers.set(
+          "Permissions-Policy",
+          "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        );
         headers.set(
           "Content-Security-Policy",
           resolveContentSecurityPolicy(response, { ...options, nonce }),
         );
 
-        if (appEnv() === "production") {
+        if (isProductionEnv()) {
           headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
         }
 

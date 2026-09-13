@@ -18,6 +18,7 @@ import {
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { defaultLayers, exampleAppLayers } from "../../../packages/strata-starter/src/presets.ts";
 import { type Prompter, promptLayers } from "../../../packages/strata-starter/src/prompt.ts";
+import { jsonCsrfHeaders } from "../../helpers/jsonCsrf";
 import { repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -182,7 +183,7 @@ describe("create-strata args", () => {
     expect(docker.docker).toBe(true);
     expect(layersFromFlags(docker).docker.services.postgres).toBe(true);
     expect(layersFromFlags(docker).docker.services.redis).toBe(true);
-    expect(layersFromFlags(docker).docker.services.adminer).toBe(true);
+    expect(layersFromFlags(docker).docker.services.adminer).toBe(false);
 
     const local = parseCreateStrataArgs([
       "acme",
@@ -241,6 +242,9 @@ describe("create-strata generate", () => {
     const authProvider = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
     expect(authProvider).toContain("envFlagEnabled(process.env.AUTH_DEV_HEADERS)");
     expect(authProvider).not.toContain('AUTH_DEV_HEADERS === "false"');
+    const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
+    expect(providers).toContain("policyProvider");
+    expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
 
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
@@ -255,7 +259,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.0.9");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^1.1.0");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -266,6 +270,8 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("apps/hiroapp");
 
     expect(existsSync(join(app, "src/models/Note.ts"))).toBe(true);
+    expect(existsSync(join(app, "src/models/User.ts"))).toBe(false);
+    expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(false);
     const note = await readFile(join(app, "src/models/Note.ts"), "utf8");
     expect(note).toContain("registerModelRepository");
     expect(note).toContain('static $fillable = ["body"]');
@@ -277,12 +283,17 @@ describe("create-strata generate", () => {
     expect(migrate).not.toContain("INSERT INTO notes");
 
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
-    expect(site).toContain('Note.query().value("id")');
-    expect(site).not.toContain("SELECT 1 FROM notes");
+    expect(site).toContain("Note.query().limit(1).get()");
+    expect(site).not.toContain('Note.query().value("id")');
+    expect(site).not.toContain("runWithMigrationBypass");
+    expect(site).not.toContain("SELECT 1 FROM notes LIMIT 1");
 
     const api = await readFile(join(app, "docs/API.md"), "utf8");
     expect(api).toContain('.pluck("body", "id")');
+    expect(api).toContain("zero rows is still 200");
     expect(api).not.toContain("SELECT id, body FROM notes");
+    expect(api).not.toContain("/webhooks");
+    expect(api).not.toContain("/billing");
   });
 
   test("in-repo sibling README is not dogfood copy", async () => {
@@ -327,7 +338,7 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("—");
   });
 
-  test("postgres HTML with docker writes postgres, redis, mailpit, and adminer", async () => {
+  test("postgres HTML with docker writes postgres, redis, and mailpit", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "ent-app",
@@ -345,11 +356,32 @@ describe("create-strata generate", () => {
     expect(compose).toContain("postgres:");
     expect(compose).toContain("redis:");
     expect(compose).toContain("mailpit:");
-    expect(compose).toContain("adminer:");
-    expect(compose).toContain("ADMINER_DEFAULT_SERVER: postgres");
+    expect(compose).not.toContain("adminer:");
+    expect(compose).toContain("127.0.0.1:5432:5432");
     expect(compose).not.toContain("mysql:");
+    expect(compose).toContain("./docker/postgres-init:/docker-entrypoint-initdb.d:ro");
     const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("http://localhost:8080");
+    expect(readme).not.toContain("http://localhost:8080");
+    expect(readme).toContain("strata_app");
+
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toContain(
+      "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/ent_app",
+    );
+    expect(env).toContain("NOSUPERUSER NOBYPASSRLS");
+    expect(env).not.toContain("MYSQL_URL");
+    const init = await readFile(join(app, "docker/postgres-init/01-strata-app-role.sql"), "utf8");
+    expect(init).toContain("CREATE ROLE strata_app LOGIN");
+    expect(init).toContain("NOBYPASSRLS");
+    expect(init).toContain("NOSUPERUSER");
+    expect(init).toContain("GRANT CONNECT ON DATABASE ent_app TO strata_app");
+    expect(init).toContain("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public");
+    expect(init).toContain("already-existing volume");
+    expect(existsSync(join(app, "db/ensure-postgres-app-role.sql"))).toBe(true);
+    const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
+    expect(preload).toContain(
+      "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/ent_app",
+    );
 
     expect(existsSync(join(app, "views/auth/login.eta"))).toBe(true);
     expect(existsSync(join(app, "views/auth/register.eta"))).toBe(true);
@@ -358,8 +390,6 @@ describe("create-strata generate", () => {
     expect(css).toContain("--accent");
     expect(existsSync(join(app, "src/modules/careers"))).toBe(false);
     expect(existsSync(join(app, "resources/views/organizations"))).toBe(false);
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).not.toContain("MYSQL_URL");
 
     const auth = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
     expect(auth).toContain("createCookieSessionAuthManager");
@@ -380,6 +410,20 @@ describe("create-strata generate", () => {
     ]);
 
     expect(existsSync(join(app, "docker-compose.yml"))).toBe(false);
+    expect(existsSync(join(app, "docker/postgres-init/01-strata-app-role.sql"))).toBe(false);
+    expect(existsSync(join(app, "db/ensure-postgres-app-role.sql"))).toBe(true);
+    const ensureSql = await readFile(join(app, "db/ensure-postgres-app-role.sql"), "utf8");
+    expect(ensureSql).toContain("already-existing volume");
+    expect(ensureSql).toContain("ALTER ROLE strata_app WITH LOGIN PASSWORD");
+    expect(ensureSql).toContain("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public");
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toMatch(
+      /^DATABASE_URL=postgresql:\/\/strata_app:dev-strata-app-change-me@localhost:5432\/team_local$/m,
+    );
+    expect(env).not.toMatch(/^DATABASE_URL=postgresql:\/\/postgres:/m);
+    expect(env).toContain(
+      "MIGRATION_DATABASE_URL=postgresql://postgres:dev-postgres-change-me@localhost:5432/team_local",
+    );
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).toContain("off (local installs)");
     expect(readme).toContain("Use local installs for Postgres, Redis");
@@ -421,6 +465,8 @@ describe("create-strata generate", () => {
     expect(compose).not.toContain("redis:");
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).toContain("Adminer: http://localhost:8080");
+    expect(readme).toContain("password `dev-postgres-change-me`");
+    expect(readme).toContain("skips FORCE RLS");
   });
 
   test("example app maps are sqlite API, postgres HTML, and postgres HTMX enterprise", () => {
@@ -431,8 +477,8 @@ describe("create-strata generate", () => {
     expect(exampleAppLayers("hiroapp").tenancy).toBe("rls");
     expect(exampleAppLayers("hiroapp").docker.services.mysql).toBe(false);
     expect(exampleAppLayers("hiroapp-hobby").docker.services.adminer).toBe(false);
-    expect(exampleAppLayers("hiroapp-team").docker.services.adminer).toBe(true);
-    expect(exampleAppLayers("hiroapp").docker.services.adminer).toBe(true);
+    expect(exampleAppLayers("hiroapp-team").docker.services.adminer).toBe(false);
+    expect(exampleAppLayers("hiroapp").docker.services.adminer).toBe(false);
     expect(defaultLayers().database).toBe("sqlite");
   });
 
@@ -475,16 +521,88 @@ describe("create-strata generate", () => {
     ]);
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
     expect(migrate).toContain("CREATE TABLE IF NOT EXISTS tenant");
+    expect(migrate).toContain("ALTER TABLE notes FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("ALTER TABLE users FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("ALTER TABLE sessions FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("ALTER TABLE api_tokens FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("ALTER TABLE auth_one_time_tokens FORCE ROW LEVEL SECURITY");
+    expect(migrate).toContain("u.id = sessions.user_id");
+    expect(migrate).toContain("u.id = auth_one_time_tokens.user_id");
+    expect(migrate).toContain("auth_saml_assertions");
+    const seedFn = migrate.slice(migrate.indexOf("export async function seed"));
+    expect(seedFn.indexOf("getSql()")).toBeGreaterThan(-1);
+    expect(seedFn.indexOf("getSql()")).toBeLessThan(seedFn.indexOf("runWithMigrationBypass(async"));
+    const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    expect(authModule).toContain("completePasswordLogin");
+    expect(authModule).toMatch(/"\/api\/v1\/auth\/login":[\s\S]*?wrapLogin\(/);
+    expect(authModule).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
+    expect(authModule).toContain("runWithMigrationBypassForIdentifier");
+    expect(authModule).toContain("runAuthWrite");
+    expect(authModule).toContain("createOAuthState()");
+    expect(authModule).not.toContain("createOAuthStateCookie");
+    expect(authModule).toContain("JSON.stringify([])");
+    expect(authModule).toContain("abilities: []");
+    expect(authModule).toContain("User.create({");
+    expect(authModule).toContain("ApiToken.create({");
+    expect(authModule).not.toContain("FROM users");
+    expect(authModule).not.toContain("INTO users");
+    expect(authModule).not.toContain("INTO api_tokens");
+    expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
+      "new JwtGuard(container)",
+    );
     expect(existsSync(join(app, "src/bootstrap/ensureDatabase.ts"))).toBe(true);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
     // The database name must come from DATABASE_URL, never a hardcoded rename.
     expect(ensure).toContain("resolveAppDatabaseUrl");
     expect(ensure).not.toContain("acme_test");
     expect(ensure).not.toMatch(/url\.pathname\s*=/);
+    const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(createApp).toContain("assertRlsLiveDatabaseRole");
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("/acme");
+    expect(env).toMatch(
+      /^DATABASE_URL=postgresql:\/\/strata_app:dev-strata-app-change-me@localhost:5432\/acme$/m,
+    );
+    expect(env).not.toMatch(/^DATABASE_URL=postgresql:\/\/postgres:/m);
+    expect(env).toContain(
+      "MIGRATION_DATABASE_URL=postgresql://postgres:dev-postgres-change-me@localhost:5432/acme",
+    );
     expect(env).not.toContain("acme_test");
     expect(env).not.toContain("MYSQL_URL");
+    expect(existsSync(join(app, "db/ensure-postgres-app-role.sql"))).toBe(true);
+    expect(existsSync(join(app, "docker/postgres-init/01-strata-app-role.sql"))).toBe(false);
+    const fresh = await readFile(join(app, "src/db/fresh.ts"), "utf8");
+    expect(fresh).toContain("dropPostgresTablesAsAdmin");
+    expect(fresh).not.toContain("getSql()");
+    expect(fresh).toContain("auth_saml_assertions");
+    const rollback = await readFile(join(app, "src/db/rollback.ts"), "utf8");
+    expect(rollback).toContain("dropPostgresTablesAsAdmin");
+  });
+
+  test("postgres rls with docker still ships repeatable SQL and a NOBYPASSRLS URL", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "acme-docker",
+      "--frontend=server-htmx",
+      "--database=postgres",
+      "--auth=cookie",
+      "--tenancy=rls",
+      "--docker",
+      "--yes",
+    ]);
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toMatch(
+      /^DATABASE_URL=postgresql:\/\/strata_app:dev-strata-app-change-me@localhost:5432\/acme_docker$/m,
+    );
+    expect(env).not.toMatch(/^DATABASE_URL=postgresql:\/\/postgres:/m);
+    const init = await readFile(join(app, "docker/postgres-init/01-strata-app-role.sql"), "utf8");
+    const ensure = await readFile(join(app, "db/ensure-postgres-app-role.sql"), "utf8");
+    expect(init).toBe(ensure);
+    expect(init).toContain("already-existing volume");
+    expect(init).toContain("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public");
+    const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
+    expect(site).toContain("Note.query().limit(1).get()");
+    expect(site).not.toContain("runWithMigrationBypass");
   });
 
   test("cookie extras write MFA schema, verify views, and a SCIM module", async () => {
@@ -512,8 +630,106 @@ describe("create-strata generate", () => {
     expect(auth).toContain("/register");
     expect(auth).toContain("/forgot-password");
     expect(auth).toContain("/email/verify");
+    expect(auth).toContain("if (record.mfa_enabled)");
+    expect(auth).toContain("pendingMfaSetCookie(record.id)");
+    expect(auth).toContain("await revokeUserSessions(Number(user.id))");
+    expect(auth).toContain("kernel.wrapWebPasswordConfirm(");
+    expect(auth).toMatch(/"\/reset-password":[\s\S]*?wrapWeb\(kernel\.wrapSigned\(/);
+    expect(auth).toContain("assertValidSignature(request)");
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
+  });
+
+  test("generated SCIM, auth, and seed use User and ApiToken models", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "model-app",
+      "--frontend=server-htmx",
+      "--database=sqlite",
+      "--auth=cookie-token",
+      "--tenancy=column",
+      "--scim",
+      "--mfa",
+      "--yes",
+    ]);
+    const scim = await readFile(join(app, "src/modules/scim/index.ts"), "utf8");
+    expect(scim).toContain("User.where({ email, tenant_id: tenantId() }).first()");
+    expect(scim).toContain("User.where({ tenant_id: tenantId() }).count()");
+    expect(scim).toContain(
+      "User.where({ tenant_id: tenantId() }).offset(startIndex - 1).limit(count).get()",
+    );
+    expect(scim).toContain("User.where({ id, tenant_id: tenantId() }).first()");
+    expect(scim).toContain("parsePositiveIntParam");
+    expect(scim).toContain("User.create({");
+    expect(scim).toContain("tenant_id: tenantId()");
+    expect(scim).toContain("user.update({ name, email })");
+    expect(scim).toContain("user.delete()");
+    expect(scim).not.toContain("FROM users");
+    expect(scim).not.toContain("INTO users");
+    expect(scim).not.toContain("runWithMigrationBypass(");
+    expect(scim).not.toContain("as User");
+    expect(scim).not.toContain("User.where({ tenant_id: tenantId() }).get()");
+
+    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    expect(auth).toContain("User.create({");
+    expect(auth).toContain("ApiToken.create({");
+    expect(auth).toContain("AuthOneTimeToken.create({");
+    expect(auth).toContain("JSON.stringify([])");
+    expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
+    expect(auth).toContain("validateObject");
+    expect(auth).toContain("emailRule()");
+    expect(auth).toContain("minLength(8)");
+    expect(auth).toContain("kernel.wrapWebPasswordConfirm(");
+    expect(auth).toMatch(/"\/reset-password":[\s\S]*?wrapWeb\(kernel\.wrapSigned\(/);
+    expect(auth).toMatch(/"\/api\/v1\/auth\/reset-password":[\s\S]*?wrapSigned\(/);
+    expect(auth).not.toContain("isValidEmail");
+    expect(auth).not.toContain("hasFreshPasswordConfirmation");
+    expect(auth).not.toContain("FROM users");
+    expect(auth).not.toContain("INTO users");
+    expect(auth).not.toContain("INTO api_tokens");
+    expect(auth).not.toContain("INTO auth_one_time_tokens");
+
+    const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
+    expect(providers).toContain("policyProvider");
+    expect(providers).toContain("authProvider");
+    const policy = await readFile(join(app, "src/bootstrap/providers/policy.ts"), "utf8");
+    expect(policy).toContain("CORE_POLICY_GATE_TOKEN");
+    expect(policy).toContain("new PolicyGate()");
+    expect(policy).toContain("@getstrata/core/auth/policy");
+    expect(policy).toContain("@getstrata/bootstrap/config");
+
+    const directory = await readFile(join(app, "src/bootstrap/authDirectory.ts"), "utf8");
+    expect(directory).toContain("User.where({ email }).first()");
+    expect(directory).toContain("User.find(id)");
+    expect(directory).toContain("ApiToken.where({ token_hash: hashed }).first()");
+    expect(directory).toContain("User.find(user_id)");
+    expect(directory).toContain("runWithMigrationBypassForIdentifier(hashed");
+    expect(directory).toContain("runWithMigrationBypassForIdentifier(user_id");
+    expect(directory).not.toContain("JOIN");
+    expect(directory).not.toContain("FROM users");
+    expect(directory).not.toContain("FROM api_tokens");
+    expect(directory).toContain('user.get("password")');
+    expect(directory).not.toContain("toArray()");
+    expect(directory).not.toContain("as User");
+    expect(directory).toContain("function mapUserRow(user: LoadedUser): AuthUserRecord");
+    expect(directory).toContain('asTimestamp(user.get("email_verified_at"))');
+    expect(directory).toContain('asTimestamp(user.get("session_valid_after"))');
+    expect(directory).toContain('asNullableString(user.get("mfa_secret"))');
+
+    const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
+    expect(migrate).toContain("User.create({");
+    expect(migrate).toContain('User.query().value("id")');
+    expect(migrate).not.toContain("INSERT INTO users");
+    expect(migrate).not.toContain("INSERT INTO notes");
+
+    const userModel = await readFile(join(app, "src/models/User.ts"), "utf8");
+    expect(userModel).toContain(
+      'static $hidden = ["password", "mfa_secret", "mfa_recovery_codes"]',
+    );
+    expect(userModel).toContain("static $timestamps = false");
+    expect(userModel).toContain("tenant_id");
+    expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(true);
+    expect(existsSync(join(app, "src/models/AuthOneTimeToken.ts"))).toBe(true);
   });
 
   test("metrics extra writes GET /metrics and a token", async () => {
@@ -533,6 +749,9 @@ describe("create-strata generate", () => {
     const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
     expect(auth).toContain("/api/v1/auth/register");
     expect(auth).toContain("/api/v1/auth/forgot-password");
+    expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
+    expect(auth).toContain("validateObject");
+    expect(auth).toMatch(/"\/api\/v1\/auth\/reset-password":[\s\S]*?wrapSigned\(/);
     expect(existsSync(join(app, "views/auth/login.eta"))).toBe(false);
   });
 
@@ -797,7 +1016,9 @@ describe("create-strata CLI", () => {
         const ready = await fetch(`http://127.0.0.1:${coldServer.port}/ready`);
         expect(ready.status).toBe(200);
         expect(ready.headers.get("content-type")).toContain("application/json");
-        expect(await ready.json()).toMatchObject({ status: "ready", checks: { database: "ok" } });
+        const readyBody = (await ready.json()) as { status: string; checks?: unknown };
+        expect(readyBody).toMatchObject({ status: "ready" });
+        expect(readyBody.checks).toBeUndefined();
       } finally {
         coldServer.stop();
       }
@@ -907,12 +1128,13 @@ describe("create-strata CLI", () => {
           method: "POST",
           headers: {
             cookie: cookies,
+            origin,
             "content-type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({
             _token: token ?? "",
             email: "demo@example.com",
-            password: "password",
+            password: "StrataDemo!ChangeMe",
           }),
           redirect: "manual",
         });
@@ -976,10 +1198,18 @@ describe("create-strata CLI", () => {
       const server = createAppServer(routes, 0);
       const origin = `http://127.0.0.1:${server.port}`;
       try {
-        const login = await fetch(`${origin}/api/v1/auth/login`, {
+        const blocked = await fetch(`${origin}/api/v1/auth/login`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: "demo@example.com", password: "password" }),
+          body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
+        });
+        expect(blocked.status).toBe(403);
+
+        const csrf = await jsonCsrfHeaders(origin);
+        const login = await fetch(`${origin}/api/v1/auth/login`, {
+          method: "POST",
+          headers: csrf.headers,
+          body: JSON.stringify({ email: "demo@example.com", password: "StrataDemo!ChangeMe" }),
         });
         expect(login.status).toBe(200);
         const minted = (await login.json()) as { token: string; expires_at: string | null };

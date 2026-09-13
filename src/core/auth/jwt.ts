@@ -105,7 +105,11 @@ function verifyJwt(token: string, secret?: string): JwtPayload | null {
     return null;
   }
 
-  if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) {
+  if (
+    typeof payload.exp !== "number" ||
+    !Number.isFinite(payload.exp) ||
+    payload.exp * 1000 <= Date.now()
+  ) {
     return null;
   }
 

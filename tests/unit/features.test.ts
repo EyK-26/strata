@@ -35,6 +35,13 @@ describe("feature flags", () => {
     expect(typeof featureFlags.registration).toBe("boolean");
   });
 
+  test("public reads and SIEM export default off", () => {
+    delete process.env.FEATURE_PUBLIC_READS;
+    delete process.env.FEATURE_SIEM_EXPORT;
+    expect(isFeatureEnabled("publicReads")).toBe(false);
+    expect(isFeatureEnabled("siemExport")).toBe(false);
+  });
+
   test("registration defaults on and can be disabled", () => {
     delete process.env.FEATURE_REGISTRATION;
     expect(isFeatureEnabled("registration")).toBe(true);

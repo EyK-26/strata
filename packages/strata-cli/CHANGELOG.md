@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 1.1.0
+
+Lockstep with `@getstrata/core` 1.1.0. No new CLI commands. See the core 1.1.0 migration list.
+
 ## 1.0.9
 
 Label HiroApp as internal e2e dogfood and seed notes via Model

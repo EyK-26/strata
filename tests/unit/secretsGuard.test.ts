@@ -102,6 +102,47 @@ describe("assertProductionSecrets", () => {
     ).toThrow(/AUTH_DEV_HEADERS=false/);
   });
 
+  test("blocks missing SAML_IDP_ISSUER when SAML is enabled in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_PUBLIC_READS: "false",
+        FEATURE_SAML: "true",
+        FRONTEND_MODE: "api",
+        SAML_IDP_SSO_URL: "https://idp.example.test/sso",
+        SAML_IDP_CERT: "cert",
+        SAML_SP_ENTITY_ID: "https://sp.example.test/metadata",
+        SAML_ACS_URL: "https://app.example/auth/saml/acs",
+      }),
+    ).toThrow(/SAML_IDP_ISSUER/);
+  });
+
+  test("blocks SAML_WANT_RESPONSE_SIGNED=false when SAML is enabled in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_PUBLIC_READS: "false",
+        FEATURE_SAML: "true",
+        FRONTEND_MODE: "api",
+        OAUTH_STATE_SECRET: "rotated-oauth-state-secret",
+        SAML_IDP_SSO_URL: "https://idp.example.test/sso",
+        SAML_IDP_CERT: "cert",
+        SAML_SP_ENTITY_ID: "https://sp.example.test/metadata",
+        SAML_ACS_URL: "https://app.example/auth/saml/acs",
+        SAML_IDP_ISSUER: "https://idp.example.test/metadata",
+        SAML_WANT_RESPONSE_SIGNED: "false",
+      }),
+    ).toThrow(/signed SAML responses are required/);
+  });
+
   test("blocks missing STRIPE_WEBHOOK_SECRET when billing is enabled in production", () => {
     expect(() =>
       assertProductionSecrets({
@@ -221,7 +262,7 @@ describe("assertProductionSecrets", () => {
         APP_URL: "https://app.example",
         FRONTEND_MODE: "server-htmx",
         AUTH_DEV_HEADERS: "false",
-        DATABASE_URL: "postgres://localhost/getstrata",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
         SESSION_SECRET: "a".repeat(32),
         FEATURE_FIELD_ENCRYPTION: "false",
         FEATURE_BILLING: "false",
@@ -239,7 +280,7 @@ describe("assertProductionSecrets", () => {
         APP_URL: "https://app.example",
         FRONTEND_MODE: "server-htmx",
         AUTH_DEV_HEADERS: "false",
-        DATABASE_URL: "postgres://localhost/getstrata",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
       }),
     ).toThrow(/SESSION_SECRET/);
   });
@@ -251,7 +292,7 @@ describe("assertProductionSecrets", () => {
         APP_URL: "https://app.example",
         FRONTEND_MODE: "hybrid",
         AUTH_DEV_HEADERS: "false",
-        DATABASE_URL: "postgres://localhost/getstrata",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
       }),
     ).toThrow(/SESSION_SECRET/);
     expect(() =>
@@ -260,7 +301,7 @@ describe("assertProductionSecrets", () => {
         APP_URL: "https://app.example",
         FRONTEND_MODE: "hybrid",
         AUTH_DEV_HEADERS: "false",
-        DATABASE_URL: "postgres://localhost/getstrata",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
         SESSION_SECRET: "a".repeat(32),
         FEATURE_FIELD_ENCRYPTION: "false",
         FEATURE_BILLING: "false",
@@ -340,6 +381,193 @@ describe("assertProductionSecrets", () => {
         SESSION_SECRET: "a-real-rotated-session-secret-value-32ch",
       }),
     ).not.toThrow();
+  });
+
+  test("blocks DATABASE_URL user postgres when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).toThrow(/DATABASE_URL for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not postgres/);
+  });
+
+  test("blocks APP_DATABASE_URL user postgres even when DATABASE_URL is an app role", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+        APP_DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).toThrow(/APP_DATABASE_URL for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not postgres/);
+  });
+
+  test("blocks generated change-me in DATABASE_URL in production", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/app",
+      }),
+    ).toThrow(/replace the generated placeholder values for DATABASE_URL/);
+  });
+
+  test("allows a NOBYPASSRLS DATABASE_URL when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+      }),
+    ).not.toThrow();
+  });
+
+  test("allows DATABASE_URL user postgres when TENANCY_DRIVER=none", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        TENANCY_DRIVER: "none",
+        DATABASE_URL: "postgresql://postgres:rotated-superuser-secret@db.example/app",
+      }),
+    ).not.toThrow();
+  });
+
+  test("blocks an empty DATABASE_URL username when TENANCY_DRIVER=rls", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        FEATURE_PUBLIC_READS: "false",
+        DATABASE_URL: "postgres://localhost/getstrata",
+      }),
+    ).toThrow(/must include a NOBYPASSRLS role username/);
+  });
+
+  test("blocks DATABASE_URL user deploy only after the live role check", async () => {
+    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "production",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "postgresql://deploy:rotated-secret@db.example/app",
+        },
+        async () => ({ rolname: "deploy", rolsuper: true, rolbypassrls: false }),
+      ),
+    ).rejects.toThrow(/role deploy is rolsuper or rolbypassrls/);
+  });
+
+  test("blocks APP_DATABASE_URL user app when the live role has BYPASSRLS", async () => {
+    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "production",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+          APP_DATABASE_URL: "postgresql://app:rotated-secret@db.example/app",
+        },
+        async () => ({ rolname: "app", rolsuper: false, rolbypassrls: true }),
+      ),
+    ).rejects.toThrow(/APP_DATABASE_URL role app is rolsuper or rolbypassrls/);
+  });
+
+  test("allows a live NOBYPASSRLS role", async () => {
+    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "production",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+        },
+        async () => ({ rolname: "strata_app", rolsuper: false, rolbypassrls: false }),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  test("fails closed when the live role query throws", async () => {
+    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "production",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+        },
+        async () => {
+          throw new Error("connection refused");
+        },
+      ),
+    ).rejects.toThrow(/could not inspect the live Postgres role/);
+  });
+
+  test("runs the live role check for rls outside production and skips non-postgres URLs", async () => {
+    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "local",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "postgresql://postgres:postgres@localhost/hiroapp",
+        },
+        async () => {
+          throw new Error("should not inspect");
+        },
+      ),
+    ).rejects.toThrow(/not postgres/);
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "local",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "postgresql://deploy:rotated-secret@db.example/app",
+        },
+        async () => ({ rolname: "deploy", rolsuper: true, rolbypassrls: false }),
+      ),
+    ).rejects.toThrow(/role deploy is rolsuper or rolbypassrls/);
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "local",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "postgresql://strata_app:rotated-app-secret@db.example/app",
+        },
+        async () => ({ rolname: "strata_app", rolsuper: false, rolbypassrls: false }),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertRlsLiveDatabaseRole(
+        {
+          APP_ENV: "production",
+          TENANCY_DRIVER: "rls",
+          DATABASE_URL: "sqlite:./storage/app.sqlite",
+        },
+        async () => {
+          throw new Error("should not inspect");
+        },
+      ),
+    ).resolves.toBeUndefined();
   });
 });
 

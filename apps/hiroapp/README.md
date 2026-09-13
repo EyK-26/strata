@@ -14,7 +14,7 @@ This in-repo app is Strata dogfood for internal end-to-end testing (migrate, see
 | Queue | `redis` |
 | Mail | `smtp` |
 | SPA prefix | `/app` |
-| Docker Compose | postgres, redis, mailpit, adminer |
+| Docker Compose | postgres, redis, mailpit |
 | Extras | mfa, emailVerification, scim, metrics |
 
 This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md).
@@ -34,16 +34,14 @@ Open http://localhost:3000. Health check: `GET /health`.
 
 ## Supporting tools
 
-Docker Compose includes Postgres, Redis, SMTP (Mailpit), Adminer (database UI).
+Docker Compose includes Postgres, Redis, SMTP (Mailpit).
 
 ```bash
 docker compose up -d
 ```
 
-Adminer: http://localhost:8080 (PostgreSQL, server `postgres`, username `postgres`, password `postgres`).
 
-
-Seeded login (password `password`):
+Seeded login (password `StrataDemo!ChangeMe`):
 
 - `demo@example.com` (member)
 - `admin@example.test` (admin)
@@ -68,7 +66,7 @@ Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <M
 
 ## Database
 
-The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`.
+The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`. `.env.example` points `DATABASE_URL` at `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`), including `--no-docker`. `db/ensure-postgres-app-role.sql` is repeatable on an existing volume; Compose init still runs on first empty volume. The `postgres` superuser is for CREATE ROLE / GRANT / migrate and Adminer.
 
 ## Deploy
 
@@ -96,5 +94,6 @@ The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything els
 - Set `TOKEN_HASH_PEPPER`.
 - Set `SCIM_BEARER_TOKEN`.
 - Set `METRICS_TOKEN`.
+- `DATABASE_URL` must be a `NOBYPASSRLS` role, not the `postgres` superuser. Generated apps create `strata_app` via `db/ensure-postgres-app-role.sql` (and Compose init on first empty volume). `MIGRATION_DATABASE_URL` may stay the superuser for CREATE ROLE / GRANT / migrate. Production boot rejects username `postgres` or `root`, then inspects `pg_roles` for `rolsuper` / `rolbypassrls`.
 
-`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` answers 503 until the schema exists, so a fresh deploy stays out of rotation until it is migrated.
+`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` is 200 when `notes` is readable (including zero rows) and 503 when that read fails.

@@ -6,21 +6,43 @@ import { wrapWebLogin, wrapWebRegister } from "@getstrata/bootstrap/web/routing"
 import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
 import type { AuthManager } from "@getstrata/core/auth/guard";
 import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";
+import {
+  AUTH_ONE_TIME_PURPOSES,
+  consumeOneTimeToken,
+  generateOneTimeToken,
+  hashOneTimeToken,
+  revokeUserSessions as revokeStoredUserSessions,
+} from "@getstrata/core/auth/oneTimeToken";
 import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";
+import { createPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";
+import {
+  completePasswordLogin,
+  persistConsumedRecoveryHash,
+} from "@getstrata/core/auth/passwordLogin";
+import { createSamlServiceProvider } from "@getstrata/core/auth/saml/samlServiceProvider";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
-import { protectMfaSecret, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { sqlTimestamp } from "@getstrata/core/database/dialect";
+import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import { flashResponse } from "@getstrata/core/http/flashSession";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
+import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";
 import { absoluteTemporarySignedUrl, assertValidSignature } from "@getstrata/core/http/signedUrl";
+import { parseJsonBody } from "@getstrata/core/http/validation";
 import { mailer } from "@getstrata/core/mail/mailer";
-import {
-  generateRecoveryCodes,
-  hashRecoveryCode,
-  recoveryCodeMatches,
-} from "@getstrata/core/security/recoveryCodes";
+import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";
+import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
 import { buildOtpauthUrl, generateTotpSecret, verifyTotp } from "@getstrata/core/security/totp";
+import { runWithMigrationBypassForIdentifier } from "@getstrata/core/tenant/databaseTenantContext";
+import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
+import {
+  emailRule,
+  minLength,
+  required,
+  stringRule,
+  validateObject,
+} from "@getstrata/core/validation/rules";
 import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";
 import { getSql } from "../../bootstrap/database.ts";
 import {
@@ -29,18 +51,99 @@ import {
   readPendingMfaUserId,
 } from "../../bootstrap/pendingMfa.ts";
 import { renderPage } from "../../lib/view.ts";
+import { ApiToken } from "../../models/ApiToken.ts";
+import { AuthOneTimeToken } from "../../models/AuthOneTimeToken.ts";
+import { User } from "../../models/User.ts";
 
-async function sendSignedMail(
+function parseLoginCredentials(payload: unknown) {
+  const body = validateObject(payload, {
+    email: [required(), stringRule(), emailRule()],
+    password: [required(), stringRule()],
+    mfa_code: [stringRule()],
+  });
+  return {
+    email: String(body.email).toLowerCase(),
+    password: String(body.password ?? ""),
+    mfa_code: typeof body.mfa_code === "string" ? body.mfa_code : undefined,
+  };
+}
+
+function parseRegisterCredentials(payload: unknown) {
+  const body = validateObject(payload, {
+    name: [required(), stringRule()],
+    email: [required(), stringRule(), emailRule()],
+    password: [required(), stringRule(), minLength(8)],
+  });
+  return {
+    name: String(body.name ?? ""),
+    email: String(body.email).toLowerCase(),
+    password: String(body.password ?? ""),
+  };
+}
+
+function parseForgotPasswordEmail(payload: unknown) {
+  const body = validateObject(payload, {
+    email: [required(), stringRule(), emailRule()],
+  });
+  return String(body.email).toLowerCase();
+}
+
+async function runAuthWrite<T>(
+  identifier: string | number,
+  callback: () => Promise<T>,
+): Promise<T> {
+  return await runWithMigrationBypassForIdentifier(identifier, callback);
+}
+
+async function issueSignedAuthMail(
   to: string,
   subject: string,
   path: string,
-  query: Record<string, string>,
+  purpose: string,
+  userId: number,
+  extra: Record<string, string> = {},
 ) {
-  const link = absoluteTemporarySignedUrl(path, 3600, query);
+  const issued = generateOneTimeToken();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  await runAuthWrite(userId, async () => {
+    await AuthOneTimeToken.create({
+      purpose,
+      user_id: userId,
+      token_hash: issued.hash,
+      expires_at: expiresAt.toISOString(),
+    });
+  });
+  const link = absoluteTemporarySignedUrl(path, 3600, { ...extra, token: issued.plain });
   await mailer().send({
     to,
     subject,
     body: `${subject}\n\n${link}\n`,
+  });
+}
+
+async function consumeSignedAuthToken(request: Request, purpose: string): Promise<number | null> {
+  const token = new URL(request.url).searchParams.get("token") ?? "";
+  if (!token) {
+    return null;
+  }
+  return await runAuthWrite(hashOneTimeToken(token), async () =>
+    consumeOneTimeToken(getSql(), purpose, token),
+  );
+}
+
+async function revokeUserSessions(userId: number) {
+  await runAuthWrite(userId, async () => {
+    await revokeStoredUserSessions(getSql(), userId);
+  });
+}
+
+async function persistAuthRecovery(
+  userId: number,
+  currentRaw: string | null | undefined,
+  consumedHash: string | undefined,
+) {
+  await runAuthWrite(userId, async () => {
+    await persistConsumedRecoveryHash(getSql(), userId, currentRaw, consumedHash);
   });
 }
 
@@ -67,35 +170,132 @@ const authModule: AppModule = {
   order: 2,
   routes({ kernel, dependencies }) {
     return {
-      "/api/v1/auth/login": {
+      "/api/v1/auth/csrf": {
+        GET: kernel.wrap(
+          "api",
+          withErrorHandling(async (request) => {
+            return jsonResponse({ token: resolveCsrfTokenForRequest(request) });
+          }),
+        ),
+      },
+      "/auth/saml": {
+        GET: kernel.wrap(
+          "api",
+          withErrorHandling(async () => {
+            if (process.env.FEATURE_SAML !== "true") {
+              return new Response("Not found", { status: 404 });
+            }
+            const issued = createOAuthState();
+            const url = await createSamlServiceProvider().authorizationUrl(issued.state);
+            return new Response(null, { status: 302, headers: { location: url } });
+          }),
+        ),
+      },
+      "/auth/saml/acs": {
         POST: kernel.wrap(
           "api",
           withErrorHandling(async (request) => {
-            const body = (await request.json()) as { email?: string; password?: string };
-            const email = (body.email ?? "").trim().toLowerCase();
-            const password = body.password ?? "";
-            const user = await starterAuthDirectory.verifyCredentials?.(email, password);
-            if (!user) {
-              return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
+            if (process.env.FEATURE_SAML !== "true") {
+              return new Response("Not found", { status: 404 });
             }
-            const plain = `strp_${randomBytes(24).toString("hex")}`;
-            // API_TOKEN_DEFAULT_EXPIRY_DAYS bounds every minted token; unset means no expiry.
-            const expiryDays = resolveDefaultTokenExpiryDays();
-            const expiresAt = expiryDays
-              ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
-              : null;
-            await getSql().unsafe(
-              "INSERT INTO api_tokens (user_id, name, token_hash, abilities, expires_at) VALUES ($1, $2, $3, $4, $5)",
-              [
-                user.id,
-                "spa",
-                hashApiToken(plain),
-                JSON.stringify(["profile:read"]),
-                expiresAt ? sqlTimestamp(expiresAt) : null,
-              ],
-            );
-            return jsonResponse({ token: plain, expires_at: expiresAt?.toISOString() ?? null });
+            const form = await request.formData();
+            const samlResponse = String(form.get("SAMLResponse") ?? "");
+            const relayState = String(form.get("RelayState") ?? "");
+            if (!verifyOAuthState(request, relayState)) {
+              return jsonResponse({ error: "Invalid SAML state." }, { status: 403 });
+            }
+            const profile = await createSamlServiceProvider()
+              .consumePost(samlResponse, relayState)
+              .catch(() => null);
+            if (!profile) {
+              return jsonResponse({ error: "Invalid SAML response." }, { status: 400 });
+            }
+            let record = await starterAuthDirectory.findByEmail?.(profile.email);
+            if (!record) {
+              if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+                return jsonResponse({ error: "SAML user is not provisioned." }, { status: 403 });
+              }
+              const hashed = await hashPassword(randomBytes(18).toString("hex"));
+              try {
+                await runAuthWrite(profile.email, async () => {
+                  await User.create({
+                    name: profile.name,
+                    email: profile.email,
+                    password: hashed,
+                    is_admin: false,
+                    tenant_id: currentTenantId(),
+                  });
+                });
+              } catch {
+                // Unique email: another request already provisioned this user.
+              }
+              record = await starterAuthDirectory.findByEmail?.(profile.email);
+            }
+            if (!record) {
+              return jsonResponse({ error: "Could not complete SAML login." }, { status: 500 });
+            }
+            if (record.mfa_enabled) {
+              const pending = redirectTo("/login/mfa");
+              pending.headers.append("set-cookie", pendingMfaSetCookie(record.id));
+              return pending;
+            }
+            const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+            return auth.signInRedirect(sessionUser(record), "/");
           }),
+        ),
+      },
+      "/api/v1/auth/login": {
+        POST: kernel.wrap(
+          "api",
+          kernel.wrapLogin(
+            withErrorHandling(async (request) => {
+              const { email, password, mfa_code } = await parseJsonBody(
+                request,
+                parseLoginCredentials,
+              );
+              const record = await starterAuthDirectory.findByEmail?.(email);
+              if (!record?.password || !(await verifyPassword(password, record.password))) {
+                return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
+              }
+              const mfaResult = completePasswordLogin(record, { mfaCode: mfa_code });
+              if (!mfaResult.ok) {
+                return jsonResponse(
+                  { error: mfaResult.error },
+                  { status: mfaResult.error === "mfa_required" ? 401 : 422 },
+                );
+              }
+              await persistAuthRecovery(
+                record.id,
+                record.mfa_recovery_codes,
+                mfaResult.consumedRecoveryHash,
+              );
+              const user = { id: record.id, role: record.role };
+              const plain = `strp_${randomBytes(24).toString("hex")}`;
+              // API_TOKEN_DEFAULT_EXPIRY_DAYS bounds every minted token; unset means no expiry.
+              const expiryDays = resolveDefaultTokenExpiryDays();
+              const expiresAt = expiryDays
+                ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
+                : null;
+              await runAuthWrite(user.id, async () => {
+                await ApiToken.create({
+                  user_id: user.id,
+                  name: "spa",
+                  token_hash: hashApiToken(plain),
+                  abilities: JSON.stringify([]),
+                  expires_at: expiresAt ? sqlTimestamp(expiresAt) : null,
+                });
+              });
+              const payload = jsonResponse({
+                token: plain,
+                expires_at: expiresAt?.toISOString() ?? null,
+              });
+              const sessionAuth =
+                dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+              const { setCookie } = await sessionAuth.signIn(sessionUser(record));
+              payload.headers.append("set-cookie", setCookie);
+              return payload;
+            }),
+          ),
         ),
       },
       "/api/v1/auth/me": {
@@ -115,63 +315,89 @@ const authModule: AppModule = {
       "/api/v1/auth/register": {
         POST: kernel.wrap(
           "api",
-          withErrorHandling(async (request) => {
-            const body = (await request.json()) as {
-              name?: string;
-              email?: string;
-              password?: string;
-            };
-            const name = (body.name ?? "").trim();
-            const email = (body.email ?? "").trim().toLowerCase();
-            const password = body.password ?? "";
-            if (!name || !email || password.length < 8) {
-              return jsonResponse(
-                { error: "Name, email, and a password of 8+ characters are required." },
-                { status: 422 },
+          kernel.wrapRegister(
+            withErrorHandling(async (request) => {
+              if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+                return jsonResponse({ error: "Not found" }, { status: 404 });
+              }
+              const { name, email, password } = await parseJsonBody(
+                request,
+                parseRegisterCredentials,
               );
-            }
-            if (await starterAuthDirectory.findByEmail?.(email)) {
-              return jsonResponse({ error: "Email is already registered." }, { status: 422 });
-            }
-            const hashed = await hashPassword(password);
-            await getSql().unsafe(
-              "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-              [name, email, hashed, false, 1],
-            );
-            const created = await starterAuthDirectory.findByEmail?.(email);
-            if (created) {
-              await sendSignedMail(email, "Verify your email", "/api/v1/auth/verify-email", {
-                id: String(created.id),
+              const existing = await starterAuthDirectory.findByEmail?.(email);
+              await hashPassword(password);
+              if (existing) {
+                return jsonResponse({ ok: true }, { status: 201 });
+              }
+              const hashed = await hashPassword(password);
+              await runAuthWrite(email, async () => {
+                await User.create({
+                  name,
+                  email,
+                  password: hashed,
+                  is_admin: false,
+                  tenant_id: currentTenantId(),
+                });
               });
-            }
-            return jsonResponse({ ok: true }, { status: 201 });
-          }),
+              const created = await starterAuthDirectory.findByEmail?.(email);
+              if (created) {
+                await issueSignedAuthMail(
+                  email,
+                  "Verify your email",
+                  "/api/v1/auth/verify-email",
+                  AUTH_ONE_TIME_PURPOSES.emailVerify,
+                  created.id,
+                  { id: String(created.id) },
+                );
+              }
+              return jsonResponse({ ok: true }, { status: 201 });
+            }),
+          ),
         ),
       },
       "/api/auth/token": {
         POST: kernel.wrap(
           "api",
-          withErrorHandling(async (request) => {
-            const body = (await request.json()) as { email?: string; password?: string };
-            const email = (body.email ?? "").trim().toLowerCase();
-            const password = body.password ?? "";
-            const user = await starterAuthDirectory.verifyCredentials?.(email, password);
-            if (!user) {
-              return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
-            }
-            const token = signJwt({
-              sub: user.id,
-              role: user.role,
-              abilities:
-                user.role === "admin" ? ["profile:read", "reports:export"] : ["profile:read"],
-              emailVerifiedAt: user.emailVerifiedAt ?? null,
-            });
-            return jsonResponse({
-              token,
-              token_type: "bearer",
-              expires_in: jwtTtlSeconds(),
-            });
-          }),
+          kernel.wrapLogin(
+            withErrorHandling(async (request) => {
+              const { email, password, mfa_code } = await parseJsonBody(
+                request,
+                parseLoginCredentials,
+              );
+              const record = await starterAuthDirectory.findByEmail?.(email);
+              if (!record?.password || !(await verifyPassword(password, record.password))) {
+                return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
+              }
+              const mfaResult = completePasswordLogin(record, { mfaCode: mfa_code });
+              if (!mfaResult.ok) {
+                return jsonResponse(
+                  { error: mfaResult.error },
+                  { status: mfaResult.error === "mfa_required" ? 401 : 422 },
+                );
+              }
+              await persistAuthRecovery(
+                record.id,
+                record.mfa_recovery_codes,
+                mfaResult.consumedRecoveryHash,
+              );
+              const user = {
+                id: record.id,
+                role: record.role,
+                emailVerifiedAt: record.email_verified_at ?? null,
+              };
+              const token = signJwt({
+                sub: user.id,
+                role: user.role,
+                abilities: [],
+                emailVerifiedAt: user.emailVerifiedAt ?? null,
+              });
+              return jsonResponse({
+                token,
+                token_type: "bearer",
+                expires_in: jwtTtlSeconds(),
+              });
+            }),
+          ),
         ),
       },
       "/api/user": {
@@ -182,17 +408,34 @@ const authModule: AppModule = {
           return jsonResponse({ id: user.id, role: user.role ?? "member" });
         }),
       },
+      "/api/v1/auth/logout": {
+        POST: kernel.wrap(
+          "api",
+          withErrorHandling(async (request) => {
+            const payload = jsonResponse({ ok: true });
+            const sessionAuth =
+              dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+            const { setCookie } = await sessionAuth.signOut(request);
+            payload.headers.append("set-cookie", setCookie);
+            return payload;
+          }),
+        ),
+      },
       "/api/v1/auth/forgot-password": {
         POST: kernel.wrap(
           "api",
           withErrorHandling(async (request) => {
-            const body = (await request.json()) as { email?: string };
-            const email = (body.email ?? "").trim().toLowerCase();
+            const email = await parseJsonBody(request, parseForgotPasswordEmail);
             const user = await starterAuthDirectory.findByEmail?.(email);
             if (user) {
-              await sendSignedMail(email, "Reset your password", "/api/v1/auth/reset-password", {
+              await issueSignedAuthMail(
                 email,
-              });
+                "Reset your password",
+                "/api/v1/auth/reset-password",
+                AUTH_ONE_TIME_PURPOSES.passwordReset,
+                user.id,
+                { email },
+              );
             }
             return jsonResponse({ ok: true });
           }),
@@ -201,36 +444,46 @@ const authModule: AppModule = {
       "/api/v1/auth/reset-password": {
         POST: kernel.wrap(
           "api",
-          withErrorHandling(async (request) => {
-            assertValidSignature(request);
-            const body = (await request.json()) as { password?: string };
-            const email = new URL(request.url).searchParams.get("email") ?? "";
-            if (!email || !(body.password && body.password.length >= 8)) {
-              return jsonResponse({ error: "Invalid reset payload." }, { status: 422 });
-            }
-            await getSql().unsafe("UPDATE users SET password = $1 WHERE email = $2", [
-              await hashPassword(body.password),
-              email,
-            ]);
-            return jsonResponse({ ok: true });
-          }),
+          kernel.wrapSigned(
+            withErrorHandling(async (request) => {
+              const userId = await consumeSignedAuthToken(
+                request,
+                AUTH_ONE_TIME_PURPOSES.passwordReset,
+              );
+              const body = (await request.json()) as { password?: string };
+              const nextPassword = body.password ?? "";
+              if (!userId || nextPassword.length < 8) {
+                return jsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
+              }
+              await runAuthWrite(userId, async () => {
+                const user = await User.find(userId);
+                await user?.update({ password: await hashPassword(nextPassword) });
+              });
+              await revokeUserSessions(userId);
+              return jsonResponse({ ok: true });
+            }),
+          ),
         ),
       },
       "/api/v1/auth/verify-email": {
         POST: kernel.wrap(
           "api",
-          withErrorHandling(async (request) => {
-            assertValidSignature(request);
-            const id = Number.parseInt(new URL(request.url).searchParams.get("id") ?? "", 10);
-            if (!Number.isInteger(id) || id <= 0) {
-              return jsonResponse({ error: "Invalid verification link." }, { status: 422 });
-            }
-            await getSql().unsafe("UPDATE users SET email_verified_at = $1 WHERE id = $2", [
-              new Date().toISOString(),
-              id,
-            ]);
-            return jsonResponse({ ok: true });
-          }),
+          kernel.wrapSigned(
+            withErrorHandling(async (request) => {
+              const id = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.emailVerify);
+              if (!id) {
+                return jsonResponse(
+                  { error: "Invalid or expired verification link." },
+                  { status: 403 },
+                );
+              }
+              await runAuthWrite(id, async () => {
+                const user = await User.find(id);
+                await user?.update({ email_verified_at: new Date().toISOString() });
+              });
+              return jsonResponse({ ok: true });
+            }),
+          ),
         ),
       },
     };
@@ -250,8 +503,7 @@ const authModule: AppModule = {
           kernel,
           async (request) => {
             const { fields } = await parseFormBody(request);
-            const email = (fields.email ?? "").trim().toLowerCase();
-            const password = fields.password ?? "";
+            const { email, password, mfa_code } = parseLoginCredentials(fields);
             const user = await starterAuthDirectory.findByEmail?.(email);
             if (!user?.password || !(await verifyPassword(password, user.password))) {
               return renderPage(
@@ -265,11 +517,29 @@ const authModule: AppModule = {
                 request,
               );
             }
-            if (user.mfa_enabled) {
-              const pending = redirectTo("/login/mfa");
-              pending.headers.append("set-cookie", pendingMfaSetCookie(user.id));
-              return pending;
+            const mfaResult = completePasswordLogin(user, { mfaCode: mfa_code });
+            if (!mfaResult.ok) {
+              if (mfaResult.error === "mfa_required") {
+                const pending = redirectTo("/login/mfa");
+                pending.headers.append("set-cookie", pendingMfaSetCookie(user.id));
+                return pending;
+              }
+              return renderPage(
+                "auth/login.eta",
+                {
+                  layout: { title: "Sign in" },
+                  errors: { email: "These credentials do not match our records." },
+                  email,
+                  password: "",
+                },
+                request,
+              );
             }
+            await persistAuthRecovery(
+              user.id,
+              user.mfa_recovery_codes,
+              mfaResult.consumedRecoveryHash,
+            );
             return auth.signInRedirect(sessionUser(user), "/");
           },
           async (request) =>
@@ -287,57 +557,56 @@ const authModule: AppModule = {
         ),
       },
       "/register": {
-        GET: kernel.wrapWebGuest(async (request) =>
-          renderPage(
+        GET: kernel.wrapWebGuest(async (request) => {
+          if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+            return new Response("Not found", { status: 404 });
+          }
+          return renderPage(
             "auth/register.eta",
             { layout: { title: "Create account" }, errors: {}, name: "", email: "", password: "" },
             request,
-          ),
-        ),
+          );
+        }),
         POST: wrapWebRegister(
           kernel,
           async (request) => {
+            if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+              return new Response("Not found", { status: 404 });
+            }
             const { fields } = await parseFormBody(request);
-            const name = (fields.name ?? "").trim();
-            const email = (fields.email ?? "").trim().toLowerCase();
-            const password = fields.password ?? "";
-            const errors: Record<string, string> = {};
-            if (!name) {
-              errors.name = "Name is required.";
-            }
-            if (!email) {
-              errors.email = "Email is required.";
-            }
-            if (password.length < 8) {
-              errors.password = "Use at least 8 characters.";
-            }
-            if (email && (await starterAuthDirectory.findByEmail?.(email))) {
-              errors.email = "Email is already registered.";
-            }
-            if (Object.keys(errors).length > 0) {
-              return renderPage(
-                "auth/register.eta",
-                { layout: { title: "Create account" }, errors, name, email, password: "" },
-                request,
-              );
+            const { name, email, password } = parseRegisterCredentials(fields);
+            const existing = await starterAuthDirectory.findByEmail?.(email);
+            await hashPassword(password);
+            if (existing) {
+              return flashResponse(redirectTo("/login"), {
+                level: "success",
+                message: "If that email is available, continue from the sign-in page.",
+              });
             }
             const hashed = await hashPassword(password);
-            await getSql().unsafe(
-              "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, $4, $5)",
-              [name, email, hashed, false, 1],
-            );
+            await runAuthWrite(email, async () => {
+              await User.create({
+                name,
+                email,
+                password: hashed,
+                is_admin: false,
+                tenant_id: currentTenantId(),
+              });
+            });
             const created = await starterAuthDirectory.findByEmail?.(email);
             const insertedId = created?.id ?? 0;
-            await sendSignedMail(email, "Verify your email", "/email/verify", {
-              id: String(insertedId),
-            });
-            return flashResponse(
-              await auth.signInRedirect(
-                sessionUser({ id: insertedId, name, email, role: "member" }),
-                "/email/verify",
-              ),
-              { level: "info", message: "Check your email for a verification link." },
+            await issueSignedAuthMail(
+              email,
+              "Verify your email",
+              "/email/verify",
+              AUTH_ONE_TIME_PURPOSES.emailVerify,
+              insertedId,
+              { id: String(insertedId) },
             );
+            return flashResponse(redirectTo("/login"), {
+              level: "success",
+              message: "If that email is available, continue from the sign-in page.",
+            });
           },
           async (request) =>
             renderPage(
@@ -364,10 +633,17 @@ const authModule: AppModule = {
         ),
         POST: kernel.wrapWeb(async (request) => {
           const { fields } = await parseFormBody(request);
-          const email = (fields.email ?? "").trim().toLowerCase();
+          const email = parseForgotPasswordEmail(fields);
           const user = await starterAuthDirectory.findByEmail?.(email);
           if (user) {
-            await sendSignedMail(email, "Reset your password", "/reset-password", { email });
+            await issueSignedAuthMail(
+              email,
+              "Reset your password",
+              "/reset-password",
+              AUTH_ONE_TIME_PURPOSES.passwordReset,
+              user.id,
+              { email },
+            );
           }
           return flashResponse(redirectTo("/forgot-password"), {
             level: "success",
@@ -376,48 +652,55 @@ const authModule: AppModule = {
         }),
       },
       "/reset-password": {
-        GET: kernel.wrapWebGuest(async (request) => {
-          assertValidSignature(request);
-          const email = new URL(request.url).searchParams.get("email") ?? "";
-          return renderPage(
-            "auth/reset-password.eta",
-            {
-              layout: { title: "Reset password" },
-              errors: {},
-              password: "",
-              email,
-              action: `${new URL(request.url).pathname}${new URL(request.url).search}`,
-            },
-            request,
-          );
-        }),
-        POST: kernel.wrapWeb(async (request) => {
-          assertValidSignature(request);
-          const { fields } = await parseFormBody(request);
-          const email = new URL(request.url).searchParams.get("email") ?? fields.email ?? "";
-          const password = fields.password ?? "";
-          if (!email || password.length < 8) {
+        GET: kernel.wrapWeb(
+          kernel.wrapSigned(async (request) => {
+            const email = new URL(request.url).searchParams.get("email") ?? "";
             return renderPage(
               "auth/reset-password.eta",
               {
                 layout: { title: "Reset password" },
-                errors: { password: "Use at least 8 characters." },
+                errors: {},
                 password: "",
                 email,
                 action: `${new URL(request.url).pathname}${new URL(request.url).search}`,
               },
               request,
             );
-          }
-          await getSql().unsafe("UPDATE users SET password = $1 WHERE email = $2", [
-            await hashPassword(password),
-            email,
-          ]);
-          return flashResponse(redirectTo("/login"), {
-            level: "success",
-            message: "Password updated. Sign in.",
-          });
-        }),
+          }),
+        ),
+        POST: kernel.wrapWeb(
+          kernel.wrapSigned(async (request) => {
+            const userId = await consumeSignedAuthToken(
+              request,
+              AUTH_ONE_TIME_PURPOSES.passwordReset,
+            );
+            const { fields } = await parseFormBody(request);
+            const email = new URL(request.url).searchParams.get("email") ?? fields.email ?? "";
+            const password = fields.password ?? "";
+            if (!userId || !email || password.length < 8) {
+              return renderPage(
+                "auth/reset-password.eta",
+                {
+                  layout: { title: "Reset password" },
+                  errors: { password: "Invalid or expired reset link." },
+                  password: "",
+                  email,
+                  action: `${new URL(request.url).pathname}${new URL(request.url).search}`,
+                },
+                request,
+              );
+            }
+            await runAuthWrite(userId, async () => {
+              const user = await User.find(userId);
+              await user?.update({ password: await hashPassword(password) });
+            });
+            await revokeUserSessions(userId);
+            return flashResponse(redirectTo("/login"), {
+              level: "success",
+              message: "Password updated. Sign in.",
+            });
+          }),
+        ),
       },
       "/logout": {
         POST: kernel.wrapWebAuthenticatedAllowUnverified((request) =>
@@ -429,18 +712,21 @@ const authModule: AppModule = {
           const url = new URL(request.url);
           if (url.searchParams.get("signature")) {
             assertValidSignature(request);
-            const id = Number.parseInt(url.searchParams.get("id") ?? "", 10);
-            if (Number.isInteger(id) && id > 0) {
-              await getSql().unsafe("UPDATE users SET email_verified_at = $1 WHERE id = $2", [
-                new Date().toISOString(),
-                id,
-              ]);
-              const record = await starterAuthDirectory.findByIdOrThrow(id);
-              return flashResponse(await auth.signInRedirect(sessionUser(record), "/"), {
+            const id = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.emailVerify);
+            if (id) {
+              await runAuthWrite(id, async () => {
+                const user = await User.find(id);
+                await user?.update({ email_verified_at: new Date().toISOString() });
+              });
+              return flashResponse(redirectTo("/login"), {
                 level: "success",
-                message: "Email verified.",
+                message: "Email verified. Sign in.",
               });
             }
+            return flashResponse(redirectTo("/login"), {
+              level: "error",
+              message: "Invalid or expired verification link.",
+            });
           }
           return renderPage(
             "auth/verify-email.eta",
@@ -454,9 +740,14 @@ const authModule: AppModule = {
           const user = await auth.user(request);
           if (user) {
             const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
-            await sendSignedMail(record.email ?? "", "Verify your email", "/email/verify", {
-              id: String(record.id),
-            });
+            await issueSignedAuthMail(
+              record.email ?? "",
+              "Verify your email",
+              "/email/verify",
+              AUTH_ONE_TIME_PURPOSES.emailVerify,
+              Number(record.id),
+              { id: String(record.id) },
+            );
           }
           return flashResponse(redirectTo("/email/verify"), {
             level: "info",
@@ -475,37 +766,79 @@ const authModule: AppModule = {
             request,
           );
         }),
-        POST: kernel.wrapWeb(async (request) => {
-          const pendingId = readPendingMfaUserId(request);
-          if (!pendingId) {
+        POST: wrapWebLogin(
+          kernel,
+          async (request) => {
+            const pendingId = readPendingMfaUserId(request);
+            if (!pendingId) {
+              return redirectTo("/login");
+            }
+            const { fields } = await parseFormBody(request);
+            const submitted = (fields.code ?? "").trim();
+            const record = await starterAuthDirectory.findByIdOrThrow(pendingId);
+            const mfaResult = completePasswordLogin(record, { mfaCode: submitted });
+            if (!mfaResult.ok) {
+              return renderPage(
+                "auth/mfa-challenge.eta",
+                { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" },
+                request,
+              );
+            }
+            await persistAuthRecovery(
+              pendingId,
+              record.mfa_recovery_codes,
+              mfaResult.consumedRecoveryHash,
+            );
+            const signed = await auth.signInRedirect(sessionUser(record), "/");
+            signed.headers.append("set-cookie", pendingMfaClearCookie());
+            return signed;
+          },
+          async (request) =>
+            renderPage(
+              "auth/mfa-challenge.eta",
+              {
+                layout: { title: "MFA" },
+                errors: { code: "Too many login attempts. Try again shortly." },
+                code: "",
+              },
+              request,
+              429,
+            ),
+        ),
+      },
+      "/confirm-password": {
+        GET: kernel.wrapWebAuthenticated(async (request) =>
+          renderPage(
+            "auth/confirm-password.eta",
+            { layout: { title: "Confirm password" }, errors: {}, password: "" },
+            request,
+          ),
+        ),
+        POST: kernel.wrapWebAuthenticated(async (request) => {
+          const user = await auth.user(request);
+          if (!user) {
             return redirectTo("/login");
           }
           const { fields } = await parseFormBody(request);
-          const submitted = (fields.code ?? "").trim();
-          const record = await starterAuthDirectory.findByIdOrThrow(pendingId);
-          const secret = revealMfaSecret(record.mfa_secret ?? null);
-          const hashedCodes: string[] = record.mfa_recovery_codes
-            ? (JSON.parse(record.mfa_recovery_codes) as string[])
-            : [];
-          const totpOk = secret ? verifyTotp(secret, submitted) : false;
-          const recoveryOk = hashedCodes.some((hash) => recoveryCodeMatches(submitted, hash));
-          if (!totpOk && !recoveryOk) {
+          const password = fields.password ?? "";
+          const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
+          if (!record.password || !(await verifyPassword(password, record.password))) {
             return renderPage(
-              "auth/mfa-challenge.eta",
-              { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" },
+              "auth/confirm-password.eta",
+              {
+                layout: { title: "Confirm password" },
+                errors: { password: "That password is not correct." },
+                password: "",
+              },
               request,
             );
           }
-          if (recoveryOk) {
-            const remaining = hashedCodes.filter((hash) => !recoveryCodeMatches(submitted, hash));
-            await getSql().unsafe("UPDATE users SET mfa_recovery_codes = $1 WHERE id = $2", [
-              JSON.stringify(remaining),
-              pendingId,
-            ]);
-          }
-          const signed = await auth.signInRedirect(sessionUser(record), "/");
-          signed.headers.append("set-cookie", pendingMfaClearCookie());
-          return signed;
+          const next = sanitizeInternalPath(
+            new URL(request.url).searchParams.get("redirect") ?? "/account/mfa",
+          );
+          const confirmed = redirectTo(next);
+          confirmed.headers.append("set-cookie", createPasswordConfirmCookie(Number(user.id)));
+          return confirmed;
         }),
       },
       "/account/mfa": {
@@ -524,7 +857,7 @@ const authModule: AppModule = {
             request,
           );
         }),
-        POST: kernel.wrapWebAuthenticated(async (request) => {
+        POST: kernel.wrapWebPasswordConfirm(async (request) => {
           const user = await auth.user(request);
           if (!user) {
             return redirectTo("/login");
@@ -551,15 +884,17 @@ const authModule: AppModule = {
           }
           const recoveryCodes = generateRecoveryCodes();
           const stored = protectMfaSecret(secret);
-          await getSql().unsafe(
-            "UPDATE users SET mfa_secret = $1, mfa_enabled = $2, mfa_recovery_codes = $3 WHERE id = $4",
-            [
-              stored,
-              true,
-              JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
-              Number(user.id),
-            ],
-          );
+          await runAuthWrite(Number(user.id), async () => {
+            const record = await User.find(Number(user.id));
+            await record?.update({
+              mfa_secret: stored,
+              mfa_enabled: true,
+              mfa_recovery_codes: JSON.stringify(
+                recoveryCodes.map((item) => hashRecoveryCode(item)),
+              ),
+            });
+          });
+          await revokeUserSessions(Number(user.id));
           return renderPage(
             "auth/mfa-setup.eta",
             {

@@ -6,7 +6,10 @@ import {
   registerDefaultDatabasePool,
   resetDefaultDatabasePoolForTests,
 } from "@getstrata/core/database/defaultConnection";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import {
+  runWithMigrationBypass,
+  runWithMigrationBypassForIdentifier,
+} from "@getstrata/core/tenant/databaseTenantContext";
 import { getDatabase } from "../../src/db/connection";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -85,7 +88,7 @@ describe("runWithMigrationBypass", () => {
     }
   });
 
-  test("reuses the active transaction instead of session-scoped set_config", async () => {
+  test("opens a nested transaction instead of setting bypass on the request connection", async () => {
     const previous = process.env.TENANCY_DRIVER;
     process.env.TENANCY_DRIVER = "rls";
     const restored = currentPoolOrNull();
@@ -97,10 +100,10 @@ describe("runWithMigrationBypass", () => {
       await runWithDatabaseConnection(pool, async () => {
         await expect(runWithMigrationBypass(async () => "nested")).resolves.toBe("nested");
       });
-      expect(calls.some((line) => line === "begin")).toBe(false);
-      expect(calls.filter((line) => line.includes("set_config")).length).toBe(2);
-      expect(calls[0]).toContain('["true"]');
-      expect(calls[1]).toContain('["false"]');
+      expect(calls.some((line) => line === "begin")).toBe(true);
+      expect(calls.filter((line) => line.includes("set_config")).length).toBe(1);
+      expect(calls.some((line) => line.includes('["true"]'))).toBe(true);
+      expect(calls.some((line) => line.includes('["false"]'))).toBe(false);
     } finally {
       restorePool(restored);
       restoreEnvVar("TENANCY_DRIVER", previous);
@@ -121,6 +124,85 @@ describe("runWithMigrationBypass", () => {
 
     try {
       await expect(runWithMigrationBypass(async () => "ok")).rejects.toThrow(/supports begin/);
+    } finally {
+      restorePool(restored);
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
+  });
+
+  test("empty or non-positive identifier throws", async () => {
+    await expect(runWithMigrationBypassForIdentifier("", async () => "nope")).rejects.toThrow(
+      /caller-supplied identifier/,
+    );
+    await expect(runWithMigrationBypassForIdentifier("   ", async () => "nope")).rejects.toThrow(
+      /caller-supplied identifier/,
+    );
+    await expect(runWithMigrationBypassForIdentifier(0, async () => "nope")).rejects.toThrow(
+      /caller-supplied identifier/,
+    );
+    await expect(runWithMigrationBypassForIdentifier(-3, async () => "nope")).rejects.toThrow(
+      /caller-supplied identifier/,
+    );
+  });
+
+  test("identifier-scoped bypass skips set_config when TENANCY_DRIVER=none", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "none";
+
+    try {
+      await expect(
+        runWithMigrationBypassForIdentifier("demo@example.com", async () => "ok"),
+      ).resolves.toBe("ok");
+    } finally {
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
+  });
+
+  test("ForIdentifier SET LOCAL app.bypass_identifier and does not set app.bypass_rls", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "rls";
+    const restored = currentPoolOrNull();
+    const calls: string[] = [];
+    registerDefaultDatabasePool(fakePool(calls));
+
+    try {
+      await expect(
+        runWithMigrationBypassForIdentifier("demo@example.com", async () => "ok"),
+      ).resolves.toBe("ok");
+      await expect(runWithMigrationBypassForIdentifier(1, async () => "ok")).resolves.toBe("ok");
+      expect(calls[0]).toBe("begin");
+      expect(calls[1]).toContain("set_config('app.bypass_identifier'");
+      expect(calls[1]).toContain('["demo@example.com"]');
+      expect(calls.some((line) => line.includes("set_config('app.bypass_rls'"))).toBe(false);
+      expect(calls.some((line) => line.includes('["true"]'))).toBe(false);
+      const trimCalls: string[] = [];
+      registerDefaultDatabasePool(fakePool(trimCalls));
+      await expect(
+        runWithMigrationBypassForIdentifier("  demo@example.com  ", async () => "ok"),
+      ).resolves.toBe("ok");
+      expect(trimCalls[1]).toContain('["demo@example.com"]');
+    } finally {
+      restorePool(restored);
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
+  });
+
+  test("identifier-scoped bypass throws when RLS is on and the pool has no begin()", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "rls";
+    const restored = currentPoolOrNull();
+    const pool = Object.assign(async () => [] as unknown[], {
+      async close() {},
+      async unsafe<T>() {
+        return [] as T[];
+      },
+    });
+    registerDefaultDatabasePool(pool as SqlDatabaseConnection);
+
+    try {
+      await expect(runWithMigrationBypassForIdentifier(1, async () => "ok")).rejects.toThrow(
+        /supports begin/,
+      );
     } finally {
       restorePool(restored);
       restoreEnvVar("TENANCY_DRIVER", previous);

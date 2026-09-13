@@ -1,15 +1,24 @@
-import { closeDatabase, getSql } from "../bootstrap/database.ts";
+import { dropPostgresTablesAsAdmin } from "@getstrata/core/tenant/enableTenantRls";
+import { closeDatabase } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { migrate } from "./migrate.ts";
 
-const tables = ["api_tokens", "sessions", "users", "notes", "tenant"];
+const tables = [
+  "api_tokens",
+  "sessions",
+  "auth_saml_assertions",
+  "auth_one_time_tokens",
+  "users",
+  "notes",
+  "tenant",
+];
 
 export async function fresh() {
   await ensureAppDatabase();
-  const sql = getSql();
-  for (const table of tables) {
-    await sql.unsafe(`DROP TABLE IF EXISTS ${table} CASCADE`);
-  }
+  await dropPostgresTablesAsAdmin(tables, {
+    runtimeUrl: process.env.DATABASE_URL ?? "",
+    migrationUrl: process.env.MIGRATION_DATABASE_URL,
+  });
   await migrate();
 }
 

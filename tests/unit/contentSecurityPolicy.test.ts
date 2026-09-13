@@ -45,7 +45,7 @@ describe("resolveContentSecurityPolicy", () => {
     expect(policy).toBe(serverHtmxContentSecurityPolicy());
     expect(policy).toContain("style-src 'self'");
     expect(policy).toContain(HTMX_2_0_4_INDICATOR_STYLE_HASH);
-    expect(policy).toContain("https://unpkg.com");
+    expect(policy).not.toContain("https://unpkg.com");
     expect(policy).toContain(
       "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
     );
@@ -62,7 +62,7 @@ describe("resolveContentSecurityPolicy", () => {
 
     const policy = resolveHtmlContentSecurityPolicy();
 
-    expect(policy).toContain("script-src 'self' https://unpkg.com https://cdn.jsdelivr.net");
+    expect(policy).toContain("script-src 'self' https://cdn.jsdelivr.net");
     expect(policy).toContain("frame-src https://www.youtube.com");
   });
 
@@ -80,7 +80,7 @@ describe("resolveContentSecurityPolicy", () => {
     const policy = response.headers.get("content-security-policy") ?? "";
 
     expect(policy).toContain("https://cdn.example.com");
-    expect(policy).toContain("https://unpkg.com");
+    expect(policy).not.toContain("https://unpkg.com");
     expect(policy).toMatch(/'nonce-[^']+'/);
     expect(policy).not.toContain("'unsafe-inline'");
   });
@@ -103,6 +103,6 @@ describe("resolveContentSecurityPolicy", () => {
     );
 
     expect(policy).toBe(serverHtmxContentSecurityPolicy());
-    expect(policy).toContain("https://unpkg.com");
+    expect(policy).not.toContain("https://unpkg.com");
   });
 });

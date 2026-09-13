@@ -21,8 +21,9 @@ If `DB_CONNECTION` is unset, the URL scheme picks the dialect. If both are unset
 ## How to opt in
 
 ```bash
-# Postgres (in-repo dogfood uses hiroapp_test)
-DATABASE_URL=postgresql://postgres:postgres@localhost:54329/hiroapp_test
+# Postgres (in-repo HiroApp runtime uses strata_app on hiroapp_test)
+DATABASE_URL=postgresql://strata_app:dev-strata-app-change-me@localhost:54329/hiroapp_test
+MIGRATION_DATABASE_URL=postgresql://postgres:dev-postgres-change-me@localhost:54329/hiroapp_test
 
 # MySQL as the app's only engine (not mixed with Postgres)
 DB_CONNECTION=mysql
@@ -34,6 +35,8 @@ DATABASE_URL=sqlite://tmp/dev.sqlite
 ```
 
 Pick **one** primary database per app. Named connections can attach another engine for a sidecar, but that is not how the in-repo examples run.
+
+When `TENANCY_DRIVER=rls`, production `DATABASE_URL` must not be a superuser or `BYPASSRLS` role. Generated Compose and `--no-docker` apps create `strata_app` for that. Production boot rejects username `postgres` or `root`, then inspects live `pg_roles`. See [TENANCY.md](./TENANCY.md).
 
 ## Query builder
 

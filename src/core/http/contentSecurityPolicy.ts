@@ -30,7 +30,7 @@ const API_DIRECTIVES: Record<string, string[]> = {
 
 const HTMX_HTML_DIRECTIVES: Record<string, string[]> = {
   "default-src": ["'self'"],
-  "script-src": ["'self'", "https://unpkg.com"],
+  "script-src": ["'self'"],
   "style-src": ["'self'", HTMX_2_0_4_INDICATOR_STYLE_HASH],
   "connect-src": ["'self'"],
   "img-src": ["'self'", "data:", "https:"],

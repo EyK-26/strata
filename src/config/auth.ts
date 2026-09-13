@@ -7,7 +7,7 @@ interface AuthConfig {
 
 const authConfig: AuthConfig = {
   allowDevHeaders: envFlagEnabled(process.env.AUTH_DEV_HEADERS),
-  tokenDefaultAbilities: ["*"],
+  tokenDefaultAbilities: [],
 };
 
 export type { AuthConfig };

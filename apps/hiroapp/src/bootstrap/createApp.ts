@@ -18,10 +18,14 @@ import {
 } from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
-import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
+import {
+  assertProductionSecrets,
+  assertRlsLiveDatabaseRole,
+} from "@getstrata/bootstrap/secretsGuard";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
+import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
 import { migrate } from "../db/migrate.ts";
 import { buildRoutes } from "../routes.ts";
 import { loadConfig } from "./config.ts";
@@ -93,6 +97,9 @@ export async function bootstrapApp(options: BootstrapOptions = {}): Promise<Boot
   await ensureAppDatabase();
   const appConfig = loadConfig();
   getSql();
+  if (isRlsTenancy()) {
+    await assertRlsLiveDatabaseRole();
+  }
   configureModulesDirectory(join(import.meta.dir, "../modules"));
   await ensureModulesLoaded();
   const context = createAppContext();

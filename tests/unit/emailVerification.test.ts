@@ -23,8 +23,9 @@ describe("emailVerification", () => {
     }
   });
 
-  test("hasVerifiedEmail treats missing timestamps as verified and null as unverified", () => {
-    expect(hasVerifiedEmail({ id: 1 })).toBe(true);
+  test("hasVerifiedEmail treats missing, undefined, and null timestamps as unverified", () => {
+    expect(hasVerifiedEmail({ id: 1 })).toBe(false);
+    expect(hasVerifiedEmail({ id: 1, emailVerifiedAt: undefined })).toBe(false);
     expect(hasVerifiedEmail({ id: 1, emailVerifiedAt: new Date() })).toBe(true);
     expect(hasVerifiedEmail({ id: 1, emailVerifiedAt: "2026-01-01T00:00:00.000Z" })).toBe(true);
     expect(hasVerifiedEmail({ id: 1, emailVerifiedAt: null })).toBe(false);

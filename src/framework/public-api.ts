@@ -16,8 +16,14 @@ export {
 } from "../core/admin/index.ts";
 export type { AbilityChecker } from "../core/auth/abilityChecker.ts";
 export { isGlobalAdmin, resolveUserId } from "../core/auth/accessControl.ts";
-export type { AuthUser } from "../core/auth/authContext.ts";
-export { authContext, currentAuthUser, runWithAuthUser } from "../core/auth/authContext.ts";
+export type { AuthUser, CredentialSource } from "../core/auth/authContext.ts";
+export {
+  authContext,
+  currentAuthUser,
+  currentCredentialSource,
+  runWithAuthContext,
+  runWithAuthUser,
+} from "../core/auth/authContext.ts";
 export { BasicAuthGuard } from "../core/auth/basicAuthGuard.ts";
 export type { AuthGuard } from "../core/auth/guard.ts";
 export {
@@ -56,7 +62,25 @@ export {
   default as MembershipService,
   resolveMembershipService,
 } from "../core/auth/membershipService.ts";
+export { createOidcHandshake, OidcProvider } from "../core/auth/oauth/oidcProvider.ts";
+export { SamlProvider } from "../core/auth/oauth/samlProvider.ts";
+export {
+  AUTH_ONE_TIME_PURPOSES,
+  generateOneTimeToken,
+  hashOneTimeToken,
+} from "../core/auth/oneTimeToken.ts";
+export { completePasswordLogin } from "../core/auth/passwordLogin.ts";
 export { Policy, PolicyGate } from "../core/auth/policy.ts";
+export {
+  consumeSamlAssertion,
+  createSamlServiceProvider,
+  InMemorySamlAssertionReplayStore,
+  readSamlEnvOptions,
+  resetSamlReplayCacheForTests,
+  SamlServiceProvider,
+  setNodeSamlLoaderForTests,
+  setSamlAssertionReplayStoreForTests,
+} from "../core/auth/saml/samlServiceProvider.ts";
 export { createScimAuthMiddleware } from "../core/auth/scimAuthMiddleware.ts";
 export { createTokenAbilityChecker } from "../core/auth/tokenAbilityChecker.ts";
 export {
@@ -522,12 +546,15 @@ export {
 export type { ScheduledTask } from "../core/scheduler/schedule.ts";
 export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
 export { guestCanViewResource, isPublicReadsEnabled } from "../core/security/publicReads.ts";
+export { assertPathUnderRoot, assertUrlPathUnderRoot } from "../core/security/safePath.ts";
 export {
   assertSafeOutboundUrl,
   assertSafeOutboundUrlResolved,
   isBlockedHostname,
   isBlockedIpAddress,
+  pinUrlToAddress,
   resetDnsLookupForTests,
+  resolveSafeOutboundTarget,
   setDnsLookupForTests,
 } from "../core/security/safeUrl.ts";
 export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
@@ -539,6 +566,12 @@ export {
   resetDefaultStorage,
   StorageManager,
 } from "../core/storage/storage.ts";
+export {
+  enableTenantRlsSql,
+  enableUserOwnedRlsSql,
+  generatedRlsBootstrapSql,
+  RLS_HELPER_SQL,
+} from "../core/tenant/enableTenantRls.ts";
 export type { TenancyDriver } from "../core/tenant/tenancyConfig.ts";
 export {
   isRlsTenancy,

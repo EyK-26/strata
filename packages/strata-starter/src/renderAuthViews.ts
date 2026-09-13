@@ -171,6 +171,7 @@ function renderLayout(layers: StarterLayers, projectName: string): string {
     <meta name="description" content="<%= it.layout.description %>" />
     <% } %>
     <link rel="stylesheet" href="/assets/site.css" />
+    <script src="/assets/htmx.min.js"></script>
   </head>
   <body>
     <header class="site-header">
@@ -205,7 +206,7 @@ function renderHomeView(projectName: string, layers: StarterLayers): string {
     <a class="button" href="/register">Create account</a>
     <a class="button button-secondary" href="/login">Sign in</a>
   </div>
-  <p class="muted">Seeded demo: <code>demo@example.com</code> / <code>password</code>.</p>
+  <p class="muted">Seeded demo: <code>demo@example.com</code> / <code>StrataDemo!ChangeMe</code>.</p>
 <% } else { %>
   <p class="lede">You are signed in as <strong><%= it.currentUser.email %></strong>.</p>
   <p>Add routes in <code>src/modules</code>. This homepage is yours to restyle.</p>
@@ -316,6 +317,20 @@ function renderMfaChallengeView(): string {
   ).replace('action="<%= it.action || "" %>"', 'action="/login/mfa"');
 }
 
+function renderConfirmPasswordView(): string {
+  return renderFormView(
+    "Confirm your password",
+    textField(
+      "password",
+      "Current password",
+      "password",
+      'required autocomplete="current-password"',
+    ),
+    "Confirm",
+    `<a href="/">Cancel</a>`,
+  ).replace('action="<%= it.action || "" %>"', 'action=""');
+}
+
 function renderMfaSetupView(): string {
   return `<section class="auth-card">
   <h1>Authenticator app</h1>
@@ -341,6 +356,7 @@ function renderMfaSetupView(): string {
 }
 
 export {
+  renderConfirmPasswordView,
   renderForgotPasswordView,
   renderHomeView,
   renderLayout,

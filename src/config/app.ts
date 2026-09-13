@@ -9,7 +9,7 @@ interface AppConfig {
 const appConfig: AppConfig = {
   name: process.env.APP_NAME?.trim() || "Strata",
   env: process.env.APP_ENV ?? "local",
-  debug: (process.env.APP_DEBUG ?? "true") !== "false",
+  debug: (process.env.APP_DEBUG ?? "false") === "true",
   url: process.env.APP_URL ?? "http://localhost:3000",
   apiPrefix: process.env.API_PREFIX ?? "/api/v1",
 };

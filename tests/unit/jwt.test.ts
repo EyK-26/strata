@@ -39,6 +39,7 @@ describe("jwt helpers", () => {
     try {
       expect(verifyJwt(signedToken({ sub: 1 }, process.env.JWT_SECRET, "none"))).toBeNull();
       expect(verifyJwt(signedToken({ role: "admin" }, process.env.JWT_SECRET))).toBeNull();
+      expect(verifyJwt(signedToken({ sub: 1 }, process.env.JWT_SECRET))).toBeNull();
       expect(verifyJwt(signedToken({ sub: 1, exp: 1 }, process.env.JWT_SECRET))).toBeNull();
       expect(verifyJwt("a.b")).toBeNull();
       expect(verifyJwt("a.b.c")).toBeNull();

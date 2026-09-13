@@ -124,12 +124,14 @@ function hasValidSignature(input: Request | URL | string): boolean {
 
   const expires = url.searchParams.get("expires");
 
-  if (expires) {
-    const expiresAt = Number.parseInt(expires, 10);
+  if (!expires) {
+    return false;
+  }
 
-    if (!Number.isInteger(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) {
-      return false;
-    }
+  const expiresAt = Number.parseInt(expires, 10);
+
+  if (!Number.isInteger(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) {
+    return false;
   }
 
   const expected = signCanonicalPayload(url.pathname, sortedQueryString(url.searchParams));

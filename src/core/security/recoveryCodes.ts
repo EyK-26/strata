@@ -3,7 +3,7 @@ import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
 
 const DEFAULT_RECOVERY_CODE_COUNT = 8;
-const RECOVERY_CODE_BYTES = 4;
+const RECOVERY_CODE_BYTES = 16;
 
 function normalizeRecoveryCode(code: string): string {
   return code.replace(/[^a-z0-9]/giu, "").toLowerCase();
@@ -14,7 +14,7 @@ function formatRecoveryCode(normalized: string): string {
     return normalized;
   }
 
-  return `${normalized.slice(0, 4)}-${normalized.slice(4)}`;
+  return normalized.match(/.{1,4}/gu)?.join("-") ?? normalized;
 }
 
 function generateRecoveryCodes(count = DEFAULT_RECOVERY_CODE_COUNT): string[] {
