@@ -36,10 +36,7 @@ function sessionRememberTtlSeconds(): number {
 }
 
 function resolveSessionSecret(): string {
-  return requireConfiguredSecret(
-    ["SESSION_SECRET", "OAUTH_STATE_SECRET", "ADMIN_API_TOKEN"],
-    "session-secret",
-  );
+  return requireConfiguredSecret(["SESSION_SECRET"], "session-secret");
 }
 
 function signSession(userId: number, issuedAt: number, ttlSeconds?: number): string {

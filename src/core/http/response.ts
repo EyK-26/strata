@@ -1,5 +1,6 @@
 import { toHttpError } from "@getstrata/core/errors/http";
 import { mapDatabaseError } from "../database/errors";
+import type { Middleware } from "./middleware";
 import { logServerError, webErrorResponse } from "./webErrorResponse";
 
 function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
@@ -61,8 +62,19 @@ function withJsonErrorHandling<TArgs extends unknown[]>(
   };
 }
 
+function createJsonErrorMiddleware(): Middleware {
+  return async (_request, next) => {
+    try {
+      return await next();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  };
+}
+
 export {
   createdResponse,
+  createJsonErrorMiddleware,
   errorResponse,
   jsonResponse,
   noContentResponse,

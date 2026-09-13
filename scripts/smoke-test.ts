@@ -15,7 +15,18 @@ async function assertOk(url: string, init?: RequestInit): Promise<Response> {
 
 await assertOk(`${BASE_URL}/health`);
 await assertOk(`${BASE_URL}/ready`);
-await assertOk(`${BASE_URL}/metrics`);
+
+const metricsToken = process.env.METRICS_TOKEN?.trim();
+if (metricsToken) {
+  await assertOk(`${BASE_URL}/metrics`, {
+    headers: { authorization: `Bearer ${metricsToken}` },
+  });
+} else if (
+  (process.env.APP_ENV ?? "").toLowerCase() !== "production" &&
+  (process.env.APP_ENV ?? "").toLowerCase() !== "staging"
+) {
+  await assertOk(`${BASE_URL}/metrics`);
+}
 
 const login = await fetch(`${BASE_URL}/login`, { redirect: "manual" });
 if (!login.ok) {

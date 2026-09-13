@@ -51,19 +51,21 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 | `--no-docker` | Do not write `docker-compose.yml`; point env at local installs |
 | `--docker-services=postgres,redis` | Compose only for that subset. Add `adminer` to include the UI |
 
-`--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines.
+`--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines. Postgres Compose binds `127.0.0.1` and creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`). `.env.example` points `DATABASE_URL` at that role, including `--no-docker`. `db/ensure-postgres-app-role.sql` is repeatable on an existing volume. The `postgres` superuser is for CREATE ROLE / GRANT / migrate and Adminer.
 
 ## What you get that actually runs
 
-- `GET /health` after `strata migrate` (plain text `ok`, or 503 `degraded` until the database ping and the `notes` table exist). Docker HEALTHCHECK uses `/health`. Migrate also seeds when the tables are empty.
+- `GET /health` after `strata migrate` (plain text `ok` when the database ping succeeds and `notes` is readable, including zero rows; 503 `degraded` when that read fails). Docker HEALTHCHECK uses `/health`. Migrate also seeds when the tables are empty.
 - `GET /ready` (from `@getstrata/bootstrap/health`): JSON database and Redis pings, 200 or 503. No schema check, so it can be 200 before the first migrate; `/health` is the gate.
-- Notes table and a `Note` model on every app. Seed and `/health` use `Note.query().value`. There is no notes CRUD route.
-- Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Seed `demo@example.com` / `password`
+- Notes table and a `Note` model on every app. Seed uses `Note.query().value`. `/health` uses `Note.query().limit(1).get()`. There is no notes CRUD route.
+- Cookie, token, and JWT apps also get a `User` model (`$hidden` for password and MFA secrets). Token layers add `ApiToken`. Seed uses two `User.create` calls. Auth directory, login/register, and SCIM read and write through that model. Auth code that needs secrets uses `user.get("password")` or `toObject()`, not `toArray()`. Login, register, and forgot-password use `validateObject` (`emailRule`, `required`, `minLength(8)` on register) so JSON returns `{ error, details }` and HTML uses field errors.
+- Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Seed `demo@example.com` / `StrataDemo!ChangeMe`
 - Token apps: `POST /api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`
 - JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
 - Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
 - `--tenancy=column`: `tenant` table + `users.tenant_id` on any engine. `--tenancy=rls`: Postgres only (`SET LOCAL`). sqlite/mysql `rls` becomes `column`
-- Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa`), email verification (`/email/verify`), SCIM `/scim/v2/Users`, metrics `GET /metrics` (only when that extra is on)
+- Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa` enroll POST uses `wrapWebPasswordConfirm`), email verification (`/email/verify`), SCIM `/scim/v2/Users` (the User model query still filters `tenant_id` on every lookup; unfiltered lists use `count` plus `offset`/`limit`; `:id` uses `parsePositiveIntParam`), metrics `GET /metrics` (only when that extra is on)
+- Generated apps register an empty `PolicyGate` so `CORE_POLICY_GATE_TOKEN` is present for `strata make:module`.
 - `strata.layers.json` records the choices
 
 `APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot.

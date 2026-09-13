@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-/** eta and mysql2 are optional peers, loaded only through dynamic import(). */
+/** eta, mysql2, and @node-saml/node-saml are optional peers, loaded only through dynamic import(). */
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -15,7 +15,7 @@ const packageJson = JSON.parse(
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 };
 
-for (const name of ["eta", "mysql2"] as const) {
+for (const name of ["eta", "mysql2", "@node-saml/node-saml"] as const) {
   if (packageJson.dependencies?.[name]) {
     errors.push(`@getstrata/core must not list ${name} in dependencies`);
   }
@@ -33,6 +33,9 @@ if (/from\s+["']mysql2/.test(indexJs)) {
 }
 if (/from\s+["']eta["']/.test(indexJs)) {
   errors.push("dist/index.js has a static eta import; EtaViewEngine must lazy-import eta");
+}
+if (/from\s+["']@node-saml\/node-saml["']/.test(indexJs)) {
+  errors.push("dist/index.js has a static @node-saml/node-saml import; SAML must lazy-import");
 }
 
 const mysqlEntry = await readFile(
@@ -83,4 +86,6 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log("Optional peers OK: eta and mysql2 are optional, loaded through import().");
+console.log(
+  "Optional peers OK: eta, mysql2, and @node-saml/node-saml are optional, loaded through import().",
+);

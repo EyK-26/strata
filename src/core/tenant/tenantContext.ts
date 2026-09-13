@@ -18,7 +18,11 @@ function currentTenant(): TenantContext | null {
 }
 
 function currentTenantId(): number {
-  return currentTenant()?.id ?? 1;
+  const tenant = currentTenant();
+  if (!tenant) {
+    throw new Error("Tenant context is required.");
+  }
+  return tenant.id;
 }
 
 function rateLimitMultiplierForPlan(plan: TenantContext["plan"]): number {

@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
+import { isProductionEnv } from "../runtime/appEnv";
 import { otelServiceName } from "../runtime/appKeyPrefix";
+import { safeFetch } from "../security/safeFetch";
 
 interface OtelSpan {
   traceId: string;
@@ -50,20 +52,29 @@ async function exportOtelSpan(span: OtelSpan): Promise<void> {
     ? endpoint
     : `${endpoint.replace(/\/$/, "")}/v1/traces`;
 
-  await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      resourceSpans: [
-        {
-          resource: {
-            attributes: [{ key: "service.name", value: { stringValue: serviceName } }],
+  await safeFetch(
+    url,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        resourceSpans: [
+          {
+            resource: {
+              attributes: [{ key: "service.name", value: { stringValue: serviceName } }],
+            },
+            scopeSpans: [{ spans: [span] }],
           },
-          scopeSpans: [{ spans: [span] }],
-        },
-      ],
-    }),
-  });
+        ],
+      }),
+    },
+    {
+      allowHttp: !isProductionEnv(),
+      allowPrivate: !isProductionEnv(),
+      timeoutMs: 5_000,
+      maxRedirects: 0,
+    },
+  );
 }
 
 export type { OtelSpan };

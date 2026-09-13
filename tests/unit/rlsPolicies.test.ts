@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import {
+  enableTenantRlsSql,
+  generatedRlsBootstrapSql,
+} from "@getstrata/core/tenant/enableTenantRls";
 import db from "../../src/db/connection";
 
 describe("tenant RLS inventory", () => {
@@ -28,5 +32,17 @@ describe("tenant RLS inventory", () => {
     `) as Array<{ tablename: string }>;
 
     expect(rows).toEqual([]);
+  });
+
+  test("generated SQL pins identifier bypass and leaves notes tenant-only", () => {
+    const sql = generatedRlsBootstrapSql(
+      ["notes", "users"],
+      ["auth_one_time_tokens", "sessions", "api_tokens"],
+    );
+    expect(sql).toContain("app.bypass_identifier");
+    expect(sql).toContain("app_bypass_identifier()");
+    expect(sql).toContain("id::text = app_bypass_identifier()");
+    expect(sql).toContain("email = app_bypass_identifier()");
+    expect(enableTenantRlsSql("notes")).not.toContain("app_bypass_identifier");
   });
 });

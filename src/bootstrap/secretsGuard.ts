@@ -1,5 +1,13 @@
+import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isViewsMode, parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
+import {
+  assertPostgresRoleCannotBypassRls,
+  inspectCurrentPostgresRole,
+  isPostgresUrl,
+  postgresUrlUsername,
+} from "@getstrata/core/tenant/enableTenantRls";
+import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
 
 /** Published test-token strings that must never ship in production. */
 const PUBLISHED_TEST_ADMIN_API_TOKEN = "strata-admin-test-token";
@@ -32,7 +40,12 @@ const SECRETS_TO_ROTATE = [
   "STRIPE_WEBHOOK_SECRET",
   "ADMIN_API_TOKEN",
   "MEMBER_API_TOKEN",
+  "DATABASE_URL",
+  "APP_DATABASE_URL",
 ] as const;
+
+/** PostgreSQL roles that skip FORCE RLS. */
+const RLS_BYPASS_DATABASE_USERS = new Set(["postgres", "root"]);
 
 function assertNoPlaceholderSecrets(env: Record<string, string | undefined>): void {
   const unrotated = SECRETS_TO_ROTATE.filter((name) =>
@@ -60,8 +73,14 @@ function isOAuthEnabled(env: Record<string, string | undefined>): boolean {
     envFlagEnabled(env.FEATURE_SAML) ||
     Boolean(env.GITHUB_CLIENT_ID?.trim()) ||
     Boolean(env.OIDC_ISSUER?.trim()) ||
+    Boolean(env.SAML_IDP_SSO_URL?.trim()) ||
     Boolean(env.SAML_LOGIN_URL?.trim())
   );
+}
+
+function isHeaderOnlyAuth(env: Record<string, string | undefined>): boolean {
+  const frontend = env.FRONTEND_MODE?.trim() ?? "";
+  return env.AUTH_MODE === "headers" || (frontend === "api" && env.AUTH_DEV_HEADERS === "true");
 }
 
 function isCorsConfigured(env: Record<string, string | undefined>): boolean {
@@ -129,9 +148,40 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
     }
   }
 
-  if (envFlagEnabled(env.FEATURE_FIELD_ENCRYPTION) && !env.KMS_ENCRYPTION_KEY?.trim()) {
+  if (
+    (envFlagEnabled(env.FEATURE_FIELD_ENCRYPTION) || envFlagEnabled(env.FEATURE_MFA)) &&
+    !env.KMS_ENCRYPTION_KEY?.trim()
+  ) {
     throw new Error(
-      "Production startup blocked: set KMS_ENCRYPTION_KEY when field encryption is enabled.",
+      "Production startup blocked: set KMS_ENCRYPTION_KEY when field encryption or MFA is enabled.",
+    );
+  }
+
+  if (envFlagEnabled(env.FEATURE_SAML)) {
+    const required = [
+      "SAML_IDP_CERT",
+      "SAML_IDP_SSO_URL",
+      "SAML_SP_ENTITY_ID",
+      "SAML_ACS_URL",
+      "SAML_IDP_ISSUER",
+    ] as const;
+    const missing = required.filter((name) => !env[name]?.trim());
+    if (missing.length > 0) {
+      throw new Error(
+        `Production startup blocked: set ${missing.join(", ")} when FEATURE_SAML=true.`,
+      );
+    }
+
+    if (env.SAML_WANT_RESPONSE_SIGNED === "false") {
+      throw new Error(
+        "Production startup blocked: signed SAML responses are required (do not set SAML_WANT_RESPONSE_SIGNED=false).",
+      );
+    }
+  }
+
+  if (envFlagEnabled(env.UPLOAD_ALLOW_UNKNOWN_MIME)) {
+    throw new Error(
+      "Production startup blocked: set UPLOAD_ALLOW_UNKNOWN_MIME=false (unknown MIME types are not allowed).",
     );
   }
 
@@ -170,6 +220,91 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]);
 
+type LivePostgresRoleInspector = () => Promise<{
+  rolname: string;
+  rolsuper: boolean;
+  rolbypassrls: boolean;
+} | null>;
+
+let livePostgresRoleInspector: LivePostgresRoleInspector | null = null;
+
+function setLivePostgresRoleInspectorForTests(inspect: LivePostgresRoleInspector | null): void {
+  livePostgresRoleInspector = inspect;
+}
+
+/**
+ * FORCE RLS does not apply to PostgreSQL superusers or BYPASSRLS roles.
+ * Username postgres/root is a fast path. Empty username on a postgres URL
+ * must not skip. Named superusers (deploy, app) are caught by the live
+ * pg_roles check in assertRlsLiveDatabaseRole().
+ */
+function assertRlsUsesAppDatabaseRole(env: Record<string, string | undefined>): void {
+  if (!isRlsTenancy(env)) {
+    return;
+  }
+
+  for (const name of ["DATABASE_URL", "APP_DATABASE_URL"] as const) {
+    const raw = env[name]?.trim();
+    if (!raw) {
+      continue;
+    }
+    const user = postgresUrlUsername(raw);
+    if (user === null) {
+      continue;
+    }
+    if (user === "") {
+      throw new Error(
+        `TENANCY_DRIVER=rls startup blocked: ${name} must include a NOBYPASSRLS role username.`,
+      );
+    }
+    if (RLS_BYPASS_DATABASE_USERS.has(user.toLowerCase())) {
+      throw new Error(
+        `TENANCY_DRIVER=rls startup blocked: ${name} for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not ${user}. FORCE RLS does not apply to PostgreSQL superusers.`,
+      );
+    }
+  }
+}
+
+async function defaultInspectLivePostgresRole(): Promise<{
+  rolname: string;
+  rolsuper: boolean;
+  rolbypassrls: boolean;
+} | null> {
+  return await inspectCurrentPostgresRole(getDefaultDatabasePool());
+}
+
+/**
+ * After the runtime pool is open, refuse rolsuper / rolbypassrls whenever
+ * TENANCY_DRIVER=rls, including local. Fail closed if the live query cannot run.
+ * MIGRATION_DATABASE_URL may stay a superuser.
+ */
+async function assertRlsLiveDatabaseRole(
+  env: Record<string, string | undefined> = process.env,
+  inspect?: LivePostgresRoleInspector,
+): Promise<void> {
+  if (!isRlsTenancy(env)) {
+    return;
+  }
+
+  const source = env.APP_DATABASE_URL?.trim() ? "APP_DATABASE_URL" : "DATABASE_URL";
+  const raw = (env.APP_DATABASE_URL ?? env.DATABASE_URL)?.trim();
+  if (!raw || !isPostgresUrl(raw)) {
+    return;
+  }
+
+  assertRlsUsesAppDatabaseRole(env);
+
+  let role: { rolname: string; rolsuper: boolean; rolbypassrls: boolean } | null;
+  try {
+    role = await (inspect ?? livePostgresRoleInspector ?? defaultInspectLivePostgresRole)();
+  } catch {
+    throw new Error(
+      `TENANCY_DRIVER=rls startup blocked: could not inspect the live Postgres role for ${source}.`,
+    );
+  }
+  assertPostgresRoleCannotBypassRls(role, source);
+}
+
 /** Signed links (password reset, email verification) and redirects are built from APP_URL. */
 function assertPublicAppUrl(env: Record<string, string | undefined>): void {
   const raw = env.APP_URL?.trim() ?? "";
@@ -200,6 +335,12 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
   assertAuthDevHeadersDisabled(env);
   assertPublicAppUrl(env);
 
+  if (isHeaderOnlyAuth(env)) {
+    throw new Error(
+      "Production startup blocked: header-only authentication is not allowed. Configure cookie, token, or JWT auth.",
+    );
+  }
+
   if (isTokenAuthEnabled(env)) {
     assertTokenAuthProductionSecrets(env);
   }
@@ -209,6 +350,8 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
   if (isViewsMode(parseFrontendMode(env.FRONTEND_MODE))) {
     assertSessionSecret(env);
   }
+
+  assertRlsUsesAppDatabaseRole(env);
 }
 
-export { assertProductionSecrets };
+export { assertProductionSecrets, assertRlsLiveDatabaseRole, setLivePostgresRoleInspectorForTests };

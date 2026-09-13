@@ -198,11 +198,7 @@ function dockerLayerForNeeded(layers: DockerNeedles, enabled: boolean): DockerLa
   if (!enabled || needed.length === 0) {
     return { enabled: false, services: emptyDockerServices() };
   }
-  const names: DockerServiceName[] = [...needed];
-  if (dockerDatabaseService(layers.database)) {
-    names.push("adminer");
-  }
-  return { enabled: true, services: enableDockerServices(names) };
+  return { enabled: true, services: enableDockerServices(needed) };
 }
 
 export type {

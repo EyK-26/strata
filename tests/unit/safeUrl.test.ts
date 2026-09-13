@@ -3,9 +3,12 @@ import {
   assertSafeOutboundUrl,
   assertSafeOutboundUrlResolved,
   isBlockedHostname,
+  pinUrlToAddress,
   resetDnsLookupForTests,
+  resolveSafeOutboundTarget,
   setDnsLookupForTests,
 } from "@getstrata/core/security/safeUrl";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 afterEach(() => {
   resetDnsLookupForTests();
@@ -25,6 +28,9 @@ describe("assertSafeOutboundUrl", () => {
     expect(() => assertSafeOutboundUrl("https://169.254.169.254/latest/meta-data")).toThrow(
       /blocked host/,
     );
+    expect(() => assertSafeOutboundUrl("https://100.64.0.1/hook")).toThrow(/blocked host/);
+    expect(() => assertSafeOutboundUrl("https://198.18.0.1/hook")).toThrow(/blocked host/);
+    expect(() => assertSafeOutboundUrl("https://2130706433/hook")).toThrow(/blocked host/);
   });
 
   test("rejects non-https URLs by default", () => {
@@ -48,6 +54,9 @@ describe("assertSafeOutboundUrl", () => {
     expect(() => assertSafeOutboundUrl("https://172.16.0.2/hook")).toThrow(/blocked host/);
     expect(() => assertSafeOutboundUrl("https://0.0.0.0/hook")).toThrow(/blocked host/);
     expect(() => assertSafeOutboundUrl("https://[::1]/hook")).toThrow(/blocked host/);
+    expect(assertSafeOutboundUrl("https://[2001:4860:4860::8888]/hook").hostname).toBe(
+      "[2001:4860:4860::8888]",
+    );
   });
 });
 
@@ -80,9 +89,62 @@ describe("assertSafeOutboundUrlResolved", () => {
     ).resolves.toMatchObject({ hostname: "public.example.com" });
   });
 
+  test("treats DNS resolution failures as a blocked host", async () => {
+    setDnsLookupForTests(async () => {
+      throw new Error("ENOTFOUND");
+    });
+    await expect(assertSafeOutboundUrlResolved("https://missing.example.com/hook")).rejects.toThrow(
+      /blocked host/,
+    );
+  });
+
+  test("rejects empty DNS results and skips lookup for private allowlists", async () => {
+    setDnsLookupForTests(async () => []);
+    await expect(assertSafeOutboundUrlResolved("https://public.example.com/hook")).rejects.toThrow(
+      /blocked host/,
+    );
+    await expect(
+      assertSafeOutboundUrlResolved("https://10.0.0.8/hook", { allowPrivate: true }),
+    ).resolves.toMatchObject({ hostname: "10.0.0.8" });
+  });
+
+  test("ignores allowPrivate and skipped DNS in production", async () => {
+    const previous = process.env.APP_ENV;
+    process.env.APP_ENV = "production";
+    setDnsLookupForTests(async () => [{ address: "10.0.0.1", family: 4 }]);
+    try {
+      expect(() => assertSafeOutboundUrl("https://10.0.0.8/hook", { allowPrivate: true })).toThrow(
+        /blocked host/,
+      );
+      await expect(
+        resolveSafeOutboundTarget("https://public.example.com/hook", {
+          allowPrivate: true,
+          resolveDns: false,
+        }),
+      ).rejects.toThrow(/blocked host/);
+    } finally {
+      restoreEnvVar("APP_ENV", previous);
+    }
+  });
+
   test("resetDnsLookupForTests restores the default resolver", () => {
     setDnsLookupForTests(async () => []);
     resetDnsLookupForTests();
+  });
+
+  test("skips DNS lookup for public literal IP hostnames", async () => {
+    setDnsLookupForTests(async () => {
+      throw new Error("DNS should not run for literal IPs");
+    });
+
+    await expect(resolveSafeOutboundTarget("https://8.8.8.8/hook")).resolves.toMatchObject({
+      addresses: ["8.8.8.8"],
+    });
+    await expect(
+      resolveSafeOutboundTarget("https://[2001:4860:4860::8888]/hook"),
+    ).resolves.toMatchObject({
+      addresses: ["[2001:4860:4860::8888]"],
+    });
   });
 });
 
@@ -94,5 +156,64 @@ describe("isBlockedHostname", () => {
     expect(isBlockedHostname("0.1.2.3")).toBe(true);
     expect(isBlockedHostname("8.8.8.8")).toBe(false);
     expect(isBlockedHostname("hooks.example.com")).toBe(false);
+    expect(isBlockedHostname("100.64.1.2")).toBe(true);
+    expect(isBlockedHostname("2130706433")).toBe(true);
+    expect(isBlockedHostname("0x7f.0.0.1")).toBe(true);
+    expect(isBlockedHostname("012.0.0.1")).toBe(true);
+    expect(isBlockedHostname("198.19.1.1")).toBe(true);
+    expect(isBlockedHostname("fe80::1")).toBe(true);
+    expect(isBlockedHostname("fc00::1")).toBe(true);
+    expect(isBlockedHostname("ff00::1")).toBe(true);
+    expect(isBlockedHostname("::")).toBe(true);
+    expect(isBlockedHostname("::1")).toBe(true);
+    expect(isBlockedHostname("0:0:0:0:0:0:0:1")).toBe(true);
+    expect(isBlockedHostname("::ffff:10.0.0.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:8.8.8.8")).toBe(false);
+    expect(isBlockedHostname("2001:4860:4860::8888")).toBe(false);
+    expect(isBlockedHostname("fe80::1%eth0")).toBe(true);
+    expect(isBlockedHostname("1:2:3:4:5:6:7:8:9")).toBe(true);
+    expect(isBlockedHostname("1::2::3")).toBe(true);
+    expect(isBlockedHostname("gggg::1")).toBe(true);
+    expect(isBlockedHostname("1:2:3:4:5:6:7:zzzz")).toBe(true);
+    expect(isBlockedHostname("256.1.1.1")).toBe(true);
+    expect(isBlockedHostname("08.1.1.1")).toBe(true);
+    expect(isBlockedHostname("0x100.1.1.1")).toBe(true);
+    expect(isBlockedHostname("4294967296")).toBe(true);
+    expect(isBlockedHostname("10..0.1")).toBe(true);
+    expect(isBlockedHostname("0400.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:012.0.0.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:0x7f.0.0.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:08.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:0x100.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:0400.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:10..0.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:1.2.3")).toBe(true);
+    expect(isBlockedHostname("::ffff:10.0.0.abc")).toBe(true);
+    expect(isBlockedHostname("::ffff:256.1.1.1")).toBe(true);
+    expect(isBlockedHostname("::ffff:010.010.010.010")).toBe(true);
+    expect(isBlockedHostname("::ffff:999.1.1.1")).toBe(true);
+    expect(isBlockedHostname("1:2:3:4:5:6:7::8:9")).toBe(true);
+    expect(isBlockedHostname("1::gggg")).toBe(true);
+    expect(isBlockedHostname("1:2:3:4:5:6:7:8g")).toBe(true);
+    expect(isBlockedHostname("[::1]")).toBe(true);
+    expect(isBlockedHostname("[2001:4860:4860::8888]")).toBe(false);
+    expect(isBlockedHostname("[::ffff:10.0.0.1]")).toBe(true);
+  });
+});
+
+describe("pinUrlToAddress", () => {
+  test("rewrites the hostname to the resolved address and keeps the original path", () => {
+    expect(pinUrlToAddress(new URL("https://example.com/hook"), "1.1.1.1").toString()).toBe(
+      "https://1.1.1.1/hook",
+    );
+    expect(pinUrlToAddress(new URL("https://example.com/hook"), "2001:4860:4860::8888").href).toBe(
+      "https://[2001:4860:4860::8888]/hook",
+    );
+    expect(
+      pinUrlToAddress(new URL("https://example.com:8443/hook"), "2001:4860:4860::8888").href,
+    ).toBe("https://[2001:4860:4860::8888]:8443/hook");
+    expect(
+      pinUrlToAddress(new URL("https://example.com/hook"), "[2001:4860:4860::8888]").href,
+    ).toBe("https://[2001:4860:4860::8888]/hook");
   });
 });

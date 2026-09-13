@@ -31,7 +31,7 @@ const authProvider: ServiceProvider = {
     auth.registerGuard("api", apiGuard);
     auth.registerGuard("access_token", apiGuard);
     auth.registerGuard("token", apiGuard);
-    auth.registerGuard("jwt", new JwtGuard());
+    auth.registerGuard("jwt", new JwtGuard(container));
     auth.registerGuard("basic", new BasicAuthGuard(container));
     container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());
     container.set(CORE_AUTH_TOKEN, auth);

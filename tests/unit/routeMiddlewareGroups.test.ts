@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
@@ -10,6 +10,7 @@ import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
+import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
 
 class ProjectPolicy extends Policy {
   override delete(user: { role?: string } | null): boolean {
@@ -31,6 +32,13 @@ function createKernelDependencies(): AppDependencies {
 }
 
 describe("createAuthorizeMiddleware", () => {
+  let previousHeaders: string | undefined;
+  beforeEach(() => {
+    previousHeaders = enableDevAuthHeaders();
+  });
+  afterEach(() => {
+    restoreDevAuthHeaders(previousHeaders);
+  });
   test("returns 403 when the policy rejects the action", async () => {
     const gate = new PolicyGate();
     const auth = new AuthManager(new GuestGuard());
@@ -66,6 +74,13 @@ describe("createAuthorizeMiddleware", () => {
 });
 
 describe("HttpKernel.wrapPolicy", () => {
+  let previousHeaders: string | undefined;
+  beforeEach(() => {
+    previousHeaders = enableDevAuthHeaders();
+  });
+  afterEach(() => {
+    restoreDevAuthHeaders(previousHeaders);
+  });
   test("applies auth and policy middleware to route handlers", async () => {
     const dependencies = createKernelDependencies();
     const gate = dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);

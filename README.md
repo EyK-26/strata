@@ -28,7 +28,7 @@ Guides: [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDIN
 
 ## Packages
 
-Published as **1.0.9**:
+Published as **1.1.0**:
 
 | Package | What it is |
 |---------|------------|
@@ -47,7 +47,7 @@ import { BaseRepository } from "@getstrata/core/database/baseRepository";
 
 ## Cookie HTML apps
 
-Generated cookie apps include restyleable welcome, login, register, and password reset screens (`views/` plus `public/assets/site.css`). Seed login is `demo@example.com` / `password`. Session cookie name is `strata_session`. CSRF field is `_token`.
+Generated cookie apps include restyleable welcome, login, register, and password reset screens (`views/` plus `public/assets/site.css`). Seed login is `demo@example.com` / `StrataDemo!ChangeMe`. Session cookie name is `strata_session`. CSRF field is `_token`.
 
 ## This repository
 

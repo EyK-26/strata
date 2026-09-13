@@ -1,41 +1,22 @@
-import { authNeedsUsers, type StarterLayers, usesTenantTable } from "./types.ts";
-
-function ph(layers: StarterLayers, count: number, start = 1): string {
-  if (layers.database === "postgres") {
-    return Array.from({ length: count }, (_, index) => `$${start + index}`).join(", ");
-  }
-  return Array.from({ length: count }, () => "?").join(", ");
-}
-
-function sqlFalse(layers: StarterLayers): string {
-  return layers.database === "postgres" ? "false" : "0";
-}
+import { authNeedsUsers, type StarterLayers } from "./types.ts";
 
 function renderScimModule(layers: StarterLayers): string | null {
   if (!layers.extras.scim || !authNeedsUsers(layers.auth)) {
     return null;
   }
 
-  const tenantOn = usesTenantTable(layers.tenancy);
-  const insertCols = tenantOn
-    ? "name, email, password, is_admin, tenant_id"
-    : "name, email, password, is_admin";
-  const insertPh = tenantOn ? ph(layers, 5) : ph(layers, 4);
-  const insertTail = tenantOn ? `, ${sqlFalse(layers)}, tenantId` : `, ${sqlFalse(layers)}`;
-  const emailPh = ph(layers, 1);
-  const idPh = ph(layers, 1);
-  const updatePh = `${ph(layers, 1)}, ${ph(layers, 1, 2)}, ${ph(layers, 1, 3)}`;
-
   return `import { randomBytes } from "node:crypto";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { createScimAuthMiddleware } from "@getstrata/core/auth/scimAuthMiddleware";
 import { hashPassword } from "@getstrata/core/auth/password";
+import { BadRequestError } from "@getstrata/core/errors/http";
+import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
 import { currentTenant } from "@getstrata/core/tenant/tenantContext";
-import { getSql } from "../../bootstrap/database.ts";
+import { User } from "../../models/User.ts";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const LIST_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:ListResponse";
@@ -43,10 +24,27 @@ const ERROR_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:Error";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const CONFIG_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig";
 
-type UserRow = { id: number; name: string; email: string };
-
 function scimEnabled(): boolean {
   return (process.env.FEATURE_SCIM ?? "false") === "true";
+}
+
+function tenantId(): number {
+  const tenant = currentTenant();
+  if (!tenant) {
+    throw new Error("SCIM requires a tenant context.");
+  }
+  return tenant.id;
+}
+
+function readScimUserId(request: Request): number | Response {
+  try {
+    return parsePositiveIntParam(routeParams(request).id ?? "", "id");
+  } catch (error) {
+    if (error instanceof BadRequestError) {
+      return scimError("Invalid id.", 400);
+    }
+    throw error;
+  }
 }
 
 function scimJson(body: unknown, status = 200): Response {
@@ -60,13 +58,15 @@ function scimError(detail: string, status: number): Response {
   return scimJson({ schemas: [ERROR_SCHEMA], detail, status: String(status) }, status);
 }
 
-function toScimUser(row: UserRow) {
+function toScimUser(user: { get(key: "id" | "name" | "email"): unknown }) {
+  const email = String(user.get("email") ?? "");
+  const name = String(user.get("name") ?? "");
   return {
     schemas: [USER_SCHEMA],
-    id: String(row.id),
-    userName: row.email,
-    name: { formatted: row.name },
-    emails: [{ value: row.email, primary: true }],
+    id: String(user.get("id")),
+    userName: email,
+    name: { formatted: name },
+    emails: [{ value: email, primary: true }],
     active: true,
     meta: { resourceType: "User" },
   };
@@ -156,24 +156,29 @@ const scimModule: AppModule = {
             const url = new URL(request.url);
             const filter = url.searchParams.get("filter") ?? "";
             const match = /userName\\s+eq\\s+"([^"]+)"/i.exec(filter);
-            let rows: UserRow[];
-            if (match?.[1]) {
-              rows = await getSql().unsafe<UserRow>(
-                "SELECT id, name, email FROM users WHERE email = ${emailPh}",
-                [match[1].trim().toLowerCase()],
-              );
-            } else {
-              rows = await getSql().unsafe<UserRow>("SELECT id, name, email FROM users");
-            }
             const startIndex = Math.max(1, Number.parseInt(url.searchParams.get("startIndex") ?? "1", 10) || 1);
-            const count = Math.min(200, Math.max(1, Number.parseInt(url.searchParams.get("count") ?? String(rows.length || 1), 10) || 200));
-            const slice = rows.slice(startIndex - 1, startIndex - 1 + count);
+            const count = Math.min(200, Math.max(1, Number.parseInt(url.searchParams.get("count") ?? "200", 10) || 200));
+            if (match?.[1]) {
+              const email = match[1].trim().toLowerCase();
+              const user = await User.where({ email, tenant_id: tenantId() }).first();
+              const users = user ? [user] : [];
+              const slice = users.slice(startIndex - 1, startIndex - 1 + count);
+              return scimJson({
+                schemas: [LIST_SCHEMA],
+                totalResults: users.length,
+                startIndex,
+                itemsPerPage: slice.length,
+                Resources: slice.map(toScimUser),
+              });
+            }
+            const totalResults = await User.where({ tenant_id: tenantId() }).count();
+            const page = await User.where({ tenant_id: tenantId() }).offset(startIndex - 1).limit(count).get();
             return scimJson({
               schemas: [LIST_SCHEMA],
-              totalResults: rows.length,
+              totalResults,
               startIndex,
-              itemsPerPage: slice.length,
-              Resources: slice.map(toScimUser),
+              itemsPerPage: page.length,
+              Resources: page.map(toScimUser),
             });
           }),
         ),
@@ -186,28 +191,16 @@ const scimModule: AppModule = {
             if (!email) {
               return scimError("userName is required.", 400);
             }
-            const existing = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE email = ${emailPh}",
-              [email],
-            );
-            if (existing[0]) {
+            const existing = await User.where({ email, tenant_id: tenantId() }).first();
+            if (existing) {
               return scimError("User already exists.", 409);
             }
             const hashed = await hashPassword(randomBytes(18).toString("hex"));
-            const tenantId = currentTenant()?.id ?? 1;
-            await getSql().unsafe(
-              "INSERT INTO users (${insertCols}) VALUES (${insertPh})",
-              [name, email, hashed${insertTail}],
-            );
-            const created = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE email = ${emailPh}",
-              [email],
-            );
-            const row = created[0];
-            if (!row) {
+            const created = await User.create({ name, email, password: hashed, is_admin: false, tenant_id: tenantId() });
+            if (!created) {
               return scimError("Could not create user.", 500);
             }
-            return scimJson(toScimUser(row), 201);
+            return scimJson(toScimUser(created), 201);
           }),
         ),
       },
@@ -215,61 +208,55 @@ const scimModule: AppModule = {
         GET: kernel.wrap(
           "api",
           wrapScim(async (request) => {
-            const id = Number.parseInt(routeParams(request).id ?? "", 10);
-            const rows = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE id = ${idPh}",
-              [id],
-            );
-            const row = rows[0];
-            if (!row) {
+            const id = readScimUserId(request);
+            if (id instanceof Response) {
+              return id;
+            }
+            const user = await User.where({ id, tenant_id: tenantId() }).first();
+            if (!user) {
               return scimError("User not found.", 404);
             }
-            return scimJson(toScimUser(row));
+            return scimJson(toScimUser(user));
           }),
         ),
         PUT: kernel.wrap(
           "api",
           wrapScim(async (request) => {
-            const id = Number.parseInt(routeParams(request).id ?? "", 10);
+            const id = readScimUserId(request);
+            if (id instanceof Response) {
+              return id;
+            }
             const body = (await request.json()) as Record<string, unknown>;
             const email = readUserName(body);
             const name = readName(body, email);
             if (!email || !name) {
               return scimError("userName and name are required.", 400);
             }
-            await getSql().unsafe(
-              "UPDATE users SET name = ${updatePh.split(", ")[0]}, email = ${updatePh.split(", ")[1]} WHERE id = ${updatePh.split(", ")[2]}",
-              [name, email, id],
-            );
-            const rows = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE id = ${idPh}",
-              [id],
-            );
-            const row = rows[0];
-            if (!row) {
+            const user = await User.where({ id, tenant_id: tenantId() }).first();
+            if (!user) {
               return scimError("User not found.", 404);
             }
-            return scimJson(toScimUser(row));
+            await user.update({ name, email });
+            return scimJson(toScimUser(user));
           }),
         ),
         PATCH: kernel.wrap(
           "api",
           wrapScim(async (request) => {
-            const id = Number.parseInt(routeParams(request).id ?? "", 10);
-            const existing = await getSql().unsafe<UserRow>(
-              "SELECT id, name, email FROM users WHERE id = ${idPh}",
-              [id],
-            );
-            const row = existing[0];
-            if (!row) {
+            const id = readScimUserId(request);
+            if (id instanceof Response) {
+              return id;
+            }
+            const user = await User.where({ id, tenant_id: tenantId() }).first();
+            if (!user) {
               return scimError("User not found.", 404);
             }
             const body = (await request.json()) as { schemas?: string[]; Operations?: Array<{ op?: string; path?: string; value?: unknown }> };
             if (body.schemas && !body.schemas.includes(PATCH_SCHEMA)) {
               return scimError("Unsupported patch schema.", 400);
             }
-            let name = row.name;
-            let email = row.email;
+            let name = String(user.get("name") ?? "");
+            let email = String(user.get("email") ?? "");
             for (const operation of body.Operations ?? []) {
               const op = (operation.op ?? "replace").toLowerCase();
               if (op !== "replace" && op !== "add") {
@@ -290,18 +277,21 @@ const scimModule: AppModule = {
                 name = readName(value, name);
               }
             }
-            await getSql().unsafe(
-              "UPDATE users SET name = ${updatePh.split(", ")[0]}, email = ${updatePh.split(", ")[1]} WHERE id = ${updatePh.split(", ")[2]}",
-              [name, email, id],
-            );
-            return scimJson(toScimUser({ id: row.id, name, email }));
+            await user.update({ name, email });
+            return scimJson(toScimUser(user));
           }),
         ),
         DELETE: kernel.wrap(
           "api",
           wrapScim(async (request) => {
-            const id = Number.parseInt(routeParams(request).id ?? "", 10);
-            await getSql().unsafe("DELETE FROM users WHERE id = ${idPh}", [id]);
+            const id = readScimUserId(request);
+            if (id instanceof Response) {
+              return id;
+            }
+            const user = await User.where({ id, tenant_id: tenantId() }).first();
+            if (user) {
+              await user.delete();
+            }
             return new Response(null, { status: 204 });
           }),
         ),

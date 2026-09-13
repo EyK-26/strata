@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
@@ -15,7 +15,11 @@ import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
+import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import { resetMemoryLoginThrottleForTests } from "@getstrata/core/http/loginThrottleMiddleware";
+import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 import { createMockDependencies } from "./testHelpers";
@@ -35,6 +39,13 @@ function createKernelDependencies(config?: ConfigStore): AppDependencies {
 }
 
 describe("HttpKernel", () => {
+  let previousHeaders: string | undefined;
+  beforeEach(() => {
+    previousHeaders = enableDevAuthHeaders();
+  });
+  afterEach(() => {
+    restoreDevAuthHeaders(previousHeaders);
+  });
   test("registers global middleware for logging, request id, and auth", () => {
     const kernel = createHttpKernel(createKernelDependencies());
     const middleware = kernel.globalMiddleware();
@@ -45,7 +56,7 @@ describe("HttpKernel", () => {
   test("skips api throttle middleware when config is not registered", () => {
     const kernel = createHttpKernel(createKernelDependencies());
 
-    expect(kernel.group("api")).toEqual([]);
+    expect(kernel.group("api")).toHaveLength(1);
   });
 
   test("falls back to memory throttle middleware when redis url is missing", () => {
@@ -53,7 +64,66 @@ describe("HttpKernel", () => {
     config.set(REDIS_URL_CONFIG_KEY, "");
     const kernel = createHttpKernel(createKernelDependencies(config));
 
-    expect(kernel.group("api")).toHaveLength(1);
+    expect(kernel.group("api")).toHaveLength(2);
+  });
+
+  test("wrapLogin keys JSON login on parsed email, not a missing body", async () => {
+    const previousMax = process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
+    const previousWindow = process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
+    process.env.LOGIN_RATE_LIMIT_PER_WINDOW = "1";
+    process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS = "60";
+    resetMemoryLoginThrottleForTests();
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrapLogin(async (request) => {
+        const body = (await request.json()) as { email?: string };
+        return Response.json({ ok: true, email: body.email ?? null });
+      });
+
+      await runWithRequestMeta({ ipAddress: "203.0.113.41", userAgent: null }, async () => {
+        const missing = await handler(
+          new Request("http://example.test/api/v1/auth/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({}),
+          }),
+        );
+        expect(missing.status).toBe(200);
+        expect(await missing.json()).toEqual({ ok: true, email: null });
+
+        const demo = await handler(
+          new Request("http://example.test/api/v1/auth/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: "demo@example.com" }),
+          }),
+        );
+        expect(demo.status).toBe(200);
+
+        const demoAgain = await handler(
+          new Request("http://example.test/api/v1/auth/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: "demo@example.com" }),
+          }),
+        );
+        expect(demoAgain.status).toBe(429);
+
+        const other = await handler(
+          new Request("http://example.test/api/v1/auth/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: "other@example.com" }),
+          }),
+        );
+        expect(other.status).toBe(200);
+      });
+    } finally {
+      restoreEnvVar("LOGIN_RATE_LIMIT_PER_WINDOW", previousMax);
+      restoreEnvVar("LOGIN_RATE_LIMIT_WINDOW_SECONDS", previousWindow);
+      resetMemoryLoginThrottleForTests();
+    }
   });
 
   test("wrapWeb applies the web middleware group when views are enabled", async () => {
@@ -73,6 +143,42 @@ describe("HttpKernel", () => {
       );
       expect(postResponse.status).toBe(403);
       expect(await postResponse.text()).toContain("Invalid or missing CSRF token.");
+    } finally {
+      restoreEnvVar("FRONTEND_MODE", previous);
+    }
+  });
+
+  test("wrap api maps CSRF failures to JSON 403", async () => {
+    const previous = process.env.FRONTEND_MODE;
+    process.env.FRONTEND_MODE = "api";
+
+    try {
+      const kernel = createHttpKernel(createKernelDependencies());
+      const handler = kernel.wrap("api", async () => Response.json({ ok: true }));
+      const response = await handler(
+        new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
+      );
+      expect(response.status).toBe(403);
+      expect(response.headers.get("content-type")).toContain("json");
+      expect(await response.json()).toEqual({ error: "Invalid or missing CSRF token." });
+
+      const get = kernel.wrap("api", async (request) =>
+        Response.json({ token: resolveCsrfTokenForRequest(request) }),
+      );
+      const issued = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
+        get(new Request("http://example.test/api/v1/auth/csrf")),
+      );
+      const issuedBody = (await issued.json()) as { token: string };
+      const cookie = issued.headers.getSetCookie()[0]?.split(";")[0] ?? "";
+      expect(decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1))).toBe(issuedBody.token);
+      const allowed = await handler(
+        new Request("http://example.test/api/v1/auth/login", {
+          method: "POST",
+          headers: { cookie, "x-csrf-token": issuedBody.token, origin: "http://example.test" },
+        }),
+      );
+      expect(allowed.status).toBe(200);
+      expect(await allowed.json()).toEqual({ ok: true });
     } finally {
       restoreEnvVar("FRONTEND_MODE", previous);
     }
@@ -330,7 +436,10 @@ describe("HttpKernel", () => {
 
       const verified = await handler(
         new Request("http://example.test/organizations", {
-          headers: { "x-authenticated-user-id": "1" },
+          headers: {
+            "x-authenticated-user-id": "1",
+            "x-authenticated-email-verified": "true",
+          },
         }),
       );
       expect(verified.status).toBe(200);

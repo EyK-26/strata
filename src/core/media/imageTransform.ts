@@ -1,4 +1,6 @@
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_PIXELS = 4096 * 4096;
 
 function normalizeMimeType(mimeType: string): string {
   return mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
@@ -34,8 +36,20 @@ async function resizeImageContents(
   width: number,
   mimeType: string,
 ): Promise<{ body: Uint8Array; contentType: string }> {
+  if (contents.byteLength > MAX_IMAGE_BYTES) {
+    throw new Error("Image exceeds the maximum allowed size.");
+  }
+
   const normalized = normalizeMimeType(mimeType);
-  const pipeline = new Bun.Image(contents).resize(width);
+  const source = new Bun.Image(contents);
+  const metadata = await source.metadata();
+  const pixels = Number(metadata.width) * Number(metadata.height);
+
+  if (pixels > MAX_IMAGE_PIXELS) {
+    throw new Error("Image exceeds the maximum allowed dimensions.");
+  }
+
+  const pipeline = source.resize(width);
 
   if (normalized === "image/png") {
     return { body: await pipeline.png().bytes(), contentType: "image/png" };

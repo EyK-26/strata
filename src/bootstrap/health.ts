@@ -1,6 +1,7 @@
 import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { jsonResponse } from "@getstrata/core/http/response";
+import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
 import { RedisClient } from "bun";
 import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "./config";
 import type { AppDependencies, ConfigStore } from "./contracts";
@@ -132,12 +133,12 @@ function createHealthRoutes(
     "/ready": async () => {
       const extra = await resolveExtraFields(options.extra);
       const { checks, ready } = await collectDependencyChecks(dependencies);
+      const debug = envFlagEnabled(process.env.APP_DEBUG);
 
       return jsonResponse(
         {
           status: ready ? "ready" : "not_ready",
-          checks,
-          ...extra,
+          ...(debug ? { checks, ...extra } : {}),
         },
         { status: ready ? 200 : 503 },
       );

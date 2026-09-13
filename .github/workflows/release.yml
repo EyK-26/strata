@@ -113,7 +113,7 @@ jobs:
         image: postgres:18.4
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: dev-postgres-change-me
           POSTGRES_DB: bun_testing
         ports:
           - 5432:5432
@@ -174,9 +174,9 @@ jobs:
 
       - name: Validate release quality gate
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bun_testing
-          APP_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hiroapp_test
-          REDIS_URL: redis://localhost:6379
+          DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:5432/bun_testing
+          APP_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:5432/hiroapp_test
+          REDIS_URL: redis://:dev-redis-change-me@localhost:6379
           SKIP_FIXTURE_TEST_BOOTSTRAP: 1
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync

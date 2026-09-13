@@ -4,7 +4,7 @@ import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { ForbiddenError, toHttpError } from "@getstrata/core/errors/http";
 import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
-import { runWithMigrationBypass } from "./databaseTenantContext";
+import { runWithMigrationBypassForIdentifier } from "./databaseTenantContext";
 import { resolveTenant } from "./resolveTenant";
 import { isTenancyEnabled } from "./tenancyConfig";
 import { runWithTenant, type TenantContext } from "./tenantContext";
@@ -13,7 +13,7 @@ import { runWithTenantDatabase } from "./tenantDatabaseScope";
 const DEFAULT_TENANT: TenantContext = {
   id: 1,
   slug: "default",
-  plan: "enterprise",
+  plan: "free",
   region: "eu",
 };
 
@@ -22,7 +22,7 @@ async function resolveUserTenantId(userId: number): Promise<number> {
     return DEFAULT_TENANT.id;
   }
 
-  return await runWithMigrationBypass(async () => {
+  return await runWithMigrationBypassForIdentifier(userId, async () => {
     const rows = (await db`
       SELECT tenant_id
       FROM users
@@ -110,15 +110,7 @@ function createTenantMiddleware() {
       const tenant = await resolveTenantForRequest(request);
 
       return await runWithTenantDatabase(tenant, async () => {
-        const response = await next();
-        const headers = new Headers(response.headers);
-        headers.set("x-tenant-id", String(tenant.id));
-        headers.set("x-tenant-region", tenant.region);
-        return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-        });
+        return await next();
       });
     } catch (error) {
       const httpError = toHttpError(error);

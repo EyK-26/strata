@@ -16,6 +16,9 @@ const envKeys = [
   "OAUTH_STATE_SECRET",
   "TOKEN_HASH_PEPPER",
   "API_TOKEN_DEFAULT_EXPIRY_DAYS",
+  "DATABASE_URL",
+  "APP_DATABASE_URL",
+  "TENANCY_DRIVER",
 ] as const;
 
 const previousEnv: Record<string, string | undefined> = {};
@@ -50,6 +53,9 @@ describe("secretsCheckCommand", () => {
     process.env.OAUTH_STATE_SECRET = "oauth-state-secret";
     process.env.TOKEN_HASH_PEPPER = "token-pepper";
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "90";
+    process.env.TENANCY_DRIVER = "rls";
+    process.env.DATABASE_URL = "postgresql://strata_app:rotated-app-secret@db.example/app";
+    delete process.env.APP_DATABASE_URL;
 
     expect(() => secretsCheckCommand()).not.toThrow();
   });

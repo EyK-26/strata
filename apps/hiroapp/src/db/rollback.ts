@@ -1,13 +1,23 @@
-import { getSql } from "../bootstrap/database.ts";
+import { dropPostgresTablesAsAdmin } from "@getstrata/core/tenant/enableTenantRls";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 
-const tables = ["api_tokens", "sessions", "users", "notes", "tenant"];
+const tables = [
+  "api_tokens",
+  "sessions",
+  "auth_saml_assertions",
+  "auth_one_time_tokens",
+  "users",
+  "notes",
+  "tenant",
+];
 
 export async function rollback() {
   await ensureAppDatabase();
-  const sql = getSql();
+  await dropPostgresTablesAsAdmin(tables, {
+    runtimeUrl: process.env.DATABASE_URL ?? "",
+    migrationUrl: process.env.MIGRATION_DATABASE_URL,
+  });
   for (const table of tables) {
-    await sql.unsafe(`DROP TABLE IF EXISTS ${table} CASCADE`);
     console.log(`dropped ${table}`);
   }
 }

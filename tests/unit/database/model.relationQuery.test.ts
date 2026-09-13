@@ -330,7 +330,7 @@ describe("Eloquent-style model relations", () => {
     connection.queue([{ id: 40, name: "htmx" }]);
     const created = await user.tags().create({ name: "htmx" });
     expect(created).toBeInstanceOf(TagModel);
-    expect(connection.calls.at(-1)?.query).toContain("INSERT INTO user_tag");
+    expect(connection.calls.at(-1)?.query).toMatch(/INSERT INTO ["`]?user_tag["`]?/);
   });
 
   test("load and Model.with eager-load relation methods", async () => {

@@ -1,5 +1,27 @@
 # create-strata changelog
 
+## 1.1.0
+
+Breaking security hardening for generated apps, lockstep with `@getstrata/core` 1.1.0. Read the core 1.1.0 migration list.
+
+CSRF on HTML and on mutating API routes, including guest JSON login (`POST /api/v1/auth/login`) and JWT mint (`POST /api/auth/token`). Fetch `GET /api/v1/auth/csrf` first. That response Set-Cookies the HttpOnly CSRF cookie and returns the same token in JSON. Send `X-CSRF-Token` (or form `_token`) plus the cookie. Nested API CSRF does not mint a second cookie. A missing token is JSON 403. CORS allowlists `X-CSRF-Token` and, when reflecting a specific origin, sets `Access-Control-Allow-Credentials`. The CSRF cookie is `SameSite=Lax`, so a different site cannot send it on fetch. Bearer and Basic skip CSRF only after that guard authenticates (`successful bearer or basic skips CSRF`). `failed Bearer header does not skip CSRF when credentialSource is null` is the Bearer header skip when `credentialSource` is null. `failed bearer does not fall back to a session or guest guard` is failed Bearer not resolving a session or guest user. HiroApp e2e `cookie login requires CSRF and ignores garbage Bearer` is garbage Bearer still requiring CSRF on POST `/login`. SCIM and SAML ACS skip CSRF by path. A missing or foreign `Origin` on a cookie mutating request is 403. `GET /login` and `GET /api/v1/auth/csrf` do not require Origin. The IdP-shaped ACS e2e is a test `fetch` to the app origin with `idpShapedHeaders()` Origin/Referer and HMAC RelayState, not a browser IdP POST.
+
+SAML is HMAC RelayState without a Lax cookie. Replay defaults to SQL `auth_saml_assertions`. Tests may use in-memory. Both drop IDs after 1 hour. Signed responses and a required IdP issuer are the default. ACS compares assertion issuer to `SAML_IDP_ISSUER`. JIT uses `currentTenantId()` and is skipped when `FEATURE_REGISTRATION=false`. Generated SAML ACS still challenges MFA when `mfa_enabled` is true. Completing MFA enrollment revokes sessions and API tokens. There is no generated OIDC cookie login.
+
+MFA is when enrolled, on HTML password POST, HTML MFA, API token mint, JWT mint, and Basic mint. Recovery hashes are persisted. `verifyCredentials` does not skip MFA. JwtGuard does not run TOTP on each request.
+
+Password reset consumes one-time tokens atomically, compares aliased `sessions.created_at` to `session_valid_after` (not `users.created_at`), and deletes `sessions` plus `api_tokens`. JwtGuard rejects tokens issued before `session_valid_after`. Verify GET does not sign in.
+
+`--tenancy=rls` FORCE RLS is on `notes` and `users`. `sessions`, `api_tokens`, and `auth_one_time_tokens` get a user-join policy plus an `app.bypass_identifier` pin on the real key columns. Auth lookups and those auth-table writes use `runWithMigrationBypassForIdentifier()`, which sets that GUC and does not rewrite SQL. Consume passes `hashOneTimeToken(token)`. SCIM scopes by `tenant_id` and throws if tenant ALS is missing. `createHealthRoutes` without `pingOnHealth` is always 200 JSON. Generated and HiroApp `/health` overwrite that with `schemaReady` (empty notes 200, unreadable not 200). Docker HEALTHCHECK fetches `/health`. Generated Compose still has a `postgres` superuser for volume init, GRANT, migrate, `migrate:fresh` DROP, and Adminer. Runtime `DATABASE_URL` uses `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`), including `--no-docker`. Generated MySQL is still `mysql://root:…`. Production Compose runtime is `strata_app` after the split (`STRATA_APP_PASSWORD` required). This CI does not boot prod compose. `db/ensure-postgres-app-role.sql` is repeatable on an existing volume. Every rls runtime pool, including local, rejects username `postgres` or `root`, then inspects live `pg_roles`.
+
+OIDC verifies RS256 ID tokens via discovery JWKS and a persisted PKCE handshake. App JWTs stay HS256. `at_hash` is verified when present; omitted `access_token` plus `at_hash` throws. GitHub OAuth uses `safeFetch`, always reads `/user/emails`, and rejects a missing verified address.
+
+`GuestGuard`: production (`isProductionEnv`, including staging) is always null even when `AUTH_DEV_HEADERS=true`. Local `AUTH_DEV_HEADERS=true` still reads request headers.
+
+Identity response headers are never set.
+
+MFA is when enrolled. Enrollment is optional. Secrets are `enc:v1:` when a KMS key is set or in production. Local without a key may still return plaintext. Seed password is `StrataDemo!ChangeMe`. HTMX is the unpkg 2.0.4 pin. Generated login tokens mint `[]` abilities. Generated Compose Postgres password is `dev-postgres-change-me`. Generated Compose application role is `strata_app` / `dev-strata-app-change-me`. Generated Compose MySQL root password is `dev-mysql-change-me`. `127.0.0.1:54329` / `6379` / `33061` stay published. Adminer is debug-profile only.
+
 ## 1.0.9
 
 Label HiroApp as internal e2e dogfood and seed notes via Model

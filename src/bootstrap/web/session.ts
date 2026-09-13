@@ -1,13 +1,22 @@
 import { createHmac, randomBytes } from "node:crypto";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { type AuthGuard, AuthManager } from "@getstrata/core/auth/guard";
+import { isSessionInvalidated } from "@getstrata/core/auth/sessionCookie";
 import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
+import {
+  getActiveDatabaseConnection,
+  hasActiveDatabaseConnection,
+} from "@getstrata/core/database/connectionContext";
+import {
+  getDefaultDatabasePool,
+  getDefaultDatabaseQuery,
+} from "@getstrata/core/database/defaultConnection";
 import { currentSqlDialect, sqlTimestamp } from "@getstrata/core/database/dialect";
 import { readRequestCookie } from "@getstrata/core/http/cookies";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
+import { runWithMigrationBypassForIdentifier } from "@getstrata/core/tenant/databaseTenantContext";
 
 function sqlPlaceholder(index: number): string {
   return currentSqlDialect().placeholder(index);
@@ -36,7 +45,11 @@ interface SessionRow {
   learn_subscriber?: boolean | null;
   is_admin?: boolean | null;
   email_verified_at?: Date | string | null;
+  session_valid_after?: Date | string | null;
   expires_at?: Date;
+  created_at?: Date | string | null;
+  session_created_at?: Date | string | null;
+  last_active_at?: Date | string | null;
 }
 
 type SqlClient = {
@@ -66,11 +79,18 @@ function isSqlClient(value: SqlSource): value is SqlClient {
 }
 
 function resolveSql(source: SqlSource): SqlClient {
-  if (isSqlClient(source)) {
-    return source;
+  const client = isSqlClient(source) ? source : source();
+  if (!hasActiveDatabaseConnection()) {
+    return client;
   }
-
-  return source();
+  try {
+    if (client === getDefaultDatabasePool() || client === getDefaultDatabaseQuery()) {
+      return getActiveDatabaseConnection(client);
+    }
+  } catch {
+    return client;
+  }
+  return client;
 }
 
 function defaultSessionSql(): SqlClient {
@@ -120,18 +140,45 @@ async function defaultLoadSessionUser(
   sql: SqlClient,
   sessionId: string,
 ): Promise<SessionUser | null> {
-  const rows = (await sql.unsafe(
-    `SELECT s.user_id, s.expires_at, u.*
-     FROM sessions s
-     INNER JOIN users u ON u.id = s.user_id
-     WHERE s.id = ${sqlPlaceholder(1)} AND s.expires_at > ${sqlNow()}`,
-    [sessionId],
-  )) as SessionRow[];
+  const sessionRows = await runWithMigrationBypassForIdentifier(sessionId, async () => {
+    return (await sql.unsafe(
+      `SELECT user_id, expires_at, created_at AS session_created_at
+     FROM sessions
+     WHERE id = ${sqlPlaceholder(1)} AND expires_at > ${sqlNow()}`,
+      [sessionId],
+    )) as SessionRow[];
+  });
 
-  const row = rows[0];
-  if (!row) return null;
+  const session = sessionRows[0];
+  if (!session) return null;
 
-  return mapSessionUserRow(row);
+  const userId = Number(session.user_id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return null;
+  }
+
+  return await runWithMigrationBypassForIdentifier(userId, async () => {
+    const rows = (await sql.unsafe(`SELECT * FROM users WHERE id = ${sqlPlaceholder(1)}`, [
+      userId,
+    ])) as SessionRow[];
+
+    const row = rows[0];
+    if (!row) return null;
+
+    const createdSource = session.session_created_at;
+    const createdAt =
+      createdSource instanceof Date
+        ? createdSource.getTime()
+        : createdSource
+          ? Date.parse(String(createdSource))
+          : Number.NaN;
+
+    if (!Number.isFinite(createdAt) || isSessionInvalidated(createdAt, row.session_valid_after)) {
+      return null;
+    }
+
+    return mapSessionUserRow({ ...row, user_id: userId, session_created_at: createdSource });
+  });
 }
 
 function redirectWithCookie(location: string, setCookie: string, status: number): Response {
@@ -192,41 +239,59 @@ export class CookieSessionStore {
   async create(user: SessionUser, meta: SessionCreateMeta = {}): Promise<string> {
     const id = randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + this.maxAgeSeconds * 1000);
-    await this.sql().unsafe(
-      `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at)
-       VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()})`,
-      [id, user.id, sqlTimestamp(expires), meta.userAgent ?? null, meta.ipAddress ?? null],
-    );
+    await runWithMigrationBypassForIdentifier(user.id, async () => {
+      await this.sql().unsafe(
+        `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at, created_at)
+       VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()}, ${sqlNow()})`,
+        [id, user.id, sqlTimestamp(expires), meta.userAgent ?? null, meta.ipAddress ?? null],
+      );
+    });
     return id;
   }
 
   async destroy(sessionId: string): Promise<void> {
-    await this.sql().unsafe(`DELETE FROM sessions WHERE id = ${sqlPlaceholder(1)}`, [sessionId]);
+    await runWithMigrationBypassForIdentifier(sessionId, async () => {
+      await this.sql().unsafe(`DELETE FROM sessions WHERE id = ${sqlPlaceholder(1)}`, [sessionId]);
+    });
+  }
+
+  async destroyAllSessions(userId: number): Promise<void> {
+    await runWithMigrationBypassForIdentifier(userId, async () => {
+      await this.sql().unsafe(`DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)}`, [
+        userId,
+      ]);
+    });
   }
 
   async destroyOtherSessions(userId: number, keepSessionId: string): Promise<void> {
-    await this.sql().unsafe(
-      `DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)} AND id <> ${sqlPlaceholder(2)}`,
-      [userId, keepSessionId],
-    );
+    await runWithMigrationBypassForIdentifier(userId, async () => {
+      await this.sql().unsafe(
+        `DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)} AND id <> ${sqlPlaceholder(2)}`,
+        [userId, keepSessionId],
+      );
+    });
   }
 
   async listForUser(userId: number): Promise<BrowserSessionRecord[]> {
     const dialect = currentSqlDialect();
-    return this.sql().unsafe<BrowserSessionRecord>(
-      `SELECT id, user_id, user_agent, ip_address, last_active_at, expires_at
+    return await runWithMigrationBypassForIdentifier(userId, () =>
+      this.sql().unsafe<BrowserSessionRecord>(
+        `SELECT id, user_id, user_agent, ip_address, last_active_at, expires_at
        FROM sessions
        WHERE user_id = ${dialect.placeholder(1)} AND expires_at > ${dialect.nowExpression()}
        ORDER BY last_active_at DESC${dialect.nullsLastSuffix()}, expires_at DESC`,
-      [userId],
+        [userId],
+      ),
     );
   }
 
   async touch(sessionId: string): Promise<void> {
-    await this.sql().unsafe(
-      `UPDATE sessions SET last_active_at = ${sqlNow()} WHERE id = ${sqlPlaceholder(1)}`,
-      [sessionId],
-    );
+    await runWithMigrationBypassForIdentifier(sessionId, async () => {
+      await this.sql().unsafe(
+        `UPDATE sessions SET last_active_at = ${sqlNow()} WHERE id = ${sqlPlaceholder(1)}`,
+        [sessionId],
+      );
+    });
   }
 
   async read(request: Request): Promise<SessionUser | null> {

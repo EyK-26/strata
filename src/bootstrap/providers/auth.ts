@@ -19,7 +19,7 @@ const authProvider: ServiceProvider = {
 
     const apiGuard = new DatabaseTokenGuard(container);
     const sessionGuard = new SessionGuard(container);
-    const jwtGuard = new JwtGuard();
+    const jwtGuard = new JwtGuard(container);
     const basicGuard = new BasicAuthGuard(container);
     const guards: AuthGuard[] = [apiGuard, jwtGuard, basicGuard, sessionGuard];
 

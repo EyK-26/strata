@@ -9,11 +9,15 @@ import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
 } from "@getstrata/core/database/boundConnection";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockDependencies } from "./testHelpers";
+
+const previousAppDebug = process.env.APP_DEBUG;
 
 describe("createHealthRoutes", () => {
   afterEach(() => {
     resetBoundDatabaseConnection();
+    restoreEnvVar("APP_DEBUG", previousAppDebug);
   });
 
   test("returns ok from /health without touching dependencies", async () => {
@@ -43,6 +47,7 @@ describe("createHealthRoutes", () => {
   });
 
   test("createHealthRoutes /ready uses the bound database client", async () => {
+    process.env.APP_DEBUG = "true";
     const queries: string[] = [];
     bindDatabaseConnection({
       async unsafe<T>(query: string) {
@@ -101,7 +106,27 @@ describe("createHealthRoutes", () => {
     expect(body.checks.database).toBe("ok");
   });
 
+  test("/ready omits check names unless APP_DEBUG is true", async () => {
+    bindDatabaseConnection({
+      async unsafe<T>() {
+        return [{ ok: 1 }] as T[];
+      },
+    });
+    process.env.APP_DEBUG = "false";
+    const routes = createHealthRoutes(
+      createMockDependencies(
+        new ServiceContainer(),
+        new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+      ),
+      { extra: { app: "hidden" } },
+    );
+    const response = await routes["/ready"]();
+    expect(await response.json()).toEqual({ status: "ready" });
+    expect(response.status).toBe(200);
+  });
+
   test("returns readiness details from /ready", async () => {
+    process.env.APP_DEBUG = "true";
     bindDatabaseConnection({
       async unsafe<T>() {
         return [{ ok: 1 }] as T[];

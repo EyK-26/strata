@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
 import type { ParsedFlags } from "./parseArgs.ts";
@@ -8,6 +8,7 @@ import {
   renderAuthDirectory,
   renderAuthModule,
   renderAuthProvider,
+  renderConfirmPasswordView,
   renderForgotPasswordView,
   renderHomeView,
   renderLayout,
@@ -30,9 +31,13 @@ import {
   renderGitignore,
   renderLayersManifest,
   renderPackageJson,
+  renderPostgresAppRoleInitSql,
   renderReadme,
+  usesComposePostgres,
 } from "./renderEnv.ts";
 import {
+  renderApiTokenModel,
+  renderAuthOneTimeTokenModel,
   renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,
@@ -41,6 +46,7 @@ import {
   renderFreshTs,
   renderMigrateTs,
   renderNoteModel,
+  renderPolicyProvider,
   renderPreloadTs,
   renderProvidersIndex,
   renderQueueProvider,
@@ -49,11 +55,14 @@ import {
   renderSeedTs,
   renderSidecarsTs,
   renderStatusTs,
+  renderUserModel,
   renderViewTs,
 } from "./renderRuntime.ts";
 import { renderScimModule } from "./renderScim.ts";
 import type { GenerateOptions, StarterLayers } from "./types.ts";
 import {
+  authNeedsUsers,
+  authUsesToken,
   htmlAuthKit,
   neededDockerServices,
   needsFrontendBuild,
@@ -159,6 +168,18 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   } else {
     removeIfExists(join(targetDir, "docker-compose.yml"));
   }
+  const postgresInit = renderPostgresAppRoleInitSql(projectName, layers);
+  if (postgresInit) {
+    writeText(join(targetDir, "db/ensure-postgres-app-role.sql"), postgresInit);
+    if (usesComposePostgres(layers)) {
+      writeText(join(targetDir, "docker/postgres-init/01-strata-app-role.sql"), postgresInit);
+    } else {
+      removeIfExists(join(targetDir, "docker/postgres-init"));
+    }
+  } else {
+    removeIfExists(join(targetDir, "db/ensure-postgres-app-role.sql"));
+    removeIfExists(join(targetDir, "docker/postgres-init"));
+  }
 
   writeText(join(src, "routes.ts"), renderRoutesTs());
   writeText(join(src, "lib/view.ts"), renderViewTs(layers));
@@ -174,9 +195,22 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(layers));
   writeText(join(src, "bootstrap/providers/config.ts"), renderConfigProvider(layers));
   writeText(join(src, "bootstrap/providers/queue.ts"), renderQueueProvider());
+  writeText(join(src, "bootstrap/providers/policy.ts"), renderPolicyProvider());
   writeText(join(src, "bootstrap/providers/index.ts"), renderProvidersIndex());
   writeText(join(src, "bootstrap/providers/auth.ts"), renderAuthProvider(layers));
-  writeText(join(src, "models/Note.ts"), renderNoteModel());
+  writeText(join(src, "models/Note.ts"), renderNoteModel(layers));
+  if (authNeedsUsers(layers.auth)) {
+    writeText(join(src, "models/User.ts"), renderUserModel(layers));
+    writeText(join(src, "models/AuthOneTimeToken.ts"), renderAuthOneTimeTokenModel());
+  } else {
+    removeIfExists(join(src, "models/User.ts"));
+    removeIfExists(join(src, "models/AuthOneTimeToken.ts"));
+  }
+  if (authUsesToken(layers.auth)) {
+    writeText(join(src, "models/ApiToken.ts"), renderApiTokenModel());
+  } else {
+    removeIfExists(join(src, "models/ApiToken.ts"));
+  }
   writeText(join(src, "db/migrate.ts"), renderMigrateTs(layers));
   writeText(join(src, "db/fresh.ts"), renderFreshTs(layers));
   writeText(join(src, "db/seed.ts"), renderSeedTs());
@@ -213,6 +247,21 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   }
 
   writeText(join(targetDir, "public/assets/site.css"), renderSiteCss());
+  // HTMX 2.0.4 from unpkg. See templates/public/assets/htmx.min.js.version.
+  const htmxSource = join(
+    options.templateRoot ?? starterPackageRoot(),
+    "public/assets/htmx.min.js",
+  );
+  const htmxFallback = join(starterPackageRoot(), "templates/public/assets/htmx.min.js");
+  const htmxPath = existsSync(htmxSource) ? htmxSource : htmxFallback;
+  if (existsSync(htmxPath)) {
+    mkdirSync(join(targetDir, "public/assets"), { recursive: true });
+    copyFileSync(htmxPath, join(targetDir, "public/assets/htmx.min.js"));
+    const versionSidecar = `${htmxPath}.version`;
+    if (existsSync(versionSidecar)) {
+      copyFileSync(versionSidecar, join(targetDir, "public/assets/htmx.min.js.version"));
+    }
+  }
   writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, layers));
   writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(layers, projectName));
   if (htmlAuthKit(layers.auth)) {
@@ -226,6 +275,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     if (layers.extras.mfa) {
       writeText(join(targetDir, "views/auth/mfa-challenge.eta"), renderMfaChallengeView());
       writeText(join(targetDir, "views/auth/mfa-setup.eta"), renderMfaSetupView());
+      writeText(join(targetDir, "views/auth/confirm-password.eta"), renderConfirmPasswordView());
     }
   }
 

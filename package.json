@@ -41,6 +41,7 @@
     "integration": "bun test ./tests/integration/redisCache.integration.test.ts ./tests/integration/queue.integration.test.ts",
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
     "test:coverage": "bun scripts/assert-core-coverage.ts",
+    "test:e2e": "bun test tests/e2e",
     "generate:example-apps": "bun scripts/generate-example-apps.ts",
     "hiroapp:fresh": "DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed",
     "hiroapp:dev": "DOGFOOD_APP=hiroapp bun run dev",
@@ -59,9 +60,11 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.7",
+    "@node-saml/node-saml": "^5.1.0",
     "@types/bun": "^1.4.0",
     "lefthook": "^2.1.10",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "xml-crypto": "^6.1.2"
   },
   "dependencies": {
     "@faker-js/faker": "^10.6.0",
