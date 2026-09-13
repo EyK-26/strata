@@ -4,7 +4,10 @@ import { join } from "node:path";
 
 describe("release.yml quality gate", () => {
   test("HiroApp runtime is strata_app on compose, not the postgres service URL", async () => {
-    const text = await readFile(join(import.meta.dir, "../../.github/workflows/release.yml"), "utf8");
+    const text = await readFile(
+      join(import.meta.dir, "../../.github/workflows/release.yml"),
+      "utf8",
+    );
     expect(text).toContain("docker compose up -d postgres redis --wait");
     expect(text).toContain(
       "DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/bun_testing_test",
