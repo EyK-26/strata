@@ -16,7 +16,19 @@
     ".": {
       "import": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./scaffold": {
+      "import": "./src/scaffold/index.ts",
+      "default": "./src/scaffold/index.ts"
+    },
+    "./queueWorker": {
+      "import": "./src/queueWorker.ts",
+      "default": "./src/queueWorker.ts"
     }
+  },
+  "peerDependencies": {
+    "@getstrata/bootstrap": "^1.1.0",
+    "@getstrata/core": "^1.1.0"
   },
   "files": [
     "cli.ts",
@@ -30,5 +42,9 @@
   },
   "engines": {
     "bun": ">=1.4.0"
+  },
+  "devDependencies": {
+    "@getstrata/bootstrap": "workspace:*",
+    "@getstrata/core": "workspace:*"
   }
 }

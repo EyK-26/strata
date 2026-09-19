@@ -38,6 +38,8 @@ import {
 import {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
+  renderCliQueueWorkTs,
+  renderCliRegisterTs,
   renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,
@@ -181,6 +183,8 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     removeIfExists(join(targetDir, "docker/postgres-init"));
   }
 
+  writeText(join(src, "cli/register.ts"), renderCliRegisterTs());
+  writeText(join(src, "cli/commands/queueWork.ts"), renderCliQueueWorkTs());
   writeText(join(src, "routes.ts"), renderRoutesTs());
   writeText(join(src, "lib/view.ts"), renderViewTs(layers));
   writeText(join(src, "bootstrap/config.ts"), renderConfigTs());

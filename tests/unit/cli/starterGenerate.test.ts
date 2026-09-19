@@ -252,6 +252,14 @@ describe("create-strata generate", () => {
     const queueProvider = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
     expect(queueProvider).toContain("registerDefaultJobs");
 
+    expect(existsSync(join(app, "src/cli/register.ts"))).toBe(true);
+    const cliRegister = await readFile(join(app, "src/cli/register.ts"), "utf8");
+    expect(cliRegister).toContain("scaffoldCommands");
+    expect(cliRegister).toContain("@getstrata/cli/scaffold");
+    const appQueueWork = await readFile(join(app, "src/cli/commands/queueWork.ts"), "utf8");
+    expect(appQueueWork).toContain("bootstrapApp({ migrate: false })");
+    expect(appQueueWork).not.toContain("createAppContext");
+
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
     expect(createApp).toContain("isProductionEnv()");

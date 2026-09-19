@@ -49,9 +49,16 @@ From the current working directory, `strata` loads `strata.config.ts` if present
 | `migrate` | `src/db/migrate.ts` |
 | `fresh` | `src/db/fresh.ts` |
 
-`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. Generated apps do not ship one.
+`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. **`create-strata` generates one** that spreads [`scaffoldCommands`](./src/scaffold/index.ts) (`make:*`, `queue:failed`, …) and wires **`queue:work`** to `bootstrapApp()` in the app (see generated `src/cli/commands/queueWork.ts`).
 
-The published `strata` binary does **not** include monorepo codegen (`make:module`, `make:migration`, `make:job`, `openapi:*`, `queue:work`, `schedule:run`, …). Those commands ship with the [Strata framework repo](https://github.com/EyK-26/strata) CLI (`bun run cli …` when developing the framework). Product apps can copy `src/cli/register.ts` from that repo or implement their own registrars. Scaffold commands resolve paths from the app working directory (`src/modules`, `src/db/migrations`, `src/jobs`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
+Subpaths:
+
+| Import | Purpose |
+| --- | --- |
+| `@getstrata/cli/scaffold` | Product-app codegen and queue maintenance (cwd-relative) |
+| `@getstrata/cli/queueWorker` | Shared Redis worker loop; pass an app `boot()` callback |
+
+The published binary still does **not** include monorepo-only commands (`openapi:*`, `schedule:run`, `route:list`, …). Those live in the [framework repo](https://github.com/EyK-26/strata) CLI (`bun run cli …`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
 
 A migrate entry may export `close()`. The CLI calls it after `migrate()` and `fresh()` so pooled drivers such as `mysql2` release the event loop instead of hanging the command.
 

@@ -76,7 +76,7 @@ The monorepo also has **file-based** migrations under `src/db/migrations/` for t
 
 ## Scaffold commands (`make:*`)
 
-`bunx strata` in a generated app only ships `dev`, `start`, `migrate`, `migrate:fresh`, `run`, and `help`. Codegen commands (`make:module`, `make:migration`, `make:job`, `openapi:*`, `queue:work`, `schedule:run`, …) live in the **Strata monorepo** CLI (`bun run cli …` from the framework repo, or copy `src/cli/register.ts` into your app). They resolve paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`).
+`bunx strata` in a generated app ships lifecycle commands plus **`src/cli/register.ts`**: `make:*` and queue maintenance via **`@getstrata/cli/scaffold`**, and **`queue:work`** via a generated command that boots **`bootstrapApp()`** (two-wave starter + module providers). OpenAPI and schedule commands are not generated; use the monorepo CLI while developing the framework or add your own registrars. Scaffold paths resolve from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`).
 
 `APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot.
 

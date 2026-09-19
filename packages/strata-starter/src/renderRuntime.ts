@@ -1299,10 +1299,43 @@ export function plainText(body: string, status = 200): Response {
 `;
 }
 
+function renderCliRegisterTs(): string {
+  return `import type { StrataCommandMap } from "@getstrata/cli";
+import { scaffoldCommands } from "@getstrata/cli/scaffold";
+
+const commands: StrataCommandMap = {
+  ...scaffoldCommands,
+  "queue:work": async () => (await import("./commands/queueWork.ts")).queueWorkCommand,
+};
+
+export { commands };
+`;
+}
+
+function renderCliQueueWorkTs(): string {
+  return `import { runQueueWorkerCommand } from "@getstrata/cli/queueWorker";
+import { bootstrapApp } from "../bootstrap/createApp.ts";
+import { closeDatabase } from "../bootstrap/database.ts";
+
+async function queueWorkCommand(): Promise<void> {
+  await runQueueWorkerCommand({
+    async boot() {
+      await bootstrapApp({ migrate: false });
+    },
+    close: closeDatabase,
+  });
+}
+
+export { queueWorkCommand };
+`;
+}
+
 export {
   dialectFragments,
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
+  renderCliQueueWorkTs,
+  renderCliRegisterTs,
   renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,
