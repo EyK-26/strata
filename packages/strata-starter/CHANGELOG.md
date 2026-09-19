@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 1.1.1
+
+Fix generated app boot
+
 ## 1.1.0
 
 Breaking security hardening for generated apps, lockstep with `@getstrata/core` 1.1.0. Read the core 1.1.0 migration list.

@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.1.1
+
+Fix generated app boot
+
 ## 1.1.0
 
 Breaking security hardening. Claims below match the code.
@@ -46,7 +50,6 @@ Breaking security hardening. Claims below match the code.
 - Client `x-trace-id` is ignored unless `APP_DEBUG=true` and the value is 32 hex characters.
 - OpenAPI documents registered routes only. Generated `docs/API.md` lists the layer's live paths and does not include leftover `/webhooks` or `/billing` strings.
 - Root Compose Redis requires `dev-redis-change-me`. Root Compose Postgres uses `dev-postgres-change-me`. Root Compose MySQL uses `dev-mysql-change-me`. Host helper `scripts/with-host-env.sh` uses those passwords and points HiroApp `APP_DATABASE_URL` at `strata_app` / `dev-strata-app-change-me`. Fixture `DATABASE_URL` stays fixture admin for `bun_testing_test`. Production Compose Redis requires `REDIS_PASSWORD` and requires `APP_ENV` to be set. Production Compose `app`/`worker` runtime `DATABASE_URL` and `APP_DATABASE_URL` are `strata_app` after the split. `MIGRATION_DATABASE_URL` stays `${POSTGRES_USER}` for migrate. `STRATA_APP_PASSWORD` is required the same way `REDIS_PASSWORD` is. Bind stays `127.0.0.1:3000`. `127.0.0.1:54329` / `6379` / `33061` stay published. Adminer is debug-profile only. Prod compose file test plus HiroApp live-role e2e. This CI does not compose-up `docker-compose.prod.yml`.
-
 
 ## 1.0.9
 
