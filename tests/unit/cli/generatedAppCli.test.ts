@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,6 +17,7 @@ import {
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { resetDiscoverModulesForUnitTests } from "../../helpers/discoverModulesTest.ts";
 import { ensureWorkspacePackagesBuilt } from "../../helpers/generatedAppHarness.ts";
+import { restoreEnvVar } from "../../helpers/restoreEnv";
 import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -28,12 +29,24 @@ const ENV_KEYS = [
   "AUTH_DEV_HEADERS",
   "TENANCY_DRIVER",
   "REDIS_URL",
+  "QUEUE_DRIVER",
 ] as const;
+
+let envSnapshot: Record<string, string | undefined>;
+
+beforeEach(() => {
+  envSnapshot = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+});
 
 afterEach(async () => {
   mock.restore();
   resetDiscoverModulesForUnitTests();
   process.chdir(repoRoot);
+  for (const key of ENV_KEYS) {
+    restoreEnvVar(key, envSnapshot[key]);
+  }
+  const { restoreDefaultDatabaseConnection } = await import("../testHelpers");
+  await restoreDefaultDatabaseConnection();
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();
     if (directory) {

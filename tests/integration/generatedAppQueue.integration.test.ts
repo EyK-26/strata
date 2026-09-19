@@ -40,6 +40,8 @@ afterEach(async () => {
     }
     savedIntegrationEnv = undefined;
   }
+  const { restoreDefaultDatabaseConnection } = await import("../unit/testHelpers");
+  await restoreDefaultDatabaseConnection();
   while (cleanups.length > 0) {
     const cleanup = cleanups.pop();
     if (cleanup) {
