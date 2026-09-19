@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import * as bootstrapContext from "@getstrata/bootstrap/context";
+import * as defaultJobs from "@getstrata/bootstrap/queue/defaultJobs";
 import {
   resetGracefulShutdownForTests,
   runGracefulShutdown,
@@ -42,6 +44,14 @@ describe("queueWorkCommand", () => {
     const previousAppEnv = process.env.APP_ENV;
     process.env.APP_ENV = "local";
 
+    mock.module("@getstrata/bootstrap/context", () => ({
+      ...bootstrapContext,
+      createAppContext: () => undefined,
+    }));
+    mock.module("@getstrata/bootstrap/queue/defaultJobs", () => ({
+      ...defaultJobs,
+      registerDefaultJobs: () => undefined,
+    }));
     mock.module("@getstrata/core/queue/createAppQueue", () => ({
       ...createAppQueueModule,
       createFailedJobService: () => ({}),
@@ -53,9 +63,6 @@ describe("queueWorkCommand", () => {
           workerStopped = true;
         },
       }),
-    }));
-    mock.module("../../../src/db/connection", () => ({
-      closeDatabase: async () => undefined,
     }));
 
     const { queueWorkCommand } = await import("../../../src/cli/commands/queueWork");
