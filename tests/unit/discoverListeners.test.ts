@@ -54,10 +54,7 @@ describe("discoverListeners", () => {
     await import("../../packages/strata-bootstrap/entries/discoverListeners.ts");
 
     process.chdir(root);
-    const { discoverListeners, resetDiscoverListenersForTests } = await import(
-      "../../src/bootstrap/discoverListeners"
-    );
-    resetDiscoverListenersForTests();
+    const { discoverListeners } = await import("../../src/bootstrap/discoverListeners");
 
     const listeners = discoverListeners();
 
