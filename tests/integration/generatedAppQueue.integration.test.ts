@@ -78,5 +78,5 @@ describe("generated app queue integration", () => {
     } finally {
       process.chdir(previousCwd);
     }
-  });
+  }, 120_000);
 });

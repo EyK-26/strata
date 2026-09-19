@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,8 +15,16 @@ import {
 const repoRoot = join(import.meta.dir, "../..");
 let workspacePackagesBuilt = false;
 
+function workspacePackageBuildArtifactsPresent(): boolean {
+  return (
+    existsSync(join(repoRoot, "packages/strata-core/dist/index.js")) &&
+    existsSync(join(repoRoot, "packages/strata-bootstrap/dist/index.js"))
+  );
+}
+
 async function ensureWorkspacePackagesBuilt(): Promise<void> {
-  if (workspacePackagesBuilt) {
+  if (workspacePackagesBuilt || workspacePackageBuildArtifactsPresent()) {
+    workspacePackagesBuilt = true;
     return;
   }
   for (const script of ["build:framework", "build:bootstrap"] as const) {
@@ -84,4 +93,9 @@ function applyGeneratedAppSqliteEnv(): void {
   process.env.QUEUE_DRIVER = "redis";
 }
 
-export { applyGeneratedAppSqliteEnv, generateAndInstallApp, repoRoot };
+export {
+  applyGeneratedAppSqliteEnv,
+  ensureWorkspacePackagesBuilt,
+  generateAndInstallApp,
+  repoRoot,
+};

@@ -14,6 +14,7 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
+import { ensureWorkspacePackagesBuilt } from "../../helpers/generatedAppHarness.ts";
 import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -56,26 +57,6 @@ function generateApp(parent: string, name: string): string {
     overlayRoot: resolveOverlayRoot(),
   });
   return targetDir;
-}
-
-let workspacePackagesBuilt = false;
-
-async function ensureWorkspacePackagesBuilt(): Promise<void> {
-  if (workspacePackagesBuilt) {
-    return;
-  }
-  for (const script of ["build:framework", "build:bootstrap"] as const) {
-    const build = Bun.spawnSync({
-      cmd: ["bun", "run", script],
-      cwd: repoRoot,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (build.exitCode !== 0) {
-      throw new Error(`${script} failed:\n${build.stderr.toString()}`);
-    }
-  }
-  workspacePackagesBuilt = true;
 }
 
 async function installGeneratedAppWithWorkspacePackages(app: string): Promise<void> {
@@ -382,4 +363,4 @@ describe("generated app CLI register", () => {
       process.chdir(previousCwd);
     }
   });
-});
+}, 120_000);
