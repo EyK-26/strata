@@ -85,7 +85,7 @@ Product apps from `create-strata` use inline SQL in `src/db/migrate.ts`. File-ba
 
 ## Extending the CLI
 
-Generated apps depend on `@getstrata/cli` for lifecycle commands (`dev`, `start`, `migrate`, `run`, `help`) and ship **`src/cli/register.ts`** that spreads **`scaffoldCommands`** from `@getstrata/cli/scaffold` (`make:*`, `queue:failed`, …) plus an app-local **`queue:work`** that calls **`bootstrapApp({ migrate: false })`** — not monorepo `createAppContext()` / `coreProviders`. Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`). OpenAPI export and schedule tasks are still monorepo-only unless you add your own registrars. The monorepo entry `bun run cli …` is the full reference while developing Strata itself.
+Generated apps depend on `@getstrata/cli` for lifecycle commands (`dev`, `start`, `migrate`, `run`, `help`) and ship **`src/cli/register.ts`** that spreads **`scaffoldCommands`** from `@getstrata/cli/scaffold` (`make:*`, `queue:failed`, …) plus an app-local **`queue:work`** that calls **`bootstrapApp({ migrate: false })`** — not monorepo `createAppContext()` / `coreProviders`. Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`). Generated apps also ship **`openapi:*`** (routes from **`createApp()`**, not HiroApp dogfood) and **`schedule:run`** with a starter **`src/bootstrap/schedule.ts`** hook. Monorepo-only commands remain things like **`route:list`**, **`schedule:install`**, and **`sdk:generate`** unless you add registrars. The monorepo entry `bun run cli …` is the full reference while developing Strata itself.
 
 ## Optional feature flags
 

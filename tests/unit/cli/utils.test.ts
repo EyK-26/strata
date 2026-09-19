@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { migrationDirectory, moduleDirectory } from "../../../src/cli/commands/utils";
+import { migrationDirectory, moduleDirectory } from "@getstrata/cli/scaffold/utils";
 import { repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];

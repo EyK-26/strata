@@ -76,7 +76,7 @@ The monorepo also has **file-based** migrations under `src/db/migrations/` for t
 
 ## Scaffold commands (`make:*`)
 
-`bunx strata` in a generated app ships lifecycle commands plus **`src/cli/register.ts`**: `make:*` and queue maintenance via **`@getstrata/cli/scaffold`**, and **`queue:work`** via a generated command that boots **`bootstrapApp()`** (two-wave starter + module providers). OpenAPI and schedule commands are not generated; use the monorepo CLI while developing the framework or add your own registrars. Scaffold paths resolve from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`).
+`bunx strata` in a generated app ships lifecycle commands plus **`src/cli/register.ts`**: `make:*` and queue maintenance via **`@getstrata/cli/scaffold`**, and **`queue:work`** via a generated command that boots **`bootstrapApp()`** (two-wave starter + module providers). Generated apps include **`openapi:generate` / `openapi:validate` / `openapi:check`** (via **`createApp()`**) and **`schedule:run`** (via **`src/bootstrap/schedule.ts`**). Install/uninstall cron wiring is still monorepo-only unless you extend **`src/cli/register.ts`**. Scaffold paths resolve from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`).
 
 `APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot.
 

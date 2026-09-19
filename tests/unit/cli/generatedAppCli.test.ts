@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import { loadAppCommands, resolveApp } from "../../../packages/strata-cli/src/resolveApp.ts";
 import {
   generateProject,
@@ -13,11 +14,21 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
-import { repoRoot } from "./helpers";
+import { captureConsole, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 
+const ENV_KEYS = [
+  "DATABASE_URL",
+  "APP_ENV",
+  "FRONTEND_MODE",
+  "AUTH_DEV_HEADERS",
+  "TENANCY_DRIVER",
+  "REDIS_URL",
+] as const;
+
 afterEach(async () => {
+  mock.restore();
   process.chdir(repoRoot);
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();
@@ -47,7 +58,29 @@ function generateApp(parent: string, name: string): string {
   return targetDir;
 }
 
+let workspacePackagesBuilt = false;
+
+async function ensureWorkspacePackagesBuilt(): Promise<void> {
+  if (workspacePackagesBuilt) {
+    return;
+  }
+  for (const script of ["build:framework", "build:bootstrap"] as const) {
+    const build = Bun.spawnSync({
+      cmd: ["bun", "run", script],
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (build.exitCode !== 0) {
+      throw new Error(`${script} failed:\n${build.stderr.toString()}`);
+    }
+  }
+  workspacePackagesBuilt = true;
+}
+
 async function installGeneratedAppWithWorkspacePackages(app: string): Promise<void> {
+  await ensureWorkspacePackagesBuilt();
+
   const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
     dependencies: Record<string, string>;
   };
@@ -79,6 +112,8 @@ describe("generated app CLI register", () => {
     const commands = await loadAppCommands(config);
 
     expect(typeof commands["make:job"]).toBe("function");
+    expect(typeof commands["openapi:generate"]).toBe("function");
+    expect(typeof commands["schedule:run"]).toBe("function");
     expect(typeof commands["queue:work"]).toBe("function");
   });
 
@@ -103,6 +138,141 @@ describe("generated app CLI register", () => {
       expect(existsSync(jobPath)).toBe(true);
       const source = await readFile(jobPath, "utf8");
       expect(source).toContain('from "@getstrata/core/queue"');
+    } finally {
+      process.chdir(previousCwd);
+    }
+  });
+
+  test("generated queue:work runs bootstrapApp before the redis worker starts", async () => {
+    const root = await tempDir();
+    const app = generateApp(root, "cli-queue-work");
+    await installGeneratedAppWithWorkspacePackages(app);
+
+    const previousEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+    const previousCwd = process.cwd();
+    let workerCreatedAfterBoot = false;
+
+    mock.module("@getstrata/bootstrap/secretsGuard", () => ({
+      assertProductionSecrets: () => undefined,
+    }));
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      createFailedJobService: () => ({}),
+      createQueueWorker: () => {
+        workerCreatedAfterBoot = true;
+        return {
+          run: async () => undefined,
+          requestStop: () => undefined,
+        };
+      },
+    }));
+
+    try {
+      process.chdir(app);
+      process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+      process.env.APP_ENV = "local";
+      process.env.FRONTEND_MODE = "api";
+      process.env.AUTH_DEV_HEADERS = "true";
+      process.env.TENANCY_DRIVER = "none";
+      process.env.REDIS_URL = "redis://127.0.0.1:6379";
+      resetDiscoverModulesForTests();
+
+      const { queueWorkCommand } = await import(join(app, "src/cli/commands/queueWork.ts"));
+      await queueWorkCommand();
+
+      expect(workerCreatedAfterBoot).toBe(true);
+
+      const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      await closeDatabase();
+    } finally {
+      resetDiscoverModulesForTests();
+      process.chdir(previousCwd);
+      for (const key of ENV_KEYS) {
+        const value = previousEnv[key];
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
+
+  test("openapi:generate writes docs/openapi.json using app createApp routes", async () => {
+    const root = await tempDir();
+    const app = generateApp(root, "cli-openapi");
+    await installGeneratedAppWithWorkspacePackages(app);
+    await mkdir(join(app, "docs"), { recursive: true });
+
+    const previousEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+    const previousCwd = process.cwd();
+
+    try {
+      process.chdir(app);
+      process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+      process.env.APP_ENV = "local";
+      process.env.FRONTEND_MODE = "api";
+      process.env.AUTH_DEV_HEADERS = "true";
+      process.env.TENANCY_DRIVER = "none";
+      resetDiscoverModulesForTests();
+
+      const config = await resolveApp(app);
+      const commands = await loadAppCommands(config);
+      const loadGenerate = commands["openapi:generate"];
+      if (!loadGenerate) {
+        throw new Error("expected openapi:generate");
+      }
+      const openapiGenerate = await loadGenerate();
+      const output = captureConsole();
+      try {
+        await openapiGenerate();
+      } finally {
+        output.restore();
+      }
+
+      const specPath = join(app, "docs/openapi.json");
+      expect(existsSync(specPath)).toBe(true);
+      const spec = await readFile(specPath, "utf8");
+      expect(spec).toContain('"openapi"');
+      expect(output.logs[0]).toMatch(/^OpenAPI spec written to .*openapi\.json \(\d+ routes\)\.$/);
+
+      const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      await closeDatabase();
+    } finally {
+      resetDiscoverModulesForTests();
+      process.chdir(previousCwd);
+      for (const key of ENV_KEYS) {
+        const value = previousEnv[key];
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
+
+  test("schedule:run loads generated schedule and reports when nothing is due", async () => {
+    const root = await tempDir();
+    const app = generateApp(root, "cli-schedule");
+    await installGeneratedAppWithWorkspacePackages(app);
+
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(app);
+      const config = await resolveApp(app);
+      const commands = await loadAppCommands(config);
+      const loadSchedule = commands["schedule:run"];
+      if (!loadSchedule) {
+        throw new Error("expected schedule:run");
+      }
+      const scheduleRun = await loadSchedule();
+      const output = captureConsole();
+      try {
+        await scheduleRun();
+      } finally {
+        output.restore();
+      }
+      expect(output.logs[0]).toBe("No scheduled tasks due.");
     } finally {
       process.chdir(previousCwd);
     }

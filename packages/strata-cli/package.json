@@ -21,6 +21,50 @@
       "import": "./src/scaffold/index.ts",
       "default": "./src/scaffold/index.ts"
     },
+    "./scaffold/utils": {
+      "import": "./src/scaffold/utils.ts",
+      "default": "./src/scaffold/utils.ts"
+    },
+    "./scaffold/makeFactory": {
+      "import": "./src/scaffold/makeFactory.ts",
+      "default": "./src/scaffold/makeFactory.ts"
+    },
+    "./scaffold/makeJob": {
+      "import": "./src/scaffold/makeJob.ts",
+      "default": "./src/scaffold/makeJob.ts"
+    },
+    "./scaffold/makeListener": {
+      "import": "./src/scaffold/makeListener.ts",
+      "default": "./src/scaffold/makeListener.ts"
+    },
+    "./scaffold/makeMigration": {
+      "import": "./src/scaffold/makeMigration.ts",
+      "default": "./src/scaffold/makeMigration.ts"
+    },
+    "./scaffold/makeModule": {
+      "import": "./src/scaffold/makeModule.ts",
+      "default": "./src/scaffold/makeModule.ts"
+    },
+    "./scaffold/makePolicy": {
+      "import": "./src/scaffold/makePolicy.ts",
+      "default": "./src/scaffold/makePolicy.ts"
+    },
+    "./scaffold/makeRequest": {
+      "import": "./src/scaffold/makeRequest.ts",
+      "default": "./src/scaffold/makeRequest.ts"
+    },
+    "./scaffold/queueFailed": {
+      "import": "./src/scaffold/queueFailed.ts",
+      "default": "./src/scaffold/queueFailed.ts"
+    },
+    "./openapi": {
+      "import": "./src/openapi/appOpenApi.ts",
+      "default": "./src/openapi/appOpenApi.ts"
+    },
+    "./schedule": {
+      "import": "./src/schedule/appSchedule.ts",
+      "default": "./src/schedule/appSchedule.ts"
+    },
     "./queueWorker": {
       "import": "./src/queueWorker.ts",
       "default": "./src/queueWorker.ts"

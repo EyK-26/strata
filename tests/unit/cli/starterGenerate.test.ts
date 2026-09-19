@@ -256,6 +256,10 @@ describe("create-strata generate", () => {
     const cliRegister = await readFile(join(app, "src/cli/register.ts"), "utf8");
     expect(cliRegister).toContain("scaffoldCommands");
     expect(cliRegister).toContain("@getstrata/cli/scaffold");
+    expect(cliRegister).toContain("openapi:generate");
+    expect(cliRegister).toContain("schedule:run");
+    expect(existsSync(join(app, "src/bootstrap/schedule.ts"))).toBe(true);
+    expect(existsSync(join(app, "src/cli/commands/openapi.ts"))).toBe(true);
     const appQueueWork = await readFile(join(app, "src/cli/commands/queueWork.ts"), "utf8");
     expect(appQueueWork).toContain("bootstrapApp({ migrate: false })");
     expect(appQueueWork).toContain("../../bootstrap/createApp.ts");

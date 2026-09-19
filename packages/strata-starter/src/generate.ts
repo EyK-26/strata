@@ -38,8 +38,11 @@ import {
 import {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
+  renderBootstrapScheduleTs,
+  renderCliOpenApiTs,
   renderCliQueueWorkTs,
   renderCliRegisterTs,
+  renderCliScheduleRunTs,
   renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,
@@ -185,6 +188,9 @@ function writeGeneratedFiles(options: GenerateOptions): void {
 
   writeText(join(src, "cli/register.ts"), renderCliRegisterTs());
   writeText(join(src, "cli/commands/queueWork.ts"), renderCliQueueWorkTs());
+  writeText(join(src, "cli/commands/openapi.ts"), renderCliOpenApiTs());
+  writeText(join(src, "cli/commands/scheduleRun.ts"), renderCliScheduleRunTs());
+  writeText(join(src, "bootstrap/schedule.ts"), renderBootstrapScheduleTs());
   writeText(join(src, "routes.ts"), renderRoutesTs());
   writeText(join(src, "lib/view.ts"), renderViewTs(layers));
   writeText(join(src, "bootstrap/config.ts"), renderConfigTs());

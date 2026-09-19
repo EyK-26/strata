@@ -1,40 +1,24 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  ensureDirectory,
-  timestampForFilename,
-  toCamelCase,
-  toKebabCase,
-  toPascalCase,
-} from "../../../src/cli/commands/utils";
+import { ensureDirectory } from "@getstrata/cli/scaffold/utils";
 import { captureConsole, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 let modulesRoot = "";
 let migrationsRoot = "";
 
-function createUtilsMock() {
-  return {
-    ensureDirectory,
-    timestampForFilename,
-    toCamelCase,
-    toKebabCase,
-    toPascalCase,
-    moduleDirectory: (name: string) => join(modulesRoot, toKebabCase(name)),
-    migrationDirectory: () => migrationsRoot,
-  };
-}
-
 async function withTempWorkspace(
   run: (workspace: string) => Promise<void>,
-  options: { chdir?: boolean } = {},
+  options: { chdir?: boolean } = { chdir: true },
 ): Promise<void> {
   const workspace = await mkdtemp(join(tmpdir(), "strata-cli-scaffold-"));
   tempDirectories.push(workspace);
-  modulesRoot = join(workspace, "modules");
-  migrationsRoot = join(workspace, "db", "migrations");
+  modulesRoot = join(workspace, "src", "modules");
+  migrationsRoot = join(workspace, "src", "db", "migrations");
+  await mkdir(modulesRoot, { recursive: true });
+  await mkdir(migrationsRoot, { recursive: true });
 
   const previousCwd = process.cwd();
 
@@ -51,7 +35,6 @@ async function withTempWorkspace(
 
 afterEach(async () => {
   process.chdir(repoRoot);
-  mock.restore();
 
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();
@@ -64,8 +47,7 @@ afterEach(async () => {
 describe("makeModuleCommand", () => {
   test("creates a module scaffold in a temp directory", async () => {
     await withTempWorkspace(async (_workspace) => {
-      mock.module("../../../src/cli/commands/utils", createUtilsMock);
-      const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
+      const { makeModuleCommand } = await import("@getstrata/cli/scaffold/makeModule");
       const output = captureConsole();
 
       try {
@@ -84,40 +66,34 @@ describe("makeModuleCommand", () => {
   });
 
   test("creates web scaffolds when --with-web is passed", async () => {
-    await withTempWorkspace(
-      async () => {
-        mock.module("../../../src/cli/commands/utils", createUtilsMock);
-        const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
-        const output = captureConsole();
+    await withTempWorkspace(async () => {
+      const { makeModuleCommand } = await import("@getstrata/cli/scaffold/makeModule");
+      const output = captureConsole();
 
-        try {
-          await makeModuleCommand("--with-web", "release note");
-        } finally {
-          output.restore();
-        }
+      try {
+        await makeModuleCommand("--with-web", "release note");
+      } finally {
+        output.restore();
+      }
 
-        const moduleDirectory = join(modulesRoot, "release-note");
-        expect(await Bun.file(join(moduleDirectory, "webRoutes.ts")).exists()).toBe(true);
-        expect(
-          await Bun.file(join(process.cwd(), "resources/views/release-notes/index.eta")).exists(),
-        ).toBe(true);
-        expect(output.logs.some((line) => line.includes("Created web view scaffold"))).toBe(true);
-      },
-      { chdir: true },
-    );
+      const moduleDirectory = join(modulesRoot, "release-note");
+      expect(await Bun.file(join(moduleDirectory, "webRoutes.ts")).exists()).toBe(true);
+      expect(
+        await Bun.file(join(process.cwd(), "resources/views/release-notes/index.eta")).exists(),
+      ).toBe(true);
+      expect(output.logs.some((line) => line.includes("Created web view scaffold"))).toBe(true);
+    });
   });
 
   test("requires a module name", async () => {
-    mock.module("../../../src/cli/commands/utils", createUtilsMock);
-    const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
+    const { makeModuleCommand } = await import("@getstrata/cli/scaffold/makeModule");
 
     await expect(makeModuleCommand()).rejects.toThrow("make:module requires a name.");
   });
 
   test("rejects duplicate modules", async () => {
     await withTempWorkspace(async () => {
-      mock.module("../../../src/cli/commands/utils", createUtilsMock);
-      const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
+      const { makeModuleCommand } = await import("@getstrata/cli/scaffold/makeModule");
 
       await makeModuleCommand("duplicate-module");
       await expect(makeModuleCommand("duplicate-module")).rejects.toThrow("Module already exists:");
@@ -125,8 +101,7 @@ describe("makeModuleCommand", () => {
   });
 
   test("rejects invalid module names", async () => {
-    mock.module("../../../src/cli/commands/utils", createUtilsMock);
-    const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
+    const { makeModuleCommand } = await import("@getstrata/cli/scaffold/makeModule");
 
     await expect(makeModuleCommand("!!!")).rejects.toThrow(
       "make:module requires a valid module name.",
@@ -137,8 +112,7 @@ describe("makeModuleCommand", () => {
 describe("makeMigrationCommand", () => {
   test("creates a migration file in the temp migrations directory", async () => {
     await withTempWorkspace(async () => {
-      mock.module("../../../src/cli/commands/utils", createUtilsMock);
-      const { makeMigrationCommand } = await import("../../../src/cli/commands/makeMigration");
+      const { makeMigrationCommand } = await import("@getstrata/cli/scaffold/makeMigration");
       const output = captureConsole();
 
       try {
@@ -155,15 +129,13 @@ describe("makeMigrationCommand", () => {
   });
 
   test("requires a migration name", async () => {
-    mock.module("../../../src/cli/commands/utils", createUtilsMock);
-    const { makeMigrationCommand } = await import("../../../src/cli/commands/makeMigration");
+    const { makeMigrationCommand } = await import("@getstrata/cli/scaffold/makeMigration");
 
     await expect(makeMigrationCommand()).rejects.toThrow("make:migration requires a name.");
   });
 
   test("rejects invalid migration names", async () => {
-    mock.module("../../../src/cli/commands/utils", createUtilsMock);
-    const { makeMigrationCommand } = await import("../../../src/cli/commands/makeMigration");
+    const { makeMigrationCommand } = await import("@getstrata/cli/scaffold/makeMigration");
 
     await expect(makeMigrationCommand("!!!")).rejects.toThrow(
       "make:migration requires a valid migration name.",
@@ -174,9 +146,8 @@ describe("makeMigrationCommand", () => {
 describe("makeFactoryCommand", () => {
   test("creates a factory file for an existing module", async () => {
     await withTempWorkspace(async () => {
-      mock.module("../../../src/cli/commands/utils", createUtilsMock);
-      const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
-      const { makeFactoryCommand } = await import("../../../src/cli/commands/makeFactory");
+      const { makeModuleCommand } = await import("@getstrata/cli/scaffold/makeModule");
+      const { makeFactoryCommand } = await import("@getstrata/cli/scaffold/makeFactory");
 
       await makeModuleCommand("widget");
 
@@ -191,13 +162,12 @@ describe("makeFactoryCommand", () => {
       expect(await Bun.file(factoryPath).exists()).toBe(true);
       const factorySource = await Bun.file(factoryPath).text();
       expect(factorySource).toContain('from "@getstrata/core/database/factory"');
-      expect(output.logs[0]).toBe(`Created factory: ${factoryPath}`);
+      expect(output.logs[0]?.endsWith("src/modules/widget/factory.ts")).toBe(true);
     });
   });
 
   test("requires a model name", async () => {
-    mock.module("../../../src/cli/commands/utils", createUtilsMock);
-    const { makeFactoryCommand } = await import("../../../src/cli/commands/makeFactory");
+    const { makeFactoryCommand } = await import("@getstrata/cli/scaffold/makeFactory");
 
     await expect(makeFactoryCommand()).rejects.toThrow("make:factory requires a model name.");
   });
@@ -205,29 +175,26 @@ describe("makeFactoryCommand", () => {
 
 describe("makeJobCommand", () => {
   test("creates a job file under src/jobs", async () => {
-    await withTempWorkspace(
-      async () => {
-        const { makeJobCommand } = await import("../../../src/cli/commands/makeJob");
-        const output = captureConsole();
+    await withTempWorkspace(async () => {
+      const { makeJobCommand } = await import("@getstrata/cli/scaffold/makeJob");
+      const output = captureConsole();
 
-        try {
-          await makeJobCommand("send invoice");
-        } finally {
-          output.restore();
-        }
+      try {
+        await makeJobCommand("send invoice");
+      } finally {
+        output.restore();
+      }
 
-        const jobPath = join(process.cwd(), "src/jobs/send-invoiceJob.ts");
-        expect(await Bun.file(jobPath).exists()).toBe(true);
-        const jobSource = await Bun.file(jobPath).text();
-        expect(jobSource).toContain('from "@getstrata/core/queue"');
-        expect(output.logs[0]).toBe(`Created job in: ${jobPath}`);
-      },
-      { chdir: true },
-    );
+      const jobPath = join(process.cwd(), "src/jobs/send-invoiceJob.ts");
+      expect(await Bun.file(jobPath).exists()).toBe(true);
+      const jobSource = await Bun.file(jobPath).text();
+      expect(jobSource).toContain('from "@getstrata/core/queue"');
+      expect(output.logs[0]).toBe(`Created job in: ${jobPath}`);
+    });
   });
 
   test("requires a job name", async () => {
-    const { makeJobCommand } = await import("../../../src/cli/commands/makeJob");
+    const { makeJobCommand } = await import("@getstrata/cli/scaffold/makeJob");
 
     await expect(makeJobCommand()).rejects.toThrow("make:job requires a job name.");
   });
@@ -236,7 +203,6 @@ describe("makeJobCommand", () => {
 describe("makePolicyCommand", () => {
   test("creates a policy file for an existing module", async () => {
     await withTempWorkspace(async () => {
-      mock.module("../../../src/cli/commands/utils", createUtilsMock);
       const moduleDirectory = join(modulesRoot, "inventory");
       await ensureDirectory(moduleDirectory);
       await writeFile(
@@ -244,7 +210,7 @@ describe("makePolicyCommand", () => {
         "export type InventoryRecord = { id: number };",
       );
 
-      const { makePolicyCommand } = await import("../../../src/cli/commands/makePolicy");
+      const { makePolicyCommand } = await import("@getstrata/cli/scaffold/makePolicy");
       const output = captureConsole();
 
       try {
@@ -257,23 +223,21 @@ describe("makePolicyCommand", () => {
       expect(await Bun.file(policyPath).exists()).toBe(true);
       const policySource = await Bun.file(policyPath).text();
       expect(policySource).toContain('from "@getstrata/core/auth/policy"');
-      expect(output.logs[0]).toBe(`Created policy in: ${policyPath}`);
+      expect(output.logs[0]?.endsWith("src/modules/inventory/policy.ts")).toBe(true);
       expect(output.logs.some((line) => line.includes("apps/hiroapp"))).toBe(false);
       expect(output.logs.some((line) => line.includes("src/modules/inventory"))).toBe(true);
     });
   });
 
   test("requires a module name", async () => {
-    mock.module("../../../src/cli/commands/utils", createUtilsMock);
-    const { makePolicyCommand } = await import("../../../src/cli/commands/makePolicy");
+    const { makePolicyCommand } = await import("@getstrata/cli/scaffold/makePolicy");
 
     await expect(makePolicyCommand()).rejects.toThrow("make:policy requires a module name.");
   });
 
   test("requires the module directory to exist", async () => {
     await withTempWorkspace(async () => {
-      mock.module("../../../src/cli/commands/utils", createUtilsMock);
-      const { makePolicyCommand } = await import("../../../src/cli/commands/makePolicy");
+      const { makePolicyCommand } = await import("@getstrata/cli/scaffold/makePolicy");
 
       await expect(makePolicyCommand("missing-module")).rejects.toThrow("Module not found:");
     });
@@ -283,7 +247,6 @@ describe("makePolicyCommand", () => {
 describe("makeRequestCommand", () => {
   test("creates request helpers for an existing module", async () => {
     await withTempWorkspace(async () => {
-      mock.module("../../../src/cli/commands/utils", createUtilsMock);
       const moduleDirectory = join(modulesRoot, "catalog");
       await ensureDirectory(moduleDirectory);
       await writeFile(
@@ -291,7 +254,7 @@ describe("makeRequestCommand", () => {
         "export type CatalogRecord = { id: number };",
       );
 
-      const { makeRequestCommand } = await import("../../../src/cli/commands/makeRequest");
+      const { makeRequestCommand } = await import("@getstrata/cli/scaffold/makeRequest");
       const output = captureConsole();
 
       try {
@@ -302,13 +265,12 @@ describe("makeRequestCommand", () => {
 
       const requestPath = join(moduleDirectory, "requests.ts");
       expect(await Bun.file(requestPath).exists()).toBe(true);
-      expect(output.logs[0]).toBe(`Created request helpers: ${requestPath}`);
+      expect(output.logs[0]?.endsWith("src/modules/catalog/requests.ts")).toBe(true);
     });
   });
 
   test("requires a module name", async () => {
-    mock.module("../../../src/cli/commands/utils", createUtilsMock);
-    const { makeRequestCommand } = await import("../../../src/cli/commands/makeRequest");
+    const { makeRequestCommand } = await import("@getstrata/cli/scaffold/makeRequest");
 
     await expect(makeRequestCommand()).rejects.toThrow("make:request requires a module name.");
   });
@@ -316,29 +278,26 @@ describe("makeRequestCommand", () => {
 
 describe("makeListenerCommand", () => {
   test("creates a listener file under src/listeners", async () => {
-    await withTempWorkspace(
-      async () => {
-        const { makeListenerCommand } = await import("../../../src/cli/commands/makeListener");
-        const output = captureConsole();
+    await withTempWorkspace(async () => {
+      const { makeListenerCommand } = await import("@getstrata/cli/scaffold/makeListener");
+      const output = captureConsole();
 
-        try {
-          await makeListenerCommand("invoice paid", "invoice.paid");
-        } finally {
-          output.restore();
-        }
+      try {
+        await makeListenerCommand("invoice paid", "invoice.paid");
+      } finally {
+        output.restore();
+      }
 
-        const listenerPath = join(process.cwd(), "src/listeners/invoice-paid.ts");
-        expect(await Bun.file(listenerPath).exists()).toBe(true);
-        expect(output.logs.some((line) => line.includes("Listening for event: invoice.paid"))).toBe(
-          true,
-        );
-      },
-      { chdir: true },
-    );
+      const listenerPath = join(process.cwd(), "src/listeners/invoice-paid.ts");
+      expect(await Bun.file(listenerPath).exists()).toBe(true);
+      expect(output.logs.some((line) => line.includes("Listening for event: invoice.paid"))).toBe(
+        true,
+      );
+    });
   });
 
   test("requires a listener name", async () => {
-    const { makeListenerCommand } = await import("../../../src/cli/commands/makeListener");
+    const { makeListenerCommand } = await import("@getstrata/cli/scaffold/makeListener");
 
     await expect(makeListenerCommand()).rejects.toThrow("make:listener requires a listener name.");
   });

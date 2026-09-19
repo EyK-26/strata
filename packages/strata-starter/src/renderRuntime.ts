@@ -1299,6 +1299,39 @@ export function plainText(body: string, status = 200): Response {
 `;
 }
 
+function renderBootstrapScheduleTs(): string {
+  return `import { appSchedule } from "@getstrata/core/scheduler/schedule";
+
+// Register cron tasks on appSchedule, then run \`strata schedule:run\`.
+export { appSchedule };
+`;
+}
+
+function renderCliOpenApiTs(): string {
+  return `import {
+  createOpenApiCheckCommand,
+  createOpenApiGenerateCommand,
+  createOpenApiValidateCommand,
+} from "@getstrata/cli/openapi";
+import { createApp } from "../../bootstrap/createApp.ts";
+
+const bootstrapAppRoutes = () => createApp();
+
+export const openapiGenerateCommand = createOpenApiGenerateCommand(bootstrapAppRoutes);
+export const openapiValidateCommand = createOpenApiValidateCommand(bootstrapAppRoutes);
+export const openapiCheckCommand = createOpenApiCheckCommand(bootstrapAppRoutes);
+`;
+}
+
+function renderCliScheduleRunTs(): string {
+  return `import { createScheduleRunCommand } from "@getstrata/cli/schedule";
+
+export const scheduleRunCommand = createScheduleRunCommand(async () => {
+  await import("../../bootstrap/schedule.ts");
+});
+`;
+}
+
 function renderCliRegisterTs(): string {
   return `import type { StrataCommandMap } from "@getstrata/cli";
 import { scaffoldCommands } from "@getstrata/cli/scaffold";
@@ -1306,6 +1339,10 @@ import { scaffoldCommands } from "@getstrata/cli/scaffold";
 const commands: StrataCommandMap = {
   ...scaffoldCommands,
   "queue:work": async () => (await import("./commands/queueWork.ts")).queueWorkCommand,
+  "openapi:generate": async () => (await import("./commands/openapi.ts")).openapiGenerateCommand,
+  "openapi:validate": async () => (await import("./commands/openapi.ts")).openapiValidateCommand,
+  "openapi:check": async () => (await import("./commands/openapi.ts")).openapiCheckCommand,
+  "schedule:run": async () => (await import("./commands/scheduleRun.ts")).scheduleRunCommand,
 };
 
 export { commands };
@@ -1334,8 +1371,11 @@ export {
   dialectFragments,
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
+  renderBootstrapScheduleTs,
+  renderCliOpenApiTs,
   renderCliQueueWorkTs,
   renderCliRegisterTs,
+  renderCliScheduleRunTs,
   renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,

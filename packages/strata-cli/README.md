@@ -56,6 +56,8 @@ Subpaths:
 | Import | Purpose |
 | --- | --- |
 | `@getstrata/cli/scaffold` | Product-app codegen and queue maintenance (cwd-relative) |
+| `@getstrata/cli/openapi` | Factory helpers for OpenAPI commands backed by app `createApp()` |
+| `@getstrata/cli/schedule` | Factory helper for `schedule:run` backed by app `src/bootstrap/schedule.ts` |
 | `@getstrata/cli/queueWorker` | Shared Redis worker loop; pass an app `boot()` callback |
 
 The published binary still does **not** include monorepo-only commands (`openapi:*`, `schedule:run`, `route:list`, …). Those live in the [framework repo](https://github.com/EyK-26/strata) CLI (`bun run cli …`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
