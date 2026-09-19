@@ -1314,8 +1314,8 @@ export { commands };
 
 function renderCliQueueWorkTs(): string {
   return `import { runQueueWorkerCommand } from "@getstrata/cli/queueWorker";
-import { bootstrapApp } from "../bootstrap/createApp.ts";
-import { closeDatabase } from "../bootstrap/database.ts";
+import { bootstrapApp } from "../../bootstrap/createApp.ts";
+import { closeDatabase } from "../../bootstrap/database.ts";
 
 async function queueWorkCommand(): Promise<void> {
   await runQueueWorkerCommand({
