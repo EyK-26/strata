@@ -216,6 +216,8 @@ describe("makeJobCommand", () => {
 
         const jobPath = join(process.cwd(), "src/jobs/send-invoiceJob.ts");
         expect(await Bun.file(jobPath).exists()).toBe(true);
+        const jobSource = await Bun.file(jobPath).text();
+        expect(jobSource).toContain('from "@getstrata/core/queue"');
         expect(output.logs[0]).toBe(`Created job in: ${jobPath}`);
       },
       { chdir: true },

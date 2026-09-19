@@ -244,11 +244,17 @@ describe("create-strata generate", () => {
     expect(authProvider).not.toContain('AUTH_DEV_HEADERS === "false"');
     const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
     expect(providers).toContain("policyProvider");
+    expect(providers).toContain("registerInvalidateCacheOnModelWriteListeners");
     expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
+
+    const queueProvider = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
+    expect(queueProvider).toContain("registerDefaultJobs");
 
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
     expect(createApp).toContain("isProductionEnv()");
+    expect(createApp).toContain("discoverModules");
+    expect(createApp).toContain("moduleProviders");
     expect(readme).not.toContain("GET /metrics");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");
