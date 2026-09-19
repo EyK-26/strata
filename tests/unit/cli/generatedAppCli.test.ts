@@ -14,7 +14,7 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
-import { captureConsole, repoRoot } from "./helpers";
+import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 
@@ -238,6 +238,111 @@ describe("generated app CLI register", () => {
       const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
       await closeDatabase();
     } finally {
+      resetDiscoverModulesForTests();
+      process.chdir(previousCwd);
+      for (const key of ENV_KEYS) {
+        const value = previousEnv[key];
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
+
+  test("openapi:check passes when docs/openapi.json matches generated output", async () => {
+    const root = await tempDir();
+    const app = generateApp(root, "cli-openapi-check");
+    await installGeneratedAppWithWorkspacePackages(app);
+    await mkdir(join(app, "docs"), { recursive: true });
+
+    const previousEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+    const previousCwd = process.cwd();
+
+    try {
+      process.chdir(app);
+      process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+      process.env.APP_ENV = "local";
+      process.env.FRONTEND_MODE = "api";
+      process.env.AUTH_DEV_HEADERS = "true";
+      process.env.TENANCY_DRIVER = "none";
+      resetDiscoverModulesForTests();
+
+      const config = await resolveApp(app);
+      const commands = await loadAppCommands(config);
+      const openapiGenerate = await commands["openapi:generate"]!();
+      await openapiGenerate();
+
+      const openapiCheck = await commands["openapi:check"]!();
+      const output = captureConsole();
+      try {
+        await openapiCheck();
+      } finally {
+        output.restore();
+      }
+
+      expect(output.logs[0]).toMatch(/^OpenAPI spec matches committed file \(\d+ routes\)\.$/);
+
+      const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      await closeDatabase();
+    } finally {
+      resetDiscoverModulesForTests();
+      process.chdir(previousCwd);
+      for (const key of ENV_KEYS) {
+        const value = previousEnv[key];
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
+
+  test("openapi:check fails when docs/openapi.json drifts", async () => {
+    const root = await tempDir();
+    const app = generateApp(root, "cli-openapi-drift");
+    await installGeneratedAppWithWorkspacePackages(app);
+    await mkdir(join(app, "docs"), { recursive: true });
+
+    const previousEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+    const previousCwd = process.cwd();
+    const exit = mockProcessExit();
+
+    try {
+      process.chdir(app);
+      process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+      process.env.APP_ENV = "local";
+      process.env.FRONTEND_MODE = "api";
+      process.env.AUTH_DEV_HEADERS = "true";
+      process.env.TENANCY_DRIVER = "none";
+      resetDiscoverModulesForTests();
+
+      const config = await resolveApp(app);
+      const commands = await loadAppCommands(config);
+      const openapiGenerate = await commands["openapi:generate"]!();
+      await openapiGenerate();
+
+      await writeFile(join(app, "docs/openapi.json"), '{"openapi":"3.1.0"}', "utf8");
+
+      const openapiCheck = await commands["openapi:check"]!();
+      const output = captureConsole();
+      try {
+        await expect(openapiCheck()).rejects.toThrow("process.exit");
+      } finally {
+        output.restore();
+      }
+
+      expect(exit.getCode()).toBe(1);
+      expect(output.errors.some((line) => line.includes("OpenAPI spec drift detected."))).toBe(
+        true,
+      );
+
+      const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      await closeDatabase();
+    } finally {
+      exit.restore();
       resetDiscoverModulesForTests();
       process.chdir(previousCwd);
       for (const key of ENV_KEYS) {

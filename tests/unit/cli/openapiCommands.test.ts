@@ -2,17 +2,22 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bu
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import {
+  configureModulesDirectory,
+  ensureModulesLoaded,
+} from "@getstrata/bootstrap/discoverModules";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
 import { openapiCheckCommand } from "../../../src/cli/commands/openapiCheck";
 import { openapiValidateCommand } from "../../../src/cli/commands/openapiValidate";
 import { registerOpenApiRoutes } from "../../../src/cli/commands/registerOpenApiRoutes";
+import { emptyModulesDirectory } from "../../helpers/discoverModulesTest.ts";
 import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 
 beforeAll(async () => {
+  configureModulesDirectory(emptyModulesDirectory);
   await ensureModulesLoaded();
 });
 

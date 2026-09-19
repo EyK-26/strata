@@ -54,12 +54,24 @@ function createOpenApiCheckCommand(bootstrap: AppBootstrap) {
   return async function openapiCheckCommand(): Promise<void> {
     await registerAppOpenApiRoutes(bootstrap);
 
-    const generated = renderOpenApiDocument(generateOpenApiSpec(routeRegistry.list()));
+    const spec = generateOpenApiSpec(routeRegistry.list());
+    const errors = validateOpenApiSpec(spec);
+
+    if (errors.length > 0) {
+      console.error("OpenAPI validation failed:");
+      for (const error of errors) {
+        console.error(`- ${error}`);
+      }
+      process.exit(1);
+    }
+
+    const generated = renderOpenApiDocument(spec);
     const jsonPath = join(process.cwd(), "docs/openapi.json");
     const committed = await readFile(jsonPath, "utf8");
 
     if (committed !== generated) {
       console.error("OpenAPI spec drift detected.");
+      console.error("Run `strata openapi:generate` and commit docs/openapi.json.");
       process.exit(1);
     }
 
