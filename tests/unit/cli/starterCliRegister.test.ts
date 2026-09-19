@@ -133,4 +133,12 @@ describe("generated src/cli/register.ts", () => {
 
     expect(output.errors.join("\n")).toContain("queue:work requires REDIS_URL to be set.");
   });
+
+  test("in-repo example apps ship the same register.ts as the renderer", async () => {
+    const expected = renderCliRegisterTs();
+    for (const id of ["hiroapp", "hiroapp-hobby", "hiroapp-team"] as const) {
+      const actual = await readFile(join(repoRoot, `apps/${id}/src/cli/register.ts`), "utf8");
+      expect(actual).toBe(expected);
+    }
+  });
 });
