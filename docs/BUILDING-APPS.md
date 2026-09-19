@@ -71,6 +71,24 @@ Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and 
 
 `createHttpKernel(dependencies)` groups middleware (`web`, `api`, `authenticated`). Generated apps use `buildModuleRoutes` / `buildWebModuleRoutes`. `@getstrata/bootstrap/createRoutes` still assembles leftover fixture HTTP for framework tests. It is not your starter.
 
+## Module providers and infra defaults
+
+After `ensureModulesLoaded()`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
+
+Starter apps also call `registerDefaultJobs` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job.
+
+## Database migrations
+
+Product apps from `create-strata` use inline SQL in `src/db/migrate.ts`. File-based migrations in the monorepo (`src/db/migrations/`, `make:migration`) are optional; see [STARTER.md](./STARTER.md#migrations).
+
+## Extending the CLI
+
+Generated apps depend on `@getstrata/cli` (lifecycle only). To add `make:module`, OpenAPI export, or `queue:work`, add `src/cli/register.ts` and re-export commands from your own code or from a fork of `src/cli/register.ts` in this repo. Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`). The monorepo entry `bun run cli …` is the reference implementation while developing Strata itself.
+
+## Optional feature flags
+
+The starter wizard covers MFA, email verification, SCIM, and metrics. Other integrations (OAuth/SAML, billing, SIEM export, webhooks, hybrid SPA, and similar) are env-driven — see [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md).
+
 ## Views and errors
 
 Configure layout data (`currentUser`, `csrfToken`, `flash`) and error templates (`errors/not-found.eta`, `errors/forbidden.eta`, `errors/error.eta`). Production 5xx must not leak stacks.

@@ -49,7 +49,9 @@ From the current working directory, `strata` loads `strata.config.ts` if present
 | `migrate` | `src/db/migrate.ts` |
 | `fresh` | `src/db/fresh.ts` |
 
-`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. Generated apps do not ship one, so `make:*`, `queue:work`, and `openapi:*` are yours to write if you want them.
+`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. Generated apps do not ship one.
+
+The published `strata` binary does **not** include monorepo codegen (`make:module`, `make:migration`, `make:job`, `openapi:*`, `queue:work`, `schedule:run`, …). Those commands ship with the [Strata framework repo](https://github.com/EyK-26/strata) CLI (`bun run cli …` when developing the framework). Product apps can copy `src/cli/register.ts` from that repo or implement their own registrars. Scaffold commands resolve paths from the app working directory (`src/modules`, `src/db/migrations`, `src/jobs`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
 
 A migrate entry may export `close()`. The CLI calls it after `migrate()` and `fresh()` so pooled drivers such as `mysql2` release the event loop instead of hanging the command.
 

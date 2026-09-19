@@ -12,7 +12,7 @@ Sibling apps in this repo are generated layer maps. They are not CI dogfood.
 
 Cookie HTML apps include a restyleable welcome page, login, register, and password reset (`views/` and `public/assets/site.css`). HiroApp extras wire MFA pages, `/email/verify`, `/scim/v2/Users`, and `GET /metrics`. Apps that leave the metrics extra off do not get that route.
 
-HTML cookie name is `strata_session`. Redis keys use `APP_KEY_PREFIX=hiroapp`. Seeded accounts use password `password`: `demo@example.com` (member) and `admin@example.test` (admin). HTML sign-in is `/login`.
+HTML cookie name is `strata_session`. Redis keys use `APP_KEY_PREFIX=hiroapp`. Seeded accounts use password `StrataDemo!ChangeMe`: `demo@example.com` (member) and `admin@example.test` (admin). HTML sign-in is `/login`.
 
 ## Run
 
