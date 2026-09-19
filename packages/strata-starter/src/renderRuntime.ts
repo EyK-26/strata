@@ -904,7 +904,8 @@ export default configProvider;
 }
 
 function renderQueueProvider(): string {
-  return `import type { ServiceProvider } from "@getstrata/core/contracts/di";
+  return `import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { CORE_QUEUE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import {
   createAppQueue,
@@ -918,7 +919,10 @@ const queueProvider: ServiceProvider = {
     const driver = (process.env.QUEUE_DRIVER ?? "sync") as "sync" | "async" | "redis";
     const failedJobs = createFailedJobService();
     container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
-    container.set(CORE_QUEUE_TOKEN, createAppQueue(driver, process.env.REDIS_URL, failedJobs));
+    container.set(
+      CORE_QUEUE_TOKEN,
+      createAppQueue(driver, process.env.REDIS_URL, failedJobs, registerDefaultJobs),
+    );
   },
 };
 
@@ -1031,13 +1035,21 @@ export default policyProvider;
 }
 
 function renderProvidersIndex(): string {
-  return `import type { ServiceProvider } from "@getstrata/core/contracts/di";
+  return `import { registerInvalidateCacheOnModelWriteListeners } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import authProvider from "./auth.ts";
 import cacheProvider from "./cache.ts";
 import configProvider from "./config.ts";
 import policyProvider from "./policy.ts";
 import queueProvider from "./queue.ts";
 import storageProvider from "./storage.ts";
+
+const listenersProvider: ServiceProvider = {
+  name: "starter.listeners",
+  boot() {
+    registerInvalidateCacheOnModelWriteListeners();
+  },
+};
 
 const starterProviders: ServiceProvider[] = [
   configProvider,
@@ -1046,6 +1058,7 @@ const starterProviders: ServiceProvider[] = [
   queueProvider,
   authProvider,
   policyProvider,
+  listenersProvider,
 ];
 
 export { starterProviders };
@@ -1076,6 +1089,7 @@ import {
 import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
 import {
   configureModulesDirectory,
+  discoverModules,
   ensureModulesLoaded,
 } from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
@@ -1133,6 +1147,10 @@ function createAppContext(): AppContext {
 
   runProviderPhase(starterProviders, "register", context);
   runProviderPhase(starterProviders, "boot", context);
+
+  const moduleProviders = discoverModules().flatMap((module) => module.providers ?? []);
+  runProviderPhase(moduleProviders, "register", context);
+  runProviderPhase(moduleProviders, "boot", context);
 
   assertAppDependenciesComplete(dependencies);
 

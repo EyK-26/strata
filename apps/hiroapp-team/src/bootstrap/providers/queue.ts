@@ -1,3 +1,4 @@
+import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { CORE_QUEUE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import {
@@ -12,7 +13,10 @@ const queueProvider: ServiceProvider = {
     const driver = (process.env.QUEUE_DRIVER ?? "sync") as "sync" | "async" | "redis";
     const failedJobs = createFailedJobService();
     container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
-    container.set(CORE_QUEUE_TOKEN, createAppQueue(driver, process.env.REDIS_URL, failedJobs));
+    container.set(
+      CORE_QUEUE_TOKEN,
+      createAppQueue(driver, process.env.REDIS_URL, failedJobs, registerDefaultJobs),
+    );
   },
 };
 
