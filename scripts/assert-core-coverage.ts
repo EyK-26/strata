@@ -21,6 +21,30 @@ if ((env.DOGFOOD_APP ?? "").trim().toLowerCase() === "hiroapp") {
   delete env.DOGFOOD_APP;
 }
 
+const testEnv = {
+  ...env,
+  CACHE_DRIVER: process.env.CACHE_DRIVER ?? "array",
+  QUEUE_DRIVER: process.env.QUEUE_DRIVER ?? "sync",
+  APP_KEY_PREFIX: "strata",
+  APP_NAME: "Strata",
+};
+
+const generatedAppProc = Bun.spawn(["bun", "test", "--max-concurrency=1", "tests/generated-app"], {
+  cwd: process.cwd(),
+  env: testEnv,
+  stdout: "pipe",
+  stderr: "pipe",
+});
+
+const generatedAppResult = await collectSpawnOutput(generatedAppProc);
+process.stdout.write("=== Generated app tests ===\n");
+process.stdout.write(digestBunTestOutput(generatedAppResult.output));
+
+if (bunTestsFailed(generatedAppResult.output, generatedAppResult.exitCode)) {
+  reportBunTestFailure("Generated app", generatedAppResult.output, generatedAppResult.exitCode);
+  process.exit(generatedAppResult.exitCode === 0 ? 1 : generatedAppResult.exitCode);
+}
+
 const proc = Bun.spawn(
   [
     "bun",
@@ -33,13 +57,7 @@ const proc = Bun.spawn(
   ],
   {
     cwd: process.cwd(),
-    env: {
-      ...env,
-      CACHE_DRIVER: process.env.CACHE_DRIVER ?? "array",
-      QUEUE_DRIVER: process.env.QUEUE_DRIVER ?? "sync",
-      APP_KEY_PREFIX: "strata",
-      APP_NAME: "Strata",
-    },
+    env: testEnv,
     stdout: "pipe",
     stderr: "pipe",
   },

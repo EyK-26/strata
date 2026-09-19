@@ -5,20 +5,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import * as createAppQueueModule from "@getstrata/core/queue/createAppQueue";
-import { loadAppCommands, resolveApp } from "../../../packages/strata-cli/src/resolveApp.ts";
+import { loadAppCommands, resolveApp } from "../../packages/strata-cli/src/resolveApp.ts";
 import {
   generateProject,
   resolveOverlayRoot,
   resolveTemplateRoot,
-} from "../../../packages/strata-starter/src/generate.ts";
+} from "../../packages/strata-starter/src/generate.ts";
 import {
   layersFromFlags,
   parseCreateStrataArgs,
-} from "../../../packages/strata-starter/src/parseArgs.ts";
-import { resetDiscoverModulesForUnitTests } from "../../helpers/discoverModulesTest.ts";
-import { ensureWorkspacePackagesBuilt } from "../../helpers/generatedAppHarness.ts";
-import { restoreEnvVar } from "../../helpers/restoreEnv";
-import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
+} from "../../packages/strata-starter/src/parseArgs.ts";
+import { resetDiscoverModulesForUnitTests } from "../helpers/discoverModulesTest.ts";
+import { ensureWorkspacePackagesBuilt } from "../helpers/generatedAppHarness.ts";
+import { restoreEnvVar } from "../helpers/restoreEnv";
+import { captureConsole, mockProcessExit, repoRoot } from "../unit/cli/helpers";
 
 const tempDirectories: string[] = [];
 
@@ -45,7 +45,7 @@ afterEach(async () => {
   for (const key of ENV_KEYS) {
     restoreEnvVar(key, envSnapshot[key]);
   }
-  const { restoreDefaultDatabaseConnection } = await import("../testHelpers");
+  const { restoreDefaultDatabaseConnection } = await import("../unit/testHelpers");
   await restoreDefaultDatabaseConnection();
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();

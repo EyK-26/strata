@@ -11,8 +11,8 @@ import {
   applyGeneratedAppSqliteEnv,
   generateAndInstallApp,
   repoRoot,
-} from "../helpers/generatedAppHarness";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+} from "../helpers/generatedAppHarness.ts";
+import { restoreEnvVar } from "../helpers/restoreEnv.ts";
 
 const INTEGRATION_ENV_KEYS = [
   "DATABASE_URL",
