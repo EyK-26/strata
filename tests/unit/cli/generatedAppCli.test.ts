@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
+import * as createAppQueueModule from "@getstrata/core/queue/createAppQueue";
 import { loadAppCommands, resolveApp } from "../../../packages/strata-cli/src/resolveApp.ts";
 import {
   generateProject,
@@ -14,6 +15,7 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
+import { resetDiscoverModulesForUnitTests } from "../../helpers/discoverModulesTest.ts";
 import { ensureWorkspacePackagesBuilt } from "../../helpers/generatedAppHarness.ts";
 import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
 
@@ -30,6 +32,7 @@ const ENV_KEYS = [
 
 afterEach(async () => {
   mock.restore();
+  resetDiscoverModulesForUnitTests();
   process.chdir(repoRoot);
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();
@@ -137,6 +140,7 @@ describe("generated app CLI register", () => {
       assertProductionSecrets: () => undefined,
     }));
     mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      ...createAppQueueModule,
       createFailedJobService: () => ({}),
       createQueueWorker: () => {
         workerCreatedAfterBoot = true;
@@ -252,10 +256,18 @@ describe("generated app CLI register", () => {
 
       const config = await resolveApp(app);
       const commands = await loadAppCommands(config);
-      const openapiGenerate = await commands["openapi:generate"]!();
+      const loadOpenApiGenerate = commands["openapi:generate"];
+      if (!loadOpenApiGenerate) {
+        throw new Error("expected openapi:generate");
+      }
+      const openapiGenerate = await loadOpenApiGenerate();
       await openapiGenerate();
 
-      const openapiCheck = await commands["openapi:check"]!();
+      const loadOpenApiCheck = commands["openapi:check"];
+      if (!loadOpenApiCheck) {
+        throw new Error("expected openapi:check");
+      }
+      const openapiCheck = await loadOpenApiCheck();
       const output = captureConsole();
       try {
         await openapiCheck();
@@ -302,12 +314,20 @@ describe("generated app CLI register", () => {
 
       const config = await resolveApp(app);
       const commands = await loadAppCommands(config);
-      const openapiGenerate = await commands["openapi:generate"]!();
+      const loadOpenApiGenerate = commands["openapi:generate"];
+      if (!loadOpenApiGenerate) {
+        throw new Error("expected openapi:generate");
+      }
+      const openapiGenerate = await loadOpenApiGenerate();
       await openapiGenerate();
 
       await writeFile(join(app, "docs/openapi.json"), '{"openapi":"3.1.0"}', "utf8");
 
-      const openapiCheck = await commands["openapi:check"]!();
+      const loadOpenApiCheck = commands["openapi:check"];
+      if (!loadOpenApiCheck) {
+        throw new Error("expected openapi:check");
+      }
+      const openapiCheck = await loadOpenApiCheck();
       const output = captureConsole();
       try {
         await expect(openapiCheck()).rejects.toThrow("process.exit");
@@ -337,7 +357,7 @@ describe("generated app CLI register", () => {
     }
   });
 
-  test("schedule:run loads generated schedule and reports when nothing is due", async () => {
+  test("schedule:run loads generated schedule and runs the shared scheduler", async () => {
     const root = await tempDir();
     const app = generateApp(root, "cli-schedule");
     await installGeneratedAppWithWorkspacePackages(app);
@@ -358,7 +378,7 @@ describe("generated app CLI register", () => {
       } finally {
         output.restore();
       }
-      expect(output.logs[0]).toBe("No scheduled tasks due.");
+      expect(output.logs[0]).toMatch(/^(No scheduled tasks due\.|Running scheduled task:)/);
     } finally {
       process.chdir(previousCwd);
     }

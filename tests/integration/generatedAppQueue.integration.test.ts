@@ -12,16 +12,34 @@ import {
   generateAndInstallApp,
   repoRoot,
 } from "../helpers/generatedAppHarness";
+import { restoreEnvVar } from "../helpers/restoreEnv";
+
+const INTEGRATION_ENV_KEYS = [
+  "DATABASE_URL",
+  "APP_ENV",
+  "FRONTEND_MODE",
+  "AUTH_DEV_HEADERS",
+  "TENANCY_DRIVER",
+  "QUEUE_DRIVER",
+  "REDIS_URL",
+] as const;
 
 interface EchoPayload {
   message: string;
 }
 
 const cleanups: Array<() => Promise<void>> = [];
+let savedIntegrationEnv: Record<string, string | undefined> | undefined;
 
 afterEach(async () => {
   process.chdir(repoRoot);
   resetDiscoverModulesForUnitTests();
+  if (savedIntegrationEnv) {
+    for (const key of INTEGRATION_ENV_KEYS) {
+      restoreEnvVar(key, savedIntegrationEnv[key]);
+    }
+    savedIntegrationEnv = undefined;
+  }
   while (cleanups.length > 0) {
     const cleanup = cleanups.pop();
     if (cleanup) {
@@ -37,6 +55,9 @@ describe("generated app queue integration", () => {
     cleanups.push(cleanup);
 
     const previousCwd = process.cwd();
+    savedIntegrationEnv = Object.fromEntries(
+      INTEGRATION_ENV_KEYS.map((key) => [key, process.env[key]]),
+    );
     applyGeneratedAppSqliteEnv();
     process.env.REDIS_URL = redisUrl;
     resetDiscoverModulesForUnitTests();
