@@ -75,7 +75,9 @@ Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and 
 
 After `ensureModulesLoaded()`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
 
-Starter apps also call `registerDefaultJobs` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job.
+Starter apps also call `registerDefaultJobs` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job. `src/listeners/*.ts` registrars are loaded via `discoverListeners()` in the same boot phase (idempotent listener groups, same pattern as the monorepo `core.listeners` provider).
+
+Generated apps use **two provider waves**: starter `register`/`boot`, then module `register`/`boot`. That is intentional — do not replace it with `collectProviders()` without re-reading auth order (starter `queue → auth → policy` vs monorepo `coreProviders`). Module `register` runs after starter has already booted (jobs and listeners attached). Prefer `bootstrapApp()` / `createApp()` in app code; calling exported `createAppContext()` without a prior `ensureModulesLoaded()` skips module providers silently.
 
 ## Database migrations
 

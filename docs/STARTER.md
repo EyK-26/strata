@@ -65,7 +65,7 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 - Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
 - `--tenancy=column`: `tenant` table + `users.tenant_id` on any engine. `--tenancy=rls`: Postgres only (`SET LOCAL`). sqlite/mysql `rls` becomes `column`
 - Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa` enroll POST uses `wrapWebPasswordConfirm`), email verification (`/email/verify`), SCIM `/scim/v2/Users` (the User model query still filters `tenant_id` on every lookup; unfiltered lists use `count` plus `offset`/`limit`; `:id` uses `parsePositiveIntParam`), metrics `GET /metrics` (only when that extra is on)
-- Generated apps register an empty `PolicyGate`, boot **module** `providers` from discovered modules (after `ensureModulesLoaded`), register default queue jobs, and wire cache-invalidation listeners on model writes.
+- Generated apps register an empty `PolicyGate`, boot **module** `providers` from discovered modules (after `ensureModulesLoaded`), register default queue jobs, wire cache-invalidation listeners on model writes (idempotent groups), and run `src/listeners/*.ts` default exports via `discoverListeners()`.
 - `strata.layers.json` records the choices
 
 ## Migrations
