@@ -85,7 +85,9 @@ Product apps from `create-strata` use inline SQL in `src/db/migrate.ts`. File-ba
 
 ## Extending the CLI
 
-Generated apps depend on `@getstrata/cli` (lifecycle only). To add `make:module`, OpenAPI export, or `queue:work`, add `src/cli/register.ts` and re-export commands from your own code or from a fork of `src/cli/register.ts` in this repo. Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`). The monorepo entry `bun run cli …` is the reference implementation while developing Strata itself.
+Generated apps depend on `@getstrata/cli` (lifecycle commands plus whatever `src/cli/register.ts` exports). The starter writes `src/cli/register.ts` with `queue:work`. That worker calls `bootstrapApp({ migrate: false })` / `createApp()` so starter and module providers load. Do not copy the monorepo `queue:work` command (`createAppContext()` from `@getstrata/bootstrap/context`, `coreProviders`).
+
+To add more commands, extend that file (`commands` or `registerCommands()`). Codegen (`make:module`, `make:migration`, `make:job`, `openapi:*`) is still the monorepo CLI (`bun run cli …` from this repo). Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`).
 
 ## Optional feature flags
 

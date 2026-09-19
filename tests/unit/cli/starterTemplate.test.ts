@@ -20,6 +20,7 @@ describe("starter template CLI", () => {
     expect(packageJson.scripts.start).toBe("strata start");
     expect(packageJson.scripts["db:migrate"]).toBe("strata migrate");
     expect(packageJson.scripts["db:fresh"]).toBe("strata migrate:fresh");
+    expect(packageJson.scripts["queue:work"]).toBe("strata queue:work");
   });
 
   test("create-strata next steps use bun run scripts, not a global strata", async () => {

@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## Unreleased
+
+- Generated apps ship `src/cli/register.ts` with `queue:work`. The published binary still does not embed monorepo codegen.
+
 ## 1.1.1
 
 Fix generated app boot

@@ -404,6 +404,7 @@ function renderPackageJson(
     start: "strata start",
     "db:migrate": "strata migrate",
     "db:fresh": "strata migrate:fresh",
+    "queue:work": "strata queue:work",
     check: "tsc --noEmit",
   };
   if (options.layers && needsFrontendBuild(options.layers.frontend)) {
@@ -696,7 +697,7 @@ This file is the map for this app. Framework guides: [Building apps](https://git
 ${next.join("\n")}
 \`\`\`
 
-Open http://localhost:3000. Health check: \`GET /health\`.
+Open http://localhost:3000. Health check: \`GET /health\`. Redis worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
 
 ${renderSupportingToolsReadme(layers)}${
   layers.auth !== "headers"
@@ -811,7 +812,7 @@ ${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : 
 `
     : ""
 }
-\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` is 200 when \`notes\` is readable (including zero rows) and 503 when that read fails.
+\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` is 200 when \`notes\` is readable (including zero rows) and 503 when that read fails. Redis jobs need a worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
 `;
 }
 

@@ -30,7 +30,7 @@ bun run db:migrate
 bun run dev
 ```
 
-Open http://localhost:3000. Health check: `GET /health`.
+Open http://localhost:3000. Health check: `GET /health`. Redis worker: `bun run queue:work` (requires `REDIS_URL`).
 
 ## Supporting tools
 
@@ -96,4 +96,4 @@ The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything els
 - Set `METRICS_TOKEN`.
 - `DATABASE_URL` must be a `NOBYPASSRLS` role, not the `postgres` superuser. Generated apps create `strata_app` via `db/ensure-postgres-app-role.sql` (and Compose init on first empty volume). `MIGRATION_DATABASE_URL` may stay the superuser for CREATE ROLE / GRANT / migrate. Production boot rejects username `postgres` or `root`, then inspects `pg_roles` for `rolsuper` / `rolbypassrls`.
 
-`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` is 200 when `notes` is readable (including zero rows) and 503 when that read fails.
+`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` is 200 when `notes` is readable (including zero rows) and 503 when that read fails. Redis jobs need a worker: `bun run queue:work` (requires `REDIS_URL`).

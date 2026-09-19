@@ -19,6 +19,8 @@ strata help
 
 `strata start` does not migrate when `APP_ENV=production`. Run `strata migrate` as an explicit deploy step.
 
+App commands from `src/cli/register.ts` merge with this list. Generated apps add `strata queue:work`.
+
 ## Running it
 
 This package installs into your app, not globally, so `strata` lands in `node_modules/.bin` and is not on your `PATH`. Use the scripts a generated app already ships:
@@ -49,9 +51,9 @@ From the current working directory, `strata` loads `strata.config.ts` if present
 | `migrate` | `src/db/migrate.ts` |
 | `fresh` | `src/db/fresh.ts` |
 
-`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. Generated apps do not ship one.
+`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. Generated apps ship one with `queue:work`, which boots the app (`bootstrapApp` / `createApp`) rather than the monorepo provider stack.
 
-The published `strata` binary does **not** include monorepo codegen (`make:module`, `make:migration`, `make:job`, `openapi:*`, `queue:work`, `schedule:run`, …). Those commands ship with the [Strata framework repo](https://github.com/EyK-26/strata) CLI (`bun run cli …` when developing the framework). Product apps can copy `src/cli/register.ts` from that repo or implement their own registrars. Scaffold commands resolve paths from the app working directory (`src/modules`, `src/db/migrations`, `src/jobs`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
+The published `strata` binary does **not** include monorepo codegen (`make:module`, `make:migration`, `make:job`, `openapi:*`, `schedule:run`, …). Those commands ship with the [Strata framework repo](https://github.com/EyK-26/strata) CLI (`bun run cli …` when developing the framework). Do not copy that repo's `src/cli/register.ts` into a product app (`queue:work` there uses `coreProviders`). Scaffold commands resolve paths from the app working directory (`src/modules`, `src/db/migrations`, `src/jobs`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
 
 A migrate entry may export `close()`. The CLI calls it after `migrate()` and `fresh()` so pooled drivers such as `mysql2` release the event loop instead of hanging the command.
 

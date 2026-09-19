@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## Unreleased
+
+- Generated apps ship `src/cli/register.ts` with `queue:work`. The worker calls the app's `bootstrapApp({ migrate: false })` / `createApp()`, not the monorepo `queue:work` command (`coreProviders`). Requires `REDIS_URL`. `bun run queue:work` is a generated script.
+
 ## 1.1.1
 
 Fix generated app boot

@@ -8,6 +8,7 @@
     "start": "strata start",
     "db:migrate": "strata migrate",
     "db:fresh": "strata migrate:fresh",
+    "queue:work": "strata queue:work",
     "check": "tsc --noEmit"
   },
   "dependencies": {
