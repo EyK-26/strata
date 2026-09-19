@@ -258,7 +258,7 @@ describe("create-strata generate", () => {
     expect(createApp).toContain("discoverModules");
     expect(createApp).toContain("moduleProviders");
     expect(createApp.indexOf("await ensureModulesLoaded()")).toBeLessThan(
-      createApp.indexOf("createAppContext()"),
+      createApp.indexOf("const context = createAppContext();"),
     );
     const starterBootIndex = createApp.indexOf('runProviderPhase(starterProviders, "boot"');
     expect(starterBootIndex).toBeGreaterThan(-1);
