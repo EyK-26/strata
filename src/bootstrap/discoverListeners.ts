@@ -1,8 +1,30 @@
 import { existsSync, readdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 
 type ListenerRegistrar = () => void;
+
+const requireListener = createRequire(import.meta.url);
+
+const DISCOVER_LISTENERS_STATE_KEY = Symbol.for("@getstrata/discoverListenersState");
+
+interface DiscoverListenersState {
+  appListeners?: ListenerRegistrar[];
+}
+
+function readDiscoverListenersState(): DiscoverListenersState {
+  const existing = (globalThis as Record<symbol, DiscoverListenersState | undefined>)[
+    DISCOVER_LISTENERS_STATE_KEY
+  ];
+
+  if (existing) {
+    return existing;
+  }
+
+  const state: DiscoverListenersState = {};
+  (globalThis as Record<symbol, DiscoverListenersState>)[DISCOVER_LISTENERS_STATE_KEY] = state;
+  return state;
+}
 
 function resolveListenersDirectory(): string {
   const fromCwd = join(process.cwd(), "src", "listeners");
@@ -14,7 +36,7 @@ function resolveListenersDirectory(): string {
   return join(import.meta.dir, "../listeners");
 }
 
-async function loadDiscoveredListeners(): Promise<ListenerRegistrar[]> {
+function loadDiscoveredListeners(): ListenerRegistrar[] {
   const listenersDirectory = resolveListenersDirectory();
 
   let entries: string[];
@@ -31,24 +53,28 @@ async function loadDiscoveredListeners(): Promise<ListenerRegistrar[]> {
     throw error;
   }
 
-  const listeners = await Promise.all(
-    entries.map(async (fileName) => {
-      const moduleUrl = pathToFileURL(join(listenersDirectory, fileName)).href;
-      const loaded = (await import(moduleUrl)) as { default?: ListenerRegistrar };
-      return loaded.default;
-    }),
-  );
+  const listeners = entries.map((fileName) => {
+    const filePath = join(listenersDirectory, fileName);
+    const loaded = requireListener(filePath) as { default?: ListenerRegistrar };
+    return loaded.default;
+  });
 
   return listeners.filter(
     (listener): listener is ListenerRegistrar => typeof listener === "function",
   );
 }
 
-const appListeners = await loadDiscoveredListeners();
-
 function discoverListeners(): ListenerRegistrar[] {
-  return appListeners;
+  const state = readDiscoverListenersState();
+
+  state.appListeners ??= loadDiscoveredListeners();
+  return state.appListeners;
+}
+
+function resetDiscoverListenersForTests(): void {
+  const state = readDiscoverListenersState();
+  state.appListeners = undefined;
 }
 
 export type { ListenerRegistrar };
-export { appListeners, discoverListeners };
+export { discoverListeners, resetDiscoverListenersForTests };
