@@ -363,4 +363,4 @@ describe("generated app CLI register", () => {
       process.chdir(previousCwd);
     }
   });
-}, 120_000);
+});
