@@ -63,8 +63,10 @@ describe("discoverListeners", () => {
 
     expect(listeners).toHaveLength(1);
     const [registerSampleListener] = listeners;
-    expect(registerSampleListener).toBeDefined();
-    registerSampleListener!();
+    if (typeof registerSampleListener !== "function") {
+      throw new Error("expected a listener registrar");
+    }
+    registerSampleListener();
     expect((globalThis as { sampleListenerLoaded?: boolean }).sampleListenerLoaded).toBe(true);
   });
 });
