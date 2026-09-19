@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import * as createAppQueueModule from "@getstrata/core/queue/createAppQueue";
 import { restoreEnvVar } from "../../helpers/restoreEnv";
 
 afterEach(() => {
@@ -10,9 +11,8 @@ describe("runQueueWorkerCommand", () => {
     const previousRedisUrl = process.env.REDIS_URL;
     delete process.env.REDIS_URL;
 
-    mock.module("@getstrata/bootstrap/secretsGuard", () => ({
-      assertProductionSecrets: () => undefined,
-    }));
+    const previousAppEnv = process.env.APP_ENV;
+    process.env.APP_ENV = "local";
 
     try {
       const { runQueueWorkerCommand } = await import(
@@ -22,6 +22,7 @@ describe("runQueueWorkerCommand", () => {
         "queue:work requires REDIS_URL to be set.",
       );
     } finally {
+      restoreEnvVar("APP_ENV", previousAppEnv);
       if (previousRedisUrl === undefined) {
         delete process.env.REDIS_URL;
       } else {
@@ -37,14 +38,15 @@ describe("runQueueWorkerCommand", () => {
     let bootFinished = false;
     let workerRunStarted = false;
 
-    mock.module("@getstrata/bootstrap/secretsGuard", () => ({
-      assertProductionSecrets: () => undefined,
-    }));
+    const previousAppEnv = process.env.APP_ENV;
+    process.env.APP_ENV = "local";
+
     mock.module("@getstrata/core/lifecycle/gracefulShutdown", () => ({
       installGracefulShutdownSignals: () => undefined,
       registerShutdownHandler: () => undefined,
     }));
     mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      ...createAppQueueModule,
       createFailedJobService: () => ({}),
       createQueueWorker: () => ({
         run: async () => {
@@ -67,6 +69,7 @@ describe("runQueueWorkerCommand", () => {
       });
       expect(workerRunStarted).toBe(true);
     } finally {
+      restoreEnvVar("APP_ENV", previousAppEnv);
       if (previousRedisUrl === undefined) {
         delete process.env.REDIS_URL;
       } else {

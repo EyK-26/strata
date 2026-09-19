@@ -4,6 +4,7 @@ import {
   runGracefulShutdown,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { Job } from "@getstrata/core/queue";
+import * as createAppQueueModule from "@getstrata/core/queue/createAppQueue";
 import { restoreEnvVar } from "../../helpers/restoreEnv";
 import { captureConsole } from "./helpers";
 
@@ -38,7 +39,11 @@ describe("queueWorkCommand", () => {
     let workerStarted = false;
     let workerStopped = false;
 
+    const previousAppEnv = process.env.APP_ENV;
+    process.env.APP_ENV = "local";
+
     mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      ...createAppQueueModule,
       createFailedJobService: () => ({}),
       createQueueWorker: () => ({
         run: async () => {
@@ -48,7 +53,6 @@ describe("queueWorkCommand", () => {
           workerStopped = true;
         },
       }),
-      registerDefaultJobs: () => undefined,
     }));
     mock.module("../../../src/db/connection", () => ({
       closeDatabase: async () => undefined,
@@ -61,6 +65,7 @@ describe("queueWorkCommand", () => {
       await queueWorkCommand();
     } finally {
       output.restore();
+      restoreEnvVar("APP_ENV", previousAppEnv);
       if (previousRedisUrl === undefined) {
         delete process.env.REDIS_URL;
       } else {
