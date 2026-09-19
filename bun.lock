@@ -75,7 +75,7 @@
       "name": "@getstrata/bootstrap",
       "version": "1.1.1",
       "peerDependencies": {
-        "@getstrata/core": "^1.0.3",
+        "@getstrata/core": "^1.1.1",
         "typescript": "^5.9.0",
       },
     },
@@ -84,6 +84,10 @@
       "version": "1.1.1",
       "bin": {
         "strata": "./cli.ts",
+      },
+      "peerDependencies": {
+        "@getstrata/bootstrap": "^1.1.0",
+        "@getstrata/core": "^1.1.0",
       },
     },
     "packages/strata-core": {
