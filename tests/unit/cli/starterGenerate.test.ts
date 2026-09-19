@@ -257,9 +257,12 @@ describe("create-strata generate", () => {
     expect(createApp).toContain("isProductionEnv()");
     expect(createApp).toContain("discoverModules");
     expect(createApp).toContain("moduleProviders");
-    expect(createApp.indexOf("ensureModulesLoaded")).toBeLessThan(
+    expect(createApp.indexOf("await ensureModulesLoaded()")).toBeLessThan(
       createApp.indexOf("createAppContext()"),
     );
+    const starterBootIndex = createApp.indexOf('runProviderPhase(starterProviders, "boot"');
+    expect(starterBootIndex).toBeGreaterThan(-1);
+    expect(createApp.indexOf("moduleProviders")).toBeGreaterThan(starterBootIndex);
     expect(readme).not.toContain("GET /metrics");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");
@@ -999,15 +1002,24 @@ describe("create-strata CLI", () => {
     await mkdir(probeDir, { recursive: true });
     await writeFile(
       join(probeDir, "index.ts"),
-      `import type { AppModule } from "@getstrata/bootstrap/contracts";
+      `import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import type { AppModule } from "@getstrata/bootstrap/contracts";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 
-export const PROBE_TOKEN = "probe.module.boot.token";
+export const PROBE_REGISTER_TOKEN = "probe.module.register.token";
+export const PROBE_BOOT_TOKEN = "probe.module.boot.token";
 
 const probeProvider: ServiceProvider = {
   name: "probe.provider",
   register({ container }) {
-    container.singleton(PROBE_TOKEN, () => "module-provider-booted");
+    container.singleton(PROBE_REGISTER_TOKEN, () => "module-provider-register");
+  },
+  boot({ container }) {
+    const gate = container.resolve<{ register: (resource: string, policy: unknown) => void }>(
+      CORE_POLICY_GATE_TOKEN,
+    );
+    gate.register("probe", { view: () => true });
+    container.singleton(PROBE_BOOT_TOKEN, () => "module-provider-boot");
   },
 };
 
@@ -1038,11 +1050,14 @@ export default probeModule;
 
     try {
       const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
-      const { PROBE_TOKEN } = await import(`${join(probeDir, "index.ts")}`);
+      const { PROBE_BOOT_TOKEN, PROBE_REGISTER_TOKEN } = await import(
+        `${join(probeDir, "index.ts")}`
+      );
       const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
 
       const { context } = await bootstrapApp({ migrate: false });
-      expect(context.container.resolve(PROBE_TOKEN)).toBe("module-provider-booted");
+      expect(context.container.resolve(PROBE_REGISTER_TOKEN)).toBe("module-provider-register");
+      expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");
       await closeDatabase();
     } finally {
       resetDiscoverModulesForTests();

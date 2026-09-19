@@ -258,6 +258,8 @@ describe("makePolicyCommand", () => {
       const policySource = await Bun.file(policyPath).text();
       expect(policySource).toContain('from "@getstrata/core/auth/policy"');
       expect(output.logs[0]).toBe(`Created policy in: ${policyPath}`);
+      expect(output.logs.some((line) => line.includes("apps/hiroapp"))).toBe(false);
+      expect(output.logs.some((line) => line.includes("src/modules/inventory"))).toBe(true);
     });
   });
 
