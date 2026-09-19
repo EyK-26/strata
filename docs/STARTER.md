@@ -65,8 +65,18 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 - Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
 - `--tenancy=column`: `tenant` table + `users.tenant_id` on any engine. `--tenancy=rls`: Postgres only (`SET LOCAL`). sqlite/mysql `rls` becomes `column`
 - Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa` enroll POST uses `wrapWebPasswordConfirm`), email verification (`/email/verify`), SCIM `/scim/v2/Users` (the User model query still filters `tenant_id` on every lookup; unfiltered lists use `count` plus `offset`/`limit`; `:id` uses `parsePositiveIntParam`), metrics `GET /metrics` (only when that extra is on)
-- Generated apps register an empty `PolicyGate` so `CORE_POLICY_GATE_TOKEN` is present for `strata make:module`.
+- Generated apps register an empty `PolicyGate`, boot **module** `providers` from discovered modules (after `ensureModulesLoaded`), register default queue jobs, wire cache-invalidation listeners on model writes (idempotent groups), and run `src/listeners/*.ts` default exports via `discoverListeners()`.
 - `strata.layers.json` records the choices
+
+## Migrations
+
+Generated apps ship **inline SQL** in `src/db/migrate.ts` (one runnable file, seeds included). That is the supported product-app path.
+
+The monorepo also has **file-based** migrations under `src/db/migrations/` for the framework fixture. `strata make:migration` (monorepo CLI from a product app directory) writes TypeScript files under `src/db/migrations/`; you still need to load them from your migrate entry if you adopt that style. Do not mix two migration runners for the same schema without a plan.
+
+## Scaffold commands (`make:*`)
+
+`bunx strata` in a generated app only ships `dev`, `start`, `migrate`, `migrate:fresh`, `run`, and `help`. Codegen commands (`make:module`, `make:migration`, `make:job`, `openapi:*`, `queue:work`, `schedule:run`, …) live in the **Strata monorepo** CLI (`bun run cli …` from the framework repo, or copy `src/cli/register.ts` into your app). They resolve paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`).
 
 `APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot.
 

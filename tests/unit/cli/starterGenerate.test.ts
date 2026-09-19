@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
@@ -244,11 +244,25 @@ describe("create-strata generate", () => {
     expect(authProvider).not.toContain('AUTH_DEV_HEADERS === "false"');
     const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
     expect(providers).toContain("policyProvider");
+    expect(providers).toContain("registerInvalidateCacheOnModelWriteListeners");
+    expect(providers).toContain("discoverListeners");
+    expect(providers).toContain("registerListenerGroup");
     expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
+
+    const queueProvider = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
+    expect(queueProvider).toContain("registerDefaultJobs");
 
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
     expect(createApp).toContain("isProductionEnv()");
+    expect(createApp).toContain("discoverModules");
+    expect(createApp).toContain("moduleProviders");
+    expect(createApp.indexOf("await ensureModulesLoaded()")).toBeLessThan(
+      createApp.indexOf("const context = createAppContext();"),
+    );
+    const starterBootIndex = createApp.indexOf('runProviderPhase(starterProviders, "boot"');
+    expect(starterBootIndex).toBeGreaterThan(-1);
+    expect(createApp.indexOf("moduleProviders")).toBeGreaterThan(starterBootIndex);
     expect(readme).not.toContain("GET /metrics");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");
@@ -970,6 +984,85 @@ describe("create-strata CLI", () => {
       }),
     );
     expect(extraValues).toEqual(["emailVerification", "scim", "metrics"]);
+  });
+
+  test("module providers register during bootstrapApp", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, ["probe-providers", "--yes"]);
+    const repo = repoRoot;
+    const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+    };
+    pkg.dependencies["@getstrata/core"] = `file:${join(repo, "packages/strata-core")}`;
+    pkg.dependencies["@getstrata/bootstrap"] = `file:${join(repo, "packages/strata-bootstrap")}`;
+    pkg.dependencies["@getstrata/cli"] = `file:${join(repo, "packages/strata-cli")}`;
+    await Bun.write(join(app, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+
+    const probeDir = join(app, "src/modules/probe");
+    await mkdir(probeDir, { recursive: true });
+    await writeFile(
+      join(probeDir, "index.ts"),
+      `import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import type { AppModule } from "@getstrata/bootstrap/contracts";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
+
+export const PROBE_REGISTER_TOKEN = "probe.module.register.token";
+export const PROBE_BOOT_TOKEN = "probe.module.boot.token";
+
+const probeProvider: ServiceProvider = {
+  name: "probe.provider",
+  register({ container }) {
+    container.singleton(PROBE_REGISTER_TOKEN, () => "module-provider-register");
+  },
+  boot({ container }) {
+    const gate = container.resolve<{ register: (resource: string, policy: unknown) => void }>(
+      CORE_POLICY_GATE_TOKEN,
+    );
+    gate.register("probe", { view: () => true });
+    container.singleton(PROBE_BOOT_TOKEN, () => "module-provider-boot");
+  },
+};
+
+const probeModule: AppModule = {
+  name: "probe",
+  providers: [probeProvider],
+};
+
+export default probeModule;
+`,
+    );
+
+    const install = Bun.spawnSync({
+      cmd: ["bun", "install"],
+      cwd: app,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(install.exitCode).toBe(0);
+
+    process.chdir(app);
+    process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+    process.env.APP_ENV = "local";
+    process.env.FRONTEND_MODE = "api";
+    process.env.AUTH_DEV_HEADERS = "true";
+    process.env.TENANCY_DRIVER = "none";
+    resetDiscoverModulesForTests();
+
+    try {
+      const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
+      const { PROBE_BOOT_TOKEN, PROBE_REGISTER_TOKEN } = await import(
+        `${join(probeDir, "index.ts")}`
+      );
+      const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
+
+      const { context } = await bootstrapApp({ migrate: false });
+      expect(context.container.resolve(PROBE_REGISTER_TOKEN)).toBe("module-provider-register");
+      expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");
+      await closeDatabase();
+    } finally {
+      resetDiscoverModulesForTests();
+      process.chdir(repoRoot);
+    }
   });
 
   test("sqlite API app boots and answers GET /health", async () => {

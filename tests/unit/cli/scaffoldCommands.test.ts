@@ -189,6 +189,8 @@ describe("makeFactoryCommand", () => {
 
       const factoryPath = join(modulesRoot, "widget", "factory.ts");
       expect(await Bun.file(factoryPath).exists()).toBe(true);
+      const factorySource = await Bun.file(factoryPath).text();
+      expect(factorySource).toContain('from "@getstrata/core/database/factory"');
       expect(output.logs[0]).toBe(`Created factory: ${factoryPath}`);
     });
   });
@@ -216,6 +218,8 @@ describe("makeJobCommand", () => {
 
         const jobPath = join(process.cwd(), "src/jobs/send-invoiceJob.ts");
         expect(await Bun.file(jobPath).exists()).toBe(true);
+        const jobSource = await Bun.file(jobPath).text();
+        expect(jobSource).toContain('from "@getstrata/core/queue"');
         expect(output.logs[0]).toBe(`Created job in: ${jobPath}`);
       },
       { chdir: true },
@@ -251,7 +255,11 @@ describe("makePolicyCommand", () => {
 
       const policyPath = join(moduleDirectory, "policy.ts");
       expect(await Bun.file(policyPath).exists()).toBe(true);
+      const policySource = await Bun.file(policyPath).text();
+      expect(policySource).toContain('from "@getstrata/core/auth/policy"');
       expect(output.logs[0]).toBe(`Created policy in: ${policyPath}`);
+      expect(output.logs.some((line) => line.includes("apps/hiroapp"))).toBe(false);
+      expect(output.logs.some((line) => line.includes("src/modules/inventory"))).toBe(true);
     });
   });
 

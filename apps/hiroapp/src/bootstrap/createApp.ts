@@ -14,6 +14,7 @@ import {
 import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
 import {
   configureModulesDirectory,
+  discoverModules,
   ensureModulesLoaded,
 } from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
@@ -76,6 +77,10 @@ function createAppContext(): AppContext {
 
   runProviderPhase(starterProviders, "register", context);
   runProviderPhase(starterProviders, "boot", context);
+
+  const moduleProviders = discoverModules().flatMap((module) => module.providers ?? []);
+  runProviderPhase(moduleProviders, "register", context);
+  runProviderPhase(moduleProviders, "boot", context);
 
   assertAppDependenciesComplete(dependencies);
 

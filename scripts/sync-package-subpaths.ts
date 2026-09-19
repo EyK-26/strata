@@ -209,6 +209,7 @@ const BOOTSTRAP_SUBPATHS = [
   "createSpaRoutes",
   "dependencies",
   "discoverModules",
+  "discoverListeners",
   "health",
   "http/securedRouteModelBinding",
   "httpKernel",

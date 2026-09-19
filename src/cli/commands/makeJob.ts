@@ -24,7 +24,7 @@ async function makeJobCommand(name?: string): Promise<void> {
     }
   }
 
-  const content = `import { Job } from "../core/queue";
+  const content = `import { Job } from "@getstrata/core/queue";
 
 interface ${payloadType} {
 }

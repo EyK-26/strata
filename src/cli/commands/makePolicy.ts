@@ -31,7 +31,7 @@ async function makePolicyCommand(moduleName?: string): Promise<void> {
   const policyClass = `${resourceName}Policy`;
   const policyVariable = `${toCamelCase(moduleName)}Policy`;
 
-  const content = `import { Policy } from "../../core/auth/policy";
+  const content = `import { Policy } from "@getstrata/core/auth/policy";
 import type { ${recordType} } from "./types";
 
 class ${policyClass} extends Policy {
@@ -59,7 +59,7 @@ export default ${policyClass};
 
   console.log(`Created policy in: ${policyPath}`);
   console.log(
-    `Register it in apps/hiroapp/src/modules/${moduleSlug}/provider.ts boot() via gate.register("${moduleSlug}", container.resolve(${policyVariable})).`,
+    `Register it in src/modules/${moduleSlug}/provider.ts boot() via gate.register("${moduleSlug}", container.resolve(${policyVariable})).`,
   );
 }
 

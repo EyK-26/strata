@@ -19,7 +19,7 @@ async function makeFactoryCommand(name?: string): Promise<void> {
     throw new Error(`Factory already exists: ${filePath}`);
   }
 
-  const content = `import { Factory } from "../../core/database/factory";
+  const content = `import { Factory } from "@getstrata/core/database/factory";
 import type { ${modelName}Record } from "./types";
 
 class ${modelName}Factory extends Factory<${modelName}Record> {
