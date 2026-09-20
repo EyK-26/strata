@@ -99,7 +99,48 @@ Configure layout data (`currentUser`, `csrfToken`, `flash`) and error templates 
 
 ## Secrets
 
-Call `assertProductionSecrets()` from your `createApp` / `serve` path when `isProductionEnv()` is true. Staging counts as production for this check. It is feature-gated: a cookie HTML app with `SESSION_SECRET` and `AUTH_DEV_HEADERS=false` does not need API tokens if those features are off. Generated apps call it at boot.
+Call `assertProductionSecrets()` from your `createApp` / `serve` path when `isProductionEnv()` is true. Staging counts as production for this check. It is feature-gated: a cookie HTML app with `SESSION_SECRET` and `AUTH_DEV_HEADERS=false` does not need API tokens if those features are off. Generated apps call it at boot. Production boot rejects `FEATURE_PUBLIC_READS=true`.
+
+## Public HTML reads (`FEATURE_PUBLIC_READS`)
+
+Generated `.env.example` sets `FEATURE_PUBLIC_READS=false`. That is the production-safe default.
+
+`HttpKernel.wrapWebPublicRead(handler)` (HTML) and `wrapPublicRead(handler)` (JSON) check the same flag via `isPublicReadsEnabled()`:
+
+| Flag | `wrapWebPublicRead` / `wrapPublicRead` | Anonymous `x-tenant-id` |
+|------|----------------------------------------|-------------------------|
+| `false` (default) | Requires a signed-in user (`wrapWebAuthenticated` / `wrapAuthenticated`) | Ignored. Guests stay on tenant `1` |
+| `true` | Guest HTML/JSON reads (still `wrapWeb` CSRF/session for HTML) | Honored. See [TENANCY.md](./TENANCY.md) |
+
+Storefront pattern (catalog, `/shop`, `make:module` web index):
+
+```typescript
+"GET /shop": kernel.wrapWebPublicRead(controller.index),
+```
+
+```bash
+# .env (local dogfood only)
+FEATURE_PUBLIC_READS=true
+
+# .env.production — required. assertProductionSecrets() throws if this is true.
+FEATURE_PUBLIC_READS=false
+```
+
+Keep production on authenticated HTML or the JSON API. Do not weaken the secrets guard. Anonymous `x-tenant-id` is a separate tenancy concern; the same flag gates both.
+
+## API abilities vs HTML admin
+
+Product apps often authorize the same resource two ways. That is expected.
+
+| Helper | Surface | What it checks |
+|--------|---------|----------------|
+| `kernel.wrapAbility("products:create")` | JSON (`api` group) | Token/session **ability** string (`RequireAbility`). Pair with a `Policy` / `PolicyGate` inside the controller or `wrapPolicy("products", "create", …)` when the action is on a loaded model. |
+| `kernel.wrapPolicy("products", "update", …)` | JSON or HTML | `PolicyGate` + `ProductPolicy` (view/update/delete **this** row). |
+| `kernel.wrapWebGlobalAdmin(handler)` | HTML cookie admin | Signed-in, verified (if that extra is on), `users.is_admin`. No ability string. |
+| `kernel.wrapWebAbility("products:create", handler)` | HTML | Cookie session + the same ability checker as JSON. |
+| `kernel.wrapWebPublicRead(handler)` | HTML catalog | Guest vs login, depending on `FEATURE_PUBLIC_READS`. Not an admin check. |
+
+Shop-style split: JSON `/api/v1/products` uses `wrapAbility("products:*")` plus `ProductPolicy`; HTMX `/admin/products` uses `wrapWebGlobalAdmin`. Admins who pass `is_admin` on HTML do not automatically get JSON abilities — grant `*` or `products:*` on the token/catalog too. See [AUTH.md](./AUTH.md).
 
 ## Identity env
 

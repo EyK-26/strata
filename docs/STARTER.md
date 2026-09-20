@@ -81,7 +81,7 @@ The monorepo fixture keeps its own file-based history under the framework repo's
 
 `make:*` resolves paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`, `src/listeners`). `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `discoverJobs()` on boot. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
 
-`APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot.
+`APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot. Generated `.env.example` sets `FEATURE_PUBLIC_READS=false`. `wrapWebPublicRead` then requires a login. Local storefronts may set `true` in `.env`; production boot rejects `true`. See [BUILDING-APPS.md](./BUILDING-APPS.md).
 
 ## In this repo
 

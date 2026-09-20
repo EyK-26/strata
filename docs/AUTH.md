@@ -76,6 +76,14 @@ Generated HiroApp JWT mint stores `[]` abilities. JwtGuard looks up the user and
 
 Use policies (`Policy` / `PolicyGate`) for resource authorization. That is not the same as a token ability.
 
+### `wrapAbility` vs `wrapWebGlobalAdmin`
+
+JSON APIs typically use `kernel.wrapAbility("products:create")` (authenticated group + ability list on the token or session). Load a row and call `wrapPolicy("products", "update", …)` or `PolicyGate.authorize` when the rule is “may this user change **this** product”.
+
+HTML admin screens that should be limited to `users.is_admin` use `kernel.wrapWebGlobalAdmin`. That is cookie auth + verified email (when enabled) + the global-admin middleware. It does not read `products:create`. `kernel.wrapWebAbility("products:create", …)` is the HTML equivalent of `wrapAbility` when staff share an ability catalog with the API.
+
+Mixing them on one resource is normal: public catalog `wrapWebPublicRead`, JSON writes `wrapAbility` + `ProductPolicy`, `/admin/products` `wrapWebGlobalAdmin`. Grant JSON abilities separately from `is_admin`. More app-level guidance: [BUILDING-APPS.md](./BUILDING-APPS.md).
+
 ## Email verification and password confirm
 
 These are kernel helpers. Cookie apps generated with `--email-verification` ship `/email/verify`, a one-time hashed token plus HMAC-signed link, and a resend form. Token/JWT apps also get `POST /api/v1/auth/verify-email`.
