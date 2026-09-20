@@ -2,6 +2,8 @@
 
 `apps/hiroapp` is Strata dogfood for internal end-to-end testing. CI migrates, seeds, boots, generates OpenAPI, and smokes this app. It is generated from the same layer flags as `create-strata`. It is not a product. Start a product app with `bunx create-strata`.
 
+CI also runs **integration extras HTTP smoke** (`scripts/smoke-integrations.ts`, included in `bun run smoke`): a temporary generated app with `--oauth-github`, `--billing`, and `--webhooks` exercises GitHub redirect and Stripe webhook routes. The HiroApp preset keeps those extras off; product-style coverage lives in `strata-shop`.
+
 HiroApp does not exercise outbound webhooks, Stripe billing sync, or GitHub OAuth cookie login. Those paths are covered by optional `create-strata` extras (`--webhooks`, `--billing`, `--oauth-github`) and by external product dogfood (`strata-shop`).
 
 Sibling apps in this repo are generated layer maps. They are not CI dogfood.

@@ -50,7 +50,7 @@
     "deps:audit": "bun audit",
     "deps:audit-fix": "bun audit fix",
     "openapi:validate": "bun run cli openapi:validate",
-    "smoke": "bun scripts/smoke-test.ts && bun scripts/smoke-webview.ts",
+    "smoke": "bun scripts/smoke-test.ts && bun scripts/smoke-webview.ts && bun scripts/smoke-integrations.ts",
     "smoke:webview": "bun scripts/smoke-webview.ts",
     "check:module-imports": "bun scripts/check-module-imports.ts",
     "cli": "strata",
