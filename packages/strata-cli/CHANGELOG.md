@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Export `queueWorker`, `queueFailed`, `scaffold`, `openapi`, and `schedule` subpaths. Generated apps register `queue:work` through `runQueueWorkerCommand({ boot, close })` (no secrets guard in the helper), plus failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. Monorepo `queue:failed` / `retry` / `flush-failed` go through `createQueueFailedCommands()` so they type as `StrataCommand`.
+- Export `queueWorker`, `queueFailed`, `scaffold`, `openapi`, and `schedule` subpaths. Generated apps register `queue:work` through `runQueueWorkerCommand({ boot, close })` (no secrets guard in the helper), plus failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. Monorepo `queue:failed` / `retry` / `flush-failed` go through `createQueueFailedCommands()` so they type as `StrataCommand`. `boot` may return a value (`bootstrapApp()` returns the app).
 - `make:job` emits `static jobName`. `make:request` imports `@getstrata/core/http`. `make:module --with-web` writes `views/` when that directory exists.
 - Peer dependencies on `@getstrata/core` and `@getstrata/bootstrap`.
 

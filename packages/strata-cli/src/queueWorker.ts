@@ -4,8 +4,8 @@ import {
 } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { createFailedJobService, createQueueWorker } from "@getstrata/core/queue/createAppQueue";
 
-type QueueWorkerBoot = () => void | Promise<void>;
-type QueueWorkerClose = () => void | Promise<void>;
+type QueueWorkerBoot = () => unknown | Promise<unknown>;
+type QueueWorkerClose = () => unknown | Promise<unknown>;
 
 async function runQueueWorkerCommand(options: {
   boot: QueueWorkerBoot;

@@ -3,7 +3,7 @@ import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { runQueueJob } from "@getstrata/core/queue/jobRunner";
 import type { StrataCommand } from "./types.ts";
 
-type QueueFailedBoot = () => void | Promise<void>;
+type QueueFailedBoot = () => unknown | Promise<unknown>;
 
 async function queueFailedCommand(boot?: QueueFailedBoot): Promise<void> {
   await boot?.();
