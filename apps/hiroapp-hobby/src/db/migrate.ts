@@ -1,13 +1,7 @@
-import { closeDatabase, getSql } from "../bootstrap/database.ts";
+import { migrateDatabase } from "@getstrata/core/database/migrations";
+import { closeDatabase } from "../bootstrap/database.ts";
 import { Note } from "../models/Note.ts";
-
-const migrations = [
-  `CREATE TABLE IF NOT EXISTS notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    body TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-];
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function seed() {
   if ((await Note.query().value("id")) === null) {
@@ -16,10 +10,9 @@ export async function seed() {
 }
 
 export async function migrate() {
-  const sql = getSql();
-  for (const statement of migrations) {
-    await sql.unsafe(statement);
-  }
+  await withMigrationDatabase(async (db) => {
+    await migrateDatabase(db, await loadStarterMigrations());
+  });
   await seed();
 }
 

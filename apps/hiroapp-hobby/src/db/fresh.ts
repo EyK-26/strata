@@ -1,14 +1,13 @@
-import { closeDatabase, getSql } from "../bootstrap/database.ts";
-import { migrate } from "./migrate.ts";
-
-const tables = ["notes"];
+import { freshDatabase } from "@getstrata/core/database/migrations";
+import { closeDatabase } from "../bootstrap/database.ts";
+import { seed } from "./migrate.ts";
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function fresh() {
-  const sql = getSql();
-  for (const table of tables) {
-    await sql.unsafe(`DROP TABLE IF EXISTS ${table}`);
-  }
-  await migrate();
+  await withMigrationDatabase(async (db) => {
+    await freshDatabase(db, await loadStarterMigrations());
+  });
+  await seed();
 }
 
 /** The CLI calls this after fresh() so pooled drivers do not hold the process open. */

@@ -34,4 +34,14 @@ describe("JobRegistry", () => {
     expect(jobRegistry.resolveName(job)).toBe("tracked.singleton");
     expect(jobRegistry.names()).toContain("singleton.test");
   });
+
+  test("tracks static jobName on construct", () => {
+    class NamedJob extends Job<{ marker: string }> {
+      static override readonly jobName = "named.job";
+      override async handle(): Promise<void> {}
+    }
+
+    const job = new NamedJob();
+    expect(jobRegistry.resolveName(job)).toBe("named.job");
+  });
 });

@@ -84,7 +84,7 @@ describe("MySQL portability", () => {
       "--tenancy=column",
       "--yes",
     ]);
-    const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
+    const migrate = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
 
     // MySQL errno 1170: a TEXT column cannot appear in a key specification.
     expect(migrate).not.toMatch(/TEXT[^,\n]*\bUNIQUE\b/);
@@ -108,7 +108,7 @@ describe("MySQL portability", () => {
         "--auth=cookie-token",
         "--yes",
       ]);
-      const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
+      const migrate = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
       expect(migrate).toContain("email TEXT NOT NULL UNIQUE");
       expect(migrate).not.toContain("VARCHAR(255)");
     }

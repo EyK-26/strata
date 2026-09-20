@@ -1,9 +1,19 @@
+import { jobRegistry } from "./jobRegistry.ts";
+
 type QueuePriority = "high" | "default" | "low";
 
 abstract class Job<TPayload extends object = object> {
+  static readonly jobName?: string;
   readonly maxAttempts?: number;
   readonly backoffMs?: number;
   readonly priority?: QueuePriority;
+
+  constructor() {
+    const jobName = (this.constructor as typeof Job).jobName;
+    if (jobName) {
+      jobRegistry.track(jobName, this);
+    }
+  }
 
   abstract handle(payload: TPayload): Promise<void>;
 }

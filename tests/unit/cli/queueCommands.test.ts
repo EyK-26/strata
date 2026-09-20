@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { join } from "node:path";
 import {
   resetGracefulShutdownForTests,
   runGracefulShutdown,
@@ -15,6 +16,28 @@ afterEach(async () => {
 });
 
 describe("queueWorkCommand", () => {
+  test("monorepo queue:work boots secrets, context, default jobs, and discoverJobs", async () => {
+    const source = await Bun.file(
+      join(import.meta.dir, "../../../src/cli/commands/queueWork.ts"),
+    ).text();
+    expect(source).toContain("assertProductionSecrets");
+    expect(source).toContain("createAppContext");
+    expect(source).toContain("registerDefaultJobs");
+    expect(source).toContain("discoverJobs");
+    expect(source).toContain("runQueueWorkerCommand");
+  });
+
+  test("published queue worker helper does not assert production secrets", async () => {
+    const source = await Bun.file(
+      join(import.meta.dir, "../../../packages/strata-cli/src/queueWorker.ts"),
+    ).text();
+    expect(source).toContain("await options.boot()");
+    expect(source).toContain("queue:work requires REDIS_URL to be set.");
+    expect(source).not.toContain("assertProductionSecrets");
+    expect(source).not.toContain("createAppContext");
+    expect(source).not.toContain("coreProviders");
+  });
+
   test("requires REDIS_URL", async () => {
     const previousRedisUrl = process.env.REDIS_URL;
     delete process.env.REDIS_URL;
@@ -50,15 +73,15 @@ describe("queueWorkCommand", () => {
       }),
       registerDefaultJobs: () => undefined,
     }));
-    mock.module("../../../src/db/connection", () => ({
-      closeDatabase: async () => undefined,
-    }));
 
-    const { queueWorkCommand } = await import("../../../src/cli/commands/queueWork");
+    const { runQueueWorkerCommand } = await import("@getstrata/cli/queueWorker");
     const output = captureConsole();
 
     try {
-      await queueWorkCommand();
+      await runQueueWorkerCommand({
+        boot: () => undefined,
+        close: async () => undefined,
+      });
     } finally {
       output.restore();
       if (previousRedisUrl === undefined) {

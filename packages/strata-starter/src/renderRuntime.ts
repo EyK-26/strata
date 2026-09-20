@@ -243,11 +243,20 @@ export async function closeDatabase() {
 `;
 }
 
-function renderMigrateTs(layers: StarterLayers): string {
+function starterSchemaStatements(layers: StarterLayers): string[] {
   const d = dialectFragments(layers.database);
   const statements: string[] = [];
   const tenancyOn = usesTenantTable(layers.tenancy);
   const mfaOn = layers.extras.mfa && authNeedsUsers(layers.auth);
+  const payloadType = layers.database === "postgres" ? "JSONB NOT NULL" : `${d.text} NOT NULL`;
+
+  statements.push(`CREATE TABLE IF NOT EXISTS failed_job (
+    id ${d.id},
+    job_name ${d.keyText} NOT NULL,
+    payload ${payloadType},
+    exception ${d.text} NOT NULL,
+    failed_at ${d.timestamp}
+  )`);
 
   if (tenancyOn) {
     statements.push(`CREATE TABLE IF NOT EXISTS tenant (
@@ -341,8 +350,94 @@ function renderMigrateTs(layers: StarterLayers): string {
     statements.push(generatedRlsBootstrapSql(rlsTables, userOwnedTables).trim());
   }
 
-  const list = statements.map((sql) => `  \`${sql.replace(/`/g, "\\`")}\`,`).join("\n");
+  return statements;
+}
 
+function renderStarterSchemaMigration(layers: StarterLayers): string {
+  const statements = starterSchemaStatements(layers);
+  const cascade = layers.database === "sqlite" ? "" : " CASCADE";
+  const upCalls = statements
+    .map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`)
+    .join("\n");
+  const downCalls = dropTables(layers)
+    .map((table) => `    await db.unsafe("DROP TABLE IF EXISTS ${table}${cascade}");`)
+    .join("\n");
+
+  return `import type { Migration } from "@getstrata/core/database/migrations/types";
+
+const migration: Migration = {
+  name: "0001_starter_schema",
+  async up(db) {
+${upCalls}
+  },
+  async down(db) {
+${downCalls}
+  },
+};
+
+export default migration;
+`;
+}
+
+function renderMigrationRuntimeTs(layers: StarterLayers): string {
+  if (layers.database === "postgres") {
+    return `import { join } from "node:path";
+import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
+import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
+import {
+  grantPostgresAppRolePrivileges,
+  openPostgresAdminConnection,
+  postgresDatabaseNameFromUrl,
+} from "@getstrata/core/tenant/enableTenantRls";
+
+const MIGRATIONS_DIRECTORY = join(import.meta.dir, "migrations");
+
+export async function loadStarterMigrations() {
+  return loadMigrationsFromDirectory(MIGRATIONS_DIRECTORY);
+}
+
+export async function withMigrationDatabase<T>(
+  fn: (db: MigrationDatabase) => Promise<T>,
+): Promise<T> {
+  const runtimeUrl = process.env.DATABASE_URL ?? "";
+  const admin = await openPostgresAdminConnection({
+    runtimeUrl,
+    migrationUrl: process.env.MIGRATION_DATABASE_URL,
+  });
+  try {
+    const result = await fn(admin);
+    await grantPostgresAppRolePrivileges(admin, {
+      database: postgresDatabaseNameFromUrl(runtimeUrl),
+    });
+    return result;
+  } finally {
+    await admin.close?.();
+  }
+}
+`;
+  }
+
+  return `import { join } from "node:path";
+import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
+import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
+import { getSql } from "../bootstrap/database.ts";
+
+const MIGRATIONS_DIRECTORY = join(import.meta.dir, "migrations");
+
+export async function loadStarterMigrations() {
+  return loadMigrationsFromDirectory(MIGRATIONS_DIRECTORY);
+}
+
+export async function withMigrationDatabase<T>(
+  fn: (db: MigrationDatabase) => Promise<T>,
+): Promise<T> {
+  return fn(getSql());
+}
+`;
+}
+
+function renderMigrateTs(layers: StarterLayers): string {
+  const tenancyOn = usesTenantTable(layers.tenancy);
   const ph = layers.database === "postgres";
   const verifyOn = layers.extras.emailVerification && authNeedsUsers(layers.auth);
   const verifiedNow = nowTimestampLiteral(layers.database);
@@ -387,10 +482,6 @@ function renderMigrateTs(layers: StarterLayers): string {
     layers.tenancy === "rls" && layers.database === "postgres"
       ? `import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";\n`
       : "";
-  const postgresRoleImport =
-    layers.database === "postgres"
-      ? `import { grantPostgresAppRolePrivileges, openPostgresAdminConnection, postgresDatabaseNameFromUrl } from "@getstrata/core/tenant/enableTenantRls";\n`
-      : "";
   const bindSql =
     seedTenant || (layers.tenancy === "rls" && layers.database === "postgres")
       ? "  const sql = getSql();\n"
@@ -408,18 +499,14 @@ function renderMigrateTs(layers: StarterLayers): string {
     ? `import { User } from "../models/User.ts";\n`
     : "";
   const needsSqlClient =
-    layers.database !== "postgres" ||
-    Boolean(seedTenant) ||
-    (layers.tenancy === "rls" && layers.database === "postgres");
+    Boolean(seedTenant) || (layers.tenancy === "rls" && layers.database === "postgres");
   const databaseImport = needsSqlClient
     ? `import { closeDatabase, getSql } from "../bootstrap/database.ts";\n`
     : `import { closeDatabase } from "../bootstrap/database.ts";\n`;
 
-  return `${hashImport}${rlsBypassImport}${postgresRoleImport}${ensureImport(layers)}${databaseImport}import { Note } from "../models/Note.ts";
-${userImport}
-const migrations = [
-${list}
-];
+  return `${hashImport}${rlsBypassImport}${ensureImport(layers)}${databaseImport}import { migrateDatabase } from "@getstrata/core/database/migrations";
+import { Note } from "../models/Note.ts";
+${userImport}import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function seed() {
 ${ensureCall(layers)}${bindSql}${seedOpen}${seedTenant}
@@ -429,30 +516,10 @@ ${ensureCall(layers)}${bindSql}${seedOpen}${seedTenant}
 }
 
 export async function migrate() {
-${ensureCall(layers)}${
-  layers.database === "postgres"
-    ? `  const runtimeUrl = process.env.DATABASE_URL ?? "";
-  const admin = await openPostgresAdminConnection({
-    runtimeUrl,
-    migrationUrl: process.env.MIGRATION_DATABASE_URL,
+${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
+    await migrateDatabase(db, await loadStarterMigrations());
   });
-  try {
-    for (const statement of migrations) {
-      await admin.unsafe(statement);
-    }
-    await grantPostgresAppRolePrivileges(admin, {
-      database: postgresDatabaseNameFromUrl(runtimeUrl),
-    });
-  } finally {
-    await admin.close?.();
-  }
-`
-    : `  const sql = getSql();
-  for (const statement of migrations) {
-    await sql.unsafe(statement);
-  }
-`
-}  await seed();
+  await seed();
 }
 
 /** The CLI calls this after migrate() so pooled drivers do not hold the process open. */
@@ -676,7 +743,7 @@ export { AuthOneTimeToken };
 }
 
 function dropTables(layers: StarterLayers): string[] {
-  const ordered: string[] = [];
+  const ordered: string[] = ["failed_job"];
   if (authUsesToken(layers.auth)) {
     ordered.push("api_tokens");
   }
@@ -695,38 +762,17 @@ function dropTables(layers: StarterLayers): string[] {
   return ordered;
 }
 
-function renderPostgresAdminDropCall(): string {
-  return `  await dropPostgresTablesAsAdmin(tables, {
-    runtimeUrl: process.env.DATABASE_URL ?? "",
-    migrationUrl: process.env.MIGRATION_DATABASE_URL,
-  });
-`;
-}
-
 function renderFreshTs(layers: StarterLayers): string {
-  const tables = dropTables(layers);
-  const cascade = layers.database === "sqlite" ? "" : " CASCADE";
-  const imports =
-    layers.database === "postgres"
-      ? `import { dropPostgresTablesAsAdmin } from "@getstrata/core/tenant/enableTenantRls";
-${ensureImport(layers)}import { closeDatabase } from "../bootstrap/database.ts";
-import { migrate } from "./migrate.ts";`
-      : `${ensureImport(layers)}import { closeDatabase, getSql } from "../bootstrap/database.ts";
-import { migrate } from "./migrate.ts";`;
-  const dropBody =
-    layers.database === "postgres"
-      ? `${renderPostgresAdminDropCall()}  await migrate();`
-      : `  const sql = getSql();
-  for (const table of tables) {
-    await sql.unsafe(\`DROP TABLE IF EXISTS \${table}${cascade}\`);
-  }
-  await migrate();`;
-  return `${imports}
-
-const tables = ${JSON.stringify(tables)};
+  return `${ensureImport(layers)}import { freshDatabase } from "@getstrata/core/database/migrations";
+import { closeDatabase } from "../bootstrap/database.ts";
+import { seed } from "./migrate.ts";
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function fresh() {
-${ensureCall(layers)}${dropBody}
+${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
+    await freshDatabase(db, await loadStarterMigrations());
+  });
+  await seed();
 }
 
 /** The CLI calls this after fresh() so pooled drivers do not hold the process open. */
@@ -757,23 +803,17 @@ if (import.meta.main) {
 }
 
 function renderStatusTs(layers: StarterLayers): string {
-  const tables = dropTables(layers);
-  return `${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";
-
-const tables = ${JSON.stringify(tables)};
+  return `${ensureImport(layers)}import { getMigrationStatus } from "@getstrata/core/database/migrations";
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function status() {
-${ensureCall(layers)}  const sql = getSql();
-  console.log("Starter schema (inline SQL, not a migration runner):");
-  for (const table of tables) {
-    try {
-      const rows = await sql.unsafe<{ count: string | number }>(
-        \`SELECT COUNT(*) AS count FROM \${table}\`,
-      );
-      console.log(\`- [present] \${table} (rows: \${rows[0]?.count ?? 0})\`);
-    } catch {
-      console.log(\`- [missing] \${table}\`);
-    }
+${ensureCall(layers)}  const rows = await withMigrationDatabase(async (db) => {
+    return getMigrationStatus(db, await loadStarterMigrations());
+  });
+  console.log("Migrations:");
+  for (const row of rows) {
+    const batch = row.batch == null ? "" : \` (batch \${row.batch})\`;
+    console.log(\`- [\${row.status}] \${row.name}\${batch}\`);
   }
 }
 
@@ -785,34 +825,25 @@ if (import.meta.main) {
 }
 
 function renderRollbackTs(layers: StarterLayers): string {
-  const tables = dropTables(layers);
-  const cascade = layers.database === "sqlite" ? "" : " CASCADE";
-  const imports =
-    layers.database === "postgres"
-      ? `import { dropPostgresTablesAsAdmin } from "@getstrata/core/tenant/enableTenantRls";
-${ensureImport(layers)}`
-      : `${ensureImport(layers)}import { getSql } from "../bootstrap/database.ts";`;
-  const dropBody =
-    layers.database === "postgres"
-      ? `${renderPostgresAdminDropCall()}  for (const table of tables) {
-    console.log(\`dropped \${table}\`);
-  }`
-      : `  const sql = getSql();
-  for (const table of tables) {
-    await sql.unsafe(\`DROP TABLE IF EXISTS \${table}${cascade}\`);
-    console.log(\`dropped \${table}\`);
-  }`;
-  return `${imports}
-
-const tables = ${JSON.stringify(tables)};
+  return `${ensureImport(layers)}import { rollbackDatabase } from "@getstrata/core/database/migrations";
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function rollback() {
-${ensureCall(layers)}${dropBody}
+${ensureCall(layers)}  const rolledBack = await withMigrationDatabase(async (db) => {
+    return rollbackDatabase(db, await loadStarterMigrations(), {
+      onMigration: (name) => {
+        console.log(\`rolled back \${name}\`);
+      },
+    });
+  });
+  if (rolledBack === 0) {
+    console.log("Nothing to roll back.");
+  }
 }
 
 if (import.meta.main) {
   await rollback();
-  console.log("Rolled back starter tables.");
+  console.log("Rolled back last migration batch.");
   process.exit(0);
 }
 `;
@@ -904,7 +935,8 @@ export default configProvider;
 }
 
 function renderQueueProvider(): string {
-  return `import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
+  return `import { discoverJobs } from "@getstrata/bootstrap/discoverJobs";
+import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { CORE_QUEUE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import {
@@ -921,7 +953,10 @@ const queueProvider: ServiceProvider = {
     container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
     container.set(
       CORE_QUEUE_TOKEN,
-      createAppQueue(driver, process.env.REDIS_URL, failedJobs, registerDefaultJobs),
+      createAppQueue(driver, process.env.REDIS_URL, failedJobs, () => {
+        registerDefaultJobs();
+        discoverJobs();
+      }),
     );
   },
 };
@@ -1244,44 +1279,116 @@ export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
 function renderCliRegisterTs(): string {
   return `import type { StrataCommandMap } from "@getstrata/cli";
 
-async function queueWorkCommand(): Promise<void> {
-  const redisUrl = process.env.REDIS_URL;
+const commands: StrataCommandMap = {
+  "make:module": async () => (await import("@getstrata/cli/scaffold")).makeModuleCommand,
+  "make:policy": async () => (await import("@getstrata/cli/scaffold")).makePolicyCommand,
+  "make:job": async () => (await import("@getstrata/cli/scaffold")).makeJobCommand,
+  "make:listener": async () => (await import("@getstrata/cli/scaffold")).makeListenerCommand,
+  "make:request": async () => (await import("@getstrata/cli/scaffold")).makeRequestCommand,
+  "make:factory": async () => (await import("@getstrata/cli/scaffold")).makeFactoryCommand,
+  "make:migration": async () => (await import("@getstrata/cli/scaffold")).makeMigrationCommand,
+  "queue:work": async () => (await import("./queueWork.ts")).queueWorkCommand,
+  "queue:failed": async () => (await import("./queueFailed.ts")).queueFailedCommand,
+  "queue:retry": async () => (await import("./queueFailed.ts")).queueRetryCommand,
+  "queue:flush-failed": async () => (await import("./queueFailed.ts")).queueFlushFailedCommand,
+  "openapi:generate": async () => (await import("./openapi.ts")).openapiGenerateCommand,
+  "openapi:validate": async () => (await import("./openapi.ts")).openapiValidateCommand,
+  "openapi:check": async () => (await import("./openapi.ts")).openapiCheckCommand,
+  "schedule:run": async () => (await import("./scheduleRun.ts")).scheduleRunCommand,
+};
 
-  if (!redisUrl) {
+export { commands };
+`;
+}
+
+function renderCliQueueWorkTs(): string {
+  return `async function queueWorkCommand(): Promise<void> {
+  if (!process.env.REDIS_URL) {
     throw new Error("queue:work requires REDIS_URL to be set.");
   }
 
+  const { runQueueWorkerCommand } = await import("@getstrata/cli/queueWorker");
   const { bootstrapApp } = await import("../bootstrap/createApp.ts");
   const { closeDatabase } = await import("../bootstrap/database.ts");
-  const { installGracefulShutdownSignals, registerShutdownHandler } = await import(
-    "@getstrata/core/lifecycle/gracefulShutdown"
-  );
-  const { createFailedJobService, createQueueWorker } = await import(
-    "@getstrata/core/queue/createAppQueue"
-  );
 
-  await bootstrapApp({ migrate: false });
-
-  console.log("[queue:work] Listening for jobs on Redis...");
-  const worker = createQueueWorker(redisUrl, createFailedJobService());
-
-  registerShutdownHandler("queue-worker", async () => {
-    worker.requestStop();
+  await runQueueWorkerCommand({
+    boot: () => bootstrapApp({ migrate: false }),
+    close: closeDatabase,
   });
-  registerShutdownHandler("database", async () => {
-    await closeDatabase();
-  });
-  installGracefulShutdownSignals();
-
-  await worker.run();
-  console.log("[queue:work] Worker stopped.");
 }
 
-const commands: StrataCommandMap = {
-  "queue:work": async () => queueWorkCommand,
-};
+export { queueWorkCommand };
+`;
+}
 
-export { commands, queueWorkCommand };
+function renderCliQueueFailedTs(): string {
+  return `async function bootApp(): Promise<void> {
+  const { bootstrapApp } = await import("../bootstrap/createApp.ts");
+  await bootstrapApp({ migrate: false });
+}
+
+async function queueFailedCommand(): Promise<void> {
+  const { queueFailedCommand: run } = await import("@getstrata/cli/queueFailed");
+  await run(bootApp);
+}
+
+async function queueRetryCommand(id?: string): Promise<void> {
+  const { queueRetryCommand: run } = await import("@getstrata/cli/queueFailed");
+  await run(id, bootApp);
+}
+
+async function queueFlushFailedCommand(): Promise<void> {
+  const { queueFlushFailedCommand: run } = await import("@getstrata/cli/queueFailed");
+  await run(bootApp);
+}
+
+export { queueFailedCommand, queueFlushFailedCommand, queueRetryCommand };
+`;
+}
+
+function renderCliOpenApiTs(): string {
+  return `async function bootstrap() {
+  const { createApp } = await import("../bootstrap/createApp.ts");
+  return createApp({ migrate: false });
+}
+
+async function openapiGenerateCommand(): Promise<void> {
+  const { createOpenApiGenerateCommand } = await import("@getstrata/cli/openapi");
+  await createOpenApiGenerateCommand(bootstrap)();
+}
+
+async function openapiValidateCommand(): Promise<void> {
+  const { createOpenApiValidateCommand } = await import("@getstrata/cli/openapi");
+  await createOpenApiValidateCommand(bootstrap)();
+}
+
+async function openapiCheckCommand(): Promise<void> {
+  const { createOpenApiCheckCommand } = await import("@getstrata/cli/openapi");
+  await createOpenApiCheckCommand(bootstrap)();
+}
+
+export { openapiCheckCommand, openapiGenerateCommand, openapiValidateCommand };
+`;
+}
+
+function renderCliScheduleRunTs(): string {
+  return `async function scheduleRunCommand(): Promise<void> {
+  const { createScheduleRunCommand } = await import("@getstrata/cli/schedule");
+  await createScheduleRunCommand(async () => {
+    const { bootstrapApp } = await import("../bootstrap/createApp.ts");
+    await bootstrapApp({ migrate: false });
+    await import("../bootstrap/schedule.ts");
+  })();
+}
+
+export { scheduleRunCommand };
+`;
+}
+
+function renderScheduleTs(): string {
+  return `import { appSchedule } from "@getstrata/core/scheduler/schedule";
+
+export { appSchedule };
 `;
 }
 
@@ -1347,7 +1454,11 @@ export {
   dialectFragments,
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
+  renderCliOpenApiTs,
+  renderCliQueueFailedTs,
+  renderCliQueueWorkTs,
   renderCliRegisterTs,
+  renderCliScheduleRunTs,
   renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,
@@ -1355,6 +1466,7 @@ export {
   renderEnsureDatabaseTs,
   renderFreshTs,
   renderMigrateTs,
+  renderMigrationRuntimeTs,
   renderNoteModel,
   renderPolicyProvider,
   renderPreloadTs,
@@ -1362,8 +1474,10 @@ export {
   renderQueueProvider,
   renderRollbackTs,
   renderRoutesTs,
+  renderScheduleTs,
   renderSeedTs,
   renderSidecarsTs,
+  renderStarterSchemaMigration,
   renderStatusTs,
   renderUserModel,
   renderViewTs,

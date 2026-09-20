@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## Unreleased
+
+- `discoverJobs()` loads `src/jobs/*.ts` default exports with `static jobName` into `jobRegistry`, same cache pattern as `discoverListeners()`.
+- Queue providers register default jobs and discovered jobs together.
+
 ## 1.1.1
 
 Fix generated app boot

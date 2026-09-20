@@ -210,6 +210,7 @@ const BOOTSTRAP_SUBPATHS = [
   "dependencies",
   "discoverModules",
   "discoverListeners",
+  "discoverJobs",
   "health",
   "http/securedRouteModelBinding",
   "httpKernel",

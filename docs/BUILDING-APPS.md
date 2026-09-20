@@ -75,19 +75,19 @@ Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and 
 
 After `ensureModulesLoaded()`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
 
-Starter apps also call `registerDefaultJobs` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job. `src/listeners/*.ts` registrars are loaded via `discoverListeners()` in the same boot phase (idempotent listener groups, same pattern as the monorepo `core.listeners` provider).
+Starter apps also call `registerDefaultJobs` and `discoverJobs()` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job. `src/listeners/*.ts` registrars are loaded via `discoverListeners()` in the same boot phase (idempotent listener groups, same pattern as the monorepo `core.listeners` provider). `src/jobs/*.ts` classes with `static jobName` are registered the same way.
 
 Generated apps use **two provider waves**: starter `register`/`boot`, then module `register`/`boot`. That is intentional — do not replace it with `collectProviders()` without re-reading auth order (starter `queue → auth → policy` vs monorepo `coreProviders`). Module `register` runs after starter has already booted (jobs and listeners attached). Prefer `bootstrapApp()` / `createApp()` in app code; calling exported `createAppContext()` without a prior `ensureModulesLoaded()` skips module providers silently.
 
 ## Database migrations
 
-Product apps from `create-strata` use inline SQL in `src/db/migrate.ts`. File-based migrations in the monorepo (`src/db/migrations/`, `make:migration`) are optional; see [STARTER.md](./STARTER.md#migrations).
+Product apps from `create-strata` use file-based migrations in `src/db/migrations/` plus the core runner from `src/db/migrate.ts`. Seed stays in `migrate.ts`. See [STARTER.md](./STARTER.md#migrations).
 
 ## Extending the CLI
 
-Generated apps depend on `@getstrata/cli` (lifecycle commands plus whatever `src/cli/register.ts` exports). The starter writes `src/cli/register.ts` with `queue:work`. That worker calls `bootstrapApp({ migrate: false })` / `createApp()` so starter and module providers load. Do not copy the monorepo `queue:work` command (`createAppContext()` from `@getstrata/bootstrap/context`, `coreProviders`).
+Generated apps depend on `@getstrata/cli` (lifecycle commands plus whatever `src/cli/register.ts` exports). The starter writes `src/cli/register.ts` with `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` calls `bootstrapApp({ migrate: false })` / `createApp()` through `@getstrata/cli/queueWorker` so starter and module providers load. Do not copy the monorepo `queue:work` command (`createAppContext()` from `@getstrata/bootstrap/context`, `coreProviders`).
 
-To add more commands, extend that file (`commands` or `registerCommands()`). Codegen (`make:module`, `make:migration`, `make:job`, `openapi:*`) is still the monorepo CLI (`bun run cli …` from this repo). Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`).
+To add more commands, extend that file (`commands` or `registerCommands()`). Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`). `openapi:*` uses `createApp()` routes. `schedule:run` loads `src/bootstrap/schedule.ts` after boot.
 
 ## Optional feature flags
 

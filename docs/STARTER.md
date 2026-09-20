@@ -65,21 +65,21 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 - Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
 - `--tenancy=column`: `tenant` table + `users.tenant_id` on any engine. `--tenancy=rls`: Postgres only (`SET LOCAL`). sqlite/mysql `rls` becomes `column`
 - Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa` enroll POST uses `wrapWebPasswordConfirm`), email verification (`/email/verify`), SCIM `/scim/v2/Users` (the User model query still filters `tenant_id` on every lookup; unfiltered lists use `count` plus `offset`/`limit`; `:id` uses `parsePositiveIntParam`), metrics `GET /metrics` (only when that extra is on)
-- Generated apps register an empty `PolicyGate`, boot **module** `providers` from discovered modules (after `ensureModulesLoaded`), register default queue jobs, wire cache-invalidation listeners on model writes (idempotent groups), and run `src/listeners/*.ts` default exports via `discoverListeners()`.
-- `src/cli/register.ts` adds `queue:work` to the published `strata` binary. The worker calls this app's `bootstrapApp({ migrate: false })` / `createApp()`, then a Redis worker. It requires `REDIS_URL`. It is not the monorepo `queue:work` command (that boots `coreProviders`).
+- Generated apps register an empty `PolicyGate`, boot **module** `providers` from discovered modules (after `ensureModulesLoaded`), register default queue jobs, discover `src/jobs/*.ts` via `discoverJobs()`, wire cache-invalidation listeners on model writes (idempotent groups), and run `src/listeners/*.ts` default exports via `discoverListeners()`.
+- `src/cli/register.ts` adds product commands to the published `strata` binary: `queue:work` / `queue:failed` / `queue:retry` / `queue:flush-failed`, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` calls this app's `bootstrapApp({ migrate: false })` / `createApp()` through `@getstrata/cli/queueWorker`. It requires `REDIS_URL`. It is not the monorepo `queue:work` command (that boots `coreProviders`).
 - `strata.layers.json` records the choices
 
 ## Migrations
 
-Generated apps ship **inline SQL** in `src/db/migrate.ts` (one runnable file, seeds included). That is the supported product-app path.
+Generated apps ship **file-based** migrations under `src/db/migrations/`, loaded by `@getstrata/core/database/migrations` from `src/db/migrate.ts` (seeds stay in that file). The first file is `0001_starter_schema` and uses `CREATE TABLE IF NOT EXISTS` so existing databases can adopt the runner. `strata make:migration` writes the next file into that directory. Postgres still migrates through the admin connection and grants the app role.
 
-The monorepo also has **file-based** migrations under `src/db/migrations/` for the framework fixture. `strata make:migration` (monorepo CLI from a product app directory) writes TypeScript files under `src/db/migrations/`; you still need to load them from your migrate entry if you adopt that style. Do not mix two migration runners for the same schema without a plan.
+The monorepo fixture keeps its own file-based history under the framework repo's `src/db/migrations/`. Do not mix two migration runners for the same schema without a plan.
 
 ## Scaffold commands (`make:*`)
 
-`bunx strata` in a generated app ships `dev`, `start`, `migrate`, `migrate:fresh`, `run`, `help`, and `queue:work`. `queue:work` comes from the generated `src/cli/register.ts` and boots **this app** (`bootstrapApp({ migrate: false })` / `createApp()`). Do not copy the monorepo `src/cli/register.ts` or `queue:work` into a product app; that worker calls `createAppContext()` from `@getstrata/bootstrap/context` (`coreProviders`).
+`bunx strata` in a generated app ships lifecycle commands plus the generated `src/cli/register.ts` map: `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` boots **this app** (`bootstrapApp({ migrate: false })` / `createApp()`). Do not copy the monorepo `src/cli/register.ts` or `queue:work` into a product app; that worker calls `createAppContext()` from `@getstrata/bootstrap/context` (`coreProviders`).
 
-Codegen commands (`make:module`, `make:migration`, `make:job`, `openapi:*`, `schedule:run`, …) still live in the **Strata monorepo** CLI (`bun run cli …` from the framework repo). They resolve paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`).
+`make:*` resolves paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`, `src/listeners`). `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `discoverJobs()` on boot. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
 
 `APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot.
 

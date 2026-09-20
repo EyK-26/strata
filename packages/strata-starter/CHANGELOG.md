@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Generated apps ship `src/cli/register.ts` with `queue:work`. The worker calls the app's `bootstrapApp({ migrate: false })` / `createApp()`, not the monorepo `queue:work` command (`coreProviders`). Requires `REDIS_URL`. `bun run queue:work` is a generated script.
+- Generated apps ship `src/cli/register.ts` with `queue:work` through `@getstrata/cli/queueWorker` (`bootstrapApp({ migrate: false })` / `createApp()`, not `coreProviders`). Failed-job commands, `make:*`, `openapi:*`, and `schedule:run` are registered the same way. File-based migrations live in `src/db/migrations/` (`0001_starter_schema`) and run through `@getstrata/core/database/migrations`; `make:migration` writes into that directory. `src/bootstrap/schedule.ts` is generated for `schedule:run`.
 
 ## 1.1.1
 

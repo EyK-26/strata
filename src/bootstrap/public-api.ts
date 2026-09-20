@@ -58,6 +58,7 @@ export {
 export type { CreateWebRoutesOptions } from "./createWebRoutes.ts";
 export { createWebRoutes, mergeWebRoutes } from "./createWebRoutes.ts";
 export { createAppDependencies } from "./dependencies.ts";
+export { discoverJobs, resetDiscoverJobsForTests } from "./discoverJobs.ts";
 export type { DiscoverModulesOptions } from "./discoverModules.ts";
 export {
   configureModulesDirectory,

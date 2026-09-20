@@ -12,7 +12,10 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
-import { renderCliRegisterTs } from "../../../packages/strata-starter/src/renderRuntime.ts";
+import {
+  renderCliQueueWorkTs,
+  renderCliRegisterTs,
+} from "../../../packages/strata-starter/src/renderRuntime.ts";
 import { captureConsole, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -46,32 +49,61 @@ function generateFromArgs(directory: string, argv: string[]): string {
   return join(directory, name);
 }
 
+const PRODUCT_COMMANDS = [
+  "make:module",
+  "make:policy",
+  "make:job",
+  "make:listener",
+  "make:request",
+  "make:factory",
+  "make:migration",
+  "queue:work",
+  "queue:failed",
+  "queue:retry",
+  "queue:flush-failed",
+  "openapi:generate",
+  "openapi:validate",
+  "openapi:check",
+  "schedule:run",
+] as const;
+
 describe("generated src/cli/register.ts", () => {
   test("queue:work boots the app, not coreProviders", () => {
-    const source = renderCliRegisterTs();
-    expect(source).toContain("bootstrapApp({ migrate: false })");
-    expect(source).toContain('await import("../bootstrap/createApp.ts")');
-    expect(source).toContain("createQueueWorker");
-    expect(source).toContain("closeDatabase");
-    expect(source).toContain('"queue:work"');
-    expect(source).not.toContain("coreProviders");
-    expect(source).not.toContain("collectProviders");
-    expect(source).not.toContain("@getstrata/bootstrap/context");
-    expect(source).not.toContain("createAppContext");
-    expect(source).not.toContain("make:module");
-    expect(source).not.toContain("make:job");
+    const register = renderCliRegisterTs();
+    const queueWork = renderCliQueueWorkTs();
+    expect(queueWork).toContain("bootstrapApp({ migrate: false })");
+    expect(queueWork).toContain('await import("../bootstrap/createApp.ts")');
+    expect(queueWork).toContain("runQueueWorkerCommand");
+    expect(queueWork).toContain("@getstrata/cli/queueWorker");
+    expect(queueWork).toContain("closeDatabase");
+    expect(register).toContain('"queue:work"');
+    expect(register).toContain("make:module");
+    expect(register).toContain("make:job");
+    expect(register).toContain("make:migration");
+    expect(register).toContain("openapi:generate");
+    expect(register).toContain("schedule:run");
+    expect(register).not.toContain("coreProviders");
+    expect(register).not.toContain("collectProviders");
+    expect(register).not.toContain("@getstrata/bootstrap/context");
+    expect(register).not.toContain("createAppContext");
+    expect(queueWork).not.toContain("assertProductionSecrets");
+    expect(queueWork).not.toContain("coreProviders");
+    expect(queueWork).not.toContain("collectProviders");
+    expect(queueWork).not.toContain("@getstrata/bootstrap/context");
+    expect(queueWork).not.toContain("createAppContext");
   });
 
   test("generate writes register.ts and strata.config points at it", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["cli-register", "--yes"]);
     const register = await readFile(join(app, "src/cli/register.ts"), "utf8");
+    const queueWork = await readFile(join(app, "src/cli/queueWork.ts"), "utf8");
     const config = await readFile(join(app, "strata.config.ts"), "utf8");
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
 
-    expect(register).toContain("bootstrapApp({ migrate: false })");
+    expect(queueWork).toContain("bootstrapApp({ migrate: false })");
     expect(register).not.toContain("coreProviders");
     expect(register).not.toContain("collectProviders");
     expect(register).not.toContain("@getstrata/bootstrap/context");
@@ -80,14 +112,14 @@ describe("generated src/cli/register.ts", () => {
     expect(pkg.scripts["queue:work"]).toBe("strata queue:work");
   });
 
-  test("loadAppCommands sees queue:work and help lists it", async () => {
+  test("loadAppCommands sees product CLI commands and help lists them", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["cli-register-help", "--yes"]);
     const resolved = await resolveApp(app);
     const commands = await loadAppCommands(resolved);
 
     expect(resolved.commandsModule).toBe(join(app, "src/cli/register.ts"));
-    expect(Object.keys(commands)).toEqual(["queue:work"]);
+    expect(Object.keys(commands).sort()).toEqual([...PRODUCT_COMMANDS].sort());
 
     const output = captureConsole();
     try {
@@ -102,9 +134,11 @@ describe("generated src/cli/register.ts", () => {
       output.restore();
     }
 
-    expect(output.logs.join("\n")).toContain("queue:work");
-    expect(output.logs.join("\n")).not.toContain("make:module");
-    expect(output.logs.join("\n")).not.toContain("coreProviders");
+    const help = output.logs.join("\n");
+    expect(help).toContain("queue:work");
+    expect(help).toContain("make:module");
+    expect(help).toContain("schedule:run");
+    expect(help).not.toContain("coreProviders");
   });
 
   test("queue:work fails closed without REDIS_URL before booting", async () => {
@@ -134,11 +168,20 @@ describe("generated src/cli/register.ts", () => {
     expect(output.errors.join("\n")).toContain("queue:work requires REDIS_URL to be set.");
   });
 
-  test("in-repo example apps ship the same register.ts as the renderer", async () => {
-    const expected = renderCliRegisterTs();
+  test("in-repo example apps ship the same CLI registrar as the renderer", async () => {
+    const expectedRegister = renderCliRegisterTs();
+    const expectedQueueWork = renderCliQueueWorkTs();
     for (const id of ["hiroapp", "hiroapp-hobby", "hiroapp-team"] as const) {
-      const actual = await readFile(join(repoRoot, `apps/${id}/src/cli/register.ts`), "utf8");
-      expect(actual).toBe(expected);
+      const actualRegister = await readFile(
+        join(repoRoot, `apps/${id}/src/cli/register.ts`),
+        "utf8",
+      );
+      const actualQueueWork = await readFile(
+        join(repoRoot, `apps/${id}/src/cli/queueWork.ts`),
+        "utf8",
+      );
+      expect(actualRegister).toBe(expectedRegister);
+      expect(actualQueueWork).toBe(expectedQueueWork);
     }
   });
 });
