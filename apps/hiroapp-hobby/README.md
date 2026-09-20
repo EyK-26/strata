@@ -28,7 +28,7 @@ bun run db:migrate
 bun run dev
 ```
 
-Open http://localhost:3000. Health check: `GET /health`.
+Open http://localhost:3000. Health check: `GET /health`. Redis worker: `bun run queue:work` (requires `REDIS_URL`).
 
 
 Header auth is on for local use. Send `x-authenticated-user-id` (and optional `x-authenticated-user-role`). Production must set `AUTH_DEV_HEADERS=false`.
@@ -56,4 +56,4 @@ The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything els
 - Cross-origin browser calls are off in production until you set `CORS_ALLOWED_ORIGINS` to explicit origins. A `*` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set `TRUST_FORWARDED_FOR=true` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of `X-Forwarded-For` is trusted.
 
-`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` is 200 when `notes` is readable (including zero rows) and 503 when that read fails.
+`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` is 200 when `notes` is readable (including zero rows) and 503 when that read fails. Redis jobs need a worker: `bun run queue:work` (requires `REDIS_URL`).

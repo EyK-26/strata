@@ -30,7 +30,7 @@ bun run db:migrate
 bun run dev
 ```
 
-Open http://localhost:3000. Health check: `GET /health`.
+Open http://localhost:3000. Health check: `GET /health`. Redis worker: `bun run queue:work` (requires `REDIS_URL`).
 
 ## Supporting tools
 
@@ -87,4 +87,4 @@ The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything els
 - Set `SESSION_SECRET` to 32+ characters.
 - Set `METRICS_TOKEN`.
 
-`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` is 200 when `notes` is readable (including zero rows) and 503 when that read fails.
+`strata start` does not migrate when `APP_ENV=production`. Run `bun run db:migrate` as a deploy step. `GET /health` is 200 when `notes` is readable (including zero rows) and 503 when that read fails. Redis jobs need a worker: `bun run queue:work` (requires `REDIS_URL`).

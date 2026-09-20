@@ -38,6 +38,7 @@ import {
 import {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
+  renderCliRegisterTs,
   renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,
@@ -193,6 +194,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     removeIfExists(join(src, "bootstrap/ensureDatabase.ts"));
   }
   writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(layers));
+  writeText(join(src, "cli/register.ts"), renderCliRegisterTs());
   writeText(join(src, "bootstrap/providers/config.ts"), renderConfigProvider(layers));
   writeText(join(src, "bootstrap/providers/queue.ts"), renderQueueProvider());
   writeText(join(src, "bootstrap/providers/policy.ts"), renderPolicyProvider());
