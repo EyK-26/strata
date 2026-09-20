@@ -50,6 +50,18 @@ describe("queueWorkCommand", () => {
       }),
       registerDefaultJobs: () => undefined,
     }));
+    mock.module("@getstrata/bootstrap/context", () => ({
+      createAppContext: () => ({}),
+    }));
+    mock.module("@getstrata/bootstrap/secretsGuard", () => ({
+      assertProductionSecrets: () => undefined,
+    }));
+    mock.module("@getstrata/bootstrap/queue/defaultJobs", () => ({
+      registerDefaultJobs: () => undefined,
+    }));
+    mock.module("@getstrata/bootstrap/discoverJobs", () => ({
+      discoverJobs: () => [],
+    }));
     mock.module("../../../src/db/connection", () => ({
       closeDatabase: async () => undefined,
     }));

@@ -499,8 +499,11 @@ export type { ${moduleName}Record } from "./types";
     await Bun.write(join(directory, fileName), content);
   }
 
+  let createdViewsDirectory: string | undefined;
+
   if (withWeb) {
     const viewsDirectory = webViewsDirectory(pluralSlug);
+    createdViewsDirectory = viewsDirectory;
     await ensureDirectory(viewsDirectory);
     await Bun.write(
       join(viewsDirectory, "index.eta"),
@@ -576,10 +579,10 @@ export { create${moduleName}WebRoutes };
   }
 
   console.log(`Created module scaffold in: ${directory}`);
-  if (withWeb) {
-    const relativeViews = viewsDirectory.startsWith(process.cwd())
-      ? viewsDirectory.slice(process.cwd().length + 1)
-      : viewsDirectory;
+  if (createdViewsDirectory) {
+    const relativeViews = createdViewsDirectory.startsWith(process.cwd())
+      ? createdViewsDirectory.slice(process.cwd().length + 1)
+      : createdViewsDirectory;
     console.log(`Created web view scaffold in: ${relativeViews}/`);
   }
   console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
