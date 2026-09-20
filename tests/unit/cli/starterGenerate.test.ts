@@ -1099,6 +1099,8 @@ export default probeModule;
     process.env.AUTH_DEV_HEADERS = "true";
     process.env.TENANCY_DRIVER = "none";
     process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
     resetDiscoverModulesForTests();
 
     try {
@@ -1145,6 +1147,8 @@ export default probeModule;
     process.env.AUTH_DEV_HEADERS = "true";
     process.env.TENANCY_DRIVER = "none";
     process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
 
     try {
       const { bootstrapApp, createAppServer } = await import(
@@ -1219,6 +1223,8 @@ export default probeModule;
     process.env.SESSION_SECRET = "dev-session-secret-change-me-please-32ch";
     process.env.AUTH_DEV_HEADERS = "false";
     process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
 
     function cookieHeader(response: Response, previous = ""): string {
       const jar = new Map<string, string>();
@@ -1336,6 +1342,8 @@ export default probeModule;
     process.env.TOKEN_HASH_PEPPER = "dev-token-pepper-change-me";
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "30";
     process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
 
     try {
       const { bootstrapApp, createAppServer } = await import(
