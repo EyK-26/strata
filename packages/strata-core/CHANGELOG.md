@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.1.2
+
+- Product CLI helpers, file migrations, and job discovery.
+
 ## Unreleased
 
 - `Job` tracks `static jobName` on construct so `queue.dispatch(new FooJob(), payload)` resolves a registry name.

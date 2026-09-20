@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 1.1.2
+
+- Product CLI helpers, file migrations, and job discovery.
+
 ## Unreleased
 
 - `discoverJobs()` loads `src/jobs/*.ts` default exports with `static jobName` into `jobRegistry`, same cache pattern as `discoverListeners()`.

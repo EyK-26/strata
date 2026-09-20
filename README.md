@@ -28,7 +28,7 @@ Guides: [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDIN
 
 ## Packages
 
-Published as **1.1.1**:
+Published as **1.1.2**:
 
 | Package | What it is |
 |---------|------------|
