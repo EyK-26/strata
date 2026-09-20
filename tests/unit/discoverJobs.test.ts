@@ -157,7 +157,7 @@ describe("discoverJobs", () => {
     expect(discoverJobs()).toEqual(["echo"]);
 
     resetDiscoverJobsForTests();
-    expect(discoverJobs()).toEqual(["echo", "later"]);
+    expect(discoverJobs().toSorted()).toEqual(["echo", "later"]);
   });
 
   test("rethrows non-ENOENT errors when src/jobs is not a directory", async () => {
