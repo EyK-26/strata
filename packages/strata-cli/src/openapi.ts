@@ -1,5 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { registerOpenApiRouteMap } from "@getstrata/bootstrap/buildModuleRoutes";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
@@ -25,6 +25,7 @@ function createOpenApiGenerateCommand(bootstrap: AppBootstrap) {
 
     const spec = generateOpenApiSpec(routeRegistry.list());
     const jsonPath = join(process.cwd(), "docs/openapi.json");
+    await mkdir(dirname(jsonPath), { recursive: true });
     await writeFile(jsonPath, renderOpenApiDocument(spec), "utf8");
 
     console.log(`OpenAPI spec written to ${jsonPath} (${routeRegistry.list().length} routes).`);

@@ -428,7 +428,9 @@ describe("production defaults", () => {
 
     expect(env).toContain("FEATURE_PUBLIC_READS=false");
     expect(env).toContain("FEATURE_SAML=false");
+    expect(env).toContain("wrapWebPublicRead");
     expect(readme).toContain("FEATURE_PUBLIC_READS=false");
+    expect(readme).toContain("wrapWebPublicRead");
   });
 
   test("api apps ship the production-safe default", async () => {

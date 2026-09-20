@@ -76,6 +76,31 @@ type RelatedRef<TRelated extends object, RelatedKey extends keyof TRelated & str
   | string
   | (() => RelatedModelClass<TRelated, RelatedKey>);
 
+type RelationNameInput = string | readonly string[];
+
+function flattenRelationNames(relations: ReadonlyArray<RelationNameInput>): string[] {
+  const names: string[] = [];
+
+  for (const item of relations) {
+    if (typeof item === "string") {
+      if (item.length > 0) {
+        names.push(item);
+      }
+      continue;
+    }
+
+    if (Array.isArray(item)) {
+      for (const nested of item) {
+        if (typeof nested === "string" && nested.length > 0) {
+          names.push(nested);
+        }
+      }
+    }
+  }
+
+  return names;
+}
+
 type ModelObserver = {
   retrieved?: (model: AnyModel) => unknown;
   creating?: (model: AnyModel) => unknown;
@@ -470,12 +495,12 @@ class ModelQuery {
     readonly query: RepositoryQuery<Record<string, unknown>, "id">,
   ) {}
 
-  with(...relations: string[]): this {
+  with(...relations: RelationNameInput[]): this {
     const statics = modelStatics(this.modelClass);
     ensureBooted(this.modelClass);
     const dummy = statics.newFromRecord({}, false);
 
-    for (const path of relations) {
+    for (const path of flattenRelationNames(relations)) {
       const name = path.split(".")[0] ?? path;
       const method = (dummy as unknown as Record<string, unknown>)[name];
 
@@ -1026,7 +1051,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return created;
   }
 
-  static with(this: object, ...relations: string[]): ModelQuery {
+  static with(this: object, ...relations: RelationNameInput[]): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).with(...relations);
   }
 
@@ -1653,8 +1678,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
-  async load(...names: string[]): Promise<this> {
-    for (const name of names) {
+  async load(...names: RelationNameInput[]): Promise<this> {
+    for (const name of flattenRelationNames(names)) {
       if (name.includes(".")) {
         await loadNested(this as never, name);
         continue;

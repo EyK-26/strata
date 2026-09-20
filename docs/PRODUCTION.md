@@ -26,7 +26,7 @@ Fix every error until it prints that production secret checks passed.
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Token auth enabled |
 | `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled |
 | `CORS_ALLOWED_ORIGINS` | Only when browsers on other origins call the API. Unset is `APP_URL` locally and same-origin in production. Never defaults to `*`. `*` is rejected in production. |
-| `FEATURE_PUBLIC_READS=false` | Required in production. The flag only controls whether anonymous `x-tenant-id` is honored. Guests already pin to tenant 1, so `/login` works with the default `false`. |
+| `FEATURE_PUBLIC_READS=false` | Required in production (`assertProductionSecrets()` rejects `true`). `wrapWebPublicRead` / `wrapPublicRead` require a login when the flag is false. The same flag also controls whether anonymous `x-tenant-id` is honored. Guests already pin to tenant 1, so `/login` works with the default `false`. Storefronts that need a public catalog set `true` in local `.env` only. |
 
 A production HTML app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need API tokens, SCIM, OAuth, or CORS when those features are off.
 

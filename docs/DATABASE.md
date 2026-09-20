@@ -122,6 +122,35 @@ Mass assignment is opt-in. A model must declare `static $fillable = [...]` to al
 
 `$casts` supports `date`, `datetime`, `json`, `bool`/`boolean`, `integer`/`int`, and `hashed`. `hashed` hashes the value with bcrypt on write and leaves an already-hashed value untouched, so re-saving a loaded model does not double-hash.
 
+### Eager loading (`with` / `load`)
+
+`Product.with("category")` and `cartItem.load("product")` take **relation method names**, not model class names. `category()` is `with("category")`. `with("Category")` throws unless you defined `Category()`. Laravel-style arrays work: `with(["category"])` and `load(["product"])`.
+
+Hydrated relations live on `loaded("category")`. There is no magic `product.category` property.
+
+String related models (`belongsTo("Category")`, `hasMany("Product")`) resolve in this order:
+
+1. `registerModelRepository(Category, …)` already names `constructor.name` and `$morphClass`.
+2. `registerModelClass("Category", CategoryModel)` only when the string is neither of those (ESM cycles, or a short alias).
+
+Register models in `src/models/register.ts` (import every model so those calls run) **before** the first query. A missing name throws `Model [Category] is not registered`.
+
+Eager belongsTo/hasMany queries reuse the parent repository connection (`withConnection`), so Postgres RLS `SET LOCAL app.tenant_id` on the request transaction also applies to related rows. Model `addGlobalScope` is applied on `Model.query()`, not on those related repository loads — filter `tenant_id` in your own `where` if you use column tenancy without RLS.
+
+```typescript
+import { registerModelClass, registerModelRepository } from "@getstrata/core/database/model";
+
+registerModelClass("Category", Category);
+registerModelClass("Product", Product);
+registerModelRepository(Category, new CategoryRepository());
+registerModelRepository(Product, new ProductRepository());
+
+const products = await Product.with("category").get();
+products[0]?.loaded<{ get: (key: string) => unknown }>("category")?.get("name");
+
+const lines = await CartItem.with(["product"]).get();
+```
+
 ## Named connections
 
 Register extra engines without pointing HiroApp OLTP at them:
