@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Job } from "@getstrata/core/queue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 
-type DiscoveredJobClass = (new () => Job) & { jobName?: string };
+type DiscoveredJobClass = (new () => Job) & { jobName: string };
 
 const requireJob = createRequire(import.meta.url);
 
@@ -38,6 +38,15 @@ function resolveJobsDirectory(): string {
   return join(import.meta.dir, "../jobs");
 }
 
+function isDiscoveredJobClass(value: unknown): value is DiscoveredJobClass {
+  if (typeof value !== "function") {
+    return false;
+  }
+
+  const jobName = (value as { jobName?: unknown }).jobName;
+  return typeof jobName === "string" && jobName.length > 0;
+}
+
 function loadDiscoveredJobClasses(): DiscoveredJobClass[] {
   const jobsDirectory = resolveJobsDirectory();
 
@@ -57,18 +66,8 @@ function loadDiscoveredJobClasses(): DiscoveredJobClass[] {
 
   return entries.flatMap((fileName) => {
     const filePath = join(jobsDirectory, fileName);
-    const loaded = requireJob(filePath) as { default?: DiscoveredJobClass };
-    const JobClass = loaded.default;
-
-    if (typeof JobClass !== "function" || typeof JobClass.jobName !== "string") {
-      return [];
-    }
-
-    if (JobClass.jobName.length === 0) {
-      return [];
-    }
-
-    return [JobClass];
+    const loaded = requireJob(filePath) as { default?: unknown };
+    return isDiscoveredJobClass(loaded.default) ? [loaded.default] : [];
   });
 }
 
@@ -82,13 +81,8 @@ function discoverJobs(): string[] {
   const names: string[] = [];
 
   for (const JobClass of loadDiscoveredJobClasses()) {
-    const jobName = JobClass.jobName;
-    if (!jobName) {
-      continue;
-    }
-
-    jobRegistry.register(jobName, () => new JobClass());
-    names.push(jobName);
+    jobRegistry.register(JobClass.jobName, () => new JobClass());
+    names.push(JobClass.jobName);
   }
 
   state.names = names;
