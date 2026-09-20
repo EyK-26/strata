@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 1.1.4
+
+- Publish http/uploads, validateUploadFile, migration-adoption docs
+
 ## 1.1.3
 
 - Eager with() arrays, OpenAPI mkdir, public-read/auth docs
