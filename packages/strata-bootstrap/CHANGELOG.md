@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## Unreleased
+
+- Docs no longer mention `registerWebhookJobs()`. Default jobs stay `cache.invalidate-tags` and `audit.export`. Apps discover `src/jobs/*.ts` with `discoverJobs()` (generated `--webhooks` registers `webhook.dispatch`).
+
 ## 1.1.4
 
 - Publish http/uploads, validateUploadFile, migration-adoption docs

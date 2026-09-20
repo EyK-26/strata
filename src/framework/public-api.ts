@@ -560,6 +560,7 @@ export {
 } from "../core/security/safeUrl.ts";
 export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
 export { logSecurityEvent } from "../core/security/securityEvents.ts";
+export { signedWebhookHeaders, signWebhookBody } from "../core/security/webhookSignature.ts";
 export type { StorageDriver } from "../core/storage/storage.ts";
 export {
   createStorageDriver,

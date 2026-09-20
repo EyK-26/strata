@@ -26,6 +26,9 @@ async function openapiCheckCommand(): Promise<void> {
   if (committed !== generated) {
     console.error("OpenAPI spec drift detected.");
     console.error("Run `strata openapi:generate` and commit docs/openapi.json.");
+    console.error(
+      "Add that generate step next to `strata openapi:check` in CI so new routes cannot ship undocumented.",
+    );
     process.exit(1);
   }
 

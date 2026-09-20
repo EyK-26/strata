@@ -255,14 +255,19 @@ function textField(name: string, label: string, type: string, extra = ""): strin
     </label>`;
 }
 
-function renderLoginView(): string {
+function renderLoginView(layers: StarterLayers): string {
+  const githubLink =
+    layers.extras.oauthGithub && htmlAuthKit(layers.auth)
+      ? `
+    <a href="/auth/github">Sign in with GitHub</a>`
+      : "";
   return renderFormView(
     "Sign in",
     `${textField("email", "Email", "email", 'required autocomplete="username"')}
     ${textField("password", "Password", "password", 'required autocomplete="current-password"')}`,
     "Sign in",
     `<a href="/register">Create account</a>
-    <a href="/forgot-password">Forgot password</a>`,
+    <a href="/forgot-password">Forgot password</a>${githubLink}`,
   ).replace('action="<%= it.action || "" %>"', 'action="/login"');
 }
 

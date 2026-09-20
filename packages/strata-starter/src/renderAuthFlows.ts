@@ -68,6 +68,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
   }
 
   const cookie = htmlAuthKit(layers.auth);
+  const github = Boolean(layers.extras.oauthGithub && cookie);
   const mfa = Boolean(layers.extras.mfa && cookie);
   const verify = Boolean(layers.extras.emailVerification);
   const jsonApi = authUsesToken(layers.auth) || authUsesJwt(layers.auth);
@@ -98,6 +99,10 @@ function renderAuthModule(layers: StarterLayers): string | null {
     imports.push(
       `import { createSamlServiceProvider } from "@getstrata/core/auth/saml/samlServiceProvider";`,
     );
+    if (github) {
+      imports.push(`import { GitHubOAuthProvider } from "@getstrata/core/auth/oauth/providers";`);
+      imports.push(`import { appUrl } from "@getstrata/core/runtime/appKeyPrefix";`);
+    }
   }
   if (jsonApi) {
     imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
@@ -276,6 +281,47 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
     email: user.email ?? "",
     is_admin: user.role === "admin",
   };
+}
+
+async function completeBrowserSsoLogin(
+  dependencies: { container: { resolve: <T>(token: string) => T } },
+  profile: { email: string; name: string },
+  label: string,
+): Promise<Response> {
+  let record = await starterAuthDirectory.findByEmail?.(profile.email);
+  if (!record) {
+    if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+      return jsonResponse({ error: \`\${label} user is not provisioned.\` }, { status: 403 });
+    }
+    const hashed = await hashPassword(randomBytes(18).toString("hex"));
+    try {
+      await runAuthWrite(profile.email, async () => {
+        await User.create({
+          name: profile.name,
+          email: profile.email,
+          password: hashed,
+          is_admin: false,${samlTenantCreateField}
+        });
+      });
+    } catch {
+      // Unique email: another request already provisioned this user.
+    }
+    record = await starterAuthDirectory.findByEmail?.(profile.email);
+  }
+  if (!record) {
+    return jsonResponse({ error: \`Could not complete \${label} login.\` }, { status: 500 });
+  }
+  ${
+    mfa
+      ? `if (record.mfa_enabled) {
+    const pending = redirectTo("/login/mfa");
+    pending.headers.append("set-cookie", pendingMfaSetCookie(record.id));
+    return pending;
+  }
+  `
+      : ""
+  }const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+  return auth.signInRedirect(sessionUser(record), "/");
 }
 `
     : ""
@@ -554,40 +600,53 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
             if (!profile) {
               return jsonResponse({ error: "Invalid SAML response." }, { status: 400 });
             }
-            let record = await starterAuthDirectory.findByEmail?.(profile.email);
-            if (!record) {
-              if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
-                return jsonResponse({ error: "SAML user is not provisioned." }, { status: 403 });
-              }
-              const hashed = await hashPassword(randomBytes(18).toString("hex"));
-              try {
-                await runAuthWrite(profile.email, async () => {
-                  await User.create({
-                    name: profile.name,
-                    email: profile.email,
-                    password: hashed,
-                    is_admin: false,${samlTenantCreateField}
-                  });
-                });
-              } catch {
-                // Unique email: another request already provisioned this user.
-              }
-              record = await starterAuthDirectory.findByEmail?.(profile.email);
+            return completeBrowserSsoLogin(dependencies, profile, "SAML");
+          })),
+        },`
+    : "";
+
+  const githubRoutes = github
+    ? `
+        "/auth/github": {
+          GET: kernel.wrap("api", withErrorHandling(async () => {
+            if (process.env.FEATURE_OAUTH !== "true") {
+              return new Response("Not found", { status: 404 });
             }
-            if (!record) {
-              return jsonResponse({ error: "Could not complete SAML login." }, { status: 500 });
+            const clientId = process.env.GITHUB_CLIENT_ID?.trim();
+            const clientSecret = process.env.GITHUB_CLIENT_SECRET?.trim();
+            if (!clientId || !clientSecret) {
+              return new Response("Not found", { status: 404 });
             }
-            ${
-              mfa
-                ? `if (record.mfa_enabled) {
-              const pending = redirectTo("/login/mfa");
-              pending.headers.append("set-cookie", pendingMfaSetCookie(record.id));
-              return pending;
+            const redirectUri = process.env.GITHUB_REDIRECT_URI?.trim() || \`\${appUrl()}/auth/github/callback\`;
+            const issued = createOAuthState();
+            const url = new GitHubOAuthProvider({ clientId, clientSecret, redirectUri }).getAuthorizationUrl(issued.state);
+            return new Response(null, { status: 302, headers: { location: url } });
+          })),
+        },
+        "/auth/github/callback": {
+          GET: kernel.wrap("api", withErrorHandling(async (request) => {
+            if (process.env.FEATURE_OAUTH !== "true") {
+              return new Response("Not found", { status: 404 });
             }
-            `
-                : ""
-            }const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
-            return auth.signInRedirect(sessionUser(record), "/");
+            const clientId = process.env.GITHUB_CLIENT_ID?.trim();
+            const clientSecret = process.env.GITHUB_CLIENT_SECRET?.trim();
+            if (!clientId || !clientSecret) {
+              return new Response("Not found", { status: 404 });
+            }
+            const url = new URL(request.url);
+            const code = url.searchParams.get("code");
+            const state = url.searchParams.get("state");
+            if (!code || !verifyOAuthState(request, state)) {
+              return jsonResponse({ error: "Invalid GitHub OAuth state." }, { status: 403 });
+            }
+            const redirectUri = process.env.GITHUB_REDIRECT_URI?.trim() || \`\${appUrl()}/auth/github/callback\`;
+            const profile = await new GitHubOAuthProvider({ clientId, clientSecret, redirectUri })
+              .exchangeCode(code)
+              .catch(() => null);
+            if (!profile) {
+              return jsonResponse({ error: "Invalid GitHub OAuth response." }, { status: 400 });
+            }
+            return completeBrowserSsoLogin(dependencies, profile, "GitHub");
           })),
         },`
     : "";
@@ -596,7 +655,7 @@ function sessionUser(user: { id: number; name?: string | null; email?: string | 
     jsonApi || cookie
       ? `
     routes({ kernel, dependencies }) {
-      return {${csrfRoute}${samlRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}
+      return {${csrfRoute}${samlRoutes}${githubRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}
       };
     },`
       : "";

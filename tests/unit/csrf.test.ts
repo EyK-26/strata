@@ -195,6 +195,15 @@ describe("createCsrfMiddleware", () => {
     expect(response.status).toBe(200);
   });
 
+  test("skips CSRF on inbound Stripe billing webhook paths", async () => {
+    const middleware = createCsrfMiddleware();
+    const response = await middleware(
+      new Request("http://example.test/billing/webhooks/stripe", { method: "POST" }),
+      async () => new Response("ok"),
+    );
+    expect(response.status).toBe(200);
+  });
+
   test("skips CSRF on SCIM mutating paths that use their own bearer", async () => {
     const middleware = createCsrfMiddleware();
     const response = await middleware(

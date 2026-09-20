@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- `signWebhookBody(secret, body)` and `signedWebhookHeaders()` on `@getstrata/core/security/webhookSignature` sign outbound JSON using `webhookSignatureHeader()`.
+- CSRF skips `POST /billing/webhooks/*` by path (Stripe-style inbound webhooks), same as SAML ACS and `/scim/`.
+
 ## 1.1.4
 
 - Publish http/uploads, validateUploadFile, migration-adoption docs

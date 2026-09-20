@@ -64,7 +64,10 @@ Options:
   --email-verification / --no-email-verification
   --scim / --no-scim
   --metrics / --no-metrics
-  --extras            Interactive extras list (MFA, email verification, SCIM, metrics)
+  --oauth-github / --no-oauth-github
+  --billing / --no-billing
+  --webhooks / --no-webhooks
+  --extras            Interactive extras list (MFA, email verification, SCIM, metrics, GitHub OAuth, billing, webhooks)
   --docker            Write Docker Compose for every selected tool that needs a service
   --no-docker         Skip docker-compose.yml; use installs already on this machine
   --docker-services   Subset: postgres, mysql, redis, mailpit, adminer (comma-separated)
@@ -183,6 +186,12 @@ function parseCreateStrataArgs(argv: string[]): ParsedFlags {
       ["--no-scim", "scim", false],
       ["--metrics", "metrics", true],
       ["--no-metrics", "metrics", false],
+      ["--oauth-github", "oauthGithub", true],
+      ["--no-oauth-github", "oauthGithub", false],
+      ["--billing", "billing", true],
+      ["--no-billing", "billing", false],
+      ["--webhooks", "webhooks", true],
+      ["--no-webhooks", "webhooks", false],
     ];
     const boolMatch = boolFlags.find(([name]) => name === arg);
     if (boolMatch) {
@@ -319,7 +328,13 @@ function applyDockerFlags(layers: StarterLayers, flags: ParsedFlags): StarterLay
  * that has no MFA code.
  */
 function extraFlagName(extra: keyof StarterLayers["extras"]): string {
-  return extra === "emailVerification" ? "email-verification" : extra;
+  if (extra === "emailVerification") {
+    return "email-verification";
+  }
+  if (extra === "oauthGithub") {
+    return "oauth-github";
+  }
+  return extra;
 }
 
 function dropInapplicableExtras(layers: StarterLayers, flags: ParsedFlags): void {

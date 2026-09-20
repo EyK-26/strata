@@ -15,7 +15,7 @@ bun run dev
 
 `strata` installs into the app rather than globally, so use the `bun run` scripts above, or `bunx strata <command>` from inside the app directory.
 
-The CLI is interactive in a terminal. Move with ↑/↓ and Enter, or type a number. Toggle extras that apply to your stack (MFA, email verification, SCIM, metrics) with Space. Header auth does not offer MFA or SCIM. `--no-metrics` skips the metrics extra and does not write `GET /metrics`. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`. `--docker` with Postgres or MySQL also writes Adminer at http://localhost:8080.
+The CLI is interactive in a terminal. Move with ↑/↓ and Enter, or type a number. Toggle extras that apply to your stack (MFA, email verification, SCIM, metrics, GitHub OAuth, billing, webhooks) with Space. Header auth does not offer MFA, SCIM, or GitHub login. `--no-metrics` skips the metrics extra and does not write `GET /metrics`. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`. `--docker` with Postgres or MySQL also writes Adminer at http://localhost:8080.
 
 Layer flags: [STARTER.md](./STARTER.md). The three in-repo apps are generated from that script (`bun run generate:example-apps`). Do not treat HiroApp as the source of the wizard. Only `apps/hiroapp` is CI dogfood.
 
@@ -130,7 +130,7 @@ To add more commands, extend that file (`commands` or `registerCommands()`). Sca
 
 ## Optional feature flags
 
-The starter wizard covers MFA, email verification, SCIM, and metrics. Other integrations (OAuth/SAML, billing, SIEM export, webhooks, hybrid SPA, and similar) are env-driven — see [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md).
+The starter wizard covers MFA, email verification, SCIM, metrics, plus optional `--oauth-github`, `--billing`, and `--webhooks` (all off by default). Other integrations (OIDC cookie login, SIEM export, hybrid SPA) stay env-driven or deferred. See [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md). Outbound webhooks use `discoverJobs()`, not a `registerWebhookJobs()` helper (that symbol was never exported).
 
 ## Views and errors
 

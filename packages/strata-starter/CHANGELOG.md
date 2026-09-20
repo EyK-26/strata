@@ -1,5 +1,12 @@
 # create-strata changelog
 
+## Unreleased
+
+- `.env.example` documents commented OAuth, billing, SIEM, and outbound webhook placeholders. Optional `--oauth-github`, `--billing`, and `--webhooks` emit GitHub cookie login, a Stripe webhook stub, or `webhook.dispatch` plus a `notes.created` listener. Off by default.
+- Generated apps always write `src/models/register.ts` (side-effect model imports) so `with(["relation"])` aliases have a home.
+- Generated README covers integrations, OpenAPI generate/check, and points at framework INTEGRATIONS.md.
+- Cookie HTML `--oauth-github` adds `GET /auth/github` and `/auth/github/callback` (not OIDC cookie login).
+
 ## 1.1.4
 
 - Publish http/uploads, validateUploadFile, migration-adoption docs

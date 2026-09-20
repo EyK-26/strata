@@ -10,6 +10,9 @@ const noneExtras: CorporateExtras = {
   emailVerification: false,
   scim: false,
   metrics: false,
+  oauthGithub: false,
+  billing: false,
+  webhooks: false,
 };
 
 const enterpriseExtras: CorporateExtras = {
@@ -17,6 +20,9 @@ const enterpriseExtras: CorporateExtras = {
   emailVerification: true,
   scim: true,
   metrics: true,
+  oauthGithub: false,
+  billing: false,
+  webhooks: false,
 };
 
 function withDocker(

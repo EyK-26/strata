@@ -48,7 +48,7 @@ HTML apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstra
 
 ## Queue
 
-`registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. Apps that dispatch model webhooks call `registerWebhookJobs()` themselves.
+`registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. Outbound model webhooks are not a core job. Put a class with `static jobName` in `src/jobs/` (generated `--webhooks` uses `webhook.dispatch`) and call `discoverJobs()` on boot. `queue:work` already does that. There is no `registerWebhookJobs()` export.
 
 ## Not a starter API
 

@@ -45,6 +45,9 @@ const EXTRA_CHOICES = [
   { value: "emailVerification", label: "email-verification: signed links + /email/verify" },
   { value: "scim", label: "scim: /Users adapter" },
   { value: "metrics", label: "metrics: Prometheus token" },
+  { value: "oauthGithub", label: "oauth-github: GitHub cookie login at /auth/github" },
+  { value: "billing", label: "billing: Stripe webhook stub + GET /api/v1/billing/subscription" },
+  { value: "webhooks", label: "webhooks: outbound notes.created job (webhook.dispatch)" },
 ] as const;
 
 type ExtraKey = (typeof EXTRA_CHOICES)[number]["value"];
