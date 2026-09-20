@@ -71,7 +71,7 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 
 ## Migrations
 
-Generated apps ship **file-based** migrations under `src/db/migrations/`, loaded by `@getstrata/core/database/migrations/runner` from `src/db/migrate.ts` (seeds stay in that file). The first file is `0001_starter_schema` and uses `CREATE TABLE IF NOT EXISTS` so existing databases can adopt the runner. `strata make:migration` writes the next file into that directory. Postgres still migrates through the admin connection and grants the app role.
+Generated apps ship **file-based** migrations under `src/db/migrations/`, loaded by `@getstrata/core/database/migrations` from `src/db/migrate.ts` (seeds stay in that file). The first file is `0001_starter_schema` and uses `CREATE TABLE IF NOT EXISTS` so existing databases can adopt the runner. `strata make:migration` writes the next file into that directory. Postgres still migrates through the admin connection and grants the app role.
 
 The monorepo fixture keeps its own file-based history under the framework repo's `src/db/migrations/`. Do not mix two migration runners for the same schema without a plan.
 

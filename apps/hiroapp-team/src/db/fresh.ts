@@ -1,4 +1,4 @@
-import { freshDatabase } from "@getstrata/core/database/migrations/runner";
+import { freshDatabase } from "@getstrata/core/database/migrations";
 import { closeDatabase } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { seed } from "./migrate.ts";

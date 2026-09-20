@@ -1,4 +1,4 @@
-import { migrateDatabase } from "@getstrata/core/database/migrations/runner";
+import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { closeDatabase } from "../bootstrap/database.ts";
 import { Note } from "../models/Note.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";

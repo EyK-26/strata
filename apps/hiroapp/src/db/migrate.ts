@@ -1,5 +1,5 @@
 import { hashPassword } from "@getstrata/core/auth/password";
-import { migrateDatabase } from "@getstrata/core/database/migrations/runner";
+import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { closeDatabase, getSql } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";

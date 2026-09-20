@@ -1,4 +1,4 @@
-import { getMigrationStatus } from "@getstrata/core/database/migrations/runner";
+import { getMigrationStatus } from "@getstrata/core/database/migrations";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 

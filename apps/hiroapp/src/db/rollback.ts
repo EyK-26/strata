@@ -1,4 +1,4 @@
-import { rollbackDatabase } from "@getstrata/core/database/migrations/runner";
+import { rollbackDatabase } from "@getstrata/core/database/migrations";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 

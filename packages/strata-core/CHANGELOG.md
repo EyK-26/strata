@@ -3,7 +3,7 @@
 ## Unreleased
 
 - `Job` tracks `static jobName` on construct so `queue.dispatch(new FooJob(), payload)` resolves a registry name.
-- The core migration runner is dialect-aware (placeholders, upsert, returning, timestamp column) so sqlite and mysql product apps can use `framework_migrations`.
+- The core migration runner is dialect-aware (placeholders, upsert, returning, timestamp column) so sqlite and mysql product apps can use `framework_migrations`. Import it from `@getstrata/core/database/migrations`.
 
 ## 1.1.1
 

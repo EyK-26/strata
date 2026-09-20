@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations/runner";
+import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import { getSql } from "../bootstrap/database.ts";
 

@@ -300,6 +300,8 @@ describe("create-strata generate", () => {
     expect(migrate).not.toContain("INSERT INTO notes");
     expect(migrate).toContain("migrateDatabase");
     expect(migrate).toContain("loadStarterMigrations");
+    expect(migrate).toContain('from "@getstrata/core/database/migrations"');
+    expect(migrate).not.toContain("@getstrata/core/database/migrations/runner");
     const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS notes");
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS failed_job");
@@ -597,6 +599,8 @@ describe("create-strata generate", () => {
     const fresh = await readFile(join(app, "src/db/fresh.ts"), "utf8");
     expect(fresh).toContain("freshDatabase");
     expect(fresh).toContain("withMigrationDatabase");
+    expect(fresh).toContain('from "@getstrata/core/database/migrations"');
+    expect(fresh).not.toContain("@getstrata/core/database/migrations/runner");
     expect(fresh).not.toContain("getSql()");
     const rollback = await readFile(join(app, "src/db/rollback.ts"), "utf8");
     expect(rollback).toContain("rollbackDatabase");

@@ -382,7 +382,7 @@ export default migration;
 function renderMigrationRuntimeTs(layers: StarterLayers): string {
   if (layers.database === "postgres") {
     return `import { join } from "node:path";
-import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations/runner";
+import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import {
   grantPostgresAppRolePrivileges,
@@ -418,7 +418,7 @@ export async function withMigrationDatabase<T>(
   }
 
   return `import { join } from "node:path";
-import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations/runner";
+import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import { getSql } from "../bootstrap/database.ts";
 
@@ -504,7 +504,7 @@ function renderMigrateTs(layers: StarterLayers): string {
     ? `import { closeDatabase, getSql } from "../bootstrap/database.ts";\n`
     : `import { closeDatabase } from "../bootstrap/database.ts";\n`;
 
-  return `${hashImport}${rlsBypassImport}${ensureImport(layers)}${databaseImport}import { migrateDatabase } from "@getstrata/core/database/migrations/runner";
+  return `${hashImport}${rlsBypassImport}${ensureImport(layers)}${databaseImport}import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { Note } from "../models/Note.ts";
 ${userImport}import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
@@ -763,7 +763,7 @@ function dropTables(layers: StarterLayers): string[] {
 }
 
 function renderFreshTs(layers: StarterLayers): string {
-  return `${ensureImport(layers)}import { freshDatabase } from "@getstrata/core/database/migrations/runner";
+  return `${ensureImport(layers)}import { freshDatabase } from "@getstrata/core/database/migrations";
 import { closeDatabase } from "../bootstrap/database.ts";
 import { seed } from "./migrate.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
@@ -803,7 +803,7 @@ if (import.meta.main) {
 }
 
 function renderStatusTs(layers: StarterLayers): string {
-  return `${ensureImport(layers)}import { getMigrationStatus } from "@getstrata/core/database/migrations/runner";
+  return `${ensureImport(layers)}import { getMigrationStatus } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function status() {
@@ -825,7 +825,7 @@ if (import.meta.main) {
 }
 
 function renderRollbackTs(layers: StarterLayers): string {
-  return `${ensureImport(layers)}import { rollbackDatabase } from "@getstrata/core/database/migrations/runner";
+  return `${ensureImport(layers)}import { rollbackDatabase } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function rollback() {
