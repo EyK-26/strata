@@ -1,6 +1,7 @@
 import { createFailedJobService } from "@getstrata/core/queue/createAppQueue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { runQueueJob } from "@getstrata/core/queue/jobRunner";
+import type { StrataCommand } from "./types.ts";
 
 type QueueFailedBoot = () => void | Promise<void>;
 
@@ -52,7 +53,11 @@ async function queueFlushFailedCommand(boot?: QueueFailedBoot): Promise<void> {
   console.log(`Removed ${deleted} failed job(s).`);
 }
 
-function createQueueFailedCommands(boot?: QueueFailedBoot) {
+function createQueueFailedCommands(boot?: QueueFailedBoot): {
+  queueFailedCommand: StrataCommand;
+  queueRetryCommand: StrataCommand;
+  queueFlushFailedCommand: StrataCommand;
+} {
   return {
     queueFailedCommand: async () => queueFailedCommand(boot),
     queueRetryCommand: async (id?: string) => queueRetryCommand(id, boot),
