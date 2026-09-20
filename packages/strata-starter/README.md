@@ -34,7 +34,7 @@ Pick one database engine. Docker Compose is optional (`--docker`, `--no-docker`,
 
 A Bun and TypeScript app on `@getstrata/core` and `@getstrata/bootstrap` that boots, migrates, and passes `bun run check`. Cookie apps include a restyleable welcome page, `/login`, `/register`, and password reset. Token apps include `POST /api/v1/auth/login` plus register and reset. Tenancy is `none`, `column` (any engine), or `rls` (Postgres only; other engines fall back to `column`). Choices are recorded in `strata.layers.json`.
 
-The `strata` binary installs into the app rather than globally, so use the generated `bun run` scripts. Generated apps ship `src/cli/register.ts` with `queue:work` (`bun run queue:work`, requires `REDIS_URL`), which boots that app rather than the framework-repo worker.
+The `strata` binary installs into the app rather than globally, so use the generated `bun run` scripts. Generated apps ship `src/cli/register.ts` with `queue:work` (`bun run queue:work`, requires `REDIS_URL`), `make:*`, `openapi:*`, and `schedule:run`. `queue:work` boots that app rather than the framework-repo worker.
 
 ## Docs
 

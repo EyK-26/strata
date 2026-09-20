@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
 import {
   ensureMigrationsTable,
   freshDatabase,
@@ -32,6 +33,13 @@ function createMemoryDb() {
         }
         applied.push({ name, batch: Number(params[1]) });
         return [{ name }] as unknown as T[];
+      }
+
+      if (query.includes("SELECT batch FROM framework_migrations WHERE name")) {
+        const name = String(params[0]);
+        return applied
+          .filter((row) => row.name === name)
+          .map(({ batch }) => ({ batch })) as unknown as T[];
       }
 
       if (query.startsWith("DELETE FROM framework_migrations WHERE name")) {
@@ -181,5 +189,26 @@ describe("migration runner", () => {
     );
     expect(loaded.length).toBeGreaterThan(20);
     expect(loaded[0]?.name).toMatch(/^0001_/);
+  });
+
+  test("records migrations with mysql placeholders", async () => {
+    useSqlDialect("mysql");
+    try {
+      const { db, applied } = createMemoryDb();
+      const queries: string[] = [];
+      const originalUnsafe = db.unsafe.bind(db);
+      db.unsafe = async <T = unknown>(query: string, params: readonly unknown[] = []) => {
+        queries.push(query);
+        return originalUnsafe<T>(query, params);
+      };
+
+      expect(await migrateDatabase(db, migrations.slice(0, 1))).toBe(1);
+      expect(applied).toHaveLength(1);
+      expect(queries.some((query) => query.includes("VARCHAR(255) PRIMARY KEY"))).toBe(true);
+      expect(queries.some((query) => query.includes("DATETIME"))).toBe(true);
+      expect(queries.some((query) => query.includes("VALUES (?, ?)"))).toBe(true);
+    } finally {
+      resetSqlDialect();
+    }
   });
 });

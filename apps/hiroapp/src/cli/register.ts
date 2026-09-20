@@ -1,40 +1,21 @@
 import type { StrataCommandMap } from "@getstrata/cli";
 
-async function queueWorkCommand(): Promise<void> {
-  const redisUrl = process.env.REDIS_URL;
-
-  if (!redisUrl) {
-    throw new Error("queue:work requires REDIS_URL to be set.");
-  }
-
-  const { bootstrapApp } = await import("../bootstrap/createApp.ts");
-  const { closeDatabase } = await import("../bootstrap/database.ts");
-  const { installGracefulShutdownSignals, registerShutdownHandler } = await import(
-    "@getstrata/core/lifecycle/gracefulShutdown"
-  );
-  const { createFailedJobService, createQueueWorker } = await import(
-    "@getstrata/core/queue/createAppQueue"
-  );
-
-  await bootstrapApp({ migrate: false });
-
-  console.log("[queue:work] Listening for jobs on Redis...");
-  const worker = createQueueWorker(redisUrl, createFailedJobService());
-
-  registerShutdownHandler("queue-worker", async () => {
-    worker.requestStop();
-  });
-  registerShutdownHandler("database", async () => {
-    await closeDatabase();
-  });
-  installGracefulShutdownSignals();
-
-  await worker.run();
-  console.log("[queue:work] Worker stopped.");
-}
-
 const commands: StrataCommandMap = {
-  "queue:work": async () => queueWorkCommand,
+  "make:module": async () => (await import("@getstrata/cli/scaffold")).makeModuleCommand,
+  "make:policy": async () => (await import("@getstrata/cli/scaffold")).makePolicyCommand,
+  "make:job": async () => (await import("@getstrata/cli/scaffold")).makeJobCommand,
+  "make:listener": async () => (await import("@getstrata/cli/scaffold")).makeListenerCommand,
+  "make:request": async () => (await import("@getstrata/cli/scaffold")).makeRequestCommand,
+  "make:factory": async () => (await import("@getstrata/cli/scaffold")).makeFactoryCommand,
+  "make:migration": async () => (await import("@getstrata/cli/scaffold")).makeMigrationCommand,
+  "queue:work": async () => (await import("./queueWork.ts")).queueWorkCommand,
+  "queue:failed": async () => (await import("./queueFailed.ts")).queueFailedCommand,
+  "queue:retry": async () => (await import("./queueFailed.ts")).queueRetryCommand,
+  "queue:flush-failed": async () => (await import("./queueFailed.ts")).queueFlushFailedCommand,
+  "openapi:generate": async () => (await import("./openapi.ts")).openapiGenerateCommand,
+  "openapi:validate": async () => (await import("./openapi.ts")).openapiValidateCommand,
+  "openapi:check": async () => (await import("./openapi.ts")).openapiCheckCommand,
+  "schedule:run": async () => (await import("./scheduleRun.ts")).scheduleRunCommand,
 };
 
-export { commands, queueWorkCommand };
+export { commands };

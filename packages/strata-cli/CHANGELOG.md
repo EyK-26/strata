@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Generated apps ship `src/cli/register.ts` with `queue:work`. The published binary still does not embed monorepo codegen.
+- Export `queueWorker`, `queueFailed`, `scaffold`, `openapi`, and `schedule` subpaths. Generated apps register `queue:work` through `runQueueWorkerCommand({ boot, close })` (no secrets guard in the helper), plus failed-job commands, `make:*`, `openapi:*`, and `schedule:run`.
+- `make:job` emits `static jobName`. `make:request` imports `@getstrata/core/http`. `make:module --with-web` writes `views/` when that directory exists.
+- Peer dependencies on `@getstrata/core` and `@getstrata/bootstrap`.
 
 ## 1.1.1
 

@@ -12,6 +12,7 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/createWebRoutes.ts",
   "src/bootstrap/dependencies.ts",
   "src/bootstrap/discoverListeners.ts",
+  "src/bootstrap/discoverJobs.ts",
   "src/bootstrap/discoverModules.ts",
   "src/bootstrap/dogfoodApp.ts",
   "src/bootstrap/env.ts",

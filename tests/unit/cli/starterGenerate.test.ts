@@ -251,6 +251,7 @@ describe("create-strata generate", () => {
 
     const queueProvider = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
     expect(queueProvider).toContain("registerDefaultJobs");
+    expect(queueProvider).toContain("discoverJobs");
 
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
@@ -297,6 +298,11 @@ describe("create-strata generate", () => {
     expect(migrate).toContain('Note.query().value("id")');
     expect(migrate).toContain('Note.create({ body: "Welcome to Strata!" })');
     expect(migrate).not.toContain("INSERT INTO notes");
+    expect(migrate).toContain("migrateDatabase");
+    expect(migrate).toContain("loadStarterMigrations");
+    const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
+    expect(schema).toContain("CREATE TABLE IF NOT EXISTS notes");
+    expect(schema).toContain("CREATE TABLE IF NOT EXISTS failed_job");
 
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
     expect(site).toContain("Note.query().limit(1).get()");
@@ -518,9 +524,9 @@ describe("create-strata generate", () => {
       "--tenancy=column",
       "--yes",
     ]);
-    const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
-    expect(migrate).toContain("CREATE TABLE IF NOT EXISTS tenant");
-    expect(migrate).toContain("tenant_id");
+    const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
+    expect(schema).toContain("CREATE TABLE IF NOT EXISTS tenant");
+    expect(schema).toContain("tenant_id");
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("TENANCY_DRIVER=column");
   });
@@ -535,16 +541,17 @@ describe("create-strata generate", () => {
       "--tenancy=rls",
       "--yes",
     ]);
+    const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
+    expect(schema).toContain("CREATE TABLE IF NOT EXISTS tenant");
+    expect(schema).toContain("ALTER TABLE notes FORCE ROW LEVEL SECURITY");
+    expect(schema).toContain("ALTER TABLE users FORCE ROW LEVEL SECURITY");
+    expect(schema).toContain("ALTER TABLE sessions FORCE ROW LEVEL SECURITY");
+    expect(schema).toContain("ALTER TABLE api_tokens FORCE ROW LEVEL SECURITY");
+    expect(schema).toContain("ALTER TABLE auth_one_time_tokens FORCE ROW LEVEL SECURITY");
+    expect(schema).toContain("u.id = sessions.user_id");
+    expect(schema).toContain("u.id = auth_one_time_tokens.user_id");
+    expect(schema).toContain("auth_saml_assertions");
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
-    expect(migrate).toContain("CREATE TABLE IF NOT EXISTS tenant");
-    expect(migrate).toContain("ALTER TABLE notes FORCE ROW LEVEL SECURITY");
-    expect(migrate).toContain("ALTER TABLE users FORCE ROW LEVEL SECURITY");
-    expect(migrate).toContain("ALTER TABLE sessions FORCE ROW LEVEL SECURITY");
-    expect(migrate).toContain("ALTER TABLE api_tokens FORCE ROW LEVEL SECURITY");
-    expect(migrate).toContain("ALTER TABLE auth_one_time_tokens FORCE ROW LEVEL SECURITY");
-    expect(migrate).toContain("u.id = sessions.user_id");
-    expect(migrate).toContain("u.id = auth_one_time_tokens.user_id");
-    expect(migrate).toContain("auth_saml_assertions");
     const seedFn = migrate.slice(migrate.indexOf("export async function seed"));
     expect(seedFn.indexOf("getSql()")).toBeGreaterThan(-1);
     expect(seedFn.indexOf("getSql()")).toBeLessThan(seedFn.indexOf("runWithMigrationBypass(async"));
@@ -588,11 +595,12 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "db/ensure-postgres-app-role.sql"))).toBe(true);
     expect(existsSync(join(app, "docker/postgres-init/01-strata-app-role.sql"))).toBe(false);
     const fresh = await readFile(join(app, "src/db/fresh.ts"), "utf8");
-    expect(fresh).toContain("dropPostgresTablesAsAdmin");
+    expect(fresh).toContain("freshDatabase");
+    expect(fresh).toContain("withMigrationDatabase");
     expect(fresh).not.toContain("getSql()");
-    expect(fresh).toContain("auth_saml_assertions");
     const rollback = await readFile(join(app, "src/db/rollback.ts"), "utf8");
-    expect(rollback).toContain("dropPostgresTablesAsAdmin");
+    expect(rollback).toContain("rollbackDatabase");
+    expect(rollback).toContain("withMigrationDatabase");
   });
 
   test("postgres rls with docker still ships repeatable SQL and a NOBYPASSRLS URL", async () => {
@@ -633,9 +641,9 @@ describe("create-strata generate", () => {
       "--scim",
       "--yes",
     ]);
-    const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
-    expect(migrate).toContain("mfa_secret");
-    expect(migrate).toContain("mfa_enabled");
+    const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
+    expect(schema).toContain("mfa_secret");
+    expect(schema).toContain("mfa_enabled");
     expect(existsSync(join(app, "views/auth/mfa-challenge.eta"))).toBe(true);
     expect(existsSync(join(app, "views/auth/verify-email.eta"))).toBe(true);
     expect(existsSync(join(app, "src/bootstrap/pendingMfa.ts"))).toBe(true);

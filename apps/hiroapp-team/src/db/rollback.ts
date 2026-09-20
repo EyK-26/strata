@@ -1,21 +1,23 @@
-import { dropPostgresTablesAsAdmin } from "@getstrata/core/tenant/enableTenantRls";
+import { rollbackDatabase } from "@getstrata/core/database/migrations/runner";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
-
-const tables = ["sessions", "auth_saml_assertions", "auth_one_time_tokens", "users", "notes"];
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function rollback() {
   await ensureAppDatabase();
-  await dropPostgresTablesAsAdmin(tables, {
-    runtimeUrl: process.env.DATABASE_URL ?? "",
-    migrationUrl: process.env.MIGRATION_DATABASE_URL,
+  const rolledBack = await withMigrationDatabase(async (db) => {
+    return rollbackDatabase(db, await loadStarterMigrations(), {
+      onMigration: (name) => {
+        console.log(`rolled back ${name}`);
+      },
+    });
   });
-  for (const table of tables) {
-    console.log(`dropped ${table}`);
+  if (rolledBack === 0) {
+    console.log("Nothing to roll back.");
   }
 }
 
 if (import.meta.main) {
   await rollback();
-  console.log("Rolled back starter tables.");
+  console.log("Rolled back last migration batch.");
   process.exit(0);
 }

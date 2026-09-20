@@ -38,7 +38,11 @@ import {
 import {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
+  renderCliOpenApiTs,
+  renderCliQueueFailedTs,
+  renderCliQueueWorkTs,
   renderCliRegisterTs,
+  renderCliScheduleRunTs,
   renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,
@@ -46,6 +50,7 @@ import {
   renderEnsureDatabaseTs,
   renderFreshTs,
   renderMigrateTs,
+  renderMigrationRuntimeTs,
   renderNoteModel,
   renderPolicyProvider,
   renderPreloadTs,
@@ -53,8 +58,10 @@ import {
   renderQueueProvider,
   renderRollbackTs,
   renderRoutesTs,
+  renderScheduleTs,
   renderSeedTs,
   renderSidecarsTs,
+  renderStarterSchemaMigration,
   renderStatusTs,
   renderUserModel,
   renderViewTs,
@@ -194,7 +201,12 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     removeIfExists(join(src, "bootstrap/ensureDatabase.ts"));
   }
   writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(layers));
+  writeText(join(src, "bootstrap/schedule.ts"), renderScheduleTs());
   writeText(join(src, "cli/register.ts"), renderCliRegisterTs());
+  writeText(join(src, "cli/queueWork.ts"), renderCliQueueWorkTs());
+  writeText(join(src, "cli/queueFailed.ts"), renderCliQueueFailedTs());
+  writeText(join(src, "cli/openapi.ts"), renderCliOpenApiTs());
+  writeText(join(src, "cli/scheduleRun.ts"), renderCliScheduleRunTs());
   writeText(join(src, "bootstrap/providers/config.ts"), renderConfigProvider(layers));
   writeText(join(src, "bootstrap/providers/queue.ts"), renderQueueProvider());
   writeText(join(src, "bootstrap/providers/policy.ts"), renderPolicyProvider());
@@ -214,6 +226,11 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     removeIfExists(join(src, "models/ApiToken.ts"));
   }
   writeText(join(src, "db/migrate.ts"), renderMigrateTs(layers));
+  writeText(join(src, "db/migrationRuntime.ts"), renderMigrationRuntimeTs(layers));
+  writeText(
+    join(src, "db/migrations/0001_starter_schema.ts"),
+    renderStarterSchemaMigration(layers),
+  );
   writeText(join(src, "db/fresh.ts"), renderFreshTs(layers));
   writeText(join(src, "db/seed.ts"), renderSeedTs());
   writeText(join(src, "db/status.ts"), renderStatusTs(layers));

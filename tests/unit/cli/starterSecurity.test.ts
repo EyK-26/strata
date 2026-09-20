@@ -149,10 +149,12 @@ describe("starter security flows", () => {
     expect(await readFile(join(app, "src/modules/auth/index.ts"), "utf8")).toContain(
       "FEATURE_REGISTRATION",
     );
-    expect(await readFile(join(app, "src/db/migrate.ts"), "utf8")).toContain(
+    expect(await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8")).toContain(
       "auth_one_time_tokens",
     );
-    expect(await readFile(join(app, "src/db/migrate.ts"), "utf8")).toContain("session_valid_after");
+    expect(await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8")).toContain(
+      "session_valid_after",
+    );
     expect(await readFile(join(app, "src/models/Note.ts"), "utf8")).toContain("tenant_id");
   });
 

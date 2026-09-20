@@ -24,7 +24,12 @@
       "@getstrata/core/*": ["./src/core/*"],
       "@getstrata/bootstrap": ["./packages/strata-bootstrap/index.ts"],
       "@getstrata/bootstrap/*": ["./src/bootstrap/*"],
-      "@getstrata/cli": ["./packages/strata-cli/src/index.ts"]
+      "@getstrata/cli": ["./packages/strata-cli/src/index.ts"],
+      "@getstrata/cli/queueWorker": ["./packages/strata-cli/src/queueWorker.ts"],
+      "@getstrata/cli/queueFailed": ["./packages/strata-cli/src/queueFailed.ts"],
+      "@getstrata/cli/scaffold": ["./packages/strata-cli/src/scaffold/index.ts"],
+      "@getstrata/cli/openapi": ["./packages/strata-cli/src/openapi.ts"],
+      "@getstrata/cli/schedule": ["./packages/strata-cli/src/schedule.ts"]
     }
   },
   "include": ["src", "tests", "scripts"],

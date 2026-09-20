@@ -1,21 +1,16 @@
-import { getSql } from "../bootstrap/database.ts";
+import { getMigrationStatus } from "@getstrata/core/database/migrations/runner";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
-
-const tables = ["sessions", "auth_saml_assertions", "auth_one_time_tokens", "users", "notes"];
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function status() {
   await ensureAppDatabase();
-  const sql = getSql();
-  console.log("Starter schema (inline SQL, not a migration runner):");
-  for (const table of tables) {
-    try {
-      const rows = await sql.unsafe<{ count: string | number }>(
-        `SELECT COUNT(*) AS count FROM ${table}`,
-      );
-      console.log(`- [present] ${table} (rows: ${rows[0]?.count ?? 0})`);
-    } catch {
-      console.log(`- [missing] ${table}`);
-    }
+  const rows = await withMigrationDatabase(async (db) => {
+    return getMigrationStatus(db, await loadStarterMigrations());
+  });
+  console.log("Migrations:");
+  for (const row of rows) {
+    const batch = row.batch == null ? "" : ` (batch ${row.batch})`;
+    console.log(`- [${row.status}] ${row.name}${batch}`);
   }
 }
 

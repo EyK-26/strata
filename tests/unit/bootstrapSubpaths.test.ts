@@ -67,6 +67,12 @@ describe("@getstrata/bootstrap published subpaths", () => {
     expect(typeof listeners.discoverListeners).toBe("function");
   });
 
+  test("discoverJobs exports job discovery", async () => {
+    const jobs = await import(join(BOOTSTRAP_DIST, "entries/discoverJobs.js"));
+
+    expect(typeof jobs.discoverJobs).toBe("function");
+  });
+
   test("buildModuleRoutes exports module route builder", async () => {
     const routes = await import(join(BOOTSTRAP_DIST, "entries/buildModuleRoutes.js"));
 

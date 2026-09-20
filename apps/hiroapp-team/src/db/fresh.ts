@@ -1,17 +1,15 @@
-import { dropPostgresTablesAsAdmin } from "@getstrata/core/tenant/enableTenantRls";
+import { freshDatabase } from "@getstrata/core/database/migrations/runner";
 import { closeDatabase } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
-import { migrate } from "./migrate.ts";
-
-const tables = ["sessions", "auth_saml_assertions", "auth_one_time_tokens", "users", "notes"];
+import { seed } from "./migrate.ts";
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function fresh() {
   await ensureAppDatabase();
-  await dropPostgresTablesAsAdmin(tables, {
-    runtimeUrl: process.env.DATABASE_URL ?? "",
-    migrationUrl: process.env.MIGRATION_DATABASE_URL,
+  await withMigrationDatabase(async (db) => {
+    await freshDatabase(db, await loadStarterMigrations());
   });
-  await migrate();
+  await seed();
 }
 
 /** The CLI calls this after fresh() so pooled drivers do not hold the process open. */

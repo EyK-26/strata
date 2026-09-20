@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { currentSqlDialect } from "../dialect.ts";
 import { withMigrationLock } from "./advisoryLock.ts";
 import type { Migration, MigrationDatabase, MigrationStatus } from "./types.ts";
 
@@ -11,14 +12,52 @@ type AppliedMigrationRow = {
 
 const MIGRATIONS_TABLE = "framework_migrations";
 
+function migrationsNameColumn(): string {
+  return currentSqlDialect().driver === "mysql" ? "VARCHAR(255) PRIMARY KEY" : "TEXT PRIMARY KEY";
+}
+
+function migrationsRunOnColumn(): string {
+  const dialect = currentSqlDialect();
+  if (dialect.driver === "pgsql") {
+    return `TIMESTAMPTZ NOT NULL DEFAULT ${dialect.nowExpression()}`;
+  }
+  if (dialect.driver === "mysql") {
+    return `DATETIME NOT NULL DEFAULT ${dialect.nowExpression()}`;
+  }
+  return "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP";
+}
+
 async function ensureMigrationsTable(db: MigrationDatabase): Promise<void> {
   await db.unsafe(`
     CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
-      name TEXT PRIMARY KEY,
+      name ${migrationsNameColumn()},
       batch INTEGER NOT NULL,
-      run_on TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      run_on ${migrationsRunOnColumn()}
     )
   `);
+}
+
+async function recordAppliedMigration(
+  db: MigrationDatabase,
+  name: string,
+  batch: number,
+): Promise<boolean> {
+  const dialect = currentSqlDialect();
+  const inserted = (await db.unsafe(
+    `INSERT INTO ${MIGRATIONS_TABLE} (name, batch) VALUES (${dialect.placeholder(1)}, ${dialect.placeholder(2)})${dialect.upsertSuffix(["name"], [])}${dialect.returningClause("name")}`,
+    [name, batch],
+  )) as { name: string }[];
+
+  if (dialect.returningClause("name")) {
+    return inserted.length > 0;
+  }
+
+  const rows = (await db.unsafe(
+    `SELECT batch FROM ${MIGRATIONS_TABLE} WHERE name = ${dialect.placeholder(1)}`,
+    [name],
+  )) as { batch: number | string }[];
+
+  return rows.some((row) => Number(row.batch) === batch);
 }
 
 async function getAppliedMigrations(db: MigrationDatabase): Promise<AppliedMigrationRow[]> {
@@ -84,12 +123,9 @@ async function runPendingMigrations(
   for (const migration of pendingMigrations) {
     options.onMigration?.(migration.name);
     await migration.up(db);
-    const inserted = (await db.unsafe(
-      `INSERT INTO ${MIGRATIONS_TABLE} (name, batch) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING RETURNING name`,
-      [migration.name, nextBatch],
-    )) as { name: string }[];
+    const recorded = await recordAppliedMigration(db, migration.name, nextBatch);
 
-    if (inserted.length === 0) {
+    if (!recorded) {
       throw new Error(`Migration ${migration.name} was applied but not recorded.`);
     }
   }
@@ -139,7 +175,10 @@ async function rollbackDatabase(
 
     options.onMigration?.(migration.name);
     await migration.down(db);
-    await db.unsafe(`DELETE FROM ${MIGRATIONS_TABLE} WHERE name = $1`, [migration.name]);
+    await db.unsafe(
+      `DELETE FROM ${MIGRATIONS_TABLE} WHERE name = ${currentSqlDialect().placeholder(1)}`,
+      [migration.name],
+    );
     rolledBack += 1;
   }
 
