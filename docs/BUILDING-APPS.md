@@ -81,7 +81,46 @@ Generated apps use **two provider waves**: starter `register`/`boot`, then modul
 
 ## Database migrations
 
-Product apps from `create-strata` use file-based migrations in `src/db/migrations/` plus the core runner from `src/db/migrate.ts`. Seed stays in `migrate.ts`. See [STARTER.md](./STARTER.md#migrations).
+Greenfield apps from `create-strata` use **file-based** migrations in `src/db/migrations/` plus `@getstrata/core/database/migrations` (`migrateDatabase`) from `src/db/migrate.ts`. Seed stays in `migrate.ts`. The runner records applied files in **`framework_migrations`**. See [STARTER.md](./STARTER.md#migrations).
+
+`0001_starter_schema` uses `CREATE TABLE IF NOT EXISTS`. Redis/queue apps include **`failed_job`** there (`queue:failed` / `queue:retry` persist into that table). An inline-SQL app that never created `failed_job` will break those commands even if the rest of the schema looks fine.
+
+### Adopting file migrations from a legacy inline migrate.ts
+
+Apps scaffolded before file migrations often loop `db.unsafe(...)` in one file and have **no** `framework_migrations` table.
+
+1. Copy the generated shape: `src/db/migrationRuntime.ts` (`loadMigrationsFromDirectory` + `withMigrationDatabase`) and `src/db/migrations/*.ts` (start with `0001_starter_schema` plus your extra tables).
+2. Replace the inline SQL loop with `await migrateDatabase(db, await loadStarterMigrations())`. Keep seed in `migrate.ts`.
+3. First `bun run db:migrate` creates `framework_migrations` and applies every file not already recorded. Keep `CREATE TABLE IF NOT EXISTS` (and additive `ALTER`s) so a database that already has the tables does not fail on duplicate DDL.
+4. If Redis queue is on, add `failed_job` in that first file if the live schema does not have it.
+
+When history is untrustworthy:
+
+- **Local / empty data:** `strata migrate:fresh` (generated `src/db/fresh.ts` → `freshDatabase`) runs `down` for recorded files, clears `framework_migrations`, then applies all files. It is destructive. Do not use it on production data.
+- **Production / keep rows:** keep `IF NOT EXISTS`, run `migrate` once so the runner records the files, then add later changes as **new** numbered files. Do not hand-insert `framework_migrations` rows unless a file must never run (document why). `migrate:status` shows pending vs `up`.
+
+Do not mix the monorepo fixture runner with a product app’s `src/db/migrations/` on the same database.
+
+## File uploads
+
+`parseMultipartUpload` (JSON / single-file API) already enforces `MAX_UPLOAD_BYTES` / `MAX_REQUEST_BODY_BYTES` and `ALLOWED_UPLOAD_MIME_TYPES` via `@getstrata/core/http/uploads`.
+
+`@getstrata/bootstrap/web/forms` `parseFormBody` is for mixed HTMX forms (fields + `File`). It returns **raw** `files[name]: File` and does **not** apply those guards.
+
+```typescript
+import { parseFormBody } from "@getstrata/bootstrap/web/forms";
+import { validateUploadFile } from "@getstrata/core/http/parseMultipartUpload";
+import { isAllowedMimeType } from "@getstrata/core/http/uploads";
+
+const { fields, files } = await parseFormBody(request);
+const image = files.image;
+if (image) {
+  const upload = await validateUploadFile(image, "image");
+  // upload.fileName, mimeType, size, contents
+}
+```
+
+Use `parseMultipartUpload(request, "file")` when the request is only that one file field. Do not reimplement the MIME list; import `isAllowedMimeType` / `resolveMaxUploadBytes` from `@getstrata/core/http/uploads`. `UPLOAD_ALLOW_UNKNOWN_MIME=true` is required before `application/octet-stream` is accepted.
 
 ## Extending the CLI
 

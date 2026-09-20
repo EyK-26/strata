@@ -390,6 +390,7 @@ export {
   type ParsedUpload,
   parseMultipartUpload,
   sanitizeUploadFileName,
+  validateUploadFile,
 } from "../core/http/parseMultipartUpload.ts";
 export type { RequestMeta } from "../core/http/requestMetaContext.ts";
 export {

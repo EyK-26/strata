@@ -136,6 +136,7 @@ const CORE_SUBPATHS = [
   "http/webErrorResponse",
   "http/webFormRequest",
   "http/throttleMiddleware",
+  "http/uploads",
   "http/validation",
   "jobs/exportAuditLogsJob",
   "jobs/invalidateCacheTagsJob",
