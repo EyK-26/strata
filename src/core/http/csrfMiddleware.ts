@@ -20,7 +20,11 @@ function samlAcsPathname(): string {
 }
 
 function skipsCsrfPath(pathname: string): boolean {
-  return pathname === samlAcsPathname() || pathname.startsWith("/scim/");
+  return (
+    pathname === samlAcsPathname() ||
+    pathname.startsWith("/scim/") ||
+    pathname.startsWith("/billing/webhooks/")
+  );
 }
 
 function appendSetCookie(response: Response, cookie: string): Response {

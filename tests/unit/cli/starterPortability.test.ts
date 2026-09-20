@@ -264,6 +264,9 @@ describe("extras flags match the wizard", () => {
     expect(layers.extras.emailVerification).toBe(false);
     // metrics applies to every auth stack.
     expect(layers.extras.metrics).toBe(true);
+    expect(layers.extras.oauthGithub).toBe(false);
+    expect(layers.extras.billing).toBe(false);
+    expect(layers.extras.webhooks).toBe(false);
   });
 
   test("header auth env does not advertise features it has no code for", async () => {
@@ -428,6 +431,11 @@ describe("production defaults", () => {
 
     expect(env).toContain("FEATURE_PUBLIC_READS=false");
     expect(env).toContain("FEATURE_SAML=false");
+    expect(env).toContain("FEATURE_OAUTH=false");
+    expect(env).toContain("FEATURE_BILLING=false");
+    expect(env).toContain("# GITHUB_CLIENT_ID=");
+    expect(env).toContain("# STRIPE_WEBHOOK_SECRET=");
+    expect(env).toContain("# WEBHOOK_ALLOW_PRIVATE=true");
     expect(env).toContain("wrapWebPublicRead");
     expect(readme).toContain("FEATURE_PUBLIC_READS=false");
     expect(readme).toContain("wrapWebPublicRead");

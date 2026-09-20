@@ -587,6 +587,23 @@ export { create${moduleName}WebRoutes };
   }
   console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
   console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
+
+  const registerPath = join(process.cwd(), "src", "models", "register.ts");
+  try {
+    await access(registerPath);
+    const existing = await Bun.file(registerPath).text();
+    if (!existing.includes(`registerModelClass("${moduleName}"`)) {
+      const snippet = `
+// ${moduleName}: after you add a Model class, register string aliases here:
+// import { ${moduleName} } from "../modules/${moduleSlug}/model.ts";
+// registerModelClass("${moduleName}", ${moduleName});
+`;
+      await Bun.write(registerPath, `${existing.trimEnd()}\n${snippet}`);
+      console.log(`Appended a registerModelClass hint to src/models/register.ts`);
+    }
+  } catch {
+    // Generated apps ship register.ts. Older apps can add it from DATABASE.md.
+  }
 }
 
 export { makeModuleCommand };

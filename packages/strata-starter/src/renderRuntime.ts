@@ -742,6 +742,28 @@ export { AuthOneTimeToken };
 `;
 }
 
+function renderModelsRegister(layers: StarterLayers): string {
+  const lines = [
+    "// Side-effect imports run registerModelRepository() in each model file.",
+    "// registerModelClass() is only for a string alias that is neither constructor.name nor $morphClass.",
+    'import { registerModelClass } from "@getstrata/core/database/model";',
+    'import "./Note.ts";',
+  ];
+  if (authNeedsUsers(layers.auth)) {
+    lines.push('import "./User.ts";');
+    lines.push('import "./AuthOneTimeToken.ts";');
+  }
+  if (authUsesToken(layers.auth)) {
+    lines.push('import "./ApiToken.ts";');
+  }
+  lines.push("");
+  lines.push("// Example after you add a Product model with belongsTo('Category'):");
+  lines.push('// registerModelClass("Category", Category);');
+  lines.push("void registerModelClass;");
+  lines.push("");
+  return `${lines.join("\n")}\n`;
+}
+
 function dropTables(layers: StarterLayers): string[] {
   const ordered: string[] = ["failed_job"];
   if (authUsesToken(layers.auth)) {
@@ -858,6 +880,7 @@ function renderPreloadTs(layers: StarterLayers, projectName: string): string {
 
   return `import { join } from "node:path";
 import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
+import "../models/register.ts";
 
 process.env.DATABASE_URL ??= ${JSON.stringify(fallback)};
 ${migrationLine}process.env.FRONTEND_MODE ??= ${JSON.stringify(layers.frontend)};
@@ -1467,6 +1490,7 @@ export {
   renderFreshTs,
   renderMigrateTs,
   renderMigrationRuntimeTs,
+  renderModelsRegister,
   renderNoteModel,
   renderPolicyProvider,
   renderPreloadTs,

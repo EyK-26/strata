@@ -180,6 +180,7 @@ const CORE_SUBPATHS = [
   "security/scimTenantTokens",
   "security/securityEvents",
   "security/stripeWebhook",
+  "security/webhookSignature",
   "security/timingSafeCompare",
   "security/tokenExpiry",
   "security/totp",

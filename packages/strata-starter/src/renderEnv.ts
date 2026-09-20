@@ -133,6 +133,8 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     "# Local storefronts/catalogs may set true in .env. Production boot rejects FEATURE_PUBLIC_READS=true.",
   );
   lines.push("FEATURE_SIEM_EXPORT=false");
+  lines.push("# SIEM_EXPORT_URL=");
+  lines.push("# SIEM_EXPORT_TOKEN=");
   lines.push("FEATURE_REGISTRATION=true");
   lines.push("FEATURE_SAML=false");
   lines.push("# SAML_IDP_SSO_URL=");
@@ -142,6 +144,35 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   lines.push("# SAML_IDP_ISSUER=");
   lines.push("# SAML_WANT_RESPONSE_SIGNED=");
   lines.push("# SAML_DISABLE_REQUESTED_AUTHN_CONTEXT=");
+
+  const oauthOn = Boolean(layers.extras.oauthGithub);
+  lines.push(`FEATURE_OAUTH=${envFlag(oauthOn)}`);
+  if (oauthOn) {
+    lines.push("GITHUB_CLIENT_ID=");
+    lines.push("GITHUB_CLIENT_SECRET=");
+    lines.push("GITHUB_REDIRECT_URI=http://localhost:3000/auth/github/callback");
+    lines.push("OAUTH_STATE_SECRET=dev-oauth-state-secret-change-me-please-32");
+  } else {
+    lines.push("# GITHUB_CLIENT_ID=");
+    lines.push("# GITHUB_CLIENT_SECRET=");
+    lines.push("# GITHUB_REDIRECT_URI=http://localhost:3000/auth/github/callback");
+    lines.push("# OAUTH_STATE_SECRET=");
+  }
+  lines.push(
+    "# OIDC cookie login is not generated. Use GitHub cookie routes (--oauth-github) or app-owned PKCE.",
+  );
+
+  const billingOn = Boolean(layers.extras.billing);
+  lines.push(`FEATURE_BILLING=${envFlag(billingOn)}`);
+  if (billingOn) {
+    lines.push("STRIPE_WEBHOOK_SECRET=whsec_change-me");
+  } else {
+    lines.push("# STRIPE_WEBHOOK_SECRET=");
+  }
+
+  lines.push("# Outbound webhook deliveries (create-strata --webhooks). Local receivers:");
+  lines.push("# WEBHOOK_ALLOW_PRIVATE=true");
+  lines.push("# WEBHOOK_SIGNATURE_HEADER=");
 
   if (needsRedis(layers)) {
     lines.push("REDIS_PASSWORD=dev-redis-change-me");
@@ -568,6 +599,23 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
       "| `GET` | `/metrics` | Prometheus text. Production requires `Authorization: Bearer <METRICS_TOKEN>`. |",
     );
   }
+  if (layers.extras.billing) {
+    rows.push(
+      "| `POST` | `/billing/webhooks/stripe` | Stripe signature verification. CSRF skipped by path. Plan sync is yours. |",
+      "| `GET` | `/api/v1/billing/subscription` | Current tenant (or first) subscription row. |",
+    );
+  }
+  if (layers.extras.webhooks) {
+    rows.push(
+      "| (job) | `webhook.dispatch` | Discovered from `src/jobs/dispatchOutboundWebhookJob.ts`. No HTTP route. |",
+    );
+  }
+  if (layers.extras.oauthGithub && authUsesCookie(layers.auth)) {
+    rows.push(
+      "| `GET` | `/auth/github` | Redirects to GitHub. 404 unless `FEATURE_OAUTH=true`. |",
+      "| `GET` | `/auth/github/callback` | Exchanges the code, JIT user, MFA gate, cookie session. |",
+    );
+  }
 
   const authNote =
     layers.auth === "headers"
@@ -627,6 +675,50 @@ Import from \`@getstrata/core/...\` subpaths rather than the package root, so si
 - [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md)
 - [Auth choices](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md)
 - [Databases](https://github.com/EyK-26/strata/blob/main/docs/DATABASE.md)
+`;
+}
+
+function renderIntegrationsReadme(layers: StarterLayers): string {
+  const enabled = [
+    layers.extras.oauthGithub ? "GitHub OAuth cookie login (`/auth/github`)" : null,
+    layers.extras.billing
+      ? "Stripe billing stub (`POST /billing/webhooks/stripe`, `GET /api/v1/billing/subscription`)"
+      : null,
+    layers.extras.webhooks
+      ? "Outbound webhooks (`notes.created` listener + `webhook.dispatch` job)"
+      : null,
+  ].filter((row): row is string => row !== null);
+
+  const lines = [
+    "## Integrations",
+    "",
+    "OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).",
+    "",
+    "Wizard flags (any stack unless noted): `--oauth-github` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `discoverListeners()` and `discoverJobs()`.",
+    "",
+  ];
+  if (enabled.length > 0) {
+    lines.push("Enabled in this app:", "", ...enabled.map((row) => `- ${row}`), "");
+  } else {
+    lines.push(
+      "This app did not pass those flags. Turn a flag on and re-run `create-strata`, or copy the commented env block and add a module yourself.",
+      "",
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function renderOpenApiReadme(): string {
+  return `## OpenAPI
+
+After you add routes, regenerate and commit the spec so CI can catch drift:
+
+\`\`\`bash
+bunx strata openapi:generate
+bunx strata openapi:check
+\`\`\`
+
+Put \`openapi:check\` in CI. A failure means \`docs/openapi.json\` does not match the live route map (billing, auth, webhooks, and anything else you added).
 `;
 }
 
@@ -695,8 +787,9 @@ function renderReadme(
 | SPA prefix | \`${layers.spaPrefix}\` |
 | Docker Compose | ${dockerLabel} |
 ${extras.length > 0 ? `| Extras | ${extras.join(", ")} |\n` : ""}
-This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md).
+This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [Integrations](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).
 
+${renderIntegrationsReadme(layers)}
 ## Run it
 
 \`\`\`bash
@@ -726,7 +819,7 @@ HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
 - Register: \`/register\`
 - Forgot password: \`/forgot-password\`
 - Reset password: signed \`/reset-password\` (mail log when \`MAIL_DRIVER=log\`)
-${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}
+${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}${layers.extras.oauthGithub ? "- GitHub: `/auth/github` (needs `FEATURE_OAUTH=true`)\n" : ""}
 Cookie name is \`strata_session\`. Forms send CSRF as \`_token\`.
 `
     : ""
@@ -780,6 +873,7 @@ The app uses the database named in \`DATABASE_URL\` and creates it on first migr
       }
 `
 }
+${renderOpenApiReadme()}
 ## Deploy
 
 \`Dockerfile\` builds a production image from the committed \`bun.lock\` (run \`bun install\` once and commit the lockfile).${
@@ -808,7 +902,7 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
 - Set \`FEATURE_PUBLIC_READS=false\`. Generated \`.env.example\` already ships \`false\` so \`wrapWebPublicRead\` requires a login. Local storefronts may set \`true\` in \`.env\` for an anonymous catalog; \`assertProductionSecrets()\` rejects \`true\` in production. Do not ship a public-reads production boot.
 - Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
-${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${
+${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${layers.extras.oauthGithub ? "- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n" : ""}${layers.extras.billing ? "- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n" : ""}${
   layers.tenancy === "rls"
     ? `- \`DATABASE_URL\` must be a \`NOBYPASSRLS\` role, not the \`postgres\` superuser. Generated apps create \`${GENERATED_POSTGRES_APP_ROLE}\` via \`db/ensure-postgres-app-role.sql\` (and Compose init on first empty volume). \`MIGRATION_DATABASE_URL\` may stay the superuser for CREATE ROLE / GRANT / migrate. Production boot rejects username \`postgres\` or \`root\`, then inspects \`pg_roles\` for \`rolsuper\` / \`rolbypassrls\`.
 `

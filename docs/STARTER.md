@@ -2,7 +2,7 @@
 
 `bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space. If you see `Choose [1]:` instead, bunx did not get raw keyboard mode. Retry in a real terminal, or pass `--yes` with layer flags.
 
-HiroApp in this repo (`apps/hiroapp`: Postgres + HTMX) is dogfood for internal end-to-end testing. It is not a product and it is not the source of the wizard. Sibling apps `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis) are generated layer maps and are not CI dogfood. Regenerate them with `bun run generate:example-apps`.
+HiroApp in this repo (`apps/hiroapp`: Postgres + HTMX) is dogfood for internal end-to-end testing (migrate, seed, boot, OpenAPI, cookie/token/JWT, MFA/SCIM). It is not a product and it is not the source of the wizard. It does **not** cover outbound webhooks, Stripe billing sync, or GitHub OAuth cookie login. Product dogfood for those paths is an external app (`strata-shop`). Sibling apps `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis) are generated layer maps and are not CI dogfood. Regenerate them with `bun run generate:example-apps`.
 
 ## Quick start
 
@@ -37,7 +37,7 @@ bunx create-strata html --frontend server-htmx --database postgres --auth cookie
 | `--mail` | `log`, `smtp` |
 | `--spa-prefix` | default `/app` |
 
-Extras that apply to the stack (off until you toggle them, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`. Header auth only offers metrics. MFA needs cookie HTML. SCIM and email verification need a users table. `--no-metrics` skips the metrics extra and does not write `GET /metrics`.
+Extras that apply to the stack (off until you toggle them, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`, `--billing`, `--webhooks`. Header auth only offers metrics, billing, and webhooks. MFA and GitHub cookie login need cookie HTML. SCIM and email verification need a users table. `--no-metrics` skips the metrics extra and does not write `GET /metrics`.
 
 You can add cache, SMTP, Redis, or another auth mode later by changing env and the matching bootstrap files. The generator only installs what you asked for. Generated apps always depend on `eta` (welcome HTML). `mysql2` is added only for `--database mysql`.
 
@@ -64,7 +64,8 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 - JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
 - Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
 - `--tenancy=column`: `tenant` table + `users.tenant_id` on any engine. `--tenancy=rls`: Postgres only (`SET LOCAL`). sqlite/mysql `rls` becomes `column`
-- Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa` enroll POST uses `wrapWebPasswordConfirm`), email verification (`/email/verify`), SCIM `/scim/v2/Users` (the User model query still filters `tenant_id` on every lookup; unfiltered lists use `count` plus `offset`/`limit`; `:id` uses `parsePositiveIntParam`), metrics `GET /metrics` (only when that extra is on)
+- Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa` enroll POST uses `wrapWebPasswordConfirm`), email verification (`/email/verify`), SCIM `/scim/v2/Users` (the User model query still filters `tenant_id` on every lookup; unfiltered lists use `count` plus `offset`/`limit`; `:id` uses `parsePositiveIntParam`), metrics `GET /metrics` (only when that extra is on), optional `--oauth-github` (`GET /auth/github`), `--billing` (`POST /billing/webhooks/stripe`), `--webhooks` (`webhook.dispatch` + `notes.created` listener)
+- Generated apps always write `src/models/register.ts` (imported from `preload.ts`) so `registerModelClass` aliases for `with(["relation"])` have a file to live in. `registerModelRepository` already names the class.
 - Generated apps register an empty `PolicyGate`, boot **module** `providers` from discovered modules (after `ensureModulesLoaded`), register default queue jobs, discover `src/jobs/*.ts` via `discoverJobs()`, wire cache-invalidation listeners on model writes (idempotent groups), and run `src/listeners/*.ts` default exports via `discoverListeners()`.
 - `src/cli/register.ts` adds product commands to the published `strata` binary: `queue:work` / `queue:failed` / `queue:retry` / `queue:flush-failed`, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` calls this app's `bootstrapApp({ migrate: false })` / `createApp()` through `@getstrata/cli/queueWorker`. It requires `REDIS_URL`. It is not the monorepo `queue:work` command (that boots `coreProviders`).
 - `strata.layers.json` records the choices
@@ -79,7 +80,9 @@ The monorepo fixture keeps its own file-based history under the framework repo's
 
 `bunx strata` in a generated app ships lifecycle commands plus the generated `src/cli/register.ts` map: `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` boots **this app** (`bootstrapApp({ migrate: false })` / `createApp()`). Do not copy the monorepo `src/cli/register.ts` or `queue:work` into a product app; that worker calls `createAppContext()` from `@getstrata/bootstrap/context` (`coreProviders`).
 
-`make:*` resolves paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`, `src/listeners`). `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `discoverJobs()` on boot. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
+`make:*` resolves paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`, `src/listeners`). `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `discoverJobs()` on boot. `make:module` appends a `registerModelClass` hint to `src/models/register.ts` when that file exists. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
+
+Apps scaffolded with `create-strata@1.1.0` should merge current `src/bootstrap/providers/index.ts` and `createApp.ts` from a 1.1.x starter (module `providers` boot + `discoverListeners()` / `discoverJobs()`). See the package changelog rather than re-running the wizard over a filled app.
 
 `APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot. Generated `.env.example` sets `FEATURE_PUBLIC_READS=false`. `wrapWebPublicRead` then requires a login. Local storefronts may set `true` in `.env`; production boot rejects `true`. See [BUILDING-APPS.md](./BUILDING-APPS.md).
 

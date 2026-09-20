@@ -36,6 +36,15 @@ import {
   usesComposePostgres,
 } from "./renderEnv.ts";
 import {
+  billingMigrationName,
+  renderBillingMigration,
+  renderBillingModule,
+  renderDispatchOutboundWebhookJob,
+  renderNoteCreatedWebhookListener,
+  renderWebhooksMigration,
+  webhookMigrationName,
+} from "./renderIntegrations.ts";
+import {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
   renderCliOpenApiTs,
@@ -51,6 +60,7 @@ import {
   renderFreshTs,
   renderMigrateTs,
   renderMigrationRuntimeTs,
+  renderModelsRegister,
   renderNoteModel,
   renderPolicyProvider,
   renderPreloadTs,
@@ -225,12 +235,26 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   } else {
     removeIfExists(join(src, "models/ApiToken.ts"));
   }
+  writeText(join(src, "models/register.ts"), renderModelsRegister(layers));
   writeText(join(src, "db/migrate.ts"), renderMigrateTs(layers));
   writeText(join(src, "db/migrationRuntime.ts"), renderMigrationRuntimeTs(layers));
   writeText(
     join(src, "db/migrations/0001_starter_schema.ts"),
     renderStarterSchemaMigration(layers),
   );
+  removeIfExists(join(src, "db/migrations/0002_webhooks_schema.ts"));
+  removeIfExists(join(src, "db/migrations/0002_billing_schema.ts"));
+  removeIfExists(join(src, "db/migrations/0003_billing_schema.ts"));
+  const webhooksMigration = renderWebhooksMigration(layers);
+  const webhooksName = webhookMigrationName(layers);
+  if (webhooksMigration && webhooksName) {
+    writeText(join(src, `db/migrations/${webhooksName}.ts`), webhooksMigration);
+  }
+  const billingMigration = renderBillingMigration(layers);
+  const billingName = billingMigrationName(layers);
+  if (billingMigration && billingName) {
+    writeText(join(src, `db/migrations/${billingName}.ts`), billingMigration);
+  }
   writeText(join(src, "db/fresh.ts"), renderFreshTs(layers));
   writeText(join(src, "db/seed.ts"), renderSeedTs());
   writeText(join(src, "db/status.ts"), renderStatusTs(layers));
@@ -259,6 +283,23 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     removeIfExists(join(src, "modules/scim/index.ts"));
   }
 
+  if (layers.extras.billing) {
+    writeText(join(src, "modules/billing/index.ts"), renderBillingModule(layers));
+  } else {
+    removeIfExists(join(src, "modules/billing/index.ts"));
+  }
+
+  if (layers.extras.webhooks) {
+    writeText(join(src, "jobs/dispatchOutboundWebhookJob.ts"), renderDispatchOutboundWebhookJob());
+    writeText(
+      join(src, "listeners/noteCreatedWebhookListener.ts"),
+      renderNoteCreatedWebhookListener(),
+    );
+  } else {
+    removeIfExists(join(src, "jobs/dispatchOutboundWebhookJob.ts"));
+    removeIfExists(join(src, "listeners/noteCreatedWebhookListener.ts"));
+  }
+
   if (layers.extras.mfa && htmlAuthKit(layers.auth)) {
     writeText(join(src, "bootstrap/pendingMfa.ts"), renderPendingMfaTs());
   } else {
@@ -284,7 +325,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, layers));
   writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(layers, projectName));
   if (htmlAuthKit(layers.auth)) {
-    writeText(join(targetDir, "views/auth/login.eta"), renderLoginView());
+    writeText(join(targetDir, "views/auth/login.eta"), renderLoginView(layers));
     writeText(join(targetDir, "views/auth/register.eta"), renderRegisterView());
     writeText(join(targetDir, "views/auth/forgot-password.eta"), renderForgotPasswordView());
     writeText(join(targetDir, "views/auth/reset-password.eta"), renderResetPasswordView());

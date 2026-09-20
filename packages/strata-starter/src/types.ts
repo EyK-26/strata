@@ -38,6 +38,9 @@ interface CorporateExtras {
   emailVerification: boolean;
   scim: boolean;
   metrics: boolean;
+  oauthGithub: boolean;
+  billing: boolean;
+  webhooks: boolean;
 }
 
 interface DockerLayer {
@@ -119,10 +122,10 @@ function nowTimestampLiteral(database: DatabaseLayer): string {
 }
 
 function extraApplies(extra: keyof CorporateExtras, auth: AuthStack): boolean {
-  if (extra === "metrics") {
+  if (extra === "metrics" || extra === "billing" || extra === "webhooks") {
     return true;
   }
-  if (extra === "mfa") {
+  if (extra === "mfa" || extra === "oauthGithub") {
     return htmlAuthKit(auth);
   }
   return authNeedsUsers(auth);

@@ -1,5 +1,10 @@
 # @getstrata/cli changelog
 
+## Unreleased
+
+- `make:module` appends a `registerModelClass` hint to `src/models/register.ts` when that file exists.
+- `openapi:check` drift output reminds you to run `openapi:generate` in CI.
+
 ## 1.1.4
 
 - Publish http/uploads, validateUploadFile, migration-adoption docs

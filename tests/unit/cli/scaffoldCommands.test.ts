@@ -88,6 +88,32 @@ describe("makeModuleCommand", () => {
     });
   });
 
+  test("appends a registerModelClass hint when src/models/register.ts exists", async () => {
+    await withTempWorkspace(async (workspace) => {
+      const registerPath = join(workspace, "src", "models", "register.ts");
+      await ensureDirectory(join(workspace, "src", "models"));
+      await writeFile(
+        registerPath,
+        `import { registerModelClass } from "@getstrata/core/database/model";
+import "./Note.ts";
+void registerModelClass;
+`,
+      );
+      const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
+      const output = captureConsole();
+
+      try {
+        await makeModuleCommand("invoice");
+      } finally {
+        output.restore();
+      }
+
+      const register = await Bun.file(registerPath).text();
+      expect(register).toContain('registerModelClass("Invoice"');
+      expect(output.logs.some((line) => line.includes("src/models/register.ts"))).toBe(true);
+    });
+  });
+
   test("requires a module name", async () => {
     const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
 

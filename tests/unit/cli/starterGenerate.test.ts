@@ -238,6 +238,17 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("Laravel");
     expect(readme).not.toContain("WorkHub");
     expect(readme).not.toContain("—");
+    expect(readme).toContain("docs/INTEGRATIONS.md");
+    expect(readme).toContain("openapi:generate");
+    expect(readme).toContain("openapi:check");
+
+    const modelsRegister = await readFile(join(app, "src/models/register.ts"), "utf8");
+    expect(modelsRegister).toContain('import "./Note.ts"');
+    expect(modelsRegister).toContain("registerModelClass");
+    const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
+    expect(preload).toContain("../models/register.ts");
+    expect(existsSync(join(app, "src/modules/billing/index.ts"))).toBe(false);
+    expect(existsSync(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"))).toBe(false);
 
     const authProvider = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
     expect(authProvider).toContain("envFlagEnabled(process.env.AUTH_DEV_HEADERS)");
@@ -296,6 +307,7 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("apps/hiroapp");
 
     expect(existsSync(join(app, "src/models/Note.ts"))).toBe(true);
+    expect(existsSync(join(app, "src/models/register.ts"))).toBe(true);
     expect(existsSync(join(app, "src/models/User.ts"))).toBe(false);
     expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(false);
     const note = await readFile(join(app, "src/models/Note.ts"), "utf8");
@@ -881,6 +893,9 @@ describe("create-strata CLI", () => {
       emailVerification: false,
       scim: false,
       metrics: false,
+      oauthGithub: false,
+      billing: false,
+      webhooks: false,
     });
   });
 
@@ -945,7 +960,7 @@ describe("create-strata CLI", () => {
         },
       }),
     );
-    expect(extraValues).toEqual(["metrics"]);
+    expect(extraValues).toEqual(["metrics", "billing", "webhooks"]);
     expect(layers.extras.mfa).toBe(false);
     expect(layers.extras.scim).toBe(false);
     expect(layers.extras.emailVerification).toBe(false);
@@ -958,13 +973,16 @@ describe("create-strata CLI", () => {
       parseCreateStrataArgs(["demo", "--no-metrics"]),
       scriptedPrompter({
         select: ["api", "sqlite", "headers", "none", "array", "sync", "log"],
+        multiSelect: [[]],
         onMultiSelect: (_message, values) => {
           extraValues = values;
         },
       }),
     );
-    expect(extraValues).toEqual([]);
+    expect(extraValues).toEqual(["billing", "webhooks"]);
     expect(layers.extras.metrics).toBe(false);
+    expect(layers.extras.billing).toBe(false);
+    expect(layers.extras.webhooks).toBe(false);
 
     extraValues = [];
     const cookie = await promptLayers(
@@ -977,13 +995,21 @@ describe("create-strata CLI", () => {
         },
       }),
     );
-    expect(extraValues).toEqual(["mfa", "emailVerification", "scim"]);
+    expect(extraValues).toEqual([
+      "mfa",
+      "emailVerification",
+      "scim",
+      "oauthGithub",
+      "billing",
+      "webhooks",
+    ]);
     expect(cookie.extras.metrics).toBe(false);
 
     const allFlagged = await promptLayers(
       parseCreateStrataArgs(["demo", "--mfa", "--email-verification", "--scim", "--metrics"]),
       scriptedPrompter({
         select: ["api", "sqlite", "cookie", "none", "array", "sync", "log"],
+        multiSelect: [[]],
       }),
     );
     expect(allFlagged.extras).toEqual({
@@ -991,6 +1017,9 @@ describe("create-strata CLI", () => {
       emailVerification: true,
       scim: true,
       metrics: true,
+      oauthGithub: false,
+      billing: false,
+      webhooks: false,
     });
   });
 
@@ -1006,7 +1035,7 @@ describe("create-strata CLI", () => {
         },
       }),
     );
-    expect(extraValues).toEqual(["emailVerification", "scim", "metrics"]);
+    expect(extraValues).toEqual(["emailVerification", "scim", "metrics", "billing", "webhooks"]);
   });
 
   test("module providers register during bootstrapApp", async () => {
@@ -1069,6 +1098,9 @@ export default probeModule;
     process.env.FRONTEND_MODE = "api";
     process.env.AUTH_DEV_HEADERS = "true";
     process.env.TENANCY_DRIVER = "none";
+    process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
     resetDiscoverModulesForTests();
 
     try {
@@ -1114,6 +1146,9 @@ export default probeModule;
     process.env.FRONTEND_MODE = "api";
     process.env.AUTH_DEV_HEADERS = "true";
     process.env.TENANCY_DRIVER = "none";
+    process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
 
     try {
       const { bootstrapApp, createAppServer } = await import(
@@ -1188,6 +1223,8 @@ export default probeModule;
     process.env.SESSION_SECRET = "dev-session-secret-change-me-please-32ch";
     process.env.AUTH_DEV_HEADERS = "false";
     process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
 
     function cookieHeader(response: Response, previous = ""): string {
       const jar = new Map<string, string>();
@@ -1304,6 +1341,9 @@ export default probeModule;
     process.env.FEATURE_API_TOKENS = "true";
     process.env.TOKEN_HASH_PEPPER = "dev-token-pepper-change-me";
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "30";
+    process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
 
     try {
       const { bootstrapApp, createAppServer } = await import(

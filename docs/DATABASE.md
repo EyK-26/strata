@@ -133,7 +133,7 @@ String related models (`belongsTo("Category")`, `hasMany("Product")`) resolve in
 1. `registerModelRepository(Category, …)` already names `constructor.name` and `$morphClass`.
 2. `registerModelClass("Category", CategoryModel)` only when the string is neither of those (ESM cycles, or a short alias).
 
-Register models in `src/models/register.ts` (import every model so those calls run) **before** the first query. A missing name throws `Model [Category] is not registered`.
+Register models in `src/models/register.ts` (import every model so those calls run) **before** the first query. Generated apps emit that file from `preload.ts`. A missing name throws `Model [Category] is not registered`. `make:module` appends a commented `registerModelClass` hint when the file exists.
 
 Eager belongsTo/hasMany queries reuse the parent repository connection (`withConnection`), so Postgres RLS `SET LOCAL app.tenant_id` on the request transaction also applies to related rows. Model `addGlobalScope` is applied on `Model.query()`, not on those related repository loads — filter `tenant_id` in your own `where` if you use column tenancy without RLS.
 
