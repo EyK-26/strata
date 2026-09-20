@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.1.5
+
+- Close dogfood gaps: webhook docs, starter extras, signing helper
+
 ## Unreleased
 
 - `signWebhookBody(secret, body)` and `signedWebhookHeaders()` on `@getstrata/core/security/webhookSignature` sign outbound JSON using `webhookSignatureHeader()`.

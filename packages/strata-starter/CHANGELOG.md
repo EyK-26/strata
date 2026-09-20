@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 1.1.5
+
+- Close dogfood gaps: webhook docs, starter extras, signing helper
+
 ## Unreleased
 
 - `.env.example` documents commented OAuth, billing, SIEM, and outbound webhook placeholders. Optional `--oauth-github`, `--billing`, and `--webhooks` emit GitHub cookie login, a Stripe webhook stub, or `webhook.dispatch` plus a `notes.created` listener. Off by default.

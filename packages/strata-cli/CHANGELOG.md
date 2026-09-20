@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 1.1.5
+
+- Close dogfood gaps: webhook docs, starter extras, signing helper
+
 ## Unreleased
 
 - `make:module` appends a `registerModelClass` hint to `src/models/register.ts` when that file exists.

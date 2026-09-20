@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 1.1.5
+
+- Close dogfood gaps: webhook docs, starter extras, signing helper
+
 ## Unreleased
 
 - Docs no longer mention `registerWebhookJobs()`. Default jobs stay `cache.invalidate-tags` and `audit.export`. Apps discover `src/jobs/*.ts` with `discoverJobs()` (generated `--webhooks` registers `webhook.dispatch`).
