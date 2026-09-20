@@ -261,9 +261,18 @@ describe("create-strata generate", () => {
     expect(createApp.indexOf("await ensureModulesLoaded()")).toBeLessThan(
       createApp.indexOf("const context = createAppContext();"),
     );
+    const starterRegisterIndex = createApp.indexOf('runProviderPhase(starterProviders, "register"');
     const starterBootIndex = createApp.indexOf('runProviderPhase(starterProviders, "boot"');
-    expect(starterBootIndex).toBeGreaterThan(-1);
-    expect(createApp.indexOf("moduleProviders")).toBeGreaterThan(starterBootIndex);
+    const moduleRegisterIndex = createApp.indexOf('runProviderPhase(moduleProviders, "register"');
+    const moduleBootIndex = createApp.indexOf('runProviderPhase(moduleProviders, "boot"');
+    expect(starterRegisterIndex).toBeGreaterThan(-1);
+    expect(starterBootIndex).toBeGreaterThan(starterRegisterIndex);
+    expect(moduleRegisterIndex).toBeGreaterThan(starterBootIndex);
+    expect(moduleBootIndex).toBeGreaterThan(moduleRegisterIndex);
+    expect(queueProvider).toContain("register({ container })");
+    expect(queueProvider.indexOf("discoverJobs()")).toBeGreaterThan(
+      queueProvider.indexOf("register({ container })"),
+    );
     expect(readme).not.toContain("GET /metrics");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");

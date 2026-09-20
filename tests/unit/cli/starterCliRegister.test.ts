@@ -88,6 +88,9 @@ describe("generated src/cli/register.ts", () => {
     expect(register).not.toContain("createAppContext");
     expect(queueWork).not.toContain("assertProductionSecrets");
     expect(queueWork).not.toContain("coreProviders");
+    expect(queueWork).not.toContain("collectProviders");
+    expect(queueWork).not.toContain("@getstrata/bootstrap/context");
+    expect(queueWork).not.toContain("createAppContext");
   });
 
   test("generate writes register.ts and strata.config points at it", async () => {
