@@ -42,7 +42,11 @@ export {
   parsePaginationQuery,
 } from "./pagination";
 export type { ParsedUpload } from "./parseMultipartUpload";
-export { parseMultipartUpload, sanitizeUploadFileName } from "./parseMultipartUpload";
+export {
+  parseMultipartUpload,
+  sanitizeUploadFileName,
+  validateUploadFile,
+} from "./parseMultipartUpload";
 export { createRequireAuthMiddleware } from "./requireAuthMiddleware";
 export { serializeDate, toPaginatedResourceCollection, toResourceCollection } from "./resources";
 export {

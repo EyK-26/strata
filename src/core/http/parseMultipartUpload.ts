@@ -19,6 +19,35 @@ function sanitizeUploadFileName(name: string): string {
   return sanitized.length > 0 ? sanitized : "upload";
 }
 
+async function validateUploadFile(file: File, fieldName = "file"): Promise<ParsedUpload> {
+  if (!(file instanceof File)) {
+    throw new BadRequestError(`Missing upload field "${fieldName}".`);
+  }
+
+  if (file.size <= 0) {
+    throw new BadRequestError("Uploaded file is empty.");
+  }
+
+  const maxBytes = resolveMaxUploadBytes();
+
+  if (file.size > maxBytes) {
+    throw new PayloadTooLargeError(`Upload exceeds the ${maxBytes} byte limit.`);
+  }
+
+  const mimeType = normalizeMimeType(file.type.trim() || "application/octet-stream");
+
+  if (!isAllowedMimeType(mimeType)) {
+    throw new BadRequestError(`File type "${mimeType}" is not allowed.`);
+  }
+
+  return {
+    fileName: sanitizeUploadFileName(file.name),
+    mimeType,
+    size: file.size,
+    contents: new Uint8Array(await file.arrayBuffer()),
+  };
+}
+
 async function parseMultipartUpload(request: Request, fieldName = "file"): Promise<ParsedUpload> {
   const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
 
@@ -33,29 +62,8 @@ async function parseMultipartUpload(request: Request, fieldName = "file"): Promi
     throw new BadRequestError(`Missing upload field "${fieldName}".`);
   }
 
-  if (value.size <= 0) {
-    throw new BadRequestError("Uploaded file is empty.");
-  }
-
-  const maxBytes = resolveMaxUploadBytes();
-
-  if (value.size > maxBytes) {
-    throw new PayloadTooLargeError(`Upload exceeds the ${maxBytes} byte limit.`);
-  }
-
-  const mimeType = normalizeMimeType(value.type.trim() || "application/octet-stream");
-
-  if (!isAllowedMimeType(mimeType)) {
-    throw new BadRequestError(`File type "${mimeType}" is not allowed.`);
-  }
-
-  return {
-    fileName: sanitizeUploadFileName(value.name),
-    mimeType,
-    size: value.size,
-    contents: new Uint8Array(await value.arrayBuffer()),
-  };
+  return validateUploadFile(value, fieldName);
 }
 
 export type { ParsedUpload };
-export { parseMultipartUpload, sanitizeUploadFileName };
+export { parseMultipartUpload, sanitizeUploadFileName, validateUploadFile };
