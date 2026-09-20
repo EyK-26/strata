@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { Model, registerModelClass, registerModelRepository } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface User {
@@ -652,5 +652,171 @@ describe("Eloquent-style model relations", () => {
     connection.queue([{ id: 7, name: "Ada" }]);
     await application.user().orderBy({ name: "DESC" }).get();
     expect(connection.calls[0]?.query.toLowerCase()).toContain("order");
+  });
+});
+
+describe("string-registered shop-shaped eager loads", () => {
+  interface ShopCategory {
+    id: number;
+    name: string;
+    tenant_id: number;
+  }
+
+  interface ShopProduct {
+    id: number;
+    name: string;
+    category_id: number;
+    tenant_id: number;
+  }
+
+  interface ShopCartItem {
+    id: number;
+    product_id: number;
+    tenant_id: number;
+  }
+
+  const categoryTable = defineTable<ShopCategory, "id">({
+    name: "categories",
+    primaryKey: "id",
+    columns: ["id", "name", "tenant_id"],
+  });
+
+  const productTable = defineTable<ShopProduct, "id">({
+    name: "products",
+    primaryKey: "id",
+    columns: ["id", "name", "category_id", "tenant_id"],
+  });
+
+  const cartItemTable = defineTable<ShopCartItem, "id">({
+    name: "cart_items",
+    primaryKey: "id",
+    columns: ["id", "product_id", "tenant_id"],
+  });
+
+  function createShopModels(
+    productConnection: FakeConnection,
+    categoryConnection = productConnection,
+  ) {
+    class ShopCategoryModel extends Model<ShopCategory, "id"> {
+      static override $fillable = ["name", "tenant_id"] as const;
+      static override $timestamps = false;
+
+      products() {
+        return this.hasMany("Product");
+      }
+    }
+
+    class ShopProductModel extends Model<ShopProduct, "id"> {
+      static override $fillable = ["name", "category_id", "tenant_id"] as const;
+      static override $timestamps = false;
+
+      category() {
+        return this.belongsTo("Category");
+      }
+    }
+
+    class ShopCartItemModel extends Model<ShopCartItem, "id"> {
+      static override $fillable = ["product_id", "tenant_id"] as const;
+      static override $timestamps = false;
+
+      product() {
+        return this.belongsTo("Product");
+      }
+    }
+
+    registerModelClass("Category", ShopCategoryModel);
+    registerModelClass("Product", ShopProductModel);
+    registerModelClass("CartItem", ShopCartItemModel);
+    registerModelRepository(
+      ShopCategoryModel,
+      new (class extends BaseRepository<ShopCategory, "id"> {
+        constructor() {
+          super(categoryTable, categoryConnection);
+        }
+      })(),
+    );
+    registerModelRepository(
+      ShopProductModel,
+      new (class extends BaseRepository<ShopProduct, "id"> {
+        constructor() {
+          super(productTable, productConnection);
+        }
+      })(),
+    );
+    registerModelRepository(
+      ShopCartItemModel,
+      new (class extends BaseRepository<ShopCartItem, "id"> {
+        constructor() {
+          super(cartItemTable, productConnection);
+        }
+      })(),
+    );
+
+    return { ShopCategoryModel, ShopProductModel, ShopCartItemModel };
+  }
+
+  test("with(category) and with(product) hydrate string-registered belongsTo/hasMany", async () => {
+    const connection = new FakeConnection();
+    const { ShopCategoryModel, ShopProductModel, ShopCartItemModel } = createShopModels(connection);
+
+    connection.queue([{ id: 2, name: "Mug", category_id: 9, tenant_id: 1 }]);
+    connection.queue([{ id: 9, name: "Drinkware", tenant_id: 1 }]);
+    const products = await ShopProductModel.with("category").get();
+    expect(products).toHaveLength(1);
+    expect(products[0]?.loaded<{ get: (key: string) => unknown }>("category")?.get("name")).toBe(
+      "Drinkware",
+    );
+
+    connection.queue([{ id: 4, product_id: 2, tenant_id: 1 }]);
+    connection.queue([{ id: 2, name: "Mug", category_id: 9, tenant_id: 1 }]);
+    const lines = await ShopCartItemModel.with("product").get();
+    expect(lines[0]?.loaded<{ get: (key: string) => unknown }>("product")?.get("name")).toBe("Mug");
+
+    connection.queue([{ id: 9, name: "Drinkware", tenant_id: 1 }]);
+    connection.queue([{ id: 2, name: "Mug", category_id: 9, tenant_id: 1 }]);
+    const categories = await ShopCategoryModel.with("products").get();
+    expect(categories[0]?.loaded<unknown[]>("products")).toHaveLength(1);
+  });
+
+  test("with() accepts Laravel-style relation name arrays", async () => {
+    const connection = new FakeConnection();
+    const { ShopProductModel, ShopCartItemModel } = createShopModels(connection);
+
+    connection.queue([{ id: 2, name: "Mug", category_id: 9, tenant_id: 1 }]);
+    connection.queue([{ id: 9, name: "Drinkware", tenant_id: 1 }]);
+    const products = await ShopProductModel.with(["category"]).get();
+    expect(products[0]?.loaded<{ get: (key: string) => unknown }>("category")?.get("name")).toBe(
+      "Drinkware",
+    );
+
+    const line = new ShopCartItemModel(
+      { id: 4, product_id: 2, tenant_id: 1 },
+      ShopCartItemModel.repository(),
+    );
+    connection.queue([{ id: 2, name: "Mug", category_id: 9, tenant_id: 1 }]);
+    await line.load(["product"]);
+    expect(line.loaded<{ get: (key: string) => unknown }>("product")?.get("name")).toBe("Mug");
+  });
+
+  test("belongsTo eager load reuses the parent connection for RLS SET LOCAL", async () => {
+    const parentConnection = new FakeConnection();
+    const relatedConnection = new FakeConnection();
+    const { ShopProductModel } = createShopModels(parentConnection, relatedConnection);
+
+    parentConnection.queue([{ id: 2, name: "Mug", category_id: 9, tenant_id: 1 }]);
+    parentConnection.queue([{ id: 9, name: "Drinkware", tenant_id: 1 }]);
+    const products = await ShopProductModel.with("category").get();
+
+    expect(products[0]?.loaded<{ get: (key: string) => unknown }>("category")?.get("name")).toBe(
+      "Drinkware",
+    );
+    expect(relatedConnection.calls).toHaveLength(0);
+    expect(parentConnection.calls.length).toBeGreaterThan(1);
+  });
+
+  test("with() looks up the relation method name, not the model class name", async () => {
+    const connection = new FakeConnection();
+    const { ShopProductModel } = createShopModels(connection);
+    expect(() => ShopProductModel.with("Category")).toThrow("has no relation method Category()");
   });
 });
