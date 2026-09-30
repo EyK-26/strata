@@ -116,6 +116,7 @@ describe("create-strata integration extras", () => {
     expect(login).toContain("it.oidcLogin");
     expect(login).toContain('href="/auth/oidc"');
     const view = await readFile(join(app, "src/lib/view.ts"), "utf8");
+    expect(view).toContain('FEATURE_OAUTH === "true"');
     expect(view).toContain("OIDC_CLIENT_ID");
     expect(auth).toContain("profile.email.trim().toLowerCase()");
   });

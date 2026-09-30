@@ -4,7 +4,7 @@
 
 - `--webhooks` inserts `webhook_deliveries` with the app dialect (`$1` on Postgres) and wraps that write in `runWithMigrationBypass()`. The job payload carries `event` instead of hardcoding `notes.created`.
 - `--billing` calls `src/billing/applyStripeWebhook.ts` after a valid Stripe signature. The generated function is a no-op.
-- Cookie SSO lowercases email. The OIDC login link stays hidden until client id and secret are set. Browser SSO failures stay JSON.
+- Cookie SSO lowercases email. The OIDC login link stays hidden unless `FEATURE_OAUTH=true` and the client id and secret are set. Browser SSO failures stay JSON.
 
 ## 1.1.6
 

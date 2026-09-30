@@ -1461,7 +1461,9 @@ export async function renderPage(
 ${userBlock}${
   layers.extras.oidc
     ? `
-  const oidcLogin = Boolean(process.env.OIDC_CLIENT_ID?.trim() && process.env.OIDC_CLIENT_SECRET?.trim());`
+  const oidcLogin =
+    process.env.FEATURE_OAUTH === "true" &&
+    Boolean(process.env.OIDC_CLIENT_ID?.trim() && process.env.OIDC_CLIENT_SECRET?.trim());`
     : ""
 }
   const html = await engine.render(
