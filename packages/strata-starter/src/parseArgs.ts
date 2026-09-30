@@ -65,9 +65,10 @@ Options:
   --scim / --no-scim
   --metrics / --no-metrics
   --oauth-github / --no-oauth-github
+  --oidc / --no-oidc
   --billing / --no-billing
   --webhooks / --no-webhooks
-  --extras            Interactive extras list (MFA, email verification, SCIM, metrics, GitHub OAuth, billing, webhooks)
+  --extras            Interactive extras list (MFA, email verification, SCIM, metrics, GitHub OAuth, OIDC, billing, webhooks)
   --docker            Write Docker Compose for every selected tool that needs a service
   --no-docker         Skip docker-compose.yml; use installs already on this machine
   --docker-services   Subset: postgres, mysql, redis, mailpit, adminer (comma-separated)
@@ -188,6 +189,8 @@ function parseCreateStrataArgs(argv: string[]): ParsedFlags {
       ["--no-metrics", "metrics", false],
       ["--oauth-github", "oauthGithub", true],
       ["--no-oauth-github", "oauthGithub", false],
+      ["--oidc", "oidc", true],
+      ["--no-oidc", "oidc", false],
       ["--billing", "billing", true],
       ["--no-billing", "billing", false],
       ["--webhooks", "webhooks", true],
@@ -333,6 +336,9 @@ function extraFlagName(extra: keyof StarterLayers["extras"]): string {
   }
   if (extra === "oauthGithub") {
     return "oauth-github";
+  }
+  if (extra === "oidc") {
+    return "oidc";
   }
   return extra;
 }

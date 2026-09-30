@@ -11,6 +11,7 @@ const noneExtras: CorporateExtras = {
   scim: false,
   metrics: false,
   oauthGithub: false,
+  oidc: false,
   billing: false,
   webhooks: false,
 };
@@ -21,6 +22,7 @@ const enterpriseExtras: CorporateExtras = {
   scim: true,
   metrics: true,
   oauthGithub: false,
+  oidc: false,
   billing: false,
   webhooks: false,
 };

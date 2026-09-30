@@ -261,13 +261,18 @@ function renderLoginView(layers: StarterLayers): string {
       ? `
     <a href="/auth/github">Sign in with GitHub</a>`
       : "";
+  const oidcLink =
+    layers.extras.oidc && htmlAuthKit(layers.auth)
+      ? `
+    <a href="/auth/oidc">Sign in with OIDC</a>`
+      : "";
   return renderFormView(
     "Sign in",
     `${textField("email", "Email", "email", 'required autocomplete="username"')}
     ${textField("password", "Password", "password", 'required autocomplete="current-password"')}`,
     "Sign in",
     `<a href="/register">Create account</a>
-    <a href="/forgot-password">Forgot password</a>${githubLink}`,
+    <a href="/forgot-password">Forgot password</a>${githubLink}${oidcLink}`,
   ).replace('action="<%= it.action || "" %>"', 'action="/login"');
 }
 

@@ -1,5 +1,11 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- `sealOidcPkceCookie()` / `readOidcPkceCookie()` on `@getstrata/core/security/oauthState` store the OIDC PKCE handshake in the `oidc_pkce` cookie, bound to the signed OAuth state.
+- OIDC discovery, token, and JWKS fetches allow loopback issuers outside production. `OIDC_ALLOW_PRIVATE=true` allows other private hosts and is ignored in production.
+- `OidcProvider.getAuthorizationUrl()` still throws. Call `createAuthorization()`.
+
 ## 1.1.5
 
 - Close dogfood gaps: webhook docs, starter extras, signing helper

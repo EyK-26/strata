@@ -894,6 +894,7 @@ describe("create-strata CLI", () => {
       scim: false,
       metrics: false,
       oauthGithub: false,
+      oidc: false,
       billing: false,
       webhooks: false,
     });
@@ -1000,6 +1001,7 @@ describe("create-strata CLI", () => {
       "emailVerification",
       "scim",
       "oauthGithub",
+      "oidc",
       "billing",
       "webhooks",
     ]);
@@ -1018,6 +1020,7 @@ describe("create-strata CLI", () => {
       scim: true,
       metrics: true,
       oauthGithub: false,
+      oidc: false,
       billing: false,
       webhooks: false,
     });

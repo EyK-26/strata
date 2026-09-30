@@ -265,6 +265,7 @@ describe("extras flags match the wizard", () => {
     // metrics applies to every auth stack.
     expect(layers.extras.metrics).toBe(true);
     expect(layers.extras.oauthGithub).toBe(false);
+    expect(layers.extras.oidc).toBe(false);
     expect(layers.extras.billing).toBe(false);
     expect(layers.extras.webhooks).toBe(false);
   });

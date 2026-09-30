@@ -67,6 +67,90 @@ describe("oidcIdToken", () => {
     jwksUri: "https://issuer.example.com/jwks",
   };
 
+  test("loads discovery from a loopback issuer outside production", async () => {
+    const previousEnv = process.env.APP_ENV;
+    const previousNode = process.env.NODE_ENV;
+    const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
+    process.env.APP_ENV = "local";
+    process.env.NODE_ENV = "test";
+    delete process.env.OIDC_ALLOW_PRIVATE;
+    mockOidcDocuments({ keys: [] });
+    try {
+      const discovery = await loadOidcDiscovery("http://127.0.0.1:9");
+      expect(discovery.authorization_endpoint).toContain("issuer.example.com");
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.APP_ENV;
+      } else {
+        process.env.APP_ENV = previousEnv;
+      }
+      if (previousNode === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNode;
+      }
+      if (previousAllow === undefined) {
+        delete process.env.OIDC_ALLOW_PRIVATE;
+      } else {
+        process.env.OIDC_ALLOW_PRIVATE = previousAllow;
+      }
+    }
+  });
+
+  test("blocks a private non-loopback issuer unless OIDC_ALLOW_PRIVATE=true", async () => {
+    const previousEnv = process.env.APP_ENV;
+    const previousNode = process.env.NODE_ENV;
+    const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
+    process.env.APP_ENV = "local";
+    process.env.NODE_ENV = "test";
+    delete process.env.OIDC_ALLOW_PRIVATE;
+    mockOidcDocuments({ keys: [] });
+    try {
+      await expect(loadOidcDiscovery("http://10.0.0.8")).rejects.toThrow("blocked host");
+      process.env.OIDC_ALLOW_PRIVATE = "true";
+      const discovery = await loadOidcDiscovery("http://10.0.0.8");
+      expect(discovery.token_endpoint).toContain("issuer.example.com");
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.APP_ENV;
+      } else {
+        process.env.APP_ENV = previousEnv;
+      }
+      if (previousNode === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNode;
+      }
+      if (previousAllow === undefined) {
+        delete process.env.OIDC_ALLOW_PRIVATE;
+      } else {
+        process.env.OIDC_ALLOW_PRIVATE = previousAllow;
+      }
+    }
+  });
+
+  test("production ignores loopback discovery and OIDC_ALLOW_PRIVATE", async () => {
+    const previousEnv = process.env.APP_ENV;
+    const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
+    process.env.APP_ENV = "production";
+    process.env.OIDC_ALLOW_PRIVATE = "true";
+    mockOidcDocuments({ keys: [] });
+    try {
+      await expect(loadOidcDiscovery("https://127.0.0.1")).rejects.toThrow("blocked host");
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.APP_ENV;
+      } else {
+        process.env.APP_ENV = previousEnv;
+      }
+      if (previousAllow === undefined) {
+        delete process.env.OIDC_ALLOW_PRIVATE;
+      } else {
+        process.env.OIDC_ALLOW_PRIVATE = previousAllow;
+      }
+    }
+  });
+
   test("rejects discovery documents that omit required endpoints", async () => {
     mockPublicDns();
     mockOidcDocuments(
