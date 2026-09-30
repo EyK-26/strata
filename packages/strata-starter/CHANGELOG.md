@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 1.1.6
+
+- Add optional OIDC cookie login and loopback discovery
+
 ## Unreleased
 
 - Optional `--oidc` (cookie HTML, off by default) writes `GET /auth/oidc` and `/auth/oidc/callback`, a login link, and an `oidc_pkce` cookie. It calls `createAuthorization()`, not `getAuthorizationUrl()`.

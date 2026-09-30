@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 1.1.6
+
+- Add optional OIDC cookie login and loopback discovery
+
 ## 1.1.5
 
 - Close dogfood gaps: webhook docs, starter extras, signing helper

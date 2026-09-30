@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.1.6
+
+- Add optional OIDC cookie login and loopback discovery
+
 ## Unreleased
 
 - `sealOidcPkceCookie()` / `readOidcPkceCookie()` on `@getstrata/core/security/oauthState` store the OIDC PKCE handshake in the `oidc_pkce` cookie, bound to the signed OAuth state.
