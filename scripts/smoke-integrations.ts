@@ -41,6 +41,7 @@ async function main(): Promise<void> {
       "--database=sqlite",
       "--auth=cookie",
       "--oauth-github",
+      "--oidc",
       "--billing",
       "--webhooks",
       "--yes",
@@ -82,9 +83,36 @@ async function main(): Promise<void> {
     process.env.MAIL_DRIVER = "log";
     process.env.CACHE_DRIVER = "array";
     process.env.QUEUE_DRIVER = "sync";
+    let discoveryPort = 0;
+    const discovery = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url);
+        if (url.pathname === "/.well-known/openid-configuration") {
+          const origin = `http://127.0.0.1:${discoveryPort}`;
+          return Response.json({
+            issuer: origin,
+            authorization_endpoint: `${origin}/authorize`,
+            token_endpoint: `${origin}/token`,
+            jwks_uri: `${origin}/jwks`,
+          });
+        }
+        return new Response("not found", { status: 404 });
+      },
+    });
+    if (typeof discovery.port !== "number") {
+      throw new Error("OIDC discovery server did not bind a port.");
+    }
+    discoveryPort = discovery.port;
+    const oidcIssuer = `http://127.0.0.1:${discoveryPort}`;
+
     process.env.FEATURE_OAUTH = "true";
     process.env.GITHUB_CLIENT_ID = "test-client-id";
     process.env.GITHUB_CLIENT_SECRET = "test-client-secret";
+    process.env.OIDC_ISSUER = oidcIssuer;
+    process.env.OIDC_CLIENT_ID = "oidc-client";
+    process.env.OIDC_CLIENT_SECRET = "oidc-secret";
+    delete process.env.OIDC_ALLOW_PRIVATE;
     process.env.FEATURE_BILLING = "true";
     const stripeWebhookSecret = "whsec_integration_smoke";
     process.env.STRIPE_WEBHOOK_SECRET = stripeWebhookSecret;
@@ -96,17 +124,48 @@ async function main(): Promise<void> {
     const { routes } = await bootstrapApp();
     const server = createAppServer(routes, 0);
     const origin = `http://127.0.0.1:${server.port}`;
+    process.env.OIDC_REDIRECT_URI = `${origin}/auth/oidc/callback`;
 
     try {
       const login = await fetch(`${origin}/login`);
       assert(login.status === 200, `login status ${login.status}`);
-      assert((await login.text()).includes("/auth/github"), "login missing GitHub link");
+      const loginHtml = await login.text();
+      assert(loginHtml.includes("/auth/github"), "login missing GitHub link");
+      assert(loginHtml.includes("/auth/oidc"), "login missing OIDC link");
 
       const github = await fetch(`${origin}/auth/github`, { redirect: "manual" });
       assert(github.status === 302, `github redirect status ${github.status}`);
       assert(
         (github.headers.get("location") ?? "").includes("github.com/login/oauth/authorize"),
         "github location missing authorize URL",
+      );
+
+      const oidc = await fetch(`${origin}/auth/oidc`, { redirect: "manual" });
+      assert(oidc.status === 302, `oidc redirect status ${oidc.status}`);
+      const oidcLocation = oidc.headers.get("location") ?? "";
+      assert(
+        oidcLocation.includes(`${oidcIssuer}/authorize`),
+        "oidc location missing authorize URL",
+      );
+      assert(oidcLocation.includes("code_challenge="), "oidc location missing PKCE challenge");
+      const pkceCookie = oidc.headers
+        .getSetCookie()
+        .find((cookie) => cookie.startsWith("oidc_pkce="));
+      assert(pkceCookie, "oidc response missing oidc_pkce cookie");
+      const state = new URL(oidcLocation).searchParams.get("state");
+      assert(state, "oidc location missing state");
+      const callback = await fetch(
+        `${origin}/auth/oidc/callback?${new URLSearchParams({ code: "smoke-code", state })}`,
+        { headers: { cookie: pkceCookie.split(";")[0] ?? "" } },
+      );
+      assert(
+        callback.status === 400,
+        `oidc callback status ${callback.status} (expected 400 after PKCE, not 403)`,
+      );
+      const callbackJson = (await callback.json()) as { error?: string };
+      assert(
+        callbackJson.error === "Invalid OIDC response.",
+        `oidc callback error ${callbackJson.error ?? ""}`,
       );
 
       const rawBody = JSON.stringify({ id: "evt_smoke", type: "customer.subscription.updated" });
@@ -123,10 +182,13 @@ async function main(): Promise<void> {
       assert(stripeJson.received === true, "stripe webhook body missing received:true");
     } finally {
       server.stop();
+      discovery.stop();
       await closeDatabase();
     }
 
-    console.log("Integration extras smoke passed (GitHub redirect + Stripe webhook).");
+    console.log(
+      "Integration extras smoke passed (GitHub redirect, OIDC PKCE callback, Stripe webhook).",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import { isProductionEnv } from "../../runtime/appEnv";
 import { safeFetch } from "../../security/safeFetch";
 import {
   loadOidcDiscovery,
+  oidcSafeFetchOptions,
   resetOidcDiscoveryCacheForTests,
   verifyOidcIdToken,
 } from "./oidcIdToken";
@@ -124,14 +124,15 @@ class OidcProvider implements OAuthProvider {
       code_verifier: handshake.codeVerifier,
     });
 
+    const tokenEndpoint = requireOidcEndpoint(discovery.token_endpoint, "token_endpoint");
     const tokenResponse = await safeFetch(
-      requireOidcEndpoint(discovery.token_endpoint, "token_endpoint"),
+      tokenEndpoint,
       {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body,
       },
-      { allowHttp: !isProductionEnv(), timeoutMs: 10_000, maxRedirects: 0 },
+      oidcSafeFetchOptions(tokenEndpoint),
     );
 
     const tokenBody = (await tokenResponse.json()) as OidcTokenResponse;

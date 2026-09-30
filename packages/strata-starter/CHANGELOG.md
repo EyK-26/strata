@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## Unreleased
+
+- Optional `--oidc` (cookie HTML, off by default) writes `GET /auth/oidc` and `/auth/oidc/callback`, a login link, and an `oidc_pkce` cookie. It calls `createAuthorization()`, not `getAuthorizationUrl()`.
+
 ## 1.1.5
 
 - Close dogfood gaps: webhook docs, starter extras, signing helper

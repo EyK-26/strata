@@ -3,7 +3,14 @@ import { isProductionEnv } from "../runtime/appEnv";
 import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 const OAUTH_STATE_COOKIE = "oauth_state";
+const OIDC_PKCE_COOKIE = "oidc_pkce";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+interface OidcPkceSeal {
+  state: string;
+  nonce: string;
+  codeVerifier: string;
+}
 
 function resolveOAuthStateSecret(): string {
   return requireConfiguredSecret(["OAUTH_STATE_SECRET", "SESSION_SECRET"], "oauth-state-secret");
@@ -78,11 +85,120 @@ function clearOAuthStateCookie(): string {
   return `${OAUTH_STATE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${isProductionEnv() ? "; Secure" : ""}`;
 }
 
+function oauthCookieSuffix(): string {
+  return `Path=/; HttpOnly; SameSite=Lax${isProductionEnv() ? "; Secure" : ""}`;
+}
+
+function sealOidcPkceCookie(payload: OidcPkceSeal): string {
+  const body = Buffer.from(
+    JSON.stringify({
+      state: payload.state,
+      nonce: payload.nonce,
+      codeVerifier: payload.codeVerifier,
+      iat: Date.now(),
+    }),
+  ).toString("base64url");
+  const signature = createHmac("sha256", resolveOAuthStateSecret())
+    .update(body)
+    .digest("base64url");
+  const value = encodeURIComponent(`${body}.${signature}`);
+  return `${OIDC_PKCE_COOKIE}=${value}; ${oauthCookieSuffix()}; Max-Age=600`;
+}
+
+function clearOidcPkceCookie(): string {
+  return `${OIDC_PKCE_COOKIE}=; ${oauthCookieSuffix()}; Max-Age=0`;
+}
+
+function readOidcPkceCookie(
+  request: Request,
+  returnedState: string | null,
+): { nonce: string; codeVerifier: string } | null {
+  const state = returnedState?.trim() ?? "";
+  if (!state) {
+    return null;
+  }
+
+  const header = request.headers.get("cookie") ?? "";
+  for (const part of header.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name !== OIDC_PKCE_COOKIE) {
+      continue;
+    }
+    return unsealOidcPkceValue(rest.join("="), state);
+  }
+
+  return null;
+}
+
+function unsealOidcPkceValue(
+  rawValue: string,
+  returnedState: string,
+): { nonce: string; codeVerifier: string } | null {
+  let decoded = rawValue;
+  try {
+    decoded = decodeURIComponent(rawValue);
+  } catch {
+    return null;
+  }
+
+  const splitAt = decoded.lastIndexOf(".");
+  if (splitAt <= 0) {
+    return null;
+  }
+
+  const body = decoded.slice(0, splitAt);
+  const signature = decoded.slice(splitAt + 1);
+  const expected = createHmac("sha256", resolveOAuthStateSecret()).update(body).digest("base64url");
+  const expectedBuffer = Buffer.from(expected);
+  const actualBuffer = Buffer.from(signature);
+  if (
+    expectedBuffer.length !== actualBuffer.length ||
+    !timingSafeEqual(expectedBuffer, actualBuffer)
+  ) {
+    return null;
+  }
+
+  let parsed: { state?: unknown; nonce?: unknown; codeVerifier?: unknown; iat?: unknown };
+  try {
+    parsed = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as typeof parsed;
+  } catch {
+    return null;
+  }
+
+  if (
+    typeof parsed.state !== "string" ||
+    typeof parsed.nonce !== "string" ||
+    typeof parsed.codeVerifier !== "string" ||
+    typeof parsed.iat !== "number" ||
+    !parsed.nonce.trim() ||
+    !parsed.codeVerifier.trim()
+  ) {
+    return null;
+  }
+
+  if (Date.now() - parsed.iat > OAUTH_STATE_TTL_MS) {
+    return null;
+  }
+
+  const left = Buffer.from(parsed.state);
+  const right = Buffer.from(returnedState);
+  if (left.length !== right.length || !timingSafeEqual(left, right)) {
+    return null;
+  }
+
+  return { nonce: parsed.nonce, codeVerifier: parsed.codeVerifier };
+}
+
+export type { OidcPkceSeal };
 export {
   clearOAuthStateCookie,
+  clearOidcPkceCookie,
   createOAuthState,
   createOAuthStateCookie,
   OAUTH_STATE_COOKIE,
+  OIDC_PKCE_COOKIE,
+  readOidcPkceCookie,
+  sealOidcPkceCookie,
   verifyOAuthState,
   verifySignedOAuthStateValue,
 };

@@ -28,11 +28,52 @@ function issuerOrigin(issuer: string): string {
   return issuer.replace(/\/$/, "");
 }
 
+function oidcLoopbackHost(hostname: string): boolean {
+  const host = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/gu, "");
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+/**
+ * Loopback issuers work in local/dev without an extra flag. Other private hosts
+ * need OIDC_ALLOW_PRIVATE=true. Production ignores both (safeFetch forces
+ * allowPrivate off).
+ */
+function oidcOutboundAllowsPrivate(url: string): boolean {
+  if (isProductionEnv()) {
+    return false;
+  }
+  if (process.env.OIDC_ALLOW_PRIVATE === "true") {
+    return true;
+  }
+  try {
+    return oidcLoopbackHost(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function oidcSafeFetchOptions(url: string): {
+  allowHttp: boolean;
+  allowPrivate: boolean;
+  timeoutMs: number;
+  maxRedirects: number;
+} {
+  return {
+    allowHttp: !isProductionEnv(),
+    allowPrivate: oidcOutboundAllowsPrivate(url),
+    timeoutMs: 10_000,
+    maxRedirects: 0,
+  };
+}
+
 async function fetchJson(url: string): Promise<unknown> {
   const response = await safeFetch(
     url,
     { headers: { accept: "application/json" } },
-    { allowHttp: !isProductionEnv(), timeoutMs: 10_000, maxRedirects: 0 },
+    oidcSafeFetchOptions(url),
   );
 
   return await response.json();
@@ -231,6 +272,7 @@ export type { OidcDiscovery };
 export {
   loadOidcDiscovery,
   oidcAccessTokenHash,
+  oidcSafeFetchOptions,
   resetOidcDiscoveryCacheForTests,
   verifyOidcIdToken,
 };

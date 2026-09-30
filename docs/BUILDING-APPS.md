@@ -130,7 +130,7 @@ To add more commands, extend that file (`commands` or `registerCommands()`). Sca
 
 ## Optional feature flags
 
-The starter wizard covers MFA, email verification, SCIM, metrics, plus optional `--oauth-github`, `--billing`, and `--webhooks` (all off by default). Other integrations (OIDC cookie login, SIEM export, hybrid SPA) stay env-driven or deferred. See [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md). Outbound webhooks use `discoverJobs()`, not a `registerWebhookJobs()` helper (that symbol was never exported).
+The starter wizard covers MFA, email verification, SCIM, metrics, plus optional `--oauth-github`, `--oidc`, `--billing`, and `--webhooks` (all off by default). SIEM export and hybrid SPA stay env-driven or deferred. See [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md). Outbound webhooks use `discoverJobs()`, not a `registerWebhookJobs()` helper (that symbol was never exported).
 
 ## Views and errors
 

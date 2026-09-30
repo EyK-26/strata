@@ -145,21 +145,41 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   lines.push("# SAML_WANT_RESPONSE_SIGNED=");
   lines.push("# SAML_DISABLE_REQUESTED_AUTHN_CONTEXT=");
 
-  const oauthOn = Boolean(layers.extras.oauthGithub);
-  lines.push(`FEATURE_OAUTH=${envFlag(oauthOn)}`);
-  if (oauthOn) {
+  const githubOn = Boolean(layers.extras.oauthGithub);
+  const oidcOn = Boolean(layers.extras.oidc);
+  lines.push(`FEATURE_OAUTH=${envFlag(githubOn || oidcOn)}`);
+  if (githubOn) {
     lines.push("GITHUB_CLIENT_ID=");
     lines.push("GITHUB_CLIENT_SECRET=");
     lines.push("GITHUB_REDIRECT_URI=http://localhost:3000/auth/github/callback");
-    lines.push("OAUTH_STATE_SECRET=dev-oauth-state-secret-change-me-please-32");
   } else {
     lines.push("# GITHUB_CLIENT_ID=");
     lines.push("# GITHUB_CLIENT_SECRET=");
     lines.push("# GITHUB_REDIRECT_URI=http://localhost:3000/auth/github/callback");
+  }
+  if (oidcOn) {
+    lines.push("OIDC_ISSUER=http://127.0.0.1:8080");
+    lines.push("OIDC_CLIENT_ID=");
+    lines.push("OIDC_CLIENT_SECRET=");
+    lines.push("OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback");
+    lines.push(
+      "# Loopback issuers are allowed when APP_ENV is not production. Other private IdPs:",
+    );
+    lines.push("# OIDC_ALLOW_PRIVATE=true");
+  } else {
+    lines.push("# OIDC_ISSUER=");
+    lines.push("# OIDC_CLIENT_ID=");
+    lines.push("# OIDC_CLIENT_SECRET=");
+    lines.push("# OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback");
+    lines.push("# OIDC_ALLOW_PRIVATE=true");
+  }
+  if (githubOn || oidcOn) {
+    lines.push("OAUTH_STATE_SECRET=dev-oauth-state-secret-change-me-please-32");
+  } else {
     lines.push("# OAUTH_STATE_SECRET=");
   }
   lines.push(
-    "# OIDC cookie login is not generated. Use GitHub cookie routes (--oauth-github) or app-owned PKCE.",
+    "# --oidc (cookie HTML) seals PKCE in the oidc_pkce cookie. Do not call OidcProvider.getAuthorizationUrl().",
   );
 
   const billingOn = Boolean(layers.extras.billing);
@@ -616,6 +636,12 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
       "| `GET` | `/auth/github/callback` | Exchanges the code, JIT user, MFA gate, cookie session. |",
     );
   }
+  if (layers.extras.oidc && authUsesCookie(layers.auth)) {
+    rows.push(
+      "| `GET` | `/auth/oidc` | OIDC `createAuthorization()` plus `oidc_pkce` cookie. 404 unless `FEATURE_OAUTH=true`. |",
+      "| `GET` | `/auth/oidc/callback` | Reads PKCE, exchanges the code, JIT user, MFA gate, cookie session. |",
+    );
+  }
 
   const authNote =
     layers.auth === "headers"
@@ -681,6 +707,7 @@ Import from \`@getstrata/core/...\` subpaths rather than the package root, so si
 function renderIntegrationsReadme(layers: StarterLayers): string {
   const enabled = [
     layers.extras.oauthGithub ? "GitHub OAuth cookie login (`/auth/github`)" : null,
+    layers.extras.oidc ? "OIDC cookie login (`/auth/oidc`, PKCE in `oidc_pkce`)" : null,
     layers.extras.billing
       ? "Stripe billing stub (`POST /billing/webhooks/stripe`, `GET /api/v1/billing/subscription`)"
       : null,
@@ -694,7 +721,7 @@ function renderIntegrationsReadme(layers: StarterLayers): string {
     "",
     "OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).",
     "",
-    "Wizard flags (any stack unless noted): `--oauth-github` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `discoverListeners()` and `discoverJobs()`.",
+    "Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `discoverListeners()` and `discoverJobs()`.",
     "",
   ];
   if (enabled.length > 0) {
@@ -819,7 +846,7 @@ HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
 - Register: \`/register\`
 - Forgot password: \`/forgot-password\`
 - Reset password: signed \`/reset-password\` (mail log when \`MAIL_DRIVER=log\`)
-${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}${layers.extras.oauthGithub ? "- GitHub: `/auth/github` (needs `FEATURE_OAUTH=true`)\n" : ""}
+${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}${layers.extras.oauthGithub ? "- GitHub: `/auth/github` (needs `FEATURE_OAUTH=true`)\n" : ""}${layers.extras.oidc ? "- OIDC: `/auth/oidc` (needs `FEATURE_OAUTH=true`; PKCE cookie `oidc_pkce`)\n" : ""}
 Cookie name is \`strata_session\`. Forms send CSRF as \`_token\`.
 `
     : ""
@@ -902,7 +929,7 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
 - Set \`FEATURE_PUBLIC_READS=false\`. Generated \`.env.example\` already ships \`false\` so \`wrapWebPublicRead\` requires a login. Local storefronts may set \`true\` in \`.env\` for an anonymous catalog; \`assertProductionSecrets()\` rejects \`true\` in production. Do not ship a public-reads production boot.
 - Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
-${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${layers.extras.oauthGithub ? "- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n" : ""}${layers.extras.billing ? "- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n" : ""}${
+${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${layers.extras.oauthGithub ? "- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n" : ""}${layers.extras.oidc ? "- Set `OAUTH_STATE_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Loopback issuers work outside production; set `OIDC_ALLOW_PRIVATE=true` for other private IdPs.\n" : ""}${layers.extras.billing ? "- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n" : ""}${
   layers.tenancy === "rls"
     ? `- \`DATABASE_URL\` must be a \`NOBYPASSRLS\` role, not the \`postgres\` superuser. Generated apps create \`${GENERATED_POSTGRES_APP_ROLE}\` via \`db/ensure-postgres-app-role.sql\` (and Compose init on first empty volume). \`MIGRATION_DATABASE_URL\` may stay the superuser for CREATE ROLE / GRANT / migrate. Production boot rejects username \`postgres\` or \`root\`, then inspects \`pg_roles\` for \`rolsuper\` / \`rolbypassrls\`.
 `

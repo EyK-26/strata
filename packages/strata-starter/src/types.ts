@@ -39,6 +39,7 @@ interface CorporateExtras {
   scim: boolean;
   metrics: boolean;
   oauthGithub: boolean;
+  oidc: boolean;
   billing: boolean;
   webhooks: boolean;
 }
@@ -125,7 +126,7 @@ function extraApplies(extra: keyof CorporateExtras, auth: AuthStack): boolean {
   if (extra === "metrics" || extra === "billing" || extra === "webhooks") {
     return true;
   }
-  if (extra === "mfa" || extra === "oauthGithub") {
+  if (extra === "mfa" || extra === "oauthGithub" || extra === "oidc") {
     return htmlAuthKit(auth);
   }
   return authNeedsUsers(auth);

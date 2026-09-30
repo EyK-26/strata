@@ -69,6 +69,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
 
   const cookie = htmlAuthKit(layers.auth);
   const github = Boolean(layers.extras.oauthGithub && cookie);
+  const oidc = Boolean(layers.extras.oidc && cookie);
   const mfa = Boolean(layers.extras.mfa && cookie);
   const verify = Boolean(layers.extras.emailVerification);
   const jsonApi = authUsesToken(layers.auth) || authUsesJwt(layers.auth);
@@ -101,6 +102,11 @@ function renderAuthModule(layers: StarterLayers): string | null {
     );
     if (github) {
       imports.push(`import { GitHubOAuthProvider } from "@getstrata/core/auth/oauth/providers";`);
+    }
+    if (oidc) {
+      imports.push(`import { OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";`);
+    }
+    if (github || oidc) {
       imports.push(`import { appUrl } from "@getstrata/core/runtime/appKeyPrefix";`);
     }
   }
@@ -142,7 +148,9 @@ function renderAuthModule(layers: StarterLayers): string | null {
       imports.push(`import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";`);
     }
     imports.push(
-      `import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";`,
+      oidc
+        ? `import { clearOidcPkceCookie, createOAuthState, readOidcPkceCookie, sealOidcPkceCookie, verifyOAuthState } from "@getstrata/core/security/oauthState";`
+        : `import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";`,
     );
   }
   if (jsonApi || cookie) {
@@ -651,11 +659,72 @@ async function completeBrowserSsoLogin(
         },`
     : "";
 
+  const oidcRoutes = oidc
+    ? `
+        "/auth/oidc": {
+          GET: kernel.wrap("api", withErrorHandling(async () => {
+            if (process.env.FEATURE_OAUTH !== "true") {
+              return new Response("Not found", { status: 404 });
+            }
+            const issuer = process.env.OIDC_ISSUER?.trim();
+            const clientId = process.env.OIDC_CLIENT_ID?.trim();
+            const clientSecret = process.env.OIDC_CLIENT_SECRET?.trim();
+            if (!issuer || !clientId || !clientSecret) {
+              return new Response("Not found", { status: 404 });
+            }
+            const redirectUri = process.env.OIDC_REDIRECT_URI?.trim() || \`\${appUrl()}/auth/oidc/callback\`;
+            const issued = createOAuthState();
+            const provider = new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri });
+            const { url, handshake } = await provider.createAuthorization(issued.state);
+            const redirect = new Response(null, { status: 302, headers: { location: url } });
+            redirect.headers.append(
+              "set-cookie",
+              sealOidcPkceCookie({ state: issued.state, nonce: handshake.nonce, codeVerifier: handshake.codeVerifier }),
+            );
+            return redirect;
+          })),
+        },
+        "/auth/oidc/callback": {
+          GET: kernel.wrap("api", withErrorHandling(async (request) => {
+            if (process.env.FEATURE_OAUTH !== "true") {
+              return new Response("Not found", { status: 404 });
+            }
+            const issuer = process.env.OIDC_ISSUER?.trim();
+            const clientId = process.env.OIDC_CLIENT_ID?.trim();
+            const clientSecret = process.env.OIDC_CLIENT_SECRET?.trim();
+            if (!issuer || !clientId || !clientSecret) {
+              return new Response("Not found", { status: 404 });
+            }
+            const url = new URL(request.url);
+            const code = url.searchParams.get("code");
+            const state = url.searchParams.get("state");
+            const pkce = readOidcPkceCookie(request, state);
+            if (!code || !verifyOAuthState(request, state) || !pkce) {
+              const denied = jsonResponse({ error: "Invalid OIDC state." }, { status: 403 });
+              denied.headers.append("set-cookie", clearOidcPkceCookie());
+              return denied;
+            }
+            const redirectUri = process.env.OIDC_REDIRECT_URI?.trim() || \`\${appUrl()}/auth/oidc/callback\`;
+            const profile = await new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri })
+              .exchangeCode(code, redirectUri, pkce)
+              .catch(() => null);
+            if (!profile) {
+              const failed = jsonResponse({ error: "Invalid OIDC response." }, { status: 400 });
+              failed.headers.append("set-cookie", clearOidcPkceCookie());
+              return failed;
+            }
+            const login = await completeBrowserSsoLogin(dependencies, profile, "OIDC");
+            login.headers.append("set-cookie", clearOidcPkceCookie());
+            return login;
+          })),
+        },`
+    : "";
+
   const apiRoutes =
     jsonApi || cookie
       ? `
     routes({ kernel, dependencies }) {
-      return {${csrfRoute}${samlRoutes}${githubRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}
+      return {${csrfRoute}${samlRoutes}${githubRoutes}${oidcRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}
       };
     },`
       : "";

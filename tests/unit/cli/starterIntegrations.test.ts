@@ -48,6 +48,7 @@ describe("create-strata integration extras", () => {
   test("usage lists oauth, billing, and webhook flags", () => {
     const text = usage();
     expect(text).toContain("--oauth-github");
+    expect(text).toContain("--oidc");
     expect(text).toContain("--billing");
     expect(text).toContain("--webhooks");
   });
@@ -88,6 +89,38 @@ describe("create-strata integration extras", () => {
     expect(auth).toContain("completeBrowserSsoLogin");
     const login = await readFile(join(app, "views/auth/login.eta"), "utf8");
     expect(login).toContain("/auth/github");
+  });
+
+  test("--oidc writes PKCE cookie routes and does not call getAuthorizationUrl", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "oidc-app",
+      "--frontend=server-htmx",
+      "--auth=cookie",
+      "--oidc",
+      "--yes",
+    ]);
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    expect(env).toContain("FEATURE_OAUTH=true");
+    expect(env).toContain("OIDC_ISSUER=http://127.0.0.1:8080");
+    expect(env).toContain("OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback");
+    expect(env).toContain("# OIDC_ALLOW_PRIVATE=true");
+    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    expect(auth).toContain('"/auth/oidc"');
+    expect(auth).toContain('"/auth/oidc/callback"');
+    expect(auth).toContain("createAuthorization");
+    expect(auth).toContain("sealOidcPkceCookie");
+    expect(auth).toContain("readOidcPkceCookie");
+    expect(auth).not.toContain("getAuthorizationUrl");
+    const login = await readFile(join(app, "views/auth/login.eta"), "utf8");
+    expect(login).toContain("/auth/oidc");
+  });
+
+  test("header auth drops --oidc", () => {
+    const layers = layersFromFlags(
+      parseCreateStrataArgs(["app", "--auth=headers", "--oidc", "--yes"]),
+    );
+    expect(layers.extras.oidc).toBe(false);
   });
 
   test("--billing writes the Stripe stub module and migration", async () => {
