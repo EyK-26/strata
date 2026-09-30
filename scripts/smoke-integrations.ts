@@ -100,6 +100,9 @@ async function main(): Promise<void> {
         return new Response("not found", { status: 404 });
       },
     });
+    if (typeof discovery.port !== "number") {
+      throw new Error("OIDC discovery server did not bind a port.");
+    }
     discoveryPort = discovery.port;
     const oidcIssuer = `http://127.0.0.1:${discoveryPort}`;
 
