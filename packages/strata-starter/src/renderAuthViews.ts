@@ -264,7 +264,7 @@ function renderLoginView(layers: StarterLayers): string {
   const oidcLink =
     layers.extras.oidc && htmlAuthKit(layers.auth)
       ? `
-    <a href="/auth/oidc">Sign in with OIDC</a>`
+    <% if (it.oidcLogin) { %><a href="/auth/oidc">Sign in with OIDC</a><% } %>`
       : "";
   return renderFormView(
     "Sign in",

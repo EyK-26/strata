@@ -113,7 +113,11 @@ describe("create-strata integration extras", () => {
     expect(auth).toContain("readOidcPkceCookie");
     expect(auth).not.toContain("getAuthorizationUrl");
     const login = await readFile(join(app, "views/auth/login.eta"), "utf8");
-    expect(login).toContain("/auth/oidc");
+    expect(login).toContain("it.oidcLogin");
+    expect(login).toContain('href="/auth/oidc"');
+    const view = await readFile(join(app, "src/lib/view.ts"), "utf8");
+    expect(view).toContain("OIDC_CLIENT_ID");
+    expect(auth).toContain("profile.email.trim().toLowerCase()");
   });
 
   test("header auth drops --oidc", () => {
@@ -138,7 +142,11 @@ describe("create-strata integration extras", () => {
     expect(billing).toContain("/billing/webhooks/stripe");
     expect(billing).toContain("/api/v1/billing/subscription");
     expect(billing).toContain("verifyStripeWebhookSignature");
+    expect(billing).toContain("applyStripeWebhook");
     expect(billing).not.toContain("runWithMigrationBypass(");
+    const hook = await readFile(join(app, "src/billing/applyStripeWebhook.ts"), "utf8");
+    expect(hook).toContain("async function applyStripeWebhook");
+    expect(hook).not.toContain("tenant.plan");
     const migration = await readFile(join(app, "src/db/migrations/0002_billing_schema.ts"), "utf8");
     expect(migration).toContain("stripe_webhook_event");
     expect(migration).toContain("stripe_customer_id");
@@ -158,14 +166,38 @@ describe("create-strata integration extras", () => {
     expect(job).toContain('static readonly jobName = "webhook.dispatch"');
     expect(job).toContain("signWebhookBody");
     expect(job).toContain("WEBHOOK_ALLOW_PRIVATE");
+    expect(job).toContain("VALUES (?, ?, ?, ?, ?, ?)");
+    expect(job).toContain("payload.event");
+    expect(job).toContain("runWithMigrationBypass(async () => {");
+    expect(job).not.toContain('"notes.created"');
     const listener = await readFile(
       join(app, "src/listeners/noteCreatedWebhookListener.ts"),
       "utf8",
     );
     expect(listener).toContain('modelEventName("notes", "created")');
+    expect(listener).toContain("event,");
     expect(existsSync(join(app, "src/db/migrations/0002_webhooks_schema.ts"))).toBe(true);
     const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
     expect(providers).toContain("discoverListeners");
+  });
+
+  test("postgres webhooks and billing use $1 placeholders", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, [
+      "pg-app",
+      "--database=postgres",
+      "--tenancy=column",
+      "--webhooks",
+      "--billing",
+      "--yes",
+    ]);
+    const job = await readFile(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"), "utf8");
+    expect(job).toContain("VALUES ($1, $2, $3, $4, $5, $6)");
+    expect(job).not.toContain("VALUES (?, ?, ?, ?, ?, ?)");
+    const billing = await readFile(join(app, "src/modules/billing/index.ts"), "utf8");
+    expect(billing).toContain("tenant_id = $1");
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("HTML admin and storefront paths are not");
   });
 
   test("billing after webhooks uses 0003 for the billing migration", async () => {

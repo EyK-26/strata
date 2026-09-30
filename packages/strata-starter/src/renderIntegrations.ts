@@ -116,16 +116,25 @@ function renderBillingMigration(layers: StarterLayers): string | null {
   return renderFileMigration(name, up, down);
 }
 
-function renderDispatchOutboundWebhookJob(): string {
+function sqlParams(database: DatabaseLayer, count: number): string {
+  return Array.from({ length: count }, (_, index) =>
+    database === "postgres" ? `$${index + 1}` : "?",
+  ).join(", ");
+}
+
+function renderDispatchOutboundWebhookJob(layers: StarterLayers): string {
+  const values = sqlParams(layers.database, 6);
   return `import { Job } from "@getstrata/core/queue";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { webhookSignatureHeader } from "@getstrata/core/runtime/appKeyPrefix";
 import { safeFetch } from "@getstrata/core/security/safeFetch";
 import { signWebhookBody } from "@getstrata/core/security/webhookSignature";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { getSql } from "../bootstrap/database.ts";
 
 interface DispatchOutboundWebhookPayload {
   webhookId: number;
+  event: string;
   url: string;
   secret: string;
   body: string;
@@ -159,10 +168,12 @@ class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
       error = caught instanceof Error ? caught.message : "webhook dispatch failed";
     }
 
-    await getSql().unsafe(
-      "INSERT INTO webhook_deliveries (webhook_id, event, payload, response_status, attempt, error) VALUES (?, ?, ?, ?, ?, ?)",
-      [payload.webhookId, "notes.created", payload.body, responseStatus, 1, error],
-    );
+    await runWithMigrationBypass(async () => {
+      await getSql().unsafe(
+        "INSERT INTO webhook_deliveries (webhook_id, event, payload, response_status, attempt, error) VALUES (${values})",
+        [payload.webhookId, payload.event, payload.body, responseStatus, 1, error],
+      );
+    });
   }
 }
 
@@ -186,13 +197,15 @@ function registerNoteCreatedWebhookListener(): void {
       active: number | boolean;
     }>("SELECT id, url, secret, active FROM webhooks");
     const queue = resolveApplicationQueue();
-    const body = JSON.stringify({ event: "notes.created", data: payload });
+    const event = "notes.created";
+    const body = JSON.stringify({ event, data: payload });
     for (const hook of rows) {
       if (!hook.active) {
         continue;
       }
       await queue.dispatch(new DispatchOutboundWebhookJob(), {
         webhookId: hook.id,
+        event,
         url: hook.url,
         secret: hook.secret,
         body,
@@ -205,8 +218,30 @@ export default registerNoteCreatedWebhookListener;
 `;
 }
 
+function renderApplyStripeWebhook(): string {
+  return `interface StripeWebhookEvent {
+  id?: string;
+  type?: string;
+  data?: { object?: Record<string, unknown> };
+}
+
+/**
+ * Called after the Stripe signature verifies. The default does nothing.
+ * Plan and tenant updates belong in this function, not in framework core.
+ * Stripe POSTs have no tenant ALS. See docs/INTEGRATIONS.md before writing tenant tables.
+ */
+async function applyStripeWebhook(_event: StripeWebhookEvent): Promise<void> {
+  return;
+}
+
+export type { StripeWebhookEvent };
+export { applyStripeWebhook };
+`;
+}
+
 function renderBillingModule(layers: StarterLayers): string {
   const tenancyOn = usesTenantTable(layers.tenancy);
+  const tenantPlaceholder = layers.database === "postgres" ? "$1" : "?";
   const tenantImport = tenancyOn
     ? `import { currentTenant } from "@getstrata/core/tenant/tenantContext";\n`
     : "";
@@ -216,7 +251,7 @@ function renderBillingModule(layers: StarterLayers): string {
           return jsonResponse({ error: "Tenant context is required." }, { status: 500 });
         }
         const rows = await getSql().unsafe<Record<string, unknown>>(
-          "SELECT plan, status, stripe_subscription_id, current_period_end FROM subscription WHERE tenant_id = ? LIMIT 1",
+          "SELECT plan, status, stripe_subscription_id, current_period_end FROM subscription WHERE tenant_id = ${tenantPlaceholder} LIMIT 1",
           [tenant.id],
         );`
     : `        const rows = await getSql().unsafe<Record<string, unknown>>(
@@ -226,6 +261,7 @@ function renderBillingModule(layers: StarterLayers): string {
   return `import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
+import { applyStripeWebhook } from "../../billing/applyStripeWebhook.ts";
 ${tenantImport}import { getSql } from "../../bootstrap/database.ts";
 
 function billingEnabled(): boolean {
@@ -256,10 +292,7 @@ const billingModule: AppModule = {
             } catch {
               return jsonResponse({ error: "Invalid JSON." }, { status: 400 });
             }
-            // Persist event.id on stripe_webhook_event yourself. Stripe POSTs have no tenant ALS.
-            // Wrap those writes in runWithMigrationBypass when TENANCY_DRIVER=rls.
-            // See https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md
-            void event.data;
+            await applyStripeWebhook(event);
             return jsonResponse({ received: true, id: event.id ?? null, type: event.type ?? null });
           }),
         ),
@@ -299,6 +332,7 @@ function githubOAuthEnabled(layers: StarterLayers): boolean {
 export {
   billingMigrationName,
   githubOAuthEnabled,
+  renderApplyStripeWebhook,
   renderBillingMigration,
   renderBillingModule,
   renderDispatchOutboundWebhookJob,

@@ -745,7 +745,9 @@ bunx strata openapi:generate
 bunx strata openapi:check
 \`\`\`
 
-Put \`openapi:check\` in CI. A failure means \`docs/openapi.json\` does not match the live route map (billing, auth, webhooks, and anything else you added).
+Put \`openapi:check\` in CI. A failure means \`docs/openapi.json\` does not match the live JSON API route map (billing, auth, webhooks, and anything else you added).
+
+\`openapi:generate\` lists API routes only. HTML admin and storefront paths are not in that file.
 `;
 }
 
@@ -846,7 +848,7 @@ HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
 - Register: \`/register\`
 - Forgot password: \`/forgot-password\`
 - Reset password: signed \`/reset-password\` (mail log when \`MAIL_DRIVER=log\`)
-${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}${layers.extras.oauthGithub ? "- GitHub: `/auth/github` (needs `FEATURE_OAUTH=true`)\n" : ""}${layers.extras.oidc ? "- OIDC: `/auth/oidc` (needs `FEATURE_OAUTH=true`; PKCE cookie `oidc_pkce`)\n" : ""}
+${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}${layers.extras.oauthGithub ? "- GitHub: `/auth/github` (needs `FEATURE_OAUTH=true`). Failures on the callback are JSON, not the login page. State is the signed query value from `createOAuthState()`, not `createOAuthStateCookie()`.\n" : ""}${layers.extras.oidc ? "- OIDC: `/auth/oidc` (needs `FEATURE_OAUTH=true` plus `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`; otherwise the login link stays hidden and the route is 404). PKCE cookie `oidc_pkce`. Callback failures are JSON, not the login page.\n" : ""}
 Cookie name is \`strata_session\`. Forms send CSRF as \`_token\`.
 `
     : ""

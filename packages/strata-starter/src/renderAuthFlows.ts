@@ -296,17 +296,18 @@ async function completeBrowserSsoLogin(
   profile: { email: string; name: string },
   label: string,
 ): Promise<Response> {
-  let record = await starterAuthDirectory.findByEmail?.(profile.email);
+  const email = profile.email.trim().toLowerCase();
+  let record = await starterAuthDirectory.findByEmail?.(email);
   if (!record) {
     if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
       return jsonResponse({ error: \`\${label} user is not provisioned.\` }, { status: 403 });
     }
     const hashed = await hashPassword(randomBytes(18).toString("hex"));
     try {
-      await runAuthWrite(profile.email, async () => {
+      await runAuthWrite(email, async () => {
         await User.create({
           name: profile.name,
-          email: profile.email,
+          email,
           password: hashed,
           is_admin: false,${samlTenantCreateField}
         });
@@ -314,7 +315,7 @@ async function completeBrowserSsoLogin(
     } catch {
       // Unique email: another request already provisioned this user.
     }
-    record = await starterAuthDirectory.findByEmail?.(profile.email);
+    record = await starterAuthDirectory.findByEmail?.(email);
   }
   if (!record) {
     return jsonResponse({ error: \`Could not complete \${label} login.\` }, { status: 500 });

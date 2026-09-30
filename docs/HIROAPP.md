@@ -2,7 +2,9 @@
 
 `apps/hiroapp` is Strata dogfood for internal end-to-end testing. CI migrates, seeds, boots, generates OpenAPI, and smokes this app. It is generated from the same layer flags as `create-strata`. It is not a product. Start a product app with `bunx create-strata`.
 
-CI also runs **integration extras HTTP smoke** (`scripts/smoke-integrations.ts`, included in `bun run smoke`). That script scaffolds a temporary app with `--oauth-github`, `--oidc`, `--billing`, and `--webhooks`. It is not HiroApp. It checks the GitHub authorize redirect, the OIDC redirect against a loopback discovery document, and that `/auth/oidc/callback` presents the `oidc_pkce` cookie with the authorize `state` and returns 400 when token exchange fails. It also posts a signed Stripe webhook. It does not finish a GitHub or OIDC login, deliver an outbound webhook, or sync a subscription plan. Hybrid SPA is not in that smoke.
+CI also runs **integration extras HTTP smoke** (`scripts/smoke-integrations.ts`, included in `bun run smoke`). That script scaffolds a temporary app with `--oauth-github`, `--oidc`, `--billing`, and `--webhooks`. It is not HiroApp. It checks the GitHub authorize redirect, the OIDC redirect against a loopback discovery document, and that `/auth/oidc/callback` presents the `oidc_pkce` cookie with the authorize `state` and returns 400 when token exchange fails. It also posts a signed Stripe webhook. It does not finish a GitHub or OIDC login, deliver an outbound webhook, or sync a subscription plan.
+
+`scripts/smoke-spa.ts` (also in `bun run smoke`) scaffolds a temporary **hybrid** app, runs `frontend:build`, and fetches `/app`. That response is the built SPA document, not the 503 that means `frontend/dist` is missing. The HiroApp preset stays `server-htmx`.
 
 The HiroApp preset leaves those extras off, so HiroApp itself does not exercise outbound webhooks, Stripe plan sync, or GitHub/OIDC cookie login. Product dogfood for the full paths is external (`strata-shop`).
 

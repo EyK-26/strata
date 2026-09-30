@@ -1458,10 +1458,15 @@ export async function renderPage(
 ): Promise<Response> {
   const csrfToken = request ? resolveCsrfTokenForRequest(request) : "";
   const flash = currentRequestMeta().flash ?? null;
-${userBlock}
+${userBlock}${
+  layers.extras.oidc
+    ? `
+  const oidcLogin = Boolean(process.env.OIDC_CLIENT_ID?.trim() && process.env.OIDC_CLIENT_SECRET?.trim());`
+    : ""
+}
   const html = await engine.render(
     template,
-    { ...data, csrfToken, flash, currentUser },
+    { ...data, csrfToken, flash, currentUser${layers.extras.oidc ? ", oidcLogin" : ""} },
     { request },
   );
   return htmlResponse(html, { status });
