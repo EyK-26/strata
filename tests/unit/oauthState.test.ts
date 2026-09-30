@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHmac } from "node:crypto";
 import {
   clearOAuthStateCookie,
   clearOidcPkceCookie,
@@ -112,6 +113,94 @@ describe("oauth state", () => {
       expect(readOidcPkceCookie(expired, state)).toBeNull();
     } finally {
       Date.now = originalNow;
+    }
+  });
+
+  test("rejects missing, undecodable, and malformed oidc_pkce cookies", () => {
+    const previousSecret = process.env.SESSION_SECRET;
+    process.env.SESSION_SECRET = "oidc-pkce-coverage-secret-32chars";
+    try {
+      const state = "bound-state";
+      expect(readOidcPkceCookie(new Request("http://example.test/callback"), state)).toBeNull();
+      expect(
+        readOidcPkceCookie(
+          new Request("http://example.test/callback", {
+            headers: { cookie: "other=1" },
+          }),
+          state,
+        ),
+      ).toBeNull();
+
+      const sealed = sealOidcPkceCookie({
+        state,
+        nonce: "nonce-1",
+        codeVerifier: "verifier-1",
+      });
+      const pair = sealed.split(";")[0] ?? "";
+      expect(
+        readOidcPkceCookie(
+          new Request("http://example.test/callback", {
+            headers: { cookie: `other=1; ${pair}` },
+          }),
+          state,
+        ),
+      ).toEqual({ nonce: "nonce-1", codeVerifier: "verifier-1" });
+
+      expect(
+        readOidcPkceCookie(
+          new Request("http://example.test/callback", {
+            headers: { cookie: `${OIDC_PKCE_COOKIE}=%` },
+          }),
+          state,
+        ),
+      ).toBeNull();
+      expect(
+        readOidcPkceCookie(
+          new Request("http://example.test/callback", {
+            headers: { cookie: `${OIDC_PKCE_COOKIE}=nodot` },
+          }),
+          state,
+        ),
+      ).toBeNull();
+
+      const secret = process.env.SESSION_SECRET;
+      function cookieFor(payload: string): string {
+        const body = Buffer.from(payload).toString("base64url");
+        const signature = createHmac("sha256", secret).update(body).digest("base64url");
+        return `${OIDC_PKCE_COOKIE}=${encodeURIComponent(`${body}.${signature}`)}`;
+      }
+
+      expect(
+        readOidcPkceCookie(
+          new Request("http://example.test/callback", {
+            headers: { cookie: cookieFor("not-json") },
+          }),
+          state,
+        ),
+      ).toBeNull();
+      expect(
+        readOidcPkceCookie(
+          new Request("http://example.test/callback", {
+            headers: {
+              cookie: cookieFor(
+                JSON.stringify({
+                  state,
+                  nonce: " ",
+                  codeVerifier: "verifier-1",
+                  iat: Date.now(),
+                }),
+              ),
+            },
+          }),
+          state,
+        ),
+      ).toBeNull();
+    } finally {
+      if (previousSecret === undefined) {
+        delete process.env.SESSION_SECRET;
+      } else {
+        process.env.SESSION_SECRET = previousSecret;
+      }
     }
   });
 });

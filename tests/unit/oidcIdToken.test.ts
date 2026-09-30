@@ -67,6 +67,27 @@ describe("oidcIdToken", () => {
     jwksUri: "https://issuer.example.com/jwks",
   };
 
+  test("treats an unparsable issuer as a blocked private host", async () => {
+    const previousEnv = process.env.APP_ENV;
+    const previousNode = process.env.NODE_ENV;
+    process.env.APP_ENV = "local";
+    process.env.NODE_ENV = "test";
+    try {
+      await expect(loadOidcDiscovery("http://[")).rejects.toThrow();
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.APP_ENV;
+      } else {
+        process.env.APP_ENV = previousEnv;
+      }
+      if (previousNode === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNode;
+      }
+    }
+  });
+
   test("loads discovery from a loopback issuer outside production", async () => {
     const previousEnv = process.env.APP_ENV;
     const previousNode = process.env.NODE_ENV;
