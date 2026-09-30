@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 1.1.7
+
+- Fix generated webhook SQL, billing hook, and hybrid SPA smoke
+
 ## Unreleased
 
 - `--webhooks` inserts `webhook_deliveries` with the app dialect (`$1` on Postgres) and wraps that write in `runWithMigrationBypass()`. The job payload carries `event` instead of hardcoding `notes.created`.

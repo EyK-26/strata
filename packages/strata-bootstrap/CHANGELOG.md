@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 1.1.7
+
+- Fix generated webhook SQL, billing hook, and hybrid SPA smoke
+
 ## 1.1.6
 
 - Add optional OIDC cookie login and loopback discovery
