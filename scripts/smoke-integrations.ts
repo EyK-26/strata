@@ -112,7 +112,6 @@ async function main(): Promise<void> {
     process.env.OIDC_ISSUER = oidcIssuer;
     process.env.OIDC_CLIENT_ID = "oidc-client";
     process.env.OIDC_CLIENT_SECRET = "oidc-secret";
-    process.env.OIDC_REDIRECT_URI = "http://127.0.0.1:3000/auth/oidc/callback";
     delete process.env.OIDC_ALLOW_PRIVATE;
     process.env.FEATURE_BILLING = "true";
     const stripeWebhookSecret = "whsec_integration_smoke";
@@ -125,6 +124,7 @@ async function main(): Promise<void> {
     const { routes } = await bootstrapApp();
     const server = createAppServer(routes, 0);
     const origin = `http://127.0.0.1:${server.port}`;
+    process.env.OIDC_REDIRECT_URI = `${origin}/auth/oidc/callback`;
 
     try {
       const login = await fetch(`${origin}/login`);
@@ -148,9 +148,24 @@ async function main(): Promise<void> {
         "oidc location missing authorize URL",
       );
       assert(oidcLocation.includes("code_challenge="), "oidc location missing PKCE challenge");
+      const pkceCookie = oidc.headers
+        .getSetCookie()
+        .find((cookie) => cookie.startsWith("oidc_pkce="));
+      assert(pkceCookie, "oidc response missing oidc_pkce cookie");
+      const state = new URL(oidcLocation).searchParams.get("state");
+      assert(state, "oidc location missing state");
+      const callback = await fetch(
+        `${origin}/auth/oidc/callback?${new URLSearchParams({ code: "smoke-code", state })}`,
+        { headers: { cookie: pkceCookie.split(";")[0] ?? "" } },
+      );
       assert(
-        (oidc.headers.get("set-cookie") ?? "").includes("oidc_pkce="),
-        "oidc response missing oidc_pkce cookie",
+        callback.status === 400,
+        `oidc callback status ${callback.status} (expected 400 after PKCE, not 403)`,
+      );
+      const callbackJson = (await callback.json()) as { error?: string };
+      assert(
+        callbackJson.error === "Invalid OIDC response.",
+        `oidc callback error ${callbackJson.error ?? ""}`,
       );
 
       const rawBody = JSON.stringify({ id: "evt_smoke", type: "customer.subscription.updated" });
@@ -172,7 +187,7 @@ async function main(): Promise<void> {
     }
 
     console.log(
-      "Integration extras smoke passed (GitHub redirect, OIDC redirect, Stripe webhook).",
+      "Integration extras smoke passed (GitHub redirect, OIDC PKCE callback, Stripe webhook).",
     );
   } finally {
     await rm(root, { recursive: true, force: true });
