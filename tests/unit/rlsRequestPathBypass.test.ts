@@ -69,6 +69,9 @@ describe("request-path RLS bypass fence", () => {
       if (file === join(repoRoot, "packages/strata-starter/src/renderRuntime.ts")) {
         continue;
       }
+      if (file === join(repoRoot, "packages/strata-starter/src/renderIntegrations.ts")) {
+        continue;
+      }
       const text = await readFile(file, "utf8");
       if (text.includes(unboundedNeedle)) {
         offenders.push(file);
@@ -97,5 +100,18 @@ describe("request-path RLS bypass fence", () => {
     expect(createAppStart).toBeGreaterThan(-1);
     expect(createAppEnd).toBeGreaterThan(createAppStart);
     expect(text.slice(createAppStart, createAppEnd)).not.toContain(unboundedNeedle);
+  });
+
+  test("generated webhook job bypass is the delivery insert, not the billing route", async () => {
+    const file = join(repoRoot, "packages/strata-starter/src/renderIntegrations.ts");
+    const text = await readFile(file, "utf8");
+    const jobStart = text.indexOf("function renderDispatchOutboundWebhookJob");
+    const jobEnd = text.indexOf("function renderNoteCreatedWebhookListener");
+    const billingStart = text.indexOf("function renderBillingModule");
+    expect(jobStart).toBeGreaterThan(-1);
+    expect(jobEnd).toBeGreaterThan(jobStart);
+    expect(billingStart).toBeGreaterThan(jobEnd);
+    expect(text.slice(jobStart, jobEnd)).toContain(unboundedNeedle);
+    expect(text.slice(billingStart)).not.toContain(unboundedNeedle);
   });
 });

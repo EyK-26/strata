@@ -37,6 +37,7 @@ import {
 } from "./renderEnv.ts";
 import {
   billingMigrationName,
+  renderApplyStripeWebhook,
   renderBillingMigration,
   renderBillingModule,
   renderDispatchOutboundWebhookJob,
@@ -284,13 +285,18 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   }
 
   if (layers.extras.billing) {
+    writeText(join(src, "billing/applyStripeWebhook.ts"), renderApplyStripeWebhook());
     writeText(join(src, "modules/billing/index.ts"), renderBillingModule(layers));
   } else {
+    removeIfExists(join(src, "billing/applyStripeWebhook.ts"));
     removeIfExists(join(src, "modules/billing/index.ts"));
   }
 
   if (layers.extras.webhooks) {
-    writeText(join(src, "jobs/dispatchOutboundWebhookJob.ts"), renderDispatchOutboundWebhookJob());
+    writeText(
+      join(src, "jobs/dispatchOutboundWebhookJob.ts"),
+      renderDispatchOutboundWebhookJob(layers),
+    );
     writeText(
       join(src, "listeners/noteCreatedWebhookListener.ts"),
       renderNoteCreatedWebhookListener(),

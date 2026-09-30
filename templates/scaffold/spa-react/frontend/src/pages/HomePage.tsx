@@ -32,10 +32,11 @@ export default function HomePage() {
         </table>
       </div>
 
-      <h2>Add your first resource</h2>
+      <h2>Starter-only example</h2>
       <p>
-        Create a module under <code>src/modules/</code> and return routes from it. The kernel picks
-        it up on the next boot.
+        This empty app already serves <code>GET /api/v1/auth/me</code>. It does not serve{" "}
+        <code>GET /api/v1/notes</code>. The module below is an example you add yourself. Create it
+        under <code>src/modules/</code> and the kernel picks it up on the next boot.
       </p>
 
       <pre className="card">
