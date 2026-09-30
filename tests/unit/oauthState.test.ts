@@ -51,9 +51,7 @@ describe("oauth state", () => {
     try {
       expect(createOAuthStateCookie().cookie).toContain("Secure");
       expect(clearOAuthStateCookie()).toContain("Secure");
-      expect(
-        sealOidcPkceCookie({ state: "s", nonce: "n", codeVerifier: "v" }),
-      ).toContain("Secure");
+      expect(sealOidcPkceCookie({ state: "s", nonce: "n", codeVerifier: "v" })).toContain("Secure");
       expect(clearOidcPkceCookie()).toContain("Secure");
     } finally {
       if (originalAppEnv === undefined) {

@@ -143,7 +143,10 @@ async function main(): Promise<void> {
       const oidc = await fetch(`${origin}/auth/oidc`, { redirect: "manual" });
       assert(oidc.status === 302, `oidc redirect status ${oidc.status}`);
       const oidcLocation = oidc.headers.get("location") ?? "";
-      assert(oidcLocation.includes(`${oidcIssuer}/authorize`), "oidc location missing authorize URL");
+      assert(
+        oidcLocation.includes(`${oidcIssuer}/authorize`),
+        "oidc location missing authorize URL",
+      );
       assert(oidcLocation.includes("code_challenge="), "oidc location missing PKCE challenge");
       assert(
         (oidc.headers.get("set-cookie") ?? "").includes("oidc_pkce="),
@@ -168,7 +171,9 @@ async function main(): Promise<void> {
       await closeDatabase();
     }
 
-    console.log("Integration extras smoke passed (GitHub redirect, OIDC redirect, Stripe webhook).");
+    console.log(
+      "Integration extras smoke passed (GitHub redirect, OIDC redirect, Stripe webhook).",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

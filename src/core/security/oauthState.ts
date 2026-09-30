@@ -98,7 +98,9 @@ function sealOidcPkceCookie(payload: OidcPkceSeal): string {
       iat: Date.now(),
     }),
   ).toString("base64url");
-  const signature = createHmac("sha256", resolveOAuthStateSecret()).update(body).digest("base64url");
+  const signature = createHmac("sha256", resolveOAuthStateSecret())
+    .update(body)
+    .digest("base64url");
   const value = encodeURIComponent(`${body}.${signature}`);
   return `${OIDC_PKCE_COOKIE}=${value}; ${oauthCookieSuffix()}; Max-Age=600`;
 }
@@ -149,7 +151,10 @@ function unsealOidcPkceValue(
   const expected = createHmac("sha256", resolveOAuthStateSecret()).update(body).digest("base64url");
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(signature);
-  if (expectedBuffer.length !== actualBuffer.length || !timingSafeEqual(expectedBuffer, actualBuffer)) {
+  if (
+    expectedBuffer.length !== actualBuffer.length ||
+    !timingSafeEqual(expectedBuffer, actualBuffer)
+  ) {
     return null;
   }
 

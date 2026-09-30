@@ -29,7 +29,10 @@ function issuerOrigin(issuer: string): string {
 }
 
 function oidcLoopbackHost(hostname: string): boolean {
-  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/gu, "");
+  const host = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/gu, "");
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
