@@ -3,7 +3,7 @@
 ## Unreleased
 
 - `runWithTenantDatabase()` / `runInTransaction()` roll back when `withJsonErrorHandling()` (or `requestTransactionRollback()`) turns a thrown error into a response. Nested tenant scopes use a savepoint and restore `app.tenant_id` on the way out.
-- Redis workers reserve jobs with `BLMOVE` until ack. A crashed worker leaves the job on `queue:*:processing` until `QUEUE_VISIBILITY_MS` (default 60s), then another worker requeues it. Handlers must be idempotent.
+- Redis workers atomically reserve jobs with unique reservation IDs and renewable owner leases. Recovery and acknowledgement are atomic and ownership checked; a failed failure-record write retains the reservation. Invalid/unregistered payloads are quarantined for inspection. Stop old workers before rollout. `QUEUE_VISIBILITY_MS` defaults to 60s and must be at least 30ms. Handlers must be idempotent; Streams and persisted retries remain follow-up work.
 
 ## 1.1.9
 

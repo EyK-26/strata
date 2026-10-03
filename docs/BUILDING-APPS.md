@@ -92,7 +92,7 @@ Apps scaffolded before file migrations often loop `db.unsafe(...)` in one file a
 1. Copy the generated shape: `src/db/migrationRuntime.ts` (`loadMigrationsFromDirectory` + `withMigrationDatabase`) and `src/db/migrations/*.ts` (start with `0001_starter_schema` plus your extra tables).
 2. Replace the inline SQL loop with `await migrateDatabase(db, await loadStarterMigrations())`. Keep seed in `migrate.ts`.
 3. First `bun run db:migrate` creates `framework_migrations` and applies every file not already recorded. Keep `CREATE TABLE IF NOT EXISTS` (and additive `ALTER`s) so a database that already has the tables does not fail on duplicate DDL.
-4. If Redis queue is on, add `failed_job` in that first file if the live schema does not have it. `queue:work` moves a job onto `queue:*:processing` before `handle()` and deletes it only after the attempt finishes. A killed worker leaves that reservation. The next worker returns it to the pending list after `QUEUE_VISIBILITY_MS` (default 60 seconds). Delivery is at-least-once, so handlers must be idempotent.
+4. If Redis queue is on, add `failed_job` in that first file if the live schema does not have it. `queue:work` atomically creates an individually identified reservation and owner lease before `handle()`. It renews that lease while the handler/retries run, and acknowledges only after success or a successfully persisted failure record. Recovery atomically returns expired work to its pending list; stale owners cannot acknowledge a replacement. `QUEUE_VISIBILITY_MS` defaults to 60 seconds and must be an integer of at least 30 milliseconds. Delivery is at-least-once, so handlers must be idempotent.
 
 When history is untrustworthy:
 
@@ -197,3 +197,11 @@ Generated HiroApp pins `APP_KEY_PREFIX=hiroapp`, `APP_NAME=hiroapp`, and `API_PR
 - [AUTH.md](./AUTH.md)
 - [DATABASE.md](./DATABASE.md)
 - [PACKAGING.md](./PACKAGING.md)
+
+## Queue reservation rollout
+
+Stop and drain old workers before starting this reservation implementation. Producers retain the same pending-list envelope, so existing pending jobs need no SQL migration. Never run destructive-pop workers alongside the corrected workers. Preserve pending lists, processing lists, lease hashes and failed-job rows during deployment. Legacy processing entries with timestamp leases are recovered after expiration; newly claimed entries use unique reservation IDs and owners. Reservation and recovery scripts use Redis server time, validate key types before writes, and publish destination state before deleting source state. Commands poll priority lists without blocking the heartbeat connection. Redis ACLs must permit EVAL and its list/hash, TYPE and TIME operations; test the configured worker role before rollout.
+
+Malformed and unregistered jobs are kept as raw payloads in `queue:<priority>:invalid` (under the app namespace) after ownership-checked quarantine. Inspect and repair those payloads before deliberately re-enqueuing them; do not delete them as deployment cleanup. Identical pending payloads have separate reservations and leases. A failure-record database outage leaves the reservation available for recovery rather than acknowledging it. A crash after failure persistence but before acknowledgement may create another failure record on replay.
+
+A stalled process or Redis outage can still lose its lease; its effects may overlap a replay. Lease ownership fences acknowledgement, not arbitrary external side effects. Handlers must use business idempotency. The full F02 Redis Streams migration, stable job IDs, persisted retry schedules, deadlines and cancellation remain follow-up work; this list-based correction does not claim those contracts or measured production capacity.

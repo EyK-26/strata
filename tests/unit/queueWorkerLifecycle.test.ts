@@ -8,6 +8,7 @@ import {
   QUEUE_LIST_KEY,
   QUEUE_LOW_KEY,
   QueueWorker,
+  queueInvalidKey,
   queueProcessingKey,
   queueProcessingLeaseKey,
   reclaimExpiredQueueReservations,
@@ -25,6 +26,7 @@ describe("QueueWorker lifecycle", () => {
     const client = new RedisClient(redisUrl);
     for (const key of [QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY]) {
       await client.del(key);
+      await client.del(queueInvalidKey(key));
       await client.del(queueProcessingKey(key));
       await client.del(queueProcessingLeaseKey(key));
     }
@@ -122,7 +124,7 @@ describe("QueueWorker lifecycle", () => {
     }
   });
 
-  test("processNext ignores unknown job names without calling runQueueJob", async () => {
+  test("processNext quarantines unknown job names without calling runQueueJob", async () => {
     const errorLogs: unknown[] = [];
     const originalConsoleError = console.error;
 
@@ -141,6 +143,7 @@ describe("QueueWorker lifecycle", () => {
       const worker = new QueueWorker(redisUrl, new FailedJobService(new FailedJobRepository()), 1);
 
       await expect(worker.processNext()).resolves.toBe(true);
+      expect(await client.llen(queueInvalidKey(QUEUE_HIGH_KEY))).toBe(1);
       expect(errorLogs.some((entry) => String(entry).includes("Ignoring unknown job name"))).toBe(
         true,
       );

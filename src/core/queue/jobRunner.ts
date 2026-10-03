@@ -11,6 +11,7 @@ interface QueueJobEnvelope {
 async function runQueueJob(
   envelope: QueueJobEnvelope,
   failedJobs: FailedJobService,
+  options: { onFailureRecorded?: () => void } = {},
 ): Promise<void> {
   const job = jobRegistry.create(envelope.name);
 
@@ -35,6 +36,7 @@ async function runQueueJob(
           attempts: nextAttempt,
         },
         failedJobs,
+        options,
       );
       return;
     }
@@ -45,6 +47,7 @@ async function runQueueJob(
       exception: error instanceof Error ? (error.stack ?? error.message) : String(error),
     });
 
+    options.onFailureRecorded?.();
     throw error;
   }
 }
