@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/starter",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Interactive create-strata wizard. Choose each layer; one database engine.",
   "type": "module",
   "license": "MIT",

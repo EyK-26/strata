@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.0.1
+
+- Fix release lockfile drift and CLI 2.x peer compatibility
+
 ## 2.0.0
 
 - Strata 2.0: compose business transactions and tenant scopes
