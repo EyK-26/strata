@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 2.0 transaction contract: implicit repository queries use the active transaction; nested scopes use SQL savepoints without requiring a driver-specific helper. Cross-tenant nesting and concurrent sibling savepoints are rejected. Nested bypass scopes restore tenant, bypass, and identifier settings on the same connection.
+
 - `runWithTenantDatabase()` / `runInTransaction()` roll back when `withJsonErrorHandling()` (or `requestTransactionRollback()`) turns a thrown error into a response. Nested tenant scopes use a savepoint and restore `app.tenant_id` on the way out.
 - Redis workers atomically reserve jobs with unique reservation IDs and renewable owner leases. Recovery and acknowledgement are atomic and ownership checked; a failed failure-record write retains the reservation. Invalid/unregistered payloads are quarantined for inspection. Stop old workers before rollout. `QUEUE_VISIBILITY_MS` defaults to 60s and must be at least 30ms. Handlers must be idempotent; Streams and persisted retries remain follow-up work.
 
