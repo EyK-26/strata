@@ -269,7 +269,7 @@ export {
 export type { Seeder, SeederDatabase } from "../core/database/seeders/types.ts";
 export { createSqliteConnection } from "../core/database/sqliteConnection.ts";
 export { defineTable } from "../core/database/table.ts";
-export { runInTransaction } from "../core/database/transaction.ts";
+export { requestTransactionRollback, runInTransaction } from "../core/database/transaction.ts";
 export type {
   QueryJoin,
   QueryJoinOn,

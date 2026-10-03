@@ -1,5 +1,11 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- `runWithTenantDatabase()` / `runInTransaction()` roll back when `withJsonErrorHandling()` (or `requestTransactionRollback()`) turns a thrown error into a response. Nested tenant scopes use a savepoint and restore `app.tenant_id` on the way out.
+- Redis workers reserve jobs with `BLMOVE` until ack. A crashed worker leaves the job on `queue:*:processing` until `QUEUE_VISIBILITY_MS` (default 60s), then another worker requeues it. Handlers must be idempotent.
+- HTTP duration metrics are a bounded Prometheus histogram (`http_request_duration_ms`), not one stored sample per request.
+
 ## 1.1.9
 
 - Defer model events until the surrounding transaction commits

@@ -1,5 +1,10 @@
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { runWithDatabaseConnection } from "../database/connectionContext";
+import {
+  commitOrRollbackScope,
+  runWithTransactionScope,
+  settleTransaction,
+} from "../database/transactionControl";
 import { runWithDeferredModelEvents } from "../events/deferredModelEvents";
 import { isRlsTenancy } from "./tenancyConfig";
 
@@ -61,12 +66,20 @@ async function runWithScopedTenantTransaction<T>(
     );
   }
 
-  return await runWithDeferredModelEvents(async () => {
-    return await begin(async (transaction) => {
-      await apply(transaction);
-      return await runWithDatabaseConnection(transaction, callback);
-    });
-  });
+  const start = begin.bind(pool);
+  return await settleTransaction(() =>
+    runWithDeferredModelEvents(async () => {
+      return await start(async (transaction) => {
+        await apply(transaction);
+        return await runWithDatabaseConnection(transaction, async () => {
+          return await runWithTransactionScope(async () => {
+            const result = await callback();
+            return await commitOrRollbackScope(result);
+          });
+        });
+      });
+    }),
+  );
 }
 
 async function runWithMigrationBypass<T>(callback: () => T | Promise<T>): Promise<T> {
