@@ -1,3 +1,4 @@
+export { dispatchModelEvent, runWithDeferredModelEvents } from "./deferredModelEvents";
 export type { EventListener } from "./eventBus";
 export { EventBus, eventBus, readSharedEventBus } from "./eventBus";
 

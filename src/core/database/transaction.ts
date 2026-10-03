@@ -1,3 +1,4 @@
+import { runWithDeferredModelEvents } from "../events/deferredModelEvents.ts";
 import type { DatabaseConnection } from "./baseRepository.ts";
 import { createDatabaseConnection, type UnsafeQueryable } from "./connection.ts";
 import { resolveRepositoryConnection } from "./repositoryConnection.ts";
@@ -23,8 +24,10 @@ async function runInTransaction<TValue>(
     );
   }
 
-  return await pool.begin(async (transaction) => {
-    return await operation(createDatabaseConnection(transaction));
+  return await runWithDeferredModelEvents(async () => {
+    return await pool.begin(async (transaction) => {
+      return await operation(createDatabaseConnection(transaction));
+    });
   });
 }
 

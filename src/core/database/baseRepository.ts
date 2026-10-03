@@ -1,4 +1,4 @@
-import { eventBus, modelEventName } from "../events/index.ts";
+import { dispatchModelEvent, modelEventName } from "../events/index.ts";
 import {
   buildPaginationMeta,
   type CursorPaginatedResult,
@@ -332,7 +332,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       }
 
       const entity = record as TEntity;
-      await eventBus.dispatch(modelEventName(this.table.name, "created"), entity);
+      await dispatchModelEvent(modelEventName(this.table.name, "created"), entity);
       return entity;
     });
   }
@@ -351,7 +351,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       const entity = (record as TEntity | undefined) ?? null;
 
       if (entity) {
-        await eventBus.dispatch(modelEventName(this.table.name, "updated"), entity);
+        await dispatchModelEvent(modelEventName(this.table.name, "updated"), entity);
       }
 
       return entity;
@@ -392,7 +392,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         return false;
       }
 
-      await eventBus.dispatch(modelEventName(this.table.name, "deleted"), record as TEntity);
+      await dispatchModelEvent(modelEventName(this.table.name, "deleted"), record as TEntity);
       return true;
     });
   }
@@ -406,7 +406,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         return false;
       }
 
-      await eventBus.dispatch(modelEventName(this.table.name, "force-deleted"), {
+      await dispatchModelEvent(modelEventName(this.table.name, "force-deleted"), {
         id,
       });
       return true;
@@ -426,7 +426,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       }
 
       const entity = record as TEntity;
-      await eventBus.dispatch(modelEventName(this.table.name, "restored"), entity);
+      await dispatchModelEvent(modelEventName(this.table.name, "restored"), entity);
       return entity;
     });
   }

@@ -26,6 +26,10 @@ The Stripe Node SDK stays in your app, not `@getstrata/core`.
 
 `--webhooks` creates `webhooks` / `webhook_deliveries`, a `notes.created` listener, and `src/jobs/dispatchOutboundWebhookJob.ts` (`static jobName = "webhook.dispatch"`). The listener puts the event name on the job payload (`event`), so another table can dispatch the same job without copying it. The job signs the JSON body with `signWebhookBody()` / `webhookSignatureHeader()` and POSTs through `safeFetch`. The delivery insert uses the app dialect (`$1` on Postgres, `?` on sqlite and MySQL) and runs inside `runWithMigrationBypass()` because the worker has no tenant ALS. Do not copy that helper onto user-facing routes.
 
+`notes.created` (and other `BaseRepository` model events) is commit-aware. `create()` inside `runWithTenantDatabase()` or `runInTransaction()` does not run listeners until that transaction commits. If the callback throws, queued events are dropped, so a rolled-back order cannot enqueue `webhook.dispatch`. Nested transactions keep that guarantee until the outermost commit. Listeners then run with the tenant that was active at the write. `eventBus.dispatch` for non-model events is still immediate. Model observers (`creating` / `created`) still run inside the transaction.
+
+Raw `pool.begin()` does not defer events unless you wrap it with `runWithDeferredModelEvents()` from `@getstrata/core/events`.
+
 Local receivers on private IPs need `WEBHOOK_ALLOW_PRIVATE=true` **and** a non-production `APP_ENV`. `allowPrivate: true` is ignored in production. Point the row `url` at an `https` host unless you also pass `allowHttp` in the job (the generated job allows HTTP only when `WEBHOOK_ALLOW_PRIVATE` is on locally).
 
 ## SIEM / audit export (`FEATURE_SIEM_EXPORT=true`)

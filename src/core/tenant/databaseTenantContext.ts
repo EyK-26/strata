@@ -1,5 +1,6 @@
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { runWithDatabaseConnection } from "../database/connectionContext";
+import { runWithDeferredModelEvents } from "../events/deferredModelEvents";
 import { isRlsTenancy } from "./tenancyConfig";
 
 type TransactionHandle = {
@@ -59,9 +60,11 @@ async function runWithScopedTenantTransaction<T>(
     );
   }
 
-  return await pool.begin(async (transaction) => {
-    await apply(transaction);
-    return await runWithDatabaseConnection(transaction, callback);
+  return await runWithDeferredModelEvents(async () => {
+    return await pool.begin(async (transaction) => {
+      await apply(transaction);
+      return await runWithDatabaseConnection(transaction, callback);
+    });
   });
 }
 

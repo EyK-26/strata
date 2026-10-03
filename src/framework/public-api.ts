@@ -297,7 +297,11 @@ export {
 } from "../core/errors/http.ts";
 export type { EventListener } from "../core/events/eventBus.ts";
 export { EventBus, eventBus, readSharedEventBus } from "../core/events/eventBus.ts";
-export { modelEventName } from "../core/events/index.ts";
+export {
+  dispatchModelEvent,
+  modelEventName,
+  runWithDeferredModelEvents,
+} from "../core/events/index.ts";
 export {
   auth,
   cache,
