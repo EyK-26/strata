@@ -24,8 +24,9 @@ async function runInTransaction<TValue>(
     );
   }
 
+  const begin = pool.begin;
   return await runWithDeferredModelEvents(async () => {
-    return await pool.begin(async (transaction) => {
+    return await begin(async (transaction) => {
       return await operation(createDatabaseConnection(transaction));
     });
   });

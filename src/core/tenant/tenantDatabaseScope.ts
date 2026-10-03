@@ -35,8 +35,16 @@ async function runWithTenantDatabase<T>(
     return await runWithTenant(tenant, callback);
   }
 
+  const pool = getDefaultDatabasePool();
+  const begin = pool.begin;
+  if (typeof begin !== "function") {
+    throw new Error(
+      "RLS tenant scope requires a pool that supports begin(). Session-scoped set_config is not used on pooled connections.",
+    );
+  }
+
   return await runWithDeferredModelEvents(async () => {
-    return await getDefaultDatabasePool().begin!(async (transaction) => {
+    return await begin(async (transaction) => {
       await applyTenantContextToTransaction(transaction, tenant.id);
 
       return await runWithDatabaseConnection(transaction, async () => {

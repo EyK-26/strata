@@ -54,14 +54,15 @@ async function runWithScopedTenantTransaction<T>(
   }
 
   const pool = getDefaultDatabasePool();
-  if (typeof pool.begin !== "function") {
+  const begin = pool.begin;
+  if (typeof begin !== "function") {
     throw new Error(
       "RLS migration bypass requires a pool that supports begin(). Session-scoped set_config is not used on pooled connections.",
     );
   }
 
   return await runWithDeferredModelEvents(async () => {
-    return await pool.begin(async (transaction) => {
+    return await begin(async (transaction) => {
       await apply(transaction);
       return await runWithDatabaseConnection(transaction, callback);
     });
