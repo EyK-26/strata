@@ -15,6 +15,8 @@ bun run db:migrate
 bun run dev
 ```
 
+New apps use TypeScript 7.0.2 for checking; Bun still runs and bundles the application. Core and bootstrap accept TypeScript 5.9, 6.x, and 7.x, with packed-package consumer checks for all three compiler majors. React scaffolds declare Bun-supported CSS imports and are checked and built in the generated-app gate.
+
 `strata` installs into the app rather than globally, so use the `bun run` scripts above, or `bunx strata <command>` from inside the app directory.
 
 In CI, pass `--yes` and the layers you want. Defaults (no flags) are SQLite, JSON API, header auth:

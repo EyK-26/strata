@@ -13,6 +13,7 @@
  * Run: bun scripts/verify-generated-app.ts
  */
 
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,6 +31,10 @@ const PACKAGE_DIRS = [
 /** One case per code path the generator can emit. Keep MySQL and every auth kit covered. */
 const CASES: Array<{ name: string; flags: string[] }> = [
   { name: "api-sqlite-headers", flags: [] },
+  {
+    name: "spa-react-sqlite-token",
+    flags: ["--frontend", "spa-react", "--database", "sqlite", "--auth", "token"],
+  },
   {
     name: "htmx-sqlite-cookie",
     flags: ["--frontend", "server-htmx", "--database", "sqlite", "--auth", "cookie"],
@@ -116,6 +121,9 @@ async function useTarballs(appDir: string, tarballs: Record<string, string>): Pr
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
+// Match the public core/bootstrap peer contract, including declarations emitted by TS 7.
+const TYPESCRIPT_VERSIONS = ["5.9.3", "6.0.3", "7.0.2"] as const;
+
 const workspace = await mkdtemp(join(tmpdir(), "strata-verify-"));
 const failures: string[] = [];
 
@@ -136,19 +144,40 @@ try {
     const appDir = join(workspace, testCase.name);
     await useTarballs(appDir, tarballs);
 
-    const installed = await run(["bun", "install"], appDir);
-    if (installed.exitCode !== 0) {
-      failures.push(`${testCase.name}: bun install failed\n${installed.output}`);
-      continue;
-    }
+    for (const version of TYPESCRIPT_VERSIONS) {
+      const manifestPath = join(appDir, "package.json");
+      const manifest = await Bun.file(manifestPath).json();
+      manifest.devDependencies = { ...manifest.devDependencies, typescript: version };
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
-    const checked = await run(["bun", "run", "check"], appDir);
-    if (checked.exitCode === 0) {
-      console.log(`ok   ${testCase.name}`);
-      continue;
+      const installed = await run(["bun", "install"], appDir);
+      if (installed.exitCode !== 0) {
+        failures.push(`${testCase.name} (TS ${version}): bun install failed\n${installed.output}`);
+        continue;
+      }
+
+      const checked = await run(["bun", "run", "check"], appDir);
+      if (checked.exitCode === 0) {
+        console.log(`ok   ${testCase.name} (TS ${version})`);
+        continue;
+      }
+      failures.push(`${testCase.name} (TS ${version}): bun run check failed\n${checked.output}`);
+      console.log(`FAIL ${testCase.name} (TS ${version})`);
     }
-    failures.push(`${testCase.name}: bun run check failed\n${checked.output}`);
-    console.log(`FAIL ${testCase.name}`);
+    const frontendDir = join(appDir, "frontend");
+    if (existsSync(join(frontendDir, "package.json"))) {
+      for (const command of [
+        ["bun", "install"],
+        ["bun", "x", "--no-install", "tsc", "--noEmit"],
+        ["bun", "run", "build"],
+      ]) {
+        const result = await run(command, frontendDir);
+        if (result.exitCode !== 0) {
+          failures.push(`${testCase.name}: frontend ${command.join(" ")} failed\n${result.output}`);
+          break;
+        }
+      }
+    }
   }
 } finally {
   await rm(workspace, { recursive: true, force: true });
@@ -160,4 +189,6 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`\nGenerated app typecheck gate passed (${CASES.length} layer combinations).`);
+console.log(
+  `\nGenerated app typecheck gate passed (${CASES.length} layer combinations × ${TYPESCRIPT_VERSIONS.length} compiler versions).`,
+);

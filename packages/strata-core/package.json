@@ -943,7 +943,7 @@
     "@node-saml/node-saml": "^5.1.0",
     "eta": "^4.6.0",
     "mysql2": "^3.24.3",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0 || ^6.0.0 || ^7.0.0"
   },
   "peerDependenciesMeta": {
     "@node-saml/node-saml": {

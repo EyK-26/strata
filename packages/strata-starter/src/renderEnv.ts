@@ -481,7 +481,7 @@ function renderPackageJson(
       dependencies: coreDeps,
       devDependencies: {
         "@types/bun": "^1.4.0",
-        typescript: "^5.9.2",
+        typescript: "^7.0.2",
       },
     },
     null,
