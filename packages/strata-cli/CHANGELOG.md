@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## Unreleased
+
+- `openapi:generate` (and validate/check) keep JSON API and health routes and drop HTML-only (`web` without `api`) and SPA-prefix paths instead of restamping the full hybrid table as API.
+
 ## 1.1.7
 
 - Fix generated webhook SQL, billing hook, and hybrid SPA smoke
