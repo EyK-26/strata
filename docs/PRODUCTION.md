@@ -73,3 +73,13 @@ HTTP durations use cumulative millisecond histogram buckets, count, and sum; no 
 The registry admits at most 4,096 method/path/status series plus one aggregate overflow series. It normalizes methods and status codes, caps path label length, and escapes Prometheus label values. `new PrometheusRegistry(maxSeries)` can select a smaller positive limit; `getStorageStats()` exposes the retained series and bucket counts. Overflow preserves request/duration totals but loses the individual route and status breakdown. Scrape work is proportional to this cap and the fixed bucket count, rather than request volume. Alert on the overflow series before relying on per-route dashboards. Non-finite or negative duration observations are rejected.
 
 The 1.x `normalizeMetricPath()` numeric/UUID heuristic is removed in 2.0. It could retain unlimited slug labels and cannot reliably infer route identity. Keep registered templates, including HTML routes, separate from the API-only OpenAPI registry.
+
+## Distributed throttle availability
+
+The 2.0 Redis API and login throttles consume an attempt and establish its expiry in one single-key Lua operation. A counter without a TTL is repaired in that same operation. Buckets use the application namespace, configured scope, tenant identity, HTTP method, registered route template, and caller identity. Slugs and query strings cannot bypass a route's limit. Login email is normalized before identity selection. Raw emails, tokens, and request paths are not stored in the key.
+
+A configured Redis throttle returns JSON `503` with `Retry-After: 1` when Redis fails, responds incorrectly, or exceeds `commandTimeoutMs` (default 1,000ms). It does not call the business handler or switch to memory. A failed owned connection is closed and recreated on the next request. Applications can inject a shared `redisClient`; its lifecycle and recovery belong to that application. A timed-out attempt can still be consumed at the server; callers denied admission must retry normally. Handler errors propagate through the normal framework error contract.
+
+Bucket keys change in 2.0, so existing throttle windows restart during migration. Retire old throttle keys separately during maintenance using bounded Redis SCAN; do not use KEYS. Unmatched dispatchers share a bucket. Custom dispatchers should carry trusted registered templates through request context as described above.
+
+This increment addresses Redis atomicity and failure admission. Core plan multipliers, generic app quota injection, and bounded memory-store pruning are still pending in the production program. Memory throttles remain local to a process and are not a distributed production substitute.

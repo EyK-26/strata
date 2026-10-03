@@ -1,7 +1,12 @@
-import { RedisClient } from "bun";
 import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
+import {
+  createRedisThrottleConsumer,
+  type RedisThrottleClient,
+  redisThrottleKey,
+  throttleUnavailableResponse,
+} from "./throttleMiddleware";
 import { tooManyRequestsResponse } from "./throttleResponse";
 
 interface LoginThrottleOptions {
@@ -9,6 +14,8 @@ interface LoginThrottleOptions {
   maxAttempts: number;
   decaySeconds: number;
   keyPrefix?: string;
+  commandTimeoutMs?: number;
+  redisClient?: RedisThrottleClient;
 }
 
 type LoginThrottleBucket = { count: number; resetAt: number };
@@ -78,18 +85,18 @@ function createMemoryLoginThrottleMiddleware(options: LoginThrottleOptions): Mid
 function createRedisLoginThrottleMiddleware(
   options: LoginThrottleOptions & { redisUrl: string },
 ): Middleware {
-  const client = new RedisClient(options.redisUrl);
-  const prefix = options.keyPrefix ?? namespacedRedisKey("login-throttle:");
+  const consume = createRedisThrottleConsumer(options);
+  const prefix = options.keyPrefix ?? "login-throttle";
 
   return async (request: Request, next: () => Promise<Response>) => {
     const identity = resolveLoginIdentity(request);
     const email = await resolveLoginEmail(request);
-    const throttleKey = `${prefix}${identity}:${email}`;
-
-    const attempts = Number(await client.incr(throttleKey));
-
-    if (attempts === 1) {
-      await client.expire(throttleKey, options.decaySeconds);
+    const throttleKey = redisThrottleKey(request, prefix, JSON.stringify([identity, email]));
+    let attempts: number;
+    try {
+      attempts = await consume(throttleKey, options.decaySeconds);
+    } catch {
+      return throttleUnavailableResponse();
     }
 
     if (attempts > options.maxAttempts) {
