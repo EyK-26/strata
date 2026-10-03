@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   compareVersions,
@@ -195,4 +196,94 @@ describe("insertChangelogEntry", () => {
   test("prepends when the document has no title", () => {
     expect(insertChangelogEntry("stray text\n", "1.0.7", "- New.")).toStartWith("## 1.0.7");
   });
+});
+
+describe("bump workspace install contract", () => {
+  test("a major bump updates CLI peers and leaves frozen install/dedupe stable", async () => {
+    const root = await mkdtemp(join(tmpdir(), "strata-bump-contract-"));
+    const names = [
+      "strata-core",
+      "strata-bootstrap",
+      "strata-cli",
+      "strata-starter",
+      "create-strata",
+    ];
+    const write = async (path: string, value: string) => {
+      await mkdir(join(root, path, ".."), { recursive: true });
+      await Bun.write(join(root, path), value);
+    };
+    const run = async (args: string[]) => {
+      const process = Bun.spawn(["bun", ...args], { cwd: root, stdout: "pipe", stderr: "pipe" });
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(process.stdout).text(),
+        new Response(process.stderr).text(),
+        process.exited,
+      ]);
+      if (code !== 0) throw new Error(`${args.join(" ")} failed: ${stdout} ${stderr}`);
+    };
+    try {
+      await write(
+        "package.json",
+        JSON.stringify({
+          name: "strata-bump-fixture",
+          private: true,
+          workspaces: ["packages/*"],
+          dependencies: Object.fromEntries(
+            names.map((name) => [
+              name === "create-strata" ? name : `@getstrata/${name.replace("strata-", "")}`,
+              "workspace:*",
+            ]),
+          ),
+        }),
+      );
+      for (const name of names) {
+        const published =
+          name === "create-strata" ? name : `@getstrata/${name.replace("strata-", "")}`;
+        const peers =
+          name === "strata-bootstrap"
+            ? { "@getstrata/core": "^1.0.0" }
+            : name === "strata-cli"
+              ? { "@getstrata/core": "^1.0.0", "@getstrata/bootstrap": "^1.0.0" }
+              : {};
+        await write(
+          `packages/${name}/package.json`,
+          JSON.stringify({ name: published, version: "1.0.0", peerDependencies: peers }, null, 2),
+        );
+        if (name !== "create-strata")
+          await write(`packages/${name}/CHANGELOG.md`, `# ${published}\n\n## 1.0.0\n`);
+      }
+      for (const file of ["scripts/bump.ts", "scripts/bump-version.ts"]) {
+        await write(file, await readFile(join(import.meta.dir, "../..", file), "utf8"));
+      }
+      await write(
+        "scripts/verify-package-versions.ts",
+        `const EXPECTED: Record<string, string> = {\n  "@getstrata/core": "1.0.0",\n};`,
+      );
+      await write("README.md", "Published as **1.0.0**");
+      for (const file of [
+        "packages/strata-starter/templates/package.json",
+        "packages/strata-starter/src/renderEnv.ts",
+        "tests/unit/cli/starterGenerate.test.ts",
+        "tests/unit/cli/starterTemplate.test.ts",
+      ]) {
+        await write(file, '{"@getstrata/core": "^1.0.0"}');
+      }
+      await run(["install", "--ignore-scripts"]);
+      await run(["scripts/bump.ts", "2.0.0"]);
+      const cli = await Bun.file(join(root, "packages/strata-cli/package.json")).json();
+      expect(cli.peerDependencies).toEqual({
+        "@getstrata/core": "^2.0.0",
+        "@getstrata/bootstrap": "^2.0.0",
+      });
+      const lock = await readFile(join(root, "bun.lock"), "utf8");
+      expect(lock).not.toContain('"^1.0.0"');
+      await run(["install", "--frozen-lockfile", "--ignore-scripts"]);
+      await run(["dedupe"]);
+      expect(await readFile(join(root, "bun.lock"), "utf8")).toBe(lock);
+      await run(["scripts/bump.ts", "2.0.0"]);
+      expect(await readFile(join(root, "bun.lock"), "utf8")).toBe(lock);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 15_000);
 });

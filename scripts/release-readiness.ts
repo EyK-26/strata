@@ -1,6 +1,7 @@
 interface PackageVersion {
   name: string;
   version: string;
+  peerDependencies?: Record<string, string>;
 }
 
 interface ReleaseReadiness {
@@ -47,13 +48,29 @@ function resolveLockstepVersion(packages: readonly PackageVersion[]): ReleaseRea
   return { version: packages[0]?.version ?? null, errors: [] };
 }
 
+function checkPackagePeerCompatibility(packages: readonly PackageVersion[]): string[] {
+  const versions = new Map(packages.map((entry) => [entry.name, entry.version]));
+  const errors: string[] = [];
+  for (const entry of packages) {
+    for (const [name, range] of Object.entries(entry.peerDependencies ?? {})) {
+      const version = versions.get(name);
+      if (version && !Bun.semver.satisfies(version, range)) {
+        errors.push(
+          `${entry.name} requires ${name}@${range}, incompatible with released ${version}.`,
+        );
+      }
+    }
+  }
+  return errors;
+}
+
 function checkReleaseReadiness(input: {
   packages: readonly PackageVersion[];
   tag?: string;
   publishedVersions?: readonly string[];
 }): ReleaseReadiness {
   const lockstep = resolveLockstepVersion(input.packages);
-  const errors = [...lockstep.errors];
+  const errors = [...lockstep.errors, ...checkPackagePeerCompatibility(input.packages)];
   const version = lockstep.version;
 
   if (input.tag !== undefined) {
@@ -116,4 +133,10 @@ function checkReleaseTarget(input: {
 }
 
 export type { PackageVersion, ReleaseReadiness };
-export { checkReleaseReadiness, checkReleaseTarget, parseReleaseTag, resolveLockstepVersion };
+export {
+  checkPackagePeerCompatibility,
+  checkReleaseReadiness,
+  checkReleaseTarget,
+  parseReleaseTag,
+  resolveLockstepVersion,
+};
