@@ -26,12 +26,13 @@ async function missingHtmlResponse(): Promise<Response> {
   return notFoundHtmlResponse();
 }
 
-function wrapRouteHandler(handler: (request: Request) => unknown): BunRouteHandler {
+function wrapRouteHandler(handler: (request: Request) => unknown, path: string): BunRouteHandler {
   return async (request, server) => {
     return await runWithRequestMeta(
       {
         ...currentRequestMeta(),
         request,
+        routeTemplate: path,
         ipAddress: socketAddress(server, request),
         userAgent: request.headers.get("user-agent"),
       },
@@ -50,7 +51,7 @@ function convertAppRoutesToBunRoutes(
 
   for (const [path, handler] of Object.entries(routes)) {
     if (typeof handler === "function") {
-      bunRoutes[path] = { GET: wrapRouteHandler(handler as (request: Request) => unknown) };
+      bunRoutes[path] = { GET: wrapRouteHandler(handler as (request: Request) => unknown, path) };
       continue;
     }
 
@@ -64,6 +65,7 @@ function convertAppRoutesToBunRoutes(
 
         methods[method.toUpperCase()] = wrapRouteHandler(
           methodHandler as (request: Request) => unknown,
+          path,
         );
       }
 

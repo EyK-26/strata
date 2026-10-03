@@ -1,27 +1,24 @@
 import { prometheusRegistry } from "../metrics/prometheus";
 import type { Middleware } from "./middleware";
-
-function normalizeMetricPath(pathname: string): string {
-  return pathname.replace(/\/\d+/g, "/:id").replace(/\/[0-9a-f-]{36}/gi, "/:id");
-}
+import { currentRequestMeta } from "./requestMetaContext";
 
 function createMetricsMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const startedAt = performance.now();
-    const response = await next();
-    const durationMs = performance.now() - startedAt;
-    const path = normalizeMetricPath(new URL(request.url).pathname);
-    const labels = {
-      method: request.method,
-      path,
-      status: String(response.status),
-    };
-
-    prometheusRegistry.incrementHttpRequest(labels);
-    prometheusRegistry.observeHttpDuration(labels, durationMs);
-
-    return response;
+    let response: Response | undefined;
+    try {
+      response = await next();
+      return response;
+    } finally {
+      const labels = {
+        method: request.method,
+        path: currentRequestMeta().routeTemplate ?? "__unmatched__",
+        status: String(response?.status ?? 500),
+      };
+      prometheusRegistry.incrementHttpRequest(labels);
+      prometheusRegistry.observeHttpDuration(labels, performance.now() - startedAt);
+    }
   };
 }
 
-export { createMetricsMiddleware, normalizeMetricPath };
+export { createMetricsMiddleware };

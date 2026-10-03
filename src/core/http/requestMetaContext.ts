@@ -4,6 +4,8 @@ type RequestMeta = {
   ipAddress: string | null;
   userAgent: string | null;
   request?: Request;
+  /** Registered route template; never a URL supplied by the client. */
+  routeTemplate?: string;
   flash?: { level: string; message: string } | null;
   csrfToken?: string;
   cspNonce?: string;

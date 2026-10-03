@@ -1,3 +1,5 @@
+import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
+
 type Middleware = (request: Request, next: () => Promise<Response>) => Promise<Response>;
 
 type RouteHandler = (request: Request) => Response | Promise<Response>;
@@ -82,7 +84,9 @@ function applyMiddlewareToRoutes<T extends Record<string, unknown>>(
   const wrapped: Record<string, unknown> = {};
 
   for (const [path, routeHandler] of Object.entries(routes)) {
-    wrapped[path] = wrapRouteHandler(routeHandler, middleware);
+    const identity: Middleware = async (_request, next) =>
+      await runWithRequestMeta({ ...currentRequestMeta(), routeTemplate: path }, next);
+    wrapped[path] = wrapRouteHandler(routeHandler, [identity, ...middleware]);
   }
 
   return wrapped as T;
