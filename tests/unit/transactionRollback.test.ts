@@ -26,6 +26,11 @@ const otherTenant: TenantContext = {
 
 type SqlCall = { query: string; params: readonly unknown[] };
 
+type FakeTransaction = {
+  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
+  savepoint?<T>(callback: (savepoint: FakeTransaction) => Promise<T>): Promise<T>;
+};
+
 function restorePool(previous: SqlDatabaseConnection | null): void {
   if (previous) {
     registerDefaultDatabasePool(previous);
@@ -53,7 +58,7 @@ function installFakePool(
 } {
   const calls: string[] = [];
   const sql: SqlCall[] = [];
-  const tx = {
+  const tx: FakeTransaction = {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
       sql.push({ query, params: [...params] });
       if (query.includes("current_setting")) {
@@ -64,7 +69,7 @@ function installFakePool(
       }
       return [] as T[];
     },
-    async savepoint<T>(callback: (savepoint: typeof tx) => Promise<T>): Promise<T> {
+    async savepoint<T>(callback: (savepoint: FakeTransaction) => Promise<T>): Promise<T> {
       calls.push("savepoint");
       try {
         return await callback(tx);
@@ -79,7 +84,7 @@ function installFakePool(
   }
 
   const pool = Object.assign(async () => [] as unknown[], {
-    async begin<T>(callback: (transaction: typeof tx) => Promise<T>): Promise<T> {
+    async begin<T>(callback: (transaction: FakeTransaction) => Promise<T>): Promise<T> {
       calls.push("begin");
       try {
         const result = await callback(tx);
@@ -281,7 +286,7 @@ describe("transaction rollback boundaries", () => {
           },
         });
       },
-    } as SqlDatabaseConnection);
+    } as unknown as SqlDatabaseConnection);
 
     await runWithDatabaseConnection(
       {
