@@ -1,5 +1,6 @@
 import { toHttpError } from "@getstrata/core/errors/http";
 import { mapDatabaseError } from "../database/errors";
+import { requestTransactionRollback } from "../database/transactionControl";
 import type { Middleware } from "./middleware";
 import { logServerError, webErrorResponse } from "./webErrorResponse";
 
@@ -38,6 +39,7 @@ function withErrorHandling<TArgs extends unknown[]>(
     try {
       return await handler(...args);
     } catch (error) {
+      requestTransactionRollback();
       const request = args.find((arg): arg is Request => arg instanceof Request);
       const webResponse = await webErrorResponse(error, request);
 
@@ -57,6 +59,7 @@ function withJsonErrorHandling<TArgs extends unknown[]>(
     try {
       return await handler(...args);
     } catch (error) {
+      requestTransactionRollback();
       return errorResponse(error);
     }
   };
@@ -67,6 +70,7 @@ function createJsonErrorMiddleware(): Middleware {
     try {
       return await next();
     } catch (error) {
+      requestTransactionRollback();
       return errorResponse(error);
     }
   };

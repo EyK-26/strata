@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Job } from "@getstrata/core/queue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import {
@@ -7,10 +7,19 @@ import {
   QUEUE_LOW_KEY,
   queueKeyForPriority,
   RedisQueue,
+  reservationExpired,
 } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
 
-afterAll(() => {});
+describe("reservationExpired", () => {
+  test("treats a missing, blank, or stale lease as expired", () => {
+    expect(reservationExpired(null, 1_000, 60_000)).toBe(true);
+    expect(reservationExpired("", 1_000, 60_000)).toBe(true);
+    expect(reservationExpired("nope", 1_000, 60_000)).toBe(true);
+    expect(reservationExpired(String(1_000 - 60_000), 1_000, 60_000)).toBe(true);
+    expect(reservationExpired(String(1_000), 1_000, 60_000)).toBe(false);
+  });
+});
 
 describe("redis queue", () => {
   const redisUrl = `${process.env.REDIS_URL ?? "redis://redis:6379"}/15`;

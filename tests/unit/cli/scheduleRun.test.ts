@@ -11,6 +11,7 @@ describe("scheduleRunCommand", () => {
       appSchedule: {
         dueTasks: () => [],
       },
+      runDueScheduledTasks: async () => undefined,
     }));
     mock.module("../../../src/bootstrap/schedule", () => ({}));
 
@@ -39,6 +40,11 @@ describe("scheduleRunCommand", () => {
             },
           },
         ],
+      },
+      runDueScheduledTasks: async (schedule: {
+        dueTasks: () => Array<{ run: () => Promise<void> }>;
+      }) => {
+        for (const task of schedule.dueTasks()) await task.run();
       },
     }));
     mock.module("../../../src/bootstrap/schedule", () => ({}));

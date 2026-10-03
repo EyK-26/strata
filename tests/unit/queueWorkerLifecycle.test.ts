@@ -3,7 +3,16 @@ import { Job } from "@getstrata/core/queue";
 import { FailedJobRepository } from "@getstrata/core/queue/failedJobRepository";
 import { FailedJobService } from "@getstrata/core/queue/failedJobService";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
-import { QUEUE_HIGH_KEY, QueueWorker } from "@getstrata/core/queue/redisQueue";
+import {
+  QUEUE_HIGH_KEY,
+  QUEUE_LIST_KEY,
+  QUEUE_LOW_KEY,
+  QueueWorker,
+  queueInvalidKey,
+  queueProcessingKey,
+  queueProcessingLeaseKey,
+  reclaimExpiredQueueReservations,
+} from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
 
 afterAll(() => {
@@ -15,9 +24,13 @@ describe("QueueWorker lifecycle", () => {
 
   async function clearQueueKeys(): Promise<void> {
     const client = new RedisClient(redisUrl);
-    await client.del(QUEUE_HIGH_KEY);
-    await client.del("strata:queue:default");
-    await client.del("strata:queue:low");
+    for (const key of [QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY]) {
+      await client.del(key);
+      await client.del(queueInvalidKey(key));
+      await client.del(queueProcessingKey(key));
+      await client.del(queueProcessingLeaseKey(key));
+    }
+    client.close();
   }
 
   test("requestStop exits the run loop", async () => {
@@ -39,6 +52,7 @@ describe("QueueWorker lifecycle", () => {
     class EchoJob extends Job<{ message: string }> {
       override async handle(payload: { message: string }): Promise<void> {
         messages.push(payload.message);
+        expect(await client.llen(queueProcessingKey(QUEUE_HIGH_KEY))).toBe(1);
       }
     }
 
@@ -61,6 +75,8 @@ describe("QueueWorker lifecycle", () => {
 
     await expect(worker.processNext()).resolves.toBe(true);
     expect(messages).toEqual(["from-redis"]);
+    expect(await client.llen(queueProcessingKey(QUEUE_HIGH_KEY))).toBe(0);
+    client.close();
   });
 
   test("processNext returns false when no jobs are available", async () => {
@@ -108,7 +124,7 @@ describe("QueueWorker lifecycle", () => {
     }
   });
 
-  test("processNext ignores unknown job names without calling runQueueJob", async () => {
+  test("processNext quarantines unknown job names without calling runQueueJob", async () => {
     const errorLogs: unknown[] = [];
     const originalConsoleError = console.error;
 
@@ -127,6 +143,7 @@ describe("QueueWorker lifecycle", () => {
       const worker = new QueueWorker(redisUrl, new FailedJobService(new FailedJobRepository()), 1);
 
       await expect(worker.processNext()).resolves.toBe(true);
+      expect(await client.llen(queueInvalidKey(QUEUE_HIGH_KEY))).toBe(1);
       expect(errorLogs.some((entry) => String(entry).includes("Ignoring unknown job name"))).toBe(
         true,
       );
@@ -135,6 +152,28 @@ describe("QueueWorker lifecycle", () => {
       );
     } finally {
       console.error = originalConsoleError;
+    }
+  });
+
+  test("reclaims an unacked reservation and leaves a fresh lease in processing", async () => {
+    await clearQueueKeys();
+    const client = new RedisClient(redisUrl);
+    const payload = JSON.stringify({ name: "missing.job", payload: {}, attempts: 0 });
+    const processingKey = queueProcessingKey(QUEUE_HIGH_KEY);
+    const leaseKey = queueProcessingLeaseKey(QUEUE_HIGH_KEY);
+
+    try {
+      await client.lpush(processingKey, payload);
+      await client.hset(leaseKey, payload, String(Date.now()));
+      expect(await reclaimExpiredQueueReservations(client)).toBe(0);
+      expect(await client.llen(processingKey)).toBe(1);
+
+      await client.hset(leaseKey, payload, String(Date.now() - 120_000));
+      expect(await reclaimExpiredQueueReservations(client)).toBe(1);
+      expect(await client.llen(processingKey)).toBe(0);
+      expect(await client.llen(QUEUE_HIGH_KEY)).toBe(1);
+    } finally {
+      client.close();
     }
   });
 });

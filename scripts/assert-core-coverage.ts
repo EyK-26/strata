@@ -25,6 +25,7 @@ const proc = Bun.spawn(
   [
     "bun",
     "test",
+    "--isolate",
     "--coverage",
     "--coverage-reporter=text",
     "--max-concurrency=1",
