@@ -1,5 +1,11 @@
 # create-strata changelog
 
+## 2.0.2
+
+- Adopt TypeScript 7.0.2 in framework and generated apps; preserve tested TypeScript 5.9 and 6.x consumer compatibility.
+- Verify six generated app configurations against three compiler versions and typecheck/build React SPA and hybrid frontends.
+- Declare Bun-supported CSS imports in the SPA scaffold for TypeScript 7.
+
 ## 2.0.1
 
 - Fix release lockfile drift and CLI 2.x peer compatibility
