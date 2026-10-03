@@ -4,9 +4,25 @@ interface MetricLabels {
   status: string;
 }
 
+const HTTP_DURATION_BUCKETS_MS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000] as const;
+
+type DurationHistogram = {
+  cumulative: number[];
+  sum: number;
+  count: number;
+};
+
+function emptyHistogram(): DurationHistogram {
+  return {
+    cumulative: HTTP_DURATION_BUCKETS_MS.map(() => 0),
+    sum: 0,
+    count: 0,
+  };
+}
+
 class PrometheusRegistry {
   private readonly httpRequestsTotal = new Map<string, number>();
-  private readonly httpRequestDurationMs = new Map<string, number[]>();
+  private readonly httpRequestDurationMs = new Map<string, DurationHistogram>();
 
   incrementHttpRequest(labels: MetricLabels): void {
     const key = this.metricKey(labels);
@@ -15,9 +31,19 @@ class PrometheusRegistry {
 
   observeHttpDuration(labels: MetricLabels, durationMs: number): void {
     const key = this.metricKey(labels);
-    const samples = this.httpRequestDurationMs.get(key) ?? [];
-    samples.push(durationMs);
-    this.httpRequestDurationMs.set(key, samples);
+    const histogram = this.httpRequestDurationMs.get(key) ?? emptyHistogram();
+    histogram.count += 1;
+    histogram.sum += durationMs;
+
+    for (let index = 0; index < HTTP_DURATION_BUCKETS_MS.length; index += 1) {
+      const bound = HTTP_DURATION_BUCKETS_MS[index];
+      if (bound !== undefined && durationMs <= bound) {
+        const count = histogram.cumulative[index] ?? 0;
+        histogram.cumulative[index] = count + 1;
+      }
+    }
+
+    this.httpRequestDurationMs.set(key, histogram);
   }
 
   renderMetrics(): string {
@@ -31,13 +57,20 @@ class PrometheusRegistry {
     }
 
     lines.push(
-      "# HELP http_request_duration_ms_sum Sum of HTTP request durations in milliseconds.",
-      "# TYPE http_request_duration_ms_sum counter",
+      "# HELP http_request_duration_ms HTTP request duration in milliseconds.",
+      "# TYPE http_request_duration_ms histogram",
     );
 
-    for (const [key, samples] of this.httpRequestDurationMs) {
-      const sum = samples.reduce((total, sample) => total + sample, 0);
-      lines.push(`http_request_duration_ms_sum{${key}} ${sum}`);
+    for (const [key, histogram] of this.httpRequestDurationMs) {
+      for (let index = 0; index < HTTP_DURATION_BUCKETS_MS.length; index += 1) {
+        const bound = HTTP_DURATION_BUCKETS_MS[index];
+        lines.push(
+          `http_request_duration_ms_bucket{${key},le="${bound}"} ${histogram.cumulative[index] ?? 0}`,
+        );
+      }
+      lines.push(`http_request_duration_ms_bucket{${key},le="+Inf"} ${histogram.count}`);
+      lines.push(`http_request_duration_ms_sum{${key}} ${histogram.sum}`);
+      lines.push(`http_request_duration_ms_count{${key}} ${histogram.count}`);
     }
 
     return `${lines.join("\n")}\n`;
@@ -95,4 +128,4 @@ class PrometheusRegistry {
 const prometheusRegistry = new PrometheusRegistry();
 
 export type { MetricLabels };
-export { PrometheusRegistry, prometheusRegistry };
+export { HTTP_DURATION_BUCKETS_MS, PrometheusRegistry, prometheusRegistry };
