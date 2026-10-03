@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureDirectory } from "../../../src/cli/commands/utils";
@@ -8,7 +8,7 @@ import { captureConsole, repoRoot } from "./helpers";
 const tempDirectories: string[] = [];
 
 async function withTempWorkspace(run: (workspace: string) => Promise<void>): Promise<void> {
-  const workspace = await mkdtemp(join(tmpdir(), "strata-cli-scaffold-"));
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "strata-cli-scaffold-")));
   tempDirectories.push(workspace);
   const previousCwd = process.cwd();
   process.chdir(workspace);
