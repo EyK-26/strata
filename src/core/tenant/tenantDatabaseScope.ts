@@ -14,7 +14,7 @@ import { isRlsTenancy, isTenancyEnabled } from "./tenancyConfig";
 import { currentTenant, runWithTenant, type TenantContext } from "./tenantContext";
 
 type TransactionHandle = {
-  unsafe(query: string, params?: readonly unknown[]): Promise<unknown[]>;
+  unsafe<T = unknown>(query: string, params?: readonly unknown[]): Promise<T[]>;
   savepoint?<T>(callback: (savepoint: TransactionHandle) => Promise<T>): Promise<T>;
 };
 
