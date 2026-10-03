@@ -460,6 +460,7 @@ function renderPackageJson(
     dev: "strata dev",
     start: "strata start",
     "db:migrate": "strata migrate",
+    "db:seed:demo": "bun run src/db/seed.ts",
     "db:fresh": "strata migrate:fresh",
     "queue:work": "strata queue:work",
     check: "tsc --noEmit",
@@ -787,7 +788,7 @@ function renderReadme(
   if (needsFrontendBuild(layers.frontend)) {
     next.push("bun run frontend:install", "bun run frontend:build");
   }
-  next.push("bun run db:migrate", "bun run dev");
+  next.push("bun run db:migrate", "bun run db:seed:demo", "bun run dev");
 
   const extras = Object.entries(layers.extras)
     .filter(([, on]) => on)
@@ -914,7 +915,7 @@ docker build -t ${projectName} .
 docker run --rm -p 3000:3000 --env-file .env.production ${projectName}
 \`\`\`
 
-Migrations are a deploy step, not a boot step: run \`docker run --rm --env-file .env.production ${projectName} bun run db:migrate\` before the new version takes traffic.${
+Migrations are a deploy step, not a boot step: run \`docker run --rm --env-file .env.production ${projectName} bun run db:migrate\` before the new version takes traffic. Migrations and resets do not seed by default. Demo seeding is an explicit development command, \`bun run db:seed:demo\`, and refuses production/staging. Existing demo accounts must be disabled or have their credentials and sessions/tokens rotated before deployment.${
     layers.database === "sqlite"
       ? " SQLite stores its file in `/app/storage`; mount a volume there (`-v strata_data:/app/storage`) or the data is lost with the container."
       : ""

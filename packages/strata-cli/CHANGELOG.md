@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## Unreleased
+
+- 2.0: migrations no longer implicitly call an app seed export. Seeding requires --seed; fresh accepts the same explicit flag. Missing seed exports are rejected before applying migrations or resetting data.
+
 ## 1.1.9
 
 - Defer model events until the surrounding transaction commits

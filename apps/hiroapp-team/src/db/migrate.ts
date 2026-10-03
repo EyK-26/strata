@@ -1,5 +1,6 @@
 import { hashPassword } from "@getstrata/core/auth/password";
 import { migrateDatabase } from "@getstrata/core/database/migrations";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { closeDatabase } from "../bootstrap/database.ts";
 import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { Note } from "../models/Note.ts";
@@ -7,6 +8,7 @@ import { User } from "../models/User.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function seed() {
+  if (isProductionEnv()) throw new Error("Demo seeding is disabled in production and staging.");
   await ensureAppDatabase();
 
   if ((await Note.query().value("id")) === null) {
@@ -34,7 +36,6 @@ export async function migrate() {
   await withMigrationDatabase(async (db) => {
     await migrateDatabase(db, await loadStarterMigrations());
   });
-  await seed();
 }
 
 /** The CLI calls this after migrate() so pooled drivers do not hold the process open. */
@@ -44,7 +45,7 @@ export async function close() {
 
 if (import.meta.main) {
   await migrate();
-  console.log("Database migrated and seeded.");
+  console.log("Database migrated.");
   await close();
   process.exit(0);
 }

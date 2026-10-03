@@ -1178,6 +1178,7 @@ export default probeModule;
       }
 
       const { routes } = await bootstrapApp();
+      await (await import(join(app, "src/db/migrate.ts"))).seed();
       const server = createAppServer(routes, 0);
       try {
         const response = await fetch(`http://127.0.0.1:${server.port}/health`);
@@ -1256,6 +1257,23 @@ export default probeModule;
       );
       const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
       const { routes } = await bootstrapApp();
+      const { getSql } = await import(join(app, "src/bootstrap/database.ts"));
+      const { seed } = await import(join(app, "src/db/migrate.ts"));
+      expect(await getSql().unsafe("SELECT COUNT(*) AS count FROM users")).toEqual([{ count: 0 }]);
+      const previousAppEnv = process.env.APP_ENV;
+      try {
+        for (const appEnv of ["production", "staging"]) {
+          process.env.APP_ENV = appEnv;
+          await expect(seed()).rejects.toThrow(
+            "Demo seeding is disabled in production and staging.",
+          );
+        }
+      } finally {
+        if (previousAppEnv === undefined) delete process.env.APP_ENV;
+        else process.env.APP_ENV = previousAppEnv;
+      }
+      expect(await getSql().unsafe("SELECT COUNT(*) AS count FROM users")).toEqual([{ count: 0 }]);
+      await (await import(join(app, "src/db/migrate.ts"))).seed();
       const server = createAppServer(routes, 0);
       const origin = `http://127.0.0.1:${server.port}`;
       try {
@@ -1354,6 +1372,7 @@ export default probeModule;
       );
       const { closeDatabase, getSql } = await import(`${join(app, "src/bootstrap/database.ts")}`);
       const { routes } = await bootstrapApp();
+      await (await import(join(app, "src/db/migrate.ts"))).seed();
       const server = createAppServer(routes, 0);
       const origin = `http://127.0.0.1:${server.port}`;
       try {

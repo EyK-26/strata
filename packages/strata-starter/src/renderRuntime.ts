@@ -507,8 +507,10 @@ function renderMigrateTs(layers: StarterLayers): string {
   return `${hashImport}${rlsBypassImport}${ensureImport(layers)}${databaseImport}import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { Note } from "../models/Note.ts";
 ${userImport}import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 
 export async function seed() {
+  if (isProductionEnv()) throw new Error("Demo seeding is disabled in production and staging.");
 ${ensureCall(layers)}${bindSql}${seedOpen}${seedTenant}
   if ((await Note.query().value("id")) === null) {
     ${noteCreate}
@@ -519,7 +521,6 @@ export async function migrate() {
 ${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
     await migrateDatabase(db, await loadStarterMigrations());
   });
-  await seed();
 }
 
 /** The CLI calls this after migrate() so pooled drivers do not hold the process open. */
@@ -529,7 +530,7 @@ export async function close() {
 
 if (import.meta.main) {
   await migrate();
-  console.log("Database migrated and seeded.");
+  console.log("Database migrated.");
   await close();
   process.exit(0);
 }
@@ -787,14 +788,12 @@ function dropTables(layers: StarterLayers): string[] {
 function renderFreshTs(layers: StarterLayers): string {
   return `${ensureImport(layers)}import { freshDatabase } from "@getstrata/core/database/migrations";
 import { closeDatabase } from "../bootstrap/database.ts";
-import { seed } from "./migrate.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function fresh() {
 ${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
     await freshDatabase(db, await loadStarterMigrations());
   });
-  await seed();
 }
 
 /** The CLI calls this after fresh() so pooled drivers do not hold the process open. */
@@ -804,7 +803,7 @@ export async function close() {
 
 if (import.meta.main) {
   await fresh();
-  console.log("Database reset, migrated, and seeded.");
+  console.log("Database reset and migrated.");
   await close();
   process.exit(0);
 }
@@ -812,14 +811,17 @@ if (import.meta.main) {
 }
 
 function renderSeedTs(): string {
-  return `import { seed } from "./migrate.ts";
+  return `import { close, seed } from "./migrate.ts";
 
 export { seed };
 
 if (import.meta.main) {
-  await seed();
-  console.log("Database seeded.");
-  process.exit(0);
+  try {
+    await seed();
+    console.log("Demo database seeded.");
+  } finally {
+    await close();
+  }
 }
 `;
 }

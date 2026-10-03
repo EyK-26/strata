@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
+import "../models/register.ts";
 
 process.env.DATABASE_URL ??= "sqlite:./storage/app.sqlite";
 process.env.FRONTEND_MODE ??= "api";

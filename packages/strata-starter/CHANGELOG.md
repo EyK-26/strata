@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## Unreleased
+
+- 2.0: generated migration and reset entries do not seed automatically. Demo seed is an explicit development command, refuses production/staging before database access, and closes resources on completion or failure.
+
 ## 1.1.9
 
 - Defer model events until the surrounding transaction commits

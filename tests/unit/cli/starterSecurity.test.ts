@@ -191,6 +191,7 @@ describe("starter security flows", () => {
     );
     const { closeDatabase, getSql } = await import(`${join(app, "src/bootstrap/database.ts")}`);
     const { routes } = await bootstrapApp();
+    await (await import(join(app, "src/db/migrate.ts"))).seed();
     const server = createAppServer(routes, 0);
     const origin = `http://127.0.0.1:${server.port}`;
 

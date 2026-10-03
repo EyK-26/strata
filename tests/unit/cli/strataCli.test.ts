@@ -129,7 +129,7 @@ describe("published strata CLI", () => {
     }
 
     expect(logs).toContain("migrated");
-    expect(logs).toContain("seeded");
+    expect(logs).not.toContain("seeded");
     expect(logs.at(-1)).toBe("Migrations applied.");
   });
 
@@ -157,6 +157,55 @@ describe("published strata CLI", () => {
     }
 
     expect(errors.join("\n")).toContain("Unknown command: not-a-real-command");
+  });
+
+  for (const command of ["migrate", "migrate:fresh"]) {
+    test(`${command} seeds only when explicitly requested`, async () => {
+      const workspace = await createTempApp();
+      const proc = Bun.spawn(
+        ["bun", join(import.meta.dir, "../../../packages/strata-cli/cli.ts"), command, "--seed"],
+        { cwd: workspace, stdout: "pipe", stderr: "pipe" },
+      );
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(stdout.split("\n").filter((line) => line === "seeded")).toHaveLength(1);
+    });
+  }
+
+  test("fresh without --seed does not seed", async () => {
+    const workspace = await createTempApp();
+    const proc = Bun.spawn(
+      ["bun", join(import.meta.dir, "../../../packages/strata-cli/cli.ts"), "migrate:fresh"],
+      { cwd: workspace, stdout: "pipe", stderr: "pipe" },
+    );
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("seeded");
+  });
+
+  test("--seed with no seed export fails before applying migrations", async () => {
+    const workspace = await createTempApp();
+    await writeFile(
+      join(workspace, "src/db/migrate.ts"),
+      'export async function migrate() { console.log("must-not-migrate"); }',
+    );
+    const proc = Bun.spawn(
+      ["bun", join(import.meta.dir, "../../../packages/strata-cli/cli.ts"), "migrate", "--seed"],
+      { cwd: workspace, stdout: "pipe", stderr: "pipe" },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(exitCode).not.toBe(0);
+    expect(stdout).not.toContain("must-not-migrate");
+    expect(stderr).toContain("--seed requires a seed() export");
   });
 
   test.each([["--help"], ["-h"], ["help"]])("%s prints the command list", async (flag) => {
