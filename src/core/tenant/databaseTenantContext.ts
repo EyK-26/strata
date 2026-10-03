@@ -1,5 +1,10 @@
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
-import { runWithDatabaseConnection } from "../database/connectionContext";
+import {
+  getActiveDatabaseConnection,
+  hasActiveDatabaseConnection,
+  runWithDatabaseConnection,
+} from "../database/connectionContext";
+import { runInTransaction } from "../database/transaction";
 import {
   commitOrRollbackScope,
   runWithTransactionScope,
@@ -58,6 +63,27 @@ async function runWithScopedTenantTransaction<T>(
     return await callback();
   }
 
+  if (hasActiveDatabaseConnection()) {
+    const connection = getActiveDatabaseConnection(getDefaultDatabasePool());
+    return await runInTransaction(async () => {
+      const [previous] = await connection.unsafe<{
+        tenant_id: string | null;
+        bypass_rls: string | null;
+        bypass_identifier: string | null;
+      }>(`SELECT current_setting('app.tenant_id', true) AS tenant_id,
+        current_setting('app.bypass_rls', true) AS bypass_rls,
+        current_setting('app.bypass_identifier', true) AS bypass_identifier`);
+      await apply(connection);
+      const result = await callback();
+      await connection.unsafe(
+        `SELECT set_config('app.tenant_id', $1, true),
+        set_config('app.bypass_rls', $2, true), set_config('app.bypass_identifier', $3, true)`,
+        [previous?.tenant_id ?? "", previous?.bypass_rls ?? "", previous?.bypass_identifier ?? ""],
+      );
+      return result;
+    });
+  }
+
   const pool = getDefaultDatabasePool();
   const begin = pool.begin;
   if (typeof begin !== "function") {
@@ -66,17 +92,13 @@ async function runWithScopedTenantTransaction<T>(
     );
   }
 
-  const start = begin.bind(pool);
   return await settleTransaction(() =>
     runWithDeferredModelEvents(async () => {
-      return await start(async (transaction) => {
+      return await begin.bind(pool)(async (transaction) => {
         await apply(transaction);
-        return await runWithDatabaseConnection(transaction, async () => {
-          return await runWithTransactionScope(async () => {
-            const result = await callback();
-            return await commitOrRollbackScope(result);
-          });
-        });
+        return await runWithDatabaseConnection(transaction, () =>
+          runWithTransactionScope(async () => commitOrRollbackScope(await callback())),
+        );
       });
     }),
   );
@@ -100,4 +122,8 @@ async function runWithMigrationBypassForIdentifier<T>(
   );
 }
 
-export { runWithMigrationBypass, runWithMigrationBypassForIdentifier };
+export {
+  runWithMigrationBypass,
+  runWithMigrationBypassForIdentifier,
+  runWithScopedTenantTransaction,
+};

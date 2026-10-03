@@ -81,6 +81,14 @@ Generated apps use **two provider waves**: starter `register`/`boot`, then modul
 
 ## Database migrations
 
+### Business transactions and request tenancy
+
+Use `runInTransaction` from `@getstrata/core/database/transaction` around an atomic business operation. Repository queries and queries through the default connection use its active connection. Nested transactions use SQL savepoints: a thrown failure rolls back the nested writes and deferred model events, even if the controller subsequently converts that failure into an HTTP response. Successful nested writes and events remain subject to the outer transaction's commit or rollback.
+
+Keep error-to-response mapping outside the business transaction. Returning a Response, including a deliberate 4xx, is a successful callback and does not request rollback. Await nested transactions sequentially; concurrent sibling savepoints on one connection are rejected. Explicitly supplied repository connections remain the caller's responsibility.
+
+`runWithTenantDatabase` also gives nested RLS scopes a savepoint and restores the previous tenant/bypass settings. Switching tenants inside an active transaction is rejected before changing SQL settings. Nested migration bypass scopes use the same connection and restore the enclosing scope; use bypass only for trusted infrastructure operations. PostgreSQL represents a previously unset custom setting as an empty value after restoration, so treat empty and missing settings as having no identity.
+
 Greenfield apps from `create-strata` use **file-based** migrations in `src/db/migrations/` plus `@getstrata/core/database/migrations` (`migrateDatabase`) from `src/db/migrate.ts`. Seed stays in `migrate.ts`. The runner records applied files in **`framework_migrations`**. See [STARTER.md](./STARTER.md#migrations).
 
 `0001_starter_schema` uses `CREATE TABLE IF NOT EXISTS`. Redis/queue apps include **`failed_job`** there (`queue:failed` / `queue:retry` persist into that table). An inline-SQL app that never created `failed_job` will break those commands even if the rest of the schema looks fine.
