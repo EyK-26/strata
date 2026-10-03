@@ -88,7 +88,7 @@ describe("runWithMigrationBypass", () => {
     }
   });
 
-  test("opens a nested transaction instead of setting bypass on the request connection", async () => {
+  test("uses a savepoint and restores bypass on the active request connection", async () => {
     const previous = process.env.TENANCY_DRIVER;
     process.env.TENANCY_DRIVER = "rls";
     const restored = currentPoolOrNull();
@@ -100,8 +100,10 @@ describe("runWithMigrationBypass", () => {
       await runWithDatabaseConnection(pool, async () => {
         await expect(runWithMigrationBypass(async () => "nested")).resolves.toBe("nested");
       });
-      expect(calls.some((line) => line === "begin")).toBe(true);
-      expect(calls.filter((line) => line.includes("set_config")).length).toBe(1);
+      expect(calls.some((line) => line === "begin")).toBe(false);
+      expect(calls.some((line) => line.startsWith("SAVEPOINT "))).toBe(true);
+      expect(calls.some((line) => line.startsWith("RELEASE SAVEPOINT "))).toBe(true);
+      expect(calls.filter((line) => line.includes("set_config")).length).toBe(2);
       expect(calls.some((line) => line.includes('["true"]'))).toBe(true);
       expect(calls.some((line) => line.includes('["false"]'))).toBe(false);
     } finally {

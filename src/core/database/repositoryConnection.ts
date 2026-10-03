@@ -1,10 +1,13 @@
 import type { DatabaseConnection, SqlDatabaseConnection } from "./baseRepository";
 import { getBoundDatabaseConnection } from "./boundConnection";
+import { getActiveDatabaseConnection } from "./connectionContext";
 import { getDefaultDatabaseQuery } from "./defaultConnection";
 import { currentSqlDialect } from "./dialect";
 
 function resolveRepositoryConnection(): SqlDatabaseConnection {
-  return (getBoundDatabaseConnection() ?? getDefaultDatabaseQuery()) as SqlDatabaseConnection;
+  return getActiveDatabaseConnection(
+    getBoundDatabaseConnection() ?? getDefaultDatabaseQuery(),
+  ) as SqlDatabaseConnection;
 }
 
 function compileTaggedSql(

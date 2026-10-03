@@ -61,6 +61,8 @@ function installFakePool(
   const tx: FakeTransaction = {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
       sql.push({ query, params: [...params] });
+      if (query.startsWith("SAVEPOINT ")) calls.push("savepoint");
+      if (query.startsWith("ROLLBACK TO SAVEPOINT ")) calls.push("rollback-savepoint");
       if (query.includes("current_setting")) {
         if (options.sessionRow === false) {
           return [] as T[];
@@ -178,23 +180,21 @@ describe("transaction rollback boundaries", () => {
     expect(calls).not.toContain("commit");
   });
 
-  test("restores the outer database tenant after a nested scope returns", async () => {
+  test("rejects a different tenant before changing the database context", async () => {
     process.env.TENANCY_DRIVER = "rls";
     const { calls, sql } = installFakePool();
-
     await runWithTenantDatabase(defaultTestTenant, async () => {
-      await runWithTenantDatabase(otherTenant, async () => {
-        expect(currentTenant()?.id).toBe(2);
-      });
+      await expect(runWithTenantDatabase(otherTenant, async () => undefined)).rejects.toThrow(
+        "Cannot switch tenants",
+      );
       expect(currentTenant()?.id).toBe(1);
     });
-
-    const tenantSets = sql
-      .filter((call) => call.query.includes("set_config('app.tenant_id'"))
-      .map((call) => call.params[0]);
-    expect(tenantSets).toContain("2");
-    expect(tenantSets.at(-1)).toBe("1");
-    expect(calls).toContain("savepoint");
+    expect(
+      sql
+        .filter((call) => call.query.includes("set_config('app.tenant_id'"))
+        .map((call) => call.params[0]),
+    ).toEqual(["1"]);
+    expect(calls).not.toContain("savepoint");
     expect(calls).toContain("commit");
     expect(currentTenant()).toBeNull();
   });
@@ -205,7 +205,7 @@ describe("transaction rollback boundaries", () => {
 
     const result = await runWithTenantDatabase(defaultTestTenant, async () => {
       try {
-        await runWithTenantDatabase(otherTenant, async () => {
+        await runWithTenantDatabase(defaultTestTenant, async () => {
           throw new Error("inner");
         });
         return "unexpected";
@@ -225,7 +225,7 @@ describe("transaction rollback boundaries", () => {
     const { calls } = installFakePool();
 
     const response = await runWithTenantDatabase(defaultTestTenant, async () => {
-      return await runWithTenantDatabase(otherTenant, async () => {
+      return await runWithTenantDatabase(defaultTestTenant, async () => {
         return await withJsonErrorHandling(async () => {
           throw new Error("observer failed");
         })();
@@ -243,13 +243,13 @@ describe("transaction rollback boundaries", () => {
     const { calls, sql } = installFakePool({ savepoint: false, sessionRow: false });
 
     await runWithTenantDatabase(defaultTestTenant, async () => {
-      await runWithTenantDatabase(otherTenant, async () => {
-        expect(currentTenant()?.id).toBe(2);
+      await runWithTenantDatabase(defaultTestTenant, async () => {
+        expect(currentTenant()?.id).toBe(1);
       });
       expect(currentTenant()?.id).toBe(1);
     });
 
-    expect(calls).not.toContain("savepoint");
+    expect(calls).toContain("savepoint");
     expect(sql.some((call) => call.params[0] === "")).toBe(true);
     expect(calls).toContain("commit");
   });
@@ -272,7 +272,7 @@ describe("transaction rollback boundaries", () => {
     expect(calls).toContain("commit");
   });
 
-  test("runInTransaction keeps using begin when the active connection has no savepoint", async () => {
+  test("runInTransaction uses SQL savepoints without a driver savepoint helper", async () => {
     const calls: string[] = [];
     bindDatabaseConnection({
       async unsafe() {
@@ -301,7 +301,7 @@ describe("transaction rollback boundaries", () => {
       },
     );
 
-    expect(calls).toEqual(["begin"]);
+    expect(calls).toEqual([]);
   });
 
   test("requestTransactionRollback rolls back a migration bypass transaction", async () => {
