@@ -1,22 +1,65 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { registerOpenApiRouteMap } from "@getstrata/bootstrap/buildModuleRoutes";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { type RegisteredRoute, routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
 import { validateOpenApiSpec } from "@getstrata/core/openapi/validate";
+import { readSpaPrefix } from "@getstrata/core/runtime/frontendMode";
 
 type AppBootstrap = () => Promise<{ routes: Record<string, unknown> }>;
 
-function withoutSpaCatchAll(routes: Record<string, unknown>): Record<string, unknown> {
-  const next = { ...routes };
-  delete next["/*"];
-  return next;
+function isSpaDocumentedPath(path: string, spaPrefix: string): boolean {
+  return path === "/*" || path === spaPrefix || path.startsWith(`${spaPrefix}/`);
+}
+
+function isWebOnlyPath(metadata: RegisteredRoute[]): boolean {
+  return (
+    metadata.some((route) => route.middleware.includes("web")) &&
+    !metadata.some((route) => route.middleware.includes("api"))
+  );
+}
+
+function shouldKeepOpenApiPath(
+  path: string,
+  registered: RegisteredRoute[],
+  spaPrefix: string,
+): boolean {
+  if (isSpaDocumentedPath(path, spaPrefix)) {
+    return false;
+  }
+
+  const metadata = registered.filter((route) => route.path === path);
+  return !isWebOnlyPath(metadata);
 }
 
 async function registerAppOpenApiRoutes(bootstrap: AppBootstrap): Promise<void> {
-  const { routes } = await bootstrap();
   routeRegistry.clear();
-  registerOpenApiRouteMap(withoutSpaCatchAll(routes), ["global", "api"]);
+  const { routes } = await bootstrap();
+  const registered = routeRegistry.list();
+  const spaPrefix = readSpaPrefix();
+  const keepPaths = new Set<string>();
+
+  for (const path of Object.keys(routes)) {
+    if (shouldKeepOpenApiPath(path, registered, spaPrefix)) {
+      keepPaths.add(path);
+    }
+  }
+
+  const keptRegistered = registered.filter((route) => keepPaths.has(route.path));
+  const registeredKeepPaths = new Set(keptRegistered.map((route) => route.path));
+  const unregisteredKeepers: Record<string, unknown> = {};
+
+  for (const path of keepPaths) {
+    if (!registeredKeepPaths.has(path)) {
+      unregisteredKeepers[path] = routes[path];
+    }
+  }
+
+  routeRegistry.clear();
+  for (const route of keptRegistered) {
+    routeRegistry.register(route);
+  }
+  registerOpenApiRouteMap(unregisteredKeepers, ["global", "api"]);
 }
 
 function createOpenApiGenerateCommand(bootstrap: AppBootstrap) {
