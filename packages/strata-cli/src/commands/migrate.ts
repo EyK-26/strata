@@ -33,11 +33,14 @@ async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<voi
   if (typeof entry.migrate !== "function") {
     throw new Error(`${app.migrate} must export a migrate() function.`);
   }
+  if (args.includes("--seed") && typeof entry.seed !== "function") {
+    throw new Error("--seed requires a seed() export on the migration entry.");
+  }
 
   try {
     await entry.migrate(...args);
 
-    if (typeof entry.seed === "function") {
+    if (args.includes("--seed") && typeof entry.seed === "function") {
       await entry.seed(...args);
     }
   } finally {
@@ -52,10 +55,24 @@ async function migrateFreshCommand(app: StrataAppConfig, args: string[]): Promis
     if (typeof entry.fresh !== "function") {
       throw new Error(`${app.fresh} must export a fresh() function.`);
     }
+    const seedEntry = args.includes("--seed")
+      ? typeof entry.seed === "function"
+        ? entry
+        : app.migrate
+          ? await importEntry(app.migrate)
+          : undefined
+      : undefined;
+    if (args.includes("--seed") && typeof seedEntry?.seed !== "function") {
+      throw new Error("--seed requires a seed() export on the migration or fresh entry.");
+    }
     try {
       await entry.fresh(...args);
+      if (seedEntry?.seed) {
+        await seedEntry.seed(...args);
+      }
     } finally {
       await closeEntry(entry);
+      if (seedEntry && seedEntry !== entry) await closeEntry(seedEntry);
     }
     console.log("Database reset and migrated.");
     return;

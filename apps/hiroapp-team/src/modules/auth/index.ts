@@ -148,6 +148,39 @@ function sessionUser(user: {
   };
 }
 
+async function completeBrowserSsoLogin(
+  dependencies: { container: { resolve: <T>(token: string) => T } },
+  profile: { email: string; name: string },
+  label: string,
+): Promise<Response> {
+  const email = profile.email.trim().toLowerCase();
+  let record = await starterAuthDirectory.findByEmail?.(email);
+  if (!record) {
+    if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+      return jsonResponse({ error: `${label} user is not provisioned.` }, { status: 403 });
+    }
+    const hashed = await hashPassword(randomBytes(18).toString("hex"));
+    try {
+      await runAuthWrite(email, async () => {
+        await User.create({
+          name: profile.name,
+          email,
+          password: hashed,
+          is_admin: false,
+        });
+      });
+    } catch {
+      // Unique email: another request already provisioned this user.
+    }
+    record = await starterAuthDirectory.findByEmail?.(email);
+  }
+  if (!record) {
+    return jsonResponse({ error: `Could not complete ${label} login.` }, { status: 500 });
+  }
+  const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+  return auth.signInRedirect(sessionUser(record), "/");
+}
+
 const authModule: AppModule = {
   name: "auth",
   order: 2,
@@ -193,31 +226,7 @@ const authModule: AppModule = {
             if (!profile) {
               return jsonResponse({ error: "Invalid SAML response." }, { status: 400 });
             }
-            let record = await starterAuthDirectory.findByEmail?.(profile.email);
-            if (!record) {
-              if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
-                return jsonResponse({ error: "SAML user is not provisioned." }, { status: 403 });
-              }
-              const hashed = await hashPassword(randomBytes(18).toString("hex"));
-              try {
-                await runAuthWrite(profile.email, async () => {
-                  await User.create({
-                    name: profile.name,
-                    email: profile.email,
-                    password: hashed,
-                    is_admin: false,
-                  });
-                });
-              } catch {
-                // Unique email: another request already provisioned this user.
-              }
-              record = await starterAuthDirectory.findByEmail?.(profile.email);
-            }
-            if (!record) {
-              return jsonResponse({ error: "Could not complete SAML login." }, { status: 500 });
-            }
-            const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
-            return auth.signInRedirect(sessionUser(record), "/");
+            return completeBrowserSsoLogin(dependencies, profile, "SAML");
           }),
         ),
       },

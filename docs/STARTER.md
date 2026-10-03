@@ -72,6 +72,8 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 
 ## Migrations
 
+Migrations and resets do not seed by default. Use `bun run db:seed:demo` explicitly in development, or pass `--seed` to the CLI when an app provides a seed export. Generated demo seeds reject production and staging before accessing the database. Existing databases retain their current users; audit and disable or rotate known demo accounts before promotion. When upgrading, remove unconditional `seed()` calls from existing migration/fresh entries as well as upgrading the CLI, so seeding occurs exactly once when requested.
+
 Generated apps ship **file-based** migrations under `src/db/migrations/`, loaded by `@getstrata/core/database/migrations` from `src/db/migrate.ts` (seeds stay in that file). The first file is `0001_starter_schema` and uses `CREATE TABLE IF NOT EXISTS` so existing databases can adopt the runner. That file includes **`failed_job`** (required for Redis `queue:failed` / `queue:retry`). History lives in `framework_migrations`. `strata make:migration` writes the next file into that directory. Postgres still migrates through the admin connection and grants the app role. Legacy inline `migrate.ts` apps: [BUILDING-APPS.md](./BUILDING-APPS.md#adopting-file-migrations-from-a-legacy-inline-migratets).
 
 The monorepo fixture keeps its own file-based history under the framework repo's `src/db/migrations/`. Do not mix two migration runners for the same schema without a plan.

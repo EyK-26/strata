@@ -1,9 +1,12 @@
-import { seed } from "./migrate.ts";
+import { close, seed } from "./migrate.ts";
 
 export { seed };
 
 if (import.meta.main) {
-  await seed();
-  console.log("Database seeded.");
-  process.exit(0);
+  try {
+    await seed();
+    console.log("Demo database seeded.");
+  } finally {
+    await close();
+  }
 }

@@ -17,7 +17,16 @@ This in-repo app is Strata dogfood for internal end-to-end testing (migrate, see
 | Docker Compose | postgres, redis, mailpit |
 | Extras | mfa, emailVerification, scim, metrics |
 
-This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md).
+This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [Integrations](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).
+
+## Integrations
+
+OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).
+
+Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `discoverListeners()` and `discoverJobs()`.
+
+This app did not pass those flags. Turn a flag on and re-run `create-strata`, or copy the commented env block and add a module yourself.
+
 
 ## Run it
 
@@ -27,6 +36,7 @@ cp .env.example .env
 docker compose up -d
 bun install
 bun run db:migrate
+bun run db:seed:demo
 bun run dev
 ```
 
@@ -68,6 +78,19 @@ Prometheus scrape: `GET /metrics`. Production requires `Authorization: Bearer <M
 
 The app uses the database named in `DATABASE_URL` and creates it on first migrate when the connection user may. Set `APP_DATABASE_URL` only when migrations and the app should target a different database than `DATABASE_URL`. `.env.example` points `DATABASE_URL` at `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`), including `--no-docker`. `db/ensure-postgres-app-role.sql` is repeatable on an existing volume; Compose init still runs on first empty volume. The `postgres` superuser is for CREATE ROLE / GRANT / migrate and Adminer.
 
+## OpenAPI
+
+After you add routes, regenerate and commit the spec so CI can catch drift:
+
+```bash
+bunx strata openapi:generate
+bunx strata openapi:check
+```
+
+Put `openapi:check` in CI. A failure means `docs/openapi.json` does not match the live JSON API route map (billing, auth, webhooks, and anything else you added).
+
+`openapi:generate` lists API routes only. HTML admin and storefront paths are not in that file.
+
 ## Deploy
 
 `Dockerfile` builds a production image from the committed `bun.lock` (run `bun install` once and commit the lockfile).
@@ -77,7 +100,7 @@ docker build -t hiroapp .
 docker run --rm -p 3000:3000 --env-file .env.production hiroapp
 ```
 
-Migrations are a deploy step, not a boot step: run `docker run --rm --env-file .env.production hiroapp bun run db:migrate` before the new version takes traffic.
+Migrations are a deploy step, not a boot step: run `docker run --rm --env-file .env.production hiroapp bun run db:migrate` before the new version takes traffic. Migrations and resets do not seed by default. Demo seeding is an explicit development command, `bun run db:seed:demo`, and refuses production/staging. Existing demo accounts must be disabled or have their credentials and sessions/tokens rotated before deployment.
 The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything else in the Production list below comes from your environment (the `.env.production` file above is one way).
 
 ## Production
@@ -87,7 +110,7 @@ The image sets `APP_ENV=production` and `AUTH_DEV_HEADERS=false`; everything els
 - Replace every `change-me` placeholder in `.env`. The guard rejects the values this generator wrote, not just empty ones.
 - Set `APP_URL` to the public origin (for example `https://app.example.com`). Signed links and redirects are built from it; localhost is rejected.
 - Set `AUTH_DEV_HEADERS=false`.
-- Set `FEATURE_PUBLIC_READS=false`. This app ships `true` so the local welcome page reads without a login. Production requires `false`.
+- Set `FEATURE_PUBLIC_READS=false`. Generated `.env.example` already ships `false` so `wrapWebPublicRead` requires a login. Local storefronts may set `true` in `.env` for an anonymous catalog; `assertProductionSecrets()` rejects `true` in production. Do not ship a public-reads production boot.
 - Cross-origin browser calls are off in production until you set `CORS_ALLOWED_ORIGINS` to explicit origins. A `*` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set `TRUST_FORWARDED_FOR=true` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of `X-Forwarded-For` is trusted.
 - Set `SESSION_SECRET` to 32+ characters.

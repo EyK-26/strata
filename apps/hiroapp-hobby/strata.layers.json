@@ -14,7 +14,11 @@
       "mfa": false,
       "emailVerification": false,
       "scim": false,
-      "metrics": false
+      "metrics": false,
+      "oauthGithub": false,
+      "oidc": false,
+      "billing": false,
+      "webhooks": false
     },
     "docker": {
       "enabled": false,
