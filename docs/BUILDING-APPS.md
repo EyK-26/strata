@@ -92,7 +92,7 @@ Apps scaffolded before file migrations often loop `db.unsafe(...)` in one file a
 1. Copy the generated shape: `src/db/migrationRuntime.ts` (`loadMigrationsFromDirectory` + `withMigrationDatabase`) and `src/db/migrations/*.ts` (start with `0001_starter_schema` plus your extra tables).
 2. Replace the inline SQL loop with `await migrateDatabase(db, await loadStarterMigrations())`. Keep seed in `migrate.ts`.
 3. First `bun run db:migrate` creates `framework_migrations` and applies every file not already recorded. Keep `CREATE TABLE IF NOT EXISTS` (and additive `ALTER`s) so a database that already has the tables does not fail on duplicate DDL.
-4. If Redis queue is on, add `failed_job` in that first file if the live schema does not have it.
+4. If Redis queue is on, add `failed_job` in that first file if the live schema does not have it. `queue:work` moves a job onto `queue:*:processing` before `handle()` and deletes it only after the attempt finishes. A killed worker leaves that reservation. The next worker returns it to the pending list after `QUEUE_VISIBILITY_MS` (default 60 seconds). Delivery is at-least-once, so handlers must be idempotent.
 
 When history is untrustworthy:
 

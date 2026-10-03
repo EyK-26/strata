@@ -21,6 +21,31 @@ const QUEUE_LIST_KEY = queueListKey();
 const QUEUE_HIGH_KEY = queueHighKey();
 const QUEUE_LOW_KEY = queueLowKey();
 const QUEUE_KEYS = [QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY] as const;
+const DEFAULT_VISIBILITY_MS = 60_000;
+
+function queueProcessingKey(queueKey: string): string {
+  return `${queueKey}:processing`;
+}
+
+function queueProcessingLeaseKey(queueKey: string): string {
+  return `${queueKey}:processing:leases`;
+}
+
+function readVisibilityMs(): number {
+  const parsed = Number(process.env.QUEUE_VISIBILITY_MS ?? String(DEFAULT_VISIBILITY_MS));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_VISIBILITY_MS;
+}
+
+function reservationExpired(lease: string | null, now: number, visibilityMs: number): boolean {
+  if (lease === null || lease.length === 0) {
+    return true;
+  }
+  const reservedAt = Number(lease);
+  if (!Number.isFinite(reservedAt)) {
+    return true;
+  }
+  return now - reservedAt >= visibilityMs;
+}
 
 function queueKeyForPriority(priority: QueuePriority = "default"): string {
   switch (priority) {
@@ -74,6 +99,38 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
   };
 }
 
+async function reclaimExpiredQueueReservations(
+  client: RedisClient,
+  now = Date.now(),
+): Promise<number> {
+  const visibilityMs = readVisibilityMs();
+  let reclaimed = 0;
+
+  for (const queueKey of QUEUE_KEYS) {
+    const processingKey = queueProcessingKey(queueKey);
+    const leaseKey = queueProcessingLeaseKey(queueKey);
+    const reserved = await client.lrange(processingKey, 0, -1);
+
+    for (const payload of reserved) {
+      const lease = await client.hget(leaseKey, payload);
+      if (!reservationExpired(lease, now, visibilityMs)) {
+        continue;
+      }
+
+      const removed = await client.lrem(processingKey, 1, payload);
+      if (removed < 1) {
+        continue;
+      }
+
+      await client.lpush(queueKey, payload);
+      await client.hdel(leaseKey, payload);
+      reclaimed += 1;
+    }
+  }
+
+  return reclaimed;
+}
+
 class RedisQueue implements Queue {
   private readonly client: RedisClient;
 
@@ -120,28 +177,56 @@ class QueueWorker {
     return this.running;
   }
 
+  private async acknowledge(queueKey: string, rawPayload: string): Promise<void> {
+    await this.client.lrem(queueProcessingKey(queueKey), 1, rawPayload);
+    await this.client.hdel(queueProcessingLeaseKey(queueKey), rawPayload);
+  }
+
+  private async reserve(queueKey: string, timeoutSeconds: number): Promise<string | null> {
+    const rawPayload = await this.client.blmove(
+      queueKey,
+      queueProcessingKey(queueKey),
+      "RIGHT",
+      "LEFT",
+      timeoutSeconds,
+    );
+
+    if (!rawPayload) {
+      return null;
+    }
+
+    await this.client.hset(queueProcessingLeaseKey(queueKey), rawPayload, String(Date.now()));
+    return rawPayload;
+  }
+
   async processNext(): Promise<boolean> {
-    let result: [string, string] | null = null;
+    await reclaimExpiredQueueReservations(this.client);
+
+    let reserved: { queueKey: string; rawPayload: string } | null = null;
 
     for (const queueKey of QUEUE_KEYS) {
-      result = await this.client.brpop(queueKey, 1);
-
-      if (result) {
+      const rawPayload = await this.reserve(queueKey, 1);
+      if (rawPayload) {
+        reserved = { queueKey, rawPayload };
         break;
       }
     }
 
-    if (!result) {
-      result = await this.client.brpop(QUEUE_LIST_KEY, this.timeoutSeconds);
+    if (!reserved) {
+      const rawPayload = await this.reserve(QUEUE_LIST_KEY, this.timeoutSeconds);
+      if (rawPayload) {
+        reserved = { queueKey: QUEUE_LIST_KEY, rawPayload };
+      }
     }
 
-    if (!result) {
+    if (!reserved) {
       return false;
     }
 
-    const [, rawPayload] = result;
+    const { queueKey, rawPayload } = reserved;
     const envelope = parseQueueJobEnvelope(rawPayload);
     if (!envelope) {
+      await this.acknowledge(queueKey, rawPayload);
       return true;
     }
 
@@ -149,6 +234,8 @@ class QueueWorker {
       await runQueueJob(envelope, this.failedJobs);
     } catch (error) {
       console.error("[QueueWorker] Job failed:", error);
+    } finally {
+      await this.acknowledge(queueKey, rawPayload);
     }
 
     return true;
@@ -194,5 +281,9 @@ export {
   QUEUE_LOW_KEY,
   QueueWorker,
   queueKeyForPriority,
+  queueProcessingKey,
+  queueProcessingLeaseKey,
   RedisQueue,
+  reclaimExpiredQueueReservations,
+  reservationExpired,
 };
