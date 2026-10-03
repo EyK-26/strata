@@ -29,7 +29,11 @@ const targetRef =
 const packages: PackageVersion[] = [];
 for (const relativePath of PACKAGE_FILES) {
   const parsed = JSON.parse(await readFile(join(ROOT, relativePath), "utf8")) as PackageVersion;
-  packages.push({ name: parsed.name, version: parsed.version });
+  packages.push({
+    name: parsed.name,
+    version: parsed.version,
+    peerDependencies: parsed.peerDependencies,
+  });
 }
 
 async function fetchPublishedVersions(name: string): Promise<string[]> {

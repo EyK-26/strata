@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  checkPackagePeerCompatibility,
   checkReleaseReadiness,
   checkReleaseTarget,
   type PackageVersion,
@@ -157,5 +158,36 @@ describe("checkReleaseReadiness", () => {
     expect(result.version).toBeNull();
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toContain("not in lockstep");
+  });
+});
+
+describe("release peer compatibility", () => {
+  test("rejects a 2.0 CLI advertising 1.x core/bootstrap peers", () => {
+    const packages = [
+      { name: "@getstrata/core", version: "2.0.0" },
+      { name: "@getstrata/bootstrap", version: "2.0.0" },
+      {
+        name: "@getstrata/cli",
+        version: "2.0.0",
+        peerDependencies: { "@getstrata/core": "^1.1.1", "@getstrata/bootstrap": "^1.1.1" },
+      },
+    ];
+    expect(checkPackagePeerCompatibility(packages)).toHaveLength(2);
+    expect(checkReleaseReadiness({ packages }).errors.join(" ")).toContain(
+      "incompatible with released 2.0.0",
+    );
+  });
+
+  test("accepts compatible ranges and ignores third-party peers outside this release", () => {
+    expect(
+      checkPackagePeerCompatibility([
+        { name: "@getstrata/core", version: "2.0.1" },
+        {
+          name: "@getstrata/cli",
+          version: "2.0.1",
+          peerDependencies: { "@getstrata/core": "^2.0.0", typescript: "^5.9.0" },
+        },
+      ]),
+    ).toEqual([]);
   });
 });

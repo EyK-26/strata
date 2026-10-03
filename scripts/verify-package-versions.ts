@@ -3,6 +3,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { checkPackagePeerCompatibility, type PackageVersion } from "./release-readiness";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -23,18 +24,23 @@ const PACKAGE_DIRS: Record<string, string> = {
 };
 
 const mismatches: string[] = [];
+const packages: PackageVersion[] = [];
 
 for (const [name, relativePath] of Object.entries(PACKAGE_DIRS)) {
   const packageJson = JSON.parse(await readFile(join(ROOT, relativePath), "utf8")) as {
     name: string;
     version: string;
+    peerDependencies?: Record<string, string>;
   };
+  packages.push(packageJson);
   const expected = EXPECTED[name];
 
   if (packageJson.version !== expected) {
     mismatches.push(`${name}: expected ${expected}, got ${packageJson.version}`);
   }
 }
+
+mismatches.push(...checkPackagePeerCompatibility(packages));
 
 if (mismatches.length > 0) {
   console.error(`Package version mismatch:\n${mismatches.join("\n")}`);

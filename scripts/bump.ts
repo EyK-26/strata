@@ -23,6 +23,7 @@ const PACKAGE_JSON_FILES = [
 ];
 
 const PIN_FILES = [
+  "packages/strata-cli/package.json",
   "packages/strata-bootstrap/package.json",
   "packages/strata-starter/templates/package.json",
   "packages/strata-starter/src/renderEnv.ts",
@@ -89,7 +90,7 @@ for (const file of CHANGELOGS) {
   await edit(file, (text) => insertChangelogEntry(text, version, notes));
 }
 
-if (pending.size === 0) {
+if (pending.size === 0 && check) {
   console.log(`Nothing to change; every file already targets ${version}.`);
   process.exit(0);
 }
@@ -106,17 +107,22 @@ for (const [file, contents] of pending) {
   await writeFile(join(ROOT, file), contents, "utf8");
 }
 
-const lockfile = Bun.spawn(["bun", "install", "--lockfile-only"], {
-  cwd: ROOT,
-  stdout: "ignore",
-  stderr: "pipe",
-});
-
-if ((await lockfile.exited) !== 0) {
-  console.error(
-    `Bumped the manifests but could not refresh bun.lock:\n${await new Response(lockfile.stderr).text()}`,
-  );
-  process.exit(1);
+// Bun 1.4.2 updates workspace versions before refreshing their peer metadata.
+// Two native install passes settle both; CI's dedupe gate proves consistency.
+for (const command of [
+  ["bun", "install", "--ignore-scripts"],
+  ["bun", "install", "--ignore-scripts"],
+  ["bun", "dedupe"],
+]) {
+  const lockfile = Bun.spawn(command, { cwd: ROOT, stdout: "ignore", stderr: "pipe" });
+  const [diagnostics, exitCode] = await Promise.all([
+    new Response(lockfile.stderr).text(),
+    lockfile.exited,
+  ]);
+  if (exitCode !== 0) {
+    console.error(`Bumped the manifests but ${command.join(" ")} failed:\n${diagnostics}`);
+    process.exit(1);
+  }
 }
 
 pending.set("bun.lock", "");
