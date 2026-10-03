@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.0.0
+
+- Strata 2.0: compose business transactions and tenant scopes
+
 ## Unreleased
 
 - 2.0: generated migration and reset entries do not seed automatically. Demo seed is an explicit development command, refuses production/staging before database access, and closes resources on completion or failure.

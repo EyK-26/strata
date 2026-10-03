@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.0.0
+
+- Strata 2.0: compose business transactions and tenant scopes
+
 ## Unreleased
 
 - 2.0 Redis throttle keys use application, tenant and registered route identities; atomic counter/expiry consumption repairs missing TTLs. API and login throttles fail closed with 503 on store errors or deadlines and recreate failed owned connections. Memory pruning and app quota policies remain follow-up work.

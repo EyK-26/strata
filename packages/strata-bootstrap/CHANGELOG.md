@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.0.0
+
+- Strata 2.0: compose business transactions and tenant scopes
+
 ## 1.1.9
 
 - Defer model events until the surrounding transaction commits

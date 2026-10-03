@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.0.0
+
+- Strata 2.0: compose business transactions and tenant scopes
+
 ## Unreleased
 
 - 2.0: migrations no longer implicitly call an app seed export. Seeding requires --seed; fresh accepts the same explicit flag. Missing seed exports are rejected before applying migrations or resetting data.
