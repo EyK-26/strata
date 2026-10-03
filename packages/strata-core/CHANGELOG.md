@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.1.8
+
+- Exclude HTML and SPA routes from generated OpenAPI specs
+
 ## 1.1.7
 
 - Fix generated webhook SQL, billing hook, and hybrid SPA smoke

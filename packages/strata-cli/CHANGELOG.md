@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 1.1.8
+
+- Exclude HTML and SPA routes from generated OpenAPI specs
+
 ## Unreleased
 
 - `openapi:generate` (and validate/check) keep JSON API and health routes and drop HTML-only (`web` without `api`) and SPA-prefix paths instead of restamping the full hybrid table as API.
