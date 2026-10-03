@@ -21,6 +21,14 @@ function emptyHistogram(): DurationHistogram {
 }
 
 class PrometheusRegistry {
+  private readonly seriesLabels = new Map<string, MetricLabels>();
+
+  constructor(private readonly maxSeries = 4096) {
+    if (!Number.isSafeInteger(maxSeries) || maxSeries < 1) {
+      throw new Error("Metrics maxSeries must be a positive safe integer.");
+    }
+  }
+
   private readonly httpRequestsTotal = new Map<string, number>();
   private readonly httpRequestDurationMs = new Map<string, DurationHistogram>();
 
@@ -30,6 +38,7 @@ class PrometheusRegistry {
   }
 
   observeHttpDuration(labels: MetricLabels, durationMs: number): void {
+    if (!Number.isFinite(durationMs) || durationMs < 0) return;
     const key = this.metricKey(labels);
     const histogram = this.httpRequestDurationMs.get(key) ?? emptyHistogram();
     histogram.count += 1;
@@ -77,6 +86,7 @@ class PrometheusRegistry {
   }
 
   resetForTests(): void {
+    this.seriesLabels.clear();
     this.httpRequestsTotal.clear();
     this.httpRequestDurationMs.clear();
   }
@@ -93,9 +103,9 @@ class PrometheusRegistry {
     for (const [key, count] of this.httpRequestsTotal) {
       totalRequests += count;
 
-      const method = key.match(/method="([^"]+)"/)?.[1] ?? "GET";
-      const path = key.match(/path="([^"]+)"/)?.[1] ?? "/";
-      const status = key.match(/status="([^"]+)"/)?.[1] ?? "200";
+      const labels = this.seriesLabels.get(key);
+      if (!labels) continue;
+      const { method, path, status } = labels;
 
       byStatus[status] = (byStatus[status] ?? 0) + count;
 
@@ -120,8 +130,38 @@ class PrometheusRegistry {
     };
   }
 
+  /** Storage and scrape work are capped at maxSeries plus one overflow series. */
+  getStorageStats(): { series: number; histograms: number; bucketCounters: number } {
+    return {
+      series: this.seriesLabels.size,
+      histograms: this.httpRequestDurationMs.size,
+      bucketCounters: this.httpRequestDurationMs.size * HTTP_DURATION_BUCKETS_MS.length,
+    };
+  }
+
   private metricKey(labels: MetricLabels): string {
-    return `method="${labels.method}",path="${labels.path}",status="${labels.status}"`;
+    const normalized = {
+      method: /^(GET|HEAD|POST|PUT|PATCH|DELETE|CONNECT|OPTIONS|TRACE)$/.test(labels.method)
+        ? labels.method
+        : "OTHER",
+      path: labels.path.length <= 512 ? labels.path : "__overflow__",
+      status: /^[1-5][0-9]{2}$/.test(labels.status) ? labels.status : "000",
+    };
+    const escapeLabel = (value: string) =>
+      value.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll('"', '\\"');
+    const encode = (value: MetricLabels) =>
+      `method="${value.method}",path="${escapeLabel(value.path)}",status="${value.status}"`;
+    let key = encode(normalized);
+    if (!this.seriesLabels.has(key)) {
+      if (this.seriesLabels.size >= this.maxSeries) {
+        const overflow = { method: "OTHER", path: "__overflow__", status: "000" };
+        key = encode(overflow);
+        this.seriesLabels.set(key, overflow);
+      } else {
+        this.seriesLabels.set(key, normalized);
+      }
+    }
+    return key;
   }
 }
 

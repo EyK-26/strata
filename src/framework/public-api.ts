@@ -388,7 +388,7 @@ export {
   createMemoryThrottleMiddleware,
   resetMemoryThrottleForTests,
 } from "../core/http/memoryThrottleMiddleware.ts";
-export { createMetricsMiddleware, normalizeMetricPath } from "../core/http/metricsMiddleware.ts";
+export { createMetricsMiddleware } from "../core/http/metricsMiddleware.ts";
 export type { Middleware, RouteHandler } from "../core/http/middleware.ts";
 export {
   type ParsedUpload,

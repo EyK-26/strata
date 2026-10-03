@@ -65,3 +65,11 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 - [DEPLOY.md](../DEPLOY.md)
 - [RUNBOOK.md](../RUNBOOK.md)
 - [INTEGRATIONS.md](./INTEGRATIONS.md)
+
+## HTTP metrics in 2.0
+
+HTTP durations use cumulative millisecond histogram buckets, count, and sum; no request samples are retained. `applyMiddlewareToRoutes()` and `createWebServer()` carry the registered template through request context, so `/orders/:slug` has one path label regardless of the shopper's slug. Unknown paths use `__unmatched__`. Query strings and request headers never become metric labels. Custom dispatchers must establish a trusted registered `routeTemplate` through `runWithRequestMeta()` or accept the unmatched label; never use a raw request URL as the template.
+
+The registry admits at most 4,096 method/path/status series plus one aggregate overflow series. It normalizes methods and status codes, caps path label length, and escapes Prometheus label values. `new PrometheusRegistry(maxSeries)` can select a smaller positive limit; `getStorageStats()` exposes the retained series and bucket counts. Overflow preserves request/duration totals but loses the individual route and status breakdown. Scrape work is proportional to this cap and the fixed bucket count, rather than request volume. Alert on the overflow series before relying on per-route dashboards. Non-finite or negative duration observations are rejected.
+
+The 1.x `normalizeMetricPath()` numeric/UUID heuristic is removed in 2.0. It could retain unlimited slug labels and cannot reliably infer route identity. Keep registered templates, including HTML routes, separate from the API-only OpenAPI registry.

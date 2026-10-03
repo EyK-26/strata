@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 2.0 metrics contract: HTTP middleware uses registered route templates and an unmatched bucket. Fixed duration histograms, bounded method/status labels, escaping, and a 4,096-series cap plus aggregate overflow bound retention and scrape work. Removed `normalizeMetricPath()`; expose storage statistics for operational checks.
+
 - 2.0 transaction contract: implicit repository queries use the active transaction; nested scopes use SQL savepoints without requiring a driver-specific helper. Cross-tenant nesting and concurrent sibling savepoints are rejected. Nested bypass scopes restore tenant, bypass, and identifier settings on the same connection.
 
 - `runWithTenantDatabase()` / `runInTransaction()` roll back when `withJsonErrorHandling()` (or `requestTransactionRollback()`) turns a thrown error into a response. Nested tenant scopes use a savepoint and restore `app.tenant_id` on the way out.
