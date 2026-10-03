@@ -49,3 +49,5 @@ Authenticated non-admin users are pinned to their account tenant. Global admins 
 Jobs that touch RLS tables must call `runWithTenantDatabase()` with an explicit tenant from the job payload. Do not rely on a leftover pooled `app.bypass_rls` or `app.tenant_id` from a previous request.
 
 Webhook dispatch jobs require `tenantId` and scope lookup and delivery to that tenant. Blocked outbound URLs (`assertSafeOutboundUrl`) are recorded and do not fail the originating model write.
+
+`runWithTenantDatabase()` (and `runInTransaction()`) defer `BaseRepository` model events until the transaction commits. A throw drops those events. Re-entering `runWithTenantDatabase()` on an already-open connection does not start a nested SQL transaction, so those writes stay on the outer commit. See [INTEGRATIONS.md](./INTEGRATIONS.md#outbound-webhooks).

@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- Model events from `BaseRepository` writes wait for the surrounding `runInTransaction` / `runWithTenantDatabase` / `runWithMigrationBypass` callback to commit. A rollback drops the queued events. Nested transactions promote to the outer commit. Listeners run with the tenant that was active when the write happened.
+
 ## 1.1.8
 
 - Exclude HTML and SPA routes from generated OpenAPI specs

@@ -93,6 +93,8 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.createMysqlConnectionFromPool).toBe("function");
     expect(typeof core.loginRedirectLocation).toBe("function");
     expect(typeof core.assertSafeOutboundUrl).toBe("function");
+    expect(typeof core.dispatchModelEvent).toBe("function");
+    expect(typeof core.runWithDeferredModelEvents).toBe("function");
     expect(typeof core.webErrorResponse).toBe("function");
     expect(typeof core.renderWebErrorHtml).toBe("function");
     expect(typeof core.createMemoryLoginThrottleMiddleware).toBe("function");

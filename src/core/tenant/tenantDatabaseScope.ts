@@ -4,6 +4,7 @@ import {
   hasActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "../database/connectionContext";
+import { runWithDeferredModelEvents } from "../events/deferredModelEvents";
 import { isRlsTenancy, isTenancyEnabled } from "./tenancyConfig";
 import { currentTenant, runWithTenant, type TenantContext } from "./tenantContext";
 
@@ -34,11 +35,21 @@ async function runWithTenantDatabase<T>(
     return await runWithTenant(tenant, callback);
   }
 
-  return await getDefaultDatabasePool().begin!(async (transaction) => {
-    await applyTenantContextToTransaction(transaction, tenant.id);
+  const pool = getDefaultDatabasePool();
+  const begin = pool.begin;
+  if (typeof begin !== "function") {
+    throw new Error(
+      "RLS tenant scope requires a pool that supports begin(). Session-scoped set_config is not used on pooled connections.",
+    );
+  }
 
-    return await runWithDatabaseConnection(transaction, async () => {
-      return await runWithTenant(tenant, callback);
+  return await runWithDeferredModelEvents(async () => {
+    return await begin(async (transaction) => {
+      await applyTenantContextToTransaction(transaction, tenant.id);
+
+      return await runWithDatabaseConnection(transaction, async () => {
+        return await runWithTenant(tenant, callback);
+      });
     });
   });
 }

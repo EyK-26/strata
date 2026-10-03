@@ -1,5 +1,6 @@
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { runWithDatabaseConnection } from "../database/connectionContext";
+import { runWithDeferredModelEvents } from "../events/deferredModelEvents";
 import { isRlsTenancy } from "./tenancyConfig";
 
 type TransactionHandle = {
@@ -53,15 +54,18 @@ async function runWithScopedTenantTransaction<T>(
   }
 
   const pool = getDefaultDatabasePool();
-  if (typeof pool.begin !== "function") {
+  const begin = pool.begin;
+  if (typeof begin !== "function") {
     throw new Error(
       "RLS migration bypass requires a pool that supports begin(). Session-scoped set_config is not used on pooled connections.",
     );
   }
 
-  return await pool.begin(async (transaction) => {
-    await apply(transaction);
-    return await runWithDatabaseConnection(transaction, callback);
+  return await runWithDeferredModelEvents(async () => {
+    return await begin(async (transaction) => {
+      await apply(transaction);
+      return await runWithDatabaseConnection(transaction, callback);
+    });
   });
 }
 
