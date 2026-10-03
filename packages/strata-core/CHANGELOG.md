@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 1.1.9
+
+- Defer model events until the surrounding transaction commits
+
 ## Unreleased
 
 - Model events from `BaseRepository` writes wait for the surrounding `runInTransaction` / `runWithTenantDatabase` / `runWithMigrationBypass` callback to commit. A rollback drops the queued events. Nested transactions promote to the outer commit. Listeners run with the tenant that was active when the write happened.

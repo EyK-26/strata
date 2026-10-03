@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 1.1.9
+
+- Defer model events until the surrounding transaction commits
+
 ## 1.1.8
 
 - Exclude HTML and SPA routes from generated OpenAPI specs
