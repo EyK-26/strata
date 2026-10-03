@@ -93,10 +93,10 @@ describe("registerAppOpenApiRoutes", () => {
           "/health": async () => new Response("ok"),
         };
 
-        registerOpenApiRouteMap(
-          { "/api/v1/products": routes["/api/v1/products"] },
-          ["global", "api"],
-        );
+        registerOpenApiRouteMap({ "/api/v1/products": routes["/api/v1/products"] }, [
+          "global",
+          "api",
+        ]);
         registerOpenApiRouteMap({ "/admin/notes": routes["/admin/notes"] }, ["global", "web"]);
 
         return { routes };
