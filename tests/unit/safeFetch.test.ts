@@ -181,3 +181,237 @@ describe("safeFetch", () => {
     );
   });
 });
+
+describe("safeFetch lifecycle", () => {
+  test("rejects an already aborted caller before DNS or fetch", async () => {
+    const dns = mock(async () => [{ address: "1.1.1.1", family: 4 }]);
+    const fetchMock = mock(() => Promise.resolve(new Response("unused")));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    setDnsLookupForTests(dns);
+    const reason = new Error("caller canceled");
+    await expect(
+      safeFetch("https://example.com", { signal: AbortSignal.abort(reason) }),
+    ).rejects.toBe(reason);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(dns).not.toHaveBeenCalled();
+  });
+
+  test("bounds DNS resolution and never starts a late fetch", async () => {
+    let finishDns: ((value: Array<{ address: string; family: number }>) => void) | undefined;
+    setDnsLookupForTests(
+      () =>
+        new Promise((resolve) => {
+          finishDns = resolve;
+        }),
+    );
+    const fetchMock = mock(() => Promise.resolve(new Response("unused")));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await expect(safeFetch("https://example.com", {}, { timeoutMs: 15 })).rejects.toMatchObject({
+      name: "TimeoutError",
+    });
+    finishDns?.([{ address: "1.1.1.1", family: 4 }]);
+    await Bun.sleep(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("forwards caller cancellation during fetch with its reason", async () => {
+    mockPublicDns();
+    globalThis.fetch = mock(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+    const caller = new AbortController();
+    const pending = safeFetch("https://example.com", { signal: caller.signal });
+    const reason = new Error("request ended");
+    caller.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+  });
+
+  test("times out a stalled body and cancels the underlying stream", async () => {
+    mockPublicDns();
+    const cancel = mock(() => {});
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(new ReadableStream({ cancel }))),
+    ) as unknown as typeof fetch;
+    const response = await safeFetch("https://example.com", {}, { timeoutMs: 15 });
+    await expect(response.text()).rejects.toMatchObject({ name: "TimeoutError" });
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  test("releases unread response bodies on deadline", async () => {
+    mockPublicDns();
+    const cancel = mock(() => {});
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(new ReadableStream({ cancel }))),
+    ) as unknown as typeof fetch;
+    const response = await safeFetch("https://example.com", {}, { timeoutMs: 15 });
+    await Bun.sleep(30);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    await expect(response.text()).rejects.toMatchObject({ name: "TimeoutError" });
+  });
+
+  test("preserves streaming and aborts the body after headers", async () => {
+    mockPublicDns();
+    const cancel = mock(() => {});
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("first"));
+            },
+            cancel,
+          }),
+        ),
+      ),
+    ) as unknown as typeof fetch;
+    const caller = new AbortController();
+    const response = await safeFetch("https://example.com", { signal: caller.signal });
+    const body = response.body;
+    if (!body) throw new Error("Expected response body.");
+    const reader = body.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("first");
+    const pending = reader.read();
+    const reason = new Error("caller ended streaming");
+    caller.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  test("consumer cancellation releases the caller listener and timeout", async () => {
+    mockPublicDns();
+    const cancel = mock(() => {});
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(new ReadableStream({ cancel }))),
+    ) as unknown as typeof fetch;
+    const caller = new AbortController();
+    const remove = mock(caller.signal.removeEventListener.bind(caller.signal));
+    caller.signal.removeEventListener = remove;
+    const response = await safeFetch(
+      "https://example.com",
+      { signal: caller.signal },
+      { timeoutMs: 15 },
+    );
+    await response.body?.cancel("consumer finished");
+    await Bun.sleep(30);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledWith("consumer finished");
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  test("preserves metadata and clone semantics and releases after EOF", async () => {
+    mockPublicDns();
+    const original = new Response("hello", {
+      status: 201,
+      statusText: "Created",
+      headers: { "x-fixture": "ok" },
+    });
+    Object.defineProperties(original, {
+      url: { value: "https://example.com/final" },
+      redirected: { value: true },
+      type: { value: "basic" },
+    });
+    globalThis.fetch = mock(() => Promise.resolve(original)) as unknown as typeof fetch;
+    const caller = new AbortController();
+    const remove = mock(caller.signal.removeEventListener.bind(caller.signal));
+    caller.signal.removeEventListener = remove;
+    const response = await safeFetch("https://example.com", { signal: caller.signal });
+    const clone = response.clone();
+    expect(clone.url).toBe(original.url);
+    expect(clone.redirected).toBe(true);
+    expect(clone.type).toBe("basic");
+    expect(response.status).toBe(201);
+    expect(response.statusText).toBe("Created");
+    expect(response.headers.get("x-fixture")).toBe("ok");
+    expect(await response.text()).toBe("hello");
+    expect(await clone.text()).toBe("hello");
+    expect(remove).toHaveBeenCalledTimes(1);
+    caller.abort();
+    expect(response.bodyUsed).toBe(true);
+  });
+
+  test("releases deadlines for responses without a body", async () => {
+    mockPublicDns();
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(null, { status: 204 })),
+    ) as unknown as typeof fetch;
+    const response = await safeFetch("https://example.com", {}, { timeoutMs: 15 });
+    await Bun.sleep(30);
+    expect(response.status).toBe(204);
+    expect(response.body).toBeNull();
+  });
+
+  test("cancels intermediate bodies and keeps one redirect deadline", async () => {
+    mockPublicDns();
+    const cancel = mock(() => {});
+    let calls = 0;
+    globalThis.fetch = mock(() => {
+      calls++;
+      return Promise.resolve(
+        calls === 1
+          ? new Response(new ReadableStream({ cancel }), {
+              status: 302,
+              headers: { location: "/slow" },
+            })
+          : new Response(new ReadableStream()),
+      );
+    }) as unknown as typeof fetch;
+    const response = await safeFetch(
+      "https://example.com/start",
+      {},
+      { maxRedirects: 1, timeoutMs: 15 },
+    );
+    expect(cancel).toHaveBeenCalledTimes(1);
+    await expect(response.json()).rejects.toMatchObject({ name: "TimeoutError" });
+  });
+
+  test("propagates body failures without waiting for a deadline", async () => {
+    mockPublicDns();
+    const failure = new Error("body failed");
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(failure);
+            },
+          }),
+        ),
+      ),
+    ) as unknown as typeof fetch;
+    const response = await safeFetch("https://example.com");
+    await expect(response.arrayBuffer()).rejects.toBe(failure);
+  });
+
+  test("rejects invalid deadlines", async () => {
+    for (const timeoutMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      await expect(safeFetch("https://example.com", {}, { timeoutMs })).rejects.toBeInstanceOf(
+        RangeError,
+      );
+    }
+  });
+
+  test("real Bun transport cancels a stalled body after receiving headers", async () => {
+    globalThis.fetch = originalFetch;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('{"pending":'));
+            },
+          }),
+        );
+      },
+    });
+    try {
+      const response = await safeFetch(
+        `http://127.0.0.1:${server.port}/`,
+        {},
+        { allowPrivate: true, allowHttp: true, resolveDns: false, timeoutMs: 40 },
+      );
+      await expect(response.json()).rejects.toMatchObject({ name: "TimeoutError" });
+    } finally {
+      await server.stop(true);
+    }
+  });
+});

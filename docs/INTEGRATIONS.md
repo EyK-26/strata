@@ -62,3 +62,7 @@ Smoke tests that POST a Stripe fixture and then `GET /api/v1/billing/subscriptio
 ## Design rule
 
 Keep vendor SDKs outside `src/core/`. Wrap them in `apps/<your-app>/src/modules/...` adapters so the framework stays usable without Stripe or a specific IdP.
+
+## Outbound request lifecycle
+
+`safeFetch` honors `RequestInit.signal` and uses a single `timeoutMs` deadline (10 seconds by default) across DNS resolution, redirect hops, response headers, and response body consumption. Deadlines must be positive finite numbers. Caller cancellation preserves its reason; the helper deadline rejects with `TimeoutError`. Response bodies stream normally. Read the body or explicitly cancel it when only headers/status are needed; an unread body is cancelled when the deadline expires. EOF, body failure, cancellation, and bodyless responses release timers and caller listeners. Followed redirect bodies are cancelled before the next hop. Response status, headers, URL/redirect metadata, and cloning remain available.
