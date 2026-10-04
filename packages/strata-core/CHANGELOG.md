@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.0.3
+
+- Persist transactional events with leased tenant-aware SQL outbox workers
+
 ## 2.0.2
 
 - Adopt TypeScript 7.0.2 in framework and generated apps; preserve tested TypeScript 5.9 and 6.x consumer compatibility.
