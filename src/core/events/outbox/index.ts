@@ -73,11 +73,10 @@ async function privileged<T>(work: () => Promise<T>): Promise<T> {
     } catch (error) {
       const failure =
         error !== null && typeof error === "object"
-          ? (error as { code?: string; errno?: number })
+          ? (error as { code?: string; errno?: string | number })
           : {};
-      const code = failure.code;
-      const errno = failure.errno;
-      if (attempt >= 4 || !(code === "40001" || code === "40P01" || errno === 1213)) throw error;
+      const code = String(failure.errno ?? failure.code);
+      if (attempt >= 4 || !["40001", "40P01", "1213"].includes(code)) throw error;
       await Bun.sleep(10 * (attempt + 1));
     }
   }

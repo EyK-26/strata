@@ -228,7 +228,7 @@ The MySQL adapter reserves a pool connection for each awaited transaction and bi
 
 ### Durable transactional events (opt-in SQL outbox)
 
-Import `SqlOutbox` and `createOutboxMigration` from `@getstrata/core/events/outbox`. Add a numbered application file migration exporting `createOutboxMigration("0010_outbox", "pgsql", { rls: true })` (use the selected driver and enable RLS only for Postgres RLS apps). This helper owns the infrastructure schema; do not copy its SQL into the application. Run migrations separately from workers. MySQL requires 8.0+ for `SKIP LOCKED` and enforced checks. Grant the runtime role SELECT/INSERT/UPDATE on both outbox tables. DDL requires the migration owner; migration bypass is a row policy, not DDL permission. Downgrade refuses tables containing any undelivered event.
+Import `SqlOutbox` and `createOutboxMigration` from `@getstrata/core/events/outbox`. Add a numbered application file migration exporting `createOutboxMigration("0010_outbox", "pgsql", { rls: true })` (use the selected driver and enable RLS only for Postgres RLS apps). This helper owns the infrastructure schema; do not copy its SQL into the application. Run migrations separately from workers. MySQL requires 8.0.16+ (8.4 is tested) for `SKIP LOCKED` and enforced checks. Grant the runtime role SELECT/INSERT/UPDATE on both outbox tables. DDL requires the migration owner; migration bypass is a row policy, not DDL permission. Downgrade refuses tables containing any undelivered event.
 
 ```typescript
 const outbox = new SqlOutbox({

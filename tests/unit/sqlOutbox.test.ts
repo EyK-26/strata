@@ -334,6 +334,62 @@ describe("durable SQL outbox on SQLite", () => {
     );
     expect((await db.unsafe("SELECT * FROM strata_outbox_event")).length).toBe(1);
   });
+  test("database abort retries are bounded and never repeat listener effects", async () => {
+    let effects = 0;
+    const outbox = new SqlOutbox({
+      listeners: [
+        listener(async () => {
+          effects++;
+        }),
+      ],
+    });
+    await publish(outbox);
+    const begin = connection.begin.bind(connection);
+    let aborted = 0;
+    connection.begin = async (callback) => {
+      if (aborted++ < 2)
+        throw Object.assign(new Error("serialization abort"), {
+          errno: "40001",
+          code: "ERR_POSTGRES_SERVER_ERROR",
+        });
+      return begin(callback);
+    };
+    await outbox.processNext();
+    expect(effects).toBe(1);
+    let attempts = 0;
+    connection.begin = async () => {
+      attempts++;
+      throw Object.assign(new Error("deadlock"), { errno: 1213 });
+    };
+    await expect(outbox.processNext()).rejects.toThrow("deadlock");
+    expect(attempts).toBe(5);
+  });
+  test("stalled lease renewal expires cooperatively and work remains recoverable", async () => {
+    const outbox = new SqlOutbox({
+      leaseMs: 90,
+      maxAttempts: 1,
+      listeners: [
+        listener(async (_, { signal }) => {
+          await new Promise<void>((resolve) =>
+            signal.addEventListener("abort", () => resolve(), { once: true }),
+          );
+          expect(signal.reason.message).toBe("Outbox lease expired.");
+        }),
+      ],
+    });
+    await publish(outbox);
+    const begin = connection.begin.bind(connection);
+    let roots = 0;
+    connection.begin = async (callback) =>
+      begin(async (tx) => {
+        if (++roots === 2) await Bun.sleep(130);
+        return callback(tx);
+      });
+    await outbox.processNext();
+    expect((await delivery())[0]?.status).toBe("processing");
+    await outbox.processNext();
+    expect((await delivery())[0]?.error_code).toBe("attempts_exhausted");
+  });
   test("validates the contract before writes", async () => {
     const outbox = new SqlOutbox({ listeners: [listener(async () => {})], maxPayloadBytes: 10 });
     await expect(outbox.publish("orders.created", 1)).rejects.toThrow(

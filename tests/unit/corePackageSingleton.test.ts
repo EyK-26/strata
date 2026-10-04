@@ -56,6 +56,16 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(main.resetMysqlLoaderForTests).toBe(subpath.resetMysqlLoaderForTests);
   });
 
+  test("main and outbox subpath share durable infrastructure and transaction identity", async () => {
+    const main = await import(join(CORE_DIST, "index.js"));
+    const outbox = await import(join(CORE_DIST, "entries/events/outbox.js"));
+    const transaction = await import(join(CORE_DIST, "entries/database/transaction.js"));
+    expect(typeof outbox.SqlOutbox).toBe("function");
+    expect(outbox.SqlOutbox).toBe(main.SqlOutbox);
+    expect(outbox.createOutboxMigration).toBe(main.createOutboxMigration);
+    expect(transaction.hasActiveTransaction).toBe(main.hasActiveTransaction);
+  });
+
   test("main and view subpath share configureWebErrorView", async () => {
     const main = await import(join(CORE_DIST, "index.js"));
     const subpath = await import(join(CORE_DIST, "entries/view.js"));
