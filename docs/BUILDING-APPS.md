@@ -221,3 +221,7 @@ The global HTTP error boundary encloses authentication, tenancy, the business tr
 ### SQLite transactions
 
 `createSqliteConnection` supports awaited `begin()` callbacks and the standard `runInTransaction` API. Nested framework transactions use savepoints. A single native SQLite connection serializes root transactions and unrelated queries; transaction-local queries use the bound handle, so another request cannot observe uncommitted writes. Failed callbacks and deferred constraint failures roll back before the next operation starts. Do not nest native `begin()` calls or issue manual transaction-control SQL inside a managed callback; use `runInTransaction`. Drain operations before closing the connection. This does not turn SQLite into a distributed writer database: file locking and the existing busy timeout still apply between processes.
+
+### MySQL transactions
+
+The MySQL adapter reserves a pool connection for each awaited transaction and binds transaction-local pool/repository queries to that session. `runInTransaction` nests through savepoints. Queries with bound values use the prepared protocol; parameterless savepoint/DDL operations use the driver's query protocol. Failed callbacks or commits roll back before release. Uncertain BEGIN and failed rollback discard the session rather than returning it to the pool. Adapters supplied through `createMysqlConnectionFromPool` need `getConnection()` to support transactions; use `runInTransaction` for nesting and do not reuse transaction handles after completion.
