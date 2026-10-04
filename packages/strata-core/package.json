@@ -919,6 +919,11 @@
       "types": "./dist/core/view/index.d.ts",
       "import": "./dist/entries/view.js",
       "default": "./dist/entries/view.js"
+    },
+    "./events/outbox": {
+      "types": "./dist/core/events/outbox/index.d.ts",
+      "import": "./dist/entries/events/outbox.js",
+      "default": "./dist/entries/events/outbox.js"
     }
   },
   "main": "./dist/index.js",

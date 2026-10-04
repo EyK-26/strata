@@ -30,6 +30,8 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "getBoundDatabaseConnection",
     "resetBoundDatabaseConnection",
   ],
+  "events/outbox": ["SqlOutbox", "createOutboxMigration"],
+  "database/transaction": ["hasActiveTransaction", "runInTransaction"],
   "database/bunSql": ["bindBunSql", "createBunSqlPool"],
   "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],
   "database/mysqlConnection": [

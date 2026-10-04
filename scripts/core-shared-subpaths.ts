@@ -27,6 +27,7 @@ export const CORE_SHARED_SUBPATHS = [
   "database/transaction",
   "errors/http",
   "events",
+  "events/outbox",
   "http",
   "http/contentSecurityPolicy",
   "http/loginThrottleMiddleware",
