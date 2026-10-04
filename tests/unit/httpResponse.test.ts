@@ -77,3 +77,17 @@ describe("createJsonErrorMiddleware", () => {
     expect(await response.json()).toEqual({ error: "Invalid or missing CSRF token." });
   });
 });
+
+test("API error context overrides HTML negotiation in nested legacy wrappers", async () => {
+  process.env.FRONTEND_MODE = "hybrid";
+  const handler = withErrorHandling(async (_request: Request) => {
+    throw new ForbiddenError("Signature rejected.");
+  });
+  const response = await createJsonErrorMiddleware()(
+    new Request("http://app.test/billing/webhooks/stripe", { headers: { accept: "text/html" } }),
+    () => handler(new Request("http://app.test/billing/webhooks/stripe")),
+  );
+  expect(response.status).toBe(403);
+  expect(response.headers.get("content-type")).toContain("application/json");
+  expect(await response.json()).toEqual({ error: "Signature rejected." });
+});

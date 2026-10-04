@@ -259,7 +259,7 @@ function renderBillingModule(layers: StarterLayers): string {
         );`;
 
   return `import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";
+import { jsonResponse, withJsonErrorHandling } from "@getstrata/core/http/response";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 import { applyStripeWebhook } from "../../billing/applyStripeWebhook.ts";
 ${tenantImport}import { getSql } from "../../bootstrap/database.ts";
@@ -276,7 +276,7 @@ const billingModule: AppModule = {
       "/billing/webhooks/stripe": {
         POST: kernel.wrap(
           "api",
-          withErrorHandling(async (request) => {
+          withJsonErrorHandling(async (request) => {
             if (!billingEnabled()) {
               return new Response("Not found", { status: 404 });
             }
@@ -299,7 +299,7 @@ const billingModule: AppModule = {
       },
       "/api/v1/billing/subscription": {
         GET: kernel.wrapApi(
-          withErrorHandling(async () => {
+          withJsonErrorHandling(async () => {
             if (!billingEnabled()) {
               return new Response("Not found", { status: 404 });
             }

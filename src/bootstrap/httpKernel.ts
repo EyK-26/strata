@@ -24,7 +24,12 @@ import { createRequireGlobalAdminMiddleware } from "@getstrata/core/http/require
 import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
 import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
-import { withErrorHandling, withJsonErrorHandling } from "@getstrata/core/http/response";
+import {
+  createJsonErrorMiddleware,
+  createWebErrorMiddleware,
+  withErrorHandling,
+  withJsonErrorHandling,
+} from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { createSecurityHeadersMiddleware } from "@getstrata/core/http/securityHeadersMiddleware";
 import { createValidateSignatureMiddleware } from "@getstrata/core/http/signedUrl";
@@ -49,7 +54,7 @@ type WebGuestHome = string | ((user: AuthUser) => string | Promise<string>);
 class HttpKernel {
   constructor(private readonly dependencies: AppDependencies) {}
 
-  globalMiddleware(): Middleware[] {
+  globalMiddleware(errorFormat: "json" | "web" = "json"): Middleware[] {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
     return [
@@ -60,6 +65,8 @@ class HttpKernel {
       createMetricsMiddleware(),
       createRequestLoggingMiddleware(),
       requestIdMiddleware,
+      // Commit and deferred listeners finish inside this boundary, before telemetry records the result.
+      errorFormat === "json" ? createJsonErrorMiddleware() : createWebErrorMiddleware(),
       createAuthMiddleware(auth),
       createMembershipMiddleware(),
       createTenantMiddleware(),

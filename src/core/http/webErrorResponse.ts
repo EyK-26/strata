@@ -5,6 +5,7 @@ import { isProductionEnv } from "../runtime/appEnv";
 import { isViewsEnabled } from "../runtime/frontendMode";
 import { htmlErrorResponse } from "../view/webErrorView";
 import { requestPrefersJson } from "./contentNegotiation";
+import { currentRequestMeta } from "./requestMetaContext";
 import { loginRedirectLocation } from "./safeInternalPath";
 
 type FieldErrors = Record<string, string[]>;
@@ -66,7 +67,12 @@ function logServerError(error: unknown, mappedError: HttpError): void {
 }
 
 async function webErrorResponse(error: unknown, request?: Request): Promise<Response | null> {
-  if (!request || !isViewsEnabled() || requestPrefersJson(request)) {
+  if (
+    currentRequestMeta().errorFormat === "json" ||
+    !request ||
+    !isViewsEnabled() ||
+    requestPrefersJson(request)
+  ) {
     return null;
   }
 

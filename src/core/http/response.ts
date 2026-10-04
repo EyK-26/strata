@@ -2,6 +2,7 @@ import { toHttpError } from "@getstrata/core/errors/http";
 import { mapDatabaseError } from "../database/errors";
 import { requestTransactionRollback } from "../database/transactionControl";
 import type { Middleware } from "./middleware";
+import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
 import { logServerError, webErrorResponse } from "./webErrorResponse";
 
 function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
@@ -66,19 +67,26 @@ function withJsonErrorHandling<TArgs extends unknown[]>(
 }
 
 function createJsonErrorMiddleware(): Middleware {
-  return async (_request, next) => {
-    try {
-      return await next();
-    } catch (error) {
-      requestTransactionRollback();
-      return errorResponse(error);
-    }
-  };
+  return async (_request, next) =>
+    await runWithRequestMeta({ ...currentRequestMeta(), errorFormat: "json" }, async () => {
+      try {
+        return await next();
+      } catch (error) {
+        requestTransactionRollback();
+        return errorResponse(error);
+      }
+    });
+}
+
+function createWebErrorMiddleware(): Middleware {
+  return async (request, next) =>
+    await withErrorHandling(async (_request: Request) => next())(request);
 }
 
 export {
   createdResponse,
   createJsonErrorMiddleware,
+  createWebErrorMiddleware,
   errorResponse,
   jsonResponse,
   noContentResponse,
