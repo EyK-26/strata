@@ -135,7 +135,7 @@ jobs:
           git diff --exit-code -- bun.lock
 
       - name: Start services
-        run: docker compose up -d postgres redis --wait
+        run: docker compose up -d postgres mysql redis --wait
 
       - name: Check tag matches package versions
         run: |
