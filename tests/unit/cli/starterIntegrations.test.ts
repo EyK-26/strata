@@ -143,6 +143,8 @@ describe("create-strata integration extras", () => {
     expect(billing).toContain("/billing/webhooks/stripe");
     expect(billing).toContain("/api/v1/billing/subscription");
     expect(billing).toContain("verifyStripeWebhookSignature");
+    expect(billing).toContain("withJsonErrorHandling");
+    expect(billing).not.toContain("withErrorHandling");
     expect(billing).toContain("applyStripeWebhook");
     expect(billing).not.toContain("runWithMigrationBypass(");
     const hook = await readFile(join(app, "src/billing/applyStripeWebhook.ts"), "utf8");

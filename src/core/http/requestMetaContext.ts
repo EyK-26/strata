@@ -6,6 +6,8 @@ type RequestMeta = {
   request?: Request;
   /** Registered route template; never a URL supplied by the client. */
   routeTemplate?: string;
+  /** API error contracts take precedence over client content negotiation. */
+  errorFormat?: "json";
   flash?: { level: string; message: string } | null;
   csrfToken?: string;
   cspNonce?: string;

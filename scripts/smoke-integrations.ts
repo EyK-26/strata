@@ -178,6 +178,28 @@ async function main(): Promise<void> {
         body: rawBody,
       });
       assert(stripe.status === 200, `stripe webhook status ${stripe.status}`);
+      for (const accept of [undefined, "text/html"]) {
+        const rejected = await fetch(`${origin}/billing/webhooks/stripe`, {
+          method: "POST",
+          redirect: "manual",
+          headers: {
+            "content-type": "application/json",
+            "stripe-signature": "invalid",
+            ...(accept ? { accept } : {}),
+          },
+          body: rawBody,
+        });
+        assert(rejected.status === 401, `invalid stripe signature status ${rejected.status}`);
+        assert(
+          rejected.headers.get("content-type")?.includes("application/json"),
+          "stripe errors must stay JSON",
+        );
+        assert(
+          ((await rejected.json()) as { error?: string }).error ===
+            "Invalid Stripe signature header.",
+          "stripe signature error contract changed",
+        );
+      }
       const stripeJson = (await stripe.json()) as { received?: boolean };
       assert(stripeJson.received === true, "stripe webhook body missing received:true");
     } finally {
