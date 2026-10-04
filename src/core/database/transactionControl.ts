@@ -1,4 +1,5 @@
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
+import { hasActiveDatabaseConnection } from "./connectionContext";
 
 class TransactionRollback extends Error {
   readonly result: unknown;
@@ -26,6 +27,10 @@ function unwrapTransactionRollback(error: unknown, depth = 0): TransactionRollba
     return null;
   }
   return unwrapTransactionRollback(error.cause, depth + 1);
+}
+
+function hasActiveTransaction(): boolean {
+  return hasActiveDatabaseConnection() && (transactionScopes.getStore()?.rollback.length ?? 0) > 0;
 }
 
 function requestTransactionRollback(): void {
@@ -86,6 +91,7 @@ async function runWithTransactionScope<T>(callback: () => T | Promise<T>): Promi
 
 export {
   commitOrRollbackScope,
+  hasActiveTransaction,
   requestTransactionRollback,
   runWithTransactionScope,
   settleTransaction,

@@ -269,7 +269,11 @@ export {
 export type { Seeder, SeederDatabase } from "../core/database/seeders/types.ts";
 export { createSqliteConnection } from "../core/database/sqliteConnection.ts";
 export { defineTable } from "../core/database/table.ts";
-export { requestTransactionRollback, runInTransaction } from "../core/database/transaction.ts";
+export {
+  hasActiveTransaction,
+  requestTransactionRollback,
+  runInTransaction,
+} from "../core/database/transaction.ts";
 export type {
   QueryJoin,
   QueryJoinOn,
@@ -302,6 +306,12 @@ export {
   modelEventName,
   runWithDeferredModelEvents,
 } from "../core/events/index.ts";
+export type {
+  DurableEvent,
+  DurableListener,
+  SqlOutboxOptions,
+} from "../core/events/outbox/index.ts";
+export { createOutboxMigration, SqlOutbox } from "../core/events/outbox/index.ts";
 export {
   auth,
   cache,

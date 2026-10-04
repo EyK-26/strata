@@ -225,3 +225,37 @@ The global HTTP error boundary encloses authentication, tenancy, the business tr
 ### MySQL transactions
 
 The MySQL adapter reserves a pool connection for each awaited transaction and binds transaction-local pool/repository queries to that session. `runInTransaction` nests through savepoints. Queries with bound values use the prepared protocol; parameterless savepoint/DDL operations use the driver's query protocol. Failed callbacks or commits roll back before release. Uncertain BEGIN and failed rollback discard the session rather than returning it to the pool. Adapters supplied through `createMysqlConnectionFromPool` need `getConnection()` to support transactions; use `runInTransaction` for nesting and do not reuse transaction handles after completion.
+
+### Durable transactional events (opt-in SQL outbox)
+
+Import `SqlOutbox` and `createOutboxMigration` from `@getstrata/core/events/outbox`. Add a numbered application file migration exporting `createOutboxMigration("0010_outbox", "pgsql", { rls: true })` (use the selected driver and enable RLS only for Postgres RLS apps). This helper owns the infrastructure schema; do not copy its SQL into the application. Run migrations separately from workers. MySQL requires 8.0.16+ (8.4 is tested) for `SKIP LOCKED` and enforced checks. Grant the runtime role SELECT/INSERT/UPDATE on both outbox tables. DDL requires the migration owner; migration bypass is a row policy, not DDL permission. Downgrade refuses tables containing any undelivered event.
+
+```typescript
+const outbox = new SqlOutbox({
+  listeners: [{
+    name: "orders.receipt.v1", event: "orders.created",
+    async handle(event, { signal }) {
+      // Application handler: use event.id as the provider/business idempotency key.
+      await sendReceipt(event.payload, { signal, idempotencyKey: event.id });
+    },
+  }],
+});
+await runInTransaction(async () => {
+  const order = await orders.create(input);
+  await outbox.publish("orders.created", { orderId: order.id }, {
+    id: `order:${order.id}:created`, version: 1,
+  });
+});
+// Separate bootstrapped worker process; abort during shutdown and await completion.
+await outbox.work({ signal: shutdown.signal });
+```
+
+Publication requires a framework business transaction (`runInTransaction` or `runWithTenantDatabase`). A savepoint keeps publication atomic even if the caller catches its error. Event payloads are JSON, versioned, limited to 64 KiB by default, and accompanied by the current tenant identity. The transaction captures the registered listener names and attempt budget. Reusing an event ID requires the same name, version, tenant and serialized payload; it never adds listeners retroactively. Canonicalize application payloads if object key ordering may differ between retries. Keep IDs globally unique (include the tenant when business IDs are tenant-local). Retain event rows for the required idempotency/audit window; deleting them permits that ID to be published again.
+
+Durable listeners execute only in workers outside the business transaction; publication never calls a listener or a Redis queue. This differs from synchronous observers and commit-aware in-process model listeners, which are useful hooks but do not survive process death. Register the same durable listeners in producers and workers. Removing or renaming a listener leaves its existing delivery recoverable as a failure. Do not automatically convert all model hooks to durable events: apps choose which effects need durability.
+
+Workers use database time, indexed claim scans, renewable unique ownership tokens and ownership-checked acknowledgement. Expired ownership is reclaimed before new work. Short coordination transactions retry only database deadlock/serialization aborts, with a bounded retry budget; persistent infrastructure errors propagate to the worker supervisor. Delivery is **at least once**. A lease fences acknowledgement, not arbitrary provider effects: a killed worker may have already sent email or charged a provider. Handlers must support replay and observe the abort signal. Cancellation does not delete work. Failed delivery persists a bounded code, not provider exception text; attempts and exponential retry deadlines survive restart. Defaults are a 60-second lease, five attempts, and a one-second initial retry delay capped at five minutes. Provision pool headroom for lease renewal in addition to active listeners. SQLite has one writer per connection; keep application write transactions short.
+
+Tenant listeners resolve the captured tenant and run through `runWithTenantDatabase`, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use `runInTransaction` for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
+
+Use `processNext({ signal })` for bounded worker orchestration/tests, or `work({ signal, pollMs })` for the framework polling loop. Monitor pending age, expired leases, attempts, and failed deliveries in the two SQL tables. `replay(eventId, listenerName)` atomically resets only that failed listener's delivery, preserving the original event and completed listeners. Expose replay solely through an authorized operator command, never an anonymous endpoint. Outbox schema/data must survive rolling deployment and restore. This API is additive and opt-in; the starter does not silently change existing listener execution semantics.

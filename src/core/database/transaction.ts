@@ -10,6 +10,7 @@ import {
 import { resolveRepositoryConnection } from "./repositoryConnection.ts";
 import {
   commitOrRollbackScope,
+  hasActiveTransaction,
   requestTransactionRollback,
   runWithTransactionScope,
   settleTransaction,
@@ -100,4 +101,4 @@ async function runInTransaction<TValue>(
   );
 }
 
-export { requestTransactionRollback, runInTransaction };
+export { hasActiveTransaction, requestTransactionRollback, runInTransaction };

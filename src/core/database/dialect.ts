@@ -6,6 +6,10 @@ interface SqlDialect {
   placeholder(index: number): string;
   quoteIdentifier(identifier: string): string;
   nowExpression(): string;
+  /** Authoritative database wall clock for persisted lease/retry deadlines. */
+  epochMillisecondsExpression(): string;
+  /** Current reads/row locks; SQLite serializes writes at transaction admission. */
+  rowLockClause(skipLocked?: boolean): string;
   /** Render a Date as a literal this engine accepts for a timestamp column. */
   timestampValue(value: Date): string;
   returningClause(columns: string): string;
@@ -41,6 +45,12 @@ const postgresDialect: SqlDialect = {
   },
   nowExpression(): string {
     return "NOW()";
+  },
+  epochMillisecondsExpression(): string {
+    return "CAST(EXTRACT(EPOCH FROM clock_timestamp()) * 1000 AS BIGINT)";
+  },
+  rowLockClause(skipLocked = false): string {
+    return ` FOR UPDATE${skipLocked ? " SKIP LOCKED" : ""}`;
   },
   timestampValue(value: Date): string {
     return value.toISOString();
@@ -86,6 +96,12 @@ const mysqlDialect: SqlDialect = {
   nowExpression(): string {
     return "CURRENT_TIMESTAMP";
   },
+  epochMillisecondsExpression(): string {
+    return "CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000 AS UNSIGNED)";
+  },
+  rowLockClause(skipLocked = false): string {
+    return ` FOR UPDATE${skipLocked ? " SKIP LOCKED" : ""}`;
+  },
   timestampValue(value: Date): string {
     return value.toISOString().slice(0, 19).replace("T", " ");
   },
@@ -129,6 +145,12 @@ const sqliteDialect: SqlDialect = {
   nowExpression(): string {
     // Same ISO-8601 text shape as timestampValue(); SQLite compares timestamps as strings.
     return "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+  },
+  epochMillisecondsExpression(): string {
+    return "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+  },
+  rowLockClause(): string {
+    return "";
   },
   timestampValue(value: Date): string {
     return value.toISOString();

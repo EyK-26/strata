@@ -27,6 +27,8 @@ const allowedUnbounded = new Set([
   join(repoRoot, "src/db/migrations/runner.ts"),
   join(repoRoot, "src/db/seeders/runner.ts"),
   join(repoRoot, "src/core/audit/exportAuditLogs.ts"),
+  // Worker-only coordination; publication is fenced to the business transaction below.
+  join(repoRoot, "src/core/events/outbox/index.ts"),
 ]);
 
 const requestPathRoots = [
@@ -78,6 +80,25 @@ describe("request-path RLS bypass fence", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  test("outbox publication never bypasses RLS and coordination rejects an active business transaction", async () => {
+    const text = await readFile(join(repoRoot, "src/core/events/outbox/index.ts"), "utf8");
+    const publish = text.slice(
+      text.indexOf("  async publish("),
+      text.indexOf("  private async claim("),
+    );
+    expect(publish).not.toContain(unboundedNeedle);
+    expect(publish).not.toContain("privileged(");
+    expect(publish).toContain("hasActiveTransaction()");
+    const coordination = text.slice(
+      text.indexOf("async function privileged"),
+      text.indexOf("class SqlOutbox"),
+    );
+    expect(coordination).toContain("if (hasActiveTransaction())");
+    expect(coordination.indexOf("if (hasActiveTransaction())")).toBeLessThan(
+      coordination.indexOf(unboundedNeedle),
+    );
   });
 
   test("generated renderRuntime unbounded bypass sits in migrate/seed, not request handlers", async () => {
