@@ -1,7 +1,12 @@
 import { Database } from "bun:sqlite";
-import type { ActiveDatabaseHandle } from "./connectionContext.ts";
+import {
+  type ActiveDatabaseHandle,
+  getActiveDatabaseConnection,
+  runWithDatabaseConnection,
+} from "./connectionContext.ts";
 
 type SqliteConnection = ActiveDatabaseHandle & {
+  begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T>;
   close(): void;
 };
 
@@ -33,20 +38,71 @@ function createSqliteConnection(filename: string): SqliteConnection {
     db.exec("PRAGMA synchronous = NORMAL");
   }
 
-  return {
+  let tail = Promise.resolve();
+  let pending = 0;
+  let closed = false;
+  const transactions = new WeakSet<ActiveDatabaseHandle>();
+
+  function execute<T>(query: string, params: readonly unknown[]): T[] {
+    const statement = db.query(query);
+    const args = [...params] as never[];
+    if (isRowReturning(query)) return statement.all(...args) as T[];
+    statement.run(...args);
+    return [];
+  }
+
+  function enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
+    if (closed) return Promise.reject(new Error("SQLite connection is closed."));
+    pending++;
+    const result = tail.then(operation).finally(() => {
+      pending--;
+    });
+    tail = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  }
+
+  const connection: SqliteConnection = {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
-      const statement = db.query(query);
-      const args = [...params] as never[];
-      if (isRowReturning(query)) {
-        return statement.all(...args) as T[];
+      const active = getActiveDatabaseConnection(connection);
+      if (transactions.has(active)) return active.unsafe<T>(query, params);
+      return enqueue(() => execute<T>(query, params));
+    },
+    async begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T> {
+      if (transactions.has(getActiveDatabaseConnection(connection))) {
+        throw new Error("Use runInTransaction for nested SQLite transactions.");
       }
-      statement.run(...args);
-      return [];
+      return enqueue(async () => {
+        db.exec("BEGIN IMMEDIATE");
+        let open = true;
+        const transaction: ActiveDatabaseHandle = {
+          async unsafe<TValue>(query: string, params: readonly unknown[] = []): Promise<TValue[]> {
+            if (!open) throw new Error("SQLite transaction is no longer active.");
+            return execute<TValue>(query, params);
+          },
+        };
+        transactions.add(transaction);
+        try {
+          const result = await runWithDatabaseConnection(transaction, () => callback(transaction));
+          db.exec("COMMIT");
+          return result;
+        } catch (error) {
+          db.exec("ROLLBACK");
+          throw error;
+        } finally {
+          open = false;
+        }
+      });
     },
     close(): void {
+      if (pending > 0) throw new Error("Drain SQLite operations before closing the connection.");
+      closed = true;
       db.close();
     },
   };
+  return connection;
 }
 
 export type { SqliteConnection };
