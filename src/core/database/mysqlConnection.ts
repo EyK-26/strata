@@ -1,5 +1,9 @@
 import { missingOptionalPeer } from "../runtime/optionalPeer.ts";
-import type { ActiveDatabaseHandle } from "./connectionContext.ts";
+import {
+  type ActiveDatabaseHandle,
+  getActiveDatabaseConnection,
+  runWithDatabaseConnection,
+} from "./connectionContext.ts";
 
 type MysqlPromiseModule = {
   createPool: (config: { uri: string; timezone: string }) => MysqlPool;
@@ -7,7 +11,9 @@ type MysqlPromiseModule = {
 
 type MysqlExecutable = {
   execute: (sql: string, params?: unknown[]) => Promise<[unknown, unknown]>;
+  query?: (sql: string) => Promise<[unknown, unknown]>;
   end?: () => Promise<void>;
+  getConnection?: () => Promise<MysqlPoolConnection>;
 };
 
 type MysqlPool = MysqlExecutable & {
@@ -15,7 +21,16 @@ type MysqlPool = MysqlExecutable & {
   on(event: "connection", listener: (connection: unknown) => void): void;
 };
 
+type MysqlPoolConnection = MysqlExecutable & {
+  beginTransaction(): Promise<void>;
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
+  release(): void;
+  destroy(): void;
+};
+
 type MysqlConnection = ActiveDatabaseHandle & {
+  begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 };
 
@@ -87,18 +102,88 @@ function rowsFromResult<T>(result: unknown): T[] {
   return [];
 }
 
-function createMysqlConnectionFromPool(pool: MysqlExecutable): MysqlConnection {
-  return {
+async function executeMysql<T>(
+  target: MysqlExecutable,
+  query: string,
+  params: readonly unknown[],
+): Promise<T[]> {
+  // Savepoints and some DDL cannot use MySQL's prepared-statement protocol.
+  // Parameterized operations still use execute() for bound values.
+  const [result] =
+    params.length === 0 && target.query
+      ? await target.query(query)
+      : await target.execute(query, [...params]);
+  return rowsFromResult<T>(result);
+}
+
+function createMysqlAdapter(
+  getPool: () => Promise<MysqlExecutable>,
+  close: () => Promise<void>,
+): MysqlConnection {
+  const transactions = new WeakSet<ActiveDatabaseHandle>();
+  const connection: MysqlConnection = {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
-      const [result] = await pool.execute(query, [...params]);
-      return rowsFromResult<T>(result);
+      const active = getActiveDatabaseConnection(connection);
+      if (transactions.has(active)) return active.unsafe<T>(query, params);
+      return executeMysql<T>(await getPool(), query, params);
     },
-    async close(): Promise<void> {
-      if (typeof pool.end === "function") {
-        await pool.end();
+    async begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T> {
+      if (transactions.has(getActiveDatabaseConnection(connection))) {
+        throw new Error("Use runInTransaction for nested MySQL transactions.");
+      }
+      const pool = await getPool();
+      if (!pool.getConnection)
+        throw new Error("MySQL transactions require a pool with getConnection().");
+      const reserved = await pool.getConnection();
+      let open = false;
+      let discard = false;
+      const transaction: ActiveDatabaseHandle = {
+        async unsafe<TValue>(query: string, params: readonly unknown[] = []): Promise<TValue[]> {
+          if (!open) throw new Error("MySQL transaction is no longer active.");
+          return executeMysql<TValue>(reserved, query, params);
+        },
+      };
+      transactions.add(transaction);
+      try {
+        await reserved.beginTransaction();
+        open = true;
+        const result = await runWithDatabaseConnection(transaction, () => callback(transaction));
+        await reserved.commit();
+        return result;
+      } catch (error) {
+        if (open) {
+          try {
+            await reserved.rollback();
+          } catch (rollbackError) {
+            discard = true;
+            reserved.destroy();
+            throw new AggregateError(
+              [error, rollbackError],
+              "MySQL rollback failed; connection discarded.",
+            );
+          }
+        } else {
+          discard = true;
+          reserved.destroy();
+        }
+        throw error;
+      } finally {
+        open = false;
+        if (!discard) reserved.release();
       }
     },
+    close,
   };
+  return connection;
+}
+
+function createMysqlConnectionFromPool(pool: MysqlExecutable): MysqlConnection {
+  return createMysqlAdapter(
+    async () => pool,
+    async () => {
+      await pool.end?.();
+    },
+  );
 }
 
 function pinSessionToUtc(connection: RawPoolConnection): void {
@@ -144,24 +229,16 @@ function createMysqlConnection(url: string): MysqlConnection {
     return poolPending;
   }
 
-  return {
-    async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
-      const [result] = await (await ensurePool()).execute(query, [...params]);
-      return rowsFromResult<T>(result);
-    },
-    async close(): Promise<void> {
-      if (!poolPending) {
-        return;
-      }
-      const pending = poolPending;
-      poolPending = undefined;
-      const pool = await pending.catch(() => undefined);
-      await pool?.end();
-    },
-  };
+  return createMysqlAdapter(ensurePool, async () => {
+    if (!poolPending) return;
+    const pending = poolPending;
+    poolPending = undefined;
+    const pool = await pending.catch(() => undefined);
+    await pool?.end();
+  });
 }
 
-export type { MysqlConnection, MysqlExecutable, MysqlPool };
+export type { MysqlConnection, MysqlExecutable, MysqlPool, MysqlPoolConnection };
 export {
   createMysqlConnection,
   createMysqlConnectionFromPool,

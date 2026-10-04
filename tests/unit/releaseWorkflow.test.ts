@@ -8,7 +8,7 @@ describe("release.yml quality gate", () => {
       join(import.meta.dir, "../../.github/workflows/release.yml"),
       "utf8",
     );
-    expect(text).toContain("docker compose up -d postgres redis --wait");
+    expect(text).toContain("docker compose up -d postgres mysql redis --wait");
     expect(text).toContain(
       "DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/bun_testing_test",
     );
