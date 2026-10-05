@@ -1,3 +1,4 @@
+import { postgresAppRoleSql } from "@getstrata/core/tenant/enableTenantRls";
 import {
   authNeedsUsers,
   authUsesCookie,
@@ -67,32 +68,12 @@ function renderPostgresAppRoleInitSql(projectName: string, layers: StarterLayers
   if (layers.database !== "postgres") {
     return null;
   }
-  const database = appDatabaseName(projectName);
-  const role = GENERATED_POSTGRES_APP_ROLE;
-  const password = GENERATED_POSTGRES_APP_PASSWORD;
-  return `-- Application login role. FORCE RLS applies because this role is NOSUPERUSER and NOBYPASSRLS.
--- Superuser remains for CREATE ROLE / CREATE DATABASE / GRANT / migrate.
--- This script is repeatable on an already-existing volume (not only docker-entrypoint-initdb.d).
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN
-    CREATE ROLE ${role} LOGIN PASSWORD '${password}'
-      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-  ELSE
-    ALTER ROLE ${role} WITH LOGIN PASSWORD '${password}'
-      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-  END IF;
-END
-$$;
-
-GRANT CONNECT ON DATABASE ${database} TO ${role};
-GRANT USAGE, CREATE ON SCHEMA public TO ${role};
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${role};
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${role};
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${role};
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${role};
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${role};
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO ${role};
+  return `BEGIN;
+${postgresAppRoleSql({
+  database: appDatabaseName(projectName),
+  role: GENERATED_POSTGRES_APP_ROLE,
+  password: GENERATED_POSTGRES_APP_PASSWORD,
+})}COMMIT;
 `;
 }
 

@@ -93,6 +93,16 @@ Greenfield apps from `create-strata` use **file-based** migrations in `src/db/mi
 
 `0001_starter_schema` uses `CREATE TABLE IF NOT EXISTS`. Redis/queue apps include **`failed_job`** there (`queue:failed` / `queue:retry` persist into that table). An inline-SQL app that never created `failed_job` will break those commands even if the rest of the schema looks fine.
 
+### Concurrent Postgres app-role provisioning
+
+`ensurePostgresAppRole` and the generated `postgresAppRoleSql` acquire `SHARE ROW EXCLUSIVE` on `pg_catalog.pg_authid` before checking or changing a role. [Postgres stores this role catalog once per cluster](https://www.postgresql.org/docs/current/catalog-pg-authid.html), so the relation lock coordinates provisioners connected to different databases. Database-local advisory locks cannot provide that guarantee. The lock allows catalog reads but serializes role changes, including changes to other roles; use the admin/superuser provisioning connection and keep these transactions short. Runtime RLS credentials must not provision roles.
+
+The helper submits role creation/update and grants as one SQL batch. Its lock remains held through grant/default-ACL writes and is released at commit, rollback or connection loss. When called inside an explicit transaction it lasts until the caller settles that transaction. New starter scripts use the core SQL renderer and wrap the complete script in `BEGIN`/`COMMIT`, so standalone execution retains the same lock through grants. Existing generated SQL files should be regenerated from the new starter; do not edit application packages or keep a second role helper. Normal standalone role SQL participates in Postgres implicit transactions. Do not wrap provisioning in an HTTP or long-lived application transaction.
+
+Credential behavior is unchanged: explicit `password`, or the database bootstrap's `STRATA_APP_PASSWORD`/existing development default, is applied on both create and update. Provisioners sharing a role must agree on its credentials; conflicting password rotations still require administrative coordination. This is not a password-rotation protocol. `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT` and `NOBYPASSRLS` remain enforced. Custom provisioners need permission to lock the shared catalog; failures do not fall back to uncoordinated writes.
+
+This addresses [#85](https://github.com/EyK-26/strata/issues/85)'s role-provisioning race. Continue running schema migrations once per deployment: role serialization does not serialize independent migration runners, create a missing database concurrently, or coordinate the standalone grant-only helper with arbitrary DDL. No app schema migration or production capacity claim follows from this mechanism fix.
+
 ### Adopting file migrations from a legacy inline migrate.ts
 
 Apps scaffolded before file migrations often loop `db.unsafe(...)` in one file and have **no** `framework_migrations` table.

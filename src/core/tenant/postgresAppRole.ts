@@ -239,6 +239,9 @@ function postgresAppRoleCreateSql(options: { role?: string; password?: string } 
   const password = quoteSqlLiteral(options.password ?? POSTGRES_APP_ROLE_PASSWORD);
   return `DO $$
 BEGIN
+  -- pg_authid is shared across databases. Database-local advisory locks cannot
+  -- serialize a cluster-global role. This lock permits readers and lasts until commit.
+  LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN
     CREATE ROLE ${role} LOGIN PASSWORD ${password}
       NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
@@ -295,8 +298,9 @@ async function ensurePostgresAppRole(
   sql: PostgresSql,
   options: { database: string; role?: string; password?: string },
 ): Promise<void> {
-  await sql.unsafe(postgresAppRoleCreateSql(options));
-  await grantPostgresAppRolePrivileges(sql, options);
+  // One batch keeps the catalog lock through the grants too, including default
+  // ACL updates that would otherwise race on concurrent calls in the same database.
+  await sql.unsafe(postgresAppRoleSql(options));
 }
 
 async function ensurePostgresDatabaseAndAppRole(options: {

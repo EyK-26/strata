@@ -213,7 +213,7 @@ describe("postgresAppRole", () => {
       runtimeUrl: "postgresql://strata_app:secret@localhost/hiroapp",
       connect: cluster.connect,
     });
-    expect(cluster.calls.some((line) => line.includes("CREATE DATABASE"))).toBe(false);
+    expect(cluster.calls.some((line) => line.startsWith("CREATE DATABASE "))).toBe(false);
   });
 
   test("inspects the live role and rejects bypass capabilities", async () => {
@@ -249,7 +249,7 @@ describe("postgresAppRole", () => {
       runtimeUrl: "postgresql://strata_app:secret@localhost/hiroapp",
       connect: cluster.connect,
     });
-    expect(cluster.calls.some((line) => line.includes("CREATE DATABASE"))).toBe(false);
+    expect(cluster.calls.some((line) => line.startsWith("CREATE DATABASE "))).toBe(false);
     expect(cluster.calls.some((line) => line.includes("GRANT ALL PRIVILEGES ON ALL TABLES"))).toBe(
       true,
     );
