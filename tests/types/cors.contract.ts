@@ -22,3 +22,9 @@ export function corsContractFixtures(): void {
   // @ts-expect-error null is not an explicit header policy.
   createCorsMiddleware({ additionalAllowedHeaders: null });
 }
+
+import type { WebServerOptions } from "@getstrata/bootstrap/web/server";
+export const nativeCorsContract: WebServerOptions = {
+  port: 0,
+  cors: { additionalAllowedHeaders: ["X-Correlation-Id"] as const },
+};

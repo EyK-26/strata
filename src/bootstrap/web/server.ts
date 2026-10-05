@@ -1,3 +1,4 @@
+import { type CorsOptions, createCorsMiddleware } from "@getstrata/core/http/corsMiddleware";
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
@@ -9,6 +10,8 @@ export interface WebServerOptions {
   handle?: (request: Request) => Promise<Response | null> | Response | null;
   routes?: AppRouteMap;
   publicDir?: string;
+  /** Additional approved headers for synthesized route preflights; origins still use framework policy. */
+  cors?: CorsOptions;
   onRequest?: (request: Request) => Promise<void> | void;
 }
 
@@ -46,12 +49,19 @@ function wrapRouteHandler(handler: (request: Request) => unknown, path: string):
 
 function convertAppRoutesToBunRoutes(
   routes: AppRouteMap,
+  cors: CorsOptions = {},
 ): Record<string, Record<string, BunRouteHandler>> {
   const bunRoutes: Record<string, Record<string, BunRouteHandler>> = {};
+  const middleware = createCorsMiddleware(cors);
+  const preflight = (request: Request) =>
+    middleware(request, async () => new Response(null, { status: 405 }));
 
   for (const [path, handler] of Object.entries(routes)) {
     if (typeof handler === "function") {
-      bunRoutes[path] = { GET: wrapRouteHandler(handler as (request: Request) => unknown, path) };
+      bunRoutes[path] = {
+        GET: wrapRouteHandler(handler as (request: Request) => unknown, path),
+        OPTIONS: wrapRouteHandler(preflight, path),
+      };
       continue;
     }
 
@@ -70,6 +80,7 @@ function convertAppRoutesToBunRoutes(
       }
 
       if (Object.keys(methods).length > 0) {
+        methods.OPTIONS ??= wrapRouteHandler(preflight, path);
         bunRoutes[path] = methods;
       }
     }
@@ -80,7 +91,9 @@ function convertAppRoutesToBunRoutes(
 
 export function createWebServer(options: WebServerOptions) {
   const publicDir = options.publicDir ?? "./public";
-  const bunRoutes = options.routes ? convertAppRoutesToBunRoutes(options.routes) : undefined;
+  const bunRoutes = options.routes
+    ? convertAppRoutesToBunRoutes(options.routes, options.cors)
+    : undefined;
 
   return Bun.serve({
     port: options.port,
