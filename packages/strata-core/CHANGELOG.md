@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.0.5
+
+- Allow explicitly approved application headers in CORS
+
 ## 2.0.4
 
 - Place cache rollout guidance beside outbox docs without overlapping API additions
