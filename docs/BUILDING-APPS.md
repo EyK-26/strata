@@ -259,3 +259,28 @@ Workers use database time, indexed claim scans, renewable unique ownership token
 Tenant listeners resolve the captured tenant and run through `runWithTenantDatabase`, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use `runInTransaction` for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
 
 Use `processNext({ signal })` for bounded worker orchestration/tests, or `work({ signal, pollMs })` for the framework polling loop. Monitor pending age, expired leases, attempts, and failed deliveries in the two SQL tables. `replay(eventId, listenerName)` atomically resets only that failed listener's delivery, preserving the original event and completed listeners. Expose replay solely through an authorized operator command, never an anonymous endpoint. Outbox schema/data must survive rolling deployment and restore. This API is additive and opt-in; the starter does not silently change existing listener execution semantics.
+
+### Recoverable model cache invalidation
+
+The 2.x generated queue listener remains a compatibility path: a failed queue dispatch after commit can produce HTTP 500 with no persisted cache retry. SQL applications can opt into durable invalidation through the existing outbox schema. This is a migration, not an automatic bootstrap DDL or a silent error fallback.
+
+Include `createModelCacheInvalidationListener()` from `@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite` in the application's **one** `SqlOutbox` registry, alongside all business listeners. After module discovery and before admitting requests/jobs, call `registerInvalidateCacheOnModelWriteListeners(eventBus, { outbox })`. This replaces the generated queue registrations; later generated-provider calls cannot downgrade it. The returned cleanup restores the previous registration. No separate cache-only worker registry may claim the shared delivery table.
+
+```ts
+const outbox = new SqlOutbox({ listeners: [
+  createModelCacheInvalidationListener(),
+  // ...all application durable listeners
+] });
+const stopCacheListeners = registerInvalidateCacheOnModelWriteListeners(eventBus, { outbox });
+await runInTransaction(async () => {
+  await Product.create(attributes);
+});
+// Separate process, same complete registry and shared cache:
+await outbox.work({ signal: shutdown.signal });
+```
+
+Row model events publish versioned cache intents through the active business connection before commit. Publication/schema failure rolls back the business write; cache/Redis availability does not participate in the commit response. Later synchronous hooks retain their normal order. The worker directly invokes the framework cache invalidation job, bypassing the Redis queue handoff, and the SQL outbox provides leases, retry, failed-delivery retention and `replay(eventId, "strata.cache.invalidate-tags.v1")`. Tune retry/attempt policy and alert on failed or aged cache deliveries.
+
+Durable mode requires explicit framework transactions around row writes (including workers and CLI commands). The RLS request scope already supplies one. Standalone writes or repositories bound to an unrelated connection fail **before SQL mutation**; this prevents an outbox record from claiming another connection's write. Direct SQL and bulk/projection APIs remain supported escape hatches: explicitly publish `strata.cache.invalidate-tags` with `{ tags }` inside their business transaction when they bypass row events. `EventBus.listenTransactional` hooks are invoked only by model event publication, inside the transaction; normal `dispatch`/`listen` hooks remain synchronous/in-process. Hooks must only persist intents, never perform remote delivery.
+
+Rollout: stop/drain old writers and workers, deploy the outbox file migration with the migration owner, install the complete registry and registrar, and then restart writers and the outbox worker. Preserve old queue jobs and pending SQL deliveries. Use a shared cache for multi-process workers; an array/memory cache belongs to its own process and cannot be invalidated by a different process. Invalidation is eventually consistent: worker lag can expose stale cached values, so use bounded TTLs and bypass cache for authoritative/financial decisions. This fixes recoverability of the handoff; shared generation fencing, old-fill races, bounded metadata/eviction and distributed fill leases remain F05 work. Existing generated apps must opt in; the legacy 2.x queue mode is not made durable by upgrading packages alone.

@@ -66,6 +66,7 @@ async function dispatchQueuedModelEvents(queued: DeferredModelEvent[]): Promise<
 }
 
 async function dispatchModelEvent(event: string, payload: unknown): Promise<void> {
+  await eventBus.dispatchTransactional(event, payload);
   const state = deferredModelEvents.getStore();
   const frame = state?.frames[state.frames.length - 1];
 

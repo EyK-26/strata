@@ -95,3 +95,5 @@ Apps scaffolded with `create-strata@1.1.0` should merge current `src/bootstrap/p
 `strata new my-app --yes` calls the same generator. `strata new --frontend=hybrid` (no project name) still overlays HTML/SPA files into the current directory.
 
 In-repo apps are generated from `scripts/generate-example-apps.ts`. Only `apps/hiroapp` is CI dogfood.
+
+SQL applications that need recoverable model cache effects should adopt the durable registrar described in [BUILDING-APPS](./BUILDING-APPS.md#recoverable-model-cache-invalidation). The generated 2.x listener is retained for compatibility; package installation alone does not provision an outbox or convert existing cache effects. Configure one complete application outbox registry, migrate separately, activate before admission, and wrap row writes in framework transactions. Use shared Redis cache across separate worker processes.

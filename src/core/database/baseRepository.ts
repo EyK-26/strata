@@ -1,9 +1,11 @@
+import { eventBus } from "../events/eventBus.ts";
 import { dispatchModelEvent, modelEventName } from "../events/index.ts";
 import {
   buildPaginationMeta,
   type CursorPaginatedResult,
   type PaginatedResult,
 } from "../pagination/index.ts";
+import { getActiveDatabaseConnection } from "./connectionContext.ts";
 import { withDatabaseErrorHandling } from "./errors.ts";
 import {
   buildCountQuery,
@@ -41,6 +43,8 @@ import {
 import { repositoryConnection } from "./repositoryConnection";
 import { RepositoryQuery } from "./repositoryQuery.ts";
 import type { TableDefinition } from "./table.ts";
+import { runInTransaction } from "./transaction.ts";
+import { hasActiveTransaction } from "./transactionControl.ts";
 import type { MutationValues, QueryOptions, QueryWhere, UpdateValues } from "./types.ts";
 import type { WhereNode } from "./whereBuilder.ts";
 
@@ -70,6 +74,25 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     protected readonly table: TableDefinition<TEntity, PrimaryKey>,
     protected readonly connection: DatabaseConnection = repositoryConnection,
   ) {}
+
+  private assertTransactionalEvent(action: string): void {
+    if (!eventBus.hasTransactionalListeners(modelEventName(this.table.name, action))) return;
+    if (
+      !hasActiveTransaction() ||
+      (this.connection !== repositoryConnection &&
+        this.connection !== getActiveDatabaseConnection(repositoryConnection))
+    )
+      throw new Error(
+        "Transactional model listeners require runInTransaction and the framework-bound repository connection before writing.",
+      );
+  }
+
+  private async runModelMutation<T>(action: string, operation: () => Promise<T>): Promise<T> {
+    if (!eventBus.hasTransactionalListeners(modelEventName(this.table.name, action)))
+      return operation();
+    // A caught listener/publication failure must roll back its row write as well.
+    return runInTransaction(operation);
+  }
 
   async count(options: ExtendedQueryOptions<TEntity> = {}): Promise<number> {
     const { whereNodes, where, ...rest } = options;
@@ -320,42 +343,48 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   async create(values: MutationValues<TEntity>): Promise<TEntity> {
-    return await withDatabaseErrorHandling(async () => {
-      const { text, params } = buildInsertQuery(this.table, values);
-      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
-        text,
-        params,
-      );
+    this.assertTransactionalEvent("created");
+    return await this.runModelMutation("created", () =>
+      withDatabaseErrorHandling(async () => {
+        const { text, params } = buildInsertQuery(this.table, values);
+        const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+          text,
+          params,
+        );
 
-      if (!record) {
-        throw new Error(`Insert into ${this.table.name} did not return a record.`);
-      }
+        if (!record) {
+          throw new Error(`Insert into ${this.table.name} did not return a record.`);
+        }
 
-      const entity = record as TEntity;
-      await dispatchModelEvent(modelEventName(this.table.name, "created"), entity);
-      return entity;
-    });
+        const entity = record as TEntity;
+        await dispatchModelEvent(modelEventName(this.table.name, "created"), entity);
+        return entity;
+      }),
+    );
   }
 
   async updateById(
     id: TEntity[PrimaryKey],
     changes: UpdateValues<TEntity, PrimaryKey>,
   ): Promise<TEntity | null> {
-    return await withDatabaseErrorHandling(async () => {
-      const { text, params } = buildUpdateQuery(this.table, id, changes);
-      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
-        text,
-        params,
-      );
+    this.assertTransactionalEvent("updated");
+    return await this.runModelMutation("updated", () =>
+      withDatabaseErrorHandling(async () => {
+        const { text, params } = buildUpdateQuery(this.table, id, changes);
+        const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+          text,
+          params,
+        );
 
-      const entity = (record as TEntity | undefined) ?? null;
+        const entity = (record as TEntity | undefined) ?? null;
 
-      if (entity) {
-        await dispatchModelEvent(modelEventName(this.table.name, "updated"), entity);
-      }
+        if (entity) {
+          await dispatchModelEvent(modelEventName(this.table.name, "updated"), entity);
+        }
 
-      return entity;
-    });
+        return entity;
+      }),
+    );
   }
 
   async updateByIdOrThrow(
@@ -381,54 +410,63 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   async softDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
-    return await withDatabaseErrorHandling(async () => {
-      const { text, params } = buildSoftDeleteByIdQuery(this.table, id, new Date());
-      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
-        text,
-        params,
-      );
+    this.assertTransactionalEvent("deleted");
+    return await this.runModelMutation("deleted", () =>
+      withDatabaseErrorHandling(async () => {
+        const { text, params } = buildSoftDeleteByIdQuery(this.table, id, new Date());
+        const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+          text,
+          params,
+        );
 
-      if (!record) {
-        return false;
-      }
+        if (!record) {
+          return false;
+        }
 
-      await dispatchModelEvent(modelEventName(this.table.name, "deleted"), record as TEntity);
-      return true;
-    });
+        await dispatchModelEvent(modelEventName(this.table.name, "deleted"), record as TEntity);
+        return true;
+      }),
+    );
   }
 
   async forceDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
-    return await withDatabaseErrorHandling(async () => {
-      const { text, params } = buildDeleteByIdQuery(this.table, id);
-      const [row] = await this.connection.unsafe<DeletedRow>(text, params);
+    this.assertTransactionalEvent("force-deleted");
+    return await this.runModelMutation("force-deleted", () =>
+      withDatabaseErrorHandling(async () => {
+        const { text, params } = buildDeleteByIdQuery(this.table, id);
+        const [row] = await this.connection.unsafe<DeletedRow>(text, params);
 
-      if (!row) {
-        return false;
-      }
+        if (!row) {
+          return false;
+        }
 
-      await dispatchModelEvent(modelEventName(this.table.name, "force-deleted"), {
-        id,
-      });
-      return true;
-    });
+        await dispatchModelEvent(modelEventName(this.table.name, "force-deleted"), {
+          id,
+        });
+        return true;
+      }),
+    );
   }
 
   async restoreById(id: TEntity[PrimaryKey]): Promise<TEntity | null> {
-    return await withDatabaseErrorHandling(async () => {
-      const { text, params } = buildRestoreByIdQuery(this.table, id);
-      const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
-        text,
-        params,
-      );
+    this.assertTransactionalEvent("restored");
+    return await this.runModelMutation("restored", () =>
+      withDatabaseErrorHandling(async () => {
+        const { text, params } = buildRestoreByIdQuery(this.table, id);
+        const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
+          text,
+          params,
+        );
 
-      if (!record) {
-        return null;
-      }
+        if (!record) {
+          return null;
+        }
 
-      const entity = record as TEntity;
-      await dispatchModelEvent(modelEventName(this.table.name, "restored"), entity);
-      return entity;
-    });
+        const entity = record as TEntity;
+        await dispatchModelEvent(modelEventName(this.table.name, "restored"), entity);
+        return entity;
+      }),
+    );
   }
 
   withConnection(connection: DatabaseConnection): this {
