@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.0.6
+
+- Dispatch registered Bun route preflights through CORS
+
 ## 2.0.5
 
 - Allow explicitly approved application headers in CORS
