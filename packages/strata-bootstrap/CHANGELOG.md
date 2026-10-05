@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.0.4
+
+- Place cache rollout guidance beside outbox docs without overlapping API additions
+
 ## 2.0.3
 
 - Persist transactional events with leased tenant-aware SQL outbox workers
