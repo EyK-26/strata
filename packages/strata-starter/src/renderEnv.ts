@@ -182,6 +182,10 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     "# --oidc (cookie HTML) seals PKCE in the oidc_pkce cookie. Do not call OidcProvider.getAuthorizationUrl().",
   );
 
+  lines.push("# Explicit browser origins and application request headers (defaults stay enabled):");
+  lines.push("# CORS_ALLOWED_ORIGINS=https://app.example.com");
+  lines.push("# CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id");
+
   const billingOn = Boolean(layers.extras.billing);
   lines.push(`FEATURE_BILLING=${envFlag(billingOn)}`);
   if (billingOn) {
@@ -930,6 +934,7 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
 - Set \`APP_URL\` to the public origin (for example \`https://app.example.com\`). Signed links and redirects are built from it; localhost is rejected.
 - Set \`AUTH_DEV_HEADERS=false\`.
 - Set \`FEATURE_PUBLIC_READS=false\`. Generated \`.env.example\` already ships \`false\` so \`wrapWebPublicRead\` requires a login. Local storefronts may set \`true\` in \`.env\` for an anonymous catalog; \`assertProductionSecrets()\` rejects \`true\` in production. Do not ship a public-reads production boot.
+- Add explicitly approved application headers with \`CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id\`; this extends the defaults, validates header names and never reflects requested headers. OpenAPI metadata does not grant CORS access.
 - Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
 ${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${layers.extras.oauthGithub ? "- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n" : ""}${layers.extras.oidc ? "- Set `OAUTH_STATE_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Loopback issuers work outside production; set `OIDC_ALLOW_PRIVATE=true` for other private IdPs.\n" : ""}${layers.extras.billing ? "- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n" : ""}${

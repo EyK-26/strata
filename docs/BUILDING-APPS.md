@@ -310,3 +310,16 @@ const module: AppModule = {
 The public metadata types describe parameters, JSON Schema, media types, request bodies, response/error schemas, and security overrides following [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.1.html). Provided responses replace generic responses; `security: []` documents a public operation. Metadata documents your handler contract; it does not replace request validation or authorization. Run `openapi:generate` and `openapi:check` after a change. Required path parameters must match the route and header names are case-insensitive for duplicate validation.
 
 The generated fetch SDK keeps `RequestInit` and native `Response` as escape hatches. Declared headers add typed `operationHeaders`; required headers must be supplied, are checked at runtime, and are merged with a native `Headers` instance. For the example: `client.postOrders({ operationHeaders: { "Idempotency-Key": key }, credentials: "include" })`. Declared operation request/response contracts are available in the generated class's `operationContracts`; Declared scalar path/query parameters add typed `operationPath`/`operationQuery`, required-field checks and URL encoding. Cookies use native credentials/headers; JSON decoding, body encoding, advanced parameter serialization and runtime schema validation remain explicit caller responsibilities. This is not a complete OpenAPI-to-TypeScript schema compiler.
+
+
+### Explicit application CORS headers
+
+For browser callers on an approved different origin, set `CORS_ALLOWED_ORIGINS` to explicit origins and `CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id` to extend the framework's existing request-header defaults. The generated HTTP kernel consumes this environment setting; existing applications require no copied CORS middleware. Unset/empty extra headers keep the previous defaults. Names are HTTP field-name tokens, merged case-insensitively; wildcards, empty list entries, whitespace inside names and invalid characters fail middleware construction before admission. Environment entries are comma-separated and trimmed. The typed API accepts exact names:
+
+```ts
+import { createCorsMiddleware, type CorsOptions } from "@getstrata/core/http/corsMiddleware";
+const options: CorsOptions = { additionalAllowedHeaders: ["Idempotency-Key"] };
+const cors = createCorsMiddleware(options);
+```
+
+Options and the environment setting both extend defaults; options are copied so subsequent caller-array mutation cannot widen the middleware policy. Existing origin/method/credential behavior is unchanged: only listed origins receive reflected CORS permission and credentials, and development wildcard origins receive no credentials. The framework never reflects arbitrary `Access-Control-Request-Headers`. OpenAPI operation metadata documents a contract, not permission to send its headers from another origin. Authorize origins and extra names deliberately, then deploy/restart writers so invalid settings fail at startup. Header permission does not provide authentication, CSRF exemption or authorization. Same-origin/native clients do not need extra CORS settings. HTTP field-name syntax follows [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.1); browser preflight rules follow the [Fetch standard](https://fetch.spec.whatwg.org/#http-access-control-allow-headers).
