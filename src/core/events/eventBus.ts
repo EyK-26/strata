@@ -3,6 +3,26 @@ type EventListener = (payload: unknown) => void | Promise<void>;
 class EventBus {
   constructor() {}
 
+  private readonly transactionalListeners = new Map<string, Set<EventListener>>();
+
+  listenTransactional(event: string, listener: EventListener): () => void {
+    const handlers = this.transactionalListeners.get(event) ?? new Set<EventListener>();
+    handlers.add(listener);
+    this.transactionalListeners.set(event, handlers);
+    return () => {
+      handlers.delete(listener);
+      if (!handlers.size) this.transactionalListeners.delete(event);
+    };
+  }
+
+  hasTransactionalListeners(event: string): boolean {
+    return (this.transactionalListeners.get(event)?.size ?? 0) > 0;
+  }
+
+  async dispatchTransactional(event: string, payload: unknown): Promise<void> {
+    for (const listener of this.transactionalListeners.get(event) ?? []) await listener(payload);
+  }
+
   private readonly listeners = new Map<string, Set<EventListener>>();
 
   on(event: string, listener: EventListener): () => void {

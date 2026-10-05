@@ -107,6 +107,11 @@ class SqlOutbox {
     }
   }
 
+  hasListener(name: string, event?: string): boolean {
+    const listener = this.listeners.get(name);
+    return listener !== undefined && (event === undefined || listener.event === event);
+  }
+
   async publish(
     name: string,
     payload: unknown,
