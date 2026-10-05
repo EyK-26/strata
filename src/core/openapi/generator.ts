@@ -186,7 +186,8 @@ function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
     paths[openApiPath][method] = {
       summary: description,
       ...(requiresBearerAuth(route.path, route.method) ? { security: [{ bearerAuth: [] }] } : {}),
-      responses: {
+      ...route.openApi,
+      responses: route.openApi?.responses ?? {
         "200": { description: "OK" },
         "201": { description: "Created" },
         "204": { description: "No Content" },
@@ -291,12 +292,69 @@ function renderTypeScriptSdk(spec: OpenApiSpec, prefix = apiPrefix()): string {
     "",
   ];
 
+  const contracts = Object.fromEntries(
+    Object.entries(spec.paths)
+      .map(([path, methods]) => [
+        path,
+        Object.fromEntries(
+          Object.entries(methods).filter(([, value]) => {
+            const operation = value as Record<string, unknown>;
+            return operation.parameters || operation.requestBody || operation.operationId;
+          }),
+        ),
+      ])
+      .filter(([, methods]) => Object.keys(methods as object).length),
+  );
+  if (Object.keys(contracts).length)
+    lines.splice(
+      1,
+      0,
+      `  static readonly operationContracts = ${JSON.stringify(contracts)} as const;`,
+    );
+
   for (const [path, methods] of Object.entries(spec.paths)) {
     const requestPath = toRequestPath(path, prefix);
 
-    for (const method of Object.keys(methods)) {
+    for (const [method, operation] of Object.entries(methods)) {
+      const metadata = operation as {
+        parameters?: Array<{
+          name: string;
+          in: string;
+          required?: boolean;
+          schema?: { type?: string };
+        }>;
+      };
+      const headers = metadata.parameters?.filter((parameter) => parameter.in === "header") ?? [];
       const functionName = toMethodName(method, path, prefix);
 
+      if (headers.length) {
+        const headerType = headers
+          .map(
+            (header) =>
+              `${JSON.stringify(header.name)}${header.required ? "" : "?"}: ${header.schema?.type === "integer" || header.schema?.type === "number" ? "number" : header.schema?.type === "boolean" ? "boolean" : "string"}`,
+          )
+          .join("; ");
+        const required = headers.some((header) => header.required);
+        lines.push(
+          `  async ${functionName}(init: RequestInit & { operationHeaders${required ? "" : "?"}: { ${headerType} } }${required ? "" : " = {}"}): Promise<Response> {`,
+          "    const headers = new Headers(init.headers);",
+          ...headers.map(
+            (header) =>
+              `    if (init.operationHeaders?.[${JSON.stringify(header.name)}] !== undefined) headers.set(${JSON.stringify(header.name)}, String(init.operationHeaders[${JSON.stringify(header.name)}]));`,
+          ),
+          ...headers
+            .filter((header) => header.required)
+            .map(
+              (header) =>
+                `    if (init.operationHeaders?.[${JSON.stringify(header.name)}] === undefined) throw new TypeError(${JSON.stringify(`Required operation header: ${header.name}`)});`,
+            ),
+          "    const { operationHeaders: _operationHeaders, ...requestInit } = init;",
+          `    return await this.request(${JSON.stringify(requestPath)}, { ...requestInit, headers, method: ${JSON.stringify(method.toUpperCase())} });`,
+          "  }",
+          "",
+        );
+        continue;
+      }
       lines.push(
         `  async ${functionName}(init: RequestInit = {}): Promise<Response> {`,
         `    return await this.request("${requestPath}", { ...init, method: "${method.toUpperCase()}" });`,
