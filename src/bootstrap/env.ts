@@ -78,6 +78,9 @@ const appEnvSchema: EnvSchema = defineEnvSchema({
   API_PREFIX: {
     default: "/api/v1",
   },
+  CORS_ADDITIONAL_ALLOWED_HEADERS: {
+    default: "",
+  },
   CORS_ALLOWED_ORIGINS: {
     default: "*",
   },

@@ -25,6 +25,7 @@ Fix every error until it prints that production secret checks passed.
 | `TOKEN_HASH_PEPPER` | Token auth enabled |
 | `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Token auth enabled |
 | `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled |
+| `CORS_ADDITIONAL_ALLOWED_HEADERS` | Optional comma-separated explicit application request-header names; extends defaults and rejects invalid names/wildcards. It does not authorize origins or grant CSRF exemptions. |
 | `CORS_ALLOWED_ORIGINS` | Only when browsers on other origins call the API. Unset is `APP_URL` locally and same-origin in production. Never defaults to `*`. `*` is rejected in production. |
 | `FEATURE_PUBLIC_READS=false` | Required in production (`assertProductionSecrets()` rejects `true`). `wrapWebPublicRead` / `wrapPublicRead` require a login when the flag is false. The same flag also controls whether anonymous `x-tenant-id` is honored. Guests already pin to tenant 1, so `/login` works with the default `false`. Storefronts that need a public catalog set `true` in local `.env` only. |
 

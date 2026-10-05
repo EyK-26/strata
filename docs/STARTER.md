@@ -97,3 +97,6 @@ Apps scaffolded with `create-strata@1.1.0` should merge current `src/bootstrap/p
 In-repo apps are generated from `scripts/generate-example-apps.ts`. Only `apps/hiroapp` is CI dogfood.
 
 SQL applications that need recoverable model cache effects should adopt the durable registrar described in [BUILDING-APPS](./BUILDING-APPS.md#recoverable-model-cache-invalidation). The generated 2.x listener is retained for compatibility; package installation alone does not provision an outbox or convert existing cache effects. Configure one complete application outbox registry, migrate separately, activate before admission, and wrap row writes in framework transactions. Use shared Redis cache across separate worker processes.
+
+
+Generated `.env.example` includes commented CORS origin and additional-header examples. Keep them unset for same-origin applications. For an approved cross-origin browser API, configure explicit `CORS_ALLOWED_ORIGINS` and optionally `CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id`. The official HTTP kernel applies them; additional names are validated and extend existing defaults. OpenAPI metadata does not implicitly widen CORS policy. See [BUILDING-APPS](./BUILDING-APPS.md#explicit-application-cors-headers).

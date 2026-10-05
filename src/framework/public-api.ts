@@ -342,7 +342,11 @@ export {
   strictApiContentSecurityPolicy,
 } from "../core/http/contentSecurityPolicy.ts";
 export { readBunRequestCookie, readRequestCookie } from "../core/http/cookies.ts";
-export { createCorsMiddleware } from "../core/http/corsMiddleware.ts";
+export {
+  type CorsConfig,
+  type CorsOptions,
+  createCorsMiddleware,
+} from "../core/http/corsMiddleware.ts";
 export { createCsrfMiddleware } from "../core/http/csrfMiddleware.ts";
 export { createCsrfProtection } from "../core/http/csrfProtection.ts";
 export {
