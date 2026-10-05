@@ -7,6 +7,7 @@ import {
 } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
@@ -137,5 +138,27 @@ describe("buildModuleRoutes", () => {
 
     expect(Object.keys(firstCount).length).toBeGreaterThan(0);
     expect(Object.keys(secondCount).length).toBeGreaterThan(0);
+  });
+  test("carries prefixed metadata and rejects orphaned API contracts", () => {
+    const module: AppModule = {
+      ...fixtureModule,
+      openApi: { "/reports/summary": { GET: { summary: "Summary contract" } } },
+    };
+    buildModuleRoutes(createTestDependencies(), { apiPrefix: "/api", modules: [module] });
+    expect(
+      routeRegistry.list().find((route) => route.path === "/api/reports/summary")?.openApi?.summary,
+    ).toBe("Summary contract");
+    expect(() =>
+      buildModuleRoutes(createTestDependencies(), {
+        modules: [{ ...fixtureModule, openApi: { "/html-only": { GET: { summary: "Invalid" } } } }],
+      }),
+    ).toThrow("no API route");
+    expect(() =>
+      buildModuleRoutes(createTestDependencies(), {
+        modules: [
+          { ...fixtureModule, openApi: { "/reports/summary": { POST: { summary: "Invalid" } } } },
+        ],
+      }),
+    ).toThrow("no API handler");
   });
 });

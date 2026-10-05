@@ -97,7 +97,7 @@ const PUBLIC_ROUTE_DESCRIPTIONS: Record<string, string> = {
 };
 
 function toOpenApiPath(path: string): string {
-  return path.replace(/:([A-Za-z_]+)/g, "{$1}");
+  return path.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, "{$1}");
 }
 
 function toRelativeApiPath(path: string): string {
@@ -171,6 +171,17 @@ function requiresBearerAuth(path: string, method: string): boolean {
   );
 }
 
+const DEFAULT_RESPONSES = {
+  "200": { description: "OK" },
+  "201": { description: "Created" },
+  "204": { description: "No Content" },
+  "400": { description: "Bad Request" },
+  "401": { description: "Unauthorized" },
+  "403": { description: "Forbidden" },
+  "404": { description: "Not Found" },
+  "422": { description: "Validation Error" },
+};
+
 function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
   const paths: Record<string, Record<string, unknown>> = {};
 
@@ -186,16 +197,8 @@ function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
     paths[openApiPath][method] = {
       summary: description,
       ...(requiresBearerAuth(route.path, route.method) ? { security: [{ bearerAuth: [] }] } : {}),
-      responses: {
-        "200": { description: "OK" },
-        "201": { description: "Created" },
-        "204": { description: "No Content" },
-        "400": { description: "Bad Request" },
-        "401": { description: "Unauthorized" },
-        "403": { description: "Forbidden" },
-        "404": { description: "Not Found" },
-        "422": { description: "Validation Error" },
-      },
+      ...route.openApi,
+      responses: route.openApi?.responses ?? structuredClone(DEFAULT_RESPONSES),
     };
   }
 
@@ -291,12 +294,102 @@ function renderTypeScriptSdk(spec: OpenApiSpec, prefix = apiPrefix()): string {
     "",
   ];
 
+  const contracts = Object.fromEntries(
+    Object.entries(spec.paths)
+      .map(([path, methods]) => [
+        path,
+        Object.fromEntries(
+          Object.entries(methods).filter(([, value]) => {
+            const operation = value as Record<string, unknown>;
+            return (
+              operation.parameters ||
+              operation.requestBody ||
+              operation.operationId ||
+              JSON.stringify(operation.responses) !== JSON.stringify(DEFAULT_RESPONSES)
+            );
+          }),
+        ),
+      ])
+      .filter(([, methods]) => Object.keys(methods as object).length),
+  );
+  if (Object.keys(contracts).length)
+    lines.splice(
+      1,
+      0,
+      `  static readonly operationContracts = ${JSON.stringify(contracts)} as const;`,
+    );
+
   for (const [path, methods] of Object.entries(spec.paths)) {
     const requestPath = toRequestPath(path, prefix);
 
-    for (const method of Object.keys(methods)) {
+    for (const [method, operation] of Object.entries(methods)) {
+      const metadata = operation as {
+        parameters?: Array<{
+          name: string;
+          in: string;
+          required?: boolean;
+          schema?: { type?: string };
+        }>;
+      };
+      const headers = metadata.parameters?.filter((parameter) => parameter.in === "header") ?? [];
       const functionName = toMethodName(method, path, prefix);
 
+      const pathParameters =
+        metadata.parameters?.filter((parameter) => parameter.in === "path") ?? [];
+      const queryParameters =
+        metadata.parameters?.filter((parameter) => parameter.in === "query") ?? [];
+      const groups = [
+        { field: "operationHeaders", parameters: headers },
+        { field: "operationPath", parameters: pathParameters },
+        { field: "operationQuery", parameters: queryParameters },
+      ].filter((group) => group.parameters.length);
+      if (groups.length) {
+        const type = groups
+          .map(
+            (group) =>
+              `${group.field}${group.parameters.some((parameter) => parameter.required) ? "" : "?"}: { ${group.parameters.map((parameter) => `${JSON.stringify(parameter.name)}${parameter.required ? "" : "?"}: ${parameter.schema?.type === "integer" || parameter.schema?.type === "number" ? "number" : parameter.schema?.type === "boolean" ? "boolean" : "string"}`).join("; ")} }`,
+          )
+          .join("; ");
+        const required = groups.some((group) =>
+          group.parameters.some((parameter) => parameter.required),
+        );
+        lines.push(
+          `  async ${functionName}(init: RequestInit & { ${type} }${required ? "" : " = {}"}): Promise<Response> {`,
+          "    const headers = new Headers(init.headers);",
+          `    let path = ${JSON.stringify(requestPath)};`,
+          ...groups.flatMap((group) =>
+            group.parameters
+              .filter((parameter) => parameter.required)
+              .map(
+                (parameter) =>
+                  `    if (init.${group.field}?.[${JSON.stringify(parameter.name)}] === undefined) throw new TypeError(${JSON.stringify(`Required operation ${group.field === "operationHeaders" ? "header" : group.field === "operationPath" ? "path parameter" : "query parameter"}: ${parameter.name}`)});`,
+              ),
+          ),
+          ...headers.map(
+            (parameter) =>
+              `    if (init.operationHeaders?.[${JSON.stringify(parameter.name)}] !== undefined) headers.set(${JSON.stringify(parameter.name)}, String(init.operationHeaders[${JSON.stringify(parameter.name)}]));`,
+          ),
+          ...pathParameters.map(
+            (parameter) =>
+              `    if (init.operationPath?.[${JSON.stringify(parameter.name)}] !== undefined) path = path.replaceAll(${JSON.stringify(`{${parameter.name}}`)}, encodeURIComponent(String(init.operationPath[${JSON.stringify(parameter.name)}])));`,
+          ),
+          ...(queryParameters.length
+            ? [
+                "    const query = new URLSearchParams();",
+                ...queryParameters.map(
+                  (parameter) =>
+                    `    if (init.operationQuery?.[${JSON.stringify(parameter.name)}] !== undefined) query.set(${JSON.stringify(parameter.name)}, String(init.operationQuery[${JSON.stringify(parameter.name)}]));`,
+                ),
+                "    if (query.size) path += '?' + query.toString();",
+              ]
+            : []),
+          `    const { ${groups.map((group) => `${group.field}: _${group.field}`).join(", ")}, ...requestInit } = init;`,
+          `    return await this.request(path, { ...requestInit, headers, method: ${JSON.stringify(method.toUpperCase())} });`,
+          "  }",
+          "",
+        );
+        continue;
+      }
       lines.push(
         `  async ${functionName}(init: RequestInit = {}): Promise<Response> {`,
         `    return await this.request("${requestPath}", { ...init, method: "${method.toUpperCase()}" });`,
