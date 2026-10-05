@@ -145,3 +145,76 @@ test("generated SDK requires and sends declared headers without losing native he
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("SDK retains response-only contracts and encodes declared path/query parameters", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const directory = await mkdtemp(join(tmpdir(), "strata-sdk-path-"));
+  const server = Bun.serve({
+    port: 0,
+    fetch(request) {
+      return Response.json({
+        path: new URL(request.url).pathname,
+        query: new URL(request.url).searchParams.get("filter"),
+      });
+    },
+  });
+  try {
+    const spec = generateOpenApiSpec([
+      {
+        method: "GET",
+        path: "/api/v1/items/:item_id2",
+        middleware: [],
+        openApi: {
+          parameters: [
+            { name: "item_id2", in: "path", required: true, schema: { type: "string" } },
+            { name: "filter", in: "query", schema: { type: "string" } },
+          ],
+          responses: { "200": { description: "Item" } },
+        },
+      },
+      {
+        method: "GET",
+        path: "/api/v1/response-only",
+        middleware: [],
+        openApi: {
+          responses: {
+            "200": {
+              description: "Response contract",
+              content: { "application/json": { schema: { type: "boolean" } } },
+            },
+          },
+        },
+      },
+    ]);
+    expect(validateOpenApiSpec(spec)).toEqual([]);
+    const sdk = renderTypeScriptSdk(spec);
+    expect(sdk).toContain('"Response contract"');
+    await writeFile(join(directory, "client.ts"), sdk);
+    const loaded = await import(join(directory, "client.ts"));
+    const Client = Object.values(loaded).find((value) => typeof value === "function") as new (
+      url: string,
+    ) => {
+      getItemsItemid2(init: {
+        operationPath: { item_id2: string };
+        operationQuery?: { filter: string };
+      }): Promise<Response>;
+    };
+    const client = new Client(`http://localhost:${server.port}`);
+    expect(
+      await (
+        await client.getItemsItemid2({
+          operationPath: { item_id2: "id/safe" },
+          operationQuery: { filter: "space value" },
+        })
+      ).json(),
+    ).toEqual({ path: "/items/id%2Fsafe", query: "space value" });
+    await expect(client.getItemsItemid2({} as never)).rejects.toThrow(
+      "Required operation path parameter",
+    );
+  } finally {
+    server.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
