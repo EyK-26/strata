@@ -34,7 +34,11 @@ interface ModuleRouteContext {
   kernel: HttpKernel;
 }
 
+import type { OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
+
 interface AppModule {
+  /** Paths match this module's API route map before apiPrefix is applied. */
+  openApi?: OpenApiRouteMap;
   name: string;
   order?: number;
   tableName?: string;
@@ -45,4 +49,9 @@ interface AppModule {
   webRoutes?(context: ModuleRouteContext): AppRouteMap;
 }
 
+export type {
+  OpenApiOperation,
+  OpenApiRouteMap,
+  OpenApiSchema,
+} from "@getstrata/core/openapi/registeredRoute";
 export type { AppModule, ModuleRouteContext };

@@ -259,3 +259,29 @@ Workers use database time, indexed claim scans, renewable unique ownership token
 Tenant listeners resolve the captured tenant and run through `runWithTenantDatabase`, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use `runInTransaction` for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
 
 Use `processNext({ signal })` for bounded worker orchestration/tests, or `work({ signal, pollMs })` for the framework polling loop. Monitor pending age, expired leases, attempts, and failed deliveries in the two SQL tables. `replay(eventId, listenerName)` atomically resets only that failed listener's delivery, preserving the original event and completed listeners. Expose replay solely through an authorized operator command, never an anonymous endpoint. Outbox schema/data must survive rolling deployment and restore. This API is additive and opt-in; the starter does not silently change existing listener execution semantics.
+
+### Application OpenAPI operation metadata
+
+Modules may declare `openApi` using the same paths and uppercase methods as their `routes` result (before `apiPrefix`). Metadata for a missing API path/method fails bootstrap; `webRoutes` never enters the API registry. Existing modules and SDK methods retain their defaults when metadata is absent.
+
+```ts
+const module: AppModule = {
+  name: "orders",
+  openApi: {
+    "/orders": {
+      POST: {
+        summary: "Create an order",
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true,
+          schema: { type: "string", minLength: 16 } }],
+        responses: { "200": { description: "Accepted" },
+          "409": { description: "Conflicting checkout identity" } },
+      },
+    },
+  },
+  routes({ kernel }) { return { "/orders": { POST: kernel.wrap("authenticated", createOrder) } }; },
+};
+```
+
+The public metadata types describe parameters, JSON Schema, media types, request bodies, response/error schemas, and security overrides following [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.1.html). Provided responses replace generic responses; `security: []` documents a public operation. Metadata documents your handler contract; it does not replace request validation or authorization. Run `openapi:generate` and `openapi:check` after a change. Required path parameters must match the route and header names are case-insensitive for duplicate validation.
+
+The generated fetch SDK keeps `RequestInit` and native `Response` as escape hatches. Declared headers add typed `operationHeaders`; required headers must be supplied, are checked at runtime, and are merged with a native `Headers` instance. For the example: `client.postOrders({ operationHeaders: { "Idempotency-Key": key }, credentials: "include" })`. Declared operation request/response contracts are available in the generated class's `operationContracts`; Declared scalar path/query parameters add typed `operationPath`/`operationQuery`, required-field checks and URL encoding. Cookies use native credentials/headers; JSON decoding, body encoding, advanced parameter serialization and runtime schema validation remain explicit caller responsibilities. This is not a complete OpenAPI-to-TypeScript schema compiler.

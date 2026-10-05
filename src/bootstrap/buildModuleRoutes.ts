@@ -1,5 +1,6 @@
 import { conditionalJsonResponse } from "@getstrata/core/http/conditionalResponse";
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
+import type { OpenApiOperation, OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
 import type { AppDependencies, AppModule, AppRouteMap, CachedJson } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { discoverModules } from "./modules";
@@ -12,13 +13,19 @@ interface BuildModuleRoutesOptions {
   clearRegistry?: boolean;
 }
 
-function registerOpenApiRoute(method: string, path: string, middleware: string[]): void {
-  routeRegistry.register({ method, path, middleware });
+function registerOpenApiRoute(
+  method: string,
+  path: string,
+  middleware: string[],
+  openApi?: OpenApiOperation,
+): void {
+  routeRegistry.register({ method, path, middleware, ...(openApi ? { openApi } : {}) });
 }
 
 function registerOpenApiRouteMap(
   routes: Record<string, unknown>,
   middleware: string[],
+  metadata: OpenApiRouteMap = {},
 ): Record<string, unknown> {
   const registered: Record<string, unknown> = {};
 
@@ -28,13 +35,18 @@ function registerOpenApiRouteMap(
       registered[path] = methodMap;
 
       for (const method of Object.keys(methodMap)) {
-        registerOpenApiRoute(method.toUpperCase(), path, middleware);
+        registerOpenApiRoute(
+          method.toUpperCase(),
+          path,
+          middleware,
+          metadata[path]?.[method.toUpperCase() as keyof OpenApiRouteMap[string]],
+        );
       }
       continue;
     }
 
     registered[path] = handler;
-    registerOpenApiRoute("GET", path, middleware);
+    registerOpenApiRoute("GET", path, middleware, metadata[path]?.GET);
   }
 
   return registered;
@@ -70,19 +82,40 @@ function buildModuleRoutes(
   const middleware = [...kernel.globalMiddleware(), ...kernel.group("api")];
   const cachedJson = createCachedJson(dependencies);
   const moduleRoutes: Record<string, unknown> = {};
+  const metadata: OpenApiRouteMap = {};
 
   for (const module of modules) {
     if (!module.routes) {
       continue;
     }
 
-    Object.assign(moduleRoutes, module.routes({ dependencies, cachedJson, kernel }));
+    const routes = module.routes({ dependencies, cachedJson, kernel });
+    for (const [path, operations] of Object.entries(module.openApi ?? {})) {
+      if (!(path in routes))
+        throw new Error(`OpenAPI metadata has no API route: ${module.name} ${path}`);
+      const methods =
+        typeof routes[path] === "function"
+          ? ["GET"]
+          : Object.keys(routes[path] as object).map((method) => method.toUpperCase());
+      for (const method of Object.keys(operations))
+        if (!methods.includes(method))
+          throw new Error(`OpenAPI metadata has no API handler: ${method} ${path}`);
+    }
+    for (const path of Object.keys(routes)) {
+      delete metadata[path];
+      if (module.openApi?.[path]) metadata[path] = module.openApi[path];
+    }
+    Object.assign(moduleRoutes, routes);
   }
 
   const prefixedModuleRoutes = prefixRouteMap(apiPrefix, moduleRoutes);
 
   return applyMiddlewareToRoutes(
-    registerOpenApiRouteMap(prefixedModuleRoutes, ["global", "api"]),
+    registerOpenApiRouteMap(
+      prefixedModuleRoutes,
+      ["global", "api"],
+      prefixRouteMap(apiPrefix, metadata) as OpenApiRouteMap,
+    ),
     middleware,
   ) as AppRouteMap;
 }
