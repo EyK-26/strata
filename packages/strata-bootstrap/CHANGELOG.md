@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.0.7
+
+- Fix concurrent Postgres role provisioning across databases
+
 ## 2.0.6
 
 - Dispatch registered Bun route preflights through CORS
