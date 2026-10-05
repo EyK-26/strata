@@ -1,8 +1,12 @@
+BEGIN;
 -- Application login role. FORCE RLS applies because this role is NOSUPERUSER and NOBYPASSRLS.
--- Superuser remains for CREATE ROLE / CREATE DATABASE / GRANT / migrate.
+-- Superuser remains for CREATE ROLE / CREATE DATABASE / GRANT / migrate / migrate:fresh DROP.
 -- This script is repeatable on an already-existing volume (not only docker-entrypoint-initdb.d).
 DO $$
 BEGIN
+  -- pg_authid is shared across databases. Database-local advisory locks cannot
+  -- serialize a cluster-global role. This lock permits readers and lasts until commit.
+  LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'strata_app') THEN
     CREATE ROLE strata_app LOGIN PASSWORD 'dev-strata-app-change-me'
       NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
@@ -21,3 +25,4 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO strata_app;
+COMMIT;

@@ -3,8 +3,10 @@ CREATE DATABASE hiroapp_test;
 -- Application login role for HiroApp request traffic.
 -- Superuser remains for volume init, GRANT, and migrate.
 -- Repeatable via ensurePostgresDatabaseAndAppRole() on an existing volume.
+BEGIN;
 DO $$
 BEGIN
+  LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'strata_app') THEN
     CREATE ROLE strata_app LOGIN PASSWORD 'dev-strata-app-change-me'
       NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
@@ -24,3 +26,5 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO strata_app;
+
+COMMIT;
