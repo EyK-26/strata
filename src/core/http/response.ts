@@ -33,6 +33,12 @@ function errorResponse(error: unknown): Response {
   );
 }
 
+function withErrorHandling<THandler extends (request: Request) => Response | Promise<Response>>(
+  handler: THandler,
+): (...args: Parameters<THandler>) => Promise<Response>;
+function withErrorHandling<TArgs extends unknown[]>(
+  handler: (...args: TArgs) => Response | Promise<Response>,
+): (...args: TArgs) => Promise<Response>;
 function withErrorHandling<TArgs extends unknown[]>(
   handler: (...args: TArgs) => Response | Promise<Response>,
 ): (...args: TArgs) => Promise<Response> {
@@ -53,6 +59,12 @@ function withErrorHandling<TArgs extends unknown[]>(
   };
 }
 
+function withJsonErrorHandling<THandler extends (request: Request) => Response | Promise<Response>>(
+  handler: THandler,
+): (...args: Parameters<THandler>) => Promise<Response>;
+function withJsonErrorHandling<TArgs extends unknown[]>(
+  handler: (...args: TArgs) => Response | Promise<Response>,
+): (...args: TArgs) => Promise<Response>;
 function withJsonErrorHandling<TArgs extends unknown[]>(
   handler: (...args: TArgs) => Response | Promise<Response>,
 ): (...args: TArgs) => Promise<Response> {

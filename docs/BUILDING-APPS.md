@@ -361,3 +361,21 @@ class CatalogController {
 `container.set`, `instance`, `singleton`, `bind`, `get`, `resolve`, `make` and `resolveService(dependencies, token)` preserve the token's service type. Existing `container.resolve<T>("legacy.key")` callers remain supported. Keep token names unique and export one token declaration per service: creating the same name with a different type does not create a distinct runtime identity. This is a compile-time contract, not runtime validation of values registered through legacy strings, `any`, explicit assertions or JavaScript. Widening a token deliberately to `string` also leaves typed resolution. Prefer typed tokens at both registration and resolution boundaries.
 
 Use constructor parameters for the services a controller actually needs; resolve them in module/provider composition. Stateful services can remain classes, while stateless business operations can remain functions. This API does not alter request scoping, model typing, middleware typing, queues or transactions, and upgrading packages does not rewrite existing controllers.
+
+## Preserve route request types through middleware
+
+`RouteHandler<TRequest>` defaults to the standard `Request`, and accepts a narrower native request contract when a controller needs route parameters. `composeMiddleware`, `withMiddleware`, the `HttpKernel` wrappers and web login/register throttles preserve that contract, so casting parameterized handlers to an untyped `RouteHandler` is unnecessary.
+
+```typescript
+import type { RouteHandler } from "@getstrata/core/http/middleware";
+import type { RouteRequest } from "@getstrata/core/http/route";
+
+const show: RouteHandler<RouteRequest<{ id: string }>> = async (request) => {
+  return Response.json({ id: request.params.id });
+};
+
+// Module composition: no handler assertion required.
+const route = kernel.wrapWebAuthenticated(show);
+```
+
+Middleware still receives standard `Request` and invokes its continuation without replacing the request. Composition returns a handler requiring the original subtype; it does not manufacture route parameters or make a narrow handler safe to call with a plain `Request`. Register it under the matching native Bun path (`/items/:id` in this example). This change does not validate route-map paths, add request fields, decode parameters differently, change authorization/CSRF order, or make middleware-added context available as typed fields. Existing plain-request handlers remain supported. Model binding and JSON/HTML error wrappers compose without erasing the request contract.

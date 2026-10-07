@@ -2,7 +2,9 @@ import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
 
 type Middleware = (request: Request, next: () => Promise<Response>) => Promise<Response>;
 
-type RouteHandler = (request: Request) => Response | Promise<Response>;
+type RouteHandler<TRequest extends Request = Request> = (
+  request: TRequest,
+) => Response | Promise<Response>;
 
 function isRouteHandler(value: unknown): value is RouteHandler {
   return typeof value === "function";
@@ -19,8 +21,10 @@ function isMethodRouteMap(value: unknown): value is Record<string, RouteHandler>
 }
 
 function composeMiddleware(...middleware: Middleware[]) {
-  return (handler: RouteHandler): RouteHandler => {
-    return async (request: Request) => {
+  return <TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> => {
+    return async (request: TRequest) => {
       let index = 0;
 
       const dispatch = async (): Promise<Response> => {

@@ -1,11 +1,8 @@
-import { composeMiddleware, type Middleware, type RouteHandler } from "./middleware";
+import { composeMiddleware, type Middleware } from "./middleware";
 
-function withMiddleware(...middleware: Middleware[]): (handler: RouteHandler) => RouteHandler {
-  const wrap = composeMiddleware(...middleware);
-
-  return (handler: RouteHandler): RouteHandler => {
-    return wrap(handler);
-  };
+/** Middleware consumes native Request; composition preserves the handler's request subtype. */
+function withMiddleware(...middleware: Middleware[]) {
+  return composeMiddleware(...middleware);
 }
 
 export { withMiddleware };
