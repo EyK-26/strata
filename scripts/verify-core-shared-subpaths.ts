@@ -20,6 +20,13 @@ const sharedSubpathSet = new Set<string>(CORE_SHARED_SUBPATHS);
 
 /** Runtime names that must exist on the published JS entry even without a sibling checkout. */
 const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
+  "database/model": [
+    "Model",
+    "defineModel",
+    "bootModels",
+    "registerModelRepository",
+    "registerModelClass",
+  ],
   "database/boundConnection": [
     "bindDatabaseConnection",
     "getBoundDatabaseConnection",
@@ -122,8 +129,14 @@ for (const scanRoot of CONSUMER_SCAN_ROOTS) {
 }
 
 const errors: string[] = [];
+const manifest = JSON.parse(
+  await readFile(join(ROOT, "packages/strata-core/package.json"), "utf8"),
+) as { exports: Record<string, unknown> };
 
 for (const subpath of CORE_SHARED_SUBPATHS) {
+  if (!manifest.exports[`./${subpath}`]) {
+    errors.push(`Shared subpath @getstrata/core/${subpath} is missing from package exports`);
+  }
   const shimPath = join(ENTRIES_DIR, `${subpath}.js`);
   let shimSource: string;
 

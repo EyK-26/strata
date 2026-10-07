@@ -1,6 +1,6 @@
 import { ConflictError, NotFoundError } from "@getstrata/core/errors/http";
 import { hashPassword } from "../auth/password.ts";
-import type BaseRepository from "./baseRepository.ts";
+import BaseRepository from "./baseRepository.ts";
 import { foreignKeyFromTable, pivotTableName } from "./inflection.ts";
 import { resolveSoftDeleteColumn } from "./query.ts";
 import type { AnyRelationQuery, RelatedModelClass } from "./relationQuery.ts";
@@ -33,6 +33,7 @@ import {
   morphTo,
 } from "./relationships.ts";
 import type { RepositoryQuery } from "./repositoryQuery.ts";
+import type { TableDefinition } from "./table.ts";
 import type { MutationValues, QueryOptions, QueryWhere, UpdateValues } from "./types.ts";
 
 type CastType = "date" | "datetime" | "json" | "bool" | "boolean" | "integer" | "int" | "hashed";
@@ -66,6 +67,7 @@ interface ModelConstructor<
 }
 
 const modelRepositories = new WeakMap<object, BaseRepository<Record<string, unknown>, "id">>();
+const modelRepositoryFactories = new WeakMap<object, () => object>();
 const namedModels = new Map<string, object>();
 const modelGlobalScopes = new WeakMap<object, GlobalScopeFn<Record<string, unknown>, "id">[]>();
 const modelObservers = new WeakMap<object, ModelObserver[]>();
@@ -251,14 +253,54 @@ async function loadNested(
   await eagerLoadOnModels([model], [path]);
 }
 
+function nameModel(model: object): void {
+  const { name, $morphClass } = model as { name?: string; $morphClass?: string };
+  if (name) namedModels.set(name, model);
+  if ($morphClass) namedModels.set($morphClass, model);
+}
+
 function resolveModelRepository(model: object): BaseRepository<Record<string, unknown>, "id"> {
-  const repository = modelRepositories.get(model);
+  const existing = modelRepositories.get(model);
+  if (existing) return existing;
 
-  if (!repository) {
-    throw new Error(`${(model as { name: string }).name}.repository() is not implemented.`);
+  // Inherit the definition, but cache a separate repository for each concrete class.
+  for (let current: object | null = model; current; current = Object.getPrototypeOf(current)) {
+    const factory = modelRepositoryFactories.get(current);
+    if (!factory) continue;
+    const repository = factory() as BaseRepository<Record<string, unknown>, "id">;
+    modelRepositories.set(model, repository);
+    nameModel(model);
+    return repository;
   }
+  throw new Error(`${(model as { name: string }).name}.repository() is not implemented.`);
+}
 
-  return repository;
+/** Typed model base with a lazily created framework repository and active connection. */
+function defineModel<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  table: TableDefinition<TEntity, PrimaryKey>,
+): typeof Model<TEntity, PrimaryKey> {
+  class TableModel extends Model<TEntity, PrimaryKey> {}
+  modelRepositoryFactories.set(TableModel, () => new BaseRepository(table));
+  return TableModel;
+}
+
+/** Register all relationship names before initializing any model's boot hooks. */
+function bootModels(models: readonly object[]): void {
+  const names = new Map<string, object>();
+  for (const model of models) {
+    const { name, $morphClass } = model as { name?: string; $morphClass?: string };
+    for (const alias of [name, $morphClass]) {
+      if (!alias) continue;
+      const existing = names.get(alias);
+      if (existing && existing !== model) throw new Error(`Duplicate model name [${alias}].`);
+      names.set(alias, model);
+    }
+  }
+  for (const model of models) nameModel(model);
+  for (const model of models) {
+    resolveModelRepository(model);
+    ensureBooted(model);
+  }
 }
 
 /** Alias for `hasMany("Name")` when `Name` is not `constructor.name` or `$morphClass`. */
@@ -331,12 +373,24 @@ function ensureBooted(model: object): void {
     return;
   }
 
+  nameModel(model);
   modelBooted.add(model);
 
+  const scopes = modelGlobalScopes.get(model);
+  const observers = modelObservers.get(model);
   const boot = (model as { boot?: () => void }).boot;
 
   if (typeof boot === "function") {
-    boot.call(model);
+    try {
+      boot.call(model);
+    } catch (error) {
+      modelBooted.delete(model);
+      if (scopes) modelGlobalScopes.set(model, scopes);
+      else modelGlobalScopes.delete(model);
+      if (observers) modelObservers.set(model, observers);
+      else modelObservers.delete(model);
+      throw error;
+    }
   }
 }
 
@@ -1032,7 +1086,9 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   static repository<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
     this: object,
   ): BaseRepository<TEntity, PrimaryKey> {
-    return resolveModelRepository(this) as unknown as BaseRepository<TEntity, PrimaryKey>;
+    const repository = resolveModelRepository(this);
+    ensureBooted(this);
+    return repository as unknown as BaseRepository<TEntity, PrimaryKey>;
   }
 
   static query<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
@@ -1844,14 +1900,7 @@ function registerModelRepository<TModelClass>(model: TModelClass, repository: ob
     model as object,
     repository as BaseRepository<Record<string, unknown>, "id">,
   );
-  const name = (model as { name?: string }).name;
-  if (name) {
-    namedModels.set(name, model as object);
-  }
-  const morphClass = (model as { $morphClass?: string }).$morphClass;
-  if (morphClass) {
-    namedModels.set(morphClass, model as object);
-  }
+  nameModel(model as object);
   ensureBooted(model as object);
   return model;
 }
@@ -1869,6 +1918,8 @@ export {
 export type { CastType, GlobalScopeFn, ModelClassType, ModelConstructor };
 export {
   applyCasts,
+  bootModels,
+  defineModel,
   dehydrateValue,
   filterMassAssignable,
   hydrateValue,

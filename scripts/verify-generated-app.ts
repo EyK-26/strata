@@ -165,6 +165,11 @@ try {
       await readFile(join(ROOT, "tests/types/asyncWriteCasts.contract.ts"), "utf8"),
     );
 
+    await writeFile(
+      join(appDir, "src/model-definition.contract.ts"),
+      await readFile(join(ROOT, "tests/types/modelDefinition.contract.ts"), "utf8"),
+    );
+
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");
@@ -199,6 +204,28 @@ try {
       failures.push(`${testCase.name} (TS ${version}): bun run check failed\n${checked.output}`);
       console.log(`FAIL ${testCase.name} (TS ${version})`);
     }
+    const modelRuntime = await run(
+      [
+        "bun",
+        "-e",
+        `
+      const core = await import("@getstrata/core");
+      const models = await import("@getstrata/core/database/model");
+      const database = await import("@getstrata/core/database");
+      if (core.Model !== models.Model || database.Model !== models.Model) throw new Error("Model import identity differs");
+      if (core.defineModel !== models.defineModel || core.bootModels !== models.bootModels) throw new Error("Model registries differ");
+      await import("./src/bootstrap/preload.ts");
+      const { Note } = await import("./src/models/Note.ts");
+      if (!(Note.prototype instanceof core.Model)) throw new Error("Generated model is not discoverable");
+      core.bootModels([Note]);
+      if (Note.repository().getTable().name !== "notes") throw new Error("Missing default model repository");
+    `,
+      ],
+      appDir,
+    );
+    if (modelRuntime.exitCode !== 0)
+      failures.push(`${testCase.name}: packed model startup failed\n${modelRuntime.output}`);
+
     const frontendDir = join(appDir, "frontend");
     if (existsSync(join(frontendDir, "package.json"))) {
       for (const command of [

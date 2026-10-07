@@ -23,6 +23,8 @@ export {
   applyCasts,
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
+  bootModels,
+  defineModel,
   dehydrateValue,
   filterMassAssignable,
   HasManyRelationQuery,

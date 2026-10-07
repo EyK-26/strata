@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## Unreleased
+
+- Generate declarative model bases and awaited framework discovery instead of per-model repository construction and registration.
+
 ## 2.1.0
 
 - refactor(starter): reuse shared config and base repositories - fix(database): await password casts before model writes - fix(database): preserve concrete model types in query results

@@ -139,20 +139,47 @@ Observer order is preserved: static `create` resolves casts before its pre-write
 
 Hydrated relations live on `loaded("category")`. There is no magic `product.category` property.
 
-String related models (`belongsTo("Category")`, `hasMany("Product")`) resolve in this order:
+String related models (`belongsTo("Category")`, `hasMany("Product")`) use the class name or `$morphClass` registered at startup. Generated apps await framework model discovery before handling requests. `registerModelClass("catalog-category", Category)` remains available for a distinct alias; keep alternate aliases in startup code before any boot hook that uses them.
 
-1. `registerModelRepository(Category, …)` already names `constructor.name` and `$morphClass`.
-2. `registerModelClass("Category", CategoryModel)` only when the string is neither of those (ESM cycles, or a short alias).
+### Declarative model binding
 
-Register models in `src/models/register.ts` (import every model so those calls run) **before** the first query. Generated apps emit that file from `preload.ts`. A missing name throws `Model [Category] is not registered`. `make:module` appends a commented `registerModelClass` hint when the file exists.
+```typescript
+import { defineModel } from "@getstrata/core/database/model";
+import { defineTable } from "@getstrata/core/database/table";
+
+interface ProductRecord { sku: string; title: string }
+const products = defineTable<ProductRecord, "sku">({
+  name: "products", primaryKey: "sku", columns: ["sku", "title"],
+});
+class Product extends defineModel(products) {
+  static $fillable = ["sku", "title"] as const;
+  static $timestamps = false;
+}
+export { Product };
+```
+
+`defineModel(table)` supplies a typed model base. The framework creates and caches one default repository per concrete class on first use or startup initialization. Subclasses inherit table metadata, with separate repository and boot state. Concrete model results, casts, observers, scopes, SQL projections, bulk operations and locking continue to use existing APIs. This definition does not generate migrations or infer a schema from erased TypeScript interfaces.
+
+In generated `src/models/register.ts`:
+
+```typescript
+import { discoverModels } from "@getstrata/bootstrap/discoverModels";
+await discoverModels(import.meta.dir);
+```
+
+Discovery recursively imports `.ts`, `.js`, `.mts` and `.mjs` files from the trusted application directory, collects named/default exported Model subclasses, registers all class names and morph aliases, then initializes repositories and boot hooks. It deduplicates re-exports, rejects ambiguous names, and propagates import, definition and boot errors to startup. Symlinks, declaration files, and reserved `register.ts`/`register.js`/`index.ts`/`index.js` orchestration/barrel files are skipped. Use `exclude` for additional orchestration files. No request or tenant controls the discovery directory. Await discovery before HTTP, worker or scheduled work begins.
+
+For bundled deployments or models outside `src/models`, use a static manifest instead: `bootModels([Product, Category])` from `@getstrata/core/database/model`. Import all model modules first. Class-reference or lazy-reference relationships do not require name discovery; string references do. Framework discovery cannot see a class whose module has never been imported. Alternate aliases must be registered before boot if hooks depend on them.
+
+Existing `class Product extends Model<ProductRecord, "sku">` plus `registerModelRepository(Product, repository)` remains supported. To customize a declarative model, call `registerModelRepository(Product, customRepository)` before startup initialization. Explicit bindings take precedence over defaults. Custom repository methods stay available on the repository itself; registration does not add methods to the model. Keep startup bindings stable rather than rebinding per request. The default connection still resolves the framework's active request/transaction scope; discovery never selects tenants, opens a database connection, or bypasses RLS.
 
 Eager belongsTo/hasMany queries reuse the parent repository connection (`withConnection`), so Postgres RLS `SET LOCAL app.tenant_id` on the request transaction also applies to related rows. Model `addGlobalScope` is applied on `Model.query()`, not on those related repository loads — filter `tenant_id` in your own `where` if you use column tenancy without RLS.
 
 ```typescript
 import { registerModelClass, registerModelRepository } from "@getstrata/core/database/model";
 
-registerModelClass("Category", Category);
-registerModelClass("Product", Product);
+// Only alternate aliases need registerModelClass.
+registerModelClass("catalog-category", Category);
 registerModelRepository(Category, new CategoryRepository());
 registerModelRepository(Product, new ProductRepository());
 

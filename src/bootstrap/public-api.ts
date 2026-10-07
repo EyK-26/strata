@@ -59,6 +59,8 @@ export type { CreateWebRoutesOptions } from "./createWebRoutes.ts";
 export { createWebRoutes, mergeWebRoutes } from "./createWebRoutes.ts";
 export { createAppDependencies } from "./dependencies.ts";
 export { discoverJobs, resetDiscoverJobsForTests } from "./discoverJobs.ts";
+export type { DiscoverModelsOptions } from "./discoverModels.ts";
+export { discoverModels } from "./discoverModels.ts";
 export type { DiscoverModulesOptions } from "./discoverModules.ts";
 export {
   configureModulesDirectory,
@@ -79,7 +81,6 @@ export { coreProviders } from "./providers/index.ts";
 export { registerDefaultJobs } from "./queue/defaultJobs.ts";
 export { RouteRegistry, routeRegistry } from "./routeRegistry.ts";
 export { assertProductionSecrets } from "./secretsGuard.ts";
-
 export {
   CookieSessionAuthManager,
   CookieSessionGuard,
