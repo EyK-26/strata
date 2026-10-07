@@ -280,6 +280,13 @@ describe("starter security flows", () => {
       expect(withMfa.status).toBe(200);
       expect(((await withMfa.json()) as { token: string }).token.startsWith("strp_")).toBe(true);
 
+      const guestHome = await fetch(`${origin}/`);
+      expect(guestHome.status).toBe(200);
+      const guestHtml = await guestHome.text();
+      expect(guestHtml).not.toContain("StrataDemo!ChangeMe");
+      expect(guestHtml).not.toContain("demo@example.com");
+      expect(guestHtml).not.toContain("admin@example.test");
+
       const htmlLoginPage = await fetch(`${origin}/login`);
       const htmlLoginHtml = await htmlLoginPage.text();
       const htmlCsrf = /name="_token" value="([^"]+)"/.exec(htmlLoginHtml)?.[1] ?? "";

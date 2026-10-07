@@ -355,6 +355,49 @@ describe("frontend build wiring", () => {
   });
 });
 
+describe("generated login defaults", () => {
+  test("public auth pages never embed development credentials", async () => {
+    const root = await tempDir();
+    for (const [frontend, auth] of [
+      ["spa-react", "token"],
+      ["spa-react", "cookie"],
+      ["hybrid", "cookie-token-jwt"],
+      ["server-htmx", "cookie"],
+    ] as const) {
+      const app = generateFromArgs(root, [
+        `login-${frontend}-${auth}`,
+        `--frontend=${frontend}`,
+        `--auth=${auth}`,
+        "--yes",
+      ]);
+      const home = await readFile(join(app, "views/home.eta"), "utf8");
+      const publicPages = [home];
+      if (auth.includes("cookie")) {
+        publicPages.push(await readFile(join(app, "views/auth/login.eta"), "utf8"));
+      }
+      if (frontend !== "server-htmx") {
+        const spaLogin = await readFile(join(app, "frontend/src/pages/LoginPage.tsx"), "utf8");
+        publicPages.push(spaLogin);
+        expect(spaLogin).toContain('const [email, setEmail] = useState("")');
+        expect(spaLogin).toContain('const [password, setPassword] = useState("")');
+        expect(spaLogin).toContain('autoComplete="username"');
+        expect(spaLogin).toContain('autoComplete="current-password"');
+      }
+      for (const page of publicPages) {
+        expect(page).not.toContain("StrataDemo!ChangeMe");
+        expect(page).not.toContain("demo@example.com");
+        expect(page).not.toContain("admin@example.test");
+      }
+      const readme = await readFile(join(app, "README.md"), "utf8");
+      const runInstructions = readme.split("## Run it")[1]?.split("Open http://localhost:3000")[0];
+      expect(runInstructions).toContain("bun run db:migrate");
+      expect(runInstructions).not.toContain("bun run db:seed:demo");
+      expect(readme).toContain("Optional development demo accounts");
+      expect(readme).toContain("bun run db:seed:demo");
+    }
+  });
+});
+
 describe("generated API docs", () => {
   test("header auth docs claim no login routes", async () => {
     const root = await tempDir();

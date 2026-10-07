@@ -57,11 +57,11 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 
 ## What you get that actually runs
 
-- `GET /health` after `strata migrate` (plain text `ok` when the database ping succeeds and `notes` is readable, including zero rows; 503 `degraded` when that read fails). Docker HEALTHCHECK uses `/health`. Migrate also seeds when the tables are empty.
+- `GET /health` after `strata migrate` (plain text `ok` when the database ping succeeds and `notes` is readable, including zero rows; 503 `degraded` when that read fails). Docker HEALTHCHECK uses `/health`. Migrations do not seed accounts.
 - `GET /ready` (from `@getstrata/bootstrap/health`): JSON database and Redis pings, 200 or 503. No schema check, so it can be 200 before the first migrate; `/health` is the gate.
 - Notes table and a `Note` model on every app. Seed uses `Note.query().value`. `/health` uses `Note.query().limit(1).get()`. There is no notes CRUD route.
 - Cookie, token, and JWT apps also get a `User` model (`$hidden` for password and MFA secrets). Token layers add `ApiToken`. Seed uses two `User.create` calls. Auth directory, login/register, and SCIM read and write through that model. Auth code that needs secrets uses `user.get("password")` or `toObject()`, not `toArray()`. Login, register, and forgot-password use `validateObject` (`emailRule`, `required`, `minLength(8)` on register) so JSON returns `{ error, details }` and HTML uses field errors.
-- Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Seed `demo@example.com` / `StrataDemo!ChangeMe`
+- Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Login forms start empty and public pages do not advertise demo credentials. Development accounts require the explicit `bun run db:seed:demo` command.
 - Token apps: `POST /api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`
 - JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
 - Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
