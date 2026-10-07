@@ -16,6 +16,7 @@ export const CORE_SHARED_SUBPATHS = [
   "database/dialect",
   "database/mysqlConnection",
   "database/baseRepository",
+  "database/model",
   "database/bindConnection",
   "database/boundConnection",
   "database/bunSql",

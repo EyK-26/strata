@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- Add typed `defineModel(table)` bases and two-phase model startup; preserve explicit repository overrides and share model identity across package import paths.
+
 ## 2.1.0
 
 - refactor(starter): reuse shared config and base repositories - fix(database): await password casts before model writes - fix(database): preserve concrete model types in query results

@@ -244,12 +244,14 @@ describe("create-strata generate", () => {
     expect(readme).toContain("openapi:check");
 
     const modelsRegister = await readFile(join(app, "src/models/register.ts"), "utf8");
-    expect(modelsRegister).toContain('import "./Note.ts"');
-    expect(modelsRegister).toContain("registerModelClass");
+    expect(modelsRegister).toContain("@getstrata/bootstrap/discoverModels");
+    expect(modelsRegister).toContain("await discoverModels(import.meta.dir)");
     expect(modelsRegister).not.toContain("\nimport { registerModelClass }");
     expect(modelsRegister).not.toContain("void registerModelClass;");
     const noteModel = await readFile(join(app, "src/models/Note.ts"), "utf8");
-    expect(noteModel).toContain("registerModelRepository(Note, new BaseRepository(notesTable))");
+    expect(noteModel).toContain("class Note extends defineModel(notesTable)");
+    expect(noteModel).not.toContain("registerModelRepository");
+    expect(noteModel).not.toContain("BaseRepository");
     expect(noteModel).not.toContain("class NoteRepository");
     const bootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(bootstrap).toContain("const config = new ConfigStore()");
@@ -323,7 +325,7 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "src/models/User.ts"))).toBe(false);
     expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(false);
     const note = await readFile(join(app, "src/models/Note.ts"), "utf8");
-    expect(note).toContain("registerModelRepository");
+    expect(note).toContain("defineModel(notesTable)");
     expect(note).toContain('static $fillable = ["body"]');
     expect(note).not.toContain('from "@getstrata/core"');
 

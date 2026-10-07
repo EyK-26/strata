@@ -9,7 +9,9 @@ import {
   getDefaultDatabasePool,
   registerDefaultDatabasePool,
 } from "@getstrata/core/database/defaultConnection";
+import { bootModels, defineModel } from "@getstrata/core/database/model";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
+import { defineTable } from "@getstrata/core/database/table";
 import { runInTransaction } from "@getstrata/core/database/transaction";
 import {
   runWithMigrationBypass,
@@ -124,6 +126,41 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
           await db.unsafe("SELECT pg_sleep(0.02)");
           expect(currentTenantId()).toBe(id);
           expect((await settings()).tenant).toBe(String(id));
+        }),
+      ),
+    );
+  });
+  test("declarative repositories preserve concurrent restricted-role RLS and savepoint rollback", async () => {
+    const table = defineTable<{ id: number; tenant_id: number; value: number }, "id">({
+      name: "composition_models",
+      primaryKey: "id",
+      columns: ["id", "tenant_id", "value"],
+    });
+    class CompositionModel extends defineModel(table) {
+      static override $fillable = ["id", "tenant_id", "value"];
+      static override $timestamps = false;
+    }
+    bootModels([CompositionModel]);
+    await Promise.all(
+      [1, 2, 3].map((id) =>
+        runWithTenantDatabase({ ...defaultTestTenant, id }, async () => {
+          await db.unsafe(
+            "CREATE TEMP TABLE composition_models (id INTEGER PRIMARY KEY, tenant_id INTEGER, value INTEGER) ON COMMIT DROP",
+          );
+          await db.unsafe("ALTER TABLE composition_models ENABLE ROW LEVEL SECURITY");
+          await db.unsafe("ALTER TABLE composition_models FORCE ROW LEVEL SECURITY");
+          await db.unsafe(
+            "CREATE POLICY composition_model_scope ON composition_models USING (tenant_id = current_setting('app.tenant_id')::integer)",
+          );
+          await CompositionModel.create({ id: 1, tenant_id: id, value: id });
+          await expect(
+            runInTransaction(async () => {
+              await CompositionModel.create({ id: 2, tenant_id: id, value: 2 });
+              await CompositionModel.create({ id: 3, tenant_id: id + 1, value: 3 });
+            }),
+          ).rejects.toThrow();
+          expect(await CompositionModel.find(2)).toBeNull();
+          expect((await CompositionModel.findOrFail(1)).get("tenant_id")).toBe(id);
         }),
       ),
     );

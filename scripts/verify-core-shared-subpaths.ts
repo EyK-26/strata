@@ -20,6 +20,13 @@ const sharedSubpathSet = new Set<string>(CORE_SHARED_SUBPATHS);
 
 /** Runtime names that must exist on the published JS entry even without a sibling checkout. */
 const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
+  "database/model": [
+    "Model",
+    "defineModel",
+    "bootModels",
+    "registerModelRepository",
+    "registerModelClass",
+  ],
   "database/boundConnection": [
     "bindDatabaseConnection",
     "getBoundDatabaseConnection",

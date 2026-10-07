@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## Unreleased
+
+- Add awaited model discovery with nested exports, two-phase naming/boot, duplicate-name detection and startup error propagation.
+
 ## 2.1.0
 
 - refactor(starter): reuse shared config and base repositories - fix(database): await password casts before model writes - fix(database): preserve concrete model types in query results

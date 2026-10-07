@@ -16,6 +16,8 @@ describe("@getstrata/core public API", () => {
 
   test("exports Model helpers for the active-record ORM", () => {
     expect(typeof core.Model).toBe("function");
+    expect(typeof core.defineModel).toBe("function");
+    expect(typeof core.bootModels).toBe("function");
     expect(typeof core.registerModelRepository).toBe("function");
     expect(typeof core.hydrateValue).toBe("function");
     expect(typeof core.filterMassAssignable).toBe("function");
