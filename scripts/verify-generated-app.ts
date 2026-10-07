@@ -160,6 +160,11 @@ try {
       await readFile(join(ROOT, "tests/types/modelResults.contract.ts"), "utf8"),
     );
 
+    await writeFile(
+      join(appDir, "src/async-write-casts.contract.ts"),
+      await readFile(join(ROOT, "tests/types/asyncWriteCasts.contract.ts"), "utf8"),
+    );
+
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");
