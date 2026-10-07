@@ -379,3 +379,22 @@ const route = kernel.wrapWebAuthenticated(show);
 ```
 
 Middleware still receives standard `Request` and invokes its continuation without replacing the request. Composition returns a handler requiring the original subtype; it does not manufacture route parameters or make a narrow handler safe to call with a plain `Request`. Register it under the matching native Bun path (`/items/:id` in this example). This change does not validate route-map paths, add request fields, decode parameters differently, change authorization/CSRF order, or make middleware-added context available as typed fields. Existing plain-request handlers remain supported. Model binding and JSON/HTML error wrappers compose without erasing the request contract.
+
+### Inferred model results
+
+Static model lookups and writes, query chains, awaited queries, pagination and chunk callbacks preserve the concrete model class and its declared record type:
+
+```ts
+class Product extends Model<ProductRecord, "id"> {
+  label() { return this.get("title"); }
+}
+const product = await Product.with("category").findOrFail(id);
+const record: ProductRecord = product.toObject();
+product.label();
+const page = await Product.query().paginate({ page: 1, perPage: 20 });
+// page.data is Product[], while find()/first()/firstWhere() remain nullable.
+```
+
+Declare record fields to match hydrated values, including configured casts. These types do not validate database rows, cast definitions, mass-assignment input, or dynamically named loaded relations. `withCount("reviews")` adds `reviews_count` to the result record; a custom alias and multiple counts are preserved. Count values remain `unknown` because driver scalar representations and model casts differ; normalize them explicitly before arithmetic. Prefer aliases that do not overwrite model fields.
+
+Repository queries, direct SQL, projections and bulk operations remain available. `pluck` and `value` retain their existing `unknown` results. Loading or mutating a partial record does not prove that all declared fields exist: use an explicit projection contract at the repository/SQL boundary instead of treating partial data as a complete hydrated model. Model registration and runtime hydration, observers, scopes, relationships and error behavior are unchanged.
