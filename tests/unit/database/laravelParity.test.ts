@@ -127,22 +127,22 @@ describe("mass assignment policy", () => {
   });
 });
 
-describe("hashed cast", () => {
-  test("hashes a plaintext value on write", () => {
-    const stored = dehydrateValue("secret", "hashed") as string;
+describe("hashed cast", async () => {
+  test("hashes a plaintext value on write", async () => {
+    const stored = (await dehydrateValue("secret", "hashed")) as string;
 
     expect(stored).not.toBe("secret");
     expect(stored.startsWith("$2")).toBe(true);
-    expect(Bun.password.verifySync("secret", stored)).toBe(true);
+    expect(await Bun.password.verify("secret", stored)).toBe(true);
   });
 
-  test("does not re-hash a value that is already hashed", () => {
-    const once = dehydrateValue("secret", "hashed") as string;
-    expect(dehydrateValue(once, "hashed")).toBe(once);
+  test("does not re-hash a value that is already hashed", async () => {
+    const once = (await dehydrateValue("secret", "hashed")) as string;
+    expect(await dehydrateValue(once, "hashed")).toBe(once);
   });
 
-  test("leaves null and undefined alone", () => {
-    expect(dehydrateValue(null, "hashed")).toBeNull();
-    expect(dehydrateValue(undefined, "hashed")).toBeUndefined();
+  test("leaves null and undefined alone", async () => {
+    expect(await dehydrateValue(null, "hashed")).toBeNull();
+    expect(await dehydrateValue(undefined, "hashed")).toBeUndefined();
   });
 });

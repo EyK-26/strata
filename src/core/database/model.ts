@@ -1,4 +1,5 @@
 import { ConflictError, NotFoundError } from "@getstrata/core/errors/http";
+import { hashPassword } from "../auth/password.ts";
 import type BaseRepository from "./baseRepository.ts";
 import { foreignKeyFromTable, pivotTableName } from "./inflection.ts";
 import { resolveSoftDeleteColumn } from "./query.ts";
@@ -349,14 +350,15 @@ function isAlreadyHashed(value: string): boolean {
   return PASSWORD_HASH_PATTERN.test(value);
 }
 
-function hashCastValue(value: unknown): string {
+async function hashCastValue(value: unknown): Promise<unknown> {
+  if (value === null || value === undefined) return value;
   const plain = String(value);
 
   if (isAlreadyHashed(plain)) {
     return plain;
   }
 
-  return Bun.password.hashSync(plain, { algorithm: "bcrypt", cost: 12 });
+  return await hashPassword(plain);
 }
 
 function hydrateValue(value: unknown, cast: CastType): unknown {
@@ -383,7 +385,11 @@ function hydrateValue(value: unknown, cast: CastType): unknown {
   }
 }
 
+function dehydrateValue(value: unknown, cast: "hashed"): Promise<unknown>;
+function dehydrateValue(value: unknown, cast: Exclude<CastType, "hashed">): unknown;
+function dehydrateValue(value: unknown, cast: CastType): unknown;
 function dehydrateValue(value: unknown, cast: CastType): unknown {
+  if (cast === "hashed") return hashCastValue(value);
   if (value === null || value === undefined) {
     return value;
   }
@@ -400,8 +406,6 @@ function dehydrateValue(value: unknown, cast: CastType): unknown {
     case "integer":
     case "int":
       return value === "" ? null : Number(value);
-    case "hashed":
-      return hashCastValue(value);
     default:
       return value;
   }
@@ -436,22 +440,42 @@ function filterMassAssignable(
 function applyCasts(
   values: LoadedAttributes,
   casts: ModelCasts,
+  direction: "hydrate",
+): LoadedAttributes;
+function applyCasts(
+  values: LoadedAttributes,
+  casts: ModelCasts,
+  direction: "dehydrate",
+): Promise<LoadedAttributes>;
+function applyCasts(
+  values: LoadedAttributes,
+  casts: ModelCasts,
   direction: "hydrate" | "dehydrate",
-): LoadedAttributes {
-  if (Object.keys(casts).length === 0) {
-    return values;
+): LoadedAttributes | Promise<LoadedAttributes>;
+function applyCasts(
+  values: LoadedAttributes,
+  casts: ModelCasts,
+  direction: "hydrate" | "dehydrate",
+): LoadedAttributes | Promise<LoadedAttributes> {
+  const entries = Object.entries(casts);
+  if (entries.length === 0) {
+    return direction === "hydrate" ? values : Promise.resolve(values);
   }
 
   const result = { ...values };
-  const castFn = direction === "hydrate" ? hydrateValue : dehydrateValue;
-
-  for (const [key, cast] of Object.entries(casts)) {
-    if (key in result && cast) {
-      result[key] = castFn(result[key], cast);
+  if (direction === "hydrate") {
+    for (const [key, cast] of entries) {
+      if (key in result && cast) result[key] = hydrateValue(result[key], cast);
     }
+    return result;
   }
 
-  return result;
+  return (async () => {
+    for (const [key, cast] of entries) {
+      if (key in result && cast) result[key] = await dehydrateValue(result[key], cast);
+    }
+    return result;
+  })();
 }
 
 function castPluckedValue(modelClass: object, column: string, value: unknown): unknown {
@@ -969,7 +993,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   protected static dehydrateAttributes(
     this: object,
     attributes: LoadedAttributes,
-  ): LoadedAttributes {
+  ): LoadedAttributes | Promise<LoadedAttributes> {
     const casts = modelStatics(this).$casts ?? {};
     return applyCasts(attributes, casts, "dehydrate");
   }
@@ -1062,7 +1086,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       ...forced,
     };
     const withTimestamps = applyTimestampsOnCreate(table.columns, assignable, timestamps);
-    const payload = statics.dehydrateAttributes(withTimestamps);
+    const payload = await statics.dehydrateAttributes(withTimestamps);
     const pending = statics.newFromRecord({ ...payload }, false) as AnyModel;
 
     if ((await runObservers(pending, "saving")) === false) {
@@ -1412,7 +1436,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     if (updating) {
       const changes = applyTimestampsOnUpdate(
         table.columns,
-        applyCasts(this.attributes as LoadedAttributes, casts, "dehydrate"),
+        await applyCasts(this.attributes as LoadedAttributes, casts, "dehydrate"),
         timestamps,
       ) as UpdateValues<TEntity, PrimaryKey>;
       const record = await this.repository.updateByIdOrThrow(this.id, changes);
@@ -1428,7 +1452,9 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       this.attributes as LoadedAttributes,
     );
     const withTimestamps = applyTimestampsOnCreate(table.columns, assignable, timestamps);
-    const payload = ModelClass.dehydrateAttributes(withTimestamps) as MutationValues<TEntity>;
+    const payload = (await ModelClass.dehydrateAttributes(
+      withTimestamps,
+    )) as MutationValues<TEntity>;
     const record = await this.repository.create(payload);
     this.attributes = ModelClass.hydrateAttributes(record);
     this._exists = true;

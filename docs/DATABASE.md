@@ -126,6 +126,13 @@ Mass assignment is opt-in. A model must declare `static $fillable = [...]` to al
 
 `$casts` supports `date`, `datetime`, `json`, `bool`/`boolean`, `integer`/`int`, and `hashed`. `hashed` hashes the value with bcrypt on write and leaves an already-hashed value untouched, so re-saving a loaded model does not double-hash.
 
+Model `create`, new/existing instance `save`, and `update` await write casts before issuing SQL. The `hashed` cast uses the same asynchronous Bun bcrypt helper as authentication (cost 12); construction, hydration and `mergeAttributes` do not hash. Null/undefined and recognized bcrypt/Argon2 strings keep their existing behavior. Hash-prefix recognition is compatibility behavior, not validation of an imported hash.
+
+**Low-level helper migration:** await `applyCasts(values, casts, "dehydrate")` (always a promise) and `dehydrateValue(value, "hashed")` (now a promise, including null/undefined and existing hashes). `applyCasts(..., "hydrate")` and individual non-hashed `dehydrateValue` casts stay synchronous. If the cast or direction is dynamic, await the result before using it. Existing model write callers already await their writes and need no changes. Protected `dehydrateAttributes` overrides may return a record or a promise; overrides that call `super` must await its result before modifying it.
+
+Observer order is preserved: static `create` resolves casts before its pre-write observers; instance `save` runs pre-write observers before casting, so cancellation skips hashing. Hash rejection prevents that model's SQL. Use `runInTransaction` to roll back earlier business writes and deferred events when hashing or an observer fails; this change does not add an implicit transaction around arbitrary model operations. Direct repository/SQL/bulk writes bypass model casts and must supply prepared values.
+
+
 ### Eager loading (`with` / `load`)
 
 `Product.with("category")` and `cartItem.load("product")` take **relation method names**, not model class names. `category()` is `with("category")`. `with("Category")` throws unless you defined `Category()`. Laravel-style arrays work: `with(["category"])` and `load(["product"])`.
