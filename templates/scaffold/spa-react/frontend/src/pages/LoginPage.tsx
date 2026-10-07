@@ -6,8 +6,8 @@ import { useAuth } from "../auth/AuthContext";
 export default function LoginPage() {
   const { login, user } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@example.test");
-  const [password, setPassword] = useState("StrataDemo!ChangeMe");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -33,10 +33,7 @@ export default function LoginPage() {
   return (
     <section className="card">
       <h1>Sign in</h1>
-      <p className="hint">
-        Seeded users are <code>demo@example.com</code> and <code>admin@example.test</code>, password
-        <code>StrataDemo!ChangeMe</code>.
-      </p>
+      <p className="hint">Enter your account email and password.</p>
 
       {error ? <p className="error">{error}</p> : null}
 
@@ -45,6 +42,8 @@ export default function LoginPage() {
           Email
           <input
             type="email"
+            name="email"
+            autoComplete="username"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
@@ -55,6 +54,8 @@ export default function LoginPage() {
           Password
           <input
             type="password"
+            name="password"
+            autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required

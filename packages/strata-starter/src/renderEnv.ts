@@ -773,7 +773,7 @@ function renderReadme(
   if (needsFrontendBuild(layers.frontend)) {
     next.push("bun run frontend:install", "bun run frontend:build");
   }
-  next.push("bun run db:migrate", "bun run db:seed:demo", "bun run dev");
+  next.push("bun run db:migrate", "bun run dev");
 
   const extras = Object.entries(layers.extras)
     .filter(([, on]) => on)
@@ -816,7 +816,7 @@ Open http://localhost:3000. Health check: \`GET /health\`. Redis worker: \`bun r
 ${renderSupportingToolsReadme(layers)}${
   layers.auth !== "headers"
     ? `
-Seeded login (password \`StrataDemo!ChangeMe\`):
+Optional development demo accounts: run \`bun run db:seed:demo\` explicitly after migrations. This command refuses production and staging. It creates these accounts with password \`StrataDemo!ChangeMe\`:
 
 - \`demo@example.com\` (member)
 - \`admin@example.test\` (admin)
