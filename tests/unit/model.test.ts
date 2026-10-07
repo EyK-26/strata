@@ -62,6 +62,10 @@ class WidgetTagRepository extends BaseRepository<WidgetTag, "id"> {
 const widgetRepository = new WidgetRepository();
 
 class WidgetModelBase extends Model<Widget, "id"> {
+  label(): string {
+    return this.get("name").toUpperCase();
+  }
+
   protected override primaryKey(): "id" {
     return "id";
   }
@@ -92,9 +96,11 @@ const widgetBelongsToTag = belongsTo<WidgetTag, Widget, "widget_id", "id">({
 
 describe("Model", () => {
   test("find returns a model instance when a record exists", async () => {
-    const widget = (await WidgetModel.find(1)) as WidgetModelBase | null;
+    const widget = await WidgetModel.find(1);
     expect(widget?.get("name")).toBe("Alpha");
     expect(widget?.id).toBe(1);
+    expect(widget?.label()).toBe("ALPHA");
+    expect(widget).toBeInstanceOf(WidgetModelBase);
   });
 
   test("findOrFail throws NotFoundError when a record is missing", async () => {

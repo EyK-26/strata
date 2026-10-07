@@ -134,6 +134,20 @@ describe("withCount", () => {
     expect(squad?.toObject().members_count).toBe(3);
   });
 
+  test("count aliases preserve driver values during hydration", async () => {
+    const connection = new FakeConnection();
+    const { SquadModel } = createGraph(connection);
+    connection.queue([{ id: 1, label: "alpha", members_count: "3", total: 4n }]);
+
+    const squad = await runWithSqlDialect("pgsql", async () =>
+      SquadModel.query().withCount("members").withCount("members", "total").first(),
+    );
+
+    expect(squad?.toObject().members_count).toBe("3");
+    expect(squad?.get("total")).toBe(4n);
+    expect(squad).toBeInstanceOf(SquadModel);
+  });
+
   test("combines with a where clause without breaking parameter order", async () => {
     const connection = new FakeConnection();
     const { SquadModel } = createGraph(connection);

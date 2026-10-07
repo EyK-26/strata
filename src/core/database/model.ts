@@ -71,6 +71,20 @@ const modelObservers = new WeakMap<object, ModelObserver[]>();
 const modelBooted = new WeakSet<object>();
 
 type AnyModel = Model<Record<string, unknown>, "id">;
+type ModelAttributes<TModel> = TModel extends { toObject(): infer TRecord extends object }
+  ? TRecord
+  : Record<string, unknown>;
+type WithModelCount<TModel, TCount extends string> = {
+  toObject(): Omit<ModelAttributes<TModel>, TCount> & Record<TCount, unknown>;
+  get<K extends keyof (Omit<ModelAttributes<TModel>, TCount> & Record<TCount, unknown>)>(
+    key: K,
+  ): (Omit<ModelAttributes<TModel>, TCount> & Record<TCount, unknown>)[K];
+} & TModel;
+
+type ModelQueryResult<TModel, TCounts extends string> = [TCounts] extends [never]
+  ? TModel
+  : WithModelCount<TModel, TCounts>;
+
 type RelatedRef<TRelated extends object, RelatedKey extends keyof TRelated & string> =
   | RelatedModelClass<TRelated, RelatedKey>
   | string
@@ -486,7 +500,7 @@ function applyTimestampsOnUpdate(
   return result;
 }
 
-class ModelQuery {
+class ModelQuery<TModel extends object = AnyModel, TCounts extends string = never> {
   private readonly eager: Array<{ name: string; path: string; relationQuery: AnyRelationQuery }> =
     [];
 
@@ -592,7 +606,7 @@ class ModelQuery {
   }
 
   async paginate(options: { page: number; perPage: number }): Promise<{
-    data: Array<Model<Record<string, unknown>, "id">>;
+    data: ModelQueryResult<TModel, TCounts>[];
     meta: Awaited<ReturnType<RepositoryQuery<Record<string, unknown>, "id">["paginate"]>>["meta"];
   }> {
     const { data, meta } = await this.query.paginate(options);
@@ -684,15 +698,15 @@ class ModelQuery {
     return this;
   }
 
-  async get(): Promise<Array<Model<Record<string, unknown>, "id">>> {
+  async get(): Promise<ModelQueryResult<TModel, TCounts>[]> {
     return await this.hydrateRows(await this.query.get());
   }
 
   private async hydrateRows(
     rows: readonly Record<string, unknown>[],
-  ): Promise<Array<Model<Record<string, unknown>, "id">>> {
+  ): Promise<ModelQueryResult<TModel, TCounts>[]> {
     const statics = modelStatics(this.modelClass);
-    const models: Array<Model<Record<string, unknown>, "id">> = [];
+    const models: AnyModel[] = [];
 
     for (const row of rows) {
       const model = statics.newFromRecord(row, true) as AnyModel;
@@ -708,10 +722,10 @@ class ModelQuery {
 
     const nested = this.eager.filter((item) => item.path.includes(".")).map((item) => item.path);
     await eagerLoadOnModels(models.filter(isLoadableModel), nested);
-    return models;
+    return models as unknown as ModelQueryResult<TModel, TCounts>[];
   }
 
-  async first(): Promise<Model<Record<string, unknown>, "id"> | null> {
+  async first(): Promise<ModelQueryResult<TModel, TCounts> | null> {
     this.query.limit(1);
     const models = await this.get();
     return models[0] ?? null;
@@ -747,7 +761,7 @@ class ModelQuery {
     return castPluckedValue(this.modelClass, column, value);
   }
 
-  async find(id: unknown): Promise<Model<Record<string, unknown>, "id"> | null> {
+  async find(id: unknown): Promise<ModelQueryResult<TModel, TCounts> | null> {
     const primaryKey = resolveModelRepository(this.modelClass).getTable().primaryKey;
     return this.where({ [primaryKey]: id } as QueryWhere<object>).first();
   }
@@ -755,7 +769,7 @@ class ModelQuery {
   async findOrFail(
     id: unknown,
     errorFactory?: (id: unknown) => Error,
-  ): Promise<Model<Record<string, unknown>, "id">> {
+  ): Promise<ModelQueryResult<TModel, TCounts>> {
     const model = await this.find(id);
 
     if (model) {
@@ -770,12 +784,16 @@ class ModelQuery {
 
   // biome-ignore lint/suspicious/noThenProperty: ModelQuery is thenable so `await User.where(...)` loads models.
   then(
-    onfulfilled?: ((value: Array<Model<Record<string, unknown>, "id">>) => unknown) | null,
+    onfulfilled?: ((value: ModelQueryResult<TModel, TCounts>[]) => unknown) | null,
     onrejected?: ((reason: unknown) => unknown) | null,
   ): Promise<unknown> {
     return this.get().then(onfulfilled ?? undefined, onrejected ?? undefined);
   }
 
+  withCount<TName extends string, TAlias extends string = `${TName}_count`>(
+    name: TName,
+    alias?: TAlias,
+  ): ModelQuery<TModel, TCounts | TAlias>;
   withCount(name: string, alias = `${name}_count`): this {
     const statics = modelStatics(this.modelClass);
     ensureBooted(this.modelClass);
@@ -993,6 +1011,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return resolveModelRepository(this) as unknown as BaseRepository<TEntity, PrimaryKey>;
   }
 
+  static query<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
   static query(this: object): ModelQuery {
     ensureBooted(this);
     const repository = resolveModelRepository(this);
@@ -1005,6 +1024,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return new ModelQuery(this, query);
   }
 
+  static newFromRecord<TModel extends object>(
+    this: { prototype: TModel },
+    record: object,
+    exists?: boolean,
+  ): TModel;
   static newFromRecord(
     this: object,
     record: object,
@@ -1018,6 +1042,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     ) as unknown as Model<Record<string, unknown>, "id">;
   }
 
+  static create<TModel extends object>(
+    this: { prototype: TModel },
+    attributes: Record<string, unknown>,
+    forced?: Record<string, unknown>,
+  ): Promise<TModel>;
   static async create(
     this: object,
     attributes: Record<string, unknown>,
@@ -1051,18 +1080,29 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return created;
   }
 
+  static with<TModel extends object>(
+    this: { prototype: TModel },
+    ...relations: RelationNameInput[]
+  ): ModelQuery<TModel>;
   static with(this: object, ...relations: RelationNameInput[]): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).with(...relations);
   }
 
+  static withTrashed<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
   static withTrashed(this: object): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).withTrashed();
   }
 
+  static onlyTrashed<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
   static onlyTrashed(this: object): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).onlyTrashed();
   }
 
+  static chunk<TModel extends object>(
+    this: { prototype: TModel },
+    count: number,
+    callback: (models: TModel[]) => Promise<boolean | void>,
+  ): Promise<void>;
   static async chunk(
     this: object,
     count: number,
@@ -1077,6 +1117,13 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     });
   }
 
+  static cursorPaginate<TModel extends object>(
+    this: { prototype: TModel },
+    options: { perPage: number; cursor?: unknown },
+  ): Promise<{
+    data: TModel[];
+    meta: { per_page: number; next_cursor: unknown; prev_cursor: unknown; has_more: boolean };
+  }>;
   static async cursorPaginate(
     this: object,
     options: { perPage: number; cursor?: unknown },
@@ -1098,6 +1145,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     };
   }
 
+  static whereHas<TModel extends object>(
+    this: { prototype: TModel },
+    name: string,
+    constrain?: (query: AnyRelationQuery) => void,
+  ): ModelQuery<TModel>;
   static whereHas(
     this: object,
     name: string,
@@ -1106,14 +1158,24 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return (Model.query as (this: object) => ModelQuery).call(this).whereHas(name, constrain);
   }
 
+  static has<TModel extends object>(this: { prototype: TModel }, name: string): ModelQuery<TModel>;
   static has(this: object, name: string): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).has(name);
   }
 
+  static doesntHave<TModel extends object>(
+    this: { prototype: TModel },
+    name: string,
+  ): ModelQuery<TModel>;
   static doesntHave(this: object, name: string): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).doesntHave(name);
   }
 
+  static whereDoesntHave<TModel extends object>(
+    this: { prototype: TModel },
+    name: string,
+    constrain?: (query: AnyRelationQuery) => void,
+  ): ModelQuery<TModel>;
   static whereDoesntHave(
     this: object,
     name: string,
@@ -1124,6 +1186,10 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       .whereDoesntHave(name, constrain);
   }
 
+  static find<TModel extends object>(
+    this: { prototype: TModel },
+    id: unknown,
+  ): Promise<TModel | null>;
   static async find(
     this: object,
     id: unknown,
@@ -1135,6 +1201,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       .first();
   }
 
+  static findOrFail<TModel extends object>(
+    this: { prototype: TModel },
+    id: unknown,
+    errorFactory?: (id: unknown) => Error,
+  ): Promise<TModel>;
   static async findOrFail(
     this: object,
     id: unknown,
@@ -1157,6 +1228,10 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  static all<TModel extends object>(
+    this: { prototype: TModel },
+    options?: Omit<QueryOptions<object>, "where">,
+  ): Promise<TModel[]>;
   static async all(
     this: object,
     options: Omit<QueryOptions<object>, "where"> = {},
@@ -1174,6 +1249,10 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return query.get();
   }
 
+  static where<TModel extends object>(
+    this: { prototype: TModel },
+    where: QueryWhere<object>,
+  ): ModelQuery<TModel>;
   static where(this: object, where: QueryWhere<object>): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).where(where);
   }
@@ -1197,6 +1276,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return (Model.query as (this: object) => ModelQuery).call(this).value(column);
   }
 
+  static firstWhere<TModel extends object>(
+    this: { prototype: TModel },
+    where: QueryWhere<object>,
+    options?: Omit<QueryOptions<object>, "where">,
+  ): Promise<TModel | null>;
   static async firstWhere(
     this: object,
     where: QueryWhere<object>,
@@ -1211,6 +1295,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return query.first();
   }
 
+  static firstOrNew<TModel extends object>(
+    this: { prototype: TModel },
+    where: QueryWhere<object>,
+    values?: Record<string, unknown>,
+  ): Promise<TModel>;
   static async firstOrNew(
     this: object,
     where: QueryWhere<object>,
@@ -1230,6 +1319,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return modelStatics(this).newFromRecord({ ...where, ...values }, false);
   }
 
+  static firstOrCreate<TModel extends object>(
+    this: { prototype: TModel },
+    where: QueryWhere<object>,
+    values?: Record<string, unknown>,
+  ): Promise<TModel>;
   static async firstOrCreate(
     this: object,
     where: QueryWhere<object>,
@@ -1271,6 +1365,11 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     }
   }
 
+  static updateOrCreate<TModel extends object>(
+    this: { prototype: TModel },
+    where: QueryWhere<object>,
+    values?: Record<string, unknown>,
+  ): Promise<TModel>;
   static async updateOrCreate(
     this: object,
     where: QueryWhere<object>,
