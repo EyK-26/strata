@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.0.8
+
+- fix(schema): preserve constraints and generate builder migrations
+
 ## 2.0.7
 
 - Fix concurrent Postgres role provisioning across databases
