@@ -66,14 +66,14 @@
     },
     "packages/create-strata": {
       "name": "create-strata",
-      "version": "2.0.8",
+      "version": "2.0.9",
       "bin": {
         "create-strata": "./dist/cli.js",
       },
     },
     "packages/strata-bootstrap": {
       "name": "@getstrata/bootstrap",
-      "version": "2.0.8",
+      "version": "2.0.9",
       "peerDependencies": {
         "@getstrata/core": "^2.0.1",
         "typescript": "^5.9.0 || ^6.0.0 || ^7.0.0",
@@ -81,7 +81,7 @@
     },
     "packages/strata-cli": {
       "name": "@getstrata/cli",
-      "version": "2.0.8",
+      "version": "2.0.9",
       "bin": {
         "strata": "./cli.ts",
       },
@@ -92,7 +92,7 @@
     },
     "packages/strata-core": {
       "name": "@getstrata/core",
-      "version": "2.0.8",
+      "version": "2.0.9",
       "peerDependencies": {
         "@node-saml/node-saml": "^5.1.0",
         "eta": "^4.6.0",
@@ -107,7 +107,7 @@
     },
     "packages/strata-starter": {
       "name": "@getstrata/starter",
-      "version": "2.0.8",
+      "version": "2.0.9",
       "bin": {
         "create-strata": "./dist/cli.js",
       },

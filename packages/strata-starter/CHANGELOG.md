@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.0.9
+
+- fix(starter): remove demo credentials from public login defaults
+
 ## 2.0.8
 
 - fix(schema): preserve constraints and generate builder migrations
