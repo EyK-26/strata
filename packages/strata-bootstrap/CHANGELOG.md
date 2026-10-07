@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.1.0
+
+- refactor(starter): reuse shared config and base repositories - fix(database): await password casts before model writes - fix(database): preserve concrete model types in query results
+
 ## 2.0.9
 
 - fix(starter): remove demo credentials from public login defaults
