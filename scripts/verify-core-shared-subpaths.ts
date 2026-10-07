@@ -129,8 +129,14 @@ for (const scanRoot of CONSUMER_SCAN_ROOTS) {
 }
 
 const errors: string[] = [];
+const manifest = JSON.parse(
+  await readFile(join(ROOT, "packages/strata-core/package.json"), "utf8"),
+) as { exports: Record<string, unknown> };
 
 for (const subpath of CORE_SHARED_SUBPATHS) {
+  if (!manifest.exports[`./${subpath}`]) {
+    errors.push(`Shared subpath @getstrata/core/${subpath} is missing from package exports`);
+  }
   const shimPath = join(ENTRIES_DIR, `${subpath}.js`);
   let shimSource: string;
 
