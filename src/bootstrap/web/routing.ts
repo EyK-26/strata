@@ -66,29 +66,29 @@ export function wrapSecuredRouteModelByKey<
 }
 
 /** Web group (CSRF + flash + HTML errors) plus login throttle. Do not wrap with wrapWeb again. */
-export function wrapWebLogin(
+export function wrapWebLogin<TRequest extends Request = Request>(
   kernel: HttpKernel,
-  handler: RouteHandler,
-  onThrottled: (request: Request) => Response | Promise<Response>,
-): RouteHandler {
+  handler: RouteHandler<TRequest>,
+  onThrottled: (request: TRequest) => Response | Promise<Response>,
+): RouteHandler<TRequest> {
   return kernel.wrapWeb(wrapWebThrottle(kernel, "login", handler, onThrottled));
 }
 
 /** Web group (CSRF + flash + HTML errors) plus register throttle. Do not wrap with wrapWeb again. */
-export function wrapWebRegister(
+export function wrapWebRegister<TRequest extends Request = Request>(
   kernel: HttpKernel,
-  handler: RouteHandler,
-  onThrottled: (request: Request) => Response | Promise<Response>,
-): RouteHandler {
+  handler: RouteHandler<TRequest>,
+  onThrottled: (request: TRequest) => Response | Promise<Response>,
+): RouteHandler<TRequest> {
   return kernel.wrapWeb(wrapWebThrottle(kernel, "register", handler, onThrottled));
 }
 
-function wrapWebThrottle(
+function wrapWebThrottle<TRequest extends Request = Request>(
   kernel: HttpKernel,
   scope: "login" | "register",
-  handler: RouteHandler,
-  onThrottled: (request: Request) => Response | Promise<Response>,
-): RouteHandler {
+  handler: RouteHandler<TRequest>,
+  onThrottled: (request: TRequest) => Response | Promise<Response>,
+): RouteHandler<TRequest> {
   const throttled = scope === "login" ? kernel.wrapLogin(handler) : kernel.wrapRegister(handler);
 
   return async (request) => {

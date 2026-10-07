@@ -119,7 +119,10 @@ class HttpKernel {
     }
   }
 
-  wrap(groups: MiddlewareGroupName | MiddlewareGroupName[], handler: RouteHandler): RouteHandler {
+  wrap<TRequest extends Request = Request>(
+    groups: MiddlewareGroupName | MiddlewareGroupName[],
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     const names = Array.isArray(groups) ? groups : [groups];
     const middleware = names.flatMap((name) => this.group(name));
     const wrapped = middleware.length === 0 ? handler : withMiddleware(...middleware)(handler);
@@ -131,19 +134,26 @@ class HttpKernel {
     return wrapped;
   }
 
-  wrapApi(handler: RouteHandler): RouteHandler {
+  wrapApi<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return this.wrap(["api", "authenticated"], handler);
   }
 
-  wrapWeb(handler: RouteHandler): RouteHandler {
+  wrapWeb<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return withErrorHandling(this.wrap("web", handler));
   }
 
   /** Signed-in HTML users redirect to `home` instead of seeing guest pages. */
-  wrapWebGuest(handler: RouteHandler, home: WebGuestHome = "/"): RouteHandler {
+  wrapWebGuest<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+    home: WebGuestHome = "/",
+  ): RouteHandler<TRequest> {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
-    return this.wrapWeb(async (request) => {
+    return this.wrapWeb<TRequest>(async (request) => {
       const user = await auth.resolve(request);
 
       if (user) {
@@ -159,7 +169,9 @@ class HttpKernel {
     });
   }
 
-  wrapWebPublicRead(handler: RouteHandler): RouteHandler {
+  wrapWebPublicRead<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     if (isPublicReadsEnabled()) {
       return this.wrapWeb(handler);
     }
@@ -167,27 +179,38 @@ class HttpKernel {
     return this.wrapWebAuthenticated(handler);
   }
 
-  wrapWebAuthenticated(handler: RouteHandler): RouteHandler {
+  wrapWebAuthenticated<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return this.wrapWebAuth(handler, { verified: true });
   }
 
   /** Signed-in HTML without the email-verified gate (logout, verification notice). */
-  wrapWebAuthenticatedAllowUnverified(handler: RouteHandler): RouteHandler {
+  wrapWebAuthenticatedAllowUnverified<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return this.wrapWebAuth(handler, { verified: false });
   }
 
-  wrapWebVerified(handler: RouteHandler): RouteHandler {
+  wrapWebVerified<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return this.wrapWebAuth(handler, { verified: true });
   }
 
   /** Requires a fresh signed password-confirmation cookie. */
-  wrapWebPasswordConfirm(handler: RouteHandler): RouteHandler {
+  wrapWebPasswordConfirm<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return this.wrapWebAuth(withMiddleware(createRequirePasswordConfirmMiddleware())(handler), {
       verified: true,
     });
   }
 
-  wrapWebAbility(ability: string, handler: RouteHandler): RouteHandler {
+  wrapWebAbility<TRequest extends Request = Request>(
+    ability: string,
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
     const abilityChecker = resolveAbilityChecker(this.dependencies.container);
     const requireAbility = createRequireAbilityMiddleware(abilityChecker);
@@ -200,7 +223,9 @@ class HttpKernel {
     return this.wrapWeb(withMiddleware(...middleware)(handler));
   }
 
-  wrapWebGlobalAdmin(handler: RouteHandler): RouteHandler {
+  wrapWebGlobalAdmin<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
     const middleware = [
       createRequireWebAuthMiddleware(auth),
@@ -211,18 +236,24 @@ class HttpKernel {
     return this.wrapWeb(withMiddleware(...middleware)(handler));
   }
 
-  wrapAuthenticated(handler: RouteHandler): RouteHandler {
+  wrapAuthenticated<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return this.wrap("authenticated", handler);
   }
 
   /** JSON routes that require a verified email. No-op when `FEATURE_EMAIL_VERIFICATION` is off. */
-  wrapVerified(handler: RouteHandler): RouteHandler {
+  wrapVerified<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     const middleware = [...this.group("authenticated"), ...this.verifiedMiddleware()];
 
     return withMiddleware(...middleware)(handler);
   }
 
-  wrapPublicRead(handler: RouteHandler): RouteHandler {
+  wrapPublicRead<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     if (isPublicReadsEnabled()) {
       return handler;
     }
@@ -230,13 +261,18 @@ class HttpKernel {
     return this.wrapAuthenticated(handler);
   }
 
-  wrapGlobalAdmin(handler: RouteHandler): RouteHandler {
+  wrapGlobalAdmin<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     const middleware = [...this.group("authenticated"), createRequireGlobalAdminMiddleware()];
 
     return withMiddleware(...middleware)(handler);
   }
 
-  wrapAbility(ability: string, handler: RouteHandler): RouteHandler {
+  wrapAbility<TRequest extends Request = Request>(
+    ability: string,
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     const abilityChecker = resolveAbilityChecker(this.dependencies.container);
     const requireAbility = createRequireAbilityMiddleware(abilityChecker);
     const middleware = [...this.group("authenticated"), requireAbility(ability)];
@@ -244,26 +280,39 @@ class HttpKernel {
     return withMiddleware(...middleware)(handler);
   }
 
-  wrapPolicy(resource: string, action: keyof Policy, handler: RouteHandler): RouteHandler {
+  wrapPolicy<TRequest extends Request = Request>(
+    resource: string,
+    action: keyof Policy,
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
     const gate = this.dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
 
     return withMiddleware(createAuthorizeMiddleware(gate, auth, resource, action))(handler);
   }
 
-  wrapLogin(handler: RouteHandler): RouteHandler {
+  wrapLogin<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return this.wrapThrottle("login", resolveLoginRateLimit(), handler);
   }
 
-  wrapSigned(handler: RouteHandler): RouteHandler {
+  wrapSigned<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return withMiddleware(createValidateSignatureMiddleware())(handler);
   }
 
-  wrapRegister(handler: RouteHandler): RouteHandler {
+  wrapRegister<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     return this.wrapThrottle("register", resolveRegisterRateLimit(), handler);
   }
 
-  private wrapWebAuth(handler: RouteHandler, options: { verified: boolean }): RouteHandler {
+  private wrapWebAuth<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+    options: { verified: boolean },
+  ): RouteHandler<TRequest> {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
     const middleware = [
       createRequireWebAuthMiddleware(auth),
@@ -278,11 +327,11 @@ class HttpKernel {
     return [createRequireVerifiedMiddleware(auth)];
   }
 
-  private wrapThrottle(
+  private wrapThrottle<TRequest extends Request = Request>(
     scope: "login" | "register",
     rateLimit: { maxAttempts: number; decaySeconds: number },
-    handler: RouteHandler,
-  ): RouteHandler {
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
     const memoryKeyPrefix = scope === "login" ? "login-throttle:" : "register-throttle:";
     const redisUrl = this.dependencies.container.has(CORE_CONFIG_TOKEN)
       ? (this.dependencies.container

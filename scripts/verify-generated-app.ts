@@ -150,6 +150,11 @@ try {
       await readFile(join(ROOT, "tests/types/serviceTokens.contract.ts"), "utf8"),
     );
 
+    await writeFile(
+      join(appDir, "src/route-handler.contract.ts"),
+      await readFile(join(ROOT, "tests/types/routeHandlers.contract.ts"), "utf8"),
+    );
+
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");
