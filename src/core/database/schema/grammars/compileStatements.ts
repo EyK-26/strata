@@ -1,20 +1,37 @@
-import { quoteIdentifier } from "../../query.ts";
+import { dialectFor } from "../../dialect.ts";
 import type { Blueprint, IndexDefinition } from "../blueprint.ts";
 import type { ColumnDefinition } from "../columnDefinition.ts";
 import type { DatabaseDriver } from "../driver.ts";
 import { UnsupportedSchemaFeatureError } from "../errors.ts";
 import { compileColumnType } from "./grammar.ts";
 
+function compileTableConstraints(driver: DatabaseDriver, blueprint: Blueprint): string[] {
+  const quoteIdentifier = dialectFor(driver).quoteIdentifier;
+  const named = (name?: string) => (name ? `CONSTRAINT ${quoteIdentifier(name)} ` : "");
+  const columns = (names: string[]) => names.map(quoteIdentifier).join(", ");
+  return [
+    ...blueprint.foreignKeys.map((key) => {
+      const deletion = key.onDelete ? ` ON DELETE ${key.onDelete.toUpperCase()}` : "";
+      return `${named(key.name)}FOREIGN KEY (${columns(key.columns)}) REFERENCES ${quoteIdentifier(key.referencesTable)}(${columns(key.referencesColumns)})${deletion}`;
+    }),
+    ...blueprint.checks.map((check) => `${named(check.name)}CHECK (${check.expression})`),
+  ];
+}
+
 function compileCreateTable(driver: DatabaseDriver, blueprint: Blueprint): string[] {
+  const quoteIdentifier = dialectFor(driver).quoteIdentifier;
   const table = quoteIdentifier(blueprint.table);
   const parts = blueprint.columns.map((column) => compileColumn(driver, column, "create"));
 
   for (const index of blueprint.indexes) {
-    if (index.kind === "unique" && index.columns.length > 1) {
+    if (index.kind === "unique") {
       const columns = index.columns.map((column) => quoteIdentifier(column)).join(", ");
-      parts.push(`UNIQUE (${columns})`);
+      const name = index.name ? `CONSTRAINT ${quoteIdentifier(index.name)} ` : "";
+      parts.push(`${name}UNIQUE (${columns})`);
     }
   }
+
+  parts.push(...compileTableConstraints(driver, blueprint));
 
   const statements = [`CREATE TABLE IF NOT EXISTS ${table} (\n  ${parts.join(",\n  ")}\n)`];
 
@@ -39,6 +56,7 @@ function compileCreateTable(driver: DatabaseDriver, blueprint: Blueprint): strin
 }
 
 function compileAlterTable(driver: DatabaseDriver, blueprint: Blueprint): string[] {
+  const quoteIdentifier = dialectFor(driver).quoteIdentifier;
   const statements: string[] = [];
   const table = quoteIdentifier(blueprint.table);
 
@@ -47,13 +65,29 @@ function compileAlterTable(driver: DatabaseDriver, blueprint: Blueprint): string
     statements.push(`ALTER TABLE ${table}\n${addPrefix} ${compileColumn(driver, column, "alter")}`);
   }
 
+  if (blueprint.foreignKeys.length || blueprint.checks.length) {
+    if (driver === "sqlite") {
+      throw new UnsupportedSchemaFeatureError(
+        "adding table constraints; rebuild the SQLite table",
+        driver,
+      );
+    }
+    for (const constraint of compileTableConstraints(driver, blueprint)) {
+      statements.push(`ALTER TABLE ${table} ADD ${constraint}`);
+    }
+  }
+
   for (const columnName of blueprint.droppedColumns) {
     const dropPrefix = driver === "pgsql" ? "DROP COLUMN IF EXISTS" : "DROP COLUMN";
     statements.push(`ALTER TABLE ${table} ${dropPrefix} ${quoteIdentifier(columnName)}`);
   }
 
   for (const indexName of blueprint.droppedIndexes) {
-    statements.push(`DROP INDEX IF EXISTS ${quoteIdentifier(indexName)}`);
+    statements.push(
+      driver === "mysql"
+        ? `DROP INDEX ${quoteIdentifier(indexName)} ON ${table}`
+        : `DROP INDEX IF EXISTS ${quoteIdentifier(indexName)}`,
+    );
   }
 
   for (const index of blueprint.indexes) {
@@ -68,6 +102,7 @@ function compileAlterTable(driver: DatabaseDriver, blueprint: Blueprint): string
 }
 
 function compileDropTable(driver: DatabaseDriver, tableName: string): string[] {
+  const quoteIdentifier = dialectFor(driver).quoteIdentifier;
   const cascade = driver === "pgsql" ? " CASCADE" : "";
   return [`DROP TABLE IF EXISTS ${quoteIdentifier(tableName)}${cascade}`];
 }
@@ -77,6 +112,7 @@ function compileColumn(
   column: ColumnDefinition,
   mode: "create" | "alter",
 ): string {
+  const quoteIdentifier = dialectFor(driver).quoteIdentifier;
   const parts = [quoteIdentifier(column.name), compileColumnType(driver, column)];
 
   if (column.autoIncrement && driver === "mysql") {
@@ -124,7 +160,8 @@ function compileColumn(
   return parts.join(" ");
 }
 
-function compileIndex(_driver: DatabaseDriver, tableName: string, index: IndexDefinition): string {
+function compileIndex(driver: DatabaseDriver, tableName: string, index: IndexDefinition): string {
+  const quoteIdentifier = dialectFor(driver).quoteIdentifier;
   const indexName =
     index.name ??
     defaultIndexName(tableName, index.columns, index.kind === "unique" ? "unique" : "index");
@@ -140,7 +177,8 @@ function compileIndex(_driver: DatabaseDriver, tableName: string, index: IndexDe
     .join(", ");
   const unique = index.kind === "unique" ? "UNIQUE " : "";
 
-  return `CREATE ${unique}INDEX IF NOT EXISTS ${quoteIdentifier(indexName)} ON ${quoteIdentifier(tableName)}(${columns})`;
+  const existence = driver === "mysql" ? "" : "IF NOT EXISTS ";
+  return `CREATE ${unique}INDEX ${existence}${quoteIdentifier(indexName)} ON ${quoteIdentifier(tableName)}(${columns})`;
 }
 
 function compileSpecialIndex(
@@ -148,6 +186,7 @@ function compileSpecialIndex(
   tableName: string,
   index: IndexDefinition,
 ): string[] {
+  const quoteIdentifier = dialectFor(driver).quoteIdentifier;
   const indexName = index.name ?? defaultIndexName(tableName, index.columns, index.kind);
   const columns = index.columns.map((column) => quoteIdentifier(column)).join(", ");
 

@@ -190,6 +190,33 @@ A dialect change does not invent a driver. You still provide the connection. `Bu
 
 `Schema.run(db, "pgsql" | "mysql" | "sqlite", ...)` already picked a grammar per engine. That is how migrations emit `jsonb` vs `JSON` vs `TEXT`. Use the grammar that matches the database you will run.
 
+Use the published `@getstrata/core/database/schema` API for supported DDL. The file migration runner still owns history and execution order; `Schema.run` only compiles and executes the statements. It does not create a transaction on its own.
+
+```ts
+await Schema.run(db, "pgsql", (schema) => {
+  schema.create("payment_attempts", (table) => {
+    table.text("id").primary();
+    table.integer("tenant_id");
+    table.integer("order_id");
+    table.string("note", 500);
+    table.text("provider_key");
+    table.unique("provider_key", "payment_provider_identity");
+    table.foreignKey(["tenant_id", "order_id"], "orders", ["tenant_id", "id"], {
+      name: "payment_order_binding",
+    });
+    table.check("tenant_id > 0 AND order_id > 0", "payment_positive_identity");
+  });
+});
+```
+
+The referenced columns must already have an appropriate unique constraint/index. Foreign keys accept `onDelete: "cascade" | "set null" | "restrict"`; column arrays must be nonempty and have equal lengths. Table checks and foreign keys can be added through `schema.table` on Postgres/MySQL. SQLite requires a table rebuild for these alterations and throws before execution. SQL check expressions are trusted migration source, never request input. MySQL CHECK enforcement requires MySQL 8.0.16 or newer.
+
+Explicit `string(name, length)` bounds now emit `VARCHAR(length)` on Postgres; omitted lengths retain the existing `TEXT` behavior. SQLite still uses TEXT affinity without enforcing the length. This change affects newly executed DDL only: it does not tighten existing columns. Single-column `table.unique(...)` on create now produces the previously missing constraint; explicit names are preserved for both single and composite constraints. Review existing schemas for these missing constraints and add a new migration after checking existing data; upgrading packages does not repair deployed tables.
+
+Schema grammar identifier quoting now follows the explicitly selected engine, independent of the active query dialect. MySQL index creation omits unsupported `IF NOT EXISTS`, and index deletion includes its owning table. MySQL index operations therefore require accurate migration history; replaying a manually applied index operation can fail on an existing/missing index.
+
+Keep data transformations, unsupported DDL, RLS policy helpers, and guarded rollbacks as explicit SQL where needed. `schema.drop` retains its historical Postgres CASCADE behavior, so use explicit restrictive SQL when a rollback must reject dependent objects. Do not rewrite applied history casually: compare fresh-schema catalogs and populated upgrades before converting existing migration implementations, retain file names, and leave applied databases unchanged.
+
 ## Binding the client
 
 Generated HiroApp uses Bun's `Bun.sql` (Postgres). `getSql()` calls `createBunSqlPool()`, `registerDefaultDatabasePool()`, then `bindDatabaseConnection()`. `bindBunSql()` is a shorter helper that does the last two steps. A dialect change does not invent a MySQL driver. You still provide the connection.

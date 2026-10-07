@@ -1,4 +1,10 @@
-export type { BlueprintAction, IndexDefinition, IndexKind } from "./blueprint.ts";
+export type {
+  BlueprintAction,
+  IndexDefinition,
+  IndexKind,
+  TableCheckDefinition,
+  TableForeignKeyDefinition,
+} from "./blueprint.ts";
 export { Blueprint } from "./blueprint.ts";
 export type { ColumnKind, ForeignKeyOptions } from "./columnDefinition.ts";
 export {

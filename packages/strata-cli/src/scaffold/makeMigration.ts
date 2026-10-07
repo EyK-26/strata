@@ -31,20 +31,22 @@ async function makeMigrationCommand(name?: string): Promise<void> {
   }
 
   const content = `import type { Migration } from "@getstrata/core/database/migrations/types";
+import { Schema, resolveDatabaseDriver } from "@getstrata/core/database/schema";
 
 const migration: Migration = {
   name: "${fileBaseName}",
   async up(db) {
-    await db.unsafe(\`
-      -- Write SQL for ${fileBaseName}
-      SELECT 1
-    \`);
+    await Schema.run(db, resolveDatabaseDriver(), (schema) => {
+      // Define schema.create(...) or schema.table(...) here.
+      // Keep data transformations and unsupported engine features in db.unsafe(...).
+      void schema;
+    });
   },
   async down(db) {
-    await db.unsafe(\`
-      -- Roll back ${fileBaseName}
-      SELECT 1
-    \`);
+    await Schema.run(db, resolveDatabaseDriver(), (schema) => {
+      // Reverse the schema changes; guard against losing business history.
+      void schema;
+    });
   },
 };
 
