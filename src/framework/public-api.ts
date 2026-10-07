@@ -90,7 +90,12 @@ export {
 } from "../core/cache/createCacheStore.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
 export { CACHE_TAGS } from "../core/cache/tags.ts";
-export { ConfigStore, ServiceContainer } from "../core/contracts/container.ts";
+export {
+  ConfigStore,
+  createServiceToken,
+  ServiceContainer,
+  type ServiceToken,
+} from "../core/contracts/container.ts";
 export type { ServiceProvider } from "../core/contracts/di.ts";
 export { resolveService } from "../core/contracts/di.ts";
 export type { DatabaseConnection } from "../core/database/baseRepository.ts";

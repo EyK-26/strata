@@ -1,8 +1,10 @@
 export {
   ConfigStore,
   type ConfigStoreLike,
+  createServiceToken,
   ServiceContainer,
   type ServiceContainerLike,
+  type ServiceToken,
 } from "@getstrata/core/contracts/container";
 export type {
   AppContext,

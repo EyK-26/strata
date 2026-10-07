@@ -338,3 +338,26 @@ Options and the environment setting both extend defaults; options are copied so 
 Registered Bun route method maps need a route-level OPTIONS entry to reach CORS middleware. `createWebServer` synthesizes that preflight handler for registered paths, including GET shorthand and parameterized routes, when the application has no explicit OPTIONS handler. It invokes only the framework CORS policy: no business handler, authentication, CSRF check or tenant transaction runs during the preflight. Actual requests retain their existing middleware checks. Unknown paths keep normal fallback handling. Synthetic OPTIONS entries belong to native server dispatch and do not enter the API route registry/OpenAPI document or mutate the application route map.
 
 Generated apps consume the environment policy above. Custom native server composition may pass `cors: { additionalAllowedHeaders: ["X-Correlation-Id"] }` to `createWebServer` for its synthesized preflights; use the matching approved-header options in the CORS middleware wrapping actual handlers. Explicit application OPTIONS handlers take precedence and own their response policy. Arbitrary `Bun.serve`/fetch handlers are outside this adapter; compose the core middleware there explicitly. Test preflights through the actual generated method map, not only middleware invoked from a catch-all fetch function.
+
+## Typed service tokens and narrow controller dependencies
+
+Use `createServiceToken<T>()` from `@getstrata/core/contracts/container` for new application bindings. Tokens remain string keys at runtime, preserving existing container lifecycle and interoperating with legacy registrations. Their invariant type supplies inference and rejects a mismatched value/factory or an explicit resolution generic that disagrees with the token.
+
+```typescript
+import { createServiceToken } from "@getstrata/core/contracts/container";
+
+export const catalogServiceToken = createServiceToken<CatalogService>("catalog.service");
+
+// Provider / composition root:
+container.singleton(catalogServiceToken, () => new CatalogService());
+const controller = new CatalogController(container.resolve(catalogServiceToken));
+
+// Controller depends on its capability, not the entire application container:
+class CatalogController {
+  constructor(private readonly catalog: CatalogService) {}
+}
+```
+
+`container.set`, `instance`, `singleton`, `bind`, `get`, `resolve`, `make` and `resolveService(dependencies, token)` preserve the token's service type. Existing `container.resolve<T>("legacy.key")` callers remain supported. Keep token names unique and export one token declaration per service: creating the same name with a different type does not create a distinct runtime identity. This is a compile-time contract, not runtime validation of values registered through legacy strings, `any`, explicit assertions or JavaScript. Widening a token deliberately to `string` also leaves typed resolution. Prefer typed tokens at both registration and resolution boundaries.
+
+Use constructor parameters for the services a controller actually needs; resolve them in module/provider composition. Stateful services can remain classes, while stateless business operations can remain functions. This API does not alter request scoping, model typing, middleware typing, queues or transactions, and upgrading packages does not rewrite existing controllers.
