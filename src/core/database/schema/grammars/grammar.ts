@@ -47,7 +47,7 @@ function compileIdType(driver: DatabaseDriver): string {
 function compileStringType(driver: DatabaseDriver, length?: number): string {
   switch (driver) {
     case "pgsql":
-      return "TEXT";
+      return length ? `VARCHAR(${length})` : "TEXT";
     case "mysql":
       return length ? `VARCHAR(${length})` : "VARCHAR(255)";
     case "sqlite":

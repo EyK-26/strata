@@ -76,10 +76,10 @@ describe("MySqlGrammar", () => {
   test("compiles create table blueprint", () => {
     const sql = compileBlueprint("mysql", buildSampleBlueprint());
 
-    expect(sql[0]).toContain('CREATE TABLE IF NOT EXISTS "posts"');
-    expect(sql[0]).toContain('"id" BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY');
-    expect(sql[0]).toContain('"published" BOOLEAN NOT NULL DEFAULT FALSE');
-    expect(sql[0]).toContain('REFERENCES "users"("id") ON DELETE CASCADE');
+    expect(sql[0]).toContain("CREATE TABLE IF NOT EXISTS `posts`");
+    expect(sql[0]).toContain("`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY");
+    expect(sql[0]).toContain("`published` BOOLEAN NOT NULL DEFAULT FALSE");
+    expect(sql[0]).toContain("REFERENCES `users`(`id`) ON DELETE CASCADE");
   });
 
   test("rejects partial indexes", () => {
@@ -94,7 +94,7 @@ describe("MySqlGrammar", () => {
     blueprint.fullText(["title", "body"], "idx_posts_fulltext");
 
     expect(compileBlueprint("mysql", blueprint)).toEqual([
-      `CREATE FULLTEXT INDEX "idx_posts_fulltext" ON "posts"("title", "body")`,
+      "CREATE FULLTEXT INDEX `idx_posts_fulltext` ON `posts`(`title`, `body`)",
     ]);
   });
 });
@@ -122,4 +122,81 @@ describe("SchemaBuilder integration", () => {
       'DROP TABLE IF EXISTS "sessions" CASCADE',
     ]);
   });
+});
+
+describe("commerce schema contracts", () => {
+  test("preserves explicit PostgreSQL varchar bounds without changing unbounded strings", () => {
+    const table = new Blueprint("notes", "create");
+    table.string("note", 500);
+    table.string("legacy");
+    expect(compileBlueprint("pgsql", table)[0]).toContain('"note" VARCHAR(500) NOT NULL');
+    expect(compileBlueprint("pgsql", table)[0]).toContain('"legacy" TEXT NOT NULL');
+    for (const length of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => table.string("invalid", length)).toThrow("positive safe integer");
+    }
+  });
+
+  test("compiles single-column and named composite uniqueness on create", () => {
+    const table = new Blueprint("identity", "create");
+    table.text("provider_key");
+    table.integer("tenant_id");
+    table.unique("provider_key", "provider_identity");
+    table.unique(["tenant_id", "provider_key"], "tenant_identity");
+    const sql = compileBlueprint("pgsql", table)[0];
+    expect(sql).toContain('CONSTRAINT "provider_identity" UNIQUE ("provider_key")');
+    expect(sql).toContain('CONSTRAINT "tenant_identity" UNIQUE ("tenant_id", "provider_key")');
+  });
+
+  test("compiles named composite foreign keys and table checks for create and alter", () => {
+    for (const driver of ["pgsql", "mysql", "sqlite"] as const) {
+      const table = new Blueprint("payments", "create");
+      table.integer("tenant_id");
+      table.integer("order_id");
+      table.foreignKey(["tenant_id", "order_id"], "orders", ["tenant_id", "id"], {
+        name: "payment_binding",
+        onDelete: "restrict",
+      });
+      table.check("order_id > tenant_id", "payment_check");
+      const create = compileBlueprint(driver, table)[0]?.replaceAll("`", '"');
+      expect(create).toContain(
+        'CONSTRAINT "payment_binding" FOREIGN KEY ("tenant_id", "order_id") REFERENCES "orders"("tenant_id", "id") ON DELETE RESTRICT',
+      );
+      expect(create).toContain('CONSTRAINT "payment_check" CHECK (order_id > tenant_id)');
+      const alter = new Blueprint("payments", "alter");
+      alter.foreignKey(["tenant_id", "order_id"], "orders", ["tenant_id", "id"]);
+      alter.check("order_id > tenant_id", "payment_check");
+      if (driver === "sqlite") {
+        expect(() => compileBlueprint(driver, alter)).toThrow(UnsupportedSchemaFeatureError);
+      } else {
+        expect(compileBlueprint(driver, alter).map((sql) => sql.replaceAll("`", '"'))).toEqual([
+          'ALTER TABLE "payments" ADD FOREIGN KEY ("tenant_id", "order_id") REFERENCES "orders"("tenant_id", "id")',
+          'ALTER TABLE "payments" ADD CONSTRAINT "payment_check" CHECK (order_id > tenant_id)',
+        ]);
+      }
+    }
+  });
+
+  test("rejects invalid constraints and snapshots caller column arrays", () => {
+    const table = new Blueprint("payments", "create");
+    expect(() => table.foreignKey([], "orders", [])).toThrow("nonempty");
+    expect(() => table.foreignKey(["id"], "orders", ["tenant_id", "id"])).toThrow("match");
+    expect(() => table.check(" ")).toThrow("must not be empty");
+    const local = ["order_id"],
+      remote = ["id"];
+    table.foreignKey(local, "orders", remote);
+    local.push("tenant_id");
+    remote[0] = "other";
+    expect(table.foreignKeys[0]?.columns).toEqual(["order_id"]);
+    expect(table.foreignKeys[0]?.referencesColumns).toEqual(["id"]);
+  });
+});
+
+test("MySQL indexes use engine syntax independent of ambient dialect", () => {
+  const table = new Blueprint("payments", "alter");
+  table.index("order_id", { name: "order_lookup" });
+  table.dropIndex("old_lookup");
+  expect(compileBlueprint("mysql", table)).toEqual([
+    "DROP INDEX `old_lookup` ON `payments`",
+    "CREATE INDEX `order_lookup` ON `payments`(`order_id`)",
+  ]);
 });

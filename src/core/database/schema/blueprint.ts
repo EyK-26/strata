@@ -10,6 +10,19 @@ interface IndexDefinition {
   order?: "asc" | "desc";
 }
 
+interface TableForeignKeyDefinition {
+  columns: string[];
+  referencesTable: string;
+  referencesColumns: string[];
+  name?: string;
+  onDelete?: "cascade" | "set null" | "restrict";
+}
+
+interface TableCheckDefinition {
+  expression: string;
+  name?: string;
+}
+
 type BlueprintAction = "create" | "alter" | "drop";
 
 class Blueprint {
@@ -17,6 +30,8 @@ class Blueprint {
   readonly action: BlueprintAction;
   readonly columns: ColumnDefinition[] = [];
   readonly indexes: IndexDefinition[] = [];
+  readonly foreignKeys: TableForeignKeyDefinition[] = [];
+  readonly checks: TableCheckDefinition[] = [];
   readonly droppedColumns: string[] = [];
   readonly droppedIndexes: string[] = [];
 
@@ -34,6 +49,9 @@ class Blueprint {
   }
 
   string(name: string, length?: number): ColumnDefinition {
+    if (length !== undefined && (!Number.isSafeInteger(length) || length <= 0)) {
+      throw new Error("String length must be a positive safe integer.");
+    }
     const column = new ColumnDefinition(name, "string");
     column.length = length;
     column.notNullable();
@@ -126,6 +144,28 @@ class Blueprint {
     });
   }
 
+  foreignKey(
+    columns: string[],
+    referencesTable: string,
+    referencesColumns: string[],
+    options: { name?: string; onDelete?: "cascade" | "set null" | "restrict" } = {},
+  ): void {
+    if (!columns.length || columns.length !== referencesColumns.length) {
+      throw new Error("Foreign key columns must be nonempty and match referenced columns.");
+    }
+    this.foreignKeys.push({
+      columns: [...columns],
+      referencesTable,
+      referencesColumns: [...referencesColumns],
+      ...options,
+    });
+  }
+
+  check(expression: string, name?: string): void {
+    if (!expression.trim()) throw new Error("Check expression must not be empty.");
+    this.checks.push({ expression, name });
+  }
+
   index(columns: string | string[], options: { name?: string; order?: "asc" | "desc" } = {}): void {
     this.indexes.push({
       name: options.name,
@@ -168,5 +208,11 @@ class Blueprint {
   }
 }
 
-export type { BlueprintAction, IndexDefinition, IndexKind };
+export type {
+  BlueprintAction,
+  IndexDefinition,
+  IndexKind,
+  TableCheckDefinition,
+  TableForeignKeyDefinition,
+};
 export { Blueprint };

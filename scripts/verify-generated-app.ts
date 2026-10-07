@@ -144,6 +144,7 @@ try {
     const appDir = join(workspace, testCase.name);
     await useTarballs(appDir, tarballs);
 
+    let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");
       const manifest = await Bun.file(manifestPath).json();
@@ -156,6 +157,19 @@ try {
         continue;
       }
 
+      if (!migrationScaffolded) {
+        const scaffold = await run(
+          ["bun", "x", "--no-install", "strata", "make:migration", "schema_contract_probe"],
+          appDir,
+        );
+        if (scaffold.exitCode !== 0) {
+          failures.push(
+            `${testCase.name}: published CLI migration scaffold failed\n${scaffold.output}`,
+          );
+          continue;
+        }
+        migrationScaffolded = true;
+      }
       const checked = await run(["bun", "run", "check"], appDir);
       if (checked.exitCode === 0) {
         console.log(`ok   ${testCase.name} (TS ${version})`);
