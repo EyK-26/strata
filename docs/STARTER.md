@@ -100,3 +100,11 @@ SQL applications that need recoverable model cache effects should adopt the dura
 
 
 Generated `.env.example` includes commented CORS origin and additional-header examples. Keep them unset for same-origin applications. For an approved cross-origin browser API, configure explicit `CORS_ALLOWED_ORIGINS` and optionally `CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id`. The official HTTP kernel applies them; additional names are validated and extend existing defaults. OpenAPI metadata does not implicitly widen CORS policy. See [BUILDING-APPS](./BUILDING-APPS.md#explicit-application-cors-headers).
+
+## Shared model and bootstrap contracts
+
+Generated bootstrap code instantiates the public `ConfigStore` from `@getstrata/bootstrap/contracts`. There is no app-owned store implementation or cast to its type. It uses the framework's existing presence-based contract: missing keys throw `Config key "..." is not defined.`, while a deliberately registered `undefined` is present. Existing applications adopting this shape should check any reliance on the old copied store's error text or rejection of registered `undefined`.
+
+Generated models keep explicit record types, table definitions, fillable/hidden fields and `registerModelRepository` calls. Models that need only standard repository behavior register `new BaseRepository(table)` directly; a constructor-only repository subclass is unnecessary. Keep a custom subclass when it contains application queries, overrides or a custom connection, and register that instance through the same API. Table metadata and mass-assignment policy remain separate: declaring a table column does not make it writable.
+
+`src/models/register.ts` contains side-effect imports that execute each model's registration before discovery. It need not import or call `registerModelClass` for constructor names already registered by `registerModelRepository`. Import that helper only when using a distinct string alias. Existing custom repositories and explicit registrations remain supported; adopting this generator shape does not require a schema or data migration.

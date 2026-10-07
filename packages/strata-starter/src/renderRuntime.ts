@@ -562,12 +562,6 @@ const notesTable = defineTable<NoteRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class NoteRepository extends BaseRepository<NoteRecord, "id"> {
-  constructor() {
-    super(notesTable);
-  }
-}
-
 class Note extends Model<NoteRecord, "id"> {
   static $fillable = ${fillable} as const;
   // created_at uses the table default. Sending a JS Date from $timestamps
@@ -575,7 +569,7 @@ class Note extends Model<NoteRecord, "id"> {
   static $timestamps = false;
 }
 
-registerModelRepository(Note, new NoteRepository());
+registerModelRepository(Note, new BaseRepository(notesTable));
 
 export type { NoteRecord };
 export { Note };
@@ -640,12 +634,6 @@ const usersTable = defineTable<UserRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class UserRepository extends BaseRepository<UserRecord, "id"> {
-  constructor() {
-    super(usersTable);
-  }
-}
-
 class User extends Model<UserRecord, "id"> {
   static $fillable = ${fillableLiteral} as const;
   static $hidden = ${hiddenLiteral} as const;
@@ -654,7 +642,7 @@ class User extends Model<UserRecord, "id"> {
   static $timestamps = false;
 }
 
-registerModelRepository(User, new UserRepository());
+registerModelRepository(User, new BaseRepository(usersTable));
 
 export type { UserRecord };
 export { User };
@@ -684,12 +672,6 @@ const apiTokensTable = defineTable<ApiTokenRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class ApiTokenRepository extends BaseRepository<ApiTokenRecord, "id"> {
-  constructor() {
-    super(apiTokensTable);
-  }
-}
-
 class ApiToken extends Model<ApiTokenRecord, "id"> {
   static $fillable = ["user_id", "name", "token_hash", "abilities", "expires_at", "last_used_at"] as const;
   // created_at uses the table default. Sending a JS Date from $timestamps
@@ -697,7 +679,7 @@ class ApiToken extends Model<ApiTokenRecord, "id"> {
   static $timestamps = false;
 }
 
-registerModelRepository(ApiToken, new ApiTokenRepository());
+registerModelRepository(ApiToken, new BaseRepository(apiTokensTable));
 
 export type { ApiTokenRecord };
 export { ApiToken };
@@ -725,18 +707,12 @@ const authOneTimeTokensTable = defineTable<AuthOneTimeTokenRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class AuthOneTimeTokenRepository extends BaseRepository<AuthOneTimeTokenRecord, "id"> {
-  constructor() {
-    super(authOneTimeTokensTable);
-  }
-}
-
 class AuthOneTimeToken extends Model<AuthOneTimeTokenRecord, "id"> {
   static $fillable = ["purpose", "user_id", "token_hash", "expires_at", "consumed_at"] as const;
   static $timestamps = false;
 }
 
-registerModelRepository(AuthOneTimeToken, new AuthOneTimeTokenRepository());
+registerModelRepository(AuthOneTimeToken, new BaseRepository(authOneTimeTokensTable));
 
 export type { AuthOneTimeTokenRecord };
 export { AuthOneTimeToken };
@@ -747,7 +723,6 @@ function renderModelsRegister(layers: StarterLayers): string {
   const lines = [
     "// Side-effect imports run registerModelRepository() in each model file.",
     "// registerModelClass() is only for a string alias that is neither constructor.name nor $morphClass.",
-    'import { registerModelClass } from "@getstrata/core/database/model";',
     'import "./Note.ts";',
   ];
   if (authNeedsUsers(layers.auth)) {
@@ -758,9 +733,9 @@ function renderModelsRegister(layers: StarterLayers): string {
     lines.push('import "./ApiToken.ts";');
   }
   lines.push("");
-  lines.push("// Example after you add a Product model with belongsTo('Category'):");
-  lines.push('// registerModelClass("Category", Category);');
-  lines.push("void registerModelClass;");
+  lines.push("// Optional alias when a relation uses belongsTo('CategoryAlias'):");
+  lines.push('// import { registerModelClass } from "@getstrata/core/database/model";');
+  lines.push('// registerModelClass("CategoryAlias", Category);');
   lines.push("");
   return `${lines.join("\n")}\n`;
 }
@@ -1156,10 +1131,9 @@ import "./preload.ts";
 import { runProviderPhase } from "@getstrata/bootstrap/context";
 import {
   type AppContext,
-  type AppDependencies,
   type AppRouteMap,
   assertAppDependenciesComplete,
-  type ConfigStore,
+  ConfigStore,
   type MutableAppDependencies,
   type ProviderContext,
   ServiceContainer,
@@ -1192,34 +1166,9 @@ export interface BootstrappedApp {
   config: ReturnType<typeof loadConfig>;
 }
 
-class AppConfigStore {
-  private readonly values = new Map<string, unknown>();
-
-  set<T>(key: string, value: T): T {
-    this.values.set(key, value);
-    return value;
-  }
-
-  get<T>(key: string): T | undefined {
-    return this.values.get(key) as T | undefined;
-  }
-
-  require<T>(key: string): T {
-    const value = this.get<T>(key);
-    if (value === undefined) {
-      throw new Error(\`Missing required config value "\${key}".\`);
-    }
-    return value;
-  }
-
-  has(key: string): boolean {
-    return this.values.has(key);
-  }
-}
-
 function createAppContext(): AppContext {
   const container = new ServiceContainer();
-  const config = new AppConfigStore() as unknown as ConfigStore;
+  const config = new ConfigStore();
   const dependencies: MutableAppDependencies = { container };
   const context: ProviderContext = { container, config, dependencies };
 
@@ -1232,8 +1181,8 @@ function createAppContext(): AppContext {
 
   assertAppDependenciesComplete(dependencies);
 
-  const appContext = { container, config, dependencies: dependencies as AppDependencies };
-  setActiveApplicationContext(appContext as never);
+  const appContext: AppContext = { container, config, dependencies };
+  setActiveApplicationContext(appContext);
   return appContext;
 }
 

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ConfigStore } from "@getstrata/bootstrap/contracts";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
 import { resetDefaultDatabasePoolForTests } from "@getstrata/core/database/defaultConnection";
@@ -245,6 +246,17 @@ describe("create-strata generate", () => {
     const modelsRegister = await readFile(join(app, "src/models/register.ts"), "utf8");
     expect(modelsRegister).toContain('import "./Note.ts"');
     expect(modelsRegister).toContain("registerModelClass");
+    expect(modelsRegister).not.toContain("\nimport { registerModelClass }");
+    expect(modelsRegister).not.toContain("void registerModelClass;");
+    const noteModel = await readFile(join(app, "src/models/Note.ts"), "utf8");
+    expect(noteModel).toContain("registerModelRepository(Note, new BaseRepository(notesTable))");
+    expect(noteModel).not.toContain("class NoteRepository");
+    const bootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(bootstrap).toContain("const config = new ConfigStore()");
+    expect(bootstrap).not.toContain("AppConfigStore");
+    expect(bootstrap).not.toContain("as unknown as ConfigStore");
+    expect(bootstrap).not.toContain("dependencies as AppDependencies");
+    expect(bootstrap).not.toContain("appContext as never");
     const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
     expect(preload).toContain("../models/register.ts");
     expect(existsSync(join(app, "src/modules/billing/index.ts"))).toBe(false);
@@ -1116,6 +1128,12 @@ export default probeModule;
       const { context } = await bootstrapApp({ migrate: false });
       expect(context.container.resolve(PROBE_REGISTER_TOKEN)).toBe("module-provider-register");
       expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");
+      expect(context.config).toBeInstanceOf(ConfigStore);
+      context.config.set("generator.probe", "shared-store");
+      expect(context.config.require("generator.probe")).toBe("shared-store");
+      expect(() => context.config.require("generator.missing")).toThrow(
+        'Config key "generator.missing" is not defined.',
+      );
       await closeDatabase();
     } finally {
       resetDiscoverModulesForTests();
