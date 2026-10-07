@@ -1,6 +1,13 @@
 import type { CacheLike } from "../../types/services";
 import type { StorageManager } from "../storage/storage";
-import type { ConfigStore, ConfigStoreLike, ServiceContainer, ServiceFactory } from "./container";
+import type {
+  ConfigStore,
+  ConfigStoreLike,
+  LegacyServiceKey,
+  ServiceContainer,
+  ServiceFactory,
+  ServiceToken,
+} from "./container";
 
 // biome-ignore lint/suspicious/noExplicitAny: matches Bun's Routes map expectations
 type AppRouteMap = Record<string, any>;
@@ -66,6 +73,8 @@ function assertAppDependenciesComplete(
   }
 }
 
+function resolveService<T>(dependencies: AppDependencies, token: ServiceToken<T>): T;
+function resolveService<T>(dependencies: AppDependencies, token: LegacyServiceKey): T;
 function resolveService<T>(dependencies: AppDependencies, token: string): T {
   return dependencies.container.resolve<T>(token);
 }

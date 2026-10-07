@@ -143,6 +143,12 @@ try {
 
     const appDir = join(workspace, testCase.name);
     await useTarballs(appDir, tarballs);
+    // Exercise the emitted public DI declarations, including rejected mismatches,
+    // outside the monorepo's source-path aliases on every supported compiler.
+    await writeFile(
+      join(appDir, "src/service-token.contract.ts"),
+      await readFile(join(ROOT, "tests/types/serviceTokens.contract.ts"), "utf8"),
+    );
 
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
