@@ -1,6 +1,7 @@
 /** Compiled against source and packed bootstrap by the generated-app matrix. */
 import type { NativeServerOptions } from "@getstrata/bootstrap";
 import { createWebServer, type WebServerOptions } from "@getstrata/bootstrap/web/server";
+import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import type { Server } from "bun";
 
 export function nativeHttpContract(): void {
@@ -23,6 +24,7 @@ export function nativeHttpContract(): void {
   };
   const options: WebServerOptions<{ userId: number }> = {
     port: 0,
+    lifecycle: new LifecycleCoordinator({ timeoutMs: 30000 }),
     native,
     onRequest(request, server) {
       server.timeout(request, 0);

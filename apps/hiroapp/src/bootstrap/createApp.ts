@@ -18,6 +18,7 @@ import {
   assertRlsLiveDatabaseRole,
 } from "@getstrata/bootstrap/secretsGuard";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
+import type { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
 import { migrate } from "../db/migrate.ts";
@@ -104,10 +105,11 @@ export async function createApp(options: BootstrapOptions = {}) {
   return bootstrapApp({ migrate: false, ...options });
 }
 
-export function createAppServer(routes: AppRouteMap, port = 0) {
+export function createAppServer(routes: AppRouteMap, port = 0, lifecycle?: LifecycleCoordinator) {
   return createWebServer({
     port,
     publicDir: "./public",
+    lifecycle,
     routes,
   });
 }

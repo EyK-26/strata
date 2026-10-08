@@ -14,6 +14,8 @@ async function queueWorkCommand(): Promise<void> {
       registerDefaultJobs();
       discoverJobs();
     },
+    drain: () => context?.drain(),
+    flush: () => context?.flush(),
     close: async () => {
       try {
         await context?.dispose();
