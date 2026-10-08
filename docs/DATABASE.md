@@ -120,6 +120,29 @@ const squads = await Squad.query().withCount("members").get();
 squads[0].toObject().members_count;
 ```
 
+### Typed model inputs and projections
+
+Models with declared record fields infer column names and value types for `create`, `firstOrNew`, `firstOrCreate`, `updateOrCreate`, filters, ordering and primary-key lookups. Concrete subclasses and explicit custom repositories remain supported. Writes accept partial records so generated IDs, nullable fields and database defaults can be omitted. TypeScript interfaces do not describe DDL defaults or required inserts: the database remains responsible for those constraints, and `$fillable`/`$guarded` still control mass assignment. These contracts do not validate untrusted HTTP input at runtime. Declare field types to match casts/driver values, or normalize inputs before calling the model; cast metadata does not automatically infer different write types.
+
+```ts
+await Product.create({ title: "Notebook", price: 12 });
+const rows = await Product.where({ price: { gte: 10 } })
+  .orderBy({ title: "asc" })
+  .select("title", "price")
+  .get(); // Array<Pick<ProductRecord, "title" | "price">>
+const first = await Product.query().select("title").first(); // selected row or null
+```
+
+Call `select` after building the model query. Its `get`/`first` methods return plain selected records with hydration casts, without model methods, appended fields, eager relations or retrieved observers. They are SQL projections, not model serialization: `$hidden` does not remove explicitly selected columns. Only declared table columns are supported; empty or unknown column lists fail at execution. `first` does not change the query's limit for later `get` calls. Model global scopes, transaction connections and database RLS still apply. `BaseRepository.query().project(["title", "price"])` provides the corresponding typed driver-row projection without model casts.
+
+`newFromRecord(fullRecord)` is the checked hydration entry point. For unsaved partial values, use `newFromRecord(partialRecord, false)`. Trusted driver rows or deliberate partial hydration can use `newFromTrustedRecord(record, exists)`; its caller owns completeness and scalar correctness. Partial hydration does not establish that all model fields exist. Existing dirty-write behavior is preserved.
+
+#### Source compatibility
+
+Previously accepted misspelled columns and wrong scalar types now fail compilation for models with declared fields. Dynamic/index-signature models retain loose contracts. Normal TypeScript structural typing applies; `any` and untyped data can bypass static checks. Qualified joins and dynamically constructed predicates can use `query().whereDynamic(...)` or the underlying repository query. Direct SQL, bulk operations, locking and custom repositories remain available. These escape hatches retain existing runtime semantics and do not disable database RLS.
+
+Move partial `all({ select: ... })` and `firstWhere(..., { select: ... })` reads to `query().select(...)`; those model-returning helpers no longer accept partial selects. Migrate deliberate partial `newFromRecord(...)` calls to the trusted entry point (or pass `false` for an unsaved instance). Raw repository `QueryOptions.select` remains a trusted escape hatch and cannot prove full row completeness. No schema migration or automatic row conversion accompanies this source-contract change.
+
 ### Models
 
 Mass assignment is opt-in. A model must declare `static $fillable = [...]` to allow specific columns, or `static $guarded = []` to allow all of them. A model that declares neither throws on `create`/`update` rather than silently discarding every attribute.

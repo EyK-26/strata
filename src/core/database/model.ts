@@ -36,7 +36,14 @@ import {
 } from "./relationships.ts";
 import type { RepositoryQuery } from "./repositoryQuery.ts";
 import type { TableDefinition } from "./table.ts";
-import type { MutationValues, QueryOptions, QueryWhere, UpdateValues } from "./types.ts";
+import type {
+  ModelWhere,
+  ModelWriteValues,
+  MutationValues,
+  QueryOptions,
+  QueryWhere,
+  UpdateValues,
+} from "./types.ts";
 
 type CastType = "date" | "datetime" | "json" | "bool" | "boolean" | "integer" | "int" | "hashed";
 type LoadedAttributes = Record<string, unknown>;
@@ -96,6 +103,7 @@ type AnyModel = Model<Record<string, unknown>, "id">;
 type ModelAttributes<TModel> = TModel extends { toObject(): infer TRecord extends object }
   ? TRecord
   : Record<string, unknown>;
+type ModelIdentifier<TModel> = TModel extends { readonly id: infer TKey } ? TKey : unknown;
 type WithModelCount<TModel, TCount extends string> = {
   toObject(): Omit<ModelAttributes<TModel>, TCount> & Record<TCount, unknown>;
   get<K extends keyof (Omit<ModelAttributes<TModel>, TCount> & Record<TCount, unknown>)>(
@@ -597,6 +605,17 @@ function applyTimestampsOnUpdate(
   return result;
 }
 
+/** Read-only plain records; partial selection never acquires model mutation methods. */
+class ModelProjection<TEntity extends object, K extends keyof TEntity & string> {
+  constructor(private readonly load: (limit?: number) => Promise<Array<Pick<TEntity, K>>>) {}
+  get(): Promise<Array<Pick<TEntity, K>>> {
+    return this.load();
+  }
+  async first(): Promise<Pick<TEntity, K> | null> {
+    return (await this.load(1))[0] ?? null;
+  }
+}
+
 class ModelQuery<TModel extends object = AnyModel, TCounts extends string = never> {
   private readonly eager: Array<{ name: string; path: string; relationQuery: AnyRelationQuery }> =
     [];
@@ -631,8 +650,13 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
 
   where(
     input:
-      | QueryWhere<object>
-      | ((builder: import("./whereBuilder.ts").WhereBuilder<object>) => void),
+      | ModelWhere<ModelAttributes<TModel>>
+      | ((
+          builder: import("./whereBuilder.ts").WhereBuilder<
+            ModelAttributes<TModel>,
+            ModelWhere<ModelAttributes<TModel>>
+          >,
+        ) => void),
   ): this {
     this.query.where(input as never);
     return this;
@@ -640,14 +664,40 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
 
   orWhere(
     input:
-      | QueryWhere<object>
-      | ((builder: import("./whereBuilder.ts").WhereBuilder<object>) => void),
+      | ModelWhere<ModelAttributes<TModel>>
+      | ((
+          builder: import("./whereBuilder.ts").WhereBuilder<
+            ModelAttributes<TModel>,
+            ModelWhere<ModelAttributes<TModel>>
+          >,
+        ) => void),
   ): this {
     this.query.orWhere(input as never);
     return this;
   }
 
-  orderBy(orderBy: QueryOptions<object>["orderBy"]): this {
+  /** Qualified/dynamic filters retain existing SQL semantics through an explicit escape hatch. */
+  whereDynamic(input: QueryWhere<object>): this {
+    this.query.where(input as never);
+    return this;
+  }
+
+  select<K extends keyof ModelAttributes<TModel> & string>(
+    ...columns: readonly K[]
+  ): ModelProjection<ModelAttributes<TModel>, K> {
+    return new ModelProjection(async (limit) => {
+      const rows = await this.query.project(columns, limit);
+      return rows.map(
+        (row) =>
+          applyCasts(row, modelStatics(this.modelClass).$casts, "hydrate") as Pick<
+            ModelAttributes<TModel>,
+            K
+          >,
+      );
+    });
+  }
+
+  orderBy(orderBy: QueryOptions<ModelAttributes<TModel>>["orderBy"]): this {
     this.query.orderBy(orderBy as never);
     return this;
   }
@@ -662,22 +712,28 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     return this;
   }
 
-  whereNull(column: string): this {
+  whereNull(column: keyof ModelAttributes<TModel> & string): this {
     this.query.whereNull(column);
     return this;
   }
 
-  whereNotNull(column: string): this {
+  whereNotNull(column: keyof ModelAttributes<TModel> & string): this {
     this.query.whereNotNull(column as never);
     return this;
   }
 
-  whereIn(column: string, values: readonly unknown[]): this {
+  whereIn<K extends keyof ModelAttributes<TModel> & string>(
+    column: K,
+    values: readonly ModelAttributes<TModel>[K][],
+  ): this {
     this.query.whereIn(column, values);
     return this;
   }
 
-  whereNotIn(column: string, values: readonly unknown[]): this {
+  whereNotIn<K extends keyof ModelAttributes<TModel> & string>(
+    column: K,
+    values: readonly ModelAttributes<TModel>[K][],
+  ): this {
     this.query.whereNotIn(column as never, values);
     return this;
   }
@@ -858,13 +914,13 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     return castPluckedValue(this.modelClass, column, value);
   }
 
-  async find(id: unknown): Promise<ModelQueryResult<TModel, TCounts> | null> {
+  async find(id: ModelIdentifier<TModel>): Promise<ModelQueryResult<TModel, TCounts> | null> {
     const primaryKey = resolveModelRepository(this.modelClass).getTable().primaryKey;
-    return this.where({ [primaryKey]: id } as QueryWhere<object>).first();
+    return this.whereDynamic({ [primaryKey]: id } as QueryWhere<object>).first();
   }
 
   async findOrFail(
-    id: unknown,
+    id: ModelIdentifier<TModel>,
     errorFactory?: (id: unknown) => Error,
   ): Promise<ModelQueryResult<TModel, TCounts>> {
     const model = await this.find(id);
@@ -1153,7 +1209,12 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static newFromRecord<TModel extends object>(
     this: { prototype: TModel },
-    record: object,
+    record: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
+    exists: false,
+  ): TModel;
+  static newFromRecord<TModel extends object>(
+    this: { prototype: TModel },
+    record: NoInfer<ModelAttributes<TModel>>,
     exists?: boolean,
   ): TModel;
   static newFromRecord(
@@ -1169,10 +1230,20 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     ) as unknown as Model<Record<string, unknown>, "id">;
   }
 
+  /** Trusted SQL/driver/partial-record hydration. Callers own shape and completeness. */
+  static newFromTrustedRecord<TModel extends object>(
+    this: { prototype: TModel },
+    record: object,
+    exists?: boolean,
+  ): TModel;
+  static newFromTrustedRecord(this: object, record: object, exists = true): AnyModel {
+    return modelStatics(this).newFromRecord(record, exists);
+  }
+
   static create<TModel extends object>(
     this: { prototype: TModel },
-    attributes: Record<string, unknown>,
-    forced?: Record<string, unknown>,
+    attributes: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
+    forced?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
   ): Promise<TModel>;
   static async create(
     this: object,
@@ -1321,7 +1392,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static find<TModel extends object>(
     this: { prototype: TModel },
-    id: unknown,
+    id: NoInfer<ModelIdentifier<TModel>>,
   ): Promise<TModel | null>;
   static async find(
     this: object,
@@ -1336,7 +1407,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static findOrFail<TModel extends object>(
     this: { prototype: TModel },
-    id: unknown,
+    id: NoInfer<ModelIdentifier<TModel>>,
     errorFactory?: (id: unknown) => Error,
   ): Promise<TModel>;
   static async findOrFail(
@@ -1363,7 +1434,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static all<TModel extends object>(
     this: { prototype: TModel },
-    options?: Omit<QueryOptions<object>, "where">,
+    options?: Omit<QueryOptions<ModelAttributes<TModel>>, "where" | "select">,
   ): Promise<TModel[]>;
   static async all(
     this: object,
@@ -1384,7 +1455,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static where<TModel extends object>(
     this: { prototype: TModel },
-    where: QueryWhere<object>,
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
   ): ModelQuery<TModel>;
   static where(this: object, where: QueryWhere<object>): ModelQuery {
     return (Model.query as (this: object) => ModelQuery).call(this).where(where);
@@ -1411,8 +1482,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static firstWhere<TModel extends object>(
     this: { prototype: TModel },
-    where: QueryWhere<object>,
-    options?: Omit<QueryOptions<object>, "where">,
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+    options?: Omit<QueryOptions<ModelAttributes<TModel>>, "where" | "select">,
   ): Promise<TModel | null>;
   static async firstWhere(
     this: object,
@@ -1430,8 +1501,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static firstOrNew<TModel extends object>(
     this: { prototype: TModel },
-    where: QueryWhere<object>,
-    values?: Record<string, unknown>,
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
   ): Promise<TModel>;
   static async firstOrNew(
     this: object,
@@ -1454,8 +1525,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static firstOrCreate<TModel extends object>(
     this: { prototype: TModel },
-    where: QueryWhere<object>,
-    values?: Record<string, unknown>,
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
   ): Promise<TModel>;
   static async firstOrCreate(
     this: object,
@@ -1500,8 +1571,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
   static updateOrCreate<TModel extends object>(
     this: { prototype: TModel },
-    where: QueryWhere<object>,
-    values?: Record<string, unknown>,
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
   ): Promise<TModel>;
   static async updateOrCreate(
     this: object,
@@ -1971,7 +2042,14 @@ export {
   MorphOneRelationQuery,
   MorphToRelationQuery,
 } from "./relationQuery.ts";
-export type { CastType, GlobalScopeFn, ModelClassType, ModelConstructor };
+export type {
+  CastType,
+  GlobalScopeFn,
+  ModelAttributes,
+  ModelClassType,
+  ModelConstructor,
+  ModelProjection,
+};
 export {
   applyCasts,
   bootModels,

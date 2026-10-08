@@ -11,21 +11,21 @@ type WhereNode<TEntity extends object> =
   | { kind: "and" | "or"; group: WhereNode<TEntity>[] }
   | { kind: "and" | "or"; exists: ExistsClause };
 
-class WhereBuilder<TEntity extends object> {
+class WhereBuilder<TEntity extends object, TWhere extends object = QueryWhere<TEntity>> {
   readonly nodes: WhereNode<TEntity>[] = [];
 
-  where(where: QueryWhere<TEntity>): this {
-    this.nodes.push({ kind: "and", where });
+  where(where: TWhere): this {
+    this.nodes.push({ kind: "and", where: where as QueryWhere<TEntity> });
     return this;
   }
 
-  orWhere(where: QueryWhere<TEntity>): this {
-    this.nodes.push({ kind: "or", where });
+  orWhere(where: TWhere): this {
+    this.nodes.push({ kind: "or", where: where as QueryWhere<TEntity> });
     return this;
   }
 
-  whereGroup(fn: (builder: WhereBuilder<TEntity>) => void): this {
-    const nested = new WhereBuilder<TEntity>();
+  whereGroup(fn: (builder: WhereBuilder<TEntity, TWhere>) => void): this {
+    const nested = new WhereBuilder<TEntity, TWhere>();
     fn(nested);
 
     if (nested.nodes.length > 0) {
@@ -35,8 +35,8 @@ class WhereBuilder<TEntity extends object> {
     return this;
   }
 
-  orWhereGroup(fn: (builder: WhereBuilder<TEntity>) => void): this {
-    const nested = new WhereBuilder<TEntity>();
+  orWhereGroup(fn: (builder: WhereBuilder<TEntity, TWhere>) => void): this {
+    const nested = new WhereBuilder<TEntity, TWhere>();
     fn(nested);
 
     if (nested.nodes.length > 0) {

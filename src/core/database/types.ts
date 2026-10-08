@@ -21,6 +21,30 @@ type QueryFilterValue = DatabaseScalar | readonly DatabaseScalar[] | QueryOperat
 type QueryWhere<TEntity> = Partial<Record<keyof TEntity & string, QueryFilterValue>> &
   Partial<Record<string, QueryFilterValue>>;
 
+/** Ordinary model filters constrain keys and operators to their declared scalar values. */
+type ModelFilterScalar<T> = unknown extends T ? DatabaseScalar : Extract<T, DatabaseScalar>;
+type ModelFilterOperator<T> = {
+  eq?: ModelFilterScalar<T>;
+  ne?: ModelFilterScalar<T>;
+  in?: readonly ModelFilterScalar<T>[];
+  notIn?: readonly ModelFilterScalar<T>[];
+  gt?: Extract<ModelFilterScalar<T>, DatabaseComparable>;
+  gte?: Extract<ModelFilterScalar<T>, DatabaseComparable>;
+  lt?: Extract<ModelFilterScalar<T>, DatabaseComparable>;
+  lte?: Extract<ModelFilterScalar<T>, DatabaseComparable>;
+  isNull?: boolean;
+} & (Extract<T, string> extends never ? unknown : { ilike?: string; tsMatch?: string });
+type ModelWhere<TEntity> = string extends keyof TEntity
+  ? QueryWhere<TEntity>
+  : {
+      [K in keyof TEntity & string]?:
+        | ModelFilterScalar<TEntity[K]>
+        | readonly ModelFilterScalar<TEntity[K]>[]
+        | ModelFilterOperator<TEntity[K]>;
+    };
+/** Omission stays legal: DB defaults, generated columns and fillable/timestamp policy are runtime concerns. */
+type ModelWriteValues<TEntity> = Partial<TEntity>;
+
 type QueryOrder<TEntity> = {
   column: keyof TEntity & string;
   direction?: "ASC" | "DESC" | "asc" | "desc";
@@ -70,6 +94,8 @@ type UpdateValues<
 export type {
   DatabaseComparable,
   DatabaseScalar,
+  ModelWhere,
+  ModelWriteValues,
   MutationValues,
   QueryFilterValue,
   QueryJoin,
