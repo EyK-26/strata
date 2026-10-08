@@ -6,6 +6,7 @@ import {
   createTrackedJob,
   type FailedJobService,
 } from "./publicQueue";
+import { resolveQueueConfig } from "./queueConfig";
 
 const FAILED_JOB_SERVICE_TOKEN = "core.failedJobs";
 
@@ -28,4 +29,5 @@ export {
   createQueueWorker,
   createTrackedJob,
   FAILED_JOB_SERVICE_TOKEN,
+  resolveQueueConfig,
 };

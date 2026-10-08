@@ -205,7 +205,7 @@ describe("queueRetryCommand", () => {
     await expect(queueRetryCommand()).rejects.toThrow("queue:retry requires a failed job id.");
   });
 
-  test("retries a failed job through the queue runner", async () => {
+  test("admits a failed job through the configured queue and closes standalone ownership", async () => {
     class RetryJob extends Job<{ marker: string }> {
       override async handle(): Promise<void> {
         return;
@@ -221,18 +221,32 @@ describe("queueRetryCommand", () => {
     };
 
     let runCalled = false;
+    let closed = 0;
+    let selectedDriver = "";
 
     const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
     jobRegistry.register("test.retry", () => new RetryJob());
 
     mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      resolveQueueConfig: () => ({ driver: "redis" }),
       createFailedJobService: () => ({
-        retry: async () => failedJob,
+        retry: async (_id: number, enqueue: (record: typeof failedJob) => Promise<void>) => {
+          await enqueue(failedJob);
+          return failedJob;
+        },
       }),
-    }));
-    mock.module("@getstrata/core/queue/jobRunner", () => ({
-      runQueueJob: async () => {
-        runCalled = true;
+      createAppQueue: (driver: string) => {
+        selectedDriver = driver;
+        return {
+          dispatch: async (job: Job, payload: object) => {
+            expect(job).toBeInstanceOf(RetryJob);
+            expect(payload).toEqual(failedJob.payload);
+            runCalled = true;
+          },
+          close: async () => {
+            closed++;
+          },
+        };
       },
     }));
 
@@ -246,20 +260,145 @@ describe("queueRetryCommand", () => {
     }
 
     expect(runCalled).toBe(true);
-    expect(output.logs[0]).toBe("Retried failed job #3.");
+    expect(closed).toBe(1);
+    expect(selectedDriver).toBe("redis");
+    expect(output.logs[0]).toBe("Enqueued failed job #3.");
+  });
+
+  test("rejects invalid IDs before booting infrastructure", async () => {
+    const { queueRetryCommand } = await import("@getstrata/cli/queueFailed");
+    let booted = 0;
+    for (const id of ["0", "-1", "1.5", "oops", "Infinity", "9007199254740992"]) {
+      await expect(
+        queueRetryCommand(id, () => {
+          booted++;
+        }),
+      ).rejects.toThrow("positive integer");
+    }
+    expect(booted).toBe(0);
+  });
+
+  test("dispatch rejection retains recovery state and closes the owned queue", async () => {
+    const { FailedJobService } = await import("@getstrata/core/queue/failedJobService");
+    const record = {
+      id: 8,
+      job_name: "test.outage",
+      payload: {},
+      exception: "boom",
+      failed_at: new Date(),
+    };
+    let deleted = 0;
+    let closed = 0;
+    const service = new FailedJobService({
+      findByIdOrThrow: async () => record,
+      deleteById: async () => {
+        deleted++;
+        return true;
+      },
+    } as never);
+    class OutageJob extends Job {
+      async handle() {
+        throw new Error("must not execute locally");
+      }
+    }
+    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+    jobRegistry.register(record.job_name, () => new OutageJob());
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      resolveQueueConfig: () => ({ driver: "redis" }),
+      createFailedJobService: () => service,
+      createAppQueue: () => ({
+        dispatch: async () => {
+          throw new Error("Redis unavailable");
+        },
+        close: async () => {
+          closed++;
+        },
+      }),
+    }));
+    const { queueRetryCommand } = await import("@getstrata/cli/queueFailed");
+    await expect(queueRetryCommand("8")).rejects.toThrow("Redis unavailable");
+    expect(deleted).toBe(0);
+    expect(closed).toBe(1);
+  });
+
+  test("booted applications dispatch through their queue without closing borrowed infrastructure", async () => {
+    let booted = false;
+    let closed = 0;
+    let dispatched = 0;
+    class AppJob extends Job {
+      async handle() {}
+    }
+    const record = {
+      id: 9,
+      job_name: "test.app.retry",
+      payload: {},
+      exception: "boom",
+      failed_at: new Date(),
+    };
+    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+    jobRegistry.register(record.job_name, () => new AppJob());
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      createFailedJobService: () => ({
+        retry: async (_id: number, enqueue: (entry: typeof record) => Promise<void>) => {
+          await enqueue(record);
+        },
+      }),
+      createAppQueue: () => {
+        throw new Error("must use application queue");
+      },
+    }));
+    mock.module("@getstrata/core/runtime/applicationRegistry", () => ({
+      resolveApplicationQueue: () => {
+        expect(booted).toBe(true);
+        return {
+          dispatch: async () => {
+            dispatched++;
+          },
+          close: async () => {
+            closed++;
+          },
+        };
+      },
+    }));
+    const { queueRetryCommand } = await import("@getstrata/cli/queueFailed");
+    const output = captureConsole();
+    try {
+      await queueRetryCommand("9", () => {
+        booted = true;
+      });
+    } finally {
+      output.restore();
+    }
+    expect(dispatched).toBe(1);
+    expect(closed).toBe(0);
   });
 
   test("rejects unknown job names", async () => {
     mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      resolveQueueConfig: () => ({ driver: "redis" }),
       createFailedJobService: () => ({
-        retry: async () => ({
-          id: 1,
-          job_name: "missing.job",
-          payload: {},
-          exception: "boom",
-          failed_at: new Date(),
-        }),
+        retry: async (
+          _id: number,
+          enqueue: (record: {
+            id: number;
+            job_name: string;
+            payload: object;
+            exception: string;
+            failed_at: Date;
+          }) => Promise<void>,
+        ) => {
+          const record = {
+            id: 1,
+            job_name: "missing.job",
+            payload: {},
+            exception: "boom",
+            failed_at: new Date(),
+          };
+          await enqueue(record);
+          return record;
+        },
       }),
+      createAppQueue: () => ({ dispatch: async () => {}, close: async () => {} }),
     }));
 
     const { queueRetryCommand } = await import("../../../src/cli/commands/queueFailed");

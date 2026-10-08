@@ -405,3 +405,22 @@ Generated HTTP, queue worker and scheduler entrypoints coordinate stop, drain, f
 ### Awaited infrastructure discovery
 
 Jobs and listener modules load through awaited ESM imports before provider startup finishes. Malformed exports and duplicate discovered job/module names fail startup with their locations. Use explicit manifests for bundles and preserve DI factories instead of reconstructing their dependencies. See [DISCOVERY.md](DISCOVERY.md) for supported file/export shapes, caching and migration requirements.
+
+## Retrying failed jobs safely
+
+`queue:retry <id>` boots the generated application, resolves its configured queue, recreates the registered job, and dispatches its persisted payload at the job's configured priority. It removes the `failed_job` row only after dispatch resolves. Unknown jobs and rejected dispatches leave that recovery row intact. The standalone command uses `QUEUE_DRIVER` and `REDIS_URL`, closing only the queue it creates; the generated app owns its bootstrapped queue's lifecycle.
+
+Applications calling `FailedJobService.retry` directly must now provide an awaited admission callback:
+
+```ts
+await failedJobs.retry(id, async (record) => {
+  const job = jobRegistry.create(record.job_name);
+  if (!job) throw new Error(`Unknown job "${record.job_name}".`);
+  jobRegistry.track(record.job_name, job);
+  await queue.dispatch(job, record.payload);
+});
+```
+
+The former one-argument call is rejected before reading or deleting any recovery row. Upgrade `@getstrata/core` and `@getstrata/cli` together when adopting this contract. The CLI reports enqueue success, not eventual handler success. `sync` runs inline and `async` remains process-local; use Redis for shared worker admission. This change does not introduce Streams or persist delayed retries.
+
+SQL record deletion and Redis admission are separate operations. A crash, lost Redis acknowledgement, concurrent retry, or SQL deletion failure after admission can cause duplicate delivery on another retry. Handlers must be idempotent. The admission callback must resolve only when its queue has accepted the replay; it must not fire and forget. If record deletion fails, inspect both queue and recovery state before retrying. Queue durability still depends on Redis persistence and failover configuration.

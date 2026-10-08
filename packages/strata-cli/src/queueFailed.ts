@@ -1,6 +1,10 @@
-import { createFailedJobService } from "@getstrata/core/queue/createAppQueue";
+import {
+  createAppQueue,
+  createFailedJobService,
+  resolveQueueConfig,
+} from "@getstrata/core/queue/createAppQueue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
-import { runQueueJob } from "@getstrata/core/queue/jobRunner";
+import { resolveApplicationQueue } from "@getstrata/core/runtime/applicationRegistry";
 import type { StrataCommand } from "./types.ts";
 
 type QueueFailedBoot = () => unknown | Promise<unknown>;
@@ -25,26 +29,26 @@ async function queueRetryCommand(id?: string, boot?: QueueFailedBoot): Promise<v
     throw new Error("queue:retry requires a failed job id.");
   }
 
+  const jobId = Number(id);
+  if (!Number.isSafeInteger(jobId) || jobId <= 0)
+    throw new Error("queue:retry requires a positive integer failed job id.");
   await boot?.();
   const failedJobs = createFailedJobService();
-  const failedJob = await failedJobs.retry(Number.parseInt(id, 10));
-
-  const job = jobRegistry.create(failedJob.job_name);
-
-  if (!job) {
-    throw new Error(`Unknown job "${failedJob.job_name}".`);
+  // App boot owns its configured queue; standalone CLI dispatch owns and closes its queue.
+  const queue = boot
+    ? resolveApplicationQueue()
+    : createAppQueue(resolveQueueConfig().driver, process.env.REDIS_URL, failedJobs);
+  try {
+    await failedJobs.retry(jobId, async (failedJob) => {
+      const job = jobRegistry.create(failedJob.job_name);
+      if (!job) throw new Error(`Unknown job "${failedJob.job_name}".`);
+      jobRegistry.track(failedJob.job_name, job);
+      await queue.dispatch(job, failedJob.payload);
+    });
+    console.log(`Enqueued failed job #${jobId}.`);
+  } finally {
+    if (!boot) await queue.close?.();
   }
-
-  await runQueueJob(
-    {
-      name: failedJob.job_name,
-      payload: failedJob.payload,
-      attempts: 0,
-    },
-    failedJobs,
-  );
-
-  console.log(`Retried failed job #${id}.`);
 }
 
 async function queueFlushFailedCommand(boot?: QueueFailedBoot): Promise<void> {

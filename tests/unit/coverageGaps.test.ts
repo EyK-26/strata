@@ -243,7 +243,9 @@ describe("coverage gap helpers", () => {
     } as never);
 
     await expect(service.listRecent()).resolves.toEqual([]);
-    await expect(service.retry(404)).rejects.toThrow("Failed job 404 not found.");
+    await expect(service.retry(404, async () => undefined)).rejects.toThrow(
+      "Failed job 404 not found.",
+    );
   });
 
   test("covers membership scope organization readable early return for admins", () => {

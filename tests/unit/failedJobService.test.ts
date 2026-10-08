@@ -65,7 +65,7 @@ describe("FailedJobService", () => {
     expect(listed[0]?.job_name).toBe("older");
   });
 
-  test("retry removes the failed job before returning it", async () => {
+  test("retry removes the failed job only after admission succeeds", async () => {
     const repository = createRepositoryStub([
       {
         id: 4,
@@ -77,9 +77,56 @@ describe("FailedJobService", () => {
     ]);
     const service = new FailedJobService(repository as never);
 
-    const retried = await service.retry(4);
+    let admitted = false;
+    const retried = await service.retry(4, async (record) => {
+      expect(record.id).toBe(4);
+      expect(await repository.findAll()).toHaveLength(1);
+      admitted = true;
+    });
+    expect(admitted).toBe(true);
     expect(retried.job_name).toBe("test.retry");
     expect(await repository.findAll()).toEqual([]);
+  });
+
+  test("failed admission and unknown handlers retain recovery records", async () => {
+    const repository = createRepositoryStub([
+      { id: 5, job_name: "retained", payload: {}, exception: "boom", failed_at: new Date() },
+    ]);
+    const service = new FailedJobService(repository as never);
+    for (const reason of ["Redis unavailable", "Unknown job"]) {
+      await expect(
+        service.retry(5, async () => {
+          throw new Error(reason);
+        }),
+      ).rejects.toThrow(reason);
+      expect(await repository.findAll()).toHaveLength(1);
+    }
+  });
+
+  test("recovery-record deletion failure happens after admission and leaves replay available", async () => {
+    const repository = createRepositoryStub([
+      { id: 6, job_name: "retained", payload: {}, exception: "boom", failed_at: new Date() },
+    ]);
+    let admitted = 0;
+    const service = new FailedJobService({
+      ...repository,
+      deleteById: async () => {
+        expect(admitted).toBe(1);
+        throw new Error("SQL unavailable");
+      },
+    } as never);
+    await expect(
+      service.retry(6, async () => {
+        admitted++;
+      }),
+    ).rejects.toThrow("SQL unavailable");
+    expect(await repository.findAll()).toHaveLength(1);
+  });
+
+  test("missing admission callbacks refuse legacy destructive retries", async () => {
+    const service = new FailedJobService(createRepositoryStub() as never);
+    // @ts-expect-error Legacy one-argument retry must fail closed for JavaScript callers too.
+    await expect(service.retry(1)).rejects.toThrow("requires an admission callback");
   });
 
   test("flush deletes all failed jobs", async () => {
