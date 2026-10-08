@@ -238,3 +238,100 @@ test("HTTP startup rejects a delayed provider before socket admission and cleans
     await rm(root, { recursive: true });
   }
 });
+
+test("provider flush completes once before any owned resource closes", async () => {
+  const order: string[] = [];
+  const context = await createAppContext([
+    ...base(),
+    {
+      name: "telemetry",
+      register({ onCleanup }) {
+        onCleanup(() => {
+          order.push("close");
+        });
+        onCleanup(async () => {
+          await Bun.sleep(5);
+          order.push("flush");
+        }, "flush");
+      },
+    },
+  ]);
+  await Promise.all([context.flush(), context.flush()]);
+  expect(order).toEqual(["flush"]);
+  await Promise.all([context.dispose(), context.dispose()]);
+  expect(order).toEqual(["flush", "close"]);
+});
+
+test("provider disposal drains before flushing and closing, even when registered out of order", async () => {
+  const order: string[] = [];
+  const context = await createAppContext([
+    ...base(),
+    {
+      name: "runtime",
+      register({ onCleanup }) {
+        onCleanup(() => {
+          order.push("close");
+        });
+        onCleanup(() => {
+          order.push("flush");
+        }, "flush");
+        onCleanup(async () => {
+          await Bun.sleep(5);
+          order.push("drain");
+        }, "drain");
+      },
+    },
+  ]);
+  await context.dispose();
+  expect(order).toEqual(["drain", "flush", "close"]);
+});
+
+test("failed provider drain leaves infrastructure open instead of closing beneath live work", async () => {
+  let closed = false;
+  const context = await createAppContext([
+    ...base(),
+    {
+      name: "runtime",
+      register({ onCleanup }) {
+        onCleanup(() => {
+          closed = true;
+        });
+        onCleanup(() => {
+          throw new Error("drain failed");
+        }, "drain");
+      },
+    },
+  ]);
+  await expect(context.dispose()).rejects.toThrow("Provider drain failed");
+  expect(closed).toBe(false);
+});
+
+test("direct disposal preserves application services until admitted work and telemetry finish", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reads: unknown[] = [];
+  const context = await createAppContext([
+    ...base(),
+    {
+      name: "runtime",
+      register({ config, onCleanup }) {
+        config.set("drain.active", "available");
+        onCleanup(async () => {
+          await gate;
+          reads.push(resolveApplicationConfig().get<string>("drain.active"));
+        }, "drain");
+        onCleanup(() => {
+          reads.push(resolveApplicationConfig().get<string>("drain.active"));
+        }, "flush");
+      },
+    },
+  ]);
+  const disposal = context.dispose();
+  expect(resolveApplicationConfig().get<string>("drain.active")).toBe("available");
+  release();
+  await disposal;
+  expect(reads).toEqual(["available", "available"]);
+  expect(() => resolveApplicationConfig()).toThrow("not been bootstrapped");
+});

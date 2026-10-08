@@ -1,15 +1,21 @@
 import type FailedJobService from "./failedJobService";
-import type { Job, Queue } from "./index";
+import { AsyncQueue, type Job } from "./index";
 import { jobRegistry } from "./jobRegistry";
 import { runQueueJob } from "./jobRunner";
 
-class ResilientQueue implements Queue {
+class ResilientQueue extends AsyncQueue {
   constructor(
     private readonly failedJobs: FailedJobService,
     private readonly asyncDispatch = false,
-  ) {}
+  ) {
+    super();
+  }
 
-  async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
+  override async dispatch<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+  ): Promise<void> {
+    this.assertOpen();
     const name = jobRegistry.resolveName(job);
 
     if (!name) {
@@ -23,11 +29,12 @@ class ResilientQueue implements Queue {
     };
 
     if (this.asyncDispatch) {
-      setTimeout(() => {
-        void runQueueJob(envelope, this.failedJobs).catch((error) => {
+      this.enqueue(
+        () => runQueueJob(envelope, this.failedJobs),
+        (error) => {
           console.error("[ResilientQueue] Job failed:", error);
-        });
-      }, 0);
+        },
+      );
       return;
     }
 

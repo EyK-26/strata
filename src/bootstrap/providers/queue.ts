@@ -29,7 +29,7 @@ const queueProvider: ServiceProvider = {
         discoverJobs();
       },
     );
-    onCleanup(() => queue.close?.());
+    onCleanup(() => queue.close?.(), driver === "async" ? "drain" : "close");
     container.set(CORE_QUEUE_TOKEN, queue);
   },
 };

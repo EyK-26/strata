@@ -1,19 +1,26 @@
-import { resolveMaxBodyBytes } from "@getstrata/core/http/bodySizeLimitMiddleware";
 import {
   installGracefulShutdownSignals,
-  registerShutdownHandler,
+  LifecycleCoordinator,
+  type ShutdownResult,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { closeDatabase, ensureDatabaseConnection, pingDatabase } from "../db/connection";
 import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
 import { appContext, createAppContext, type InitializedAppContext } from "./context";
 import { createRoutes } from "./createRoutes";
-import { startInProcessCronIfEnabled, stopInProcessCron } from "./inProcessCron";
+import {
+  drainInProcessCron,
+  startInProcessCronIfEnabled,
+  stopInProcessCron,
+} from "./inProcessCron";
 import { assertProductionSecrets } from "./secretsGuard";
+import { createWebServer } from "./web/server";
 
 class App {
   private server?: ReturnType<typeof Bun.serve>;
 
   private startup?: Promise<void>;
+  private lifecycle?: LifecycleCoordinator;
+  private uninstallSignals?: () => void;
 
   async serve(): Promise<void> {
     this.startup ??= this.start();
@@ -39,25 +46,22 @@ class App {
 
       const port = this.resolvePort();
 
-      this.server = Bun.serve({
+      const lifecycle = new LifecycleCoordinator();
+      this.lifecycle = lifecycle;
+      this.server = createWebServer({
         port,
         routes: createRoutes(context.dependencies),
-        maxRequestBodySize: resolveMaxBodyBytes(),
+        lifecycle,
       });
 
-      registerShutdownHandler("http-server", async () => {
-        this.server?.stop(true);
-        this.server = undefined;
-      });
-      registerShutdownHandler("providers", () => context?.dispose());
-      registerShutdownHandler("database", async () => {
-        await closeDatabase();
-      });
-      registerShutdownHandler("in-process-cron", async () => {
-        stopInProcessCron();
-      });
+      lifecycle.register("in-process-cron:stop", stopInProcessCron, "stop");
+      lifecycle.register("in-process-cron:drain", drainInProcessCron, "drain");
+      lifecycle.register("providers:drain", () => context?.drain(), "drain");
+      lifecycle.register("providers:flush", () => context?.flush(), "flush");
+      lifecycle.register("providers:close", () => context?.dispose(), "close");
+      lifecycle.register("database", closeDatabase, "close");
       startInProcessCronIfEnabled();
-      installGracefulShutdownSignals();
+      this.uninstallSignals = installGracefulShutdownSignals(undefined, lifecycle);
 
       console.log(`Listening on ${this.server.url}`);
     } catch (error) {
@@ -79,6 +83,14 @@ class App {
     }
   }
 
+  async shutdown(reason = "MANUAL"): Promise<ShutdownResult> {
+    await this.startup;
+    const result = await this.lifecycle?.shutdown(reason);
+    this.uninstallSignals?.();
+    return result ?? { successful: true, timedOut: false, errors: [] };
+  }
+
+  // Transport-only compatibility API. Use shutdown() to drain and close providers.
   stop(force = true): void {
     this.server?.stop(force);
   }

@@ -15,6 +15,7 @@ async function scheduleRunCommand(): Promise<void> {
         await closeDatabase();
       }
     },
+    { drain: () => app?.context.drain(), flush: () => app?.context.flush() },
   )();
 }
 

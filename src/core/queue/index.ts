@@ -30,12 +30,43 @@ class SyncQueue implements Queue {
 }
 
 class AsyncQueue implements Queue {
+  private readonly active = new Set<Promise<void>>();
+  private closing?: Promise<void>;
+  private closed = false;
+
+  protected assertOpen(): void {
+    if (this.closed) throw new Error("Async queue is closed.");
+  }
+
+  protected enqueue(task: () => Promise<void>, onError: (error: unknown) => void): void {
+    this.assertOpen();
+    const running = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        void Promise.resolve().then(task).catch(onError).finally(resolve);
+      }, 0);
+    });
+    this.active.add(running);
+    void running.then(() => {
+      this.active.delete(running);
+    });
+  }
+
   async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
-    setTimeout(() => {
-      void job.handle(payload).catch((error) => {
+    this.enqueue(
+      () => job.handle(payload),
+      (error) => {
         console.error("[AsyncQueue] Job failed:", error);
-      });
-    }, 0);
+      },
+    );
+  }
+
+  close(): Promise<void> {
+    this.closing ??= (async () => {
+      // Producers must be quiescent first. Admitted jobs may enqueue child jobs.
+      while (this.active.size) await Promise.all([...this.active]);
+      this.closed = true;
+    })();
+    return this.closing;
   }
 }
 

@@ -930,7 +930,7 @@ const queueProvider: ServiceProvider = {
       registerDefaultJobs();
       discoverJobs();
     });
-    onCleanup(() => queue.close?.());
+    onCleanup(() => queue.close?.(), driver === "async" ? "drain" : "close");
     container.set(CORE_QUEUE_TOKEN, queue);
   },
 };
@@ -1100,6 +1100,7 @@ import {
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
 ${metricsImport}import { assertProductionSecrets, assertRlsLiveDatabaseRole } from "@getstrata/bootstrap/secretsGuard";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
+import type { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
 import { migrate } from "../db/migrate.ts";
@@ -1172,10 +1173,11 @@ export async function createApp(options: BootstrapOptions = {}) {
   return bootstrapApp({ migrate: false, ...options });
 }
 
-export function createAppServer(routes: AppRouteMap, port = 0) {
+export function createAppServer(routes: AppRouteMap, port = 0, lifecycle?: LifecycleCoordinator) {
   return createWebServer({
     port,
     publicDir: "./public",
+    lifecycle,
     routes,
   });
 }
@@ -1239,6 +1241,8 @@ function renderCliQueueWorkTs(): string {
     boot: async () => {
       app = await bootstrapApp({ migrate: false });
     },
+    drain: () => app?.context.drain(),
+    flush: () => app?.context.flush(),
     close: async () => {
       try {
         await app?.context.dispose();
@@ -1314,7 +1318,7 @@ function renderCliScheduleRunTs(): string {
     await import("../bootstrap/schedule.ts");
   }, async () => {
     try { await app?.context.dispose(); } finally { await closeDatabase(); }
-  })();
+  }, { drain: () => app?.context.drain(), flush: () => app?.context.flush() })();
 }
 
 export { scheduleRunCommand };

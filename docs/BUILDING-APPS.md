@@ -412,3 +412,7 @@ Repository queries, direct SQL, projections and bulk operations remain available
 ### Model composition
 
 For ordinary SQL models, extend `defineModel(table)` from `@getstrata/core/database/model` with a typed `defineTable` definition. Generated startup awaits `discoverModels` from `@getstrata/bootstrap/discoverModels`; the framework supplies default repositories and registers relationship names before boot. Use `bootModels([...])` with static imports when filesystem discovery is unsuitable, and retain `registerModelRepository` only for explicit custom repository bindings. Existing manually registered models are compatible. See [DATABASE.md](./DATABASE.md#declarative-model-binding) for startup ordering, aliases and migration guidance.
+
+### Graceful lifecycle
+
+Generated HTTP, queue worker and scheduler entrypoints coordinate stop, drain, flush and close phases. Providers can register `onCleanup(handler, "drain")` for admitted work, `onCleanup(handler, "flush")` for telemetry, and default cleanup for resource closure. Existing custom entrypoints must adopt the coordinator explicitly. See [LIFECYCLE.md](LIFECYCLE.md) for integration, deadlines and recovery contracts.

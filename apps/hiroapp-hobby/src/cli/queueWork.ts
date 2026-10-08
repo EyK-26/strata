@@ -12,6 +12,8 @@ async function queueWorkCommand(): Promise<void> {
     boot: async () => {
       app = await bootstrapApp({ migrate: false });
     },
+    drain: () => app?.context.drain(),
+    flush: () => app?.context.flush(),
     close: async () => {
       try {
         await app?.context.dispose();

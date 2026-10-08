@@ -32,8 +32,8 @@ interface ProviderContext {
   container: ServiceContainer;
   config: ConfigStore;
   dependencies: MutableAppDependencies;
-  /** Register owned resources immediately; cleanup runs in reverse order. */
-  onCleanup(handler: () => void | Promise<void>): void;
+  /** Register owned resources immediately; flush precedes close, each in reverse order. */
+  onCleanup(handler: () => void | Promise<void>, phase?: "drain" | "flush" | "close"): void;
 }
 
 interface ServiceProvider {

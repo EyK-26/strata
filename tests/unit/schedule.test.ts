@@ -46,3 +46,36 @@ describe("Schedule", () => {
     expect(midHour).toHaveBeenCalledTimes(1);
   });
 });
+
+test("scheduler stop finishes the active task without admitting another due task", async () => {
+  mock.restore();
+  const { Schedule, runDueScheduledTasks } = await import("@getstrata/core/scheduler/schedule");
+  const schedule = new Schedule();
+  const controller = new AbortController();
+  let release!: () => void;
+  let entered!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let completed = false;
+  let second = false;
+  schedule.command("* * * * *", "active", async () => {
+    entered();
+    await gate;
+    completed = true;
+  });
+  schedule.command("* * * * *", "not-admitted", () => {
+    second = true;
+  });
+  const running = runDueScheduledTasks(schedule, new Date(), { signal: controller.signal });
+  await started;
+  controller.abort();
+  expect(completed).toBe(false);
+  release();
+  expect(await running).toBe(1);
+  expect(completed).toBe(true);
+  expect(second).toBe(false);
+});

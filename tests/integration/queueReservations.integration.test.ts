@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { Job } from "@getstrata/core/queue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import {
@@ -34,6 +35,81 @@ async function fixture(run: (client: RedisClient, key: string) => Promise<void>)
 }
 
 describeRedis("queue reservation failure boundaries", () => {
+  test("shutdown drains and acknowledges the active Redis job before cleanup without reserving its successor", async () => {
+    await fixture(async (client, key) => {
+      let entered!: () => void;
+      let release!: () => void;
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let completed = 0;
+      class Pending extends Job {
+        async handle() {
+          entered();
+          await gate;
+          completed++;
+        }
+      }
+      const name = `test.shutdown.${crypto.randomUUID()}`;
+      jobRegistry.register(name, () => new Pending());
+      await client.lpush(
+        key,
+        JSON.stringify({ name, payload: {} }),
+        JSON.stringify({ name, payload: {} }),
+      );
+      const worker = new QueueWorker(redisUrl, {} as never, 0, [key]);
+      const running = worker.run();
+      const lifecycle = new LifecycleCoordinator({ timeoutMs: 2000 });
+      const order: string[] = [];
+      lifecycle.register("worker", () => worker.requestStop(), "stop");
+      lifecycle.register(
+        "worker-drain",
+        async () => {
+          await running;
+          order.push("ack");
+        },
+        "drain",
+      );
+      lifecycle.register(
+        "telemetry",
+        () => {
+          order.push("flush");
+        },
+        "flush",
+      );
+      lifecycle.register(
+        "worker-close",
+        () => {
+          worker.close();
+          order.push("close");
+        },
+        "close",
+      );
+      try {
+        await started;
+        const shutdown = lifecycle.shutdown();
+        await Bun.sleep(20);
+        expect(order).toEqual([]);
+        expect(await client.llen(queueProcessingKey(key))).toBe(1);
+        release();
+        expect((await shutdown).successful).toBe(true);
+        expect(completed).toBe(1);
+        expect(order).toEqual(["ack", "flush", "close"]);
+        expect(await client.llen(queueProcessingKey(key))).toBe(0);
+        expect(await client.hlen(queueProcessingLeaseKey(key))).toBe(0);
+        expect(await client.llen(key)).toBe(1);
+      } finally {
+        release();
+        worker.requestStop();
+        await running;
+        worker.close();
+      }
+    });
+  });
+
   test("two equal payloads have independent identities, leases and acknowledgements", async () => {
     await fixture(async (client, key) => {
       const payload = JSON.stringify({ name: "job", payload: { id: 1 } });
@@ -215,7 +291,8 @@ describeRedis("queue reservation failure boundaries", () => {
       const name = `test.killed.${crypto.randomUUID()}`;
       const script = `
         import { QueueWorker } from ${JSON.stringify(`${source}/redisQueue.ts`)};
-        import { Job } from ${JSON.stringify(`${source}/index.ts`)};
+        import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
+import { Job } from ${JSON.stringify(`${source}/index.ts`)};
         import { jobRegistry } from ${JSON.stringify(`${source}/jobRegistry.ts`)};
         class Blocked extends Job { async handle() { await new Promise(() => {}); } }
         jobRegistry.register(${JSON.stringify(name)}, () => new Blocked());

@@ -83,6 +83,8 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     `APP_KEY_PREFIX=${projectName}`,
     "APP_ENV=local",
     "PORT=3000",
+    "# Total graceful shutdown budget in milliseconds; keep deployment grace longer.",
+    "SHUTDOWN_TIMEOUT_MS=30000",
     "APP_URL=http://localhost:3000",
     `DATABASE_URL=${defaultDatabaseUrl(layers, projectName)}`,
     ...postgresAppRoleEnvNotes(layers),

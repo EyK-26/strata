@@ -29,14 +29,18 @@ const appSchedule = new Schedule();
 async function runDueScheduledTasks(
   schedule: Schedule = appSchedule,
   now = new Date(),
+  options: { signal?: AbortSignal } = {},
 ): Promise<number> {
   const due = schedule.dueTasks(now);
 
+  let completed = 0;
   for (const task of due) {
+    if (options.signal?.aborted) break;
     await task.run();
+    completed++;
   }
 
-  return due.length;
+  return completed;
 }
 
 export type { ScheduledTask };
