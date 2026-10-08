@@ -20,7 +20,7 @@ import {
 import { defaultLayers, exampleAppLayers } from "../../../packages/strata-starter/src/presets.ts";
 import { type Prompter, promptLayers } from "../../../packages/strata-starter/src/prompt.ts";
 import { jsonCsrfHeaders } from "../../helpers/jsonCsrf";
-import { repoRoot } from "./helpers";
+import { appTest, installGeneratedAppDependencies, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 const ENV_KEYS = [
@@ -1058,7 +1058,7 @@ describe("create-strata CLI", () => {
     expect(extraValues).toEqual(["emailVerification", "scim", "metrics", "billing", "webhooks"]);
   });
 
-  test("generated bootstrap awaits module registration before starter boot", async () => {
+  appTest("generated bootstrap awaits module registration before starter boot", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["probe-providers", "--yes"]);
     const repo = repoRoot;
@@ -1118,13 +1118,7 @@ export default probeModule;
       ),
     );
 
-    const install = Bun.spawnSync({
-      cmd: ["bun", "install"],
-      cwd: app,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(install.exitCode).toBe(0);
+    installGeneratedAppDependencies(app);
 
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
@@ -1162,7 +1156,7 @@ export default probeModule;
     }
   });
 
-  test("sqlite API app boots and answers GET /health", async () => {
+  appTest("sqlite API app boots and answers GET /health", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["boot-hobby", "--yes"]);
     const repo = repoRoot;
@@ -1174,13 +1168,7 @@ export default probeModule;
     pkg.dependencies["@getstrata/cli"] = `file:${join(repo, "packages/strata-cli")}`;
     await Bun.write(join(app, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
 
-    const install = Bun.spawnSync({
-      cmd: ["bun", "install"],
-      cwd: app,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(install.exitCode).toBe(0);
+    installGeneratedAppDependencies(app);
 
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
@@ -1232,7 +1220,7 @@ export default probeModule;
     }
   });
 
-  test("cookie sqlite HTML app serves welcome, login, register, and signs in", async () => {
+  appTest("cookie sqlite HTML app serves welcome, login, register, and signs in", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "cookie-app",
@@ -1250,13 +1238,7 @@ export default probeModule;
     pkg.dependencies["@getstrata/bootstrap"] = `file:${join(repo, "packages/strata-bootstrap")}`;
     pkg.dependencies["@getstrata/cli"] = `file:${join(repo, "packages/strata-cli")}`;
     await Bun.write(join(app, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
-    const install = Bun.spawnSync({
-      cmd: ["bun", "install"],
-      cwd: app,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(install.exitCode).toBe(0);
+    installGeneratedAppDependencies(app);
 
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
@@ -1366,7 +1348,7 @@ export default probeModule;
     }
   });
 
-  test("token sqlite API app mints expiring tokens and rejects expired ones", async () => {
+  appTest("token sqlite API app mints expiring tokens and rejects expired ones", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "token-app",
@@ -1384,13 +1366,7 @@ export default probeModule;
     pkg.dependencies["@getstrata/bootstrap"] = `file:${join(repo, "packages/strata-bootstrap")}`;
     pkg.dependencies["@getstrata/cli"] = `file:${join(repo, "packages/strata-cli")}`;
     await Bun.write(join(app, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
-    const install = Bun.spawnSync({
-      cmd: ["bun", "install"],
-      cwd: app,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(install.exitCode).toBe(0);
+    installGeneratedAppDependencies(app);
 
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";

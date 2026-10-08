@@ -17,7 +17,7 @@ import {
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { jsonCsrfHeaders } from "../../helpers/jsonCsrf";
-import { repoRoot } from "./helpers";
+import { appTest, installGeneratedAppDependencies, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 const ENV_KEYS = [
@@ -111,13 +111,7 @@ async function installWorkspaceApp(app: string): Promise<void> {
   pkg.dependencies["@getstrata/bootstrap"] = `file:${join(repoRoot, "packages/strata-bootstrap")}`;
   pkg.dependencies["@getstrata/cli"] = `file:${join(repoRoot, "packages/strata-cli")}`;
   await Bun.write(join(app, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
-  const install = Bun.spawnSync({
-    cmd: ["bun", "install"],
-    cwd: app,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(install.exitCode).toBe(0);
+  installGeneratedAppDependencies(app);
 }
 
 describe("starter security flows", () => {
@@ -158,7 +152,7 @@ describe("starter security flows", () => {
     expect(await readFile(join(app, "src/models/Note.ts"), "utf8")).toContain("tenant_id");
   });
 
-  test("cookie+token app rejects CSRF skip on garbage Bearer and requires MFA", async () => {
+  appTest("cookie+token app rejects CSRF skip on garbage Bearer and requires MFA", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "sec-boot",

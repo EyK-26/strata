@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { join } from "node:path";
 
 const repoRoot = join(import.meta.dir, "../../..");
@@ -105,4 +106,35 @@ async function runCli(
   return { stdout, stderr, exitCode };
 }
 
-export { captureConsole, cliTestEnv, formatCliResult, mockProcessExit, repoRoot, runCli };
+// These integration tests install generated apps before booting their runtime.
+// Bound setup separately so a test timeout cannot remove an app during installation.
+function appTest(name: string, run: () => Promise<void>): void {
+  test(name, run, 30_000);
+}
+
+function installGeneratedAppDependencies(app: string): void {
+  const result = Bun.spawnSync({
+    cmd: ["bun", "install", "--prefer-offline"],
+    cwd: app,
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: 20_000,
+    killSignal: "SIGKILL",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Generated-app installation failed (${result.exitCode ?? result.signalCode ?? "timeout"}) in ${app}:\n${new TextDecoder().decode(result.stdout)}\n${new TextDecoder().decode(result.stderr)}`,
+    );
+  }
+}
+
+export {
+  appTest,
+  captureConsole,
+  cliTestEnv,
+  formatCliResult,
+  installGeneratedAppDependencies,
+  mockProcessExit,
+  repoRoot,
+  runCli,
+};
