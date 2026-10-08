@@ -152,12 +152,14 @@ class HttpKernel {
         const maxAttempts = Number(process.env.RATE_LIMIT_PER_MINUTE ?? "120");
 
         return [
-          createThrottleMiddleware({
-            redisUrl,
-            maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
-            decaySeconds: 60,
-            quotaPolicy,
-          }),
+          this.ownThrottle(
+            createThrottleMiddleware({
+              redisUrl,
+              maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
+              decaySeconds: 60,
+              quotaPolicy,
+            }),
+          ),
           csrf,
         ];
       }
@@ -401,12 +403,14 @@ class HttpKernel {
 
     if (redisUrl) {
       return withMiddleware(
-        createThrottleMiddleware({
-          redisUrl,
-          maxAttempts: rateLimit.maxAttempts,
-          decaySeconds: rateLimit.decaySeconds,
-          keyPrefix: memoryKeyPrefix,
-        }),
+        this.ownThrottle(
+          createThrottleMiddleware({
+            redisUrl,
+            maxAttempts: rateLimit.maxAttempts,
+            decaySeconds: rateLimit.decaySeconds,
+            keyPrefix: memoryKeyPrefix,
+          }),
+        ),
       )(handler);
     }
 

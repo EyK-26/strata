@@ -63,3 +63,56 @@ describe("createScimThrottleMiddleware", () => {
     expect((await middleware(second, next)).status).toBe(429);
   });
 });
+
+describe("SCIM distributed failure contracts", () => {
+  test("failed, malformed and stalled stores return a safe 503 without local fallback", async () => {
+    for (const send of [
+      async () => {
+        throw new Error("private Redis credentials");
+      },
+      async () => "invalid",
+      async () => new Promise<never>(() => {}),
+    ]) {
+      const throttle = createScimThrottleMiddleware({
+        redisUrl: "unused",
+        redisClient: { send },
+        commandTimeoutMs: 5,
+        maxAttempts: 120,
+        decaySeconds: 60,
+      });
+      for (let i = 0; i < 2; i++) {
+        const response = await throttle(
+          new Request("http://example.test/scim/v2/Users"),
+          async () => {
+            throw new Error("must not admit");
+          },
+        );
+        expect(response.status).toBe(503);
+        expect(response.headers.get("retry-after")).toBe("1");
+        expect(await response.text()).not.toContain("private");
+      }
+      throttle.dispose();
+    }
+  });
+
+  test("handler failures remain business errors, and zero quotas block the first request", async () => {
+    const options = { redisClient: { send: async () => 1 }, maxAttempts: 1, decaySeconds: 60 };
+    const throttle = createScimThrottleMiddleware(options);
+    await expect(
+      throttle(new Request("http://example.test/scim/v2/Users"), async () => {
+        throw new Error("business");
+      }),
+    ).rejects.toThrow("business");
+    const deny = createScimThrottleMiddleware({ ...options, maxAttempts: 0 });
+    expect(
+      (
+        await deny(
+          new Request("http://example.test/scim/v2/Users"),
+          async () => new Response("bypass"),
+        )
+      ).status,
+    ).toBe(429);
+    throttle.dispose();
+    deny.dispose();
+  });
+});

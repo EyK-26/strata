@@ -54,3 +54,22 @@ export function boundedMemoryContracts(): void {
   // @ts-expect-error Capacity bounds are numeric.
   createMemoryThrottleMiddleware({ maxAttempts: 1, decaySeconds: 60, maxBuckets: "unbounded" });
 }
+
+import { createLoginThrottleMiddleware } from "@getstrata/core/http/loginThrottleMiddleware";
+import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
+import { createRedisThrottleConsumer } from "@getstrata/core/http/throttleMiddleware";
+export function redisOwnershipContracts(): void {
+  const options = {
+    redisUrl: "redis://local",
+    maxAttempts: 1,
+    decaySeconds: 60,
+    commandTimeoutMs: 1000,
+  };
+  createThrottleMiddleware(options).dispose();
+  createLoginThrottleMiddleware(options).dispose();
+  createScimThrottleMiddleware(options).dispose();
+  const consumer = createRedisThrottleConsumer(options);
+  const closed: boolean = consumer.isDisposed();
+  consumer.dispose();
+  void closed;
+}

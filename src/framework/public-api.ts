@@ -473,6 +473,7 @@ export {
   temporarySignedUrl,
 } from "../core/http/signedUrl.ts";
 export type {
+  DisposableThrottle,
   ThrottleOptions,
   ThrottleQuotaContext,
   ThrottleQuotaPolicy,
