@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Persist only changed attributes on existing model saves, skip no-op updates and unchanged write casts, and restore retryable snapshots after transaction/savepoint rollback.
+
 - Apply related target model scopes and composed filters to lazy/eager/existence/count reads; retain batched connection reuse, isolate morph targets by type and ID, and use dialect-aware through/pivot read parameters.
 
 - Compose repeated query predicates and protect global model scopes from caller OR branches; preserve scopes in chunks/cursor pages and intersect cursor bounds with existing filters.

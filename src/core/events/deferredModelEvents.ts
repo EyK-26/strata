@@ -10,6 +10,7 @@ type DeferredModelEvent = {
 
 type DeferredModelEventState = {
   frames: DeferredModelEvent[][];
+  rollbackFrames: Array<Array<() => void>>;
 };
 
 const deferredModelEvents = createAsyncContextStore<DeferredModelEventState>(
@@ -87,9 +88,12 @@ async function runWithDeferredModelEvents<T>(callback: () => T | Promise<T>): Pr
 
   if (existing) {
     existing.frames.push([]);
+    existing.rollbackFrames.push([]);
     try {
       const result = await callback();
       const nested = existing.frames.pop() ?? [];
+      const rollback = existing.rollbackFrames.pop() ?? [];
+      existing.rollbackFrames.at(-1)?.push(...rollback);
       const parent = existing.frames[existing.frames.length - 1];
       if (parent) {
         parent.push(...nested);
@@ -97,14 +101,27 @@ async function runWithDeferredModelEvents<T>(callback: () => T | Promise<T>): Pr
       return result;
     } catch (error) {
       existing.frames.pop();
+      for (const rollback of (existing.rollbackFrames.pop() ?? []).reverse()) rollback();
       throw error;
     }
   }
 
-  const state: DeferredModelEventState = { frames: [[]] };
-  const result = await deferredModelEvents.run(state, callback);
+  const state: DeferredModelEventState = { frames: [[]], rollbackFrames: [[]] };
+  let result: T;
+  try {
+    result = await deferredModelEvents.run(state, callback);
+  } catch (error) {
+    for (const rollback of (state.rollbackFrames[0] ?? []).reverse()) rollback();
+    throw error;
+  }
   await dispatchQueuedModelEvents(state.frames[0] ?? []);
   return result;
 }
 
-export { dispatchModelEvent, runWithDeferredModelEvents };
+// Internal model bookkeeping: run only when the database callback fails, never
+// when delivery fails after a successful commit. Nested savepoints unwind LIFO.
+function onDeferredModelRollback(callback: () => void): void {
+  deferredModelEvents.getStore()?.rollbackFrames.at(-1)?.push(callback);
+}
+
+export { dispatchModelEvent, onDeferredModelRollback, runWithDeferredModelEvents };

@@ -275,4 +275,82 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
       ),
     );
   });
+  test("changed-field writes preserve stale edits, mutable dates and timestamp no-ops under RLS", async () => {
+    type Row = {
+      id: number;
+      tenant_id: number;
+      title: string;
+      qty: number;
+      metadata: { tags: string[] };
+      published_at: Date;
+      created_at: Date;
+      updated_at: Date;
+    };
+    const table = defineTable<Row, "id">({
+      name: "dirty_rls_items",
+      primaryKey: "id",
+      columns: [
+        "id",
+        "tenant_id",
+        "title",
+        "qty",
+        "metadata",
+        "published_at",
+        "created_at",
+        "updated_at",
+      ],
+    });
+    class Item extends defineModel(table) {
+      static override $guarded = [];
+      static override $casts = {
+        metadata: "json",
+        published_at: "datetime",
+        created_at: "datetime",
+        updated_at: "datetime",
+      } as const;
+    }
+    await Promise.all(
+      [1, 2, 3].map((tenantId) =>
+        runWithTenantDatabase({ ...defaultTestTenant, id: tenantId }, async () => {
+          await db.unsafe(
+            "CREATE TEMP TABLE dirty_rls_items(id INTEGER PRIMARY KEY, tenant_id INTEGER, title TEXT, qty INTEGER, metadata JSONB, published_at TIMESTAMPTZ, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ) ON COMMIT DROP",
+          );
+          await db.unsafe("ALTER TABLE dirty_rls_items ENABLE ROW LEVEL SECURITY");
+          await db.unsafe("ALTER TABLE dirty_rls_items FORCE ROW LEVEL SECURITY");
+          await db.unsafe(
+            "CREATE POLICY tenant_rows ON dirty_rls_items USING (tenant_id = current_setting('app.tenant_id')::integer)",
+          );
+          await Item.create({
+            id: 1,
+            tenant_id: tenantId,
+            title: "original",
+            qty: 10,
+            metadata: { tags: ["a"] },
+            published_at: new Date("2026-01-01T00:00:00Z"),
+          });
+          const first = await Item.findOrFail(1);
+          const second = await Item.findOrFail(1);
+          await first.update({ title: "changed" });
+          second.get("published_at").setUTCFullYear(2027);
+          second.get("metadata").tags.push("b");
+          await second.update({ qty: 11 });
+          const persisted = await Item.findOrFail(1);
+          expect(persisted.toObject()).toMatchObject({
+            tenant_id: tenantId,
+            title: "changed",
+            qty: 11,
+            metadata: { tags: ["a", "b"] },
+          });
+          expect(persisted.get("published_at").getUTCFullYear()).toBe(2027);
+          const updated = persisted.get("updated_at").getTime();
+          await db.unsafe("SELECT pg_sleep(0.005)");
+          await persisted.save();
+          expect((await Item.findOrFail(1)).get("updated_at").getTime()).toBe(updated);
+          await persisted.update({ qty: 12 });
+          expect(persisted.get("updated_at").getTime()).toBeGreaterThan(updated);
+          expect((await settings()).tenant).toBe(String(tenantId));
+        }),
+      ),
+    );
+  });
 });

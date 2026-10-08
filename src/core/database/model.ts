@@ -1,5 +1,7 @@
+import { isDeepStrictEqual } from "node:util";
 import { ConflictError, NotFoundError } from "@getstrata/core/errors/http";
 import { hashPassword } from "../auth/password.ts";
+import { onDeferredModelRollback } from "../events/deferredModelEvents.ts";
 import BaseRepository from "./baseRepository.ts";
 import { foreignKeyFromTable, pivotTableName } from "./inflection.ts";
 import { resolveSoftDeleteColumn } from "./query.ts";
@@ -39,6 +41,23 @@ import type { MutationValues, QueryOptions, QueryWhere, UpdateValues } from "./t
 type CastType = "date" | "datetime" | "json" | "bool" | "boolean" | "integer" | "int" | "hashed";
 type LoadedAttributes = Record<string, unknown>;
 type ModelCasts = Partial<Record<string, CastType>>;
+
+function snapshotAttributes(values: LoadedAttributes): LoadedAttributes {
+  return Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [
+      key,
+      Buffer.isBuffer(value) ? Buffer.from(value) : structuredClone(value),
+    ]),
+  );
+}
+
+function changedAttributes(values: LoadedAttributes, original: LoadedAttributes): LoadedAttributes {
+  return Object.fromEntries(
+    Object.entries(values).filter(
+      ([key, value]) => !(key in original) || !isDeepStrictEqual(value, original[key]),
+    ),
+  );
+}
 
 type GlobalScopeFn<TEntity extends object, PrimaryKey extends keyof TEntity & string> = (
   query: RepositoryQuery<TEntity, PrimaryKey>,
@@ -938,6 +957,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   static $morphClass?: string;
 
   private _exists: boolean;
+  private originalAttributes: LoadedAttributes;
   private readonly loadedRelations: Record<string, unknown> = {};
   private hiddenOverrides: string[] = [];
   private visibleOverrides: string[] = [];
@@ -950,6 +970,27 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   ) {
     this._exists = exists;
     this.attributes = modelStatics(this.constructor).hydrateAttributes(attributes);
+    this.originalAttributes = snapshotAttributes(this.attributes as LoadedAttributes);
+  }
+
+  private acceptPersistedAttributes(record: TEntity): void {
+    const original = this.originalAttributes;
+    const beforeWrite = snapshotAttributes(this.attributes as LoadedAttributes);
+    const existed = this._exists;
+    this.attributes = modelStatics(this.constructor).hydrateAttributes(record);
+    this.originalAttributes = snapshotAttributes(this.attributes as LoadedAttributes);
+    const written = this.originalAttributes;
+    this._exists = true;
+    onDeferredModelRollback(() => {
+      // Keep intended edits and subsequent observer/caller edits retryable, but
+      // discard fields brought in by RETURNING from a transaction that rolled back.
+      this.attributes = {
+        ...beforeWrite,
+        ...changedAttributes(this.attributes as LoadedAttributes, written),
+      } as TEntity;
+      this.originalAttributes = original;
+      this._exists = existed;
+    });
   }
 
   getRepository(): BaseRepository<TEntity, PrimaryKey> {
@@ -1502,13 +1543,18 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     }
 
     if (updating) {
+      const dirty = changedAttributes(this.attributes as LoadedAttributes, this.originalAttributes);
+      if (Object.keys(dirty).length === 0) {
+        await runObservers(this as never, "saved");
+        return this;
+      }
       const changes = applyTimestampsOnUpdate(
         table.columns,
-        await applyCasts(this.attributes as LoadedAttributes, casts, "dehydrate"),
+        await applyCasts(dirty, casts, "dehydrate"),
         timestamps,
       ) as UpdateValues<TEntity, PrimaryKey>;
       const record = await this.repository.updateByIdOrThrow(this.id, changes);
-      this.attributes = ModelClass.hydrateAttributes(record);
+      this.acceptPersistedAttributes(record);
       await runObservers(this as never, "updated");
       await runObservers(this as never, "saved");
       return this;
@@ -1524,8 +1570,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       withTimestamps,
     )) as MutationValues<TEntity>;
     const record = await this.repository.create(payload);
-    this.attributes = ModelClass.hydrateAttributes(record);
-    this._exists = true;
+    this.acceptPersistedAttributes(record);
     await runObservers(this as never, "created");
     await runObservers(this as never, "saved");
     return this;
@@ -1563,14 +1608,13 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   async restore(): Promise<this | null> {
-    const ModelClass = modelStatics(this.constructor);
     const record = await this.repository.restoreById(this.id);
 
     if (!record) {
       return null;
     }
 
-    this.attributes = ModelClass.hydrateAttributes(record);
+    this.acceptPersistedAttributes(record);
     return this;
   }
 
