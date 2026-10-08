@@ -18,27 +18,54 @@ async function runQueueWorkerCommand(options: {
     throw new Error("queue:work requires REDIS_URL to be set.");
   }
 
-  await options.boot();
-
-  const failedJobs = options.failedJobs ?? createFailedJobService();
-
-  console.log("[queue:work] Listening for jobs on Redis...");
-  const worker = createQueueWorker(redisUrl, failedJobs);
-
-  registerShutdownHandler("queue-worker", async () => {
-    worker.requestStop();
-  });
-
-  if (options.close) {
-    registerShutdownHandler("database", async () => {
-      await options.close?.();
-    });
+  let worker: ReturnType<typeof createQueueWorker> | undefined;
+  let closePromise: Promise<void> | undefined;
+  const close = (): Promise<void> => {
+    closePromise ??= (async () => {
+      try {
+        worker?.close?.();
+      } finally {
+        await options.close?.();
+      }
+    })();
+    return closePromise;
+  };
+  const unregister: Array<() => void> = [];
+  let failure: unknown;
+  let failed = false;
+  try {
+    await options.boot();
+    const failedJobs = options.failedJobs ?? createFailedJobService();
+    worker = createQueueWorker(redisUrl, failedJobs);
+    const activeWorker = worker;
+    console.log("[queue:work] Listening for jobs on Redis...");
+    const running = activeWorker.run();
+    unregister.push(
+      registerShutdownHandler("queue-worker", async () => {
+        activeWorker.requestStop();
+        await running;
+      }),
+    );
+    unregister.push(registerShutdownHandler("queue-application", close));
+    installGracefulShutdownSignals();
+    await running;
+    console.log("[queue:work] Worker stopped.");
+  } catch (error) {
+    failed = true;
+    failure = error;
   }
-
-  installGracefulShutdownSignals();
-
-  await worker.run();
-  console.log("[queue:work] Worker stopped.");
+  for (const remove of unregister) remove();
+  worker?.requestStop();
+  try {
+    await close();
+  } catch (error) {
+    if (failed)
+      throw new AggregateError([failure, error], "Queue startup/runtime and cleanup failed.", {
+        cause: failure,
+      });
+    throw error;
+  }
+  if (failed) throw failure;
 }
 
 export type { QueueWorkerBoot, QueueWorkerClose };

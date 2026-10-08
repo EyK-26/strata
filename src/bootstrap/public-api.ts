@@ -35,6 +35,7 @@ export {
   DEFAULT_APP_PORT,
   REDIS_URL_CONFIG_KEY,
 } from "./config.ts";
+export type { InitializedAppContext } from "./context.ts";
 export { collectProviders, createAppContext, runProviderPhase } from "./context.ts";
 export type {
   AppContext,

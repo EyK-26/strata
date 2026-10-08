@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Generate one official awaited provider lifecycle, database readiness before HTTP, provider cleanup and queue/schedule resource ownership.
+
 - Generate declarative model bases and awaited framework discovery instead of per-model repository construction and registration.
 
 ## 2.1.0

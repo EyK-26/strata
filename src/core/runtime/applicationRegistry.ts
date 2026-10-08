@@ -35,6 +35,12 @@ function setActiveApplicationContext(context: AppContext): void {
   (globalThis as Record<symbol, AppContext>)[APPLICATION_CONTEXT_KEY] = context;
 }
 
+function clearActiveApplicationContext(context: AppContext): void {
+  if (readStoredApplicationContext() !== context) return;
+  activeContext = undefined;
+  delete (globalThis as Record<symbol, AppContext | undefined>)[APPLICATION_CONTEXT_KEY];
+}
+
 function requireActiveApplicationContext(): AppContext {
   const context = readStoredApplicationContext();
 
@@ -78,6 +84,7 @@ function resolveApplicationDependencies() {
 }
 
 export {
+  clearActiveApplicationContext,
   resolveApplicationAuth,
   resolveApplicationCache,
   resolveApplicationConfig,

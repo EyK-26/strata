@@ -262,6 +262,10 @@ class RedisQueue implements Queue {
     this.client = new RedisClient(redisUrl);
   }
 
+  close(): void {
+    this.client.close();
+  }
+
   async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
     const name = jobRegistry.resolveName(job);
 

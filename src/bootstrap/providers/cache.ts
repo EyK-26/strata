@@ -12,7 +12,7 @@ import type { ServiceProvider } from "../contracts";
 
 const cacheProvider: ServiceProvider = {
   name: "core.cache",
-  register({ container, config, dependencies }) {
+  register({ container, config, dependencies, onCleanup }) {
     container.singleton(CORE_CACHE_TOKEN, () => {
       const store = createCacheStore({
         driver: config.require<CacheDriver>(CACHE_DRIVER_CONFIG_KEY),
@@ -21,7 +21,9 @@ const cacheProvider: ServiceProvider = {
         redisUrl: config.get<string>(REDIS_URL_CONFIG_KEY) || undefined,
       });
 
-      return new CacheRepository(store);
+      const cache = new CacheRepository(store);
+      onCleanup(() => cache.close());
+      return cache;
     });
 
     dependencies.cache = container.resolve(CORE_CACHE_TOKEN);

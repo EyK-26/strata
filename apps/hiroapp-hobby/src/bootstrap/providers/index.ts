@@ -8,26 +8,13 @@ import policyProvider from "./policy.ts";
 import queueProvider from "./queue.ts";
 import storageProvider from "./storage.ts";
 
-const registeredListenerGroups = new Set<string>();
-
-function registerListenerGroup(name: string, register: () => void): void {
-  if (registeredListenerGroups.has(name)) {
-    return;
-  }
-
-  registeredListenerGroups.add(name);
-  register();
-}
-
 const listenersProvider: ServiceProvider = {
   name: "starter.listeners",
-  boot() {
-    registerListenerGroup("cache.invalidate-on-model-write", () => {
-      registerInvalidateCacheOnModelWriteListeners();
-    });
+  async boot({ onCleanup }) {
+    onCleanup(registerInvalidateCacheOnModelWriteListeners());
 
     for (const registerListener of discoverListeners()) {
-      registerListener();
+      await registerListener();
     }
   },
 };

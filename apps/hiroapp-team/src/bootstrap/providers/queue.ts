@@ -10,17 +10,16 @@ import {
 
 const queueProvider: ServiceProvider = {
   name: "starter.queue",
-  register({ container }) {
+  register({ container, onCleanup }) {
     const driver = (process.env.QUEUE_DRIVER ?? "sync") as "sync" | "async" | "redis";
     const failedJobs = createFailedJobService();
     container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
-    container.set(
-      CORE_QUEUE_TOKEN,
-      createAppQueue(driver, process.env.REDIS_URL, failedJobs, () => {
-        registerDefaultJobs();
-        discoverJobs();
-      }),
-    );
+    const queue = createAppQueue(driver, process.env.REDIS_URL, failedJobs, () => {
+      registerDefaultJobs();
+      discoverJobs();
+    });
+    onCleanup(() => queue.close?.());
+    container.set(CORE_QUEUE_TOKEN, queue);
   },
 };
 

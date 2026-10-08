@@ -54,6 +54,56 @@ describe("queueWorkCommand", () => {
     }
   });
 
+  test("awaits boot before creating a worker and closes once after rejected boot", async () => {
+    const previousRedisUrl = process.env.REDIS_URL;
+    process.env.REDIS_URL = "redis://localhost:6379";
+    let created = 0;
+    let closed = 0;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      createFailedJobService: () => ({}),
+      createQueueWorker: () => {
+        created++;
+        return { run: async () => {}, requestStop() {}, close() {} };
+      },
+    }));
+    try {
+      const { runQueueWorkerCommand } = await import("@getstrata/cli/queueWorker");
+      const running = runQueueWorkerCommand({
+        boot: () => pending,
+        close: () => {
+          closed++;
+        },
+      });
+      await Promise.resolve();
+      expect(created).toBe(0);
+      release();
+      await running;
+      expect(created).toBe(1);
+      expect(closed).toBe(1);
+      await expect(
+        runQueueWorkerCommand({
+          boot: async () => {
+            throw new Error("provider failed");
+          },
+          close: () => {
+            closed++;
+          },
+        }),
+      ).rejects.toThrow("provider failed");
+      expect(created).toBe(1);
+      expect(closed).toBe(2);
+      await runGracefulShutdown("TEST");
+      expect(closed).toBe(2);
+    } finally {
+      release();
+      restoreEnvVar("REDIS_URL", previousRedisUrl);
+    }
+  });
+
   test("starts the queue worker and drains on shutdown", async () => {
     const previousRedisUrl = process.env.REDIS_URL;
     process.env.REDIS_URL = "redis://localhost:6379";

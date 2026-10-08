@@ -1,7 +1,7 @@
 import { createAppContext } from "./context";
 
-function createAppDependencies() {
-  return createAppContext().dependencies;
+async function createAppDependencies() {
+  return (await createAppContext()).dependencies;
 }
 
 export type { AppContext, AppDependencies } from "./contracts";

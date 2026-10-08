@@ -4,6 +4,10 @@ import TaggedCache from "./taggedCache";
 class CacheRepository {
   constructor(private readonly store: CacheStore) {}
 
+  async close(): Promise<void> {
+    await this.store.close?.();
+  }
+
   async get<T>(key: string): Promise<T | undefined> {
     return this.store.get<T>(key);
   }

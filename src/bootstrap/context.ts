@@ -1,3 +1,4 @@
+import { clearActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { setActiveApplicationContext } from "./applicationRegistry.ts";
 import {
   type AppContext,
@@ -9,57 +10,92 @@ import {
   ServiceContainer,
   type ServiceProvider,
 } from "./contracts";
-import { discoverModules } from "./modules";
+import { discoverModules, ensureModulesLoaded } from "./modules";
 import { coreProviders } from "./providers";
+
+type InitializedAppContext = AppContext & { dispose(): Promise<void> };
 
 function collectProviders(modules: AppModule[] = discoverModules()): ServiceProvider[] {
   return [...coreProviders, ...modules.flatMap((module) => module.providers ?? [])];
 }
 
-function runProviderPhase(
-  providers: ServiceProvider[],
+async function runProviderPhase(
+  providers: readonly ServiceProvider[],
   phase: "register" | "boot",
   context: ProviderContext,
-): void {
-  for (const provider of providers) {
-    provider[phase]?.(context);
-  }
+): Promise<void> {
+  for (const provider of providers) await provider[phase]?.(context);
 }
 
-function createAppContext(): AppContext {
+let readyContext: InitializedAppContext | undefined;
+
+async function createAppContext(
+  providers?: readonly ServiceProvider[],
+): Promise<InitializedAppContext> {
+  if (!providers) await ensureModulesLoaded();
+  const configured = [...(providers ?? collectProviders())];
   const container = new ServiceContainer();
   const config = new ConfigStore();
-  const dependencies: MutableAppDependencies = {
-    container,
+  const dependencies: MutableAppDependencies = { container };
+  const cleanups: Array<() => void | Promise<void>> = [];
+  let disposal: Promise<void> | undefined;
+  let disposed = false;
+  let initialized: InitializedAppContext | undefined;
+  const dispose = (): Promise<void> => {
+    disposed = true;
+    if (initialized) {
+      clearActiveApplicationContext(initialized);
+      if (readyContext === initialized) readyContext = undefined;
+    }
+    disposal ??= (async () => {
+      const errors: unknown[] = [];
+      for (const handler of cleanups.splice(0).reverse()) {
+        try {
+          await handler();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length) throw new AggregateError(errors, "Provider cleanup failed.");
+    })();
+    return disposal;
   };
   const context: ProviderContext = {
     container,
     config,
     dependencies,
+    onCleanup(handler) {
+      if (disposed) throw new Error("Cannot register cleanup on a disposed application context.");
+      cleanups.push(handler);
+    },
   };
-  const providers = collectProviders();
-
-  runProviderPhase(providers, "register", context);
-  runProviderPhase(providers, "boot", context);
-
-  assertAppDependenciesComplete(dependencies);
-
-  const appContext = {
-    container,
-    config,
-    dependencies,
-  };
-
-  setActiveApplicationContext(appContext);
-
-  return appContext;
+  try {
+    await runProviderPhase(configured, "register", context);
+    await runProviderPhase(configured, "boot", context);
+    assertAppDependenciesComplete(dependencies);
+    const appContext: InitializedAppContext = { container, config, dependencies, dispose };
+    initialized = appContext;
+    setActiveApplicationContext(appContext);
+    readyContext = appContext;
+    return appContext;
+  } catch (error) {
+    try {
+      await dispose();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "Application startup and cleanup failed.", {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
-let cachedAppContext: AppContext | undefined;
-
-function getAppContext(): AppContext {
-  cachedAppContext ??= createAppContext();
-  return cachedAppContext;
+function getAppContext(): InitializedAppContext {
+  if (!readyContext)
+    throw new Error(
+      "Application context is not ready. Await createAppContext() before using appContext.",
+    );
+  return readyContext;
 }
 
 const appContext: AppContext = {
@@ -74,4 +110,5 @@ const appContext: AppContext = {
   },
 };
 
+export type { InitializedAppContext };
 export { appContext, collectProviders, createAppContext, runProviderPhase };

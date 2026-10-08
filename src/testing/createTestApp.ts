@@ -9,7 +9,7 @@ interface CreateTestAppOptions {
 
 interface TestApp {
   server: ReturnType<typeof Bun.serve>;
-  dependencies: ReturnType<typeof createAppDependencies>;
+  dependencies: Awaited<ReturnType<typeof createAppDependencies>>;
   routes: AppRouteMap;
   baseUrl: string;
   stop: () => void;
@@ -20,7 +20,7 @@ async function createTestApp(options: CreateTestAppOptions = {}): Promise<TestAp
     await freshDatabase({ seed: true });
   }
 
-  const dependencies = createAppDependencies();
+  const dependencies = await createAppDependencies();
   const routes = createRoutes(dependencies);
   const server = Bun.serve({
     port: 0,

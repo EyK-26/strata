@@ -32,12 +32,14 @@ interface ProviderContext {
   container: ServiceContainer;
   config: ConfigStore;
   dependencies: MutableAppDependencies;
+  /** Register owned resources immediately; cleanup runs in reverse order. */
+  onCleanup(handler: () => void | Promise<void>): void;
 }
 
 interface ServiceProvider {
   name: string;
-  register?(context: ProviderContext): void;
-  boot?(context: ProviderContext): void;
+  register?(context: ProviderContext): void | Promise<void>;
+  boot?(context: ProviderContext): void | Promise<void>;
 }
 
 interface AppContext {
