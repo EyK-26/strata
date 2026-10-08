@@ -581,8 +581,20 @@ export {
   resolveApplicationQueue,
   setActiveApplicationContext,
 } from "../core/runtime/applicationRegistry.ts";
-export type { ScheduledTask } from "../core/scheduler/schedule.ts";
-export { appSchedule, runDueScheduledTasks, Schedule } from "../core/scheduler/schedule.ts";
+export type {
+  ScheduledTask,
+  ScheduledTaskContext,
+  SchedulerLease,
+  SchedulerLeaseStore,
+  SchedulerRunOptions,
+} from "../core/scheduler/schedule.ts";
+export {
+  appSchedule,
+  RedisSchedulerLeaseStore,
+  runDueScheduledTasks,
+  Schedule,
+  SchedulerLeaseLostError,
+} from "../core/scheduler/schedule.ts";
 export { guestCanViewResource, isPublicReadsEnabled } from "../core/security/publicReads.ts";
 export { assertPathUnderRoot, assertUrlPathUnderRoot } from "../core/security/safePath.ts";
 export {

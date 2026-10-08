@@ -6,6 +6,14 @@ import db from "../../src/db/connection";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { clearPendingAuditLogs } from "./testHelpers";
 
+// These tests exercise callbacks directly, not scheduler admission/ownership.
+const callbackContext = {
+  taskName: "callback-test",
+  occurrenceId: "0",
+  scheduledAt: new Date(0),
+  signal: new AbortController().signal,
+  assertOwnership: async () => {},
+};
 const originalFetch = globalThis.fetch;
 
 function captureConsole(): {
@@ -77,11 +85,11 @@ describe("bootstrap schedule", () => {
       expect(heartbeat).toBeDefined();
       expect(auditExport).toBeDefined();
 
-      await heartbeat?.run();
+      await heartbeat?.run(callbackContext);
       expect(output.logs.some((line) => line.includes("Scheduler heartbeat"))).toBe(true);
 
       process.env.FEATURE_SIEM_EXPORT = "false";
-      await auditExport?.run();
+      await auditExport?.run(callbackContext);
       expect(output.logs.some((line) => line.includes("Exported"))).toBe(false);
 
       process.env.FEATURE_SIEM_EXPORT = "true";
@@ -94,10 +102,10 @@ describe("bootstrap schedule", () => {
         Promise.resolve(new Response("accepted", { status: 200 })),
       ) as unknown as typeof fetch;
 
-      await auditExport?.run();
+      await auditExport?.run(callbackContext);
       expect(output.logs.some((line) => line.includes("Exported 3 audit log entries"))).toBe(true);
 
-      await auditExport?.run();
+      await auditExport?.run(callbackContext);
       expect(
         output.logs.filter((line) => line.includes("Exported 0 audit log entries")),
       ).toHaveLength(0);
@@ -107,7 +115,7 @@ describe("bootstrap schedule", () => {
         Promise.resolve(new Response("fail", { status: 503 })),
       ) as unknown as typeof fetch;
 
-      await auditExport?.run();
+      await auditExport?.run(callbackContext);
       expect(output.errors.some((line) => line.includes("Audit export failed."))).toBe(true);
     } finally {
       output.restore();

@@ -107,6 +107,10 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     `AUTH_DEV_HEADERS=${envFlag(layers.auth === "headers")}`,
   ];
 
+  lines.push(
+    "# Scheduler coordination defaults to Redis in production, one process in development.",
+  );
+  lines.push("# SCHEDULER_COORDINATION=redis");
   lines.push("APP_DEBUG=false");
   lines.push("FEATURE_PUBLIC_READS=false");
   lines.push(

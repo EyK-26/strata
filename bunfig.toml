@@ -111,7 +111,8 @@ coveragePathIgnorePatterns = [
   "src/core/metrics/**",
   "src/core/logging/**",
   "src/core/openapi/**",
-  "src/core/scheduler/**",
+  "src/core/scheduler/osCron.ts",
+  "src/core/scheduler/schedule.ts",
   "src/config/**",
 
   # Queue transport wiring (job handlers and services remain in scope)

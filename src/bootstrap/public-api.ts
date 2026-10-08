@@ -2,8 +2,20 @@
  * @getstrata/bootstrap: application shell for Strata apps.
  */
 
-export type { ScheduledTask } from "@getstrata/core/scheduler/schedule";
-export { appSchedule, runDueScheduledTasks, Schedule } from "@getstrata/core/scheduler/schedule";
+export type {
+  ScheduledTask,
+  ScheduledTaskContext,
+  SchedulerLease,
+  SchedulerLeaseStore,
+  SchedulerRunOptions,
+} from "@getstrata/core/scheduler/schedule";
+export {
+  appSchedule,
+  RedisSchedulerLeaseStore,
+  runDueScheduledTasks,
+  Schedule,
+  SchedulerLeaseLostError,
+} from "@getstrata/core/scheduler/schedule";
 export {
   resolveApplicationAuth,
   resolveApplicationCache,
