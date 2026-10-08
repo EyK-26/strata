@@ -286,7 +286,7 @@ describe("changed-field model writes", () => {
     await connection.unsafe("UPDATE dirty_items SET qty = qty + 1 WHERE id = 1");
     await item.update({ title: "kept" });
     expect((await Item.findOrFail(1)).toObject()).toMatchObject({ title: "kept", qty: 11 });
-    const projected = Item.newFromRecord({ id: 1, title: "kept" });
+    const projected = Item.newFromTrustedRecord({ id: 1, title: "kept" });
     await projected.update({ title: "projection" });
     expect((await Item.findOrFail(1)).get("qty")).toBe(11);
   });

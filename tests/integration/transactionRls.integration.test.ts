@@ -161,6 +161,10 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
           ).rejects.toThrow();
           expect(await CompositionModel.find(2)).toBeNull();
           expect((await CompositionModel.findOrFail(1)).get("tenant_id")).toBe(id);
+          const projection = CompositionModel.query().select("value");
+          expect(await projection.first()).toEqual({ value: id });
+          expect(await projection.get()).toEqual([{ value: id }]);
+          expect((await settings()).tenant).toBe(String(id));
         }),
       ),
     );

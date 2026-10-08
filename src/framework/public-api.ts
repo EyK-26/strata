@@ -143,7 +143,13 @@ export type {
   MigrationDatabase,
   MigrationStatus,
 } from "../core/database/migrations/types.ts";
-export type { CastType, GlobalScopeFn, ModelConstructor } from "../core/database/model.ts";
+export type {
+  CastType,
+  GlobalScopeFn,
+  ModelAttributes,
+  ModelConstructor,
+  ModelProjection,
+} from "../core/database/model.ts";
 export {
   applyCasts,
   BelongsToManyRelationQuery,
@@ -282,6 +288,8 @@ export {
   runInTransaction,
 } from "../core/database/transaction.ts";
 export type {
+  ModelWhere,
+  ModelWriteValues,
   QueryJoin,
   QueryJoinOn,
   QueryOptions,

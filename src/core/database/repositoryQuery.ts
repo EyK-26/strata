@@ -415,6 +415,23 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return row[column];
   }
 
+  /** Plain selected records, never complete entities or hydrated models. */
+  async project<K extends keyof TEntity & string>(
+    columns: readonly K[],
+    limit?: number,
+  ): Promise<Array<Pick<TEntity, K>>> {
+    if (columns.length === 0) throw new RangeError("A projection requires at least one column.");
+    const table = this.repository.getTable();
+    for (const column of columns)
+      if (!table.columns.includes(column))
+        throw new TypeError(`Unknown projection column: ${column}`);
+    return await this.repository.findAll({
+      ...this.buildOptions(),
+      ...(limit === undefined ? {} : { limit }),
+      select: uniqueColumnSelect(table.name, columns),
+    });
+  }
+
   async attachToRows(rows: readonly TEntity[]): Promise<Array<TEntity & LoadedRow>> {
     return await this.attach(rows);
   }

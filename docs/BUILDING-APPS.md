@@ -407,7 +407,7 @@ const page = await Product.query().paginate({ page: 1, perPage: 20 });
 
 Declare record fields to match hydrated values, including configured casts. These types do not validate database rows, cast definitions, mass-assignment input, or dynamically named loaded relations. `withCount("reviews")` adds `reviews_count` to the result record; a custom alias and multiple counts are preserved. Count values remain `unknown` because driver scalar representations and model casts differ; normalize them explicitly before arithmetic. Prefer aliases that do not overwrite model fields.
 
-Repository queries, direct SQL, projections and bulk operations remain available. `pluck` and `value` retain their existing `unknown` results. Loading or mutating a partial record does not prove that all declared fields exist: use an explicit projection contract at the repository/SQL boundary instead of treating partial data as a complete hydrated model. Model registration and runtime hydration, observers, scopes, relationships and error behavior are unchanged.
+Writes and filters infer declared field names and value types. Use `Product.query().select("title", "price").get()` for plain selected records with model casts; these rows have no model methods or unselected fields. Model-returning `all` and `firstWhere` helpers do not accept partial selects. Repository queries, direct SQL and bulk operations remain available; `pluck` and `value` retain their existing `unknown` results. Use `newFromTrustedRecord` for deliberate partial SQL hydration, where the caller owns completeness. See [typed model inputs and projections](./DATABASE.md#typed-model-inputs-and-projections) for defaults, cast boundaries, dynamic predicates and source compatibility.
 
 ### Model composition
 

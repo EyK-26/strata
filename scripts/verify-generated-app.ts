@@ -180,6 +180,11 @@ try {
       await readFile(join(ROOT, "tests/types/infrastructureDiscovery.contract.ts"), "utf8"),
     );
 
+    await writeFile(
+      join(appDir, "src/model-inputs.contract.ts"),
+      await readFile(join(ROOT, "tests/types/modelInputs.contract.ts"), "utf8"),
+    );
+
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");
