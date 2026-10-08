@@ -415,7 +415,7 @@ For ordinary SQL models, extend `defineModel(table)` from `@getstrata/core/datab
 
 ### Graceful lifecycle
 
-Generated HTTP, queue worker and scheduler entrypoints coordinate stop, drain, flush and close phases. Providers can register `onCleanup(handler, "drain")` for admitted work, `onCleanup(handler, "flush")` for telemetry, and default cleanup for resource closure. Existing custom entrypoints must adopt the coordinator explicitly. See [LIFECYCLE.md](LIFECYCLE.md) for integration, deadlines and recovery contracts.
+Generated HTTP, queue worker and scheduler entrypoints coordinate stop, drain, flush and close phases. Providers can register `onCleanup(handler, "drain")` for admitted work, `onCleanup(handler, "flush")` for telemetry, and default cleanup for resource closure. The generated provider list includes the shared `tracingProvider` for OpenTelemetry flush and shutdown; older generated lists must add it explicitly. See [TRACING.md](TRACING.md) for collector configuration and sampling. Existing custom entrypoints must adopt the coordinator explicitly. See [LIFECYCLE.md](LIFECYCLE.md) for integration, deadlines and recovery contracts.
 
 ### Awaited infrastructure discovery
 

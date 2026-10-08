@@ -274,6 +274,9 @@ describe("create-strata generate", () => {
     expect(providers).toContain("onCleanup(registerInvalidateCacheOnModelWriteListeners())");
     expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
 
+    expect(providers).toContain('import { tracingProvider } from "@getstrata/bootstrap"');
+    expect(providers).toContain("  tracingProvider,");
+
     const queueProvider = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
     expect(queueProvider).toContain("registerDefaultJobs");
     expect(queueProvider).toContain("discoverJobs");

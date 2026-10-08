@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use maintained OpenTelemetry tracing with W3C propagation, consistent identities/epoch timestamps, bounded batching, sampling, error status and lifecycle-owned flush/shutdown. Raw URL/exception secrets are omitted; debug x-trace-id no longer overrides identity.
+
 - Strengthen declared model write/filter/identifier contracts and add typed plain-record projections with model casts and existing scope/RLS semantics. Source compatibility: use `query().select(...)` instead of partial selects on model-returning helpers, `whereDynamic` for qualified/dynamic predicates, and `newFromTrustedRecord` for deliberate partial driver hydration. Database defaults and mass-assignment rules remain runtime concerns.
 
 - Accept awaited provider hooks and explicit cleanup registration; expose optional closure of owned Redis cache/queue clients.

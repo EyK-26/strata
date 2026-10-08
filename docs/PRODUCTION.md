@@ -84,3 +84,7 @@ A configured Redis throttle returns JSON `503` with `Retry-After: 1` when Redis 
 Bucket keys change in 2.0, so existing throttle windows restart during migration. Retire old throttle keys separately during maintenance using bounded Redis SCAN; do not use KEYS. Unmatched dispatchers share a bucket. Custom dispatchers should carry trusted registered templates through request context as described above.
 
 This increment addresses Redis atomicity and failure admission. Core plan multipliers, generic app quota injection, and bounded memory-store pruning are still pending in the production program. Memory throttles remain local to a process and are not a distributed production substitute.
+
+## OpenTelemetry tracing
+
+HTTP tracing uses the maintained SDK with W3C propagation, bounded batching, configured sampling and lifecycle flushing. Registered templates bound route names; request secrets and exception text are omitted. See [TRACING.md](TRACING.md) for collector trust, overflow behavior, configuration, manual instrumentation and Bun qualification.

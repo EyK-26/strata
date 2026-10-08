@@ -1043,7 +1043,8 @@ export default policyProvider;
 }
 
 function renderProvidersIndex(): string {
-  return `import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
+  return `import { tracingProvider } from "@getstrata/bootstrap";
+import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
 import { registerInvalidateCacheOnModelWriteListeners } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import authProvider from "./auth.ts";
@@ -1066,6 +1067,7 @@ const listenersProvider: ServiceProvider = {
 
 const starterProviders: ServiceProvider[] = [
   configProvider,
+  tracingProvider,
   cacheProvider,
   storageProvider,
   queueProvider,

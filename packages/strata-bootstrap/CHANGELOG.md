@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Provide shared tracing provider ownership and phased OpenTelemetry flush/shutdown without replacing application global tracer providers.
+
 - Breaking source contract: `discoverJobs()` and `discoverListeners()` now return promises. Await ESM discovery before queue construction or listener boot; malformed exports and duplicate discovered identities fail visibly. Add explicit job/listener/module manifests for bundles, preserve custom job factories, evict failed discovery loads and protect publication after reset. See `docs/DISCOVERY.md` before release/adoption.
 
 - Make provider startup awaited, register all providers before boot, and expose idempotent context disposal with failure cleanup. Direct startup helper callers must now await; appContext getters require completed startup.
