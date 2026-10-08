@@ -166,34 +166,19 @@ Configure layout data (`currentUser`, `csrfToken`, `flash`) and error templates 
 
 ## Secrets
 
-Call `assertProductionSecrets()` from your `createApp` / `serve` path when `isProductionEnv()` is true. Staging counts as production for this check. It is feature-gated: a cookie HTML app with `SESSION_SECRET` and `AUTH_DEV_HEADERS=false` does not need API tokens if those features are off. Generated apps call it at boot. Production boot rejects `FEATURE_PUBLIC_READS=true`.
+Call `assertProductionSecrets()` from your `createApp` / `serve` path when `isProductionEnv()` is true. Staging counts as production for this check. It is feature-gated: a cookie HTML app with `SESSION_SECRET` and `AUTH_DEV_HEADERS=false` does not need API tokens if those features are off. Generated apps call it at boot. Production boot rejects `TENANT_DEV_HEADERS=true`; public-read admission has a separate trusted-host tenancy contract.
 
 ## Public HTML reads (`FEATURE_PUBLIC_READS`)
 
-Generated `.env.example` sets `FEATURE_PUBLIC_READS=false`. That is the production-safe default.
-
-`HttpKernel.wrapWebPublicRead(handler)` (HTML) and `wrapPublicRead(handler)` (JSON) check the same flag via `isPublicReadsEnabled()`:
-
-| Flag | `wrapWebPublicRead` / `wrapPublicRead` | Anonymous `x-tenant-id` |
-|------|----------------------------------------|-------------------------|
-| `false` (default) | Requires a signed-in user (`wrapWebAuthenticated` / `wrapAuthenticated`) | Ignored. Guests stay on tenant `1` |
-| `true` | Guest HTML/JSON reads (still `wrapWeb` CSRF/session for HTML) | Honored. See [TENANCY.md](./TENANCY.md) |
-
-Storefront pattern (catalog, `/shop`, `make:module` web index):
+Generated apps default to authenticated reads. For a public catalog, opt in on its route:
 
 ```typescript
-"GET /shop": kernel.wrapWebPublicRead(controller.index),
+"GET /shop": kernel.wrapWebPublicRead(controller.index, { allowAnonymous: true }),
 ```
 
-```bash
-# .env (local dogfood only)
-FEATURE_PUBLIC_READS=true
+The JSON counterpart is `kernel.wrapPublicRead(handler, { allowAnonymous: true })`, composed with the normal API group. Omit the option to use `FEATURE_PUBLIC_READS` as the default policy, or set it false to require authentication. Only the exact string `true` enables that default. Writes and administrator routes retain their existing authorization.
 
-# .env.production — required. assertProductionSecrets() throws if this is true.
-FEATURE_PUBLIC_READS=false
-```
-
-Keep production on authenticated HTML or the JSON API. Do not weaken the secrets guard. Anonymous `x-tenant-id` is a separate tenancy concern; the same flag gates both.
+Public admission does not enable anonymous tenant headers. Production/staging tenancy requires an approved-host binding through `CORE_PUBLIC_TENANCY_TOKEN`; generated apps approve only the configured `APP_URL` hostname for their starter tenant. Multi-tenant applications provide their own domain mapping. Unknown hosts fail closed, and forwarded hosts require configured immediate socket-peer IPs. Keep the separate `TENANT_DEV_HEADERS` flag false in production. See [TENANCY.md](./TENANCY.md#trusted-public-tenancy-and-public-read-admission) for configuration and upgrade requirements.
 
 ## API abilities vs HTML admin
 

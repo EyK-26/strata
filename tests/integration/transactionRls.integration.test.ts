@@ -19,6 +19,7 @@ import {
 } from "@getstrata/core/tenant/databaseTenantContext";
 import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
+import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { SQL } from "bun";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { defaultTestTenant } from "../unit/testHelpers";
@@ -119,6 +120,42 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
     });
   });
 
+  test("trusted host requests preserve concurrent restricted-role RLS settings", async () => {
+    const middleware = createTenantMiddleware({
+      publicTenancy: {
+        resolveTenantId: async (host) =>
+          host === "first.example" ? 1 : host === "second.example" ? 2 : null,
+      },
+      resolveTenant: async (id) => ({ id, slug: `host-${id}` }),
+    });
+    await Promise.all(
+      [1, 2, 1, 2].map(async (id) => {
+        const response = await middleware(
+          new Request(`https://${id === 1 ? "first" : "second"}.example/catalog`, {
+            headers: { "x-tenant-id": "999" },
+          }),
+          async () => {
+            await db.unsafe("SELECT pg_sleep(0.02)");
+            expect(currentTenantId()).toBe(id);
+            expect((await settings()).tenant).toBe(String(id));
+            await db.unsafe("CREATE TEMP TABLE host_rls (tenant_id INTEGER) ON COMMIT DROP");
+            await db.unsafe("ALTER TABLE host_rls ENABLE ROW LEVEL SECURITY");
+            await db.unsafe("ALTER TABLE host_rls FORCE ROW LEVEL SECURITY");
+            await db.unsafe(
+              "CREATE POLICY host_scope ON host_rls USING (tenant_id = current_setting('app.tenant_id')::integer)",
+            );
+            await db.unsafe("INSERT INTO host_rls VALUES ($1)", [id]);
+            await expect(
+              runInTransaction(() => db.unsafe("INSERT INTO host_rls VALUES ($1)", [id + 1])),
+            ).rejects.toThrow();
+            expect(await db.unsafe("SELECT tenant_id FROM host_rls")).toEqual([{ tenant_id: id }]);
+            return new Response("ok");
+          },
+        );
+        expect(response.status).toBe(200);
+      }),
+    );
+  });
   test("concurrent root requests retain independent SQL tenant settings", async () => {
     await Promise.all(
       [1, 2, 3].map((id) =>

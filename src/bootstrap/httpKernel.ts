@@ -44,6 +44,7 @@ import {
   CORE_CONFIG_TOKEN,
   CORE_HTTP_CLEANUP_TOKEN,
   CORE_POLICY_GATE_TOKEN,
+  CORE_PUBLIC_TENANCY_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,
   REDIS_URL_CONFIG_KEY,
@@ -106,6 +107,9 @@ class HttpKernel {
       createAuthMiddleware(auth),
       createMembershipMiddleware(),
       createTenantMiddleware({
+        publicTenancy: this.dependencies.container.has(CORE_PUBLIC_TENANCY_TOKEN)
+          ? this.dependencies.container.resolve(CORE_PUBLIC_TENANCY_TOKEN)
+          : undefined,
         resolveTenant: this.dependencies.container.has(CORE_TENANT_RESOLVER_TOKEN)
           ? this.dependencies.container.resolve(CORE_TENANT_RESOLVER_TOKEN)
           : undefined,
@@ -220,8 +224,9 @@ class HttpKernel {
 
   wrapWebPublicRead<TRequest extends Request = Request>(
     handler: RouteHandler<TRequest>,
+    options: { allowAnonymous?: boolean } = {},
   ): RouteHandler<TRequest> {
-    if (isPublicReadsEnabled()) {
+    if (options.allowAnonymous ?? isPublicReadsEnabled()) {
       return this.wrapWeb(handler);
     }
 
@@ -302,8 +307,9 @@ class HttpKernel {
 
   wrapPublicRead<TRequest extends Request = Request>(
     handler: RouteHandler<TRequest>,
+    options: { allowAnonymous?: boolean } = {},
   ): RouteHandler<TRequest> {
-    if (isPublicReadsEnabled()) {
+    if (options.allowAnonymous ?? isPublicReadsEnabled()) {
       return handler;
     }
 

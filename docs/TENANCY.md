@@ -40,7 +40,7 @@ Global middleware order: auth, then membership, then tenant. Do not reverse that
 
 Unauthenticated requests still need a tenant (login, register, CSRF). They use tenant `1` (`DEFAULT_TENANT`).
 
-`x-tenant-id` on anonymous requests is honored only when `FEATURE_PUBLIC_READS=true`. Guests already pin to tenant `1`, so `/login` works with `FEATURE_PUBLIC_READS=false` (the code and `.env.example` default). Production boot requires the flag to stay false so guests cannot probe other tenants via that header.
+Anonymous tenant selection is independent of public-read admission. `FEATURE_PUBLIC_READS` never enables tenant headers. Explicit development selection requires `TENANT_DEV_HEADERS=true` and a non-production environment; production/staging reject that flag. See the trusted public tenancy contract below.
 
 Authenticated non-admin users are pinned to their account tenant. Global admins may override with `x-tenant-id`.
 
@@ -96,3 +96,27 @@ API, login and SCIM Redis throttles now reuse the same atomic increment/expiry s
 The consumer and distributed middleware expose idempotent `dispose()`. Disposal closes only an owned Redis connection, cancels pending admission immediately, and permanently prevents reconnects. Injected clients stay owned by the caller. Cancellation removes deadline timers and abort listeners; it cannot undo a command already received by Redis, so an uncertain attempt may still be counted, but never reaches the handler after disposal. A command failure resets an owned connection so a later request can retry with a fresh connection; it cannot revive a disposed consumer. The kernel now owns distributed API, registration and login throttles as well as local ones; generated SCIM routes already join this ownership boundary. Application close still follows HTTP drain, so handlers already admitted can finish before resources close.
 
 **SCIM rolling deployment:** the default bucket namespace is now `scim-throttle:v2`. Old identity-only counters are not imported into tenant/method/route buckets, and limits are now per registered route and method rather than one credential-wide counter. This is a documented behavior change: mixed old/new replicas cannot enforce one shared SCIM window. Use a maintenance rollout or coordinated cutover with a consistent configuration across replicas. After retiring all old replicas, operators can remove the retired `APP_KEY_PREFIX:scim-throttle:*` keys using bounded SCAN/UNLINK maintenance, explicitly excluding `APP_KEY_PREFIX:scim-throttle:v2:*` (or the configured new prefix). Old immortal counters may otherwise remain; no application request scans Redis or silently deletes live quota state. No automatic migration resets current counters. Direct middleware/consumer users dispose their resources; injected Redis clients must be closed by their original owner.
+
+
+## Trusted public tenancy and public-read admission
+
+`kernel.wrapWebPublicRead(handler, { allowAnonymous: true })` and `kernel.wrapPublicRead(handler, { allowAnonymous: true })` explicitly admit public HTML/JSON reads. Omit the option to use the exact-string `FEATURE_PUBLIC_READS=true` default policy; set `allowAnonymous: false` to require authentication regardless of that default. JSON routes still compose the normal API group, and writes/admin routes retain their authentication, CSRF, ability and policy checks. Public-read admission does not authorize arbitrary business resources.
+
+When tenancy is enabled, bind `CORE_PUBLIC_TENANCY_TOKEN` before constructing the kernel:
+
+```typescript
+container.set(CORE_PUBLIC_TENANCY_TOKEN, {
+  resolveTenantId: async (hostname) => approvedDomainLookup(hostname),
+  trustedProxyAddresses: ["10.0.0.10"],
+});
+```
+
+The application owns the approved-domain directory, its uniqueness, administrative changes and persistence. The framework passes only a normalized hostname (case folded, IDNA encoded, one terminal dot removed, port omitted), validates the positive safe-integer identity, then uses the ordinary tenant resolver and RLS scope. Use the exported `normalizeTenantHostname` for domain storage. Unknown hosts or missing tenants return 403, with no default-tenant fallback. Resolver outages propagate through the normal error boundary and never select another tenant. Production/staging anonymous requests without a public resolver are denied, including login pages; single-tenant `TENANCY_DRIVER=none` retains its existing synthetic identity.
+
+The native server records the immediate socket peer separately from the forwarded/client address. Only exact literal IPs in `trustedProxyAddresses` (maximum 128) can supply `X-Forwarded-Host`; absent/unknown peers and untrusted forwarded headers cannot affect selection. A trusted proxy must overwrite that header with a single original authority, reject unexpected public hosts at ingress, and restrict backend reachability. Comma-separated/malformed forwarded authorities fail closed. The `Forwarded` header and `TRUST_FORWARDED_FOR` are not host-trust inputs. Custom transports must provide `RequestMeta.peerAddress` from their actual socket; never derive it from a header. Missing peer metadata never grants proxy trust. Unix socket transports can use a preserved direct Host without forwarded-host trust.
+
+A configured host allowlist is checked for authenticated requests too. Authenticated users retain account membership/tenant selection; the public resolver cannot move them to another tenant. Existing authenticated administrator overrides remain unchanged. SCIM retains its dedicated authenticated tenant selection. Domain selection is an anonymous scope, not account authorization or a source for signed URLs.
+
+In production/staging, generated apps bind their configured `APP_URL` hostname to starter tenant 1 and approve no proxy by default. Multi-tenant products replace that application provider with their approved-domain mapping. This contains no commerce entitlements. Changing that mapping or its proxy topology requires a coordinated application deployment; forwarded headers are never accepted just because a public-read flag is on.
+
+**Upgrade:** remove the former assumption that `FEATURE_PUBLIC_READS` enables guest `x-tenant-id`. Development tests that deliberately select guest tenants must opt into `TENANT_DEV_HEADERS=true`. Keep it false in production. Existing tenancy-enabled applications must add the public host binding before upgrading their production login/storefront deployment. Enabling public reads is now allowed by the secrets guard; it does not bypass the host resolver or authentication on other routes. No automatic domain table/migration, data rewrite or wildcard approval is performed.

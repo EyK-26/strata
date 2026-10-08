@@ -207,10 +207,8 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
     }
   }
 
-  if (envFlagEnabled(env.FEATURE_PUBLIC_READS)) {
-    throw new Error(
-      "Production startup blocked: set FEATURE_PUBLIC_READS=false for authenticated-only reads.",
-    );
+  if (envFlagEnabled(env.TENANT_DEV_HEADERS)) {
+    throw new Error("Production startup blocked: set TENANT_DEV_HEADERS=false.");
   }
 
   if (!env.SIEM_EXPORT_URL?.trim() && envFlagEnabled(env.FEATURE_SIEM_EXPORT)) {

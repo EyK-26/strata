@@ -474,6 +474,7 @@ describe("production defaults", () => {
     const readme = await readFile(join(html, "README.md"), "utf8");
 
     expect(env).toContain("FEATURE_PUBLIC_READS=false");
+    expect(env).toContain("TENANT_DEV_HEADERS=false");
     expect(env).toContain("FEATURE_SAML=false");
     expect(env).toContain("FEATURE_OAUTH=false");
     expect(env).toContain("FEATURE_BILLING=false");
@@ -483,6 +484,8 @@ describe("production defaults", () => {
     expect(env).toContain("wrapWebPublicRead");
     expect(readme).toContain("FEATURE_PUBLIC_READS=false");
     expect(readme).toContain("wrapWebPublicRead");
+    expect(readme).toContain("CORE_PUBLIC_TENANCY_TOKEN");
+    expect(readme).toContain("TENANT_DEV_HEADERS=false");
   });
 
   test("api apps ship the production-safe default", async () => {
@@ -490,6 +493,7 @@ describe("production defaults", () => {
     const api = generateFromArgs(root, ["pr-api", "--frontend=api", "--yes"]);
     const env = await readFile(join(api, ".env.example"), "utf8");
     expect(env).toContain("FEATURE_PUBLIC_READS=false");
+    expect(env).toContain("TENANT_DEV_HEADERS=false");
   });
 
   test("every generated placeholder secret carries the change-me marker", async () => {

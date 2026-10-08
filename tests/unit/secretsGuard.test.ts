@@ -312,7 +312,7 @@ describe("assertProductionSecrets", () => {
     ).not.toThrow();
   });
 
-  test("blocks public reads in production", () => {
+  test("blocks development tenant headers in production", () => {
     expect(() =>
       assertProductionSecrets({
         APP_ENV: "production",
@@ -324,12 +324,34 @@ describe("assertProductionSecrets", () => {
         FEATURE_FIELD_ENCRYPTION: "false",
         FEATURE_BILLING: "false",
         FEATURE_PUBLIC_READS: "true",
+        TENANT_DEV_HEADERS: "true",
         CORS_ALLOWED_ORIGINS: "https://app.example.com",
         OAUTH_STATE_SECRET: "rotated-oauth-state-secret",
         TOKEN_HASH_PEPPER: "rotated-token-pepper",
         API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
       }),
-    ).toThrow(/FEATURE_PUBLIC_READS=false/);
+    ).toThrow(/TENANT_DEV_HEADERS=false/);
+  });
+
+  test("allows public-read policy in production with development tenant headers disabled", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        ADMIN_API_TOKEN: "rotated-admin-token",
+        MEMBER_API_TOKEN: "rotated-member-token",
+        SCIM_BEARER_TOKEN: "rotated-scim-token",
+        AUTH_DEV_HEADERS: "false",
+        FEATURE_FIELD_ENCRYPTION: "false",
+        FEATURE_BILLING: "false",
+        FEATURE_PUBLIC_READS: "true",
+        TENANT_DEV_HEADERS: "false",
+        CORS_ALLOWED_ORIGINS: "https://app.example.com",
+        OAUTH_STATE_SECRET: "rotated-oauth-state-secret",
+        TOKEN_HASH_PEPPER: "rotated-token-pepper",
+        API_TOKEN_DEFAULT_EXPIRY_DAYS: "90",
+      }),
+    ).not.toThrow();
   });
 
   test("blocks the generator's own placeholder secrets in production", () => {

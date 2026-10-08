@@ -27,7 +27,8 @@ Fix every error until it prints that production secret checks passed.
 | `OAUTH_STATE_SECRET` | OAuth / OIDC / SAML enabled |
 | `CORS_ADDITIONAL_ALLOWED_HEADERS` | Optional comma-separated explicit application request-header names; extends defaults and rejects invalid names/wildcards. It does not authorize origins or grant CSRF exemptions. |
 | `CORS_ALLOWED_ORIGINS` | Only when browsers on other origins call the API. Unset is `APP_URL` locally and same-origin in production. Never defaults to `*`. `*` is rejected in production. |
-| `FEATURE_PUBLIC_READS=false` | Required in production (`assertProductionSecrets()` rejects `true`). `wrapWebPublicRead` / `wrapPublicRead` require a login when the flag is false. The same flag also controls whether anonymous `x-tenant-id` is honored. Guests already pin to tenant 1, so `/login` works with the default `false`. Storefronts that need a public catalog set `true` in local `.env` only. |
+| `FEATURE_PUBLIC_READS=false` | Default authenticated-read policy. Public catalogs may opt in per route with `{ allowAnonymous: true }` or enable the default policy. Neither enables guest tenant headers. Tenancy-enabled production guest requests require `CORE_PUBLIC_TENANCY_TOKEN`; generated apps approve their configured `APP_URL` hostname for starter tenant 1. Unknown hosts fail closed. |
+| `TENANT_DEV_HEADERS=false` | Required in production/staging. Exact `true` permits development-only guest tenant-header selection. Forwarded hosts instead require explicit immediate socket-peer IP trust; see [TENANCY.md](./TENANCY.md#trusted-public-tenancy-and-public-read-admission). |
 
 A production HTML app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need API tokens, SCIM, OAuth, or CORS when those features are off.
 

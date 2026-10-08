@@ -2,6 +2,8 @@ import { createAsyncContextStore } from "../runtime/asyncContextStore";
 
 type RequestMeta = {
   ipAddress: string | null;
+  /** Immediate socket peer recorded by the transport; never a forwarded client header. */
+  peerAddress?: string | null;
   userAgent: string | null;
   request?: Request;
   /** Registered route template; never a URL supplied by the client. */

@@ -53,7 +53,7 @@ describe("createTenantMiddleware", () => {
     }
   });
 
-  test("resolves tenant from header for anonymous requests", async () => {
+  test("keeps the default anonymous scope without exposing tenant headers", async () => {
     const previous = process.env.FEATURE_PUBLIC_READS;
     process.env.FEATURE_PUBLIC_READS = "true";
     try {
@@ -228,9 +228,9 @@ describe("createTenantMiddleware", () => {
     });
   });
 
-  test("falls back to the default tenant when a public-read guest header tenant is missing", async () => {
-    const previous = process.env.FEATURE_PUBLIC_READS;
-    process.env.FEATURE_PUBLIC_READS = "true";
+  test("explicit development tenant selection retains the missing-tenant fallback", async () => {
+    const previous = process.env.TENANT_DEV_HEADERS;
+    process.env.TENANT_DEV_HEADERS = "true";
 
     try {
       const { createTenantMiddleware, DEFAULT_TENANT } = await import(
@@ -249,7 +249,7 @@ describe("createTenantMiddleware", () => {
       expect(response.headers.get("x-tenant-id")).toBeNull();
       expect(tenant?.id).toBe(DEFAULT_TENANT.id);
     } finally {
-      restoreEnvVar("FEATURE_PUBLIC_READS", previous);
+      restoreEnvVar("TENANT_DEV_HEADERS", previous);
     }
   });
 
