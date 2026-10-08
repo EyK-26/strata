@@ -3,8 +3,9 @@ import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { ForbiddenError, toHttpError } from "@getstrata/core/errors/http";
-import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { runWithMigrationBypassForIdentifier } from "./databaseTenantContext";
+import { createPublicTenantSelector, type PublicTenancyOptions } from "./publicTenantHost";
 import { resolveTenant } from "./resolveTenant";
 import { isTenancyEnabled } from "./tenancyConfig";
 import { runWithTenant, type TenantContext } from "./tenantContext";
@@ -41,18 +42,19 @@ type TenantResolver = (id: number) => Promise<TenantContext | null>;
 interface TenantMiddlewareOptions {
   /** Load trusted application metadata after the framework selects the tenant ID. */
   resolveTenant?: TenantResolver;
+  publicTenancy?: PublicTenancyOptions;
 }
 
 async function resolveTenantForRequest(
   request: Request,
   resolver: TenantResolver,
+  selectPublicTenant?: (request: Request) => Promise<number>,
 ): Promise<TenantContext> {
+  const hostTenantId = selectPublicTenant ? await selectPublicTenant(request) : null;
   const user = currentAuthUser();
   const headerValue = request.headers.get("x-tenant-id")?.trim();
   const parsedHeader =
-    headerValue !== undefined && headerValue.length > 0
-      ? Number.parseInt(headerValue, 10)
-      : Number.NaN;
+    headerValue !== undefined && headerValue.length > 0 ? Number(headerValue) : Number.NaN;
 
   if (user) {
     const userId = typeof user.id === "number" ? user.id : Number.parseInt(String(user.id), 10);
@@ -61,7 +63,11 @@ async function resolveTenantForRequest(
       const userTenantId = await resolveUserTenantId(userId);
 
       if (!isGlobalAdmin(user)) {
-        if (Number.isInteger(parsedHeader) && parsedHeader > 0 && parsedHeader !== userTenantId) {
+        if (
+          Number.isSafeInteger(parsedHeader) &&
+          parsedHeader > 0 &&
+          parsedHeader !== userTenantId
+        ) {
           throw new ForbiddenError("Tenant header does not match your account.");
         }
 
@@ -73,7 +79,7 @@ async function resolveTenantForRequest(
         return DEFAULT_TENANT;
       }
 
-      if (Number.isInteger(parsedHeader) && parsedHeader > 0) {
+      if (Number.isSafeInteger(parsedHeader) && parsedHeader > 0) {
         const headerTenant = await resolver(parsedHeader);
         if (headerTenant) {
           return headerTenant;
@@ -91,10 +97,19 @@ async function resolveTenantForRequest(
     }
   }
 
-  const headerTenantId = Number.isInteger(parsedHeader) && parsedHeader > 0 ? parsedHeader : null;
+  const headerTenantId =
+    Number.isSafeInteger(parsedHeader) && parsedHeader > 0 ? parsedHeader : null;
   const tenantId =
-    isPublicReadsEnabled() && headerTenantId !== null ? headerTenantId : DEFAULT_TENANT.id;
+    hostTenantId !== null
+      ? hostTenantId
+      : !isProductionEnv() && process.env.TENANT_DEV_HEADERS === "true" && headerTenantId !== null
+        ? headerTenantId
+        : DEFAULT_TENANT.id;
+  if (isProductionEnv() && !selectPublicTenant) {
+    throw new ForbiddenError("Public tenant host resolver is required.");
+  }
   const guestTenant = await resolver(tenantId);
+  if (selectPublicTenant && !guestTenant) throw new ForbiddenError("Tenant not found.");
   if (guestTenant) {
     return guestTenant;
   }
@@ -104,6 +119,9 @@ async function resolveTenantForRequest(
 
 function createTenantMiddleware(options: TenantMiddlewareOptions = {}) {
   const resolver = options.resolveTenant ?? resolveTenant;
+  const selectPublicTenant = options.publicTenancy
+    ? createPublicTenantSelector(options.publicTenancy)
+    : undefined;
   return async (request: Request, next: () => Promise<Response>) => {
     const pathname = new URL(request.url).pathname;
 
@@ -116,16 +134,20 @@ function createTenantMiddleware(options: TenantMiddlewareOptions = {}) {
     }
 
     try {
-      const tenant = await resolveTenantForRequest(request, async (id) => {
-        const tenant = await resolver(id);
-        if (options.resolveTenant && tenant === null) {
-          throw new ForbiddenError("Tenant not found.");
-        }
-        if (tenant && tenant.id !== id) {
-          throw new Error("Tenant resolver returned a different tenant identity.");
-        }
-        return tenant;
-      });
+      const tenant = await resolveTenantForRequest(
+        request,
+        async (id) => {
+          const tenant = await resolver(id);
+          if (options.resolveTenant && tenant === null) {
+            throw new ForbiddenError("Tenant not found.");
+          }
+          if (tenant && tenant.id !== id) {
+            throw new Error("Tenant resolver returned a different tenant identity.");
+          }
+          return tenant;
+        },
+        selectPublicTenant,
+      );
 
       return await runWithTenantDatabase(tenant, async () => {
         return await next();
@@ -142,5 +164,7 @@ function createTenantMiddleware(options: TenantMiddlewareOptions = {}) {
   };
 }
 
+export type { PublicTenancyOptions } from "./publicTenantHost";
+export { normalizeTenantHostname } from "./publicTenantHost";
 export type { TenantMiddlewareOptions, TenantResolver };
 export { auditChecksum, createTenantMiddleware, DEFAULT_TENANT, resolveUserTenantId };

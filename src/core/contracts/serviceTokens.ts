@@ -1,6 +1,6 @@
 import type { AbilityChecker } from "../auth/abilityChecker";
 import type { ThrottleQuotaPolicy } from "../http/throttleMiddleware";
-import type { TenantResolver } from "../tenant/tenantMiddleware";
+import type { PublicTenancyOptions, TenantResolver } from "../tenant/tenantMiddleware";
 import type { AuthUserDirectory } from "./authUserDirectory";
 import type { ServiceContainerLike } from "./container";
 import { createServiceToken } from "./container";
@@ -8,6 +8,7 @@ import { createServiceToken } from "./container";
 const CORE_THROTTLE_QUOTA_POLICY_TOKEN = createServiceToken<ThrottleQuotaPolicy>(
   "core.throttleQuotaPolicy",
 );
+const CORE_PUBLIC_TENANCY_TOKEN = createServiceToken<PublicTenancyOptions>("core.publicTenancy");
 const CORE_TENANT_RESOLVER_TOKEN = createServiceToken<TenantResolver>("core.tenantResolver");
 
 const CORE_HTTP_CLEANUP_TOKEN =
@@ -78,6 +79,7 @@ export {
   CORE_EVENT_BUS_TOKEN,
   CORE_HTTP_CLEANUP_TOKEN,
   CORE_POLICY_GATE_TOKEN,
+  CORE_PUBLIC_TENANCY_TOKEN,
   CORE_QUEUE_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,

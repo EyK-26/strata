@@ -112,12 +112,14 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   );
   lines.push("# SCHEDULER_COORDINATION=redis");
   lines.push("APP_DEBUG=false");
+  lines.push("TENANT_DEV_HEADERS=false");
+  lines.push("# Development-only anonymous x-tenant-id selection; never enable in production.");
   lines.push("FEATURE_PUBLIC_READS=false");
   lines.push(
     "# wrapWebPublicRead / wrapPublicRead require login when false (production-safe default).",
   );
   lines.push(
-    "# Local storefronts/catalogs may set true in .env. Production boot rejects FEATURE_PUBLIC_READS=true.",
+    "# Public reads do not enable tenant headers. Production guest tenancy requires CORE_PUBLIC_TENANCY_TOKEN.",
   );
   lines.push("FEATURE_SIEM_EXPORT=false");
   lines.push("# SIEM_EXPORT_URL=");
@@ -920,7 +922,7 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
 - Replace every \`change-me\` placeholder in \`.env\`. The guard rejects the values this generator wrote, not just empty ones.
 - Set \`APP_URL\` to the public origin (for example \`https://app.example.com\`). Signed links and redirects are built from it; localhost is rejected.
 - Set \`AUTH_DEV_HEADERS=false\`.
-- Set \`FEATURE_PUBLIC_READS=false\`. Generated \`.env.example\` already ships \`false\` so \`wrapWebPublicRead\` requires a login. Local storefronts may set \`true\` in \`.env\` for an anonymous catalog; \`assertProductionSecrets()\` rejects \`true\` in production. Do not ship a public-reads production boot.
+- Generated \`FEATURE_PUBLIC_READS=false\` makes \`wrapWebPublicRead\` / \`wrapPublicRead\` require login by default. Opt in per route with \`{ allowAnonymous: true }\`, or set \`FEATURE_PUBLIC_READS=true\` as their default policy. With tenancy enabled, production guests require an application-approved host resolver bound to \`CORE_PUBLIC_TENANCY_TOKEN\`; unknown hosts fail closed. Keep \`TENANT_DEV_HEADERS=false\` in production. See the framework TENANCY guide for proxy trust and rollout.
 - Add explicitly approved application headers with \`CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id\`; this extends the defaults, validates header names and never reflects requested headers. OpenAPI metadata does not grant CORS access.
 - Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.

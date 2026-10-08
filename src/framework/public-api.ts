@@ -652,11 +652,16 @@ export {
   isInsideTenantDatabaseScope,
   runWithTenantDatabase,
 } from "../core/tenant/tenantDatabaseScope.ts";
-export type { TenantMiddlewareOptions, TenantResolver } from "../core/tenant/tenantMiddleware.ts";
+export type {
+  PublicTenancyOptions,
+  TenantMiddlewareOptions,
+  TenantResolver,
+} from "../core/tenant/tenantMiddleware.ts";
 export {
   auditChecksum,
   createTenantMiddleware,
   DEFAULT_TENANT,
+  normalizeTenantHostname,
   resolveUserTenantId,
 } from "../core/tenant/tenantMiddleware.ts";
 export type { TraceContext } from "../core/tracing/traceContext.ts";

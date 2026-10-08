@@ -59,6 +59,7 @@ function wrapRouteHandler<T>(
             request,
             routeTemplate: path,
             ipAddress: socketAddress(server, request),
+            peerAddress: socketAddress(server, request),
             userAgent: request.headers.get("user-agent"),
           },
           async () => {
@@ -160,6 +161,7 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
               ...currentRequestMeta(),
               request,
               ipAddress: socketAddress(server, request),
+              peerAddress: socketAddress(server, request),
               userAgent: request.headers.get("user-agent"),
             },
             async () => {
