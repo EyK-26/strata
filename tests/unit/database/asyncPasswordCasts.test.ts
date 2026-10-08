@@ -204,6 +204,7 @@ describe("awaited password write casts", () => {
         await expect(pending.save()).rejects.toThrow("hash failed");
         expect(pending.$exists).toBe(false);
         const existing = new Account({ id: 1, name: "changed", password: "plain" }, repository);
+        existing.mergeAttributes({ password: "replacement" });
         await expect(existing.save()).rejects.toThrow("hash failed");
         await expect(existing.update({ password: "different" })).rejects.toThrow("hash failed");
       });
