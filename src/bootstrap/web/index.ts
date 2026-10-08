@@ -11,7 +11,12 @@ export {
   wrapWebLogin,
   wrapWebRegister,
 } from "./routing.ts";
-export { convertAppRoutesToBunRoutes, createWebServer, type WebServerOptions } from "./server.ts";
+export {
+  convertAppRoutesToBunRoutes,
+  createWebServer,
+  type NativeServerOptions,
+  type WebServerOptions,
+} from "./server.ts";
 export {
   CookieSessionAuthManager,
   CookieSessionGuard,

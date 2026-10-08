@@ -92,6 +92,7 @@ export {
   createWebServer,
   type LoadSessionUser,
   type MapSessionUser,
+  type NativeServerOptions,
   type ParsedForm,
   parseFormBody,
   routeParams,
