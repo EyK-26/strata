@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
+  CORE_HTTP_CLEANUP_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,
   REDIS_URL_CONFIG_KEY,
 } from "@getstrata/bootstrap/config";
@@ -72,6 +73,57 @@ describe("HttpKernel", () => {
         )
       ).status,
     ).toBe(200);
+  });
+
+  test("kernel cleanup completes even if a custom throttle cleanup fails", () => {
+    const kernel = createHttpKernel(createKernelDependencies());
+    let cleaned = 0;
+    const middleware = async (_request: Request, next: () => Promise<Response>) => await next();
+    kernel.ownThrottle(
+      Object.assign(middleware.bind(null), {
+        dispose: () => {
+          cleaned++;
+        },
+      }),
+    );
+    kernel.ownThrottle(
+      Object.assign(middleware.bind(null), {
+        dispose: () => {
+          throw new Error("custom");
+        },
+      }),
+    );
+    expect(() => kernel.dispose()).toThrow("HTTP throttle cleanup failed");
+    expect(cleaned).toBe(1);
+    kernel.dispose();
+    const late = Object.assign(middleware.bind(null), {
+      dispose: () => {
+        cleaned++;
+      },
+    });
+    expect(() => kernel.ownThrottle(late)).toThrow("disposed");
+    expect(cleaned).toBe(2);
+  });
+
+  test("registered kernel cleanup disposes local route throttles and closes admission", async () => {
+    const config = new ConfigStore();
+    config.set(REDIS_URL_CONFIG_KEY, "");
+    const dependencies = createKernelDependencies(config);
+    const cleanups: Array<() => void> = [];
+    dependencies.container.set(CORE_HTTP_CLEANUP_TOKEN, (cleanup) => {
+      cleanups.push(cleanup);
+    });
+    const kernel = createHttpKernel(dependencies);
+    const handler = kernel.wrap("api", async () => new Response("ok"));
+    const request = new Request("http://example.test/a", {
+      headers: { accept: "application/json" },
+    });
+    expect((await handler(request)).status).toBe(200);
+    expect(cleanups).toHaveLength(1);
+    for (const cleanup of cleanups) cleanup();
+    kernel.dispose();
+    expect((await handler(request)).status).toBe(503);
+    expect(() => kernel.wrapLogin(async () => new Response("bypass"))).toThrow("disposed");
   });
 
   test("registers global middleware for logging, request id, and auth", () => {

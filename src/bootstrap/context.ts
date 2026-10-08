@@ -1,3 +1,4 @@
+import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { clearActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { setActiveApplicationContext } from "./applicationRegistry.ts";
 import {
@@ -116,6 +117,7 @@ async function createAppContext(
       (phase === "drain" ? drains : phase === "flush" ? flushes : cleanups).push(handler);
     },
   };
+  container.set(CORE_HTTP_CLEANUP_TOKEN, (handler) => context.onCleanup(handler));
   try {
     await runProviderPhase(configured, "register", context);
     await runProviderPhase(configured, "boot", context);

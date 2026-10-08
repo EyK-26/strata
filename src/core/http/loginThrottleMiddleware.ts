@@ -1,5 +1,9 @@
-import { namespacedRedisKey } from "../runtime/appKeyPrefix";
+import {
+  BoundedThrottleStore,
+  type MemoryThrottleStorageOptions,
+} from "../runtime/boundedThrottleStore";
 import { readClientIp } from "./clientIp";
+import type { DisposableMemoryThrottle } from "./memoryThrottleMiddleware";
 import type { Middleware } from "./middleware";
 import {
   createRedisThrottleConsumer,
@@ -9,7 +13,7 @@ import {
 } from "./throttleMiddleware";
 import { tooManyRequestsResponse } from "./throttleResponse";
 
-interface LoginThrottleOptions {
+interface LoginThrottleOptions extends MemoryThrottleStorageOptions {
   redisUrl?: string;
   maxAttempts: number;
   decaySeconds: number;
@@ -18,9 +22,7 @@ interface LoginThrottleOptions {
   redisClient?: RedisThrottleClient;
 }
 
-type LoginThrottleBucket = { count: number; resetAt: number };
-
-const memoryLoginBuckets = new Map<string, LoginThrottleBucket>();
+let resetGeneration = 0;
 
 function resolveLoginIdentity(request: Request): string {
   return readClientIp(request) ?? "unknown";
@@ -48,38 +50,35 @@ async function resolveLoginEmail(request: Request): Promise<string> {
   }
 }
 
-function consumeMemoryAttempt(key: string, decaySeconds: number): number {
-  const now = Date.now();
-  const existing = memoryLoginBuckets.get(key);
-
-  if (!existing || existing.resetAt <= now) {
-    memoryLoginBuckets.set(key, { count: 1, resetAt: now + decaySeconds * 1000 });
-    return 1;
-  }
-
-  existing.count += 1;
-  return existing.count;
-}
-
-function createMemoryLoginThrottleMiddleware(options: LoginThrottleOptions): Middleware {
-  const prefix = options.keyPrefix ?? namespacedRedisKey("login-throttle:");
-
-  return async (request: Request, next: () => Promise<Response>) => {
-    const identity = resolveLoginIdentity(request);
+function createMemoryLoginThrottleMiddleware(
+  options: LoginThrottleOptions,
+): DisposableMemoryThrottle {
+  const store = new BoundedThrottleStore(options.decaySeconds * 1000, options);
+  if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
+    throw new Error("Invalid memory throttle limit.");
+  let generation = resetGeneration;
+  const middleware: Middleware = async (request, next) => {
+    if (generation !== resetGeneration) {
+      store.clear();
+      generation = resetGeneration;
+    }
     const email = await resolveLoginEmail(request);
-    const throttleKey = `${prefix}${identity}:${email}`;
-    const attempts = consumeMemoryAttempt(throttleKey, options.decaySeconds);
-
-    if (attempts > options.maxAttempts) {
+    const key = redisThrottleKey(
+      request,
+      options.keyPrefix ?? "login-throttle",
+      JSON.stringify([resolveLoginIdentity(request), email]),
+    );
+    const attempts = store.consume(key);
+    if (attempts === null) return throttleUnavailableResponse();
+    if (attempts > options.maxAttempts)
       return await tooManyRequestsResponse(
         request,
         "Too many login attempts. Try again later.",
         options.decaySeconds,
       );
-    }
-
     return await next();
   };
+  return Object.assign(middleware, { dispose: () => store.dispose(), stats: () => store.stats() });
 }
 
 function createRedisLoginThrottleMiddleware(
@@ -122,7 +121,7 @@ function createLoginThrottleMiddleware(options: LoginThrottleOptions): Middlewar
 }
 
 function resetMemoryLoginThrottleForTests(): void {
-  memoryLoginBuckets.clear();
+  resetGeneration++;
 }
 
 export type { LoginThrottleOptions };

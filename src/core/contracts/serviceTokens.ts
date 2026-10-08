@@ -10,6 +10,9 @@ const CORE_THROTTLE_QUOTA_POLICY_TOKEN = createServiceToken<ThrottleQuotaPolicy>
 );
 const CORE_TENANT_RESOLVER_TOKEN = createServiceToken<TenantResolver>("core.tenantResolver");
 
+const CORE_HTTP_CLEANUP_TOKEN =
+  createServiceToken<(cleanup: () => void) => void>("core.httpCleanup");
+
 const CORE_CONFIG_TOKEN = "core.config";
 const CORE_CACHE_TOKEN = "core.cache";
 const CORE_QUEUE_TOKEN = "core.queue";
@@ -73,6 +76,7 @@ export {
   CORE_CACHE_TOKEN,
   CORE_CONFIG_TOKEN,
   CORE_EVENT_BUS_TOKEN,
+  CORE_HTTP_CLEANUP_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,

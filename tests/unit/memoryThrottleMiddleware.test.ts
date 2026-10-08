@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import {
   createMemoryThrottleMiddleware,
   resetMemoryThrottleForTests,
 } from "@getstrata/core/http/memoryThrottleMiddleware";
+import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("createMemoryThrottleMiddleware", () => {
@@ -38,7 +41,7 @@ describe("createMemoryThrottleMiddleware", () => {
     expect((await middleware(request, next)).status).toBe(200);
   });
 
-  test("keys requests by forwarded ip, authorization header, or unknown", async () => {
+  test("keys trusted forwarded IP or authenticated identity; forged bearer values share the guest bucket", async () => {
     const previous = process.env.TRUST_FORWARDED_FOR;
     process.env.TRUST_FORWARDED_FOR = "true";
 
@@ -60,7 +63,7 @@ describe("createMemoryThrottleMiddleware", () => {
 
       expect((await middleware(forwardedRequest, next)).status).toBe(200);
       expect((await middleware(authRequest, next)).status).toBe(200);
-      expect((await middleware(unknownRequest, next)).status).toBe(200);
+      expect((await middleware(unknownRequest, next)).status).toBe(429);
 
       expect((await middleware(forwardedRequest, next)).status).toBe(429);
       expect((await middleware(authRequest, next)).status).toBe(429);
@@ -145,5 +148,126 @@ describe("createMemoryThrottleMiddleware", () => {
     } finally {
       restoreEnvVar("FRONTEND_MODE", previous);
     }
+  });
+});
+
+describe("bounded middleware admission", () => {
+  test("concurrent admissions enforce one fixed window without counter races", async () => {
+    const middleware = createMemoryThrottleMiddleware({ maxAttempts: 7, decaySeconds: 60 });
+    const responses = await Promise.all(
+      Array.from({ length: 100 }, () =>
+        middleware(
+          new Request("https://example.test/a", { headers: { accept: "application/json" } }),
+          async () => {
+            await Promise.resolve();
+            return new Response("ok");
+          },
+        ),
+      ),
+    );
+    expect(responses.filter((r) => r.status === 200)).toHaveLength(7);
+    expect(responses.filter((r) => r.status === 429)).toHaveLength(93);
+    expect(middleware.stats().retainedBuckets).toBe(1);
+    middleware.dispose();
+  });
+
+  test("registered templates, method, tenant and verified token identities determine local buckets", async () => {
+    const middleware = createMemoryThrottleMiddleware({ maxAttempts: 1, decaySeconds: 60 });
+    const next = async () => new Response("ok");
+    const invoke = (
+      id: number,
+      token: number,
+      method = "GET",
+      path = "a",
+      routeTemplate = "/items/:id",
+    ) =>
+      runWithTenant({ id, slug: "tenant" }, () =>
+        runWithAuthUser({ id: 1, role: "member", tokenId: token }, () =>
+          runWithRequestMeta({ ipAddress: null, userAgent: null, routeTemplate }, () =>
+            middleware(
+              new Request(`https://example.test/items/${path}`, {
+                method,
+                headers: { accept: "application/json" },
+              }),
+              next,
+            ),
+          ),
+        ),
+      );
+    expect((await invoke(1, 1)).status).toBe(200);
+    expect((await invoke(1, 1, "GET", "b")).status).toBe(429);
+    expect((await invoke(2, 1)).status).toBe(200);
+    expect((await invoke(1, 2)).status).toBe(200);
+    expect((await invoke(1, 1, "POST")).status).toBe(200);
+    expect((await invoke(1, 1, "GET", "c", "/other/:id")).status).toBe(200);
+    middleware.dispose();
+  });
+
+  test("unique unknown URLs and forged tokens cannot create buckets or bypass existing limits", async () => {
+    const middleware = createMemoryThrottleMiddleware({
+      maxAttempts: 1,
+      decaySeconds: 60,
+      maxBuckets: 2,
+    });
+    for (let i = 0; i < 1000; i++) {
+      const response = await middleware(
+        new Request(`https://example.test/unknown-${i}`, {
+          headers: { authorization: `Bearer forged-${i}`, accept: "application/json" },
+        }),
+        async () => new Response("ok"),
+      );
+      expect(response.status).toBe(i === 0 ? 200 : 429);
+    }
+    expect(middleware.stats().retainedBuckets).toBe(1);
+    middleware.dispose();
+    middleware.dispose();
+    expect(middleware.stats().retainedBuckets).toBe(0);
+    expect(
+      (await middleware(new Request("https://example.test/a"), async () => new Response("bypass")))
+        .status,
+    ).toBe(503);
+  });
+
+  test("storage saturation and invalid policies fail closed; disposal does not affect other instances", async () => {
+    const first = createMemoryThrottleMiddleware({
+      maxAttempts: 1,
+      decaySeconds: 60,
+      maxBuckets: 1,
+    });
+    const second = createMemoryThrottleMiddleware({ maxAttempts: 1, decaySeconds: 60 });
+    const request = new Request("https://example.test/a", {
+      headers: { accept: "application/json" },
+    });
+    const next = async () => new Response("ok");
+    expect((await first(request, next)).status).toBe(200);
+    expect(
+      (await runWithAuthUser({ id: 2, role: "member" }, () => first(request, next))).status,
+    ).toBe(503);
+    expect((await first(request, next)).status).toBe(429);
+    first.dispose();
+    expect((await second(request, next)).status).toBe(200);
+    second.dispose();
+    for (const [quotaPolicy, status] of [
+      [() => 0, 429],
+      [() => NaN, 503],
+      [
+        () => {
+          throw new Error("private");
+        },
+        503,
+      ],
+    ] as const) {
+      const policy = createMemoryThrottleMiddleware({
+        maxAttempts: 1,
+        decaySeconds: 60,
+        quotaPolicy,
+      });
+      const response = await policy(request, next);
+      expect(response.status).toBe(status);
+      policy.dispose();
+    }
+    expect(() => createMemoryThrottleMiddleware({ maxAttempts: -1, decaySeconds: 60 })).toThrow(
+      "limit",
+    );
   });
 });

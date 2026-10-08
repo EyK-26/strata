@@ -42,6 +42,7 @@ import { createTracingMiddleware } from "@getstrata/core/tracing/tracingMiddlewa
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
+  CORE_HTTP_CLEANUP_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,
@@ -54,7 +55,40 @@ type MiddlewareGroupName = "api" | "authenticated" | "web";
 type WebGuestHome = string | ((user: AuthUser) => string | Promise<string>);
 
 class HttpKernel {
-  constructor(private readonly dependencies: AppDependencies) {}
+  private readonly ownedThrottles = new Set<Middleware & { dispose(): void }>();
+  private disposed = false;
+  constructor(private readonly dependencies: AppDependencies) {
+    if (dependencies.container.has(CORE_HTTP_CLEANUP_TOKEN)) {
+      dependencies.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => this.dispose());
+    }
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    const owned = [...this.ownedThrottles];
+    this.ownedThrottles.clear();
+    const errors: unknown[] = [];
+    for (const throttle of owned.reverse()) {
+      try {
+        throttle.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length) throw new AggregateError(errors, "HTTP throttle cleanup failed.");
+  }
+
+  /** Own custom disposable throttle middleware until this application closes. */
+  ownThrottle<T extends Middleware>(throttle: T): T {
+    if (this.disposed) {
+      if ("dispose" in throttle && typeof throttle.dispose === "function") throttle.dispose();
+      throw new Error("HTTP kernel is disposed.");
+    }
+    if ("dispose" in throttle && typeof throttle.dispose === "function") {
+      this.ownedThrottles.add(throttle as T & { dispose(): void });
+    }
+    return throttle;
+  }
 
   globalMiddleware(errorFormat: "json" | "web" = "json"): Middleware[] {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
@@ -104,11 +138,13 @@ class HttpKernel {
           const maxAttempts = Number(process.env.RATE_LIMIT_PER_MINUTE ?? "120");
 
           return [
-            createMemoryThrottleMiddleware({
-              maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
-              decaySeconds: 60,
-              quotaPolicy,
-            }),
+            this.ownThrottle(
+              createMemoryThrottleMiddleware({
+                maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
+                decaySeconds: 60,
+                quotaPolicy,
+              }),
+            ),
             csrf,
           ];
         }
@@ -353,11 +389,13 @@ class HttpKernel {
 
     if (scope === "login") {
       return withMiddleware(
-        createLoginThrottleMiddleware({
-          ...(redisUrl ? { redisUrl } : {}),
-          maxAttempts: rateLimit.maxAttempts,
-          decaySeconds: rateLimit.decaySeconds,
-        }),
+        this.ownThrottle(
+          createLoginThrottleMiddleware({
+            ...(redisUrl ? { redisUrl } : {}),
+            maxAttempts: rateLimit.maxAttempts,
+            decaySeconds: rateLimit.decaySeconds,
+          }),
+        ),
       )(handler);
     }
 
@@ -373,11 +411,13 @@ class HttpKernel {
     }
 
     return withMiddleware(
-      createMemoryThrottleMiddleware({
-        maxAttempts: rateLimit.maxAttempts,
-        decaySeconds: rateLimit.decaySeconds,
-        keyPrefix: memoryKeyPrefix,
-      }),
+      this.ownThrottle(
+        createMemoryThrottleMiddleware({
+          maxAttempts: rateLimit.maxAttempts,
+          decaySeconds: rateLimit.decaySeconds,
+          keyPrefix: memoryKeyPrefix,
+        }),
+      ),
     )(handler);
   }
 }

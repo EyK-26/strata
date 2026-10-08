@@ -1,16 +1,19 @@
 import { createHash } from "node:crypto";
 import { RedisClient } from "bun";
 import { namespacedRedisKey } from "../runtime/appKeyPrefix";
+import {
+  BoundedThrottleStore,
+  type MemoryThrottleStorageOptions,
+} from "../runtime/boundedThrottleStore";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
+import { redisThrottleKey, throttleUnavailableResponse } from "./throttleMiddleware";
 
-interface ScimThrottleOptions {
+interface ScimThrottleOptions extends MemoryThrottleStorageOptions {
   redisUrl?: string;
   maxAttempts: number;
   decaySeconds: number;
 }
-
-const memoryBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function resolveScimIdentity(request: Request): string {
   const authorization = request.headers.get("authorization") ?? "";
@@ -25,35 +28,17 @@ function resolveScimIdentity(request: Request): string {
   return readClientIp(request) ?? "unknown";
 }
 
-function throttleFromMemory(
-  key: string,
-  maxAttempts: number,
-  decaySeconds: number,
-): Response | null {
-  const now = Date.now();
-  const existing = memoryBuckets.get(key);
-
-  if (!existing || existing.resetAt <= now) {
-    memoryBuckets.set(key, { count: 1, resetAt: now + decaySeconds * 1000 });
-    return null;
-  }
-
-  existing.count += 1;
-
-  if (existing.count > maxAttempts) {
-    return Response.json(
-      { error: "Too many SCIM requests." },
-      { status: 429, headers: { "retry-after": String(decaySeconds) } },
-    );
-  }
-
-  return null;
-}
-
-function createScimThrottleMiddleware(options: ScimThrottleOptions): Middleware {
+function createScimThrottleMiddleware(options: ScimThrottleOptions) {
+  if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
+    throw new Error("Invalid SCIM throttle limit.");
+  const store = options.redisUrl
+    ? null
+    : new BoundedThrottleStore(options.decaySeconds * 1000, options);
   const client = options.redisUrl ? new RedisClient(options.redisUrl) : null;
 
-  return async (request: Request, next: () => Promise<Response>) => {
+  let disposed = false;
+  const middleware: Middleware = async (request, next) => {
+    if (disposed) return throttleUnavailableResponse();
     const identity = resolveScimIdentity(request);
     const key = `${namespacedRedisKey("scim-throttle:")}${identity}`;
 
@@ -74,14 +59,25 @@ function createScimThrottleMiddleware(options: ScimThrottleOptions): Middleware 
       return await next();
     }
 
-    const limited = throttleFromMemory(key, options.maxAttempts, options.decaySeconds);
-
-    if (limited) {
-      return limited;
-    }
+    const attempts = store?.consume(redisThrottleKey(request, "scim-throttle", identity));
+    if (attempts === null || attempts === undefined) return throttleUnavailableResponse();
+    if (attempts > options.maxAttempts)
+      return Response.json(
+        { error: "Too many SCIM requests." },
+        { status: 429, headers: { "retry-after": String(options.decaySeconds) } },
+      );
 
     return await next();
   };
+  return Object.assign(middleware, {
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      store?.dispose();
+      client?.close();
+    },
+    stats: () => store?.stats(),
+  });
 }
 
 export type { ScimThrottleOptions };
