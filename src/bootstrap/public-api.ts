@@ -81,6 +81,7 @@ export { createHttpKernel, type HttpKernel, type MiddlewareGroupName } from "./h
 export { resolveMembershipService } from "./membershipService.ts";
 export { prefixRouteMap } from "./prefixRouteMap.ts";
 export { coreProviders } from "./providers/index.ts";
+export { default as tracingProvider } from "./providers/tracing.ts";
 export { registerDefaultJobs } from "./queue/defaultJobs.ts";
 export { RouteRegistry, routeRegistry } from "./routeRegistry.ts";
 export { assertProductionSecrets } from "./secretsGuard.ts";

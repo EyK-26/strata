@@ -641,7 +641,13 @@ export {
   runWithTraceContext,
   traceContextStorage,
 } from "../core/tracing/traceContext.ts";
-export { createTracingMiddleware } from "../core/tracing/tracingMiddleware.ts";
+export type { TracingOptions, TracingRuntime } from "../core/tracing/tracingMiddleware.ts";
+export {
+  acquireTracingRuntime,
+  createTracingMiddleware,
+  createTracingRuntime,
+  getTracingRuntime,
+} from "../core/tracing/tracingMiddleware.ts";
 export type { ValidationRule, ValidationSchema } from "../core/validation/rules.ts";
 export {
   emailRule,
