@@ -1,80 +1,66 @@
-import { existsSync, readdirSync } from "node:fs";
-import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import {
+  type InfrastructureDiscoveryOptions,
+  importInfrastructure,
+  infrastructureFiles,
+} from "./infrastructureDiscovery";
 
-type ListenerRegistrar = () => void;
-
-const requireListener = createRequire(import.meta.url);
-
-const DISCOVER_LISTENERS_STATE_KEY = Symbol.for("@getstrata/discoverListenersState");
-
+type ListenerRegistrar = () => void | Promise<void>;
+interface DiscoverListenersOptions extends InfrastructureDiscoveryOptions {
+  manifest?: readonly ListenerRegistrar[];
+}
 interface DiscoverListenersState {
-  appListeners?: ListenerRegistrar[];
+  loads: Map<string | readonly ListenerRegistrar[], Promise<ListenerRegistrar[]>>;
 }
-
-function readDiscoverListenersState(): DiscoverListenersState {
-  const existing = (globalThis as Record<symbol, DiscoverListenersState | undefined>)[
-    DISCOVER_LISTENERS_STATE_KEY
-  ];
-
-  if (existing) {
-    return existing;
-  }
-
-  const state: DiscoverListenersState = {};
-  (globalThis as Record<symbol, DiscoverListenersState>)[DISCOVER_LISTENERS_STATE_KEY] = state;
-  return state;
+const KEY = Symbol.for("@getstrata/discoverListenersState");
+function state(): DiscoverListenersState {
+  const globals = globalThis as Record<symbol, DiscoverListenersState | undefined>;
+  globals[KEY] ??= { loads: new Map() };
+  return globals[KEY];
 }
-
-function resolveListenersDirectory(): string {
-  const fromCwd = join(process.cwd(), "src", "listeners");
-
-  if (existsSync(fromCwd)) {
-    return fromCwd;
-  }
-
-  return join(import.meta.dir, "../listeners");
-}
-
-function loadDiscoveredListeners(): ListenerRegistrar[] {
-  const listenersDirectory = resolveListenersDirectory();
-
-  let entries: string[];
-
-  try {
-    entries = readdirSync(listenersDirectory, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && /\.(ts|js)$/.test(entry.name))
-      .map((entry) => entry.name);
-  } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-      return [];
+async function load(options: DiscoverListenersOptions): Promise<ListenerRegistrar[]> {
+  const listeners = new Set<ListenerRegistrar>();
+  const add = (value: unknown, location: string) => {
+    if (typeof value !== "function")
+      throw new TypeError(
+        `Invalid listener registrar at ${location}: expected a default function.`,
+      );
+    listeners.add(value as ListenerRegistrar);
+  };
+  if (options.manifest)
+    for (const [index, value] of options.manifest.entries())
+      add(value, `listener manifest[${index}]`);
+  else
+    for (const file of await infrastructureFiles(
+      options.directory ?? join(process.cwd(), "src", "listeners"),
+      options.exclude,
+    )) {
+      const exports = await importInfrastructure(file);
+      const value = exports.default;
+      add(value && typeof value === "object" && "default" in value ? value.default : value, file);
     }
-
+  return [...listeners];
+}
+function discoverListeners(options: DiscoverListenersOptions = {}): Promise<ListenerRegistrar[]> {
+  const cache = state().loads;
+  const key =
+    options.manifest ??
+    JSON.stringify([
+      resolve(options.directory ?? join(process.cwd(), "src", "listeners")),
+      [...(options.exclude ?? [])].sort(),
+    ]);
+  const existing = cache.get(key);
+  if (existing) return existing;
+  const pending = load(options).catch((error) => {
+    if (cache.get(key) === pending) cache.delete(key);
     throw error;
-  }
-
-  const listeners = entries.map((fileName) => {
-    const filePath = join(listenersDirectory, fileName);
-    const loaded = requireListener(filePath) as { default?: ListenerRegistrar };
-    return loaded.default;
   });
-
-  return listeners.filter(
-    (listener): listener is ListenerRegistrar => typeof listener === "function",
-  );
+  cache.set(key, pending);
+  return pending;
 }
-
-function discoverListeners(): ListenerRegistrar[] {
-  const state = readDiscoverListenersState();
-
-  state.appListeners ??= loadDiscoveredListeners();
-  return state.appListeners;
-}
-
 function resetDiscoverListenersForTests(): void {
-  const state = readDiscoverListenersState();
-  state.appListeners = undefined;
+  state().loads = new Map();
 }
 
-export type { ListenerRegistrar };
+export type { DiscoverListenersOptions, ListenerRegistrar };
 export { discoverListeners, resetDiscoverListenersForTests };

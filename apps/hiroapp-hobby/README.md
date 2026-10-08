@@ -22,7 +22,7 @@ This file is the map for this app. Framework guides: [Building apps](https://git
 
 OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).
 
-Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `discoverListeners()` and `discoverJobs()`.
+Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `await discoverListeners()` and `await discoverJobs()`.
 
 This app did not pass those flags. Turn a flag on and re-run `create-strata`, or copy the commented env block and add a module yourself.
 

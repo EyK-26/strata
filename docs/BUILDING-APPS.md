@@ -77,7 +77,7 @@ Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and 
 
 After `ensureModulesLoaded()`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
 
-Starter apps also call `registerDefaultJobs` and `discoverJobs()` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job. `src/listeners/*.ts` registrars are loaded via `discoverListeners()` in the same boot phase (registration-owned cleanup, same pattern as the monorepo `core.listeners` provider). `src/jobs/*.ts` classes with `static jobName` are registered the same way.
+Starter apps also call `registerDefaultJobs` and `await discoverJobs()` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job. `src/listeners/*.ts` registrars are loaded via `await discoverListeners()` in the same boot phase (registration-owned cleanup, same pattern as the monorepo `core.listeners` provider). `src/jobs/*.ts` classes with `static jobName` are registered the same way.
 
 Generated apps combine `starterProviders` and discovered module providers into one ordered list and await the official `createAppContext(providers)` lifecycle. All registrations finish before any boot hook runs; starter providers retain their declared order, followed by module providers. A starter boot hook can therefore resolve a binding from module registration. Modules should register bindings in `register` and consume bindings in `boot`; a registration still cannot depend on a later registration having run. Do not substitute `collectProviders()` in generated apps: its monorepo core providers have different auth/config defaults.
 
@@ -158,7 +158,7 @@ To add more commands, extend that file (`commands` or `registerCommands()`). Sca
 
 ## Optional feature flags
 
-The starter wizard covers MFA, email verification, SCIM, metrics, plus optional `--oauth-github`, `--oidc`, `--billing`, and `--webhooks` (all off by default). SIEM export and hybrid SPA stay env-driven or deferred. See [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md). Outbound webhooks use `discoverJobs()`, not a `registerWebhookJobs()` helper (that symbol was never exported).
+The starter wizard covers MFA, email verification, SCIM, metrics, plus optional `--oauth-github`, `--oidc`, `--billing`, and `--webhooks` (all off by default). SIEM export and hybrid SPA stay env-driven or deferred. See [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md). Outbound webhooks use `await discoverJobs()`, not a `registerWebhookJobs()` helper (that symbol was never exported).
 
 ## Views and errors
 
@@ -416,3 +416,7 @@ For ordinary SQL models, extend `defineModel(table)` from `@getstrata/core/datab
 ### Graceful lifecycle
 
 Generated HTTP, queue worker and scheduler entrypoints coordinate stop, drain, flush and close phases. Providers can register `onCleanup(handler, "drain")` for admitted work, `onCleanup(handler, "flush")` for telemetry, and default cleanup for resource closure. Existing custom entrypoints must adopt the coordinator explicitly. See [LIFECYCLE.md](LIFECYCLE.md) for integration, deadlines and recovery contracts.
+
+### Awaited infrastructure discovery
+
+Jobs and listener modules load through awaited ESM imports before provider startup finishes. Malformed exports and duplicate discovered job/module names fail startup with their locations. Use explicit manifests for bundles and preserve DI factories instead of reconstructing their dependencies. See [DISCOVERY.md](DISCOVERY.md) for supported file/export shapes, caching and migration requirements.

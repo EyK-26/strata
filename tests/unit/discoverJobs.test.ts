@@ -36,7 +36,7 @@ describe("discoverJobs", () => {
     );
     resetDiscoverJobsForTests();
 
-    expect(discoverJobs()).toEqual([]);
+    expect(await discoverJobs()).toEqual([]);
   });
 
   test("returns no names when cwd src/jobs exists but is empty", async () => {
@@ -49,7 +49,7 @@ describe("discoverJobs", () => {
     );
     resetDiscoverJobsForTests();
 
-    expect(discoverJobs()).toEqual([]);
+    expect(await discoverJobs()).toEqual([]);
   });
 
   test("registers jobs with static jobName from cwd", async () => {
@@ -72,53 +72,23 @@ describe("discoverJobs", () => {
     );
     resetDiscoverJobsForTests();
 
-    expect(discoverJobs()).toEqual(["echo"]);
+    expect(await discoverJobs()).toEqual(["echo"]);
     expect(jobRegistry.create("echo")?.constructor.name).toBe("EchoJob");
   });
 
-  test("skips files that are not jobs and loads .js defaults", async () => {
+  test("loads legacy CommonJS defaults and ignores explicitly excluded helper modules", async () => {
     const root = await tempDir();
     const jobsDirectory = join(root, "src", "jobs");
-    await mkdir(join(jobsDirectory, "nested"), { recursive: true });
-    await writeJob(jobsDirectory, "readme.txt", "not a job\n");
-    await writeJob(jobsDirectory, "noDefault.ts", "export class NotDefault {}\n");
-    await writeJob(jobsDirectory, "notAClass.ts", "export default 1;\n");
-    await writeJob(
-      jobsDirectory,
-      "noName.ts",
-      `export default class NoNameJob {
-  async handle() {}
-}
-`,
-    );
-    await writeJob(
-      jobsDirectory,
-      "emptyName.ts",
-      `export default class EmptyNameJob {
-  static jobName = "";
-  async handle() {}
-}
-`,
-    );
+    await mkdir(jobsDirectory, { recursive: true });
+    await writeJob(jobsDirectory, "helper.ts", "export default 1;");
     await writeJob(
       jobsDirectory,
       "fromJs.js",
-      `module.exports = {
-  default: class FromJs {
-    static jobName = "from-js";
-    async handle() {}
-  },
-};
-`,
+      'module.exports = {default: class FromJs {static jobName="from-js"; async handle(){}}};',
     );
-
     process.chdir(root);
-    const { discoverJobs, resetDiscoverJobsForTests } = await import(
-      "../../src/bootstrap/discoverJobs"
-    );
-    resetDiscoverJobsForTests();
-
-    expect(discoverJobs()).toEqual(["from-js"]);
+    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
+    expect(await discoverJobs({ exclude: ["helper.ts"] })).toEqual(["from-js"]);
     expect(jobRegistry.create("from-js")?.constructor.name).toBe("FromJs");
   });
 
@@ -142,7 +112,7 @@ describe("discoverJobs", () => {
     );
     resetDiscoverJobsForTests();
 
-    expect(discoverJobs()).toEqual(["echo"]);
+    expect(await discoverJobs()).toEqual(["echo"]);
 
     await writeJob(
       jobsDirectory,
@@ -154,10 +124,10 @@ describe("discoverJobs", () => {
 `,
     );
 
-    expect(discoverJobs()).toEqual(["echo"]);
+    expect(await discoverJobs()).toEqual(["echo"]);
 
     resetDiscoverJobsForTests();
-    expect(discoverJobs().toSorted()).toEqual(["echo", "later"]);
+    expect((await discoverJobs()).toSorted()).toEqual(["echo", "later"]);
   });
 
   test("rethrows non-ENOENT errors when src/jobs is not a directory", async () => {
@@ -171,6 +141,6 @@ describe("discoverJobs", () => {
     );
     resetDiscoverJobsForTests();
 
-    expect(() => discoverJobs()).toThrow();
+    await expect(discoverJobs()).rejects.toThrow();
   });
 });

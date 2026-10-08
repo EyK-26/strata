@@ -59,12 +59,14 @@ export {
 export type { CreateWebRoutesOptions } from "./createWebRoutes.ts";
 export { createWebRoutes, mergeWebRoutes } from "./createWebRoutes.ts";
 export { createAppDependencies } from "./dependencies.ts";
+export type { DiscoveredJobClass, DiscoverJobsOptions, JobManifestEntry } from "./discoverJobs.ts";
 export { discoverJobs, resetDiscoverJobsForTests } from "./discoverJobs.ts";
 export type { DiscoverModelsOptions } from "./discoverModels.ts";
 export { discoverModels } from "./discoverModels.ts";
 export type { DiscoverModulesOptions } from "./discoverModules.ts";
 export {
   configureModulesDirectory,
+  configureModulesManifest,
   discoverModules,
   ensureModulesLoaded,
 } from "./discoverModules.ts";
