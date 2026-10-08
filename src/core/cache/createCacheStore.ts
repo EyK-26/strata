@@ -1,4 +1,4 @@
-import RedisCacheStore from "./redisCacheStore";
+import RedisCacheStore, { type RedisCacheOptions } from "./redisCacheStore";
 import SimpleCache from "./simpleCache";
 import SimpleCacheStore from "./simpleCacheStore";
 import type { CacheStore } from "./store";
@@ -10,6 +10,7 @@ interface CreateCacheStoreOptions {
   ttlMs: number;
   maxEntries: number;
   redisUrl?: string;
+  redis?: RedisCacheOptions;
 }
 
 function createCacheStore(options: CreateCacheStoreOptions): CacheStore {
@@ -18,11 +19,11 @@ function createCacheStore(options: CreateCacheStoreOptions): CacheStore {
       throw new Error('CACHE_DRIVER="redis" requires REDIS_URL to be set.');
     }
 
-    return new RedisCacheStore(options.redisUrl, options.ttlMs, options.maxEntries);
+    return new RedisCacheStore(options.redisUrl, options.ttlMs, options.maxEntries, options.redis);
   }
 
   return new SimpleCacheStore(new SimpleCache(options.ttlMs, options.maxEntries));
 }
 
-export type { CacheDriver, CreateCacheStoreOptions };
+export type { CacheDriver, CreateCacheStoreOptions, RedisCacheOptions };
 export { createCacheStore };
