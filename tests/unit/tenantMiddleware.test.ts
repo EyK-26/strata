@@ -18,9 +18,39 @@ async function runTenant(
 }
 
 describe("createTenantMiddleware", () => {
-  test("DEFAULT_TENANT uses the free plan", async () => {
+  test("DEFAULT_TENANT carries only tenant identity", async () => {
     const { DEFAULT_TENANT } = await import("@getstrata/core/tenant/tenantMiddleware");
-    expect(DEFAULT_TENANT.plan).toBe("free");
+    expect(DEFAULT_TENANT).toEqual({ id: 1, slug: "default" });
+  });
+
+  test("loads trusted metadata only for the selected tenant and rejects identity changes", async () => {
+    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
+    const previous = process.env.FEATURE_PUBLIC_READS;
+    process.env.FEATURE_PUBLIC_READS = "false";
+    try {
+      const middleware = createTenantMiddleware({
+        resolveTenant: async (id) => ({ id, slug: "custom", metadata: { entitlement: "campus" } }),
+      });
+      const result = await runTenant(
+        middleware,
+        new Request("http://example.test/", {
+          headers: { "x-tenant-id": "999", "x-entitlement": "other" },
+        }),
+      );
+      expect(result.tenant).toEqual({ id: 1, slug: "custom", metadata: { entitlement: "campus" } });
+      const missing = createTenantMiddleware({ resolveTenant: async () => null });
+      const denied = await runTenant(missing, new Request("http://example.test/"));
+      expect(denied.response.status).toBe(403);
+      expect(denied.tenant).toBeNull();
+      const broken = createTenantMiddleware({
+        resolveTenant: async () => ({ id: 999, slug: "wrong" }),
+      });
+      await expect(runTenant(broken, new Request("http://example.test/"))).rejects.toThrow(
+        "different tenant identity",
+      );
+    } finally {
+      restoreEnvVar("FEATURE_PUBLIC_READS", previous);
+    }
   });
 
   test("resolves tenant from header for anonymous requests", async () => {
@@ -41,7 +71,7 @@ describe("createTenantMiddleware", () => {
       expect(response.headers.get("x-tenant-id")).toBeNull();
       expect(response.headers.get("x-tenant-region")).toBeNull();
       expect(tenant?.id).toBe(1);
-      expect(tenant?.region).toBeTruthy();
+      expect(tenant?.metadata).toBeUndefined();
     } finally {
       restoreEnvVar("FEATURE_PUBLIC_READS", previous);
     }

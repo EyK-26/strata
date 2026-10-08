@@ -1,12 +1,23 @@
 import { createHash } from "node:crypto";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
-import { currentTenant, rateLimitMultiplierForPlan } from "@getstrata/core/tenant/tenantContext";
+import { currentTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
 import { RedisClient } from "bun";
 import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";
 import { tooManyRequestsResponse } from "./throttleResponse";
+
+interface ThrottleQuotaContext {
+  readonly request: Request;
+  readonly tenant: TenantContext | null;
+  readonly identity: string;
+  readonly routeTemplate: string;
+  readonly maxAttempts: number;
+}
+
+/** A synchronous application-owned attempt limit; the window remains fixed. */
+type ThrottleQuotaPolicy = (context: ThrottleQuotaContext) => number;
 
 interface ThrottleOptions {
   redisUrl: string;
@@ -15,6 +26,7 @@ interface ThrottleOptions {
   keyPrefix?: string;
   commandTimeoutMs?: number;
   redisClient?: RedisThrottleClient;
+  quotaPolicy?: ThrottleQuotaPolicy;
 }
 
 function resolveThrottleIdentity(request: Request): string {
@@ -123,20 +135,48 @@ function throttleUnavailableResponse(): Response {
   );
 }
 
+function resolveThrottleQuota(
+  request: Request,
+  options: Pick<ThrottleOptions, "maxAttempts" | "quotaPolicy">,
+  identity = resolveThrottleIdentity(request),
+): number {
+  const limit = options.quotaPolicy
+    ? options.quotaPolicy({
+        request,
+        tenant: currentTenant(),
+        identity,
+        routeTemplate: currentRequestMeta().routeTemplate ?? "__unmatched__",
+        maxAttempts: options.maxAttempts,
+      })
+    : options.maxAttempts;
+  if (!Number.isSafeInteger(limit) || limit < 0) {
+    throw new Error("Invalid application quota.");
+  }
+  return limit;
+}
+
 function createThrottleMiddleware(options: ThrottleOptions): Middleware {
+  if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0) {
+    throw new Error("Throttle maxAttempts must be a non-negative safe integer.");
+  }
   const consume = createRedisThrottleConsumer(options);
   const prefix = options.keyPrefix ?? "throttle";
 
   return async (request: Request, next: () => Promise<Response>) => {
-    const key = redisThrottleKey(request, prefix, resolveThrottleIdentity(request));
+    const identity = resolveThrottleIdentity(request);
+    let maxAttempts: number;
+    try {
+      maxAttempts = resolveThrottleQuota(request, options, identity);
+    } catch {
+      return throttleUnavailableResponse();
+    }
+    const key = redisThrottleKey(request, prefix, identity);
     let attempts: number;
     try {
       attempts = await consume(key, options.decaySeconds);
     } catch {
       return throttleUnavailableResponse();
     }
-    const maxAttempts =
-      options.maxAttempts * rateLimitMultiplierForPlan(currentTenant()?.plan ?? "free");
     if (attempts > maxAttempts) {
       return await tooManyRequestsResponse(request, "Too many requests.", options.decaySeconds);
     }
@@ -144,12 +184,13 @@ function createThrottleMiddleware(options: ThrottleOptions): Middleware {
   };
 }
 
-export type { RedisThrottleClient, ThrottleOptions };
+export type { RedisThrottleClient, ThrottleOptions, ThrottleQuotaContext, ThrottleQuotaPolicy };
 export {
   consumeRedisThrottle,
   createRedisThrottleConsumer,
   createThrottleMiddleware,
   redisThrottleKey,
   resolveThrottleIdentity,
+  resolveThrottleQuota,
   throttleUnavailableResponse,
 };

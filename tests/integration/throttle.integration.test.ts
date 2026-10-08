@@ -6,6 +6,7 @@ import {
   createThrottleMiddleware,
   redisThrottleKey,
 } from "@getstrata/core/http/throttleMiddleware";
+import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import { RedisClient } from "bun";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
@@ -52,6 +53,57 @@ describeRedis("atomic distributed throttles", () => {
       expect(Number(await clients[0].send("PTTL", [key]))).toBeGreaterThan(0);
     } finally {
       await clients[0].del(key);
+      for (const client of clients) client.close();
+    }
+  });
+
+  test("application quotas remain tenant-isolated across three Redis clients", async () => {
+    const clients = [
+      new RedisClient(redisUrl),
+      new RedisClient(redisUrl),
+      new RedisClient(redisUrl),
+    ] as const;
+    const prefix = `quota-test-${crypto.randomUUID()}`;
+    const request = new Request("http://example.test/resources/42", {
+      headers: { accept: "application/json" },
+    });
+    const meta = { ipAddress: "203.0.113.60", userAgent: null, routeTemplate: "/resources/:id" };
+    const keys: string[] = [];
+    try {
+      const middleware = clients.map((redisClient) =>
+        createThrottleMiddleware({
+          redisUrl,
+          redisClient,
+          keyPrefix: prefix,
+          maxAttempts: 1,
+          decaySeconds: 60,
+          quotaPolicy: ({ tenant, maxAttempts }) =>
+            tenant?.metadata?.entitlement === "campus" ? 7 : maxAttempts,
+        }),
+      );
+      const responses = await Promise.all(
+        ["campus", "unknown"].map((entitlement, index) =>
+          runWithTenant({ id: index + 1, slug: entitlement, metadata: { entitlement } }, () =>
+            runWithRequestMeta(meta, async () => {
+              keys.push(redisThrottleKey(request, prefix, meta.ipAddress));
+              return await Promise.all(
+                Array.from({ length: 30 }, (_, i) =>
+                  middleware[i % 3]?.(request, async () => new Response("ok")),
+                ),
+              );
+            }),
+          ),
+        ),
+      );
+      expect(responses[0]?.filter((r) => r?.status === 200)).toHaveLength(7);
+      expect(responses[1]?.filter((r) => r?.status === 200)).toHaveLength(1);
+      expect(new Set(keys).size).toBe(2);
+      for (const key of keys) {
+        expect(Number(await clients[0].get(key))).toBe(30);
+        expect(Number(await clients[0].send("PTTL", [key]))).toBeGreaterThan(0);
+      }
+    } finally {
+      for (const key of keys) await clients[0].del(key);
       for (const client of clients) client.close();
     }
   });

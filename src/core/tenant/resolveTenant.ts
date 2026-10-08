@@ -7,25 +7,21 @@ async function resolveTenant(tenantId: number): Promise<TenantContext | null> {
     return {
       id: tenantId,
       slug: "default",
-      plan: "free",
-      region: "eu",
     };
   }
 
   const rows = (await db`
-    SELECT id, slug, plan, region
+    SELECT id, slug
     FROM tenant
     WHERE id = ${tenantId}
     LIMIT 1
   `) as Array<{
     id: number;
     slug: string;
-    plan: TenantContext["plan"];
-    region: TenantContext["region"];
   }>;
 
   const row = rows[0];
-  return row ? { id: row.id, slug: row.slug, plan: row.plan, region: row.region ?? "eu" } : null;
+  return row ? { id: row.id, slug: row.slug } : null;
 }
 
 export { resolveTenant };

@@ -13,8 +13,6 @@ import { runWithTenantDatabase } from "./tenantDatabaseScope";
 const DEFAULT_TENANT: TenantContext = {
   id: 1,
   slug: "default",
-  plan: "free",
-  region: "eu",
 };
 
 async function resolveUserTenantId(userId: number): Promise<number> {
@@ -38,7 +36,17 @@ function auditChecksum(payload: Record<string, unknown>): string {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
-async function resolveTenantForRequest(request: Request): Promise<TenantContext> {
+type TenantResolver = (id: number) => Promise<TenantContext | null>;
+
+interface TenantMiddlewareOptions {
+  /** Load trusted application metadata after the framework selects the tenant ID. */
+  resolveTenant?: TenantResolver;
+}
+
+async function resolveTenantForRequest(
+  request: Request,
+  resolver: TenantResolver,
+): Promise<TenantContext> {
   const user = currentAuthUser();
   const headerValue = request.headers.get("x-tenant-id")?.trim();
   const parsedHeader =
@@ -57,7 +65,7 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
           throw new ForbiddenError("Tenant header does not match your account.");
         }
 
-        const memberTenant = await resolveTenant(userTenantId);
+        const memberTenant = await resolver(userTenantId);
         if (memberTenant) {
           return memberTenant;
         }
@@ -66,7 +74,7 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
       }
 
       if (Number.isInteger(parsedHeader) && parsedHeader > 0) {
-        const headerTenant = await resolveTenant(parsedHeader);
+        const headerTenant = await resolver(parsedHeader);
         if (headerTenant) {
           return headerTenant;
         }
@@ -74,7 +82,7 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
         return DEFAULT_TENANT;
       }
 
-      const adminTenant = await resolveTenant(userTenantId);
+      const adminTenant = await resolver(userTenantId);
       if (adminTenant) {
         return adminTenant;
       }
@@ -86,7 +94,7 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
   const headerTenantId = Number.isInteger(parsedHeader) && parsedHeader > 0 ? parsedHeader : null;
   const tenantId =
     isPublicReadsEnabled() && headerTenantId !== null ? headerTenantId : DEFAULT_TENANT.id;
-  const guestTenant = await resolveTenant(tenantId);
+  const guestTenant = await resolver(tenantId);
   if (guestTenant) {
     return guestTenant;
   }
@@ -94,7 +102,8 @@ async function resolveTenantForRequest(request: Request): Promise<TenantContext>
   return DEFAULT_TENANT;
 }
 
-function createTenantMiddleware() {
+function createTenantMiddleware(options: TenantMiddlewareOptions = {}) {
+  const resolver = options.resolveTenant ?? resolveTenant;
   return async (request: Request, next: () => Promise<Response>) => {
     const pathname = new URL(request.url).pathname;
 
@@ -107,7 +116,16 @@ function createTenantMiddleware() {
     }
 
     try {
-      const tenant = await resolveTenantForRequest(request);
+      const tenant = await resolveTenantForRequest(request, async (id) => {
+        const tenant = await resolver(id);
+        if (options.resolveTenant && tenant === null) {
+          throw new ForbiddenError("Tenant not found.");
+        }
+        if (tenant && tenant.id !== id) {
+          throw new Error("Tenant resolver returned a different tenant identity.");
+        }
+        return tenant;
+      });
 
       return await runWithTenantDatabase(tenant, async () => {
         return await next();
@@ -124,4 +142,5 @@ function createTenantMiddleware() {
   };
 }
 
+export type { TenantMiddlewareOptions, TenantResolver };
 export { auditChecksum, createTenantMiddleware, DEFAULT_TENANT, resolveUserTenantId };

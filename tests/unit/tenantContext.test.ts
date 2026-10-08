@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   currentTenant,
   currentTenantId,
-  rateLimitMultiplierForPlan,
   runWithTenant,
 } from "@getstrata/core/tenant/tenantContext";
 
@@ -23,9 +22,8 @@ describe("tenantContext", () => {
     expect(currentTenant()).toBeNull();
   });
 
-  test("maps tenant plans to rate limit multipliers", () => {
-    expect(rateLimitMultiplierForPlan("free")).toBe(1);
-    expect(rateLimitMultiplierForPlan("pro")).toBe(2);
-    expect(rateLimitMultiplierForPlan("enterprise")).toBe(4);
+  test("preserves arbitrary application metadata without interpreting it", () => {
+    const tenant = { id: 9, slug: "acme", metadata: { entitlement: "campus", region: "moon" } };
+    runWithTenant(tenant, () => expect(currentTenant()?.metadata).toEqual(tenant.metadata));
   });
 });
