@@ -3,6 +3,7 @@ import {
   BoundedThrottleStore,
   type MemoryThrottleStorageOptions,
 } from "../runtime/boundedThrottleStore";
+import { resolveScimTenantFromToken } from "../security/scimTenantTokens";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 import {
@@ -46,7 +47,15 @@ function createScimThrottleMiddleware(options: ScimThrottleOptions) {
   const middleware: Middleware = async (request, next) => {
     if (disposed) return throttleUnavailableResponse();
     const identity = resolveScimIdentity(request);
-    const key = redisThrottleKey(request, options.keyPrefix ?? "scim-throttle:v2", identity);
+    const token = request.headers.get("authorization")?.startsWith("Bearer ")
+      ? (request.headers.get("authorization")?.slice("Bearer ".length).trim() ?? "")
+      : "";
+    const key = redisThrottleKey(
+      request,
+      options.keyPrefix ?? "scim-throttle:v2",
+      identity,
+      resolveScimTenantFromToken(token) ?? undefined,
+    );
     let attempts: number | null | undefined;
     try {
       attempts = consume ? await consume(key, options.decaySeconds) : store?.consume(key);

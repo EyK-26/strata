@@ -56,9 +56,14 @@ end
 return count
 `;
 
-function redisThrottleKey(request: Request, prefix: string, identity: string): string {
+function redisThrottleKey(
+  request: Request,
+  prefix: string,
+  identity: string,
+  tenantId: number | null = currentTenant()?.id ?? null,
+): string {
   const bucket = JSON.stringify([
-    currentTenant()?.id ?? null,
+    tenantId,
     request.method,
     currentRequestMeta().routeTemplate ?? "__unmatched__",
     identity,

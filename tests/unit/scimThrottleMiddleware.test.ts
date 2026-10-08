@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
+import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
+import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("createScimThrottleMiddleware", () => {
   test("bounds distinct local credentials without evicting lockouts", async () => {
@@ -65,6 +67,41 @@ describe("createScimThrottleMiddleware", () => {
 });
 
 describe("SCIM distributed failure contracts", () => {
+  test("pre-auth buckets use the trusted SCIM token tenant rather than surrounding scope", async () => {
+    const previous = process.env.SCIM_TENANT_TOKENS;
+    process.env.SCIM_TENANT_TOKENS = "2:trusted-token";
+    const counts = new Map<string, number>();
+    const keys: string[] = [];
+    const throttle = createScimThrottleMiddleware({
+      maxAttempts: 1,
+      decaySeconds: 60,
+      redisClient: {
+        send: async (_command, args) => {
+          const key = args[2] ?? "";
+          keys.push(key);
+          const count = (counts.get(key) ?? 0) + 1;
+          counts.set(key, count);
+          return count;
+        },
+      },
+    });
+    const request = new Request("http://example.test/scim/v2/Users", {
+      headers: { authorization: "Bearer trusted-token" },
+    });
+    try {
+      for (const id of [1, 3]) {
+        const response = await runWithTenant({ id, slug: "surrounding" }, () =>
+          throttle(request, async () => new Response("ok")),
+        );
+        expect(response.status).toBe(id === 1 ? 200 : 429);
+      }
+      expect(keys[0]).toBe(keys[1]);
+    } finally {
+      throttle.dispose();
+      restoreEnvVar("SCIM_TENANT_TOKENS", previous);
+    }
+  });
+
   test("failed, malformed and stalled stores return a safe 503 without local fallback", async () => {
     for (const send of [
       async () => {
