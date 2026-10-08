@@ -1,5 +1,20 @@
 # create-strata changelog
 
+## 2.2.0
+
+Consistent model scopes.
+Changed-field model writes.
+Awaited provider startup.
+Shared cache correctness.
+Native HTTP controls and body limits.
+Graceful lifecycle.
+Validated async discovery.
+Stronger model input types.
+OpenTelemetry tracing.
+Distributed scheduler ownership.
+App-owned quota policy.
+Bounded memory throttling.
+
 ## Unreleased
 
 - Document generated scheduler coordination defaults: Redis in production and explicit one-process operation for local deployments.

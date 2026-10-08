@@ -1,5 +1,20 @@
 # @getstrata/core changelog
 
+## 2.2.0
+
+Consistent model scopes.
+Changed-field model writes.
+Awaited provider startup.
+Shared cache correctness.
+Native HTTP controls and body limits.
+Graceful lifecycle.
+Validated async discovery.
+Stronger model input types.
+OpenTelemetry tracing.
+Distributed scheduler ownership.
+App-owned quota policy.
+Bounded memory throttling.
+
 ## Unreleased
 
 - Coordinate scheduled minute occurrences with renewable Redis ownership, overlap exclusion, completion retention and lease-loss cancellation. Production defaults to Redis without local fallback; direct task callbacks now accept ownership context. Share appSchedule across root/subpath imports. See SCHEDULER.md for explicit local mode and replay limits.

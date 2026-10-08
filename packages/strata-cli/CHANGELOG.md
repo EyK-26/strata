@@ -1,5 +1,20 @@
 # @getstrata/cli changelog
 
+## 2.2.0
+
+Consistent model scopes.
+Changed-field model writes.
+Awaited provider startup.
+Shared cache correctness.
+Native HTTP controls and body limits.
+Graceful lifecycle.
+Validated async discovery.
+Stronger model input types.
+OpenTelemetry tracing.
+Distributed scheduler ownership.
+App-owned quota policy.
+Bounded memory throttling.
+
 ## 2.1.0
 
 - refactor(starter): reuse shared config and base repositories - fix(database): await password casts before model writes - fix(database): preserve concrete model types in query results

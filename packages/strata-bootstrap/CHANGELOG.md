@@ -1,5 +1,20 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.0
+
+Consistent model scopes.
+Changed-field model writes.
+Awaited provider startup.
+Shared cache correctness.
+Native HTTP controls and body limits.
+Graceful lifecycle.
+Validated async discovery.
+Stronger model input types.
+OpenTelemetry tracing.
+Distributed scheduler ownership.
+App-owned quota policy.
+Bounded memory throttling.
+
 ## Unreleased
 
 - Provide shared tracing provider ownership and phased OpenTelemetry flush/shutdown without replacing application global tracer providers.
