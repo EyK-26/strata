@@ -24,12 +24,19 @@ class FailedJobService {
     });
   }
 
-  async retry(id: number): Promise<FailedJobRecord> {
+  /** Admit the replay before deleting its recovery record. Delivery remains at least once. */
+  async retry(
+    id: number,
+    enqueue: (record: FailedJobRecord) => Promise<void>,
+  ): Promise<FailedJobRecord> {
+    if (typeof enqueue !== "function")
+      throw new Error("Failed-job retry requires an admission callback.");
     const failedJob = await this.repository.findByIdOrThrow(
       id,
       (jobId) => new Error(`Failed job ${jobId} not found.`),
     );
 
+    await enqueue(failedJob);
     await this.repository.deleteById(id);
     return failedJob;
   }
