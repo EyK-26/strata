@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Compose repeated query predicates and protect global model scopes from caller OR branches; preserve scopes in chunks/cursor pages and intersect cursor bounds with existing filters. Related-model scope propagation remains a follow-up.
+
 - Add typed `defineModel(table)` bases and two-phase model startup; preserve explicit repository overrides and share model identity across package import paths.
 
 ## 2.1.0

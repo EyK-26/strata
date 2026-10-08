@@ -230,17 +230,21 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       throw new Error("Cursor page size must be a positive integer.");
     }
 
-    const cursorWhere: QueryWhere<TEntity> = { ...where };
-
+    const filters: WhereNode<TEntity>[] = [];
+    if (Object.keys(where).length > 0) filters.push({ kind: "and", where });
+    filters.push(...(whereNodes ?? []));
+    const cursorFilters: WhereNode<TEntity>[] = [{ kind: "and", group: filters }];
     if (cursor !== undefined) {
+      const cursorWhere: QueryWhere<TEntity> = {};
       (cursorWhere as Record<string, unknown>)[cursorColumn] =
         direction === "asc" ? { gt: cursor } : { lt: cursor };
+      cursorFilters.push({ kind: "and", where: cursorWhere });
     }
 
     const rows = await this.findAll({
       ...queryOptions,
-      where: cursorWhere,
-      whereNodes,
+      where: {},
+      whereNodes: cursorFilters,
       orderBy: { [cursorColumn]: direction } as QueryOptions<TEntity>["orderBy"],
       limit: perPage + 1,
     });

@@ -1098,7 +1098,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     let query = repository.query();
 
     for (const scope of getGlobalScopes(this)) {
-      query = scope(query);
+      query = scope(query).protectWhere();
     }
 
     return new ModelQuery(this, query);
@@ -1190,11 +1190,15 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   ): Promise<void> {
     const statics = modelStatics(this);
     ensureBooted(this);
-    await resolveModelRepository(this).chunk(count, async (rows) => {
-      return await callback(
-        rows.map((row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">),
-      );
-    });
+    await (Model.query as (this: object) => ModelQuery)
+      .call(this)
+      .query.chunk(count, async (rows) => {
+        return await callback(
+          rows.map(
+            (row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">,
+          ),
+        );
+      });
   }
 
   static cursorPaginate<TModel extends object>(
@@ -1213,10 +1217,12 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }> {
     const statics = modelStatics(this);
     ensureBooted(this);
-    const page = await resolveModelRepository(this).cursorPaginate({
-      perPage: options.perPage,
-      cursor: options.cursor as never,
-    });
+    const page = await (Model.query as (this: object) => ModelQuery)
+      .call(this)
+      .query.cursorPaginate({
+        perPage: options.perPage,
+        cursor: options.cursor as never,
+      });
     return {
       data: page.data.map(
         (row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">,
