@@ -922,17 +922,16 @@ import {
 
 const queueProvider: ServiceProvider = {
   name: "starter.queue",
-  register({ container }) {
+  register({ container, onCleanup }) {
     const driver = (process.env.QUEUE_DRIVER ?? "sync") as "sync" | "async" | "redis";
     const failedJobs = createFailedJobService();
     container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
-    container.set(
-      CORE_QUEUE_TOKEN,
-      createAppQueue(driver, process.env.REDIS_URL, failedJobs, () => {
-        registerDefaultJobs();
-        discoverJobs();
-      }),
-    );
+    const queue = createAppQueue(driver, process.env.REDIS_URL, failedJobs, () => {
+      registerDefaultJobs();
+      discoverJobs();
+    });
+    onCleanup(() => queue.close?.());
+    container.set(CORE_QUEUE_TOKEN, queue);
   },
 };
 
@@ -1055,26 +1054,13 @@ import policyProvider from "./policy.ts";
 import queueProvider from "./queue.ts";
 import storageProvider from "./storage.ts";
 
-const registeredListenerGroups = new Set<string>();
-
-function registerListenerGroup(name: string, register: () => void): void {
-  if (registeredListenerGroups.has(name)) {
-    return;
-  }
-
-  registeredListenerGroups.add(name);
-  register();
-}
-
 const listenersProvider: ServiceProvider = {
   name: "starter.listeners",
-  boot() {
-    registerListenerGroup("cache.invalidate-on-model-write", () => {
-      registerInvalidateCacheOnModelWriteListeners();
-    });
+  async boot({ onCleanup }) {
+    onCleanup(registerInvalidateCacheOnModelWriteListeners());
 
     for (const registerListener of discoverListeners()) {
-      registerListener();
+      await registerListener();
     }
   },
 };
@@ -1103,16 +1089,8 @@ function renderCreateAppTs(layers: StarterLayers): string {
   const metricsSpread = layers.extras.metrics ? "\n    ...createMetricsRoutes()," : "";
   return `import { join } from "node:path";
 import "./preload.ts";
-import { runProviderPhase } from "@getstrata/bootstrap/context";
-import {
-  type AppContext,
-  type AppRouteMap,
-  assertAppDependenciesComplete,
-  ConfigStore,
-  type MutableAppDependencies,
-  type ProviderContext,
-  ServiceContainer,
-} from "@getstrata/bootstrap/contracts";
+import { createAppContext as createProviderAppContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
+import type { AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
 import {
   configureModulesDirectory,
@@ -1122,13 +1100,12 @@ import {
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
 ${metricsImport}import { assertProductionSecrets, assertRlsLiveDatabaseRole } from "@getstrata/bootstrap/secretsGuard";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
-import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
 import { migrate } from "../db/migrate.ts";
 import { buildRoutes } from "../routes.ts";
 import { loadConfig } from "./config.ts";
-import { getSql } from "./database.ts";
+import { closeDatabase, getSql, pingDatabase } from "./database.ts";
 ${ensureLine}import { starterProviders } from "./providers/index.ts";
 
 export interface BootstrapOptions {
@@ -1136,62 +1113,59 @@ export interface BootstrapOptions {
 }
 
 export interface BootstrappedApp {
-  context: AppContext;
+  context: InitializedAppContext;
   routes: AppRouteMap;
   config: ReturnType<typeof loadConfig>;
 }
 
-function createAppContext(): AppContext {
-  const container = new ServiceContainer();
-  const config = new ConfigStore();
-  const dependencies: MutableAppDependencies = { container };
-  const context: ProviderContext = { container, config, dependencies };
-
-  runProviderPhase(starterProviders, "register", context);
-  runProviderPhase(starterProviders, "boot", context);
-
+async function createAppContext(): Promise<InitializedAppContext> {
+  await ensureModulesLoaded();
   const moduleProviders = discoverModules().flatMap((module) => module.providers ?? []);
-  runProviderPhase(moduleProviders, "register", context);
-  runProviderPhase(moduleProviders, "boot", context);
-
-  assertAppDependenciesComplete(dependencies);
-
-  const appContext: AppContext = { container, config, dependencies };
-  setActiveApplicationContext(appContext);
-  return appContext;
+  return createProviderAppContext([...starterProviders, ...moduleProviders]);
 }
 
 export async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
-  const isProduction = isProductionEnv();
-  // Dev boots migrate for convenience. Production must not mutate schema on
-  // start, so run \`strata migrate\` as an explicit deploy step instead.
-  const { migrate: runMigrate = !isProduction } = options;
+  let context: InitializedAppContext | undefined;
+  try {
+    const isProduction = isProductionEnv();
+    // Dev boots migrate for convenience. Production must not mutate schema on
+    // start, so run \`strata migrate\` as an explicit deploy step instead.
+    const { migrate: runMigrate = !isProduction } = options;
 
-  if (isProduction) {
-    assertProductionSecrets();
+    if (isProduction) {
+      assertProductionSecrets();
+    }
+
+${needsEnsure(layers) ? "    await ensureAppDatabase();\n" : ""}    const appConfig = loadConfig();
+    getSql();
+    if (!(await pingDatabase())) throw new Error("Database is not ready.");
+    if (isRlsTenancy()) {
+      await assertRlsLiveDatabaseRole();
+    }
+    configureModulesDirectory(join(import.meta.dir, "../modules"));
+    await ensureModulesLoaded();
+    context = await createAppContext();
+
+    if (runMigrate) {
+      await migrate();
+    }
+
+    const routes = mergeSpaRoutes(context.dependencies, {
+      ...createHealthRoutes(context.dependencies),
+      ...buildRoutes(context.dependencies),${metricsSpread}
+    }, {
+      distDirectory: join(import.meta.dir, "../../frontend/dist"),
+    });
+
+    return { context, routes, config: appConfig };
+  } catch (error) {
+    const failures: unknown[] = [];
+    for (const cleanup of [() => context?.dispose(), closeDatabase]) {
+      try { await cleanup(); } catch (failure) { failures.push(failure); }
+    }
+    if (failures.length) throw new AggregateError([error, ...failures], "Application startup and cleanup failed.", { cause: error });
+    throw error;
   }
-
-${needsEnsure(layers) ? "  await ensureAppDatabase();\n" : ""}  const appConfig = loadConfig();
-  getSql();
-  if (isRlsTenancy()) {
-    await assertRlsLiveDatabaseRole();
-  }
-  configureModulesDirectory(join(import.meta.dir, "../modules"));
-  await ensureModulesLoaded();
-  const context = createAppContext();
-
-  if (runMigrate) {
-    await migrate();
-  }
-
-  const routes = mergeSpaRoutes(context.dependencies, {
-    ...createHealthRoutes(context.dependencies),
-    ...buildRoutes(context.dependencies),${metricsSpread}
-  }, {
-    distDirectory: join(import.meta.dir, "../../frontend/dist"),
-  });
-
-  return { context, routes, config: appConfig };
 }
 
 export async function createApp(options: BootstrapOptions = {}) {
@@ -1260,9 +1234,18 @@ function renderCliQueueWorkTs(): string {
   const { bootstrapApp } = await import("../bootstrap/createApp.ts");
   const { closeDatabase } = await import("../bootstrap/database.ts");
 
+  let app: Awaited<ReturnType<typeof bootstrapApp>> | undefined;
   await runQueueWorkerCommand({
-    boot: () => bootstrapApp({ migrate: false }),
-    close: closeDatabase,
+    boot: async () => {
+      app = await bootstrapApp({ migrate: false });
+    },
+    close: async () => {
+      try {
+        await app?.context.dispose();
+      } finally {
+        await closeDatabase();
+      }
+    },
   });
 }
 
@@ -1323,10 +1306,14 @@ export { openapiCheckCommand, openapiGenerateCommand, openapiValidateCommand };
 function renderCliScheduleRunTs(): string {
   return `async function scheduleRunCommand(): Promise<void> {
   const { createScheduleRunCommand } = await import("@getstrata/cli/schedule");
+  const { bootstrapApp } = await import("../bootstrap/createApp.ts");
+  const { closeDatabase } = await import("../bootstrap/database.ts");
+  let app: Awaited<ReturnType<typeof bootstrapApp>> | undefined;
   await createScheduleRunCommand(async () => {
-    const { bootstrapApp } = await import("../bootstrap/createApp.ts");
-    await bootstrapApp({ migrate: false });
+    app = await bootstrapApp({ migrate: false });
     await import("../bootstrap/schedule.ts");
+  }, async () => {
+    try { await app?.context.dispose(); } finally { await closeDatabase(); }
   })();
 }
 

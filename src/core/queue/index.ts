@@ -19,6 +19,7 @@ abstract class Job<TPayload extends object = object> {
 }
 
 interface Queue {
+  close?(): void | Promise<void>;
   dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void>;
 }
 

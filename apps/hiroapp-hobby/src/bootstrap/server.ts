@@ -1,25 +1,37 @@
 import "./preload.ts";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { bootstrapApp, createAppServer } from "./createApp.ts";
-import { closeDatabase, pingDatabase } from "./database.ts";
+import { closeDatabase } from "./database.ts";
 
-await ensureModulesLoaded();
-
-const { routes, config } = await bootstrapApp();
-
-const server = createAppServer(routes, config.port);
-
+const { routes, config, context } = await bootstrapApp();
+let server: ReturnType<typeof createAppServer>;
+try {
+  server = createAppServer(routes, config.port);
+} catch (error) {
+  try {
+    await context.dispose();
+  } finally {
+    await closeDatabase();
+  }
+  throw error;
+}
 console.log(`Listening on http://localhost:${server.port} (APP_URL ${config.appUrl})`);
 
-if (!(await pingDatabase())) {
-  console.warn("Warning: database ping failed.");
+let shutdownPromise: Promise<void> | undefined;
+function shutdown(): Promise<void> {
+  shutdownPromise ??= (async () => {
+    server.stop();
+    try {
+      await context.dispose();
+    } finally {
+      await closeDatabase();
+    }
+    process.exit(0);
+  })();
+  return shutdownPromise;
 }
-
-async function shutdown() {
-  await closeDatabase();
-  server.stop();
-  process.exit(0);
-}
-
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => {
+  void shutdown();
+});
+process.on("SIGTERM", () => {
+  void shutdown();
+});

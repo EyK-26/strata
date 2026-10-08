@@ -5,14 +5,14 @@ import { envFlagEnabled, isProductionEnv } from "../../core/runtime/appEnv";
 import { storage } from "../../core/storage/storage";
 
 interface TinkerContext {
-  container: ReturnType<typeof createAppDependencies>["container"];
-  dependencies: ReturnType<typeof createAppDependencies>;
+  container: Awaited<ReturnType<typeof createAppDependencies>>["container"];
+  dependencies: Awaited<ReturnType<typeof createAppDependencies>>;
   mailer: typeof mailer;
   storage: typeof storage;
 }
 
-function createTinkerContext(): TinkerContext {
-  const dependencies = createAppDependencies();
+async function createTinkerContext(): Promise<TinkerContext> {
+  const dependencies = await createAppDependencies();
   return {
     container: dependencies.container,
     dependencies,
@@ -37,7 +37,7 @@ async function tinkerCommand(): Promise<void> {
     );
   }
 
-  const context = createTinkerContext();
+  const context = await createTinkerContext();
   assignTinkerGlobals(context);
 
   const preloadPath = join(import.meta.dir, "tinkerPreload.ts");

@@ -48,6 +48,8 @@
 
 ## Unreleased
 
+- Await queue/scheduler application startup and close resources after failed startup or completed work; preserve original failures when cleanup also fails.
+
 - 2.0: migrations no longer implicitly call an app seed export. Seeding requires --seed; fresh accepts the same explicit flag. Missing seed exports are rejected before applying migrations or resetting data.
 
 ## 1.1.9

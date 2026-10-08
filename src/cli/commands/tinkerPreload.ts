@@ -2,7 +2,7 @@ import { appDisplayName } from "@getstrata/core/runtime/appKeyPrefix";
 import { assignTinkerGlobals, createTinkerContext } from "./tinker";
 
 if (process.env.STRATA_TINKER !== "1") {
-  const context = createTinkerContext();
+  const context = await createTinkerContext();
   assignTinkerGlobals(context);
 }
 

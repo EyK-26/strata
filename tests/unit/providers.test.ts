@@ -41,18 +41,18 @@ describe("config store", () => {
 });
 
 describe("app providers", () => {
-  test("does not run product-app production secret gates", () => {
+  test("does not run product-app production secret gates", async () => {
     const previous = process.env.APP_ENV;
     process.env.APP_ENV = "production";
 
     try {
-      expect(() => createAppContext()).not.toThrow();
+      await expect(createAppContext()).resolves.toBeDefined();
     } finally {
       restoreEnvVar("APP_ENV", previous);
     }
   });
 
-  test("build the app context from config and core providers", () => {
+  test("build the app context from config and core providers", async () => {
     const previousPort = process.env.PORT;
     const previousTtl = process.env.CACHE_TTL_MS;
     const previousMaxEntries = process.env.CACHE_MAX_ENTRIES;
@@ -62,7 +62,7 @@ describe("app providers", () => {
     process.env.CACHE_MAX_ENTRIES = "25";
 
     try {
-      const context = createAppContext();
+      const context = await createAppContext();
 
       expect(context.config.require<number>(APP_PORT_CONFIG_KEY)).toBe(4100);
       expect(context.config.require<number>(CACHE_TTL_MS_CONFIG_KEY)).toBe(2500);

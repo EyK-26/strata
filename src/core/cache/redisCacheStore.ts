@@ -23,6 +23,10 @@ class RedisCacheStore implements CacheStore {
     this.client = new RedisClient(redisUrl);
   }
 
+  close(): void {
+    this.client.close();
+  }
+
   async get<T>(key: string): Promise<T | undefined> {
     const raw = await this.client.get(this.storageKey(key));
 

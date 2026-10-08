@@ -254,7 +254,7 @@ describe("create-strata generate", () => {
     expect(noteModel).not.toContain("BaseRepository");
     expect(noteModel).not.toContain("class NoteRepository");
     const bootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(bootstrap).toContain("const config = new ConfigStore()");
+    expect(bootstrap).toContain("createProviderAppContext");
     expect(bootstrap).not.toContain("AppConfigStore");
     expect(bootstrap).not.toContain("as unknown as ConfigStore");
     expect(bootstrap).not.toContain("dependencies as AppDependencies");
@@ -271,7 +271,7 @@ describe("create-strata generate", () => {
     expect(providers).toContain("policyProvider");
     expect(providers).toContain("registerInvalidateCacheOnModelWriteListeners");
     expect(providers).toContain("discoverListeners");
-    expect(providers).toContain("registerListenerGroup");
+    expect(providers).toContain("onCleanup(registerInvalidateCacheOnModelWriteListeners())");
     expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
 
     const queueProvider = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
@@ -284,19 +284,15 @@ describe("create-strata generate", () => {
     expect(createApp).toContain("discoverModules");
     expect(createApp).toContain("moduleProviders");
     expect(createApp.indexOf("await ensureModulesLoaded()")).toBeLessThan(
-      createApp.indexOf("const context = createAppContext();"),
+      createApp.indexOf("context = await createAppContext();"),
     );
-    const starterRegisterIndex = createApp.indexOf('runProviderPhase(starterProviders, "register"');
-    const starterBootIndex = createApp.indexOf('runProviderPhase(starterProviders, "boot"');
-    const moduleRegisterIndex = createApp.indexOf('runProviderPhase(moduleProviders, "register"');
-    const moduleBootIndex = createApp.indexOf('runProviderPhase(moduleProviders, "boot"');
-    expect(starterRegisterIndex).toBeGreaterThan(-1);
-    expect(starterBootIndex).toBeGreaterThan(starterRegisterIndex);
-    expect(moduleRegisterIndex).toBeGreaterThan(starterBootIndex);
-    expect(moduleBootIndex).toBeGreaterThan(moduleRegisterIndex);
-    expect(queueProvider).toContain("register({ container })");
+    expect(createApp).toContain(
+      "return createProviderAppContext([...starterProviders, ...moduleProviders])",
+    );
+    expect(createApp).not.toContain("runProviderPhase");
+    expect(queueProvider).toContain("register({ container, onCleanup })");
     expect(queueProvider.indexOf("discoverJobs()")).toBeGreaterThan(
-      queueProvider.indexOf("register({ container })"),
+      queueProvider.indexOf("register({ container, onCleanup })"),
     );
     expect(readme).not.toContain("GET /metrics");
 
@@ -1055,7 +1051,7 @@ describe("create-strata CLI", () => {
     expect(extraValues).toEqual(["emailVerification", "scim", "metrics", "billing", "webhooks"]);
   });
 
-  test("module providers register during bootstrapApp", async () => {
+  test("generated bootstrap awaits module registration before starter boot", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["probe-providers", "--yes"]);
     const repo = repoRoot;
@@ -1080,10 +1076,13 @@ export const PROBE_BOOT_TOKEN = "probe.module.boot.token";
 
 const probeProvider: ServiceProvider = {
   name: "probe.provider",
-  register({ container }) {
+  async register({ container, onCleanup }) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    onCleanup(() => { container.set("probe.closed", true); });
     container.singleton(PROBE_REGISTER_TOKEN, () => "module-provider-register");
   },
-  boot({ container }) {
+  async boot({ container }) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
     const gate = container.resolve<{ register: (resource: string, policy: unknown) => void }>(
       CORE_POLICY_GATE_TOKEN,
     );
@@ -1099,6 +1098,17 @@ const probeModule: AppModule = {
 
 export default probeModule;
 `,
+    );
+
+    const providerIndex = join(app, "src/bootstrap/providers/index.ts");
+    const providerSource = await readFile(providerIndex, "utf8");
+    await writeFile(
+      providerIndex,
+      providerSource.replace(
+        "  async boot({ onCleanup }) {",
+        `  async boot({ onCleanup, container }) {
+    if (container.resolve("probe.module.register.token") !== "module-provider-register") throw new Error("starter boot ran before module registration");`,
+      ),
     );
 
     const install = Bun.spawnSync({
@@ -1136,6 +1146,8 @@ export default probeModule;
       expect(() => context.config.require("generator.missing")).toThrow(
         'Config key "generator.missing" is not defined.',
       );
+      await context.dispose();
+      expect(context.container.resolve("probe.closed")).toBe(true);
       await closeDatabase();
     } finally {
       resetDiscoverModulesForTests();

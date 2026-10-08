@@ -559,6 +559,7 @@ export {
   webhookSignatureHeader,
 } from "../core/runtime/appKeyPrefix.ts";
 export {
+  clearActiveApplicationContext,
   resolveApplicationAuth,
   resolveApplicationCache,
   resolveApplicationConfig,

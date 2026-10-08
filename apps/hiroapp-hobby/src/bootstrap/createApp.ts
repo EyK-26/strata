@@ -1,16 +1,10 @@
 import { join } from "node:path";
 import "./preload.ts";
-import { runProviderPhase } from "@getstrata/bootstrap/context";
 import {
-  type AppContext,
-  type AppDependencies,
-  type AppRouteMap,
-  assertAppDependenciesComplete,
-  type ConfigStore,
-  type MutableAppDependencies,
-  type ProviderContext,
-  ServiceContainer,
-} from "@getstrata/bootstrap/contracts";
+  createAppContext as createProviderAppContext,
+  type InitializedAppContext,
+} from "@getstrata/bootstrap/context";
+import type { AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
 import {
   configureModulesDirectory,
@@ -24,12 +18,11 @@ import {
 } from "@getstrata/bootstrap/secretsGuard";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
-import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
 import { migrate } from "../db/migrate.ts";
 import { buildRoutes } from "../routes.ts";
 import { loadConfig } from "./config.ts";
-import { getSql } from "./database.ts";
+import { closeDatabase, getSql, pingDatabase } from "./database.ts";
 import { starterProviders } from "./providers/index.ts";
 
 export interface BootstrapOptions {
@@ -37,91 +30,70 @@ export interface BootstrapOptions {
 }
 
 export interface BootstrappedApp {
-  context: AppContext;
+  context: InitializedAppContext;
   routes: AppRouteMap;
   config: ReturnType<typeof loadConfig>;
 }
 
-class AppConfigStore {
-  private readonly values = new Map<string, unknown>();
-
-  set<T>(key: string, value: T): T {
-    this.values.set(key, value);
-    return value;
-  }
-
-  get<T>(key: string): T | undefined {
-    return this.values.get(key) as T | undefined;
-  }
-
-  require<T>(key: string): T {
-    const value = this.get<T>(key);
-    if (value === undefined) {
-      throw new Error(`Missing required config value "${key}".`);
-    }
-    return value;
-  }
-
-  has(key: string): boolean {
-    return this.values.has(key);
-  }
-}
-
-function createAppContext(): AppContext {
-  const container = new ServiceContainer();
-  const config = new AppConfigStore() as unknown as ConfigStore;
-  const dependencies: MutableAppDependencies = { container };
-  const context: ProviderContext = { container, config, dependencies };
-
-  runProviderPhase(starterProviders, "register", context);
-  runProviderPhase(starterProviders, "boot", context);
-
+async function createAppContext(): Promise<InitializedAppContext> {
+  await ensureModulesLoaded();
   const moduleProviders = discoverModules().flatMap((module) => module.providers ?? []);
-  runProviderPhase(moduleProviders, "register", context);
-  runProviderPhase(moduleProviders, "boot", context);
-
-  assertAppDependenciesComplete(dependencies);
-
-  const appContext = { container, config, dependencies: dependencies as AppDependencies };
-  setActiveApplicationContext(appContext as never);
-  return appContext;
+  return createProviderAppContext([...starterProviders, ...moduleProviders]);
 }
 
 export async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
-  const isProduction = isProductionEnv();
-  // Dev boots migrate for convenience. Production must not mutate schema on
-  // start, so run `strata migrate` as an explicit deploy step instead.
-  const { migrate: runMigrate = !isProduction } = options;
+  let context: InitializedAppContext | undefined;
+  try {
+    const isProduction = isProductionEnv();
+    // Dev boots migrate for convenience. Production must not mutate schema on
+    // start, so run `strata migrate` as an explicit deploy step instead.
+    const { migrate: runMigrate = !isProduction } = options;
 
-  if (isProduction) {
-    assertProductionSecrets();
+    if (isProduction) {
+      assertProductionSecrets();
+    }
+
+    const appConfig = loadConfig();
+    getSql();
+    if (!(await pingDatabase())) throw new Error("Database is not ready.");
+    if (isRlsTenancy()) {
+      await assertRlsLiveDatabaseRole();
+    }
+    configureModulesDirectory(join(import.meta.dir, "../modules"));
+    await ensureModulesLoaded();
+    context = await createAppContext();
+
+    if (runMigrate) {
+      await migrate();
+    }
+
+    const routes = mergeSpaRoutes(
+      context.dependencies,
+      {
+        ...createHealthRoutes(context.dependencies),
+        ...buildRoutes(context.dependencies),
+      },
+      {
+        distDirectory: join(import.meta.dir, "../../frontend/dist"),
+      },
+    );
+
+    return { context, routes, config: appConfig };
+  } catch (error) {
+    const failures: unknown[] = [];
+    for (const cleanup of [() => context?.dispose(), closeDatabase]) {
+      try {
+        await cleanup();
+      } catch (failure) {
+        failures.push(failure);
+      }
+    }
+    if (failures.length)
+      throw new AggregateError([error, ...failures], "Application startup and cleanup failed.", {
+        cause: error,
+      });
+    throw error;
   }
-
-  const appConfig = loadConfig();
-  getSql();
-  if (isRlsTenancy()) {
-    await assertRlsLiveDatabaseRole();
-  }
-  configureModulesDirectory(join(import.meta.dir, "../modules"));
-  await ensureModulesLoaded();
-  const context = createAppContext();
-
-  if (runMigrate) {
-    await migrate();
-  }
-
-  const routes = mergeSpaRoutes(
-    context.dependencies,
-    {
-      ...createHealthRoutes(context.dependencies),
-      ...buildRoutes(context.dependencies),
-    },
-    {
-      distDirectory: join(import.meta.dir, "../../frontend/dist"),
-    },
-  );
-
-  return { context, routes, config: appConfig };
 }
 
 export async function createApp(options: BootstrapOptions = {}) {

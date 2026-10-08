@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make provider startup awaited, register all providers before boot, and expose idempotent context disposal with failure cleanup. Direct startup helper callers must now await; appContext getters require completed startup.
+
 - Add awaited model discovery with nested exports, two-phase naming/boot, duplicate-name detection and startup error propagation.
 
 ## 2.1.0

@@ -101,7 +101,7 @@ describe("@getstrata/core contracts", () => {
 
     const container = new ServiceContainer();
     const config = new ConfigStore();
-    provider.register?.({ container, config, dependencies: { container } });
+    provider.register?.({ container, config, dependencies: { container }, onCleanup() {} });
 
     expect(config.has("demo")).toBe(true);
     expect(config.require<boolean>("demo")).toBe(true);

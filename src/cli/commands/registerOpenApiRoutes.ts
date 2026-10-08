@@ -12,7 +12,7 @@ function withoutSpaCatchAll(routes: Record<string, unknown>): Record<string, unk
 
 async function registerOpenApiRoutes(): Promise<void> {
   if (!isHiroappDogfood()) {
-    const { dependencies } = createAppContext();
+    const { dependencies } = await createAppContext();
     createRoutes(dependencies);
     return;
   }

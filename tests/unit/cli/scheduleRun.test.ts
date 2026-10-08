@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import * as database from "../../../src/db/connection";
 import { captureConsole } from "./helpers";
+
+beforeEach(() => {
+  spyOn(database, "closeDatabase").mockResolvedValue(undefined);
+});
 
 afterEach(() => {
   mock.restore();
@@ -60,5 +65,54 @@ describe("scheduleRunCommand", () => {
 
     expect(ran).toBe(true);
     expect(output.logs).toEqual(["Running scheduled task: heartbeat"]);
+  });
+});
+
+describe("scheduled app startup", () => {
+  test("does not inspect or run tasks before boot resolves; rejected boot cleans up once", async () => {
+    let inspected = 0;
+    let ran = 0;
+    let closed = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mock.module("@getstrata/core/scheduler/schedule", () => ({
+      appSchedule: {
+        dueTasks: () => {
+          inspected++;
+          return [{ name: "probe" }];
+        },
+      },
+      runDueScheduledTasks: async () => {
+        ran++;
+      },
+    }));
+    const { createScheduleRunCommand } = await import("@getstrata/cli/schedule");
+    const running = createScheduleRunCommand(
+      () => gate,
+      () => {
+        closed++;
+      },
+    )();
+    await Promise.resolve();
+    expect(inspected).toBe(0);
+    expect(ran).toBe(0);
+    release();
+    await running;
+    expect(ran).toBe(1);
+    expect(closed).toBe(1);
+    await expect(
+      createScheduleRunCommand(
+        async () => {
+          throw new Error("boot failed");
+        },
+        () => {
+          closed++;
+        },
+      )(),
+    ).rejects.toThrow("boot failed");
+    expect(ran).toBe(1);
+    expect(closed).toBe(2);
   });
 });

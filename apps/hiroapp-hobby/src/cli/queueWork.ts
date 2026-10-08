@@ -7,9 +7,18 @@ async function queueWorkCommand(): Promise<void> {
   const { bootstrapApp } = await import("../bootstrap/createApp.ts");
   const { closeDatabase } = await import("../bootstrap/database.ts");
 
+  let app: Awaited<ReturnType<typeof bootstrapApp>> | undefined;
   await runQueueWorkerCommand({
-    boot: () => bootstrapApp({ migrate: false }),
-    close: closeDatabase,
+    boot: async () => {
+      app = await bootstrapApp({ migrate: false });
+    },
+    close: async () => {
+      try {
+        await app?.context.dispose();
+      } finally {
+        await closeDatabase();
+      }
+    },
   });
 }
 

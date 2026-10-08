@@ -1,4 +1,5 @@
 interface CacheStore {
+  close?(): void | Promise<void>;
   get<T>(key: string): Promise<T | undefined>;
   set<T>(key: string, value: T, ttlMs?: number): Promise<void>;
   getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T>;

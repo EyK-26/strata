@@ -12,7 +12,7 @@ describe("createTinkerContext", () => {
   test("exposes container and facades", async () => {
     mock.restore();
     const { createTinkerContext: createContext } = await import("../../../src/cli/commands/tinker");
-    const context = createContext();
+    const context = await createContext();
 
     expect(context.container).toBeDefined();
     expect(context.dependencies.container).toBe(context.container);
@@ -25,7 +25,7 @@ describe("createTinkerContext", () => {
     const { assignTinkerGlobals: assignGlobals, createTinkerContext: createContext } = await import(
       "../../../src/cli/commands/tinker"
     );
-    const context = createContext();
+    const context = await createContext();
     assignGlobals(context);
 
     expect((globalThis as { container?: unknown }).container).toBe(context.container);
@@ -37,8 +37,10 @@ describe("createTinkerContext", () => {
 describe("tinker preload script", () => {
   test("runs a one-liner against the tinker context", async () => {
     const script = `
+      import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
+      configureModulesDirectory("./tests/fixtures/empty-modules");
       import { createTinkerContext } from "./src/cli/commands/tinker.ts";
-      const ctx = createTinkerContext();
+      const ctx = await createTinkerContext();
       console.log(JSON.stringify({
         hasContainer: Boolean(ctx.container),
         mailerName: ctx.mailer().constructor.name,
