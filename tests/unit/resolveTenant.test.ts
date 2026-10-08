@@ -10,7 +10,7 @@ describe("resolveTenant", () => {
       id: 1,
       slug: "default",
     });
-    expect(tenant?.plan).toBeDefined();
+    expect(tenant).toEqual({ id: 1, slug: "default" });
   });
 
   test("returns a synthetic tenant when TENANCY_DRIVER=none", async () => {
@@ -21,8 +21,6 @@ describe("resolveTenant", () => {
       await expect(resolveTenant(9)).resolves.toEqual({
         id: 9,
         slug: "default",
-        plan: "free",
-        region: "eu",
       });
     } finally {
       restoreEnvVar("TENANCY_DRIVER", previous);

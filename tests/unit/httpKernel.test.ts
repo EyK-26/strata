@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
+  CORE_THROTTLE_QUOTA_POLICY_TOKEN,
   REDIS_URL_CONFIG_KEY,
 } from "@getstrata/bootstrap/config";
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
@@ -46,6 +47,33 @@ describe("HttpKernel", () => {
   afterEach(() => {
     restoreDevAuthHeaders(previousHeaders);
   });
+  test("API quota DI works in local mode without weakening login/register protection", async () => {
+    const config = new ConfigStore();
+    config.set(REDIS_URL_CONFIG_KEY, "");
+    const dependencies = createKernelDependencies(config);
+    dependencies.container.set(CORE_THROTTLE_QUOTA_POLICY_TOKEN, () => 0);
+    const kernel = createHttpKernel(dependencies);
+    const response = await kernel.wrap(
+      "api",
+      async () => new Response("bypass"),
+    )(new Request("http://example.test/a", { headers: { accept: "application/json" } }));
+    expect(response.status).toBe(429);
+    expect(
+      (
+        await kernel.wrapLogin(async () => new Response("ok"))(
+          new Request("http://example.test/login"),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await kernel.wrapRegister(async () => new Response("ok"))(
+          new Request("http://example.test/register"),
+        )
+      ).status,
+    ).toBe(200);
+  });
+
   test("registers global middleware for logging, request id, and auth", () => {
     const kernel = createHttpKernel(createKernelDependencies());
     const middleware = kernel.globalMiddleware();

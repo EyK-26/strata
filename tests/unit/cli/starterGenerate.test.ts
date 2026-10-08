@@ -563,6 +563,10 @@ describe("create-strata generate", () => {
     const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS tenant");
     expect(schema).toContain("tenant_id");
+    expect(schema).not.toContain("plan TEXT");
+    expect(schema).not.toContain("region TEXT");
+    const seed = await readFile(join(app, "src/db/migrate.ts"), "utf8");
+    expect(seed).not.toContain("slug, plan, region");
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("TENANCY_DRIVER=column");
   });

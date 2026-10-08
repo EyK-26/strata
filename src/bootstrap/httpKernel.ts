@@ -43,6 +43,8 @@ import {
   CORE_AUTH_TOKEN,
   CORE_CONFIG_TOKEN,
   CORE_POLICY_GATE_TOKEN,
+  CORE_TENANT_RESOLVER_TOKEN,
+  CORE_THROTTLE_QUOTA_POLICY_TOKEN,
   REDIS_URL_CONFIG_KEY,
 } from "./config";
 import type { AppDependencies, ConfigStore } from "./contracts";
@@ -69,7 +71,11 @@ class HttpKernel {
       errorFormat === "json" ? createJsonErrorMiddleware() : createWebErrorMiddleware(),
       createAuthMiddleware(auth),
       createMembershipMiddleware(),
-      createTenantMiddleware(),
+      createTenantMiddleware({
+        resolveTenant: this.dependencies.container.has(CORE_TENANT_RESOLVER_TOKEN)
+          ? this.dependencies.container.resolve(CORE_TENANT_RESOLVER_TOKEN)
+          : undefined,
+      }),
     ];
   }
 
@@ -88,6 +94,9 @@ class HttpKernel {
           return [csrf];
         }
 
+        const quotaPolicy = this.dependencies.container.has(CORE_THROTTLE_QUOTA_POLICY_TOKEN)
+          ? this.dependencies.container.resolve(CORE_THROTTLE_QUOTA_POLICY_TOKEN)
+          : undefined;
         const config = this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
         const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? "";
 
@@ -98,6 +107,7 @@ class HttpKernel {
             createMemoryThrottleMiddleware({
               maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
               decaySeconds: 60,
+              quotaPolicy,
             }),
             csrf,
           ];
@@ -110,6 +120,7 @@ class HttpKernel {
             redisUrl,
             maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
             decaySeconds: 60,
+            quotaPolicy,
           }),
           csrf,
         ];

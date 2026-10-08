@@ -1,12 +1,18 @@
 import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
+import {
+  resolveThrottleQuota,
+  type ThrottleQuotaPolicy,
+  throttleUnavailableResponse,
+} from "./throttleMiddleware";
 import { tooManyRequestsResponse } from "./throttleResponse";
 
 interface MemoryThrottleOptions {
   maxAttempts: number;
   decaySeconds: number;
   keyPrefix?: string;
+  quotaPolicy?: ThrottleQuotaPolicy;
 }
 
 type ThrottleBucket = { count: number; resetAt: number };
@@ -19,6 +25,15 @@ function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Middlew
   throttleBucketRegistries.add(buckets);
 
   return async (request: Request, next: () => Promise<Response>) => {
+    let maxAttempts: number;
+    try {
+      maxAttempts = resolveThrottleQuota(request, options);
+    } catch {
+      return throttleUnavailableResponse();
+    }
+    if (maxAttempts === 0) {
+      return await tooManyRequestsResponse(request, "Too many requests.", options.decaySeconds);
+    }
     const path = new URL(request.url).pathname;
     const identity =
       readClientIp(request) ?? request.headers.get("authorization")?.slice(0, 32) ?? "unknown";
@@ -33,7 +48,7 @@ function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Middlew
 
     existing.count += 1;
 
-    if (existing.count > options.maxAttempts) {
+    if (existing.count > maxAttempts) {
       return await tooManyRequestsResponse(request, "Too many requests.", options.decaySeconds);
     }
 

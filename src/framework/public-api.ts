@@ -466,6 +466,11 @@ export {
   signedUrl,
   temporarySignedUrl,
 } from "../core/http/signedUrl.ts";
+export type {
+  ThrottleOptions,
+  ThrottleQuotaContext,
+  ThrottleQuotaPolicy,
+} from "../core/http/throttleMiddleware.ts";
 export { createThrottleMiddleware } from "../core/http/throttleMiddleware.ts";
 export {
   expectObject,
@@ -633,7 +638,6 @@ export type { TenantContext } from "../core/tenant/tenantContext.ts";
 export {
   currentTenant,
   currentTenantId,
-  rateLimitMultiplierForPlan,
   runWithTenant,
   tenantContext,
 } from "../core/tenant/tenantContext.ts";
@@ -641,6 +645,7 @@ export {
   isInsideTenantDatabaseScope,
   runWithTenantDatabase,
 } from "../core/tenant/tenantDatabaseScope.ts";
+export type { TenantMiddlewareOptions, TenantResolver } from "../core/tenant/tenantMiddleware.ts";
 export {
   auditChecksum,
   createTenantMiddleware,

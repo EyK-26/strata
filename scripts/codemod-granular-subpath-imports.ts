@@ -86,7 +86,6 @@ const SYMBOL_TARGETS: Record<string, string> = {
   ROLE_RANK: "auth/accessControl",
   currentTenant: "tenant/tenantContext",
   currentTenantId: "tenant/tenantContext",
-  rateLimitMultiplierForPlan: "tenant/tenantContext",
   runWithTenant: "tenant/tenantContext",
   TenantContext: "tenant/tenantContext",
   assertIfMatch: "http/etag",

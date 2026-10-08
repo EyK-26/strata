@@ -261,9 +261,7 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
   if (tenancyOn) {
     statements.push(`CREATE TABLE IF NOT EXISTS tenant (
     id ${d.id},
-    slug ${d.keyText} NOT NULL UNIQUE,
-    plan ${d.defaultText} NOT NULL DEFAULT 'free',
-    region ${d.defaultText} NOT NULL DEFAULT 'eu'
+    slug ${d.keyText} NOT NULL UNIQUE
   )`);
   }
 
@@ -449,8 +447,8 @@ function renderMigrateTs(layers: StarterLayers): string {
   );
   if (Number(tenantCount) === 0) {
     await sql.unsafe(
-      "INSERT INTO tenant (slug, plan, region) VALUES (${ph ? "$1, $2, $3" : "?, ?, ?"})",
-      ["default", "free", "eu"],
+      "INSERT INTO tenant (slug) VALUES (${ph ? "$1" : "?"})",
+      ["default"],
     );
   }`
     : "";

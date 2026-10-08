@@ -3,8 +3,10 @@ import { createAsyncContextStore } from "../runtime/asyncContextStore";
 type TenantContext = {
   id: number;
   slug: string;
-  plan: "free" | "pro" | "enterprise";
-  region: "eu" | "us" | "apac";
+  /** Trusted application data; never inferred from request headers. */
+  metadata?: Readonly<Record<string, unknown>>;
+  /** Existing application extensions remain opaque to core. */
+  [key: string]: unknown;
 };
 
 const tenantContext = createAsyncContextStore<TenantContext>("@getstrata/tenantContext");
@@ -25,16 +27,5 @@ function currentTenantId(): number {
   return tenant.id;
 }
 
-function rateLimitMultiplierForPlan(plan: TenantContext["plan"]): number {
-  switch (plan) {
-    case "enterprise":
-      return 4;
-    case "pro":
-      return 2;
-    default:
-      return 1;
-  }
-}
-
 export type { TenantContext };
-export { currentTenant, currentTenantId, rateLimitMultiplierForPlan, runWithTenant, tenantContext };
+export { currentTenant, currentTenantId, runWithTenant, tenantContext };

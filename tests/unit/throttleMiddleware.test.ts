@@ -157,3 +157,123 @@ describe("distributed throttle failure boundaries", () => {
     );
   });
 });
+
+describe("application-owned quota policy", () => {
+  test("default limits never interpret legacy plan names", async () => {
+    for (const plan of ["free", "pro", "enterprise", "custom"]) {
+      const middleware = createThrottleMiddleware({
+        redisUrl: "redis://unused",
+        maxAttempts: 1,
+        decaySeconds: 60,
+        redisClient: { send: async () => 2 },
+      });
+      const response = await runWithTenant({ id: 1, slug: "tenant", plan }, () =>
+        middleware(
+          new Request("http://example.test/api", { headers: { accept: "application/json" } }),
+          async () => new Response("ok"),
+        ),
+      );
+      expect(response.status).toBe(429);
+    }
+  });
+
+  test("different policies use trusted tenant metadata and registered route identity", async () => {
+    for (const entitlement of ["campus", "unknown"]) {
+      for (const allowance of [2, 3]) {
+        const middleware = createThrottleMiddleware({
+          redisUrl: "redis://unused",
+          maxAttempts: 1,
+          decaySeconds: 60,
+          redisClient: { send: async () => 2 },
+          quotaPolicy: (context) => {
+            expect(context.identity).toBe("token:42");
+            expect(context.routeTemplate).toBe("/orders/:id");
+            expect(context.request.method).toBe("GET");
+            return context.tenant?.metadata?.entitlement === "campus"
+              ? allowance
+              : context.maxAttempts;
+          },
+        });
+        const response = await runWithTenant(
+          { id: 9, slug: "acme", metadata: { entitlement } },
+          () =>
+            runWithAuthUser({ id: 1, role: "member", tokenId: 42 }, () =>
+              runWithRequestMeta(
+                { ipAddress: null, userAgent: null, routeTemplate: "/orders/:id" },
+                () =>
+                  middleware(
+                    new Request("http://example.test/orders/123", {
+                      headers: { accept: "application/json", "x-plan": "campus" },
+                    }),
+                    async () => new Response("ok"),
+                  ),
+              ),
+            ),
+        );
+        expect(response.status).toBe(entitlement === "campus" ? 200 : 429);
+      }
+    }
+  });
+
+  test("broken policy fails closed without accessing Redis or leaking details", async () => {
+    for (const quotaPolicy of [
+      () => Number.NaN,
+      () => Infinity,
+      () => -1,
+      () => 0.5,
+      () => Number.MAX_SAFE_INTEGER + 1,
+      () => {
+        throw new Error("private policy data");
+      },
+      (() => undefined) as unknown as () => number,
+      (() => null) as unknown as () => number,
+      (async () => 10) as unknown as () => number,
+    ]) {
+      let consumed = false;
+      const middleware = createThrottleMiddleware({
+        redisUrl: "redis://unused",
+        maxAttempts: 1,
+        decaySeconds: 60,
+        quotaPolicy,
+        redisClient: {
+          send: async () => {
+            consumed = true;
+            return 1;
+          },
+        },
+      });
+      const response = await middleware(
+        new Request("http://example.test/a"),
+        async () => new Response("bypass"),
+      );
+      expect(response.status).toBe(503);
+      expect(await response.text()).not.toContain("private");
+      expect(consumed).toBe(false);
+    }
+  });
+
+  test("zero denies access and generous policies cannot bypass store outages", async () => {
+    for (const failing of [false, true]) {
+      const middleware = createThrottleMiddleware({
+        redisUrl: "redis://unused",
+        maxAttempts: 1,
+        decaySeconds: 60,
+        quotaPolicy: () => (failing ? 999 : 0),
+        redisClient: {
+          send: async () => {
+            if (failing) throw new Error("offline");
+            return 1;
+          },
+        },
+      });
+      const response = await middleware(
+        new Request("http://example.test/a", { headers: { accept: "application/json" } }),
+        async () => new Response("bypass"),
+      );
+      expect(response.status).toBe(failing ? 503 : 429);
+    }
+    expect(() =>
+      createThrottleMiddleware({ redisUrl: "unused", maxAttempts: -1, decaySeconds: 60 }),
+    ).toThrow("maxAttempts");
+  });
+});
