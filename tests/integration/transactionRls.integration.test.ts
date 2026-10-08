@@ -165,4 +165,49 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
       ),
     );
   });
+  test("scoped cursor and chunk reads preserve concurrent restricted-role tenancy", async () => {
+    type Row = { id: number; tenant_id: number; active: number };
+    const table = defineTable<Row, "id">({
+      name: "composition_scopes",
+      primaryKey: "id",
+      columns: ["id", "tenant_id", "active"],
+    });
+    class Scoped extends defineModel(table) {
+      static override $fillable = ["id", "tenant_id", "active"];
+      static override $timestamps = false;
+      static override boot() {
+        Scoped.addGlobalScope<Row, "id">("active", (query) => query.where({ active: 1 }));
+      }
+    }
+    await Promise.all(
+      [1, 2, 3].map((id) =>
+        runWithTenantDatabase({ ...defaultTestTenant, id }, async () => {
+          await db.unsafe(
+            "CREATE TEMP TABLE composition_scopes (id INTEGER PRIMARY KEY, tenant_id INTEGER, active INTEGER) ON COMMIT DROP",
+          );
+          await db.unsafe("ALTER TABLE composition_scopes ENABLE ROW LEVEL SECURITY");
+          await db.unsafe("ALTER TABLE composition_scopes FORCE ROW LEVEL SECURITY");
+          await db.unsafe(
+            "CREATE POLICY scoped_tenant ON composition_scopes USING (tenant_id = current_setting('app.tenant_id')::integer)",
+          );
+          await Scoped.create({ id: 1, tenant_id: id, active: 1 });
+          await Scoped.create({ id: 2, tenant_id: id, active: 0 });
+          expect(await Scoped.where({ active: 0 }).get()).toEqual([]);
+          expect(
+            (await Scoped.query().where({ id: 1 }).orWhere({ id: 2 }).get()).map((row) => row.id),
+          ).toEqual([1]);
+          expect((await Scoped.cursorPaginate({ perPage: 10 })).data.map((row) => row.id)).toEqual([
+            1,
+          ]);
+          const values: number[] = [];
+          await Scoped.chunk(1, async (rows) => {
+            values.push(...rows.map((row) => row.get("tenant_id")));
+          });
+          expect(values).toEqual([id]);
+          expect(await Scoped.repository<Row, "id">().count()).toBe(2);
+          expect((await settings()).tenant).toBe(String(id));
+        }),
+      ),
+    );
+  });
 });

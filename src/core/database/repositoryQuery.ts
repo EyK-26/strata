@@ -58,6 +58,7 @@ type StoredEagerLoad<TEntity extends object> = {
 class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   private readonly eagerLoads: StoredEagerLoad<TEntity>[] = [];
   private readonly whereNodes: WhereNode<TEntity>[] = [];
+  private readonly protectedWhere: WhereNode<TEntity>[] = [];
 
   constructor(
     private readonly repository: BaseRepository<TEntity, PrimaryKey>,
@@ -69,11 +70,24 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     if (typeof input === "function") {
       const builder = new WhereBuilder<TEntity>();
       input(builder);
-      this.whereNodes.push(...builder.nodes);
+      if (builder.nodes.length > 0) this.whereNodes.push({ kind: "and", group: builder.nodes });
       return this;
     }
 
-    this.whereClause = { ...this.whereClause, ...input };
+    this.whereNodes.push({ kind: "and", where: { ...input } });
+    return this;
+  }
+
+  /** Preserve completed scope predicates separately from subsequent caller OR conditions. */
+  protectWhere(): this {
+    const nodes: WhereNode<TEntity>[] = [];
+    if (Object.keys(this.whereClause).length > 0) {
+      nodes.push({ kind: "and", where: this.whereClause });
+    }
+    nodes.push(...this.whereNodes);
+    if (nodes.length > 0) this.protectedWhere.push({ kind: "and", group: nodes });
+    this.whereClause = {};
+    this.whereNodes.length = 0;
     return this;
   }
 
@@ -410,11 +424,30 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     });
   }
 
+  async chunk(
+    count: number,
+    callback: (rows: Array<TEntity & LoadedRow>) => Promise<boolean | void>,
+  ): Promise<void> {
+    await this.repository.chunk(
+      count,
+      async (rows) => callback(await this.attach(rows)),
+      this.buildOptions(),
+    );
+  }
+
+  async cursorPaginate(options: { perPage: number; cursor?: TEntity[PrimaryKey] }) {
+    const page = await this.repository.cursorPaginate({ ...this.buildOptions(), ...options });
+    return { ...page, data: await this.attach(page.data) };
+  }
+
   private buildOptions(): QueryOptions<TEntity> & { whereNodes?: WhereNode<TEntity>[] } {
+    if (this.protectedWhere.length === 0) {
+      return { ...this.queryOptions, where: this.whereClause, whereNodes: this.whereNodes };
+    }
     return {
       ...this.queryOptions,
-      where: this.whereClause,
-      whereNodes: this.whereNodes,
+      where: {},
+      whereNodes: [...this.protectedWhere, { kind: "and", group: [...this.whereNodes] }],
     };
   }
 

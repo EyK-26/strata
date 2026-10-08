@@ -173,6 +173,10 @@ For bundled deployments or models outside `src/models`, use a static manifest in
 
 Existing `class Product extends Model<ProductRecord, "sku">` plus `registerModelRepository(Product, repository)` remains supported. To customize a declarative model, call `registerModelRepository(Product, customRepository)` before startup initialization. Explicit bindings take precedence over defaults. Custom repository methods stay available on the repository itself; registration does not add methods to the model. Keep startup bindings stable rather than rebinding per request. The default connection still resolves the framework's active request/transaction scope; discovery never selects tenants, opens a database connection, or bypasses RLS.
 
+Normal model reads, `Model.chunk()` and `Model.cursorPaginate()` retain global scopes. Each scope is grouped separately and ANDed with caller predicates, including top-level or callback OR conditions. Repeated `where()` predicates compose with AND; they no longer replace an earlier filter on the same column. Callback `where()` predicates form a group. Cursor bounds also intersect existing filters rather than overwriting a key condition or allowing an OR branch to escape the cursor. To intentionally read without model global scopes, use the explicit repository API. This does not disable database RLS or the repository's soft-delete policy.
+
+Related-model scope propagation remains a separate follow-up; the limitation below still applies.
+
 Eager belongsTo/hasMany queries reuse the parent repository connection (`withConnection`), so Postgres RLS `SET LOCAL app.tenant_id` on the request transaction also applies to related rows. Model `addGlobalScope` is applied on `Model.query()`, not on those related repository loads — filter `tenant_id` in your own `where` if you use column tenancy without RLS.
 
 ```typescript
