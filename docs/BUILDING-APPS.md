@@ -19,6 +19,8 @@ The CLI is interactive in a terminal. Move with ↑/↓ and Enter, or type a num
 
 Layer flags: [STARTER.md](./STARTER.md). The three in-repo apps are generated from that script (`bun run generate:example-apps`). Do not treat HiroApp as the source of the wizard. Only `apps/hiroapp` is CI dogfood.
 
+For typed native Bun transport options, WebSockets, request-hook coverage and streamed-body limits, see [native HTTP configuration](NATIVE-HTTP.md). Review the transport ceiling and hook changes before upgrading existing applications.
+
 ## Frontend shapes
 
 Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMode` (`parseFrontendMode`, `FRONTEND_MODE_PATTERN`). Apps should reuse that pattern in their env schema instead of copying a regex.
