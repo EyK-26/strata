@@ -1091,17 +1091,23 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return repository as unknown as BaseRepository<TEntity, PrimaryKey>;
   }
 
+  /** Apply this model's global filters to a query with an explicitly selected connection. */
+  static scopeQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+    this: object,
+    query: RepositoryQuery<TEntity, PrimaryKey>,
+  ): RepositoryQuery<TEntity, PrimaryKey> {
+    ensureBooted(this);
+    let scoped = query as unknown as RepositoryQuery<Record<string, unknown>, "id">;
+    for (const scope of getGlobalScopes(this)) scoped = scope(scoped).protectWhere();
+    return scoped as unknown as RepositoryQuery<TEntity, PrimaryKey>;
+  }
+
   static query<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
   static query(this: object): ModelQuery {
     ensureBooted(this);
     const repository = resolveModelRepository(this);
-    let query = repository.query();
-
-    for (const scope of getGlobalScopes(this)) {
-      query = scope(query).protectWhere();
-    }
-
-    return new ModelQuery(this, query);
+    const scopeQuery = Model.scopeQuery<Record<string, unknown>, "id">;
+    return new ModelQuery(this, scopeQuery.call(this, repository.query()));
   }
 
   static newFromRecord<TModel extends object>(

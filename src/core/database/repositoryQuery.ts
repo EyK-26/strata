@@ -52,6 +52,7 @@ type StoredEagerLoad<TEntity extends object> = {
     | MorphToRelation<TEntity, keyof TEntity & string, keyof TEntity & string>;
   repository: BaseRepository<Record<string, unknown>, "id">;
   options?: Omit<QueryOptions<Record<string, unknown>>, "where">;
+  morphOptions?: ReadonlyMap<string, QueryOptions<Record<string, unknown>>>;
   morphRepositories?: ReadonlyMap<string, BaseRepository<Record<string, unknown>, "id">>;
 };
 
@@ -280,9 +281,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     relation: MorphToRelation<TEntity, MorphTypeKey, MorphIdKey>,
     repositoriesByType: ReadonlyMap<string, BaseRepository<TParent, keyof TParent & string>>,
     options: Omit<QueryOptions<TParent>, "where"> = {},
+    optionsByType?: ReadonlyMap<string, QueryOptions<TParent>>,
   ): this {
     this.eagerLoads.push({
       kind: "morphTo",
+      morphOptions: optionsByType as StoredEagerLoad<TEntity>["morphOptions"],
       as,
       relation: relation as StoredEagerLoad<TEntity>["relation"],
       repository: this.repository as unknown as BaseRepository<Record<string, unknown>, "id">,
@@ -440,6 +443,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return { ...page, data: await this.attach(page.data) };
   }
 
+  /** Compiled query filters for batched relationship loaders. */
+  getOptions(): QueryOptions<TEntity> {
+    return this.buildOptions();
+  }
+
   private buildOptions(): QueryOptions<TEntity> & { whereNodes?: WhereNode<TEntity>[] } {
     if (this.protectedWhere.length === 0) {
       return { ...this.queryOptions, where: this.whereClause, whereNodes: this.whereNodes };
@@ -593,18 +601,40 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
         keyof TEntity & string,
         keyof TEntity & string
       >;
-      const grouped = await this.repository.loadMorphToForChildren(
-        rows,
-        relation,
-        load.morphRepositories ?? new Map(),
-        load.options,
+      // An ID is only unique within its morph type. Partition once before
+      // batching so filtered/missing targets cannot borrow another type's row.
+      const repositories = load.morphRepositories ?? new Map();
+      const partitions = new Map<
+        string,
+        { rows: TEntity[]; targets: Array<TEntity & LoadedRow> }
+      >();
+      rows.forEach((row, index) => {
+        const type = String(row[relation.morphTypeKey]);
+        const target = result[index];
+        if (!target || !repositories.has(type)) return;
+        const partition = partitions.get(type) ?? { rows: [], targets: [] };
+        partition.rows.push(row);
+        partition.targets.push(target);
+        partitions.set(type, partition);
+      });
+      await Promise.all(
+        [...partitions.entries()].map(async ([type, partition]) => {
+          const repository = repositories.get(type);
+          if (!repository) return;
+          const grouped = await this.repository.loadMorphToForChildren(
+            partition.rows,
+            relation,
+            new Map([[type, repository]]),
+            load.morphOptions?.get(type) ?? load.options,
+          );
+          for (const row of partition.targets) {
+            (row as LoadedRow)[load.as] = getByRelationKey(
+              grouped,
+              row[relation.morphIdKey as keyof TEntity],
+            );
+          }
+        }),
       );
-      for (const row of result) {
-        (row as LoadedRow)[load.as] = getByRelationKey(
-          grouped,
-          row[relation.morphIdKey as keyof TEntity],
-        );
-      }
       return;
     }
 

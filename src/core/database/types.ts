@@ -1,3 +1,5 @@
+import type { WhereNode } from "./whereBuilder.ts";
+
 type DatabaseComparable = string | number | Date;
 type DatabaseScalar = DatabaseComparable | boolean | null;
 
@@ -45,7 +47,8 @@ type QuerySelectItem =
   | { kind: "subqueryCount"; sql: string; params: readonly unknown[]; as: string }
   | { kind: "tsRank"; table: string; column: string; query: string; as: string };
 
-interface QueryOptions<TEntity> {
+interface QueryOptions<TEntity extends object> {
+  whereNodes?: WhereNode<TEntity>[];
   where?: QueryWhere<TEntity>;
   orderBy?: QueryOrder<TEntity> | QueryOrder<TEntity>[] | QueryOrderShorthand<TEntity>;
   limit?: number;

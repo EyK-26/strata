@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Compose repeated query predicates and protect global model scopes from caller OR branches; preserve scopes in chunks/cursor pages and intersect cursor bounds with existing filters. Related-model scope propagation remains a follow-up.
+- Apply related target model scopes and composed filters to lazy/eager/existence/count reads; retain batched connection reuse, isolate morph targets by type and ID, and use dialect-aware through/pivot read parameters.
+
+- Compose repeated query predicates and protect global model scopes from caller OR branches; preserve scopes in chunks/cursor pages and intersect cursor bounds with existing filters.
 
 - Add typed `defineModel(table)` bases and two-phase model startup; preserve explicit repository overrides and share model identity across package import paths.
 
