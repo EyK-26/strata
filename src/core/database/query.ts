@@ -313,7 +313,7 @@ function resolveSoftDeleteColumn<TEntity>(table: TableDefinition<TEntity>): stri
   return table.softDeletes.column ?? "deleted_at";
 }
 
-function appendSoftDeleteScope<TEntity>(
+function appendSoftDeleteScope<TEntity extends object>(
   table: TableDefinition<TEntity>,
   options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed">,
   clauses: string[],
@@ -369,7 +369,7 @@ function isQueryOrder<TEntity>(value: object): value is QueryOrder<TEntity> {
   return "column" in value;
 }
 
-function normalizeOrderBy<TEntity>(
+function normalizeOrderBy<TEntity extends object>(
   orderBy?: QueryOptions<TEntity>["orderBy"],
 ): QueryOrder<TEntity>[] {
   if (!orderBy) {

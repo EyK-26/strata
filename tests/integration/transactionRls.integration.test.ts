@@ -210,4 +210,69 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
       ),
     );
   });
+  test("related model scopes preserve concurrent restricted-role connections", async () => {
+    type ChildRow = { id: number; tenant_id: number; active: number };
+    type ParentRow = { id: number; tenant_id: number; child_id: number };
+    const childTable = defineTable<ChildRow, "id">({
+      name: "relation_scope_children",
+      primaryKey: "id",
+      columns: ["id", "tenant_id", "active"],
+    });
+    const parentTable = defineTable<ParentRow, "id">({
+      name: "relation_scope_parents",
+      primaryKey: "id",
+      columns: ["id", "tenant_id", "child_id"],
+    });
+    class Child extends defineModel(childTable) {
+      static override $fillable = ["id", "tenant_id", "active"];
+      static override $timestamps = false;
+      static override boot() {
+        Child.addGlobalScope<ChildRow, "id">("active", (query) => query.where({ active: 1 }));
+      }
+    }
+    class Parent extends defineModel(parentTable) {
+      static override $fillable = ["id", "tenant_id", "child_id"];
+      static override $timestamps = false;
+      children() {
+        return this.hasMany<ChildRow, "id">(Child, "tenant_id");
+      }
+      child() {
+        return this.belongsTo(Child, "child_id");
+      }
+    }
+    await Promise.all(
+      [1, 2, 3].map((id) =>
+        runWithTenantDatabase({ ...defaultTestTenant, id }, async () => {
+          for (const name of ["relation_scope_children", "relation_scope_parents"]) {
+            await db.unsafe(
+              name === "relation_scope_children"
+                ? "CREATE TEMP TABLE relation_scope_children (id INTEGER PRIMARY KEY, tenant_id INTEGER, active INTEGER) ON COMMIT DROP"
+                : "CREATE TEMP TABLE relation_scope_parents (id INTEGER PRIMARY KEY, tenant_id INTEGER, child_id INTEGER) ON COMMIT DROP",
+            );
+            await db.unsafe(`ALTER TABLE ${name} ENABLE ROW LEVEL SECURITY`);
+            await db.unsafe(`ALTER TABLE ${name} FORCE ROW LEVEL SECURITY`);
+            await db.unsafe(
+              `CREATE POLICY relation_scope ON ${name} USING (tenant_id = current_setting('app.tenant_id')::integer)`,
+            );
+          }
+          await Child.create({ id: 1, tenant_id: id, active: 1 });
+          await Child.create({ id: 2, tenant_id: id, active: 0 });
+          await Parent.create({ id, tenant_id: id, child_id: 2 });
+          const parent = await Parent.findOrFail(id);
+          expect((await parent.children().get()).map((row) => row.get("tenant_id"))).toEqual([id]);
+          expect(await parent.child().get()).toBeNull();
+          const loaded = (await Parent.with("children", "child").get())[0];
+          expect(loaded?.loaded<Array<{ id: unknown }>>("children")?.map((row) => row.id)).toEqual([
+            1,
+          ]);
+          expect(loaded?.loaded("child")).toBeUndefined();
+          expect((await Parent.query().whereHas("children").get()).map((row) => row.id)).toEqual([
+            id,
+          ]);
+          expect(await Parent.query().whereHas("child").get()).toEqual([]);
+          expect((await settings()).tenant).toBe(String(id));
+        }),
+      ),
+    );
+  });
 });

@@ -1,6 +1,8 @@
 import type BaseRepository from "./baseRepository.ts";
+import type { DatabaseConnection } from "./baseRepository.ts";
+import { currentSqlDialect } from "./dialect.ts";
 import { projectPluck } from "./pluck.ts";
-import { buildAdvancedWhereClause, qualifyColumn, quoteIdentifier } from "./query.ts";
+import { buildJoinClause, buildQueryWhereClause, qualifyColumn, quoteIdentifier } from "./query.ts";
 import type {
   BelongsToManyRelation,
   BelongsToRelation,
@@ -83,6 +85,69 @@ function pluckFromQuery(
   return keyBy === undefined ? query.pluck(column) : query.pluck(column, keyBy);
 }
 
+function scopedRelatedQuery<T extends object, K extends keyof T & string>(
+  model: RelatedModelClass<T, K>,
+  repository = model.repository(),
+): RepositoryQuery<T, K> {
+  const query = repository.query();
+  const scopedModel = model as RelatedModelClass<T, K> & {
+    scopeQuery?: (query: RepositoryQuery<T, K>) => RepositoryQuery<T, K>;
+  };
+  return scopedModel.scopeQuery?.(query) ?? query;
+}
+
+function relatedOptions<T extends object, K extends keyof T & string>(
+  model: RelatedModelClass<T, K>,
+  filters: QueryWhere<T>[],
+  options: Omit<QueryOptions<T>, "where"> = {},
+): QueryOptions<T> {
+  const query = scopedRelatedQuery(model);
+  for (const filter of filters) query.where(filter);
+  return { ...query.getOptions(), ...options };
+}
+
+function relatedRead<T extends object, K extends keyof T & string>(
+  model: RelatedModelClass<T, K>,
+  connection: DatabaseConnection,
+  binding: QueryWhere<T>,
+  filters: QueryWhere<T>[],
+  options: Omit<QueryOptions<T>, "where"> = {},
+): RepositoryQuery<T, K> {
+  const query = scopedRelatedQuery(model, model.repository().withConnection(connection));
+  query.where(binding).protectWhere();
+  for (const filter of filters) query.where(filter);
+  if (options.orderBy) query.orderBy(options.orderBy);
+  if (options.limit !== undefined) query.limit(options.limit);
+  return query;
+}
+
+function relatedConditions<T extends object, K extends keyof T & string>(
+  model: RelatedModelClass<T, K>,
+  filters: QueryWhere<T>[],
+  options: Omit<QueryOptions<T>, "where"> = {},
+  parameters: unknown[] = [],
+  reservedTables: string[] = [],
+) {
+  const compiled = relatedOptions(model, filters, options);
+  if (compiled.joins?.some((join) => reservedTables.includes(join.table))) {
+    throw new Error(
+      "A related model scope joins a reserved relation table; use an explicitly aliased correlated predicate instead.",
+    );
+  }
+  const extra = buildQueryWhereClause(
+    model.repository().getTable(),
+    compiled,
+    compiled.whereNodes,
+    parameters,
+  );
+  const predicate = extra.clause.replace(/^ WHERE /, "");
+  return {
+    sql: predicate ? ` AND (${predicate})` : "",
+    joins: buildJoinClause(compiled.joins),
+    params: extra.params,
+  };
+}
+
 class HasManyRelationQuery<
   TParent extends object,
   ParentKey extends keyof TParent & string,
@@ -90,7 +155,7 @@ class HasManyRelationQuery<
   ChildKey extends keyof TChild & string,
 > {
   readonly kind: RelationKind = "hasMany";
-  private extraWhere: QueryWhere<TChild> = {};
+  private extraWhere: QueryWhere<TChild>[] = [];
   private extraOptions: Omit<QueryOptions<TChild>, "where"> = {};
 
   constructor(
@@ -100,7 +165,7 @@ class HasManyRelationQuery<
   ) {}
 
   where(where: QueryWhere<TChild>): this {
-    this.extraWhere = { ...this.extraWhere, ...where };
+    this.extraWhere.push({ ...where });
     return this;
   }
 
@@ -115,7 +180,12 @@ class HasManyRelationQuery<
   }
 
   applyEagerLoad(query: RepositoryQuery<TParent, ParentKey>, alias: string): void {
-    query.withHasMany(alias, this.relation, this.related.repository() as never, this.extraOptions);
+    query.withHasMany(
+      alias,
+      this.relation,
+      this.related.repository() as never,
+      relatedOptions(this.related, this.extraWhere, this.extraOptions),
+    );
   }
 
   hydrateEager(row: Record<string, unknown>, alias: string): unknown {
@@ -126,32 +196,25 @@ class HasManyRelationQuery<
 
   toExistsClause(parentTable: string): ExistsClause {
     const childTable = this.related.repository().getTable().name;
-    const extra = buildAdvancedWhereClause(childTable, this.extraWhere, [], []);
-    const extraSql = extra.clause.replace(/^ WHERE /, "");
-    const sql = `SELECT 1 FROM ${quoteIdentifier(childTable)} WHERE ${qualifyColumn(childTable, this.relation.foreignKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    const extra = relatedConditions(
+      this.related,
+      this.extraWhere,
+      this.extraOptions,
+      [],
+      [parentTable],
+    );
+    const sql = `SELECT 1 FROM ${quoteIdentifier(childTable)}${extra.joins} WHERE ${qualifyColumn(childTable, this.relation.foreignKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
   private scopedQuery(): RepositoryQuery<TChild, ChildKey> {
-    const repository = this.related
-      .repository()
-      .withConnection(this.parent.getRepository().getConnection());
-    let query = repository.query(
-      asWhere<TChild>({
-        [this.relation.foreignKey]: this.parent.get(this.relation.localKey),
-        ...this.extraWhere,
-      }),
+    return relatedRead(
+      this.related,
+      this.parent.getRepository().getConnection(),
+      asWhere<TChild>({ [this.relation.foreignKey]: this.parent.get(this.relation.localKey) }),
+      this.extraWhere,
+      this.extraOptions,
     );
-
-    if (this.extraOptions.orderBy) {
-      query = query.orderBy(this.extraOptions.orderBy);
-    }
-
-    if (this.extraOptions.limit !== undefined) {
-      query = query.limit(this.extraOptions.limit);
-    }
-
-    return query;
   }
 
   async get(): Promise<RelatedRecord[]> {
@@ -255,7 +318,7 @@ class HasOneRelationQuery<
   }
 
   applyEagerLoad(query: RepositoryQuery<TParent, ParentKey>, alias: string): void {
-    this.inner.limit(1).applyEagerLoad(query, alias);
+    this.inner.applyEagerLoad(query, alias);
   }
 
   hydrateEager(row: Record<string, unknown>, alias: string): unknown {
@@ -314,7 +377,7 @@ class BelongsToRelationQuery<
   ParentKey extends keyof TParent & string,
 > {
   readonly kind: RelationKind = "belongsTo";
-  private extraWhere: QueryWhere<TParent> = {};
+  private extraWhere: QueryWhere<TParent>[] = [];
   private extraOptions: Omit<QueryOptions<TParent>, "where"> = {};
 
   constructor(
@@ -324,7 +387,7 @@ class BelongsToRelationQuery<
   ) {}
 
   where(where: QueryWhere<TParent>): this {
-    this.extraWhere = { ...this.extraWhere, ...where };
+    this.extraWhere.push({ ...where });
     return this;
   }
 
@@ -338,7 +401,7 @@ class BelongsToRelationQuery<
       alias,
       this.relation,
       this.related.repository() as never,
-      this.extraOptions,
+      relatedOptions(this.related, this.extraWhere, this.extraOptions),
     );
   }
 
@@ -349,9 +412,14 @@ class BelongsToRelationQuery<
 
   toExistsClause(parentTable: string): ExistsClause {
     const relatedTable = this.related.repository().getTable().name;
-    const extra = buildAdvancedWhereClause(relatedTable, this.extraWhere, [], []);
-    const extraSql = extra.clause.replace(/^ WHERE /, "");
-    const sql = `SELECT 1 FROM ${quoteIdentifier(relatedTable)} WHERE ${qualifyColumn(relatedTable, this.relation.ownerKey)} = ${qualifyColumn(parentTable, this.relation.foreignKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    const extra = relatedConditions(
+      this.related,
+      this.extraWhere,
+      this.extraOptions,
+      [],
+      [parentTable],
+    );
+    const sql = `SELECT 1 FROM ${quoteIdentifier(relatedTable)}${extra.joins} WHERE ${qualifyColumn(relatedTable, this.relation.ownerKey)} = ${qualifyColumn(parentTable, this.relation.foreignKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
@@ -387,18 +455,13 @@ class BelongsToRelationQuery<
       return null;
     }
 
-    const repository = this.related
-      .repository()
-      .withConnection(this.parent.getRepository().getConnection());
-    let query = repository.query(
-      asWhere<TParent>({ [this.relation.ownerKey]: foreign, ...this.extraWhere }),
+    return relatedRead(
+      this.related,
+      this.parent.getRepository().getConnection(),
+      asWhere<TParent>({ [this.relation.ownerKey]: foreign }),
+      this.extraWhere,
+      this.extraOptions,
     );
-
-    if (this.extraOptions.orderBy) {
-      query = query.orderBy(this.extraOptions.orderBy);
-    }
-
-    return query;
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
@@ -430,7 +493,7 @@ class BelongsToManyRelationQuery<
   Pivot extends object,
 > {
   readonly kind: RelationKind = "belongsToMany";
-  private extraWhere: QueryWhere<TRelated> = {};
+  private extraWhere: QueryWhere<TRelated>[] = [];
   private extraOptions: Omit<QueryOptions<TRelated>, "where"> = {};
   private pivotValues: Record<string, unknown> = {};
 
@@ -449,7 +512,7 @@ class BelongsToManyRelationQuery<
   ) {}
 
   where(where: QueryWhere<TRelated>): this {
-    this.extraWhere = { ...this.extraWhere, ...where };
+    this.extraWhere.push({ ...where });
     return this;
   }
 
@@ -463,7 +526,7 @@ class BelongsToManyRelationQuery<
       alias,
       this.relation,
       this.related.repository() as never,
-      this.extraOptions,
+      relatedOptions(this.related, this.extraWhere, this.extraOptions),
     );
   }
 
@@ -480,9 +543,14 @@ class BelongsToManyRelationQuery<
 
   toExistsClause(parentTable: string): ExistsClause {
     const relatedTable = this.related.repository().getTable().name;
-    const extra = buildAdvancedWhereClause(relatedTable, this.extraWhere, [], []);
-    const extraSql = extra.clause.replace(/^ WHERE /, "");
-    const sql = `SELECT 1 FROM ${quoteIdentifier(relatedTable)} INNER JOIN ${quoteIdentifier(this.relation.pivotTable)} ON ${qualifyColumn(this.relation.pivotTable, this.relation.relatedPivotKey)} = ${qualifyColumn(relatedTable, this.relation.relatedKey)} WHERE ${qualifyColumn(this.relation.pivotTable, this.relation.foreignPivotKey)} = ${qualifyColumn(parentTable, this.relation.parentKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    const extra = relatedConditions(
+      this.related,
+      this.extraWhere,
+      this.extraOptions,
+      [],
+      [parentTable, this.relation.pivotTable],
+    );
+    const sql = `SELECT 1 FROM ${quoteIdentifier(relatedTable)} INNER JOIN ${quoteIdentifier(this.relation.pivotTable)} ON ${qualifyColumn(this.relation.pivotTable, this.relation.relatedPivotKey)} = ${qualifyColumn(relatedTable, this.relation.relatedKey)}${extra.joins} WHERE ${qualifyColumn(this.relation.pivotTable, this.relation.foreignPivotKey)} = ${qualifyColumn(parentTable, this.relation.parentKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
@@ -491,32 +559,8 @@ class BelongsToManyRelationQuery<
   }
 
   async get(): Promise<RelatedRecord[]> {
-    const parentId = this.parent.get(this.relation.parentKey);
-    const pivotRows = await this.connection().unsafe<Pivot>(
-      `SELECT * FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1`,
-      [parentId],
-    );
-
-    if (pivotRows.length === 0) {
-      return [];
-    }
-
-    const relatedIds = [
-      ...new Set(
-        pivotRows.map(
-          (row) => row[this.relation.relatedPivotKey] as unknown as TRelated[RelatedKey],
-        ),
-      ),
-    ];
-    const repository = this.related.repository().withConnection(this.connection());
-    const rows = await repository.findAll({
-      ...this.extraOptions,
-      where: asWhere<TRelated>({
-        [this.relation.relatedKey]: relatedIds,
-        ...this.extraWhere,
-      }),
-    });
-
+    const query = await this.relatedQuery();
+    const rows = query ? await query.get() : [];
     return rows.map((row) => this.related.newFromRecord(row));
   }
 
@@ -526,12 +570,8 @@ class BelongsToManyRelationQuery<
   }
 
   async count(): Promise<number> {
-    const parentId = this.parent.get(this.relation.parentKey);
-    const rows = await this.connection().unsafe<{ count: number | string }>(
-      `SELECT COUNT(*) AS count FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1`,
-      [parentId],
-    );
-    return Number(rows[0]?.count ?? 0);
+    const query = await this.relatedQuery();
+    return query ? query.count() : 0;
   }
 
   async pluck(column: string): Promise<unknown[]>;
@@ -548,7 +588,7 @@ class BelongsToManyRelationQuery<
   private async relatedQuery(): Promise<RepositoryQuery<TRelated, RelatedKey> | null> {
     const parentId = this.parent.get(this.relation.parentKey);
     const pivotRows = await this.connection().unsafe<Pivot>(
-      `SELECT * FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1`,
+      `SELECT * FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)}`,
       [parentId],
     );
 
@@ -563,21 +603,13 @@ class BelongsToManyRelationQuery<
         ),
       ),
     ];
-    let query = this.related
-      .repository()
-      .withConnection(this.connection())
-      .query(
-        asWhere<TRelated>({
-          [this.relation.relatedKey]: relatedIds,
-          ...this.extraWhere,
-        }),
-      );
-
-    if (this.extraOptions.orderBy) {
-      query = query.orderBy(this.extraOptions.orderBy);
-    }
-
-    return query;
+    return relatedRead(
+      this.related,
+      this.connection(),
+      asWhere<TRelated>({ [this.relation.relatedKey]: relatedIds }),
+      this.extraWhere,
+      this.extraOptions,
+    );
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
@@ -666,7 +698,7 @@ class MorphManyRelationQuery<
   ChildKey extends keyof TChild & string,
 > {
   readonly kind: RelationKind = "morphMany";
-  private extraWhere: QueryWhere<TChild> = {};
+  private extraWhere: QueryWhere<TChild>[] = [];
   private extraOptions: Omit<QueryOptions<TChild>, "where"> = {};
 
   constructor(
@@ -682,7 +714,7 @@ class MorphManyRelationQuery<
   ) {}
 
   where(where: QueryWhere<TChild>): this {
-    this.extraWhere = { ...this.extraWhere, ...where };
+    this.extraWhere.push({ ...where });
     return this;
   }
 
@@ -691,7 +723,7 @@ class MorphManyRelationQuery<
       alias,
       this.relation,
       this.related.repository() as never,
-      this.extraOptions,
+      relatedOptions(this.related, this.extraWhere, this.extraOptions),
     );
   }
 
@@ -703,31 +735,30 @@ class MorphManyRelationQuery<
 
   toExistsClause(parentTable: string): ExistsClause {
     const childTable = this.related.repository().getTable().name;
-    const extra = buildAdvancedWhereClause(
-      childTable,
-      {
-        [this.relation.morphTypeKey]: this.relation.morphType,
+    const extra = relatedConditions(
+      this.related,
+      [
+        asWhere<TChild>({ [this.relation.morphTypeKey]: this.relation.morphType }),
         ...this.extraWhere,
-      } as QueryWhere<TChild>,
+      ],
+      this.extraOptions,
       [],
-      [],
+      [parentTable],
     );
-    const extraSql = extra.clause.replace(/^ WHERE /, "");
-    const sql = `SELECT 1 FROM ${quoteIdentifier(childTable)} WHERE ${qualifyColumn(childTable, this.relation.morphIdKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    const sql = `SELECT 1 FROM ${quoteIdentifier(childTable)}${extra.joins} WHERE ${qualifyColumn(childTable, this.relation.morphIdKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
   private scopedQuery(): RepositoryQuery<TChild, ChildKey> {
-    return this.related
-      .repository()
-      .withConnection(this.parent.getRepository().getConnection())
-      .query(
-        asWhere<TChild>({
-          [this.relation.morphTypeKey]: this.relation.morphType,
-          [this.relation.morphIdKey]: this.parent.get(this.relation.localKey),
-          ...this.extraWhere,
-        }),
-      );
+    return relatedRead(
+      this.related,
+      this.parent.getRepository().getConnection(),
+      asWhere<TChild>({
+        [this.relation.morphTypeKey]: this.relation.morphType,
+        [this.relation.morphIdKey]: this.parent.get(this.relation.localKey),
+      }),
+      this.extraWhere,
+    );
   }
 
   async get(): Promise<RelatedRecord[]> {
@@ -855,7 +886,7 @@ class MorphOneRelationQuery<
 
 class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild & string> {
   readonly kind: RelationKind = "morphTo";
-  private extraWhere: QueryWhere<Record<string, unknown>> = {};
+  private extraWhere: QueryWhere<Record<string, unknown>>[] = [];
 
   constructor(
     private readonly parent: RelationHost<TChild, ChildKey>,
@@ -867,7 +898,7 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
   ) {}
 
   where(where: QueryWhere<Record<string, unknown>>): this {
-    this.extraWhere = { ...this.extraWhere, ...where };
+    this.extraWhere.push({ ...where });
     return this;
   }
 
@@ -878,7 +909,18 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
         model.repository() as never,
       ]),
     );
-    query.withMorphTo(alias, this.relation, repositories);
+    query.withMorphTo(
+      alias,
+      this.relation,
+      repositories,
+      {},
+      new Map(
+        Object.entries(this.relatedByType).map(([type, model]) => [
+          type,
+          relatedOptions(model, this.extraWhere),
+        ]),
+      ),
+    );
   }
 
   hydrateEager(row: Record<string, unknown>, alias: string): unknown {
@@ -886,18 +928,21 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
   }
 
   toExistsClause(parentTable: string): ExistsClause {
-    const type = String(this.parent.get(this.relation.morphTypeKey) ?? "");
-    const related = this.relatedByType[type];
-    if (!related) {
-      return { sql: "SELECT 1 WHERE 1 = 0", params: [] };
+    const params: unknown[] = [];
+    const type = this.parent.get(this.relation.morphTypeKey);
+    if (type !== undefined && type !== null && !this.relatedByType[String(type)]) {
+      return { sql: "SELECT 1 WHERE 1 = 0", params };
     }
-
-    const relatedTable = related.repository().getTable();
-    const extra = buildAdvancedWhereClause(relatedTable.name, this.extraWhere, [], []);
-    const extraSql = extra.clause.replace(/^ WHERE /, "");
+    const branches = Object.entries(this.relatedByType).map(([type, related]) => {
+      params.push(type);
+      const discriminator = currentSqlDialect().placeholder(params.length);
+      const table = related.repository().getTable();
+      const extra = relatedConditions(related, this.extraWhere, {}, params, [parentTable]);
+      return `(${qualifyColumn(parentTable, this.relation.morphTypeKey)} = ${discriminator} AND EXISTS (SELECT 1 FROM ${quoteIdentifier(table.name)}${extra.joins} WHERE ${qualifyColumn(table.name, table.primaryKey)} = ${qualifyColumn(parentTable, this.relation.morphIdKey)}${extra.sql}))`;
+    });
     return {
-      sql: `SELECT 1 FROM ${quoteIdentifier(relatedTable.name)} WHERE ${qualifyColumn(relatedTable.name, relatedTable.primaryKey)} = ${qualifyColumn(parentTable, this.relation.morphIdKey)}${extraSql ? ` AND ${extraSql}` : ""}`,
-      params: extra.params,
+      sql: `SELECT 1 WHERE ${branches.length > 0 ? branches.join(" OR ") : "1 = 0"}`,
+      params,
     };
   }
 
@@ -936,10 +981,12 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
     }
 
     const table = related.repository().getTable();
-    return related
-      .repository()
-      .withConnection(this.parent.getRepository().getConnection())
-      .query(asWhere<object>({ [table.primaryKey]: id, ...this.extraWhere }));
+    return relatedRead(
+      related,
+      this.parent.getRepository().getConnection(),
+      asWhere<Record<string, unknown>>({ [table.primaryKey]: id }),
+      this.extraWhere,
+    );
   }
 
   // biome-ignore lint/suspicious/noThenProperty: relation queries are thenable (`await user.applications()`).
@@ -958,7 +1005,7 @@ class HasManyThroughRelationQuery<
   FarKey extends keyof TFar & string,
 > {
   readonly kind: RelationKind = "hasManyThrough";
-  private extraWhere: QueryWhere<TFar> = {};
+  private extraWhere: QueryWhere<TFar>[] = [];
   private extraOptions: Omit<QueryOptions<TFar>, "where"> = {};
 
   constructor(
@@ -975,7 +1022,7 @@ class HasManyThroughRelationQuery<
   ) {}
 
   where(where: QueryWhere<TFar>): this {
-    this.extraWhere = { ...this.extraWhere, ...where };
+    this.extraWhere.push({ ...where });
     return this;
   }
 
@@ -994,7 +1041,7 @@ class HasManyThroughRelationQuery<
       alias,
       this.relation,
       this.related.repository() as never,
-      this.extraOptions,
+      relatedOptions(this.related, this.extraWhere, this.extraOptions),
     );
   }
 
@@ -1006,9 +1053,14 @@ class HasManyThroughRelationQuery<
 
   toExistsClause(parentTable: string): ExistsClause {
     const farTable = this.related.repository().getTable().name;
-    const extra = buildAdvancedWhereClause(farTable, this.extraWhere, [], []);
-    const extraSql = extra.clause.replace(/^ WHERE /, "");
-    const sql = `SELECT 1 FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(this.relation.throughTable)} ON ${qualifyColumn(this.relation.throughTable, this.relation.secondLocalKey)} = ${qualifyColumn(farTable, this.relation.secondKey)} WHERE ${qualifyColumn(this.relation.throughTable, this.relation.firstKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extraSql ? ` AND ${extraSql}` : ""}`;
+    const extra = relatedConditions(
+      this.related,
+      this.extraWhere,
+      this.extraOptions,
+      [],
+      [parentTable, this.relation.throughTable],
+    );
+    const sql = `SELECT 1 FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(this.relation.throughTable)} ON ${qualifyColumn(this.relation.throughTable, this.relation.secondLocalKey)} = ${qualifyColumn(farTable, this.relation.secondKey)}${extra.joins} WHERE ${qualifyColumn(this.relation.throughTable, this.relation.firstKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
@@ -1044,8 +1096,7 @@ class HasManyThroughRelationQuery<
       .repository()
       .withConnection(this.parent.getRepository().getConnection())
       .findHasManyThrough(this.parent.get(this.relation.localKey), this.relation, {
-        ...this.extraOptions,
-        where: this.extraWhere,
+        ...relatedOptions(this.related, this.extraWhere, this.extraOptions),
       });
   }
 

@@ -6,6 +6,7 @@ import {
   type PaginatedResult,
 } from "../pagination/index.ts";
 import { getActiveDatabaseConnection } from "./connectionContext.ts";
+import { currentSqlDialect } from "./dialect.ts";
 import { withDatabaseErrorHandling } from "./errors.ts";
 import {
   buildCountQuery,
@@ -13,7 +14,9 @@ import {
   buildGroupedCountQuery,
   buildIncrementQuery,
   buildInsertQuery,
+  buildJoinClause,
   buildProjectionQuery,
+  buildQueryWhereClause,
   buildRestoreByIdQuery,
   buildSelectQuery,
   buildSoftDeleteByIdQuery,
@@ -672,19 +675,22 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       return indexHasManyThroughRelation(parents, [], relation);
     }
 
+    if (options.joins?.some((join) => join.table === relation.throughTable)) {
+      throw new Error(
+        "A related model scope joins the through table twice; use an explicitly aliased correlated predicate instead.",
+      );
+    }
     const parentIds = [...new Set(parents.map((parent) => parent[relation.localKey]))];
     const throughParentKey = relation.throughParentKey ?? "__through_parent_id";
     const farTable = this.table.name;
     const columns = this.table.columns
       .map((column) => `${qualifyColumn(farTable, column)}`)
       .join(", ");
-    const placeholders = parentIds.map((_, index) => `$${index + 1}`).join(", ");
-    const { text: extraWhere, params: extraParams } = this.buildThroughWhere(
-      options,
-      parentIds.length,
-    );
-    const softDelete = this.throughSoftDeleteClause(options);
-    const sql = `SELECT ${columns}, ${qualifyColumn(relation.throughTable, relation.firstKey)} AS ${throughParentKey} FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(relation.throughTable)} ON ${qualifyColumn(relation.throughTable, relation.secondLocalKey)} = ${qualifyColumn(farTable, relation.secondKey)} WHERE ${qualifyColumn(relation.throughTable, relation.firstKey)} IN (${placeholders})${softDelete}${extraWhere}`;
+    const placeholders = parentIds
+      .map((_, index) => currentSqlDialect().placeholder(index + 1))
+      .join(", ");
+    const { text: extraWhere, params: extraParams } = this.buildThroughWhere(options, parentIds);
+    const sql = `SELECT ${columns}, ${qualifyColumn(relation.throughTable, relation.firstKey)} AS ${throughParentKey} FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(relation.throughTable)} ON ${qualifyColumn(relation.throughTable, relation.secondLocalKey)} = ${qualifyColumn(farTable, relation.secondKey)}${buildJoinClause(options.joins)} WHERE ${qualifyColumn(relation.throughTable, relation.firstKey)} IN (${placeholders})${extraWhere}`;
 
     const children = await this.connection.unsafe<TEntity & Record<string, unknown>>(sql, [
       ...parentIds,
@@ -694,37 +700,16 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     return indexHasManyThroughRelation(parents, children, relation);
   }
 
-  private throughSoftDeleteClause(options: QueryOptions<TEntity>): string {
-    const column = resolveSoftDeleteColumn(this.table);
-    if (!column) {
-      return "";
-    }
-    const qualified = qualifyColumn(this.table.name, column);
-    if (options.onlyTrashed) {
-      return ` AND ${qualified} IS NOT NULL`;
-    }
-    if (options.withTrashed) {
-      return "";
-    }
-    return ` AND ${qualified} IS NULL`;
-  }
-
   private buildThroughWhere(
     options: QueryOptions<TEntity>,
-    paramOffset = 1,
+    parentIds: unknown[],
   ): { text: string; params: unknown[] } {
-    const where = options.where ?? {};
-    const entries = Object.entries(where);
-    if (entries.length === 0) {
-      return { text: "", params: [] };
-    }
-
-    const params: unknown[] = [];
-    const clauses = entries.map(([column, value], index) => {
-      params.push(value);
-      return `${qualifyColumn(this.table.name, column)} = $${paramOffset + index + 1}`;
-    });
-    return { text: ` AND ${clauses.join(" AND ")}`, params };
+    const parameters = [...parentIds];
+    const { clause } = buildQueryWhereClause(this.table, options, options.whereNodes, parameters);
+    return {
+      text: clause ? ` AND (${clause.replace(/^ WHERE /, "")})` : "",
+      params: parameters.slice(parentIds.length),
+    };
   }
 
   async loadBelongsToForParents<
@@ -893,7 +878,9 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
 
     const parentIds = [...new Set(parents.map((parent) => parent[relation.parentKey]))];
-    const placeholders = parentIds.map((_, index) => `$${index + 1}`).join(", ");
+    const placeholders = parentIds
+      .map((_, index) => currentSqlDialect().placeholder(index + 1))
+      .join(", ");
     const pivotRows = await this.connection.unsafe<Pivot>(
       `SELECT * FROM ${relation.pivotTable} WHERE ${String(relation.foreignPivotKey)} IN (${placeholders})`,
       parentIds,
