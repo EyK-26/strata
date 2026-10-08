@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { createLoginThrottleMiddleware } from "@getstrata/core/http/loginThrottleMiddleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
 import {
   consumeRedisThrottle,
+  createRedisThrottleConsumer,
   createThrottleMiddleware,
   redisThrottleKey,
   resolveThrottleIdentity,
@@ -149,6 +152,9 @@ describe("distributed throttle failure boundaries", () => {
     await expect(consumeRedisThrottle(client, "test", -1)).rejects.toThrow(
       "Invalid throttle expiry",
     );
+    await expect(consumeRedisThrottle(client, "test", Number.MAX_VALUE)).rejects.toThrow(
+      "Invalid throttle expiry",
+    );
     await expect(consumeRedisThrottle(client, "test", 1, 0)).rejects.toThrow(
       "Invalid throttle expiry",
     );
@@ -275,5 +281,104 @@ describe("application-owned quota policy", () => {
     expect(() =>
       createThrottleMiddleware({ redisUrl: "unused", maxAttempts: -1, decaySeconds: 60 }),
     ).toThrow("maxAttempts");
+  });
+});
+
+describe("Redis throttle ownership", () => {
+  test("disposal cancels a pending command without closing or reusing an injected client", async () => {
+    let calls = 0;
+    let closed = 0;
+    let complete: (value: number) => void = () => {};
+    const client = {
+      send: async () => {
+        calls++;
+        return await new Promise<number>((resolve) => {
+          complete = resolve;
+        });
+      },
+      close: () => {
+        closed++;
+      },
+    };
+    const consumer = createRedisThrottleConsumer({
+      redisUrl: "unused",
+      redisClient: client,
+      commandTimeoutMs: 60_000,
+    });
+    const pending = consumer("key", 60);
+    const outcome = pending.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    consumer.dispose();
+    consumer.dispose();
+    expect(await outcome).toBeInstanceOf(Error);
+    expect(String(await outcome)).toContain("disposed");
+    complete(1);
+    await expect(consumer("key", 60)).rejects.toThrow("disposed");
+    expect(calls).toBe(1);
+    expect(closed).toBe(0);
+    expect(consumer.isDisposed()).toBe(true);
+  });
+
+  test("API, login and SCIM middleware never admit late completion after disposal", async () => {
+    for (const factory of [
+      createThrottleMiddleware,
+      createLoginThrottleMiddleware,
+      createScimThrottleMiddleware,
+    ]) {
+      let complete: (value: number) => void = () => {};
+      let started: () => void = () => {};
+      const entered = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const throttle = factory({
+        redisUrl: "unused",
+        maxAttempts: 1,
+        decaySeconds: 60,
+        redisClient: {
+          send: async () => {
+            started();
+            return await new Promise<number>((resolve) => {
+              complete = resolve;
+            });
+          },
+        },
+      });
+      let admitted = false;
+      const request = new Request("http://example.test/auth", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "user@example.test" }),
+      });
+      const pending = throttle(request, async () => {
+        admitted = true;
+        return new Response("bypass");
+      });
+      await entered;
+      throttle.dispose();
+      complete(1);
+      expect((await pending).status).toBe(503);
+      expect(admitted).toBe(false);
+      expect((await throttle(request, async () => new Response("bypass"))).status).toBe(503);
+    }
+  });
+
+  test("aborted consumption sends no command", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      consumeRedisThrottle(
+        {
+          send: async () => {
+            throw new Error("must not send");
+          },
+        },
+        "key",
+        60,
+        1000,
+        controller.signal,
+      ),
+    ).rejects.toThrow("disposed");
   });
 });

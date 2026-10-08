@@ -105,6 +105,26 @@ describe("HttpKernel", () => {
     expect(cleaned).toBe(2);
   });
 
+  test.skipIf(!process.env.REDIS_URL)(
+    "kernel also disposes distributed API admission",
+    async () => {
+      const config = new ConfigStore();
+      config.set(REDIS_URL_CONFIG_KEY, process.env.REDIS_URL);
+      const kernel = createHttpKernel(createKernelDependencies(config));
+      const handler = kernel.wrap("api", async () => new Response("ok"));
+      const request = new Request("http://example.test/a", {
+        headers: { accept: "application/json" },
+      });
+      try {
+        expect((await handler(request)).status).toBe(200);
+        kernel.dispose();
+        expect((await handler(request)).status).toBe(503);
+      } finally {
+        kernel.dispose();
+      }
+    },
+  );
+
   test("registered kernel cleanup disposes local route throttles and closes admission", async () => {
     const config = new ConfigStore();
     config.set(REDIS_URL_CONFIG_KEY, "");

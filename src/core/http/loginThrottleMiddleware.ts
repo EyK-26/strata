@@ -7,6 +7,7 @@ import type { DisposableMemoryThrottle } from "./memoryThrottleMiddleware";
 import type { Middleware } from "./middleware";
 import {
   createRedisThrottleConsumer,
+  type DisposableThrottle,
   type RedisThrottleClient,
   redisThrottleKey,
   throttleUnavailableResponse,
@@ -83,11 +84,11 @@ function createMemoryLoginThrottleMiddleware(
 
 function createRedisLoginThrottleMiddleware(
   options: LoginThrottleOptions & { redisUrl: string },
-): Middleware {
+): DisposableThrottle {
   const consume = createRedisThrottleConsumer(options);
   const prefix = options.keyPrefix ?? "login-throttle";
 
-  return async (request: Request, next: () => Promise<Response>) => {
+  const middleware: Middleware = async (request, next) => {
     const identity = resolveLoginIdentity(request);
     const email = await resolveLoginEmail(request);
     const throttleKey = redisThrottleKey(request, prefix, JSON.stringify([identity, email]));
@@ -98,6 +99,7 @@ function createRedisLoginThrottleMiddleware(
       return throttleUnavailableResponse();
     }
 
+    if (consume.isDisposed()) return throttleUnavailableResponse();
     if (attempts > options.maxAttempts) {
       return await tooManyRequestsResponse(
         request,
@@ -108,9 +110,10 @@ function createRedisLoginThrottleMiddleware(
 
     return await next();
   };
+  return Object.assign(middleware, { dispose: () => consume.dispose() });
 }
 
-function createLoginThrottleMiddleware(options: LoginThrottleOptions): Middleware {
+function createLoginThrottleMiddleware(options: LoginThrottleOptions): DisposableThrottle {
   const redisUrl = options.redisUrl?.trim() ?? "";
 
   if (redisUrl) {
