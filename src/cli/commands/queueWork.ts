@@ -12,7 +12,7 @@ async function queueWorkCommand(): Promise<void> {
       assertProductionSecrets();
       context = await createAppContext();
       registerDefaultJobs();
-      discoverJobs();
+      await discoverJobs();
     },
     drain: () => context?.drain(),
     flush: () => context?.flush(),

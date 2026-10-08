@@ -33,7 +33,7 @@ describe("discoverListeners", () => {
     );
     resetDiscoverListenersForTests();
 
-    const listeners = discoverListeners();
+    const listeners = await discoverListeners();
 
     expect(listeners).toEqual([]);
   });
@@ -56,7 +56,7 @@ describe("discoverListeners", () => {
     process.chdir(root);
     const { discoverListeners } = await import("../../src/bootstrap/discoverListeners");
 
-    const listeners = discoverListeners();
+    const listeners = await discoverListeners();
 
     expect(listeners).toHaveLength(1);
     const [registerSampleListener] = listeners;

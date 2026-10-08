@@ -13,7 +13,7 @@ const listenersProvider: ServiceProvider = {
   async boot({ onCleanup }) {
     onCleanup(registerInvalidateCacheOnModelWriteListeners());
 
-    for (const registerListener of discoverListeners()) {
+    for (const registerListener of await discoverListeners()) {
       await registerListener();
     }
   },

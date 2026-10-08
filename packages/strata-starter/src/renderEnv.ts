@@ -709,7 +709,7 @@ function renderIntegrationsReadme(layers: StarterLayers): string {
     "",
     "OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).",
     "",
-    "Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `discoverListeners()` and `discoverJobs()`.",
+    "Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `await discoverListeners()` and `await discoverJobs()`.",
     "",
   ];
   if (enabled.length > 0) {

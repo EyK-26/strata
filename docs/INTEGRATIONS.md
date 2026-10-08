@@ -4,7 +4,7 @@ Strata ships hooks for SCIM, billing webhooks, SIEM export, and SSO. Core routes
 
 `create-strata` extras (`--scim`, `--mfa`, `--oauth-github`, `--oidc`, `--billing`, `--webhooks`) are **off by default**. Cookie apps with those extras on also ship MFA pages, email verification, a SCIM `/Users` adapter, GitHub cookie login, OIDC cookie login, a Stripe webhook stub, or outbound `webhook.dispatch`. Copy patterns from [AUTH.md](./AUTH.md) and [BUILDING-APPS.md](./BUILDING-APPS.md). Generated `.env.example` always includes commented `FEATURE_OAUTH` / `GITHUB_*` / `OIDC_*` / `FEATURE_BILLING` / `STRIPE_WEBHOOK_SECRET` / `WEBHOOK_ALLOW_PRIVATE` blocks.
 
-There is no `registerWebhookJobs()` API. Put a job class with `static jobName` in `src/jobs/` and call `discoverJobs()` (generated queue providers and `queue:work` already do). `--webhooks` writes `DispatchOutboundWebhookJob` as `webhook.dispatch`.
+There is no `registerWebhookJobs()` API. Put a job class with `static jobName` in `src/jobs/` and call `await discoverJobs()` (generated queue providers and `queue:work` already do). `--webhooks` writes `DispatchOutboundWebhookJob` as `webhook.dispatch`.
 
 Production checklist: [PRODUCTION.md](./PRODUCTION.md)
 
