@@ -88,3 +88,7 @@ This increment addresses Redis atomicity and failure admission. Core plan multip
 ## OpenTelemetry tracing
 
 HTTP tracing uses the maintained SDK with W3C propagation, bounded batching, configured sampling and lifecycle flushing. Registered templates bound route names; request secrets and exception text are omitted. See [TRACING.md](TRACING.md) for collector trust, overflow behavior, configuration, manual instrumentation and Bun qualification.
+
+## Scheduler ownership
+
+Production due-task runners require Redis coordination by default. Stable task names, shared namespaces and renewable occurrence/overlap leases prevent duplicate admission while ownership is valid. Effects still require application idempotency; leases do not provide database fencing or automatic catch-up. See [SCHEDULER.md](SCHEDULER.md) for retention, configuration, failover and explicit single-runner operation.

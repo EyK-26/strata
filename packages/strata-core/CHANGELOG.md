@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Coordinate scheduled minute occurrences with renewable Redis ownership, overlap exclusion, completion retention and lease-loss cancellation. Production defaults to Redis without local fallback; direct task callbacks now accept ownership context. Share appSchedule across root/subpath imports. See SCHEDULER.md for explicit local mode and replay limits.
+
 - Use maintained OpenTelemetry tracing with W3C propagation, consistent identities/epoch timestamps, bounded batching, sampling, error status and lifecycle-owned flush/shutdown. Raw URL/exception secrets are omitted; debug x-trace-id no longer overrides identity.
 
 - Strengthen declared model write/filter/identifier contracts and add typed plain-record projections with model casts and existing scope/RLS semantics. Source compatibility: use `query().select(...)` instead of partial selects on model-returning helpers, `whereDynamic` for qualified/dynamic predicates, and `newFromTrustedRecord` for deliberate partial driver hydration. Database defaults and mass-assignment rules remain runtime concerns.

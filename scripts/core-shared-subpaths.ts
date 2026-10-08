@@ -40,6 +40,7 @@ export const CORE_SHARED_SUBPATHS = [
   "queue/jobRegistry",
   "runtime/appKeyPrefix",
   "runtime/applicationRegistry",
+  "scheduler/schedule",
   "security/safeUrl",
   "security/securityEvents",
   "tenant/tenantContext",

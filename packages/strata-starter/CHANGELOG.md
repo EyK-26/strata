@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Document generated scheduler coordination defaults: Redis in production and explicit one-process operation for local deployments.
+
 - Include the shared tracing provider in generated provider lists so HTTP, workers and schedulers flush telemetry before infrastructure closes.
 
 - Await job discovery before queue construction and listener discovery before async registrar boot. Existing custom entrypoints must migrate to the new promise-returning discovery contracts; generated providers use the official shape.

@@ -37,6 +37,13 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "getBoundDatabaseConnection",
     "resetBoundDatabaseConnection",
   ],
+  "scheduler/schedule": [
+    "appSchedule",
+    "Schedule",
+    "runDueScheduledTasks",
+    "RedisSchedulerLeaseStore",
+    "SchedulerLeaseLostError",
+  ],
   "events/outbox": ["SqlOutbox", "createOutboxMigration"],
   "database/transaction": ["hasActiveTransaction", "runInTransaction"],
   "database/bunSql": ["bindBunSql", "createBunSqlPool"],

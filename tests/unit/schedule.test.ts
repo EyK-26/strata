@@ -79,3 +79,129 @@ test("scheduler stop finishes the active task without admitting another due task
   expect(completed).toBe(true);
   expect(second).toBe(false);
 });
+
+test("single-runner deduplicates the minute and supplies a stable per-task occurrence identity", async () => {
+  mock.restore();
+  const { Schedule, runDueScheduledTasks } = await import("@getstrata/core/scheduler/schedule");
+  const ids: string[] = [];
+  const schedule = new Schedule()
+    .command("* * * * *", "one", async (context) => {
+      ids.push(context.occurrenceId);
+      expect(context.scheduledAt.getUTCSeconds()).toBe(0);
+      expect(context.signal.aborted).toBe(false);
+      await context.assertOwnership();
+    })
+    .command("* * * * *", "two", (context) => {
+      ids.push(context.occurrenceId);
+    });
+  const now = new Date();
+  const options = { coordination: "single-runner" as const };
+  expect(await runDueScheduledTasks(schedule, now, options)).toBe(2);
+  expect(await runDueScheduledTasks(schedule, now, options)).toBe(0);
+  expect(new Set(ids).size).toBe(2);
+  expect(() => schedule.command("* * * * *", "one", () => {})).toThrow("unique");
+  expect(() => schedule.command("* * * * *", "   ", () => {})).toThrow("nonempty");
+  expect(() => schedule.command("* * * * *", "x".repeat(201), () => {})).toThrow();
+});
+
+test("lease loss aborts the handler and cannot count its side effect as completed", async () => {
+  mock.restore();
+  const { Schedule, runDueScheduledTasks, SchedulerLeaseLostError } = await import(
+    "@getstrata/core/scheduler/schedule"
+  );
+  let acknowledged = false;
+  let released = false;
+  const store = {
+    acquire: async () => true,
+    renew: async () => false,
+    complete: async () => {
+      acknowledged = true;
+      return true;
+    },
+    release: async () => {
+      released = true;
+    },
+  };
+  const schedule = new Schedule().command(
+    "* * * * *",
+    "lost",
+    async ({ signal, assertOwnership }) => {
+      await new Promise<void>((resolve) =>
+        signal.addEventListener("abort", () => resolve(), { once: true }),
+      );
+      expect(signal.reason).toBeInstanceOf(SchedulerLeaseLostError);
+      await expect(assertOwnership()).rejects.toBeInstanceOf(SchedulerLeaseLostError);
+    },
+  );
+  await expect(
+    runDueScheduledTasks(schedule, new Date(), { leaseStore: store, leaseMs: 100, renewalMs: 10 }),
+  ).rejects.toBeInstanceOf(SchedulerLeaseLostError);
+  expect(acknowledged).toBe(false);
+  expect(released).toBe(true);
+});
+
+test("admission shutdown during a delayed claim releases it without invoking the task", async () => {
+  mock.restore();
+  const { Schedule, runDueScheduledTasks } = await import("@getstrata/core/scheduler/schedule");
+  const admission = new AbortController();
+  let ran = false;
+  let released = false;
+  const store = {
+    acquire: async () => {
+      admission.abort();
+      return true;
+    },
+    renew: async () => true,
+    complete: async () => true,
+    release: async () => {
+      released = true;
+    },
+  };
+  expect(
+    await runDueScheduledTasks(
+      new Schedule().command("* * * * *", "task", () => {
+        ran = true;
+      }),
+      new Date(),
+      { signal: admission.signal, leaseStore: store },
+    ),
+  ).toBe(0);
+  expect(ran).toBe(false);
+  expect(released).toBe(true);
+});
+
+test("Redis failure never silently executes through a local fallback", async () => {
+  mock.restore();
+  const { Schedule, runDueScheduledTasks } = await import("@getstrata/core/scheduler/schedule");
+  let ran = false;
+  const schedule = new Schedule().command("* * * * *", "task", () => {
+    ran = true;
+  });
+  await expect(
+    runDueScheduledTasks(schedule, new Date(), {
+      coordination: "redis",
+      redisUrl: "redis://127.0.0.1:1",
+      leaseMs: 100,
+      commandTimeoutMs: 20,
+    }),
+  ).rejects.toThrow();
+  expect(ran).toBe(false);
+  await expect(runDueScheduledTasks(schedule, new Date(NaN))).rejects.toThrow("date");
+  await expect(runDueScheduledTasks(schedule, new Date(), { leaseMs: 99 })).rejects.toThrow(
+    "leaseMs",
+  );
+  await expect(
+    runDueScheduledTasks(schedule, new Date(), { leaseMs: 100, renewalMs: 50 }),
+  ).rejects.toThrow("renewalMs");
+});
+
+test("invalid namespace and JavaScript task handlers fail before admission", async () => {
+  mock.restore();
+  const { Schedule, runDueScheduledTasks } = await import("@getstrata/core/scheduler/schedule");
+  const schedule = new Schedule();
+  expect(() => schedule.command("* * * * *", "invalid", null as never)).toThrow("handler");
+  schedule.command("* * * * *", "task", () => {});
+  await expect(runDueScheduledTasks(schedule, new Date(), { namespace: " " })).rejects.toThrow(
+    "namespace",
+  );
+});
