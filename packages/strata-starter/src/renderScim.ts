@@ -6,6 +6,7 @@ function renderScimModule(layers: StarterLayers): string | null {
   }
 
   return `import { randomBytes } from "node:crypto";
+import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { createScimAuthMiddleware } from "@getstrata/core/auth/scimAuthMiddleware";
@@ -103,12 +104,12 @@ function readName(body: Record<string, unknown>, fallback: string): string {
   return fallback;
 }
 
-function wrapScim(handler: (request: Request) => Promise<Response>) {
-  const throttle = createScimThrottleMiddleware({
+function wrapScim(kernel: HttpKernel, handler: (request: Request) => Promise<Response>) {
+  const throttle = kernel.ownThrottle(createScimThrottleMiddleware({
     redisUrl: process.env.REDIS_URL,
     maxAttempts: 120,
     decaySeconds: 60,
-  });
+  }));
   return withMiddleware(throttle, createScimAuthMiddleware())(
     withErrorHandling(async (request) => {
       if (!scimEnabled()) {
@@ -127,7 +128,7 @@ const scimModule: AppModule = {
       "/scim/v2/ServiceProviderConfig": {
         GET: kernel.wrap(
           "api",
-          wrapScim(async () =>
+          wrapScim(kernel, async () =>
             scimJson({
               schemas: [CONFIG_SCHEMA],
               patch: { supported: true },
@@ -152,7 +153,7 @@ const scimModule: AppModule = {
       "/scim/v2/Users": {
         GET: kernel.wrap(
           "api",
-          wrapScim(async (request) => {
+          wrapScim(kernel, async (request) => {
             const url = new URL(request.url);
             const filter = url.searchParams.get("filter") ?? "";
             const match = /userName\\s+eq\\s+"([^"]+)"/i.exec(filter);
@@ -184,7 +185,7 @@ const scimModule: AppModule = {
         ),
         POST: kernel.wrap(
           "api",
-          wrapScim(async (request) => {
+          wrapScim(kernel, async (request) => {
             const body = (await request.json()) as Record<string, unknown>;
             const email = readUserName(body);
             const name = readName(body, email.split("@")[0] ?? "User");
@@ -207,7 +208,7 @@ const scimModule: AppModule = {
       "/scim/v2/Users/:id": {
         GET: kernel.wrap(
           "api",
-          wrapScim(async (request) => {
+          wrapScim(kernel, async (request) => {
             const id = readScimUserId(request);
             if (id instanceof Response) {
               return id;
@@ -221,7 +222,7 @@ const scimModule: AppModule = {
         ),
         PUT: kernel.wrap(
           "api",
-          wrapScim(async (request) => {
+          wrapScim(kernel, async (request) => {
             const id = readScimUserId(request);
             if (id instanceof Response) {
               return id;
@@ -242,7 +243,7 @@ const scimModule: AppModule = {
         ),
         PATCH: kernel.wrap(
           "api",
-          wrapScim(async (request) => {
+          wrapScim(kernel, async (request) => {
             const id = readScimUserId(request);
             if (id instanceof Response) {
               return id;
@@ -283,7 +284,7 @@ const scimModule: AppModule = {
         ),
         DELETE: kernel.wrap(
           "api",
-          wrapScim(async (request) => {
+          wrapScim(kernel, async (request) => {
             const id = readScimUserId(request);
             if (id instanceof Response) {
               return id;

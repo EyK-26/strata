@@ -39,3 +39,18 @@ export function quotaContracts(): void {
     quotaPolicy: () => "high",
   });
 }
+
+import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
+export function boundedMemoryContracts(): void {
+  const throttle = createMemoryThrottleMiddleware({
+    maxAttempts: 1,
+    decaySeconds: 60,
+    maxBuckets: 100,
+    pruneBatchSize: 4,
+  });
+  const retained: number = throttle.stats().retainedBuckets;
+  throttle.dispose();
+  void retained;
+  // @ts-expect-error Capacity bounds are numeric.
+  createMemoryThrottleMiddleware({ maxAttempts: 1, decaySeconds: 60, maxBuckets: "unbounded" });
+}

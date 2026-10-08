@@ -2,6 +2,28 @@ import { describe, expect, test } from "bun:test";
 import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
 
 describe("createScimThrottleMiddleware", () => {
+  test("bounds distinct local credentials without evicting lockouts", async () => {
+    const middleware = createScimThrottleMiddleware({
+      maxAttempts: 1,
+      decaySeconds: 60,
+      maxBuckets: 1,
+    });
+    const request = (secret: string) =>
+      new Request("http://example.test/scim/v2/Users", {
+        headers: { authorization: `Bearer ${secret}` },
+      });
+    const next = async () => new Response("ok");
+    expect((await middleware(request("one"), next)).status).toBe(200);
+    expect((await middleware(request("two"), next)).status).toBe(503);
+    expect((await middleware(request("one"), next)).status).toBe(429);
+    middleware.dispose();
+    expect(middleware.stats()?.retainedBuckets).toBe(0);
+    expect((await middleware(request("one"), next)).status).toBe(503);
+    expect(() => createScimThrottleMiddleware({ maxAttempts: -1, decaySeconds: 60 })).toThrow(
+      "limit",
+    );
+  });
+
   test("throttles in memory when Redis is not configured", async () => {
     const middleware = createScimThrottleMiddleware({
       maxAttempts: 2,

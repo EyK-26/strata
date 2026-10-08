@@ -1,66 +1,69 @@
-import { namespacedRedisKey } from "../runtime/appKeyPrefix";
-import { readClientIp } from "./clientIp";
+import {
+  BoundedThrottleStore,
+  type MemoryThrottleStats,
+  type MemoryThrottleStorageOptions,
+} from "../runtime/boundedThrottleStore";
 import type { Middleware } from "./middleware";
 import {
+  redisThrottleKey,
   resolveThrottleQuota,
   type ThrottleQuotaPolicy,
   throttleUnavailableResponse,
 } from "./throttleMiddleware";
 import { tooManyRequestsResponse } from "./throttleResponse";
 
-interface MemoryThrottleOptions {
+interface MemoryThrottleOptions extends MemoryThrottleStorageOptions {
   maxAttempts: number;
   decaySeconds: number;
   keyPrefix?: string;
   quotaPolicy?: ThrottleQuotaPolicy;
 }
 
-type ThrottleBucket = { count: number; resetAt: number };
+type DisposableMemoryThrottle = Middleware & { dispose(): void; stats(): MemoryThrottleStats };
+let resetGeneration = 0;
 
-const throttleBucketRegistries = new Set<Map<string, ThrottleBucket>>();
-
-function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Middleware {
-  const prefix = options.keyPrefix ?? namespacedRedisKey("memory-throttle:");
-  const buckets = new Map<string, ThrottleBucket>();
-  throttleBucketRegistries.add(buckets);
-
-  return async (request: Request, next: () => Promise<Response>) => {
+function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): DisposableMemoryThrottle {
+  const store = new BoundedThrottleStore(options.decaySeconds * 1000, options);
+  if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
+    throw new Error("Invalid memory throttle limit.");
+  let generation = resetGeneration;
+  const middleware: Middleware = async (request, next) => {
+    if (generation !== resetGeneration) {
+      store.clear();
+      generation = resetGeneration;
+    }
     let maxAttempts: number;
     try {
       maxAttempts = resolveThrottleQuota(request, options);
     } catch {
       return throttleUnavailableResponse();
     }
-    if (maxAttempts === 0) {
+    const attempts = store.consume(
+      redisThrottleKey(
+        request,
+        options.keyPrefix ?? "memory-throttle",
+        resolveThrottleIdentity(request),
+      ),
+    );
+    if (attempts === null) return throttleUnavailableResponse();
+    if (attempts > maxAttempts)
       return await tooManyRequestsResponse(request, "Too many requests.", options.decaySeconds);
-    }
-    const path = new URL(request.url).pathname;
-    const identity =
-      readClientIp(request) ?? request.headers.get("authorization")?.slice(0, 32) ?? "unknown";
-    const key = `${prefix}${identity}:${path}`;
-    const now = Date.now();
-    const existing = buckets.get(key);
-
-    if (!existing || existing.resetAt <= now) {
-      buckets.set(key, { count: 1, resetAt: now + options.decaySeconds * 1000 });
-      return await next();
-    }
-
-    existing.count += 1;
-
-    if (existing.count > maxAttempts) {
-      return await tooManyRequestsResponse(request, "Too many requests.", options.decaySeconds);
-    }
-
     return await next();
   };
+  return Object.assign(middleware, { dispose: () => store.dispose(), stats: () => store.stats() });
 }
 
+import { resolveThrottleIdentity } from "./throttleMiddleware";
+
+/** Lazy generation reset avoids retaining middleware instances in a global test registry. */
 function resetMemoryThrottleForTests(): void {
-  for (const buckets of throttleBucketRegistries) {
-    buckets.clear();
-  }
+  resetGeneration++;
 }
 
-export type { MemoryThrottleOptions };
+export type {
+  DisposableMemoryThrottle,
+  MemoryThrottleOptions,
+  MemoryThrottleStats,
+  MemoryThrottleStorageOptions,
+};
 export { createMemoryThrottleMiddleware, resetMemoryThrottleForTests };

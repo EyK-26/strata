@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { appContext, collectProviders, createAppContext } from "@getstrata/bootstrap/context";
 import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { resolveApplicationConfig } from "@getstrata/core/runtime/applicationRegistry";
 
 const base = () =>
@@ -9,6 +10,25 @@ const base = () =>
   );
 
 describe("awaited provider lifecycle", () => {
+  test("HTTP cleanup registration is scoped to each application context", async () => {
+    const first = await createAppContext(base());
+    const second = await createAppContext(base());
+    let a = 0;
+    let b = 0;
+    first.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {
+      a++;
+    });
+    second.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {
+      b++;
+    });
+    await first.dispose();
+    await first.dispose();
+    expect([a, b]).toEqual([1, 0]);
+    await second.dispose();
+    expect([a, b]).toEqual([1, 1]);
+    expect(() => first.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {})).toThrow("disposed");
+  });
+
   test("delayed module registrations finish before any provider boots or context is published", async () => {
     const order: string[] = [];
     let release!: () => void;

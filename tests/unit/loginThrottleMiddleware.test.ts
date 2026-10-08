@@ -49,6 +49,22 @@ describe("createMemoryLoginThrottleMiddleware", () => {
     resetMemoryLoginThrottleForTests();
   });
 
+  test("distinct login emails saturate safely and disposal releases local state", async () => {
+    const middleware = createMemoryLoginThrottleMiddleware({
+      maxAttempts: 1,
+      decaySeconds: 60,
+      maxBuckets: 1,
+    });
+    const next = async () => new Response("ok");
+    expect((await middleware(jsonLogin("first@example.test"), next)).status).toBe(200);
+    expect((await middleware(jsonLogin("other@example.test"), next)).status).toBe(503);
+    expect((await middleware(jsonLogin("first@example.test"), next)).status).toBe(429);
+    expect(middleware.stats().retainedBuckets).toBe(1);
+    middleware.dispose();
+    expect(middleware.stats().retainedBuckets).toBe(0);
+    expect((await middleware(jsonLogin("first@example.test"), next)).status).toBe(503);
+  });
+
   test("same IP and email share a bucket; a missing-body unknown bucket does not lock out that email", async () => {
     const middleware = createMemoryLoginThrottleMiddleware({
       maxAttempts: 1,

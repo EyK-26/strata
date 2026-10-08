@@ -413,6 +413,12 @@ export {
   resolveLoginEmail,
   resolveLoginIdentity,
 } from "../core/http/loginThrottleMiddleware.ts";
+export type {
+  DisposableMemoryThrottle,
+  MemoryThrottleOptions,
+  MemoryThrottleStats,
+  MemoryThrottleStorageOptions,
+} from "../core/http/memoryThrottleMiddleware.ts";
 export {
   createMemoryThrottleMiddleware,
   resetMemoryThrottleForTests,
