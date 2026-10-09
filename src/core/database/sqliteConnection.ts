@@ -45,7 +45,9 @@ function createSqliteConnection(filename: string): SqliteConnection {
 
   function execute<T>(query: string, params: readonly unknown[]): T[] {
     const statement = db.query(query);
-    const args = [...params] as never[];
+    const args = params.map((value) =>
+      value instanceof Date ? value.toISOString() : value,
+    ) as never[];
     if (isRowReturning(query)) return statement.all(...args) as T[];
     statement.run(...args);
     return [];

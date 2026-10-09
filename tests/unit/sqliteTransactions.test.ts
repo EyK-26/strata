@@ -21,6 +21,24 @@ describe("published SQLite async transactions", () => {
     connection.close();
   });
 
+  test("Date bindings preserve positional parameters and UTC timestamps", async () => {
+    await connection.unsafe("CREATE TABLE stamps (id INTEGER PRIMARY KEY, stamp TEXT)");
+    await connection.unsafe("INSERT INTO stamps VALUES (?,?)", [1, null]);
+    const stamp = new Date("2026-10-09T12:00:00.000Z");
+    await runInTransaction(async () => {
+      expect(
+        await db.unsafe("UPDATE stamps SET stamp=? WHERE id=? RETURNING id,stamp", [stamp, 1]),
+      ).toEqual([{ id: 1, stamp: stamp.toISOString() }]);
+      expect(await db.unsafe("SELECT id FROM stamps WHERE stamp=? AND id=?", [stamp, 1])).toEqual([
+        { id: 1 },
+      ]);
+    });
+    await expect(
+      connection.unsafe("INSERT INTO stamps VALUES (?,?)", [2, new Date(Number.NaN)]),
+    ).rejects.toThrow();
+    expect(await connection.unsafe("SELECT id FROM stamps ORDER BY id")).toEqual([{ id: 1 }]);
+  });
+
   test("commits awaited pool and repository writes through the active connection", async () => {
     await runInTransaction(async () => {
       await db.unsafe("INSERT INTO effects VALUES (?)", [1]);

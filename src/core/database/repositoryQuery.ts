@@ -12,7 +12,13 @@ import type {
   MorphToRelation,
 } from "./relationships.ts";
 import { getByRelationKey } from "./relationships.ts";
-import type { QueryJoin, QueryLockOptions, QueryOptions, QueryWhere } from "./types.ts";
+import type {
+  QueryJoin,
+  QueryLockOptions,
+  QueryOptions,
+  QueryWhere,
+  UpdateValues,
+} from "./types.ts";
 import { WhereBuilder, type WhereNode } from "./whereBuilder.ts";
 
 type LoadedRow = Record<string, unknown>;
@@ -375,6 +381,28 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   onlyTrashed(): this {
     this.queryOptions = { ...this.queryOptions, onlyTrashed: true };
     return this;
+  }
+
+  async update(changes: UpdateValues<TEntity, PrimaryKey>): Promise<number> {
+    this.assertNoMutationEagerLoads();
+    return this.repository.updateWhere(changes, this.buildOptions());
+  }
+
+  async updateReturning<K extends keyof TEntity & string>(
+    changes: UpdateValues<TEntity, PrimaryKey>,
+    ...columns: K[]
+  ): Promise<Pick<TEntity, K>[]> {
+    this.assertNoMutationEagerLoads();
+    return this.repository.updateWhereReturning(changes, columns, this.buildOptions());
+  }
+
+  async delete(): Promise<number> {
+    this.assertNoMutationEagerLoads();
+    return this.repository.deleteWhere(this.buildOptions());
+  }
+
+  private assertNoMutationEagerLoads(): void {
+    if (this.eagerLoads.length) throw new Error("Conditional writes do not support eager loading.");
   }
 
   async get(): Promise<Array<TEntity & LoadedRow>> {

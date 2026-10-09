@@ -843,9 +843,70 @@ function buildDeleteByIdQuery<TEntity extends object, PrimaryKey extends keyof T
   };
 }
 
+/** Single-statement writes: predicates and protected scopes stay in the mutation. */
+function buildConditionalWriteQuery<
+  TEntity extends object,
+  PrimaryKey extends keyof TEntity & string,
+>(
+  table: TableDefinition<TEntity, PrimaryKey>,
+  operation: "update" | "delete",
+  changes: UpdateValues<TEntity, PrimaryKey>,
+  options: QueryOptions<TEntity>,
+  returning?: readonly (keyof TEntity & string)[],
+): { text: string; params: unknown[] } {
+  for (const key of [
+    "joins",
+    "groupBy",
+    "having",
+    "select",
+    "orderBy",
+    "limit",
+    "offset",
+    "lock",
+  ] as const) {
+    if (options[key] !== undefined) throw new Error(`Conditional writes do not support ${key}.`);
+  }
+  const params: unknown[] = [];
+  const predicate = buildAdvancedWhereClause(
+    table.name,
+    options.where ?? {},
+    options.whereNodes ?? [],
+  );
+  if (!predicate.clause) throw new Error("Conditional writes require an explicit predicate.");
+  if (returning !== undefined && currentSqlDialect().driver === "mysql")
+    throw new Error("Mutation RETURNING is not supported on MySQL.");
+  const columns = returning ?? [table.primaryKey];
+  if (!columns.length || columns.some((column) => !table.columns.includes(column)))
+    throw new Error("RETURNING columns must be nonempty declared table columns.");
+  const deletedAt = resolveSoftDeleteColumn(table);
+  const values = operation === "delete" && deletedAt ? { [deletedAt]: new Date() } : changes;
+  let prefix: string;
+  if (operation === "update" || deletedAt) {
+    const entries = Object.entries(values).filter(([, value]) => value !== undefined);
+    if (!entries.length) throw new Error("Conditional updates require at least one value.");
+    if (
+      entries.some(
+        ([column]) =>
+          column === table.primaryKey || !table.columns.includes(column as keyof TEntity & string),
+      )
+    )
+      throw new Error("Conditional updates require declared non-primary-key columns.");
+    const assignments = entries.map(
+      ([column, value]) => `${quoteIdentifier(column)} = ${pushParam(params, value)}`,
+    );
+    prefix = `UPDATE ${quoteIdentifier(table.name)} SET ${assignments.join(", ")}`;
+  } else prefix = `DELETE FROM ${quoteIdentifier(table.name)}`;
+  const { clause } = buildQueryWhereClause(table, options, options.whereNodes ?? [], params);
+  return {
+    text: prefix + clause + returningSuffix(columns.map(quoteIdentifier).join(", ")),
+    params,
+  };
+}
+
 export {
   assertSafeProjectionExpression,
   buildAdvancedWhereClause,
+  buildConditionalWriteQuery,
   buildCountQuery,
   buildDeleteByIdQuery,
   buildGroupedCountQuery,
