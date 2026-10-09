@@ -305,3 +305,7 @@ Postgres RLS is documented in [TENANCY.md](./TENANCY.md). `TENANCY_DRIVER=none` 
 - `tsMatch` throws off Postgres on purpose.
 - MySQL has no `RETURNING`. Insert helpers that expect a returned row need another SELECT.
 - Identifier quoting rejects anything that is not `[A-Za-z_][A-Za-z0-9_]*`.
+
+### Generated Postgres query handle
+
+Postgres starters expose `SqlClient = SqlDatabaseConnection`, retaining both bound `unsafe(text, params)` and tagged-template calls. `getSql()` returns the framework transaction-aware query proxy, so tagged calls use the active request/savepoint connection rather than the pool. For example, a tagged `SELECT` with `${productId}` binds the value instead of interpolating SQL text. Tagged results remain plain driver rows; the public interface returns `unknown[]`, while typed model projections are preferred for declared application records. SQLite/MySQL starter adapters retain their existing unsafe-only application handle; this change does not promise native Bun helpers on those adapters.

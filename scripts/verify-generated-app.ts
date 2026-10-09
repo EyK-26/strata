@@ -145,6 +145,18 @@ try {
     await useTarballs(appDir, tarballs);
     // Exercise the emitted public DI declarations, including rejected mismatches,
     // outside the monorepo's source-path aliases on every supported compiler.
+    // The Postgres query proxy is callable; unsafe-only adapters must stay honest.
+    await writeFile(
+      join(appDir, "src/database-query.contract.ts"),
+      `import { getSql } from "./bootstrap/database.ts";
+export async function queryContract(): Promise<void> {
+  ${testCase.flags.includes("postgres") ? "" : "// @ts-expect-error This generated adapter does not expose tagged SQL."}
+  await getSql()\`SELECT 1 AS value WHERE 1 = \${1}\`;
+  const rows: Array<{value: number}> = await getSql().unsafe<{value: number}>("SELECT 1 AS value");
+  void rows;
+}
+`,
+    );
     await writeFile(
       join(appDir, "src/service-token.contract.ts"),
       await readFile(join(ROOT, "tests/types/serviceTokens.contract.ts"), "utf8"),

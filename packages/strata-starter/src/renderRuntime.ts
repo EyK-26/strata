@@ -200,10 +200,7 @@ import {
 } from "@getstrata/core/database/defaultConnection";
 import { useSqlDialect } from "@getstrata/core/database/dialect";
 
-export type SqlClient = {
-  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
-  close?: () => Promise<void> | void;
-};
+export type SqlClient = SqlDatabaseConnection;
 
 let sql: SqlClient | null = null;
 
@@ -221,7 +218,7 @@ export function getSql(): SqlClient {
   const pool = createBunSqlPool({ url, max: 5 }) as SqlDatabaseConnection;
   registerDefaultDatabasePool(pool);
   bindDatabaseConnection(getDefaultDatabaseQuery());
-  sql = getDefaultDatabaseQuery() as SqlClient;
+  sql = getDefaultDatabaseQuery();
   return sql;
 }
 
