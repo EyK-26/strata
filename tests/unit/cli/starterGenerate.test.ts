@@ -341,7 +341,10 @@ describe("create-strata generate", () => {
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS failed_job");
 
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
-    expect(site).toContain("Note.query().limit(1).get()");
+    expect(site).not.toContain("/health");
+    const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(healthBootstrap).toContain('Note.query().limit(1).select("id").get()');
+    expect(healthBootstrap).not.toContain("runWithMigrationBypass");
     expect(site).not.toContain('Note.query().value("id")');
     expect(site).not.toContain("runWithMigrationBypass");
     expect(site).not.toContain("SELECT 1 FROM notes LIMIT 1");
@@ -667,7 +670,10 @@ describe("create-strata generate", () => {
     expect(init).toContain("already-existing volume");
     expect(init).toContain("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public");
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
-    expect(site).toContain("Note.query().limit(1).get()");
+    expect(site).not.toContain("/health");
+    const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(healthBootstrap).toContain('Note.query().limit(1).select("id").get()');
+    expect(healthBootstrap).not.toContain("runWithMigrationBypass");
     expect(site).not.toContain("runWithMigrationBypass");
   });
 

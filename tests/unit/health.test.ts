@@ -162,3 +162,98 @@ describe("createHealthRoutes", () => {
     expect([200, 503]).toContain(response.status);
   });
 });
+
+describe("schema/container health probes", () => {
+  afterEach(() => resetBoundDatabaseConnection());
+  const dependencies = () => {
+    const container = new ServiceContainer();
+    const config = new ConfigStore();
+    config.set(REDIS_URL_CONFIG_KEY, "");
+    container.set(CORE_CONFIG_TOKEN, config);
+    return createMockDependencies(
+      container,
+      new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+    );
+  };
+  test("text probe reports only readiness, ignores extra data and never caches", async () => {
+    bindDatabaseConnection({
+      async unsafe<T>() {
+        return [{ ok: 1 }] as T[];
+      },
+    });
+    const routes = createHealthRoutes(dependencies(), {
+      pingOnHealth: true,
+      healthFormat: "text",
+      schemaCheck: async () => true,
+      extra: () => {
+        throw new Error("Private data must not be evaluated");
+      },
+    });
+    const response = await routes["/health"](new Request("http://unknown.invalid/health"));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("ok");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const rejected = await routes["/health"](
+      new Request("http://localhost/health", { method: "POST" }),
+    );
+    expect(rejected.status).toBe(405);
+    expect(rejected.headers.get("allow")).toBe("GET, HEAD");
+  });
+  test("missing schema and schema errors are sanitized as 503", async () => {
+    bindDatabaseConnection({
+      async unsafe<T>() {
+        return [{ ok: 1 }] as T[];
+      },
+    });
+    for (const schemaCheck of [
+      async () => false,
+      async () => {
+        throw new Error("private SQL details");
+      },
+    ]) {
+      const response = await createHealthRoutes(dependencies(), {
+        pingOnHealth: true,
+        healthFormat: "text",
+        schemaCheck,
+      })["/health"]();
+      expect(response.status).toBe(503);
+      expect(await response.text()).toBe("degraded");
+    }
+  });
+  test("unavailable Redis cannot report a healthy text probe", async () => {
+    bindDatabaseConnection({
+      async unsafe<T>() {
+        return [{ ok: 1 }] as T[];
+      },
+    });
+    const container = new ServiceContainer();
+    const config = new ConfigStore();
+    config.set(REDIS_URL_CONFIG_KEY, "redis://127.0.0.1:1");
+    container.set(CORE_CONFIG_TOKEN, config);
+    const deps = createMockDependencies(
+      container,
+      new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+    );
+    const response = await createHealthRoutes(deps, {
+      pingOnHealth: true,
+      healthFormat: "text",
+      schemaCheck: async () => true,
+    })["/health"]();
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe("degraded");
+  });
+  test("database failure does not become a successful schema probe", async () => {
+    bindDatabaseConnection({
+      async unsafe() {
+        throw new Error("private database error");
+      },
+    });
+    const response = await createHealthRoutes(dependencies(), {
+      pingOnHealth: true,
+      healthFormat: "text",
+      schemaCheck: async () => true,
+    })["/health"]();
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe("degraded");
+  });
+});

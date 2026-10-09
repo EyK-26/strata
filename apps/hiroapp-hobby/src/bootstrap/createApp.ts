@@ -21,6 +21,7 @@ import type { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShu
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
 import { migrate } from "../db/migrate.ts";
+import { Note } from "../models/Note.ts";
 import { buildRoutes } from "../routes.ts";
 import { loadConfig } from "./config.ts";
 import { closeDatabase, getSql, pingDatabase } from "./database.ts";
@@ -71,7 +72,19 @@ export async function bootstrapApp(options: BootstrapOptions = {}): Promise<Boot
     const routes = mergeSpaRoutes(
       context.dependencies,
       {
-        ...createHealthRoutes(context.dependencies),
+        ...createHealthRoutes(context.dependencies, {
+          pingOnHealth: true,
+          healthFormat: "text",
+          schemaCheck: async () => {
+            // Infrastructure probe: no tenant selection, bypass, user data or writes.
+            try {
+              await Note.query().limit(1).select("id").get();
+              return true;
+            } catch {
+              return false;
+            }
+          },
+        }),
         ...buildRoutes(context.dependencies),
       },
       {

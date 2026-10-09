@@ -131,3 +131,10 @@ HTTP tracing uses the maintained SDK with W3C propagation, bounded batching, con
 ## Scheduler ownership
 
 Production due-task runners require Redis coordination by default. Stable task names, shared namespaces and renewable occurrence/overlap leases prevent duplicate admission while ownership is valid. Effects still require application idempotency; leases do not provide database fencing or automatic catch-up. See [SCHEDULER.md](SCHEDULER.md) for retention, configuration, failover and explicit single-runner operation.
+
+
+### Generated readiness probes
+
+Generated apps register `/health` in bootstrap with `createHealthRoutes`, `pingOnHealth: true`, `healthFormat: "text"`, and a non-mutating `schemaCheck`. It returns only `ok` (200) or `degraded` (503), with no authentication, tenant selection, RLS bypass, or business data. Database, configured Redis, and schema readability must succeed; zero visible rows is healthy. `/ready` checks dependencies only and can succeed before migrations. Use `/health` for readiness, and a separate process/TCP check for liveness so dependency outages do not cause restart loops. Restrict infrastructure probes at the network boundary when needed.
+
+Existing generated apps must adopt the bootstrap health registration and remove their site-module `/health` handler; otherwise the module handler overrides the infrastructure probe and applies API admission middleware. Preserve any application-specific schema checks in the bootstrap callback using the runtime role. No database migration is needed for this change.

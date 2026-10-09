@@ -12,6 +12,10 @@ type PingableConnection = {
 
 interface CreateHealthRoutesOptions {
   pingOnHealth?: boolean;
+  /** Optional non-mutating schema check; applies to dependency-checked /health only. */
+  schemaCheck?: () => boolean | Promise<boolean>;
+  /** Text mode emits only ok/degraded for container readiness probes. */
+  healthFormat?: "json" | "text";
   extra?:
     | Record<string, unknown>
     | (() => Record<string, unknown> | Promise<Record<string, unknown>>);
@@ -66,13 +70,20 @@ async function pingDatabase(): Promise<boolean> {
 }
 
 async function checkRedis(redisUrl: string): Promise<boolean> {
+  let client: RedisClient | undefined;
   try {
-    const client = new RedisClient(redisUrl);
+    client = new RedisClient(redisUrl, {
+      connectionTimeout: 1000,
+      idleTimeout: 1000,
+      autoReconnect: false,
+    });
     const response = await client.ping();
 
     return response === "PONG";
   } catch {
     return false;
+  } finally {
+    client?.close();
   }
 }
 
@@ -111,22 +122,45 @@ function createHealthRoutes(
   options: CreateHealthRoutesOptions = {},
 ) {
   return {
-    "/health": async () => {
-      const extra = await resolveExtraFields(options.extra);
+    "/health": async (request?: Request) => {
+      if (request && request.method !== "GET" && request.method !== "HEAD") {
+        return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
+      }
+      const headers = { "cache-control": "no-store" };
+      const extra = options.healthFormat === "text" ? {} : await resolveExtraFields(options.extra);
 
       if (!options.pingOnHealth) {
-        return jsonResponse({ status: "ok", ...extra });
+        return options.healthFormat === "text"
+          ? new Response("ok", {
+              headers: { ...headers, "content-type": "text/plain; charset=utf-8" },
+            })
+          : jsonResponse({ status: "ok", ...extra }, { headers });
       }
 
-      const { checks, ready } = await collectDependencyChecks(dependencies);
-
+      const { checks, ready: dependenciesReady } = await collectDependencyChecks(dependencies);
+      let schemaReady = true;
+      if (options.schemaCheck) {
+        try {
+          schemaReady = await options.schemaCheck();
+        } catch {
+          schemaReady = false;
+        }
+      }
+      if (options.schemaCheck) checks.schema = schemaReady ? "ok" : "error";
+      const ready = dependenciesReady && schemaReady;
+      if (options.healthFormat === "text") {
+        return new Response(ready ? "ok" : "degraded", {
+          status: ready ? 200 : 503,
+          headers: { ...headers, "content-type": "text/plain; charset=utf-8" },
+        });
+      }
       return jsonResponse(
         {
           status: ready ? "ok" : "error",
           checks,
           ...extra,
         },
-        { status: ready ? 200 : 503 },
+        { status: ready ? 200 : 503, headers },
       );
     },
 
