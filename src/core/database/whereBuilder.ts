@@ -9,7 +9,15 @@ type ExistsClause = {
 type WhereNode<TEntity extends object> =
   | { kind: "and" | "or"; where: QueryWhere<TEntity> }
   | { kind: "and" | "or"; group: WhereNode<TEntity>[] }
-  | { kind: "and" | "or"; exists: ExistsClause };
+  | { kind: "and" | "or"; exists: ExistsClause }
+  | {
+      kind: "and" | "or";
+      compareRow: {
+        columns: readonly string[];
+        operator: "lt" | "gt";
+        values: readonly unknown[];
+      };
+    };
 
 class WhereBuilder<TEntity extends object, TWhere extends object = QueryWhere<TEntity>> {
   readonly nodes: WhereNode<TEntity>[] = [];
