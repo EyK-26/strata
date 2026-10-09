@@ -489,6 +489,17 @@ function buildSelectList<TEntity extends object>(
         return item.as ? `${column} AS ${quoteIdentifier(item.as)}` : column;
       }
 
+      if (item.kind === "textColumn") {
+        const dialect = currentSqlDialect();
+        const column = qualifyColumn(item.table, item.column);
+        // SQLite's ordinary REAL-to-TEXT cast rounds to 15 significant digits.
+        const text =
+          dialect.driver === "sqlite"
+            ? `CASE WHEN typeof(${column}) = 'real' THEN printf('%!.26g', ${column}) ELSE ${dialect.castToText(column)} END`
+            : dialect.castToText(column);
+        return `${text} AS ${quoteIdentifier(item.as)}`;
+      }
+
       if (item.kind === "literalText") {
         return `${currentSqlDialect().castToText(pushParam(params, item.value))} AS ${quoteIdentifier(item.as)}`;
       }

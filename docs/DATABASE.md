@@ -340,3 +340,34 @@ The official SQLite adapter normalizes bound `Date` values to UTC ISO strings be
 Use `table.bigId()` (or `table.bigId("order_id")`) for an automatically generated 64-bit primary key. PostgreSQL compiles BIGSERIAL; MySQL compiles BIGINT UNSIGNED AUTO_INCREMENT; SQLite uses its 64-bit INTEGER PRIMARY KEY AUTOINCREMENT rowid. `bigInteger()` remains a non-generated integer column. Existing `id()` migrations retain their current types, including PostgreSQL SERIAL; this addition does not rewrite deployed tables or change generated starter defaults.
 
 Choose compatible foreign-key widths deliberately (`bigInteger()` for PostgreSQL references, with matching signedness for MySQL). Database storage width does not make JavaScript numbers exact beyond `Number.MAX_SAFE_INTEGER`: driver numeric conversion still applies. Use a configured driver bigint/string representation or explicit text projections for identities above that boundary, and encode them safely in JSON. The integration tests verify generation beyond the signed 32-bit boundary; they do not claim automatic precision-safe conversion across the entire 64-bit range. Existing SQL remains available for database-specific identity options and altering deployed identity columns.
+
+### Composite keyset pages
+
+`keysetPaginate()` is additive; `cursorPaginate()` keeps its primary-key cursor contract. Use composite pages when a stable business ordering contains ties, such as timestamp-ordered history:
+
+```typescript
+import type { KeysetCursor } from "@getstrata/core/pagination";
+
+const cursor: KeysetCursor | undefined = validatedCursor;
+const page = await Order.query()
+  .where({ user_id: authenticatedUser.id })
+  .select("id", "created_at", "status")
+  .keysetPaginate({
+    perPage: 20,
+    orderBy: [
+      { column: "created_at", direction: "desc" },
+      { column: "id", direction: "desc" },
+    ],
+    cursor,
+  });
+// page.data is the selected plain record array.
+// JSON-encode page.meta.next_cursor for the next forward page, if non-null.
+```
+
+Repository queries and model queries support `keysetPaginate()`. Full model pages use the existing hydration, casts and batched eager-loading path. Selected model pages stay partial. Repository `projectKeyset(columns, options)` returns typed plain selected records. Static `Model.keysetPaginate(options)` retains model scopes. Cursor predicates intersect caller predicates, model scopes and soft-delete policy; database RLS remains authoritative.
+
+Provide 1–8 distinct declared scalar ordering columns with explicit `asc`/`desc` directions, ending in the table's declared primary key. Mixed directions are supported. Page sizes must be integers from 1 through 1000; applications should choose a smaller bound appropriate to their endpoints. Ordering fields must be non-null in the TypeScript record **and actual database schema**, and the declared primary key must really be unique. Nullable/JSON fields are excluded from typed ordering. Joined/grouped queries, explicit limits and offsets are rejected. The keyset ordering replaces earlier query ordering. Internal `__strata_keyset_` projection aliases are reserved.
+
+Cursor values are bounded database text projections, obtained before native date hydration, so sub-millisecond timestamps and adjacent floating-point boundaries survive continuation. Pass the returned versioned cursor unchanged; do not rebuild it from hydrated `Date` values or JavaScript numbers. A cursor with different columns/directions or malformed values is rejected. Comparisons use bound parameters and the database column's types and collation. Keep types, collation, database session timezone and ordering consistent across requests. Unsupported or null source keys fail explicitly; this is not schema introspection.
+
+The application owns HTTP encoding, input validation, authorization and any cursor signing. Cursors expose their ordering values and are not authorization tokens; reapply the same authorized filters on every request and avoid sensitive sort columns. `next_cursor` is null when no further row was observed. `prev_cursor` records the incoming boundary; it does not provide reverse traversal. Pages are forward continuations, not snapshots: deleting a boundary row is safe, newly inserted rows after the boundary may appear, and rows inserted before it are excluded. Use immutable sort keys to avoid skips or repeats caused by updates. Add suitable indexes and measure query plans for the actual filters and workload.

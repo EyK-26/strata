@@ -1,5 +1,6 @@
 import { eventBus } from "../events/eventBus.ts";
 import { dispatchModelEvent, modelEventName } from "../events/index.ts";
+import type { KeysetCursor, KeysetOptions } from "../pagination/index.ts";
 import {
   buildPaginationMeta,
   type CursorPaginatedResult,
@@ -8,6 +9,7 @@ import {
 import { getActiveDatabaseConnection } from "./connectionContext.ts";
 import { currentSqlDialect } from "./dialect.ts";
 import { withDatabaseErrorHandling } from "./errors.ts";
+import { KEYSET_ALIAS_PREFIX, keysetBoundary, validateKeyset } from "./keyset.ts";
 import {
   buildConditionalWriteQuery,
   buildCountQuery,
@@ -274,6 +276,80 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         next_cursor: nextCursor,
         prev_cursor: prevCursor,
         has_more: hasMore,
+      },
+    };
+  }
+
+  async keysetPaginate(
+    options: KeysetOptions<TEntity> &
+      Omit<ExtendedQueryOptions<TEntity>, "orderBy" | "limit" | "offset">,
+  ): Promise<CursorPaginatedResult<TEntity, KeysetCursor>> {
+    const order = validateKeyset(this.table, options);
+    if (
+      options.joins?.length ||
+      options.groupBy ||
+      options.having ||
+      "offset" in options ||
+      "limit" in options
+    )
+      throw new TypeError(
+        "Keyset pagination does not accept joined/grouped/offset/limited queries.",
+      );
+    if (options.select?.some((item) => item.as?.toLowerCase().startsWith(KEYSET_ALIAS_PREFIX)))
+      throw new TypeError("Projection conflicts with reserved keyset aliases.");
+    const filters: WhereNode<TEntity>[] = [...(options.whereNodes ?? [])];
+    if (options.where) filters.push({ kind: "and", where: options.where });
+    const rows = await this.findAll({
+      ...options,
+      where: {},
+      whereNodes: [
+        { kind: "and", group: filters },
+        ...keysetBoundary<TEntity>(order, options.cursor),
+      ],
+      orderBy: order as QueryOptions<TEntity>["orderBy"],
+      limit: options.perPage + 1,
+      select: [
+        ...(options.select?.length
+          ? options.select
+          : this.table.columns.map((column) => ({
+              kind: "column" as const,
+              table: this.table.name,
+              column,
+            }))),
+        ...order.map((item, i) => ({
+          kind: "textColumn" as const,
+          table: this.table.name,
+          column: item.column,
+          as: `${KEYSET_ALIAS_PREFIX}${i}`,
+        })),
+      ],
+    });
+
+    const entries = rows.map((row) => {
+      const record = { ...row } as Record<string, unknown>;
+      const values = order.map((_, i) => {
+        const key = `${KEYSET_ALIAS_PREFIX}${i}`;
+        const value = record[key];
+        delete record[key];
+        if (typeof value !== "string" || value.length > 4096)
+          throw new TypeError("Keyset columns must contain non-null bounded scalar values.");
+        return value;
+      });
+      return { record: record as TEntity, values };
+    });
+    const hasMore = entries.length > options.perPage;
+    const visible = entries.slice(0, options.perPage);
+    const last = visible.at(-1);
+    const nextCursor: KeysetCursor | null =
+      hasMore && last ? { version: 1, order, values: last.values } : null;
+    const data = visible.map(({ record }) => record);
+    return {
+      data,
+      meta: {
+        per_page: options.perPage,
+        has_more: hasMore,
+        next_cursor: nextCursor,
+        prev_cursor: options.cursor ?? null,
       },
     };
   }

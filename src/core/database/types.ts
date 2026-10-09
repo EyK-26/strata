@@ -66,6 +66,7 @@ type QueryJoin = {
 };
 
 type QuerySelectItem =
+  | { kind: "textColumn"; table: string; column: string; as: string }
   | { kind: "column"; table: string; column: string; as?: string }
   | { kind: "literalText"; value: string; as: string }
   | { kind: "subqueryCount"; sql: string; params: readonly unknown[]; as: string }
