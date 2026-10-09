@@ -18,6 +18,70 @@ function streamRetryKey(queueKey: string): string {
   return `${streamQueueKey(queueKey)}:retries`;
 }
 
+interface StreamsEnqueueOptions {
+  /** Total lifetime including time waiting and retries, measured from Redis server time. */
+  timeoutMs?: number;
+}
+const MAX_TIMER_MS = 2147483647;
+async function readStreamTime(client: RedisClient): Promise<number> {
+  const value = await client.send("TIME", []);
+  if (
+    !Array.isArray(value) ||
+    value.length !== 2 ||
+    typeof value[0] !== "string" ||
+    typeof value[1] !== "string" ||
+    !/^\d+$/.test(value[0]) ||
+    !/^\d+$/.test(value[1])
+  )
+    throw new Error("Invalid Redis TIME response");
+  const seconds = Number(value[0]);
+  const micros = Number(value[1]);
+  const now = seconds * 1000 + Math.floor(micros / 1000);
+  if (
+    !Number.isSafeInteger(seconds) ||
+    seconds < 0 ||
+    !Number.isSafeInteger(micros) ||
+    micros < 0 ||
+    micros >= 1000000 ||
+    !Number.isSafeInteger(now)
+  )
+    throw new Error("Invalid Redis TIME response");
+  return now;
+}
+// Long deadlines use bounded timers; each wakeup rechecks the authoritative server clock.
+function watchStreamDeadline(
+  client: RedisClient,
+  deadlineAtMs: number,
+  remainingMs: number,
+  expire: () => void,
+  fail: (error: unknown) => void,
+): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout>;
+  const schedule = (remaining: number) => {
+    timer = setTimeout(
+      () => {
+        void (async () => {
+          try {
+            const remaining = deadlineAtMs - (await readStreamTime(client));
+            if (stopped) return;
+            if (remaining <= 0) expire();
+            else schedule(remaining);
+          } catch (error) {
+            if (!stopped) fail(error);
+          }
+        })();
+      },
+      Math.max(1, Math.min(MAX_TIMER_MS, remaining)),
+    );
+  };
+  schedule(remainingMs);
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}
+
 // The entire next envelope is the sorted-set member; no orphan payload hash is needed.
 // Fence ownership, preflight types, then persist before removing the source reservation.
 const SCHEDULE_RETRY = `
@@ -27,6 +91,7 @@ local kind = redis.call('TYPE', KEYS[2]).ok
 if kind ~= 'none' and kind ~= 'zset' then return redis.error_reply('Invalid stream retry key type') end
 local now = redis.call('TIME')
 local due = tonumber(now[1])*1000 + math.floor(tonumber(now[2])/1000) + tonumber(ARGV[5])
+if ARGV[7] ~= '' then due = math.min(due, tonumber(ARGV[7])) end
 redis.call('ZADD', KEYS[2], due, ARGV[6])
 redis.call('XACK', KEYS[1], ARGV[1], ARGV[2])
 redis.call('XDEL', KEYS[1], ARGV[2])
@@ -69,6 +134,7 @@ async function scheduleStreamRetry(
     String(readQueueVisibilityMs()),
     String(delayMs),
     JSON.stringify(envelope),
+    envelope.deadlineAtMs === undefined ? "" : String(envelope.deadlineAtMs),
   ]);
   if (Number(scheduled) !== 1) throw new Error("Queue lease lost while scheduling retry");
 }
@@ -233,10 +299,29 @@ class RedisStreamsQueue implements Queue {
     this.client.close();
   }
   async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
+    await this.enqueue(job, payload);
+  }
+  async enqueue<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options: StreamsEnqueueOptions = {},
+  ): Promise<string> {
+    if (
+      options.timeoutMs !== undefined &&
+      (!Number.isSafeInteger(options.timeoutMs) ||
+        options.timeoutMs <= 0 ||
+        options.timeoutMs > MAX_TIMER_MS)
+    )
+      throw new Error("Streams timeoutMs must be an integer between 1 and 2147483647");
     const name = jobRegistry.resolveName(job);
     if (!name) throw new Error("Job is not registered with the queue worker registry.");
     const key = queueKeyForPriority(job.priority);
     await assertLegacyDrained(this.client, key);
+    const jobId = `${streamQueueKey(key)}/${crypto.randomUUID()}`;
+    const deadlineAtMs =
+      options.timeoutMs === undefined
+        ? undefined
+        : (await readStreamTime(this.client)) + options.timeoutMs;
     await this.client.send("XADD", [
       streamQueueKey(key),
       "*",
@@ -245,9 +330,11 @@ class RedisStreamsQueue implements Queue {
         name,
         payload,
         attempts: 0,
-        jobId: `${streamQueueKey(key)}/${crypto.randomUUID()}`,
+        jobId,
+        deadlineAtMs,
       }),
     ]);
+    return jobId;
   }
 }
 
@@ -324,16 +411,45 @@ class RedisStreamsWorker {
       return;
     }
     envelope.jobId ??= `${streamQueueKey(key)}/${reservation.id}`;
+    const remainingMs =
+      envelope.deadlineAtMs === undefined
+        ? undefined
+        : envelope.deadlineAtMs - (await readStreamTime(this.client));
+    const deadlineError = new Error("Streams job deadline exceeded");
+    if (remainingMs !== undefined && remainingMs <= 0) {
+      await this.failedJobs.recordFailure({
+        jobName: envelope.name,
+        payload: envelope.payload,
+        exception: deadlineError.message,
+      });
+      await updateStreamReservation(this.client, key, reservation, "ack");
+      return;
+    }
     const controller = new AbortController();
     this.active = controller;
     let acknowledge = false;
     let released = false;
     let ownershipLost = false;
     let renewal: Promise<void> | undefined;
+    let deadlineExpired = false;
+    let failureRecorded = false;
     const loseOwnership = (error: unknown) => {
       ownershipLost = true;
       controller.abort(error);
     };
+    const stopDeadlineWatch =
+      remainingMs === undefined || envelope.deadlineAtMs === undefined
+        ? undefined
+        : watchStreamDeadline(
+            this.client,
+            envelope.deadlineAtMs,
+            remainingMs,
+            () => {
+              deadlineExpired = true;
+              controller.abort(deadlineError);
+            },
+            loseOwnership,
+          );
     const heartbeat = setInterval(
       () => {
         if (renewal || ownershipLost || released) return;
@@ -353,7 +469,11 @@ class RedisStreamsWorker {
     );
     try {
       await runQueueJob(envelope, this.failedJobs, {
-        context: { jobId: envelope.jobId, signal: controller.signal },
+        context: {
+          jobId: envelope.jobId,
+          signal: controller.signal,
+          deadlineAtMs: envelope.deadlineAtMs,
+        },
         deferRetry: async (next, delayMs) => {
           controller.signal.throwIfAborted();
           await scheduleStreamRetry(this.client, key, reservation, next, delayMs);
@@ -361,15 +481,31 @@ class RedisStreamsWorker {
         },
         onFailureRecorded: () => {
           acknowledge = true;
+          failureRecorded = true;
         },
       });
       acknowledge = true;
     } catch (error) {
       console.error("[StreamsWorker] Job failed:", error);
     } finally {
+      stopDeadlineWatch?.();
       clearInterval(heartbeat);
       await renewal;
       this.active = undefined;
+    }
+    if (
+      !ownershipLost &&
+      !released &&
+      envelope.deadlineAtMs !== undefined &&
+      (deadlineExpired || envelope.deadlineAtMs <= (await readStreamTime(this.client)))
+    ) {
+      if (!failureRecorded)
+        await this.failedJobs.recordFailure({
+          jobName: envelope.name,
+          payload: envelope.payload,
+          exception: deadlineError.message,
+        });
+      acknowledge = true;
     }
     if (acknowledge && !ownershipLost && !released)
       await updateStreamReservation(this.client, key, reservation, "ack");
@@ -430,7 +566,7 @@ async function migrateLegacyQueueToStreams(
   return converted;
 }
 
-export type { StreamReservation };
+export type { StreamReservation, StreamsEnqueueOptions };
 // Internal protocol helpers, not exported as a package subpath.
 export {
   ensureStreamGroup,
@@ -440,6 +576,7 @@ export {
   RedisStreamsWorker,
   readStreamEntry,
   readStreamQueueDepth,
+  readStreamTime,
   reserveStreamJob,
   STREAM_GROUP,
   scheduleStreamRetry,
@@ -447,4 +584,5 @@ export {
   streamQueueKey,
   streamRetryKey,
   updateStreamReservation,
+  watchStreamDeadline,
 };

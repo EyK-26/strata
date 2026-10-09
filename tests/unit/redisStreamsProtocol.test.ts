@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   ensureStreamGroup,
   readStreamEntry,
+  readStreamTime,
   reserveStreamJob,
   scheduleStreamRetry,
+  watchStreamDeadline,
 } from "../../src/core/queue/redisStreams";
 
 function replies(values: unknown[]) {
@@ -16,6 +18,92 @@ function replies(values: unknown[]) {
 }
 
 describe("Streams protocol boundaries", () => {
+  test("deadline clock rejects malformed Redis replies", async () => {
+    for (const value of [
+      null,
+      [],
+      [null, "0"],
+      ["1", null],
+      ["", "0"],
+      ["1", "bad"],
+      ["bad", "0"],
+      ["-1", "0"],
+      ["1", "1000000"],
+      ["1", "-1"],
+      ["1.5", "0"],
+      [String(Number.MAX_SAFE_INTEGER), "0"],
+    ])
+      await expect(readStreamTime(replies([value]) as never)).rejects.toThrow("TIME response");
+    expect(await readStreamTime(replies([["10", "250000"]]) as never)).toBe(10250);
+  });
+  test("deadline watch rechecks the clock and propagates infrastructure failures", async () => {
+    let expired = false;
+    const clock = replies([
+      ["0", "1000"],
+      ["1", "0"],
+    ]);
+    const stop = watchStreamDeadline(
+      clock as never,
+      10,
+      1,
+      () => {
+        expired = true;
+      },
+      () => {
+        throw new Error("Unexpected clock failure");
+      },
+    );
+    try {
+      await Bun.sleep(25);
+      expect(expired).toBe(true);
+    } finally {
+      stop();
+    }
+    let failed = false;
+    const stopFailure = watchStreamDeadline(
+      replies([]) as never,
+      1,
+      1,
+      () => {},
+      () => {
+        failed = true;
+      },
+    );
+    try {
+      await Bun.sleep(10);
+      expect(failed).toBe(true);
+    } finally {
+      stopFailure();
+    }
+  });
+  test("deadline cleanup suppresses in-flight clock results and errors", async () => {
+    for (const reject of [false, true]) {
+      let settle: () => void = () => {};
+      const clock = {
+        send: async () =>
+          await new Promise((resolve, fail) => {
+            settle = () => (reject ? fail(new Error("Closed connection")) : resolve(["1", "0"]));
+          }),
+      };
+      let callbacks = 0;
+      const stop = watchStreamDeadline(
+        clock as never,
+        1,
+        1,
+        () => {
+          callbacks++;
+        },
+        () => {
+          callbacks++;
+        },
+      );
+      await Bun.sleep(10);
+      stop();
+      settle();
+      await Bun.sleep(5);
+      expect(callbacks).toBe(0);
+    }
+  });
   test("rejects retry delays that cannot be represented safely before accessing Redis", async () => {
     for (const delay of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER])
       await expect(

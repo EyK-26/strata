@@ -6,6 +6,7 @@ type QueuePriority = "high" | "default" | "low";
 interface JobContext {
   readonly jobId: string;
   readonly signal: AbortSignal;
+  readonly deadlineAtMs?: number;
 }
 
 abstract class Job<TPayload extends object = object> {

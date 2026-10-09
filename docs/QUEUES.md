@@ -32,7 +32,34 @@ Redis persistence, replication/failover, memory, and eviction settings determine
 
 Stop and drain older Streams workers before deploying this retry format: older workers ignore its logical identity and retry scheduling contract. New workers accept old producer envelopes, including maintenance-converted messages. Do not revert workers while scheduled retries remain; older releases cannot promote them. Queue storage has no automatic expiry because it contains unfinished work; sorted-set entries are removed on promotion, leaving no separate payload metadata.
 
-A crash during handler execution still replays the admitted attempt. Terminal SQL failure recording and Redis acknowledgement remain separate: if SQL persistence fails, the pending entry is retained; a crash after SQL recording can create a duplicate recovery record. Delivery remains at least once. Persisted deadlines, durable cancellation, and logical identities across manual SQL failed-job replay remain separate F02 follow-ups.
+A crash during handler execution still replays the admitted attempt. Terminal SQL failure recording and Redis acknowledgement remain separate: if SQL persistence fails, the pending entry is retained; a crash after SQL recording can create a duplicate recovery record. Delivery remains at least once. Durable cancellation and logical identities across manual SQL failed-job replay remain separate F02 follow-ups.
+
+## Total job deadlines
+
+The Streams queue has an explicit typed admission API that returns the stable logical ID:
+
+```ts
+import { RedisStreamsQueue } from "@getstrata/core/queue/redisQueue";
+const redisUrl = process.env.REDIS_URL;
+if (!redisUrl) throw new Error("REDIS_URL is required");
+const queue = new RedisStreamsQueue(redisUrl);
+try {
+  const jobId = await queue.enqueue(deliverJob, payload, { timeoutMs: 120_000 });
+  // Store jobId with application-owned tracking if needed.
+} finally {
+  queue.close();
+}
+```
+
+`timeoutMs` is an integer from 1 through 2,147,483,647 milliseconds (about 24.8 days). Omit it for no deadline. Existing `dispatch(job, payload): Promise<void>` remains supported. This capability belongs to the explicitly selected Streams transport; local and legacy list queues do not provide `enqueue` or durable deadlines.
+
+Admission reads Redis server time and persists one absolute `deadlineAtMs` in the envelope. The lifetime starts at that clock read, includes admission latency, queue waiting, every handler attempt, and retry backoff, and never resets after recovery. Retry schedules are capped at the deadline so a long backoff cannot postpone expiry processing. The optional `JobContext.deadlineAtMs` exposes the same timestamp to handlers.
+
+Before calling a handler, workers check Redis time: expired work is recorded as `Streams job deadline exceeded` in SQL failed-job storage and then acknowledged with ownership fencing. If SQL recording fails, the pending entry remains recoverable. Live deadlines abort the handler signal using bounded timers that recheck Redis time; clock-read failures abort processing without acknowledging the entry. The worker also checks the deadline after the handler exits, including if an event-loop stall delayed the timer. Expiry is processed by workers, so an outage can delay failure recording.
+
+Handlers must pass the signal to cancellable I/O and support replay. A deadline cannot undo an external side effect, interrupt blocking JavaScript, or terminate a handler that ignores its signal. Workers keep renewing ownership and wait for the handler to finish before recording deadline failure; they do not detach still-running work. Retrying a failed deadline job manually is a new admission with a new identity and no inherited deadline under the existing failed-job SQL format.
+
+Drain older Streams workers before admitting deadline-bearing jobs. Older releases ignore this field, so a mixed worker rollout cannot enforce the contract. Durable caller-requested cancellation remains a separate follow-up.
 
 ## Maintenance conversion from lists
 
