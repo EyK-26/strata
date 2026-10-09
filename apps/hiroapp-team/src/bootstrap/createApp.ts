@@ -56,7 +56,7 @@ export async function bootstrapApp(options: BootstrapOptions = {}): Promise<Boot
       assertProductionSecrets();
     }
 
-    await ensureAppDatabase();
+    await ensureAppDatabase({ provision: !isProduction });
     const appConfig = loadConfig();
     getSql();
     if (!(await pingDatabase())) throw new Error("Database is not ready.");

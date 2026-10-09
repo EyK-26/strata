@@ -3,7 +3,7 @@ import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function rollback() {
-  await ensureAppDatabase();
+  await ensureAppDatabase({ provision: false });
   const rolledBack = await withMigrationDatabase(async (db) => {
     return rollbackDatabase(db, await loadStarterMigrations(), {
       onMigration: (name) => {

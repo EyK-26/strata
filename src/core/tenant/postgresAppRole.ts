@@ -8,8 +8,9 @@ import { isProductionEnv } from "../runtime/appEnv";
  * CREATE TABLE, so the NOBYPASSRLS runtime role cannot drop them. Runtime
  * DATABASE_URL / APP_DATABASE_URL must be this NOBYPASSRLS role.
  * docker-entrypoint-initdb.d only runs on an empty volume; call
- * ensurePostgresDatabaseAndAppRole() on every boot so existing volumes get the
- * same role and table GRANTs after migrate:fresh.
+ * ensurePostgresDatabaseAndAppRole() during explicit provisioning/migration so
+ * existing volumes get the role and table GRANTs after migrate:fresh. Production
+ * runtime processes only connect through the already-provisioned restricted role.
  *
  * Admin DDL (GRANT ALL TABLES, CREATE TABLE, DROP TABLE) must run on the
  * application database. postgres/template1 are only for CREATE DATABASE.
@@ -139,6 +140,10 @@ function postgresAdminUrls(options: {
     return urls;
   }
 
+  // Production may use only explicitly configured administrative credentials.
+  if (isProductionEnv() && !options.superuserPassword?.trim()) {
+    return urls;
+  }
   const superuserPassword = options.superuserPassword ?? POSTGRES_SUPERUSER_PASSWORD;
   push(withPostgresUrlCredentials(options.runtimeUrl, "postgres", superuserPassword));
   // Last-resort password "postgres" is admin fallback only, and only when APP_ENV is local.

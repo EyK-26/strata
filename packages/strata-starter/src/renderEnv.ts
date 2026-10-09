@@ -56,7 +56,9 @@ function postgresAppRoleEnvNotes(layers: StarterLayers): string[] {
   }
   return [
     `# Runtime DATABASE_URL is ${GENERATED_POSTGRES_APP_ROLE} (NOSUPERUSER NOBYPASSRLS).`,
-    "# MIGRATION_DATABASE_URL is the postgres superuser for CREATE ROLE / CREATE DATABASE / GRANT / migrate.",
+    "# MIGRATION_DATABASE_URL belongs to the explicit migration/provisioning process, never HTTP/workers.",
+    "# Production provisioning also requires STRATA_APP_PASSWORD matching the restricted role credential.",
+    "# STRATA_APP_PASSWORD=",
     "# db/ensure-postgres-app-role.sql is repeatable on an existing volume, not only docker-entrypoint-initdb.d.",
     layers.tenancy === "rls"
       ? "# Production TENANCY_DRIVER=rls inspects pg_roles (rolsuper / rolbypassrls), not only the URL username."
@@ -930,7 +932,7 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
 ${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${layers.extras.oauthGithub ? "- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n" : ""}${layers.extras.oidc ? "- Set `OAUTH_STATE_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Loopback issuers work outside production; set `OIDC_ALLOW_PRIVATE=true` for other private IdPs.\n" : ""}${layers.extras.billing ? "- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n" : ""}${
   layers.tenancy === "rls"
-    ? `- \`DATABASE_URL\` must be a \`NOBYPASSRLS\` role, not the \`postgres\` superuser. Generated apps create \`${GENERATED_POSTGRES_APP_ROLE}\` via \`db/ensure-postgres-app-role.sql\` (and Compose init on first empty volume). \`MIGRATION_DATABASE_URL\` may stay the superuser for CREATE ROLE / GRANT / migrate. Production boot rejects username \`postgres\` or \`root\`, then inspects \`pg_roles\` for \`rolsuper\` / \`rolbypassrls\`.
+    ? `- \`DATABASE_URL\` must be a \`NOBYPASSRLS\` role, not the \`postgres\` superuser. Generated apps create \`${GENERATED_POSTGRES_APP_ROLE}\` via \`db/ensure-postgres-app-role.sql\` (and Compose init on first empty volume). \`MIGRATION_DATABASE_URL\` and an explicit non-development \`STRATA_APP_PASSWORD\` belong only to the migrate/provisioning process. HTTP/workers connect to the existing role without admin credentials or role/password writes. Production boot rejects username \`postgres\` or \`root\`, then inspects \`pg_roles\` for \`rolsuper\` / \`rolbypassrls\`.
 `
     : ""
 }

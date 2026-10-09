@@ -3,7 +3,7 @@ import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function status() {
-  await ensureAppDatabase();
+  await ensureAppDatabase({ provision: false });
   const rows = await withMigrationDatabase(async (db) => {
     return getMigrationStatus(db, await loadStarterMigrations());
   });

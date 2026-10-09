@@ -9,7 +9,7 @@ import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime
 
 export async function seed() {
   if (isProductionEnv()) throw new Error("Demo seeding is disabled in production and staging.");
-  await ensureAppDatabase();
+  await ensureAppDatabase({ provision: true });
 
   if ((await Note.query().value("id")) === null) {
     await Note.create({ body: "Welcome to Strata!" });
@@ -32,7 +32,7 @@ export async function seed() {
 }
 
 export async function migrate() {
-  await ensureAppDatabase();
+  await ensureAppDatabase({ provision: true });
   await withMigrationDatabase(async (db) => {
     await migrateDatabase(db, await loadStarterMigrations());
   });

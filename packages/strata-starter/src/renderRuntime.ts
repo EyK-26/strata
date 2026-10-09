@@ -20,8 +20,8 @@ function ensureImport(layers: StarterLayers): string {
     : "";
 }
 
-function ensureCall(layers: StarterLayers): string {
-  return needsEnsure(layers) ? "  await ensureAppDatabase();\n" : "";
+function ensureCall(layers: StarterLayers, provision = true): string {
+  return needsEnsure(layers) ? `  await ensureAppDatabase({ provision: ${provision} });\n` : "";
 }
 
 function dialectFragments(database: DatabaseLayer) {
@@ -777,7 +777,7 @@ function renderStatusTs(layers: StarterLayers): string {
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function status() {
-${ensureCall(layers)}  const rows = await withMigrationDatabase(async (db) => {
+${ensureCall(layers, false)}  const rows = await withMigrationDatabase(async (db) => {
     return getMigrationStatus(db, await loadStarterMigrations());
   });
   console.log("Migrations:");
@@ -799,7 +799,7 @@ function renderRollbackTs(layers: StarterLayers): string {
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function rollback() {
-${ensureCall(layers)}  const rolledBack = await withMigrationDatabase(async (db) => {
+${ensureCall(layers, false)}  const rolledBack = await withMigrationDatabase(async (db) => {
     return rollbackDatabase(db, await loadStarterMigrations(), {
       onMigration: (name) => {
         console.log(\`rolled back \${name}\`);
@@ -826,12 +826,14 @@ function renderPreloadTs(layers: StarterLayers, projectName: string): string {
     ? `process.env.MIGRATION_DATABASE_URL ??= ${JSON.stringify(migrationFallback)};\n`
     : "";
 
+  const databaseDefaults = needsEnsure(layers)
+    ? `if (!isProductionEnv()) {\n  process.env.DATABASE_URL ??= ${JSON.stringify(fallback)};\n  ${migrationLine.trim()}\n}\n`
+    : `process.env.DATABASE_URL ??= ${JSON.stringify(fallback)};\n`;
   return `import { join } from "node:path";
 import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
-import "../models/register.ts";
+${needsEnsure(layers) ? 'import { isProductionEnv } from "@getstrata/core/runtime/appEnv";\n' : ""}import "../models/register.ts";
 
-process.env.DATABASE_URL ??= ${JSON.stringify(fallback)};
-${migrationLine}process.env.FRONTEND_MODE ??= ${JSON.stringify(layers.frontend)};
+${databaseDefaults}process.env.FRONTEND_MODE ??= ${JSON.stringify(layers.frontend)};
 process.env.SPA_PREFIX ??= ${JSON.stringify(layers.spaPrefix)};
 process.env.CACHE_DRIVER ??= ${JSON.stringify(layers.cache)};
 process.env.QUEUE_DRIVER ??= ${JSON.stringify(layers.queue)};
@@ -960,7 +962,10 @@ function resolveAppDatabaseUrl(): string {
   if (explicit) {
     return explicit;
   }
-  return process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
+  const configured = process.env.DATABASE_URL?.trim();
+  if (configured) return configured;
+  if (isProductionEnv()) throw new Error("DATABASE_URL or APP_DATABASE_URL is required in production/staging.");
+  return DEFAULT_DATABASE_URL;
 }
 `;
 
@@ -984,12 +989,17 @@ function safeDatabaseName(url: string): string {
 
   if (layers.database === "mysql") {
     return `import { createConnection } from "mysql2/promise";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 
 const DEFAULT_DATABASE_URL = ${JSON.stringify(fallback)};
 
 ${resolveUrl}${safeName}
-export async function ensureAppDatabase(): Promise<string> {
+export async function ensureAppDatabase(options: { provision?: boolean } = {}): Promise<string> {
   const url = resolveAppDatabaseUrl();
+  if (!(options.provision ?? !isProductionEnv())) {
+    process.env.DATABASE_URL = url;
+    return url;
+  }
   const name = safeDatabaseName(url);
 
   const admin = new URL(url);
@@ -1011,17 +1021,25 @@ export async function ensureAppDatabase(): Promise<string> {
   ensurePostgresDatabaseAndAppRole,
   POSTGRES_APP_ROLE_PASSWORD,
 } from "@getstrata/core/tenant/enableTenantRls";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 
 const DEFAULT_DATABASE_URL = ${JSON.stringify(fallback)};
 
 ${resolveUrl}
-export async function ensureAppDatabase(): Promise<string> {
+export async function ensureAppDatabase(options: { provision?: boolean } = {}): Promise<string> {
   const url = resolveAppDatabaseUrl();
-  await ensurePostgresDatabaseAndAppRole({
-    runtimeUrl: url,
-    migrationUrl: process.env.MIGRATION_DATABASE_URL,
-    password: process.env.STRATA_APP_PASSWORD ?? POSTGRES_APP_ROLE_PASSWORD,
-  });
+  if (options.provision ?? !isProductionEnv()) {
+    if (isProductionEnv()) {
+      if (!process.env.MIGRATION_DATABASE_URL?.trim()) throw new Error("MIGRATION_DATABASE_URL is required for production/staging provisioning.");
+      const password = process.env.STRATA_APP_PASSWORD?.trim();
+      if (!password || password === POSTGRES_APP_ROLE_PASSWORD) throw new Error("Set an explicit non-development STRATA_APP_PASSWORD for production/staging provisioning.");
+    }
+    await ensurePostgresDatabaseAndAppRole({
+      runtimeUrl: url,
+      migrationUrl: process.env.MIGRATION_DATABASE_URL,
+      password: process.env.STRATA_APP_PASSWORD ?? POSTGRES_APP_ROLE_PASSWORD,
+    });
+  }
   process.env.DATABASE_URL = url;
   return url;
 }
@@ -1144,7 +1162,7 @@ export async function bootstrapApp(options: BootstrapOptions = {}): Promise<Boot
       assertProductionSecrets();
     }
 
-${needsEnsure(layers) ? "    await ensureAppDatabase();\n" : ""}    const appConfig = loadConfig();
+${needsEnsure(layers) ? "    await ensureAppDatabase({ provision: !isProduction });\n" : ""}    const appConfig = loadConfig();
     getSql();
     if (!(await pingDatabase())) throw new Error("Database is not ready.");
     if (isRlsTenancy()) {
