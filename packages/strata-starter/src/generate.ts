@@ -35,6 +35,7 @@ import {
   renderReadme,
   usesComposePostgres,
 } from "./renderEnv.ts";
+import { renderInitialAdminCommand, renderInitialAdminMigration } from "./renderInitialAdmin.ts";
 import {
   billingMigrationName,
   renderApplyStripeWebhook,
@@ -213,7 +214,16 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   }
   writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(layers));
   writeText(join(src, "bootstrap/schedule.ts"), renderScheduleTs());
-  writeText(join(src, "cli/register.ts"), renderCliRegisterTs());
+  writeText(join(src, "cli/register.ts"), renderCliRegisterTs(layers));
+  const initialAdminCommand = renderInitialAdminCommand(layers);
+  const initialAdminMigration = renderInitialAdminMigration(layers);
+  if (initialAdminCommand && initialAdminMigration) {
+    writeText(join(src, "cli/initialAdmin.ts"), initialAdminCommand);
+    writeText(join(src, "db/migrations/0004_initial_admin_provisioning.ts"), initialAdminMigration);
+  } else {
+    removeIfExists(join(src, "cli/initialAdmin.ts"));
+    removeIfExists(join(src, "db/migrations/0004_initial_admin_provisioning.ts"));
+  }
   writeText(join(src, "cli/queueWork.ts"), renderCliQueueWorkTs());
   writeText(join(src, "cli/queueFailed.ts"), renderCliQueueFailedTs());
   writeText(join(src, "cli/openapi.ts"), renderCliOpenApiTs());

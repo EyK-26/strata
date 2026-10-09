@@ -12,6 +12,8 @@ APP_ENV=production strata secrets:check
 
 Fix every error until it prints that production secret checks passed.
 
+Provision the first operator through the explicit [initial-admin command](INITIAL-ADMIN.md); demo seeding is not a production provisioning method.
+
 ## Required for all production deployments
 
 | Variable | When |

@@ -112,6 +112,19 @@ describe("generated src/cli/register.ts", () => {
     expect(pkg.scripts["queue:work"]).toBe("strata queue:work");
   });
 
+  test("user-auth generation registers admin provisioning and adds its independent file migration", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, ["admin-register", "--auth", "cookie", "--yes"]);
+    const commands = await loadAppCommands(await resolveApp(app));
+    expect(typeof commands["auth:provision-admin"]).toBe("function");
+    expect(await readFile(join(app, "src/cli/initialAdmin.ts"), "utf8")).toContain(
+      "runInitialAdminCommand",
+    );
+    expect(
+      await readFile(join(app, "src/db/migrations/0004_initial_admin_provisioning.ts"), "utf8"),
+    ).toContain("Cannot discard a completed");
+  });
+
   test("loadAppCommands sees product CLI commands and help lists them", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["cli-register-help", "--yes"]);
@@ -169,9 +182,12 @@ describe("generated src/cli/register.ts", () => {
   });
 
   test("in-repo example apps ship the same CLI registrar as the renderer", async () => {
-    const expectedRegister = renderCliRegisterTs();
     const expectedQueueWork = renderCliQueueWorkTs();
     for (const id of ["hiroapp", "hiroapp-hobby", "hiroapp-team"] as const) {
+      const { layers } = JSON.parse(
+        await readFile(join(repoRoot, `apps/${id}/strata.layers.json`), "utf8"),
+      );
+      const expectedRegister = renderCliRegisterTs(layers);
       const actualRegister = await readFile(
         join(repoRoot, `apps/${id}/src/cli/register.ts`),
         "utf8",

@@ -29,6 +29,7 @@
       "@getstrata/cli/queueFailed": ["./packages/strata-cli/src/queueFailed.ts"],
       "@getstrata/cli/scaffold": ["./packages/strata-cli/src/scaffold/index.ts"],
       "@getstrata/cli/openapi": ["./packages/strata-cli/src/openapi.ts"],
+      "@getstrata/cli/initialAdmin": ["./packages/strata-cli/src/initialAdmin.ts"],
       "@getstrata/cli/schedule": ["./packages/strata-cli/src/schedule.ts"]
     }
   },

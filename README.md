@@ -24,7 +24,7 @@ bunx create-strata my-app --yes
 bunx create-strata html --frontend server-htmx --database postgres --auth cookie --cache redis --queue redis --docker --yes
 ```
 
-Guides: [1.x → 2.x migration](docs/MIGRATING-2.md), [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDING-APPS.md), [docs/AUTH.md](docs/AUTH.md), [docs/DATABASE.md](docs/DATABASE.md), [docs/TENANCY.md](docs/TENANCY.md).
+Guides: [1.x → 2.x migration](docs/MIGRATING-2.md), [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDING-APPS.md), [docs/AUTH.md](docs/AUTH.md), [initial admin](docs/INITIAL-ADMIN.md), [docs/DATABASE.md](docs/DATABASE.md), [docs/TENANCY.md](docs/TENANCY.md).
 
 ## Packages
 

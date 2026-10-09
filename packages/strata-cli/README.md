@@ -19,7 +19,7 @@ strata help
 
 `strata start` does not migrate when `APP_ENV=production`. Run `strata migrate` as an explicit deploy step.
 
-App commands from `src/cli/register.ts` merge with this list. Generated apps add `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`.
+App commands from `src/cli/register.ts` merge with this list. Generated apps add `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. User-auth starters also add explicit `auth:provision-admin`; its `initialAdmin` subpath reads bounded password input from a pipe and redacts provisioning errors. The app owns its transactional one-time claim and user schema. See [initial-admin provisioning](https://github.com/EyK-26/strata/blob/main/docs/INITIAL-ADMIN.md) before adoption.
 
 ## Running it
 
@@ -51,7 +51,7 @@ From the current working directory, `strata` loads `strata.config.ts` if present
 | `migrate` | `src/db/migrate.ts` |
 | `fresh` | `src/db/fresh.ts` |
 
-`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. Generated apps ship `queue:work`, which boots the app (`bootstrapApp` / `createApp`) rather than the monorepo provider stack, plus `make:*`, failed-job commands, `openapi:*`, and `schedule:run`.
+`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. Generated apps ship `queue:work`, which boots the app (`bootstrapApp` / `createApp`) rather than the monorepo provider stack, plus `make:*`, failed-job commands, `openapi:*`, and `schedule:run`. User-auth starters also add explicit `auth:provision-admin`; its `initialAdmin` subpath reads bounded password input from a pipe and redacts provisioning errors. The app owns its transactional one-time claim and user schema. See [initial-admin provisioning](https://github.com/EyK-26/strata/blob/main/docs/INITIAL-ADMIN.md) before adoption.
 
 Helpers live on package subpaths: `@getstrata/cli/queueWorker`, `@getstrata/cli/queueFailed`, `@getstrata/cli/scaffold`, `@getstrata/cli/openapi`, and `@getstrata/cli/schedule`. `queue:work` takes `{ boot, close }` and does not call `assertProductionSecrets()` (that belongs in app boot). Scaffold commands resolve paths from the app working directory (`src/modules`, `src/db/migrations`, `src/jobs`, `views/` or `resources/views`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
 

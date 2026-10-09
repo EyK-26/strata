@@ -1,6 +1,7 @@
 import type { StrataCommandMap } from "@getstrata/cli";
 
 const commands: StrataCommandMap = {
+  "auth:provision-admin": async () => (await import("./initialAdmin.ts")).initialAdminCommand,
   "make:module": async () => (await import("@getstrata/cli/scaffold")).makeModuleCommand,
   "make:policy": async () => (await import("@getstrata/cli/scaffold")).makePolicyCommand,
   "make:job": async () => (await import("@getstrata/cli/scaffold")).makeJobCommand,
