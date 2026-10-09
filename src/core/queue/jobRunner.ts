@@ -7,6 +7,7 @@ interface QueueJobEnvelope {
   name: string;
   payload: Record<string, unknown>;
   attempts?: number;
+  jobId?: string;
 }
 
 function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
@@ -43,7 +44,19 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
     return null;
   }
 
+  if (
+    envelope.jobId !== undefined &&
+    (typeof envelope.jobId !== "string" || !envelope.jobId.length)
+  )
+    return null;
+  if (
+    envelope.attempts !== undefined &&
+    (!Number.isSafeInteger(envelope.attempts) || envelope.attempts < 0)
+  )
+    return null;
+
   return {
+    jobId: envelope.jobId,
     name: envelope.name,
     payload: (envelope.payload ?? {}) as Record<string, unknown>,
     attempts: typeof envelope.attempts === "number" ? envelope.attempts : 0,
@@ -53,7 +66,11 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
 async function runQueueJob(
   envelope: QueueJobEnvelope,
   failedJobs: FailedJobService,
-  options: { onFailureRecorded?: () => void; context?: import("./index").JobContext } = {},
+  options: {
+    onFailureRecorded?: () => void;
+    context?: import("./index").JobContext;
+    deferRetry?: (envelope: QueueJobEnvelope, delayMs: number) => Promise<void>;
+  } = {},
 ): Promise<void> {
   options.context?.signal.throwIfAborted();
   const job = jobRegistry.create(envelope.name);
@@ -73,6 +90,10 @@ async function runQueueJob(
 
     if (nextAttempt < maxAttempts) {
       const backoffMs = job.backoffMs ?? queueConfig.backoffMs;
+      if (options.deferRetry) {
+        await options.deferRetry({ ...envelope, attempts: nextAttempt }, backoffMs * nextAttempt);
+        return;
+      }
       await delay(backoffMs * nextAttempt, undefined, { signal: options.context?.signal });
       await runQueueJob(
         {

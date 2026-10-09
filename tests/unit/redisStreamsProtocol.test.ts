@@ -3,6 +3,7 @@ import {
   ensureStreamGroup,
   readStreamEntry,
   reserveStreamJob,
+  scheduleStreamRetry,
 } from "../../src/core/queue/redisStreams";
 
 function replies(values: unknown[]) {
@@ -15,6 +16,18 @@ function replies(values: unknown[]) {
 }
 
 describe("Streams protocol boundaries", () => {
+  test("rejects retry delays that cannot be represented safely before accessing Redis", async () => {
+    for (const delay of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER])
+      await expect(
+        scheduleStreamRetry(
+          replies([]) as never,
+          "key",
+          { id: "1-0", owner: "owner", payload: "{}" },
+          { name: "job", payload: {} },
+          delay,
+        ),
+      ).rejects.toThrow("Invalid Streams retry delay");
+  });
   test("rejects invalid entry framing and retains missing payloads for quarantine", () => {
     for (const value of [null, [], [1, []], ["1-0", null]])
       expect(() => readStreamEntry(value, "owner")).toThrow("Invalid Redis stream entry");
