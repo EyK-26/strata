@@ -1,4 +1,4 @@
-import type { PaginatedResult } from "../pagination/index.ts";
+import type { KeysetOptions, PaginatedResult } from "../pagination/index.ts";
 import type BaseRepository from "./baseRepository.ts";
 import { projectPluck, uniqueColumnSelect } from "./pluck.ts";
 import { parseQualifiedColumn } from "./query.ts";
@@ -502,6 +502,28 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   async cursorPaginate(options: { perPage: number; cursor?: TEntity[PrimaryKey] }) {
     const page = await this.repository.cursorPaginate({ ...this.buildOptions(), ...options });
     return { ...page, data: await this.attach(page.data) };
+  }
+
+  async keysetPaginate(options: KeysetOptions<TEntity>) {
+    const page = await this.repository.keysetPaginate({ ...this.buildOptions(), ...options });
+    return { ...page, data: await this.attach(page.data) };
+  }
+
+  async projectKeyset<K extends keyof TEntity & string>(
+    columns: readonly K[],
+    options: KeysetOptions<TEntity>,
+  ) {
+    if (
+      !columns.length ||
+      columns.some((column) => !this.repository.getTable().columns.includes(column))
+    )
+      throw new TypeError("Keyset projections require declared columns.");
+    const page = await this.repository.keysetPaginate({
+      ...this.buildOptions(),
+      ...options,
+      select: uniqueColumnSelect(this.repository.getTable().name, columns),
+    });
+    return { ...page, data: page.data as Array<Pick<TEntity, K>> };
   }
 
   /** Compiled query filters for batched relationship loaders. */

@@ -542,6 +542,9 @@ export {
 } from "../core/notifications/index.ts";
 export type {
   CursorPaginatedResult,
+  KeysetColumn,
+  KeysetCursor,
+  KeysetOptions,
   PaginatedResult,
   PaginationMeta,
 } from "../core/pagination/index.ts";

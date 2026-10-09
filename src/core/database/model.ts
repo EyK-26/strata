@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { ConflictError, NotFoundError } from "@getstrata/core/errors/http";
 import { hashPassword } from "../auth/password.ts";
 import { onDeferredModelRollback } from "../events/deferredModelEvents.ts";
+import type { CursorPaginatedResult, KeysetCursor, KeysetOptions } from "../pagination/index.ts";
 import BaseRepository from "./baseRepository.ts";
 import { foreignKeyFromTable, pivotTableName } from "./inflection.ts";
 import { resolveSoftDeleteColumn } from "./query.ts";
@@ -608,7 +609,15 @@ function applyTimestampsOnUpdate(
 
 /** Read-only plain records; partial selection never acquires model mutation methods. */
 class ModelProjection<TEntity extends object, K extends keyof TEntity & string> {
-  constructor(private readonly load: (limit?: number) => Promise<Array<Pick<TEntity, K>>>) {}
+  constructor(
+    private readonly load: (limit?: number) => Promise<Array<Pick<TEntity, K>>>,
+    private readonly page: (
+      options: KeysetOptions<TEntity>,
+    ) => Promise<CursorPaginatedResult<Pick<TEntity, K>, KeysetCursor>>,
+  ) {}
+  keysetPaginate(options: KeysetOptions<TEntity>) {
+    return this.page(options);
+  }
   get(): Promise<Array<Pick<TEntity, K>>> {
     return this.load();
   }
@@ -686,16 +695,31 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
   select<K extends keyof ModelAttributes<TModel> & string>(
     ...columns: readonly K[]
   ): ModelProjection<ModelAttributes<TModel>, K> {
-    return new ModelProjection(async (limit) => {
-      const rows = await this.query.project(columns, limit);
-      return rows.map(
-        (row) =>
-          applyCasts(row, modelStatics(this.modelClass).$casts, "hydrate") as Pick<
-            ModelAttributes<TModel>,
-            K
-          >,
-      );
-    });
+    return new ModelProjection(
+      async (limit) => {
+        const rows = await this.query.project(columns, limit);
+        return rows.map(
+          (row) =>
+            applyCasts(row, modelStatics(this.modelClass).$casts, "hydrate") as Pick<
+              ModelAttributes<TModel>,
+              K
+            >,
+        );
+      },
+      async (options) => {
+        const page = await this.query.projectKeyset(columns, options as never);
+        return {
+          ...page,
+          data: page.data.map(
+            (row) =>
+              applyCasts(row, modelStatics(this.modelClass).$casts, "hydrate") as Pick<
+                ModelAttributes<TModel>,
+                K
+              >,
+          ),
+        };
+      },
+    );
   }
 
   lockForUpdate(options: QueryLockOptions = {}): this {
@@ -864,6 +888,11 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
 
   async get(): Promise<ModelQueryResult<TModel, TCounts>[]> {
     return await this.hydrateRows(await this.query.get());
+  }
+
+  async keysetPaginate(options: KeysetOptions<ModelAttributes<TModel>>) {
+    const page = await this.query.keysetPaginate(options as never);
+    return { ...page, data: await this.hydrateRows(page.data) };
   }
 
   private async hydrateRows(
@@ -1328,6 +1357,13 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
           ),
         );
       });
+  }
+
+  static keysetPaginate<TModel extends object>(
+    this: { prototype: TModel },
+    options: KeysetOptions<ModelAttributes<TModel>>,
+  ) {
+    return (Model.query as (this: object) => ModelQuery<TModel>).call(this).keysetPaginate(options);
   }
 
   static cursorPaginate<TModel extends object>(
