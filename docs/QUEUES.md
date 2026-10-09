@@ -32,7 +32,7 @@ Redis persistence, replication/failover, memory, and eviction settings determine
 
 Stop and drain older Streams workers before deploying this retry format: older workers ignore its logical identity and retry scheduling contract. New workers accept old producer envelopes, including maintenance-converted messages. Do not revert workers while scheduled retries remain; older releases cannot promote them. Queue storage has no automatic expiry because it contains unfinished work; sorted-set entries are removed on promotion, leaving no separate payload metadata.
 
-A crash during handler execution still replays the admitted attempt. Terminal SQL failure recording and Redis acknowledgement remain separate: if SQL persistence fails, the pending entry is retained; a crash after SQL recording can create a duplicate recovery record. Delivery remains at least once. Durable cancellation and logical identities across manual SQL failed-job replay remain separate F02 follow-ups.
+A crash during handler execution still replays the admitted attempt. Terminal SQL failure recording and Redis acknowledgement remain separate: if SQL persistence fails, the pending entry is retained; a crash after SQL recording can create a duplicate recovery record. Delivery remains at least once. Logical identities across manual SQL failed-job replay remain a separate F02 follow-up.
 
 ## Total job deadlines
 
@@ -59,7 +59,30 @@ Before calling a handler, workers check Redis time: expired work is recorded as 
 
 Handlers must pass the signal to cancellable I/O and support replay. A deadline cannot undo an external side effect, interrupt blocking JavaScript, or terminate a handler that ignores its signal. Workers keep renewing ownership and wait for the handler to finish before recording deadline failure; they do not detach still-running work. Retrying a failed deadline job manually is a new admission with a new identity and no inherited deadline under the existing failed-job SQL format.
 
-Drain older Streams workers before admitting deadline-bearing jobs. Older releases ignore this field, so a mixed worker rollout cannot enforce the contract. Durable caller-requested cancellation remains a separate follow-up.
+Drain older Streams workers before admitting deadline-bearing jobs. Older releases ignore this field, so a mixed worker rollout cannot enforce the contract. Caller-requested cancellation is described below.
+
+## Durable cancellation requests
+
+Opt in when admitting through the explicitly selected `RedisStreamsQueue`:
+
+```ts
+const jobId = await queue.enqueue(deliverJob, payload, {
+  cancellable: true,
+  timeoutMs: 120_000, // Optional; cancellation does not require a deadline.
+});
+// After application authorization verifies ownership of this tracked job:
+const accepted = await queue.cancel(jobId);
+```
+
+`cancel` accepts a returned UUID identity in this queue's current namespace. It returns `true` when Redis retains the request, including repeated requests; `false` means there is no control record (completed, not opted in, unknown, or admitted by an older release). A namespace/identity mismatch throws. The framework supplies transport control, not tenant/shopper authorization: applications must authorize cancellation before calling it. An accepted request does not certify that external effects stopped or were undone. If the reply is lost, repeat the call with the same ID.
+
+Each opted-in unfinished job has one Redis hash (`:stream:control:<uuid>`) recording active/cancelled state and, after retry admission, its latest retry envelope. There is no time-based expiry that could forget cancellation during a long wait. Requests wake a currently scheduled retry by setting its due score to zero; already-promoted retries are not copied again. Queued or reclaimed cancelled work is recorded as `Streams job cancelled` in SQL failed-job storage before acknowledgement. Failed SQL recording retains both the pending work and the request for recovery.
+
+Running workers check cancellation during lease renewal and before terminal processing. Once observed, the handler signal aborts; the worker keeps renewing and waits for the handler to exit. Cancellation also fences deferred retry admission. Observation latency depends on visibility/renewal cadence and Redis availability, so this is cooperative cancellation rather than an immediate interrupt. A handler that completes before observing the request may already have performed its effect. Shutdown/ownership-loss aborts remain distinct from durable cancellation.
+
+Ownership-fenced terminal acknowledgement deletes the control hash together with the stream entry. Metadata is proportional to opted-in unfinished jobs, including quarantined work that needs operator resolution. Do not expire/delete control records of pending or scheduled jobs. Monitor unfinished/quarantined work and control-state errors. Wrong Redis types, missing control state, or incomplete admission writes fail closed; workers retain work for operator repair instead of ignoring cancellation. Redis persistence/failover settings still determine durability. Manual failed-job replay is a new admission, without inherited opt-in state or identity.
+
+Drain older Streams workers before admitting cancellable jobs: older versions ignore control state and cannot clean it up. Non-opted-in `enqueue` and ordinary `dispatch` keep their existing behavior and allocate no control hashes. Local and legacy list transports do not provide this capability.
 
 ## Maintenance conversion from lists
 

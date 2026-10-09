@@ -9,6 +9,7 @@ interface QueueJobEnvelope {
   attempts?: number;
   jobId?: string;
   deadlineAtMs?: number;
+  cancellable?: boolean;
 }
 
 function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
@@ -62,7 +63,14 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
   )
     return null;
 
+  if (
+    envelope.cancellable !== undefined &&
+    (typeof envelope.cancellable !== "boolean" || (envelope.cancellable && !envelope.jobId))
+  )
+    return null;
+
   return {
+    ...(envelope.cancellable ? { cancellable: true } : {}),
     ...(envelope.deadlineAtMs === undefined ? {} : { deadlineAtMs: envelope.deadlineAtMs }),
     jobId: envelope.jobId,
     name: envelope.name,

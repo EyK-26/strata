@@ -122,6 +122,8 @@ describe("runQueueJob", () => {
       expect(parseQueueJobEnvelope(raw)).toBeNull();
     jobRegistry.register("test.validated-envelope", () => new FlakyJob());
     for (const fields of [
+      { cancellable: "true" },
+      { cancellable: true },
       { deadlineAtMs: 0 },
       { deadlineAtMs: -1 },
       { deadlineAtMs: "1" },

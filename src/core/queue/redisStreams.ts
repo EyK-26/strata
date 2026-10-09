@@ -21,7 +21,56 @@ function streamRetryKey(queueKey: string): string {
 interface StreamsEnqueueOptions {
   /** Total lifetime including time waiting and retries, measured from Redis server time. */
   timeoutMs?: number;
+  cancellable?: boolean;
 }
+function streamControlKey(key: string, jobId: string): string {
+  const prefix = `${streamQueueKey(key)}/`;
+  if (
+    !jobId.startsWith(prefix) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      jobId.slice(prefix.length),
+    )
+  )
+    throw new Error("Invalid cancellable Streams job ID");
+  return `${streamQueueKey(key)}:control:${jobId.slice(prefix.length)}`;
+}
+const ENQUEUE_CONTROLLED = `
+local kind = redis.call('TYPE', KEYS[1]).ok
+if kind ~= 'none' and kind ~= 'stream' then return redis.error_reply('Invalid stream admission key type') end
+if redis.call('EXISTS', KEYS[2]) ~= 0 then return redis.error_reply('Streams control identity already exists') end
+redis.call('XADD', KEYS[1], '*', 'payload', ARGV[1])
+redis.call('HSET', KEYS[2], 'state', 'active')
+return 1
+`;
+const CANCEL_STREAM = `
+local state = redis.call('HGET', KEYS[1], 'state')
+if not state then return 0 end
+local kind = redis.call('TYPE', KEYS[2]).ok
+if kind ~= 'none' and kind ~= 'zset' then return redis.error_reply('Invalid stream retry key type') end
+local payload = redis.call('HGET', KEYS[1], 'retryPayload')
+if payload and redis.call('ZSCORE', KEYS[2], payload) then redis.call('ZADD', KEYS[2], 0, payload) end
+redis.call('HSET', KEYS[1], 'state', 'cancelled')
+return 1
+`;
+async function cancelStreamJob(client: RedisClient, key: string, jobId: string): Promise<boolean> {
+  return (
+    Number(
+      await client.send("EVAL", [
+        CANCEL_STREAM,
+        "2",
+        streamControlKey(key, jobId),
+        streamRetryKey(key),
+      ]),
+    ) === 1
+  );
+}
+async function readStreamCancellation(client: RedisClient, controlKey: string): Promise<boolean> {
+  const state = await client.send("HGET", [controlKey, "state"]);
+  if (state !== "active" && state !== "cancelled")
+    throw new Error("Missing or invalid Streams control state");
+  return state === "cancelled";
+}
+
 const MAX_TIMER_MS = 2147483647;
 async function readStreamTime(client: RedisClient): Promise<number> {
   const value = await client.send("TIME", []);
@@ -89,10 +138,16 @@ local pending = redis.call('XPENDING', KEYS[1], ARGV[1], ARGV[2], ARGV[2], 1)
 if #pending == 0 or pending[1][2] ~= ARGV[3] or tonumber(pending[1][3]) >= tonumber(ARGV[4]) then return 0 end
 local kind = redis.call('TYPE', KEYS[2]).ok
 if kind ~= 'none' and kind ~= 'zset' then return redis.error_reply('Invalid stream retry key type') end
+if ARGV[8] == '1' then
+  local state = redis.call('HGET', KEYS[3], 'state')
+  if state == 'cancelled' then return redis.error_reply('Streams job cancelled') end
+  if state ~= 'active' then return redis.error_reply('Missing or invalid Streams control state') end
+end
 local now = redis.call('TIME')
 local due = tonumber(now[1])*1000 + math.floor(tonumber(now[2])/1000) + tonumber(ARGV[5])
 if ARGV[7] ~= '' then due = math.min(due, tonumber(ARGV[7])) end
 redis.call('ZADD', KEYS[2], due, ARGV[6])
+if ARGV[8] == '1' then redis.call('HSET', KEYS[3], 'retryPayload', ARGV[6]) end
 redis.call('XACK', KEYS[1], ARGV[1], ARGV[2])
 redis.call('XDEL', KEYS[1], ARGV[2])
 if #redis.call('XPENDING', KEYS[1], ARGV[1], '-', '+', 1, ARGV[3]) == 0 then redis.call('XGROUP', 'DELCONSUMER', KEYS[1], ARGV[1], ARGV[3]) end
@@ -125,9 +180,10 @@ async function scheduleStreamRetry(
     throw new Error("Invalid Streams retry delay");
   const scheduled = await client.send("EVAL", [
     SCHEDULE_RETRY,
-    "2",
+    "3",
     streamQueueKey(key),
     streamRetryKey(key),
+    envelope.cancellable ? streamControlKey(key, envelope.jobId ?? "") : streamQueueKey(key),
     STREAM_GROUP,
     reservation.id,
     reservation.owner,
@@ -135,6 +191,7 @@ async function scheduleStreamRetry(
     String(delayMs),
     JSON.stringify(envelope),
     envelope.deadlineAtMs === undefined ? "" : String(envelope.deadlineAtMs),
+    envelope.cancellable ? "1" : "0",
   ]);
   if (Number(scheduled) !== 1) throw new Error("Queue lease lost while scheduling retry");
 }
@@ -179,6 +236,10 @@ async function assertLegacyDrained(client: RedisClient, key: string): Promise<vo
 const UPDATE_STREAM = `
 local pending = redis.call('XPENDING', KEYS[1], ARGV[1], ARGV[2], ARGV[2], 1)
 if #pending == 0 or pending[1][2] ~= ARGV[3] or tonumber(pending[1][3]) >= tonumber(ARGV[4]) then return 0 end
+if ARGV[7] == '1' then
+  local kind = redis.call('TYPE', KEYS[3]).ok
+  if kind ~= 'none' and kind ~= 'hash' then return redis.error_reply('Invalid stream control key type') end
+end
 if ARGV[5] == 'renew' then
   local claimed = redis.call('XCLAIM', KEYS[1], ARGV[1], ARGV[3], 0, ARGV[2], 'JUSTID')
   return #claimed
@@ -189,7 +250,10 @@ if ARGV[5] == 'quarantine' then
   redis.call('XADD', KEYS[2], '*', 'sourceId', ARGV[2], 'payload', ARGV[6])
 end
 local acknowledged = redis.call('XACK', KEYS[1], ARGV[1], ARGV[2])
-if acknowledged == 1 then redis.call('XDEL', KEYS[1], ARGV[2]) end
+if acknowledged == 1 then
+  redis.call('XDEL', KEYS[1], ARGV[2])
+  if ARGV[7] == '1' then redis.call('DEL', KEYS[3]) end
+end
 if #redis.call('XPENDING', KEYS[1], ARGV[1], '-', '+', 1, ARGV[3]) == 0 then redis.call('XGROUP', 'DELCONSUMER', KEYS[1], ARGV[1], ARGV[3]) end
 return acknowledged
 `;
@@ -237,20 +301,23 @@ async function updateStreamReservation(
   key: string,
   reservation: StreamReservation,
   action: "renew" | "ack" | "quarantine",
+  controlKey?: string,
 ): Promise<boolean> {
   return (
     Number(
       await client.send("EVAL", [
         UPDATE_STREAM,
-        "2",
+        "3",
         streamQueueKey(key),
         streamDeadLetterKey(key),
+        controlKey ?? streamQueueKey(key),
         STREAM_GROUP,
         reservation.id,
         reservation.owner,
         String(readQueueVisibilityMs()),
         action,
         reservation.payload,
+        controlKey ? "1" : "0",
       ]),
     ) === 1
   );
@@ -306,6 +373,8 @@ class RedisStreamsQueue implements Queue {
     payload: TPayload,
     options: StreamsEnqueueOptions = {},
   ): Promise<string> {
+    if (options.cancellable !== undefined && typeof options.cancellable !== "boolean")
+      throw new Error("cancellable must be a boolean");
     if (
       options.timeoutMs !== undefined &&
       (!Number.isSafeInteger(options.timeoutMs) ||
@@ -322,19 +391,29 @@ class RedisStreamsQueue implements Queue {
       options.timeoutMs === undefined
         ? undefined
         : (await readStreamTime(this.client)) + options.timeoutMs;
-    await this.client.send("XADD", [
-      streamQueueKey(key),
-      "*",
-      "payload",
-      JSON.stringify({
-        name,
-        payload,
-        attempts: 0,
-        jobId,
-        deadlineAtMs,
-      }),
-    ]);
+    const envelope = JSON.stringify({
+      name,
+      payload,
+      attempts: 0,
+      jobId,
+      deadlineAtMs,
+      ...(options.cancellable ? { cancellable: true } : {}),
+    });
+    if (options.cancellable)
+      await this.client.send("EVAL", [
+        ENQUEUE_CONTROLLED,
+        "2",
+        streamQueueKey(key),
+        streamControlKey(key, jobId),
+        envelope,
+      ]);
+    else await this.client.send("XADD", [streamQueueKey(key), "*", "payload", envelope]);
     return jobId;
+  }
+  async cancel(jobId: string): Promise<boolean> {
+    const key = defaultQueueKeys().find((key) => jobId.startsWith(`${streamQueueKey(key)}/`));
+    if (!key) throw new Error("Invalid cancellable Streams job ID");
+    return cancelStreamJob(this.client, key, jobId);
   }
 }
 
@@ -411,6 +490,25 @@ class RedisStreamsWorker {
       return;
     }
     envelope.jobId ??= `${streamQueueKey(key)}/${reservation.id}`;
+    let controlKey: string | undefined;
+    if (envelope.cancellable) {
+      try {
+        controlKey = streamControlKey(key, envelope.jobId);
+      } catch {
+        await updateStreamReservation(this.client, key, reservation, "quarantine");
+        return;
+      }
+    }
+    const cancellationError = new Error("Streams job cancelled");
+    if (controlKey && (await readStreamCancellation(this.client, controlKey))) {
+      await this.failedJobs.recordFailure({
+        jobName: envelope.name,
+        payload: envelope.payload,
+        exception: cancellationError.message,
+      });
+      await updateStreamReservation(this.client, key, reservation, "ack", controlKey);
+      return;
+    }
     const remainingMs =
       envelope.deadlineAtMs === undefined
         ? undefined
@@ -422,7 +520,7 @@ class RedisStreamsWorker {
         payload: envelope.payload,
         exception: deadlineError.message,
       });
-      await updateStreamReservation(this.client, key, reservation, "ack");
+      await updateStreamReservation(this.client, key, reservation, "ack", controlKey);
       return;
     }
     const controller = new AbortController();
@@ -432,6 +530,7 @@ class RedisStreamsWorker {
     let ownershipLost = false;
     let renewal: Promise<void> | undefined;
     let deadlineExpired = false;
+    let cancellationRequested = false;
     let failureRecorded = false;
     const loseOwnership = (error: unknown) => {
       ownershipLost = true;
@@ -455,8 +554,14 @@ class RedisStreamsWorker {
         if (renewal || ownershipLost || released) return;
         renewal = (async () => {
           try {
-            if (!(await updateStreamReservation(this.client, key, reservation, "renew")))
+            if (
+              !(await updateStreamReservation(this.client, key, reservation, "renew", controlKey))
+            )
               loseOwnership(new Error("Queue lease lost"));
+            else if (controlKey && (await readStreamCancellation(this.client, controlKey))) {
+              cancellationRequested = true;
+              controller.abort(cancellationError);
+            }
           } catch (error) {
             loseOwnership(error);
             console.error("[StreamsWorker] Lease renewal failed:", error);
@@ -496,6 +601,21 @@ class RedisStreamsWorker {
     if (
       !ownershipLost &&
       !released &&
+      controlKey &&
+      (cancellationRequested || (await readStreamCancellation(this.client, controlKey)))
+    ) {
+      if (!failureRecorded)
+        await this.failedJobs.recordFailure({
+          jobName: envelope.name,
+          payload: envelope.payload,
+          exception: cancellationError.message,
+        });
+      failureRecorded = true;
+      acknowledge = true;
+    }
+    if (
+      !ownershipLost &&
+      !released &&
       envelope.deadlineAtMs !== undefined &&
       (deadlineExpired || envelope.deadlineAtMs <= (await readStreamTime(this.client)))
     ) {
@@ -508,7 +628,7 @@ class RedisStreamsWorker {
       acknowledge = true;
     }
     if (acknowledge && !ownershipLost && !released)
-      await updateStreamReservation(this.client, key, reservation, "ack");
+      await updateStreamReservation(this.client, key, reservation, "ack", controlKey);
   }
   async run(): Promise<void> {
     this.running = true;
@@ -569,17 +689,20 @@ async function migrateLegacyQueueToStreams(
 export type { StreamReservation, StreamsEnqueueOptions };
 // Internal protocol helpers, not exported as a package subpath.
 export {
+  cancelStreamJob,
   ensureStreamGroup,
   migrateLegacyQueueToStreams,
   promoteStreamRetries,
   RedisStreamsQueue,
   RedisStreamsWorker,
+  readStreamCancellation,
   readStreamEntry,
   readStreamQueueDepth,
   readStreamTime,
   reserveStreamJob,
   STREAM_GROUP,
   scheduleStreamRetry,
+  streamControlKey,
   streamDeadLetterKey,
   streamQueueKey,
   streamRetryKey,

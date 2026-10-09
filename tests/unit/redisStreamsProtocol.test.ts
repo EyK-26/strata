@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   ensureStreamGroup,
+  readStreamCancellation,
   readStreamEntry,
   readStreamTime,
   reserveStreamJob,
@@ -18,6 +19,14 @@ function replies(values: unknown[]) {
 }
 
 describe("Streams protocol boundaries", () => {
+  test("missing and unexpected cancellation states fail closed", async () => {
+    for (const state of [null, "unknown"])
+      await expect(readStreamCancellation(replies([state]) as never, "control")).rejects.toThrow(
+        "control state",
+      );
+    expect(await readStreamCancellation(replies(["active"]) as never, "control")).toBe(false);
+    expect(await readStreamCancellation(replies(["cancelled"]) as never, "control")).toBe(true);
+  });
   test("deadline clock rejects malformed Redis replies", async () => {
     for (const value of [
       null,
