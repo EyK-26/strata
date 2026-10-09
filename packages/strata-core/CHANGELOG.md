@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.3
+
+- feat(database): add scoped composite keyset pagination
+
 ## 2.2.2
 
 - orm improvments
