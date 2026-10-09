@@ -98,12 +98,21 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   async count(options: ExtendedQueryOptions<TEntity> = {}): Promise<number> {
+    if (options.lock) throw new Error("Row locks require a row selection, not count().");
     const { whereNodes, where, ...rest } = options;
     return await this.countWhere(where ?? {}, rest, whereNodes ?? []);
   }
 
   async findAll(options: ExtendedQueryOptions<TEntity> = {}): Promise<TEntity[]> {
     return await withDatabaseErrorHandling(async () => {
+      if (
+        options.lock &&
+        (!hasActiveTransaction() ||
+          (this.connection !== repositoryConnection &&
+            this.connection !== getActiveDatabaseConnection(repositoryConnection)))
+      ) {
+        throw new Error("Row locks require the framework active transaction connection.");
+      }
       const { whereNodes, ...queryOptions } = options;
       const { text, params } = buildSelectQuery(this.table, queryOptions, whereNodes ?? []);
       return (await this.connection.unsafe<TEntity & Record<string, unknown>>(

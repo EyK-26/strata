@@ -528,6 +528,34 @@ function getDefinedColumnEntries<TEntity, PrimaryKey extends keyof TEntity & str
   });
 }
 
+function buildSelectLock<TEntity extends object>(
+  table: TableDefinition<TEntity>,
+  options: QueryOptions<TEntity>,
+): string {
+  const lock = options.lock;
+  if (!lock) return "";
+  const driver = currentSqlDialect().driver;
+  if (driver === "sqlite")
+    throw new Error("Row locks are not supported on SQLite; use an explicit write transaction.");
+  if (lock.mode !== "update" && lock.mode !== "share")
+    throw new TypeError("Invalid row lock mode.");
+  if (lock.wait !== undefined && !["wait", "nowait", "skipLocked"].includes(lock.wait))
+    throw new TypeError("Invalid row lock wait policy.");
+  if (options.groupBy || options.having)
+    throw new Error("Row locks cannot be combined with grouped/aggregate queries.");
+  let target = "";
+  if (lock.of !== undefined) {
+    if (driver !== "pgsql") throw new Error("Row lock targets are supported only on PostgreSQL.");
+    const tables = [table.name, ...(options.joins ?? []).map((join) => join.table)];
+    if (!lock.of.length || lock.of.some((name) => !tables.includes(name)))
+      throw new TypeError("Row lock targets must name tables in this query.");
+    target = ` OF ${lock.of.map(quoteIdentifier).join(", ")}`;
+  }
+  const wait =
+    lock.wait === "nowait" ? " NOWAIT" : lock.wait === "skipLocked" ? " SKIP LOCKED" : "";
+  return ` FOR ${lock.mode === "update" ? "UPDATE" : "SHARE"}${target}${wait}`;
+}
+
 function buildSelectQuery<TEntity extends object>(
   table: TableDefinition<TEntity>,
   options: QueryOptions<TEntity> = {},
@@ -542,9 +570,10 @@ function buildSelectQuery<TEntity extends object>(
   const orderBy = buildOrderByClause(table.name, options.orderBy ?? table.defaultOrderBy);
   const limit = buildLimitClause(options.limit);
   const offset = buildOffsetClause(options.offset);
+  const lock = buildSelectLock(table, options);
 
   return {
-    text: `SELECT ${columns} FROM ${quoteIdentifier(table.name)}${joins}${clause}${groupBy}${havingClause}${orderBy}${limit}${offset}`,
+    text: `SELECT ${columns} FROM ${quoteIdentifier(table.name)}${joins}${clause}${groupBy}${havingClause}${orderBy}${limit}${offset}${lock}`,
     params,
   };
 }
