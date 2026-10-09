@@ -15,6 +15,12 @@ import {
   updateStreamReservation,
 } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
+import {
+  promoteStreamRetries,
+  reserveStreamJob,
+  scheduleStreamRetry,
+  streamRetryKey,
+} from "../../src/core/queue/redisStreams";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
@@ -47,6 +53,7 @@ async function fixture(
         `${key}:processing:leases`,
         streamQueueKey(key),
         streamDeadLetterKey(key),
+        streamRetryKey(key),
         `${key}:started`,
       );
     client.close();
@@ -89,6 +96,164 @@ async function agePending(client: RedisClient, key: string) {
 }
 
 describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
+  test("persisted backoff frees workers and resumes attempts and identity after restart", async () => {
+    await fixture(async (client, keys) => {
+      process.env.QUEUE_REDIS_TRANSPORT = "streams";
+      const identities: string[] = [];
+      let failures = 0;
+      class Retry extends Job {
+        override readonly maxAttempts = 3;
+        override readonly backoffMs = 100;
+        async handle(_payload: object, context?: JobContext) {
+          identities.push(required(context).jobId);
+          throw new Error("Expected retry");
+        }
+      }
+      const job = new Retry();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const failed = {
+        recordFailure: async () => {
+          failures++;
+        },
+      };
+      try {
+        await queue.dispatch(job, {});
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const worker = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+          try {
+            expect(await worker.processNext()).toBe(true);
+            expect(identities.length).toBe(attempt + 1);
+            expect((await readRedisQueueDepth(redisUrl)).total).toBe(attempt < 2 ? 1 : 0);
+            expect(await worker.processNext()).toBe(false);
+            expect(await entries(client, keys[1])).toEqual([]);
+            if (attempt < 2) {
+              const scheduled = (await client.send("ZRANGE", [
+                streamRetryKey(keys[1]),
+                "0",
+                "-1",
+              ])) as string[];
+              expect(JSON.parse(required(scheduled[0])).attempts).toBe(attempt + 1);
+            }
+          } finally {
+            worker.close();
+          }
+          if (attempt < 2) await Bun.sleep(120 * (attempt + 1));
+        }
+        expect(failures).toBe(1);
+        expect(new Set(identities).size).toBe(1);
+        expect(await client.send("EXISTS", [streamRetryKey(keys[1])])).toBe(0);
+      } finally {
+        queue.close();
+      }
+    });
+  });
+  test("retry scheduling fences expired owners and validates destinations before acknowledgement", async () => {
+    await fixture(async (client, keys) => {
+      const key = keys[1];
+      const job = new (class extends Job {
+        async handle() {}
+      })();
+      const name = tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, keys);
+      try {
+        await worker.processNext();
+        await queue.dispatch(job, {});
+        const reservation = required(
+          (await reserveStreamJob(client, key, "owner")).reservation ?? undefined,
+        );
+        const next = { name, payload: {}, attempts: 1, jobId: "stable" };
+        await client.set(streamRetryKey(key), "wrong type");
+        await expect(scheduleStreamRetry(client, key, reservation, next, 0)).rejects.toThrow(
+          "retry key type",
+        );
+        expect((await entries(client, key)).length).toBe(1);
+        await client.del(streamRetryKey(key));
+        await agePending(client, key);
+        await expect(scheduleStreamRetry(client, key, reservation, next, 0)).rejects.toThrow(
+          "lease lost",
+        );
+        const recovered = required(
+          (await reserveStreamJob(client, key, "replacement")).reservation ?? undefined,
+        );
+        await expect(scheduleStreamRetry(client, key, reservation, next, 0)).rejects.toThrow(
+          "lease lost",
+        );
+        await scheduleStreamRetry(client, key, recovered, next, 0);
+        expect(await entries(client, key)).toEqual([]);
+        expect(await promoteStreamRetries(client, key)).toBe(1);
+        expect(JSON.parse(required((await entries(client, key))[0])[1][1] ?? "{}")).toEqual(next);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("lost schedule and promotion replies retain exactly one admitted retry", async () => {
+    await fixture(async (client, keys) => {
+      const key = keys[1];
+      const job = new (class extends Job {
+        async handle() {}
+      })();
+      const name = tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, keys);
+      const loseReply = {
+        send: async (command: string, args: string[]) => {
+          await client.send(command, args);
+          throw new Error("Lost reply after server execution");
+        },
+      };
+      try {
+        await worker.processNext();
+        await queue.dispatch(job, {});
+        const reservation = required(
+          (await reserveStreamJob(client, key, "owner")).reservation ?? undefined,
+        );
+        const next = { name, payload: {}, attempts: 1, jobId: "stable" };
+        await expect(
+          scheduleStreamRetry(loseReply as never, key, reservation, next, 0),
+        ).rejects.toThrow("Lost reply");
+        expect(await entries(client, key)).toEqual([]);
+        await expect(scheduleStreamRetry(client, key, reservation, next, 0)).rejects.toThrow(
+          "lease lost",
+        );
+        await expect(promoteStreamRetries(loseReply as never, key)).rejects.toThrow("Lost reply");
+        expect(await promoteStreamRetries(client, key)).toBe(0);
+        expect((await entries(client, key)).length).toBe(1);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("concurrent bounded promotion preserves every distinct envelope and priority", async () => {
+    await fixture(async (client, keys) => {
+      const key = keys[0];
+      for (let i = 0; i < 205; i++)
+        await client.send("ZADD", [streamRetryKey(key), "0", JSON.stringify({ jobId: String(i) })]);
+      expect(await promoteStreamRetries(client, key)).toBe(100);
+      expect(await client.send("ZCARD", [streamRetryKey(key)])).toBe(105);
+      const other = new RedisClient(redisUrl);
+      try {
+        expect(
+          (
+            await Promise.all([promoteStreamRetries(client, key), promoteStreamRetries(other, key)])
+          ).sort((a, b) => a - b),
+        ).toEqual([5, 100]);
+        expect((await entries(client, key)).length).toBe(205);
+        expect(await entries(client, keys[1])).toEqual([]);
+        expect(await client.send("EXISTS", [streamRetryKey(key)])).toBe(0);
+      } finally {
+        other.close();
+      }
+      await client.send("ZADD", [streamRetryKey(keys[2]), "0", "payload"]);
+      await client.set(streamQueueKey(keys[2]), "wrong type");
+      await expect(promoteStreamRetries(client, keys[2])).rejects.toThrow("promotion key type");
+      expect(await client.send("ZCARD", [streamRetryKey(keys[2])])).toBe(1);
+    });
+  });
   test("dispatch and consumer groups preserve priority and delete only acknowledged entries", async () => {
     await fixture(async (client, keys) => {
       const seen: string[] = [];
@@ -464,6 +629,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       const source = join(import.meta.dir, "../../src/core/queue");
       const script = `
         import { RedisClient } from "bun";
+import { promoteStreamRetries, reserveStreamJob, scheduleStreamRetry, streamRetryKey } from "../../src/core/queue/redisStreams";
         import { Job } from ${JSON.stringify(`${source}/index.ts`)};
         import { jobRegistry } from ${JSON.stringify(`${source}/jobRegistry.ts`)};
         import { RedisStreamsWorker } from ${JSON.stringify(`${source}/redisStreams.ts`)};

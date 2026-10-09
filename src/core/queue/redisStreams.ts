@@ -2,7 +2,7 @@ import { RedisClient } from "bun";
 import type FailedJobService from "./failedJobService";
 import type { Job, Queue } from "./index";
 import { jobRegistry } from "./jobRegistry";
-import { parseQueueJobEnvelope, runQueueJob } from "./jobRunner";
+import { parseQueueJobEnvelope, type QueueJobEnvelope, runQueueJob } from "./jobRunner";
 import { readQueueVisibilityMs } from "./queueConfig";
 import { defaultQueueKeys, queueKeyForPriority } from "./redisQueueKeys";
 
@@ -12,6 +12,81 @@ function streamQueueKey(queueKey: string): string {
 }
 function streamDeadLetterKey(queueKey: string): string {
   return `${streamQueueKey(queueKey)}:invalid`;
+}
+
+function streamRetryKey(queueKey: string): string {
+  return `${streamQueueKey(queueKey)}:retries`;
+}
+
+// The entire next envelope is the sorted-set member; no orphan payload hash is needed.
+// Fence ownership, preflight types, then persist before removing the source reservation.
+const SCHEDULE_RETRY = `
+local pending = redis.call('XPENDING', KEYS[1], ARGV[1], ARGV[2], ARGV[2], 1)
+if #pending == 0 or pending[1][2] ~= ARGV[3] or tonumber(pending[1][3]) >= tonumber(ARGV[4]) then return 0 end
+local kind = redis.call('TYPE', KEYS[2]).ok
+if kind ~= 'none' and kind ~= 'zset' then return redis.error_reply('Invalid stream retry key type') end
+local now = redis.call('TIME')
+local due = tonumber(now[1])*1000 + math.floor(tonumber(now[2])/1000) + tonumber(ARGV[5])
+redis.call('ZADD', KEYS[2], due, ARGV[6])
+redis.call('XACK', KEYS[1], ARGV[1], ARGV[2])
+redis.call('XDEL', KEYS[1], ARGV[2])
+if #redis.call('XPENDING', KEYS[1], ARGV[1], '-', '+', 1, ARGV[3]) == 0 then redis.call('XGROUP', 'DELCONSUMER', KEYS[1], ARGV[1], ARGV[3]) end
+return 1
+`;
+const PROMOTE_RETRIES = `
+local kinds = {'stream','zset'}
+for i=1,2 do
+  local kind = redis.call('TYPE', KEYS[i]).ok
+  if kind ~= 'none' and kind ~= kinds[i] then return redis.error_reply('Invalid stream retry promotion key type') end
+end
+local now = redis.call('TIME')
+local due = tonumber(now[1])*1000 + math.floor(tonumber(now[2])/1000)
+local entries = redis.call('ZRANGE', KEYS[2], '-inf', due, 'BYSCORE', 'LIMIT', 0, 100)
+for _, payload in ipairs(entries) do
+  redis.call('XADD', KEYS[1], '*', 'payload', payload)
+  redis.call('ZREM', KEYS[2], payload)
+end
+return #entries
+`;
+async function scheduleStreamRetry(
+  client: RedisClient,
+  key: string,
+  reservation: StreamReservation,
+  envelope: QueueJobEnvelope,
+  delayMs: number,
+): Promise<void> {
+  // Keep server timestamp arithmetic exact, including its epoch component.
+  if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > Number.MAX_SAFE_INTEGER / 2)
+    throw new Error("Invalid Streams retry delay");
+  const scheduled = await client.send("EVAL", [
+    SCHEDULE_RETRY,
+    "2",
+    streamQueueKey(key),
+    streamRetryKey(key),
+    STREAM_GROUP,
+    reservation.id,
+    reservation.owner,
+    String(readQueueVisibilityMs()),
+    String(delayMs),
+    JSON.stringify(envelope),
+  ]);
+  if (Number(scheduled) !== 1) throw new Error("Queue lease lost while scheduling retry");
+}
+async function promoteStreamRetries(client: RedisClient, key: string): Promise<number> {
+  return Number(
+    await client.send("EVAL", [PROMOTE_RETRIES, "2", streamQueueKey(key), streamRetryKey(key)]),
+  );
+}
+async function readStreamQueueDepth(client: RedisClient, key: string): Promise<number> {
+  // An atomic snapshot avoids double-counting during promotion or scheduling.
+  return Number(
+    await client.send("EVAL", [
+      "return redis.call('XLEN', KEYS[1]) + redis.call('ZCARD', KEYS[2])",
+      "2",
+      streamQueueKey(key),
+      streamRetryKey(key),
+    ]),
+  );
 }
 
 type StreamReservation = { id: string; owner: string; payload: string };
@@ -166,7 +241,12 @@ class RedisStreamsQueue implements Queue {
       streamQueueKey(key),
       "*",
       "payload",
-      JSON.stringify({ name, payload, attempts: 0 }),
+      JSON.stringify({
+        name,
+        payload,
+        attempts: 0,
+        jobId: `${streamQueueKey(key)}/${crypto.randomUUID()}`,
+      }),
     ]);
   }
 }
@@ -206,6 +286,7 @@ class RedisStreamsWorker {
     this.initialized = true;
   }
   private async reserve(key: string): Promise<StreamReservation | null> {
+    await promoteStreamRetries(this.client, key);
     const result = await reserveStreamJob(this.client, key, this.owner, this.cursors.get(key));
     this.cursors.set(key, result.cursor);
     return result.reservation;
@@ -242,9 +323,11 @@ class RedisStreamsWorker {
       await updateStreamReservation(this.client, key, reservation, "quarantine");
       return;
     }
+    envelope.jobId ??= `${streamQueueKey(key)}/${reservation.id}`;
     const controller = new AbortController();
     this.active = controller;
     let acknowledge = false;
+    let released = false;
     let ownershipLost = false;
     let renewal: Promise<void> | undefined;
     const loseOwnership = (error: unknown) => {
@@ -253,7 +336,7 @@ class RedisStreamsWorker {
     };
     const heartbeat = setInterval(
       () => {
-        if (renewal || ownershipLost) return;
+        if (renewal || ownershipLost || released) return;
         renewal = (async () => {
           try {
             if (!(await updateStreamReservation(this.client, key, reservation, "renew")))
@@ -270,7 +353,12 @@ class RedisStreamsWorker {
     );
     try {
       await runQueueJob(envelope, this.failedJobs, {
-        context: { jobId: `${streamQueueKey(key)}/${reservation.id}`, signal: controller.signal },
+        context: { jobId: envelope.jobId, signal: controller.signal },
+        deferRetry: async (next, delayMs) => {
+          controller.signal.throwIfAborted();
+          await scheduleStreamRetry(this.client, key, reservation, next, delayMs);
+          released = true;
+        },
         onFailureRecorded: () => {
           acknowledge = true;
         },
@@ -283,7 +371,7 @@ class RedisStreamsWorker {
       await renewal;
       this.active = undefined;
     }
-    if (acknowledge && !ownershipLost)
+    if (acknowledge && !ownershipLost && !released)
       await updateStreamReservation(this.client, key, reservation, "ack");
   }
   async run(): Promise<void> {
@@ -347,12 +435,16 @@ export type { StreamReservation };
 export {
   ensureStreamGroup,
   migrateLegacyQueueToStreams,
+  promoteStreamRetries,
   RedisStreamsQueue,
   RedisStreamsWorker,
   readStreamEntry,
+  readStreamQueueDepth,
   reserveStreamJob,
   STREAM_GROUP,
+  scheduleStreamRetry,
   streamDeadLetterKey,
   streamQueueKey,
+  streamRetryKey,
   updateStreamReservation,
 };

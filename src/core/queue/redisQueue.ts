@@ -15,7 +15,7 @@ import {
   QUEUE_LOW_KEY,
   queueKeyForPriority,
 } from "./redisQueueKeys";
-import { streamQueueKey } from "./redisStreams";
+import { readStreamQueueDepth } from "./redisStreams";
 
 function queueProcessingKey(queueKey: string): string {
   return `${queueKey}:processing`;
@@ -335,7 +335,7 @@ async function countPendingQueueJobs(redisUrl: string): Promise<number> {
       : QUEUE_KEYS) {
       total +=
         resolveRedisQueueTransport() === "streams"
-          ? Number(await client.send("XLEN", [streamQueueKey(queueKey)]))
+          ? await readStreamQueueDepth(client, queueKey)
           : await client.llen(queueKey);
     }
 

@@ -121,6 +121,28 @@ describe("runQueueJob", () => {
     for (const raw of ["null", "1", "true", '"text"'])
       expect(parseQueueJobEnvelope(raw)).toBeNull();
     jobRegistry.register("test.validated-envelope", () => new FlakyJob());
+    for (const fields of [
+      { jobId: "" },
+      { jobId: 1 },
+      { attempts: -1 },
+      { attempts: 0.5 },
+      { attempts: "1" },
+    ])
+      expect(
+        parseQueueJobEnvelope(
+          JSON.stringify({ name: "test.validated-envelope", payload: {}, ...fields }),
+        ),
+      ).toBeNull();
+    expect(
+      parseQueueJobEnvelope(
+        JSON.stringify({
+          name: "test.validated-envelope",
+          payload: {},
+          jobId: "stable",
+          attempts: 2,
+        }),
+      ),
+    ).toEqual({ name: "test.validated-envelope", payload: {}, jobId: "stable", attempts: 2 });
     for (const payload of [null, 1, "text"])
       expect(
         parseQueueJobEnvelope(JSON.stringify({ name: "test.validated-envelope", payload })),

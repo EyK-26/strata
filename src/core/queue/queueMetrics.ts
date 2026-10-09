@@ -2,7 +2,7 @@ import { RedisClient } from "bun";
 import { createFailedJobService } from "./createAppQueue";
 import { queueConfig, resolveRedisQueueTransport } from "./queueConfig";
 import { defaultQueueKeys } from "./redisQueueKeys";
-import { streamQueueKey } from "./redisStreams";
+import { readStreamQueueDepth } from "./redisStreams";
 
 interface QueueDepthMetrics {
   high: number;
@@ -25,7 +25,7 @@ async function readRedisQueueDepth(redisUrl: string): Promise<QueueDepthMetrics>
   try {
     const readDepth = async (key: string) =>
       resolveRedisQueueTransport() === "streams"
-        ? Number(await client.send("XLEN", [streamQueueKey(key)]))
+        ? readStreamQueueDepth(client, key)
         : client.llen(key);
     [high, defaultQueue, low] = await Promise.all([
       readDepth(defaultQueueKeys()[0]),
