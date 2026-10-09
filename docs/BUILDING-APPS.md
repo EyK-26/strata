@@ -359,6 +359,8 @@ class CatalogController {
 
 Use constructor parameters for the services a controller actually needs; resolve them in module/provider composition. Stateful services can remain classes, while stateless business operations can remain functions. This API does not alter request scoping, model typing, middleware typing, queues or transactions, and upgrading packages does not rewrite existing controllers.
 
+For tenant-specific API allowances, bind `CORE_THROTTLE_QUOTA_POLICY_TOKEN` during provider registration rather than adding plan rules to core. Use trusted tenant metadata and the synchronous `ThrottleQuotaPolicy` contract. The generated kernel applies it to API throttles. Dedicated login and SCIM limits remain additional controls when those routes also use the API group. See [application-owned quotas and local storage bounds](PRODUCTION.md#application-owned-quotas) for an example, failure semantics and cleanup requirements.
+
 ## Preserve route request types through middleware
 
 `RouteHandler<TRequest>` defaults to the standard `Request`, and accepts a narrower native request contract when a controller needs route parameters. `composeMiddleware`, `withMiddleware`, the `HttpKernel` wrappers and web login/register throttles preserve that contract, so casting parameterized handlers to an untyped `RouteHandler` is unnecessary.
