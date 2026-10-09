@@ -3,7 +3,7 @@ import { Job } from "@getstrata/core/queue";
 import { FailedJobRepository } from "@getstrata/core/queue/failedJobRepository";
 import { FailedJobService } from "@getstrata/core/queue/failedJobService";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
-import { runQueueJob } from "@getstrata/core/queue/jobRunner";
+import { parseQueueJobEnvelope, runQueueJob } from "@getstrata/core/queue/jobRunner";
 
 class FailingJob extends Job<{ marker: string }> {
   override readonly maxAttempts = 1;
@@ -83,5 +83,47 @@ describe("runQueueJob", () => {
         failedJobs,
       ),
     ).rejects.toThrow('Unknown job "missing.job".');
+  });
+  test("lease cancellation stops local retries without recording a business failure", async () => {
+    const controller = new AbortController();
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let attempts = 0;
+    let failures = 0;
+    class Cancelled extends Job {
+      override readonly maxAttempts = 3;
+      override readonly backoffMs = 10000;
+      async handle() {
+        attempts++;
+        entered();
+        throw new Error("retryable failure");
+      }
+    }
+    jobRegistry.register("test.cancelled", () => new Cancelled());
+    const running = runQueueJob(
+      { name: "test.cancelled", payload: {} },
+      {
+        recordFailure: async () => {
+          failures++;
+        },
+      } as never,
+      { context: { jobId: "transport-id", signal: controller.signal } },
+    );
+    await started;
+    controller.abort(new Error("Lease lost"));
+    await expect(running).rejects.toThrow();
+    expect(attempts).toBe(1);
+    expect(failures).toBe(0);
+  });
+  test("envelope validation rejects primitive and non-object payloads", () => {
+    for (const raw of ["null", "1", "true", '"text"'])
+      expect(parseQueueJobEnvelope(raw)).toBeNull();
+    jobRegistry.register("test.validated-envelope", () => new FlakyJob());
+    for (const payload of [null, 1, "text"])
+      expect(
+        parseQueueJobEnvelope(JSON.stringify({ name: "test.validated-envelope", payload })),
+      ).toBeNull();
   });
 });

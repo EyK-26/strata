@@ -2,6 +2,12 @@ import { jobRegistry } from "./jobRegistry.ts";
 
 type QueuePriority = "high" | "default" | "low";
 
+/** Transport identity is stable across automatic recovery, not manual failed-job replay. */
+interface JobContext {
+  readonly jobId: string;
+  readonly signal: AbortSignal;
+}
+
 abstract class Job<TPayload extends object = object> {
   static readonly jobName?: string;
   readonly maxAttempts?: number;
@@ -15,7 +21,7 @@ abstract class Job<TPayload extends object = object> {
     }
   }
 
-  abstract handle(payload: TPayload): Promise<void>;
+  abstract handle(payload: TPayload, context?: JobContext): Promise<void>;
 }
 
 interface Queue {
@@ -74,5 +80,5 @@ function createQueue(driver: "sync" | "async"): Queue {
   return driver === "async" ? new AsyncQueue() : new SyncQueue();
 }
 
-export type { Queue, QueuePriority };
+export type { JobContext, Queue, QueuePriority };
 export { AsyncQueue, createQueue, Job, SyncQueue };

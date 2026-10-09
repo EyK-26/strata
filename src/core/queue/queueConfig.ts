@@ -30,3 +30,19 @@ const queueConfig: QueueConfig = {
 
 export type { QueueConfig };
 export { queueConfig, resolveQueueConfig };
+
+function resolveRedisQueueTransport(): "lists" | "streams" {
+  const transport = process.env.QUEUE_REDIS_TRANSPORT ?? "lists";
+  if (transport !== "lists" && transport !== "streams")
+    throw new Error('QUEUE_REDIS_TRANSPORT must be "lists" or "streams".');
+  return transport;
+}
+
+function readQueueVisibilityMs(): number {
+  const value = Number(process.env.QUEUE_VISIBILITY_MS ?? "60000");
+  if (!Number.isSafeInteger(value) || value < 30)
+    throw new Error("QUEUE_VISIBILITY_MS must be an integer of at least 30 milliseconds.");
+  return value;
+}
+
+export { readQueueVisibilityMs, resolveRedisQueueTransport };

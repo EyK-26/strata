@@ -1,27 +1,21 @@
 import { RedisClient } from "bun";
-import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import type FailedJobService from "./failedJobService";
-import type { Job, Queue, QueuePriority } from "./index";
+import type { Job, Queue } from "./index";
 import { jobRegistry } from "./jobRegistry";
-import { type QueueJobEnvelope, runQueueJob } from "./jobRunner";
-
-function queueListKey(): string {
-  return namespacedRedisKey("queue:default");
-}
-
-function queueHighKey(): string {
-  return namespacedRedisKey("queue:high");
-}
-
-function queueLowKey(): string {
-  return namespacedRedisKey("queue:low");
-}
-
-const QUEUE_LIST_KEY = queueListKey();
-const QUEUE_HIGH_KEY = queueHighKey();
-const QUEUE_LOW_KEY = queueLowKey();
-const QUEUE_KEYS = [QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY] as const;
-const DEFAULT_VISIBILITY_MS = 60_000;
+import { parseQueueJobEnvelope, type QueueJobEnvelope, runQueueJob } from "./jobRunner";
+import {
+  readQueueVisibilityMs as readVisibilityMs,
+  resolveRedisQueueTransport,
+} from "./queueConfig";
+import {
+  defaultQueueKeys,
+  QUEUE_HIGH_KEY,
+  QUEUE_KEYS,
+  QUEUE_LIST_KEY,
+  QUEUE_LOW_KEY,
+  queueKeyForPriority,
+} from "./redisQueueKeys";
+import { streamQueueKey } from "./redisStreams";
 
 function queueProcessingKey(queueKey: string): string {
   return `${queueKey}:processing`;
@@ -29,14 +23,6 @@ function queueProcessingKey(queueKey: string): string {
 
 function queueProcessingLeaseKey(queueKey: string): string {
   return `${queueKey}:processing:leases`;
-}
-
-function readVisibilityMs(): number {
-  const parsed = Number(process.env.QUEUE_VISIBILITY_MS ?? String(DEFAULT_VISIBILITY_MS));
-  if (!Number.isSafeInteger(parsed) || parsed < 30) {
-    throw new Error("QUEUE_VISIBILITY_MS must be an integer of at least 30 milliseconds.");
-  }
-  return parsed;
 }
 
 function reservationExpired(lease: string | null, now: number, visibilityMs: number): boolean {
@@ -48,58 +34,6 @@ function reservationExpired(lease: string | null, now: number, visibilityMs: num
     return true;
   }
   return now - reservedAt >= visibilityMs;
-}
-
-function queueKeyForPriority(priority: QueuePriority = "default"): string {
-  switch (priority) {
-    case "high":
-      return queueHighKey();
-    case "low":
-      return queueLowKey();
-    default:
-      return queueListKey();
-  }
-}
-
-function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(rawPayload);
-  } catch {
-    console.error("[QueueWorker] Ignoring malformed queue payload");
-    return null;
-  }
-
-  if (!parsed || typeof parsed !== "object") {
-    console.error("[QueueWorker] Ignoring non-object queue payload");
-    return null;
-  }
-
-  const envelope = parsed as Partial<QueueJobEnvelope>;
-  if (typeof envelope.name !== "string" || envelope.name.length === 0) {
-    console.error("[QueueWorker] Ignoring queue payload without job name");
-    return null;
-  }
-
-  if (!jobRegistry.create(envelope.name)) {
-    console.error(`[QueueWorker] Ignoring unknown job name: ${envelope.name}`);
-    return null;
-  }
-
-  if (
-    envelope.payload !== undefined &&
-    (typeof envelope.payload !== "object" || envelope.payload === null)
-  ) {
-    console.error("[QueueWorker] Ignoring queue payload with invalid payload object");
-    return null;
-  }
-
-  return {
-    name: envelope.name,
-    payload: (envelope.payload ?? {}) as Record<string, unknown>,
-    attempts: typeof envelope.attempts === "number" ? envelope.attempts : 0,
-  };
 }
 
 type QueueReservation = { id: string; owner: string; payload: string; record: string };
@@ -396,8 +330,13 @@ async function countPendingQueueJobs(redisUrl: string): Promise<number> {
   try {
     let total = 0;
 
-    for (const queueKey of QUEUE_KEYS) {
-      total += await client.llen(queueKey);
+    for (const queueKey of resolveRedisQueueTransport() === "streams"
+      ? defaultQueueKeys()
+      : QUEUE_KEYS) {
+      total +=
+        resolveRedisQueueTransport() === "streams"
+          ? Number(await client.send("XLEN", [streamQueueKey(queueKey)]))
+          : await client.llen(queueKey);
     }
 
     return total;
@@ -406,6 +345,16 @@ async function countPendingQueueJobs(redisUrl: string): Promise<number> {
   }
 }
 
+export type { StreamReservation } from "./redisStreams";
+export {
+  migrateLegacyQueueToStreams,
+  RedisStreamsQueue,
+  RedisStreamsWorker,
+  STREAM_GROUP,
+  streamDeadLetterKey,
+  streamQueueKey,
+  updateStreamReservation,
+} from "./redisStreams";
 export type { QueueJobEnvelope, QueueReservation };
 export {
   countPendingQueueJobs,

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { queueConfig, resolveQueueConfig } from "../../src/core/queue/queueConfig";
+import {
+  queueConfig,
+  readQueueVisibilityMs,
+  resolveQueueConfig,
+  resolveRedisQueueTransport,
+} from "../../src/core/queue/queueConfig";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("queueConfig", () => {
@@ -66,6 +71,29 @@ describe("queueConfig", () => {
       restoreEnvVar("QUEUE_DRIVER", previousDriver);
       restoreEnvVar("QUEUE_MAX_ATTEMPTS", previousAttempts);
       restoreEnvVar("QUEUE_BACKOFF_MS", previousBackoff);
+    }
+  });
+  test("Redis transport and visibility settings are explicit and fail closed", () => {
+    const previousTransport = process.env.QUEUE_REDIS_TRANSPORT;
+    const previousVisibility = process.env.QUEUE_VISIBILITY_MS;
+    try {
+      delete process.env.QUEUE_REDIS_TRANSPORT;
+      delete process.env.QUEUE_VISIBILITY_MS;
+      expect(resolveRedisQueueTransport()).toBe("lists");
+      expect(readQueueVisibilityMs()).toBe(60000);
+      process.env.QUEUE_REDIS_TRANSPORT = "streams";
+      expect(resolveRedisQueueTransport()).toBe("streams");
+      process.env.QUEUE_REDIS_TRANSPORT = "true";
+      expect(resolveRedisQueueTransport).toThrow("QUEUE_REDIS_TRANSPORT");
+      for (const value of ["0", "-1", "29", "31.5", "oops", "Infinity"]) {
+        process.env.QUEUE_VISIBILITY_MS = value;
+        expect(readQueueVisibilityMs).toThrow("QUEUE_VISIBILITY_MS");
+      }
+      process.env.QUEUE_VISIBILITY_MS = "200";
+      expect(readQueueVisibilityMs()).toBe(200);
+    } finally {
+      restoreEnvVar("QUEUE_REDIS_TRANSPORT", previousTransport);
+      restoreEnvVar("QUEUE_VISIBILITY_MS", previousVisibility);
     }
   });
 });
