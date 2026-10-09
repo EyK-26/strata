@@ -124,6 +124,7 @@ async function runQueueJob(
 
     await failedJobs.recordFailure({
       jobName: envelope.name,
+      jobId: options.context?.jobId ?? envelope.jobId,
       payload: envelope.payload,
       exception: error instanceof Error ? (error.stack ?? error.message) : String(error),
     });

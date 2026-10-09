@@ -2,7 +2,7 @@ import { jobRegistry } from "./jobRegistry.ts";
 
 type QueuePriority = "high" | "default" | "low";
 
-/** Transport identity is stable across automatic recovery, not manual failed-job replay. */
+/** Logical identity is stable across automatic recovery and supported manual replay. */
 interface JobContext {
   readonly jobId: string;
   readonly signal: AbortSignal;
@@ -27,6 +27,12 @@ abstract class Job<TPayload extends object = object> {
 
 interface Queue {
   close?(): void | Promise<void>;
+  /** Preserve a stored logical identity on deliberate replay; reset execution controls. */
+  replay?<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    jobId: string,
+  ): Promise<void>;
   dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void>;
 }
 

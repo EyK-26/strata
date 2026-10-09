@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { Job, type JobContext } from "@getstrata/core/queue";
-import { createAppQueue, createQueueWorker } from "@getstrata/core/queue/createAppQueue";
+import {
+  createAppQueue,
+  createFailedJobService,
+  createQueueWorker,
+} from "@getstrata/core/queue/createAppQueue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { readRedisQueueDepth } from "@getstrata/core/queue/queueMetrics";
 import {
@@ -112,6 +116,117 @@ async function agePending(client: RedisClient, key: string) {
 }
 
 describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
+  test("SQL failed-job replay preserves identity, resets controls, and retains recovery on rejected admission", async () => {
+    await fixture(async (client, keys) => {
+      const service = createFailedJobService();
+      const seen: string[] = [];
+      let shouldFail = true;
+      const job = new (class extends Job {
+        override readonly maxAttempts = 1;
+        async handle(_payload: object, context?: JobContext) {
+          seen.push(required(context).jobId);
+          expect(context?.deadlineAtMs).toBeUndefined();
+          if (shouldFail) throw new Error("Expected terminal failure");
+        }
+      })();
+      const name = tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(redisUrl, service, 0, keys);
+      let recordId: number | undefined;
+      try {
+        const id = await queue.enqueue(job, {}, { cancellable: true });
+        await worker.processNext();
+        const failed = (await service.listRecent(1000)).find((record) => record.job_name === name);
+        if (!failed) throw new Error("Expected recovery record");
+        recordId = failed.id;
+        expect(failed.job_id).toBe(id);
+        expect(await queue.cancel(id)).toBe(false);
+        await client.set(streamQueueKey(keys[1]), "wrong type");
+        await expect(
+          service.retry(failed.id, (record) =>
+            queue.replay(job, record.payload, record.job_id ?? ""),
+          ),
+        ).rejects.toThrow();
+        expect((await service.listRecent(1000)).some((record) => record.id === failed.id)).toBe(
+          true,
+        );
+        await client.del(streamQueueKey(keys[1]));
+        // Recreate the group after deliberate corruption repair in this isolated fixture.
+        const nextWorker = new RedisStreamsWorker(redisUrl, service, 0, keys);
+        try {
+          // The admission completed, but the operator did not receive its acknowledgement.
+          await expect(
+            service.retry(failed.id, async (record) => {
+              await queue.replay(job, record.payload, record.job_id ?? "");
+              throw new Error("Lost replay acknowledgement");
+            }),
+          ).rejects.toThrow("Lost replay acknowledgement");
+          expect((await service.listRecent(1000)).some((record) => record.id === failed.id)).toBe(
+            true,
+          );
+          await service.retry(failed.id, async (record) => {
+            await queue.replay(job, record.payload, record.job_id ?? "");
+            const envelope = JSON.parse(
+              required((await entries(client, keys[1]))[0])[1][1] ?? "{}",
+            );
+            expect(envelope).toEqual({ name, payload: {}, attempts: 0, jobId: id });
+            expect((await entries(client, keys[1])).length).toBe(2);
+          });
+          shouldFail = false;
+          await nextWorker.processNext();
+          await nextWorker.processNext();
+          expect(seen).toEqual([id, id, id]);
+          expect((await service.listRecent(1000)).some((record) => record.id === failed.id)).toBe(
+            false,
+          );
+        } finally {
+          nextWorker.close();
+        }
+        await expect(queue.replay(job, {}, "foreign")).rejects.toThrow("namespace");
+        await expect(queue.replay(job, {}, `${streamQueueKey(keys[1])}/bad`)).rejects.toThrow(
+          "namespace",
+        );
+      } finally {
+        if (recordId !== undefined) await service.delete(recordId).catch(() => {});
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("cancelled and deadline failures retain logical identity in SQL", async () => {
+    await fixture(async (_client, keys) => {
+      const service = createFailedJobService();
+      const job = new (class extends Job {
+        async handle() {
+          throw new Error("Must not execute");
+        }
+      })();
+      const name = tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(redisUrl, service, 0, keys);
+      const ids: number[] = [];
+      try {
+        const cancelled = await queue.enqueue(job, {}, { cancellable: true });
+        await queue.cancel(cancelled);
+        await worker.processNext();
+        const expired = await queue.enqueue(job, {}, { timeoutMs: 10 });
+        await Bun.sleep(30);
+        await worker.processNext();
+        const failures = (await service.listRecent(1000)).filter(
+          (record) => record.job_name === name,
+        );
+        ids.push(...failures.map((record) => record.id));
+        expect(failures.map((record) => record.job_id).sort()).toEqual([cancelled, expired].sort());
+        expect(failures.map((record) => record.exception).sort()).toEqual(
+          ["Streams job cancelled", "Streams job deadline exceeded"].sort(),
+        );
+      } finally {
+        for (const id of ids) await service.delete(id);
+        worker.close();
+        queue.close();
+      }
+    });
+  });
   test("cancellation survives queue close and SQL failure until a recovered worker acknowledges", async () => {
     await fixture(async (client, keys) => {
       let calls = 0;

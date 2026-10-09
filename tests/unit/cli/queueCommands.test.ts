@@ -199,6 +199,67 @@ describe("queueFailedCommand", () => {
 });
 
 describe("queueRetryCommand", () => {
+  test("identity-aware replays use the queue capability and refuse unsupported transports", async () => {
+    const { FailedJobService } = await import("@getstrata/core/queue/failedJobService");
+    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+    const record = {
+      id: 20,
+      job_name: "test.identity-replay",
+      job_id: "stored-identity",
+      payload: {},
+      exception: "failure",
+      failed_at: new Date(),
+    };
+    jobRegistry.register(
+      record.job_name,
+      () =>
+        new (class extends Job {
+          async handle() {
+            throw new Error("Must not run inline");
+          }
+        })(),
+    );
+    let replayed = 0;
+    let deleted = 0;
+    let supported = false;
+    const service = new FailedJobService({
+      findByIdOrThrow: async () => record,
+      deleteById: async () => {
+        deleted++;
+        return true;
+      },
+    } as never);
+    mock.module("@getstrata/core/queue/createAppQueue", () => ({
+      resolveQueueConfig: () => ({ driver: "redis" }),
+      createFailedJobService: () => service,
+      createAppQueue: () => ({
+        dispatch: async () => {
+          throw new Error("Must preserve identity");
+        },
+        ...(supported
+          ? {
+              replay: async (_job: Job, payload: object, id: string) => {
+                expect(payload).toEqual(record.payload);
+                expect(id).toBe(record.job_id);
+                replayed++;
+              },
+            }
+          : {}),
+      }),
+    }));
+    const { queueRetryCommand } = await import("@getstrata/cli/queueFailed");
+    await expect(queueRetryCommand("20")).rejects.toThrow("cannot preserve");
+    expect(deleted).toBe(0);
+    supported = true;
+    const output = captureConsole();
+    try {
+      await queueRetryCommand("20");
+    } finally {
+      output.restore();
+    }
+    expect(replayed).toBe(1);
+    expect(deleted).toBe(1);
+  });
   test("requires a failed job id", async () => {
     const { queueRetryCommand } = await import("../../../src/cli/commands/queueFailed");
 
