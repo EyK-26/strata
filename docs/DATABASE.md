@@ -315,3 +315,22 @@ Postgres starters expose `SqlClient = SqlDatabaseConnection`, retaining both bou
 Inside `runInTransaction` (or a Postgres tenant scope), call `query().lockForUpdate()` or `query().sharedLock()` before `first()`, `get()` or `select(...)`. Selection stays on the active connection and returns the same typed models/plain projections. Query options also accept `lock: { mode: "update" | "share", wait?, of? }` for repositories. `wait` is `"wait"` (default), `"nowait"` or `"skipLocked"`. PostgreSQL supports `of: ["table_name"]` for locking selected query tables; MySQL 8+ supports the lock/wait modes but rejects `of`. SQLite rejects row locking instead of silently omitting it; use its explicit write transaction semantics. Raw database/native transactions outside the framework do not satisfy the active-connection guard.
 
 Locks last until transaction completion. Grouped queries and `count()` cannot take row locks. Eager-loading child queries do not inherit the parent's lock; explicitly design any child locking and its order. Keep business lock ordering deterministic. `SKIP LOCKED` is suitable for competing work claims, not a consistent full listing or pagination promise. Driver isolation, deadlocks and lock timeouts still apply; applications own replay-safe business effects. Advanced SQL remains a supported escape hatch.
+
+### Conditional set-based repository writes
+
+Use a repository query when a write must include an expected state or ownership predicate in the same statement:
+
+```ts
+const affected = await inventoryRepository.query()
+  .where({ id: productId, stock: expectedStock })
+  .update({ stock: expectedStock - quantity });
+if (affected !== 1) throw new Error("Inventory changed; retry checkout.");
+```
+
+`updateWhere(changes, options)` and `deleteWhere(options)` are the direct repository equivalents. Fluent `update(changes)` and `delete()` return the driver's affected-row count. PostgreSQL and SQLite derive this count from the statement's RETURNING rows; the official MySQL adapter supplies affectedRows metadata (including unchanged matches under its default FOUND_ROWS setting). Custom MySQL adapters must preserve that metadata. A zero count means the predicate did not match; it is not inferred from a later SELECT. The framework-bound connection preserves the active transaction and tenant scope. Database constraints and RLS still apply.
+
+On PostgreSQL and SQLite, `query.updateReturning(changes, "id", "stock")` (or `repository.updateWhereReturning(changes, columns, options)`) returns plain typed projections directly from the UPDATE. MySQL rejects RETURNING before executing; it does not emulate it with an unlocked second query. Bulk deletes respect the configured soft-delete column and visibility scope. These operations require an explicit predicate, reject primary-key/unknown-column updates and empty changes, and reject joins, eager loading, grouping, selection, ordering, limits and locks rather than silently discarding selection semantics. A predicate can intentionally match every row; the guard is against an omitted predicate, not a substitute for authorization.
+
+These are low-level set-based operations: values must already be ready for the database. They do not hydrate models, apply model fillable/write-cast/timestamp policy, or emit per-row observer events. In particular, never pass plaintext passwords to this API. Use instance model writes for those behaviors, or explicitly write a business outbox event inside the transaction after checking the affected count. Protected query predicates remain grouped outside caller OR predicates. Existing direct SQL remains supported for expressions, advanced joined writes and other database-specific operations.
+
+The official SQLite adapter normalizes bound `Date` values to UTC ISO strings before passing them to Bun. Invalid dates fail before statement execution; they cannot shift positional bindings or silently turn a conditional mutation into a no-op.

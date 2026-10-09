@@ -9,6 +9,7 @@ import { getActiveDatabaseConnection } from "./connectionContext.ts";
 import { currentSqlDialect } from "./dialect.ts";
 import { withDatabaseErrorHandling } from "./errors.ts";
 import {
+  buildConditionalWriteQuery,
   buildCountQuery,
   buildDeleteByIdQuery,
   buildGroupedCountQuery,
@@ -377,6 +378,51 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         return entity;
       }),
     );
+  }
+
+  /** Set-based writes intentionally bypass per-row model observers and write casts. */
+  async updateWhere(
+    changes: UpdateValues<TEntity, PrimaryKey>,
+    options: QueryOptions<TEntity>,
+  ): Promise<number> {
+    return this.executeConditionalWrite("update", changes, options);
+  }
+
+  async deleteWhere(options: QueryOptions<TEntity>): Promise<number> {
+    return this.executeConditionalWrite("delete", {}, options);
+  }
+
+  async updateWhereReturning<K extends keyof TEntity & string>(
+    changes: UpdateValues<TEntity, PrimaryKey>,
+    columns: readonly K[],
+    options: QueryOptions<TEntity>,
+  ): Promise<Pick<TEntity, K>[]> {
+    const { text, params } = buildConditionalWriteQuery(
+      this.table,
+      "update",
+      changes,
+      options,
+      columns,
+    );
+    return withDatabaseErrorHandling(() => this.connection.unsafe<Pick<TEntity, K>>(text, params));
+  }
+
+  private async executeConditionalWrite(
+    operation: "update" | "delete",
+    changes: UpdateValues<TEntity, PrimaryKey>,
+    options: QueryOptions<TEntity>,
+  ): Promise<number> {
+    const { text, params } = buildConditionalWriteQuery(this.table, operation, changes, options);
+    return withDatabaseErrorHandling(async () => {
+      const rows = await this.connection.unsafe<{ affectedRows?: number }>(text, params);
+      if (currentSqlDialect().driver !== "mysql") return rows.length;
+      const affected = rows[0]?.affectedRows;
+      if (!Number.isSafeInteger(affected) || affected === undefined || affected < 0)
+        throw new Error(
+          "MySQL conditional writes require affectedRows metadata from the framework adapter.",
+        );
+      return affected;
+    });
   }
 
   async updateById(

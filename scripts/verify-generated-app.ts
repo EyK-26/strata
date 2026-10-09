@@ -217,6 +217,10 @@ export async function queryContract(): Promise<void> {
       await readFile(join(ROOT, "tests/types/rowLocks.contract.ts"), "utf8"),
     );
 
+    await writeFile(
+      join(appDir, "src/conditionalWrites.contract.ts"),
+      await readFile(join(ROOT, "tests/types/conditionalWrites.contract.ts"), "utf8"),
+    );
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");
