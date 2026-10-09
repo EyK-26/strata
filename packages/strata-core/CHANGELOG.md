@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.2
+
+- orm improvments
+
 ## 2.2.1
 
 F02 — complete queue durability. Queues have leased reservations, recovery and fenced acknowledgement, but still use Redis lists. Persisted retry schedules, execution deadlines, cancellation and the planned Streams migration remain unfinished. Retries currently wait inside the running worker.
