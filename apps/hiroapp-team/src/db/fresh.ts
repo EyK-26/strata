@@ -4,7 +4,7 @@ import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function fresh() {
-  await ensureAppDatabase();
+  await ensureAppDatabase({ provision: true });
   await withMigrationDatabase(async (db) => {
     await freshDatabase(db, await loadStarterMigrations());
   });

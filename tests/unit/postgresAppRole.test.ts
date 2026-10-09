@@ -145,6 +145,40 @@ describe("postgresAppRole", () => {
     }
   });
 
+  test("production/staging never try inferred development admin credentials", async () => {
+    const previous = process.env.APP_ENV;
+    try {
+      for (const mode of ["production", "staging"]) {
+        process.env.APP_ENV = mode;
+        const runtimeUrl = "postgresql://strata_app:private@localhost/production";
+        const migrationUrl = "postgresql://migration:explicit@localhost/production";
+        expect(postgresAdminUrls({ runtimeUrl })).toEqual([]);
+        expect(postgresAdminUrls({ runtimeUrl, migrationUrl })).toEqual([migrationUrl]);
+        expect(postgresAdminUrls({ runtimeUrl, superuserPassword: "explicit-admin" })).toEqual([
+          "postgresql://postgres:explicit-admin@localhost/production",
+        ]);
+        const tried: string[] = [];
+        await expect(
+          openPostgresAdminConnection({
+            runtimeUrl,
+            migrationUrl,
+            connect(url) {
+              tried.push(url);
+              return {
+                async unsafe() {
+                  throw new Error("configured admin unavailable");
+                },
+              };
+            },
+          }),
+        ).rejects.toThrow("configured admin unavailable");
+        expect(tried).toEqual([migrationUrl]);
+      }
+    } finally {
+      restoreEnvVar("APP_ENV", previous);
+    }
+  });
+
   test("SQL creates the role idempotently and grants existing tables", () => {
     const sql = postgresAppRoleSql({ database: "hiroapp" });
     expect(sql).toContain("NOBYPASSRLS");

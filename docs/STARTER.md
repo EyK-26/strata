@@ -126,3 +126,11 @@ Merge the current generated `createApp.ts`, provider cleanup, HTTP entrypoint an
 ### Discovery migration
 
 Current queue providers await `discoverJobs()` before constructing a queue. Listener providers iterate `await discoverListeners()` and await each registrar. Custom startup and worker entrypoints must adopt the same order. These APIs now return promises, and invalid infrastructure files require correction or explicit exclusion. See [DISCOVERY.md](DISCOVERY.md).
+
+### Runtime database credentials and explicit provisioning
+
+Production/staging SQL bootstrap resolves `APP_DATABASE_URL` before `DATABASE_URL`, pings the existing database and inspects the live RLS role. It does not CREATE DATABASE, CREATE/ALTER ROLE, GRANT or require administrative credentials. SQL preload no longer supplies development database/admin URLs in production. Missing runtime configuration and unavailable infrastructure reject startup before admission; no automatic migration or demo seed follows.
+
+`ensureAppDatabase({ provision: false })` resolves runtime configuration without provisioning. Its default still provisions locally, while production/staging defaults to resolution only. Generated migrate/fresh paths select `{ provision: true }` explicitly; status/rollback select resolution only and do not change role credentials. Postgres production provisioning requires `MIGRATION_DATABASE_URL` and an explicit non-development `STRATA_APP_PASSWORD`; this command can alter the generated role's password, so supply the administratively chosen credential and coordinate rotation. Do not give these administrative values to HTTP or background worker containers. MySQL explicit provisioning retains its configured account's CREATE DATABASE behavior; use a pre-created database with restricted runtime credentials for production boot.
+
+Existing apps must merge the new `ensureDatabase.ts`, `preload.ts`, `createApp.ts` and explicit database-command calls after publication. Package installation alone does not replace these generated files. PostgreSQL administrative helpers no longer try inferred development passwords in production/staging: configure `migrationUrl`/`MIGRATION_DATABASE_URL` or explicitly pass the administrative `superuserPassword`. Local fallback compatibility remains. See [migration guidance](MIGRATING-2.md).
