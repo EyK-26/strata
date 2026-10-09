@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.4
+
+-  perf(database): seek Postgres composite keyset bounds
+
 ## 2.2.3
 
 - feat(database): add scoped composite keyset pagination
