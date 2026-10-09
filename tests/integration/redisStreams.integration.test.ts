@@ -16,9 +16,11 @@ import {
 } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
 import {
+  cancelStreamJob,
   promoteStreamRetries,
   reserveStreamJob,
   scheduleStreamRetry,
+  streamControlKey,
   streamRetryKey,
 } from "../../src/core/queue/redisStreams";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -56,6 +58,20 @@ async function fixture(
         streamRetryKey(key),
         `${key}:started`,
       );
+    for (const key of keys) {
+      let cursor = "0";
+      do {
+        const response = (await client.send("SCAN", [
+          cursor,
+          "MATCH",
+          `${streamQueueKey(key)}:control:*`,
+          "COUNT",
+          "100",
+        ])) as [string, string[]];
+        cursor = response[0];
+        if (response[1].length) await client.del(...response[1]);
+      } while (cursor !== "0");
+    }
     client.close();
     restoreEnvVar("APP_KEY_PREFIX", previousPrefix);
     restoreEnvVar("QUEUE_VISIBILITY_MS", previousVisibility);
@@ -96,6 +112,364 @@ async function agePending(client: RedisClient, key: string) {
 }
 
 describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
+  test("cancellation survives queue close and SQL failure until a recovered worker acknowledges", async () => {
+    await fixture(async (client, keys) => {
+      let calls = 0;
+      let failures = 0;
+      const job = new (class extends Job {
+        async handle() {
+          calls++;
+        }
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const failed = {
+        recordFailure: async (failure: { exception: string }) => {
+          expect(failure.exception).toBe("Streams job cancelled");
+          if (++failures === 1) throw new Error("SQL unavailable");
+        },
+      };
+      const first = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+      try {
+        const id = await queue.enqueue(job, {}, { cancellable: true });
+        expect(await queue.cancel(id)).toBe(true);
+        expect(await queue.cancel(id)).toBe(true);
+        queue.close();
+        await expect(first.processNext()).rejects.toThrow("SQL unavailable");
+        first.close();
+        expect(await client.send("HGET", [streamControlKey(keys[1], id), "state"])).toBe(
+          "cancelled",
+        );
+        await agePending(client, keys[1]);
+        const next = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+        try {
+          expect(await next.processNext()).toBe(true);
+        } finally {
+          next.close();
+        }
+        expect(calls).toBe(0);
+        expect(failures).toBe(2);
+        expect(await client.send("EXISTS", [streamControlKey(keys[1], id)])).toBe(0);
+        const fresh = new RedisStreamsQueue(redisUrl);
+        try {
+          expect(await fresh.cancel(id)).toBe(false);
+        } finally {
+          fresh.close();
+        }
+      } finally {
+        first.close();
+        queue.close();
+      }
+    });
+  });
+  test("cancelled retries wake promptly without resetting the job identity or calling its handler again", async () => {
+    await fixture(async (client, keys) => {
+      let calls = 0;
+      let failures = 0;
+      const job = new (class extends Job {
+        override readonly backoffMs = 3600000;
+        async handle() {
+          calls++;
+          throw new Error("Retry later");
+        }
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(
+        redisUrl,
+        {
+          recordFailure: async () => {
+            failures++;
+          },
+        } as never,
+        0,
+        keys,
+      );
+      try {
+        const id = await queue.enqueue(job, {}, { cancellable: true });
+        expect(await worker.processNext()).toBe(true);
+        const members = (await client.send("ZRANGE", [
+          streamRetryKey(keys[1]),
+          "0",
+          "-1",
+        ])) as string[];
+        expect(JSON.parse(required(members[0])).jobId).toBe(id);
+        expect(await queue.cancel(id)).toBe(true);
+        expect(
+          Number(await client.send("ZSCORE", [streamRetryKey(keys[1]), required(members[0])])),
+        ).toBe(0);
+        expect(await worker.processNext()).toBe(true);
+        expect(calls).toBe(1);
+        expect(failures).toBe(1);
+        expect(
+          await client.send("EXISTS", [streamControlKey(keys[1], id), streamRetryKey(keys[1])]),
+        ).toBe(0);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("running cancellation aborts cooperative I/O and retains ownership while ignored", async () => {
+    await fixture(async (client, keys) => {
+      for (const cooperative of [true, false]) {
+        let started: () => void = () => {};
+        const entered = new Promise<void>((resolve) => {
+          started = resolve;
+        });
+        let returned = false;
+        let failures = 0;
+        const job = new (class extends Job {
+          async handle(_payload: object, context?: JobContext) {
+            const signal = required(context).signal;
+            started();
+            if (cooperative)
+              await new Promise<void>((_resolve, reject) =>
+                signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+              );
+            else {
+              await Bun.sleep(350);
+              expect(signal.aborted).toBe(true);
+            }
+            returned = true;
+          }
+        })();
+        tracked(job);
+        const queue = new RedisStreamsQueue(redisUrl);
+        const worker = new RedisStreamsWorker(
+          redisUrl,
+          {
+            recordFailure: async (failure: { exception: string }) => {
+              expect(failure.exception).toBe("Streams job cancelled");
+              failures++;
+            },
+          } as never,
+          0,
+          keys,
+        );
+        const competitor = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, keys);
+        try {
+          const id = await queue.enqueue(job, {}, { cancellable: true });
+          const running = worker.processNext();
+          await entered;
+          expect(await queue.cancel(id)).toBe(true);
+          if (!cooperative) {
+            await Bun.sleep(230);
+            expect(returned).toBe(false);
+            expect(await competitor.processNext()).toBe(false);
+            expect(await client.send("EXISTS", [streamControlKey(keys[1], id)])).toBe(1);
+          }
+          expect(await running).toBe(true);
+          expect(failures).toBe(1);
+          expect(await client.send("EXISTS", [streamControlKey(keys[1], id)])).toBe(0);
+        } finally {
+          worker.close();
+          competitor.close();
+          queue.close();
+        }
+      }
+    });
+  });
+  test("cancellation fences retry scheduling and stale owners cannot erase the control record", async () => {
+    await fixture(async (client, keys) => {
+      const queue = new RedisStreamsQueue(redisUrl);
+      const job = new (class extends Job {
+        async handle() {}
+      })();
+      const name = tracked(job);
+      const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, keys);
+      try {
+        await worker.processNext();
+        const id = await queue.enqueue(job, {}, { cancellable: true });
+        const original = required(
+          (await reserveStreamJob(client, keys[1], "original")).reservation ?? undefined,
+        );
+        expect(await queue.cancel(id)).toBe(true);
+        await expect(
+          scheduleStreamRetry(
+            client,
+            keys[1],
+            original,
+            { name, payload: {}, jobId: id, cancellable: true },
+            0,
+          ),
+        ).rejects.toThrow("cancelled");
+        expect(await client.send("ZCARD", [streamRetryKey(keys[1])])).toBe(0);
+        await agePending(client, keys[1]);
+        await reserveStreamJob(client, keys[1], "replacement");
+        expect(
+          await updateStreamReservation(
+            client,
+            keys[1],
+            original,
+            "ack",
+            streamControlKey(keys[1], id),
+          ),
+        ).toBe(false);
+        expect(await client.send("HGET", [streamControlKey(keys[1], id), "state"])).toBe(
+          "cancelled",
+        );
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("control corruption fails closed and cannot acknowledge business work", async () => {
+    await fixture(async (client, keys) => {
+      let calls = 0;
+      const job = new (class extends Job {
+        async handle() {
+          calls++;
+        }
+      })();
+      const name = tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, keys);
+      try {
+        await worker.processNext();
+        const id = await queue.enqueue(job, {}, { cancellable: true });
+        await client.set(streamRetryKey(keys[1]), "wrong type");
+        await expect(queue.cancel(id)).rejects.toThrow("retry key type");
+        expect(await client.send("HGET", [streamControlKey(keys[1], id), "state"])).toBe("active");
+        await client.del(streamRetryKey(keys[1]));
+        const reservation = required(
+          (await reserveStreamJob(client, keys[1], "owner")).reservation ?? undefined,
+        );
+        await client.del(streamControlKey(keys[1], id));
+        await expect(
+          scheduleStreamRetry(
+            client,
+            keys[1],
+            reservation,
+            { name, payload: {}, jobId: id, cancellable: true },
+            0,
+          ),
+        ).rejects.toThrow("control state");
+        await agePending(client, keys[1]);
+        await expect(worker.processNext()).rejects.toThrow("control state");
+        await client.set(streamControlKey(keys[1], id), "wrong type");
+        await expect(
+          updateStreamReservation(
+            client,
+            keys[1],
+            { ...reservation, owner: "wrong" },
+            "ack",
+            streamControlKey(keys[1], id),
+          ),
+        ).resolves.toBe(false);
+        expect(calls).toBe(0);
+        expect((await entries(client, keys[1])).length).toBe(1);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("a lost cancellation reply remains durable and retrying cannot re-admit a promoted job", async () => {
+    await fixture(async (client, keys) => {
+      let calls = 0;
+      const job = new (class extends Job {
+        override readonly backoffMs = 3600000;
+        async handle() {
+          calls++;
+          throw new Error("retry");
+        }
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, keys);
+      try {
+        const id = await queue.enqueue(job, {}, { cancellable: true });
+        await worker.processNext();
+        const lostReply = {
+          send: async (command: string, args: string[]) => {
+            await client.send(command, args);
+            throw new Error("Lost cancellation reply");
+          },
+        };
+        await expect(cancelStreamJob(lostReply as never, keys[1], id)).rejects.toThrow(
+          "Lost cancellation reply",
+        );
+        expect(await promoteStreamRetries(client, keys[1])).toBe(1);
+        expect(await queue.cancel(id)).toBe(true);
+        expect(await promoteStreamRetries(client, keys[1])).toBe(0);
+        expect((await entries(client, keys[1])).length).toBe(1);
+        await worker.processNext();
+        expect(calls).toBe(1);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("cancellation during a failing handler blocks its deferred retry", async () => {
+    await fixture(async (client, keys) => {
+      const queue = new RedisStreamsQueue(redisUrl);
+      let failures = 0;
+      const job = new (class extends Job {
+        async handle(_payload: object, context?: JobContext) {
+          expect(await queue.cancel(required(context).jobId)).toBe(true);
+          throw new Error("Failed after requesting cancellation");
+        }
+      })();
+      const name = tracked(job);
+      const worker = new RedisStreamsWorker(
+        redisUrl,
+        {
+          recordFailure: async (failure: { exception: string }) => {
+            expect(failure.exception).toBe("Streams job cancelled");
+            failures++;
+          },
+        } as never,
+        0,
+        keys,
+      );
+      try {
+        const id = await queue.enqueue(job, {}, { cancellable: true });
+        await worker.processNext();
+        expect(failures).toBe(1);
+        expect(
+          await client.send("EXISTS", [streamControlKey(keys[1], id), streamRetryKey(keys[1])]),
+        ).toBe(0);
+        await client.send("XADD", [
+          streamQueueKey(keys[1]),
+          "*",
+          "payload",
+          JSON.stringify({ name, payload: {}, jobId: "foreign", cancellable: true }),
+        ]);
+        expect(await worker.processNext()).toBe(true);
+        expect(await client.send("XLEN", [streamDeadLetterKey(keys[1])])).toBe(1);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("only opted-in identities in this queue namespace can be cancelled", async () => {
+    await fixture(async (_client, keys) => {
+      const job = new (class extends Job {
+        async handle() {}
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      try {
+        const id = await queue.enqueue(job, {});
+        expect(await queue.cancel(id)).toBe(false);
+        for (const value of [
+          "bad",
+          `${streamQueueKey(keys[1])}/bad`,
+          `other:stream/${crypto.randomUUID()}`,
+        ])
+          await expect(queue.cancel(value)).rejects.toThrow("job ID");
+        await expect(queue.enqueue(job, {}, { cancellable: "true" as never })).rejects.toThrow(
+          "boolean",
+        );
+      } finally {
+        queue.close();
+      }
+    });
+  });
   test("expired queued jobs never invoke handlers and retain recovery state if SQL recording fails", async () => {
     await fixture(async (client, keys) => {
       let calls = 0;
