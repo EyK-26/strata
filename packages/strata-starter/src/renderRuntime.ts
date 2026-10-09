@@ -253,6 +253,7 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
   statements.push(`CREATE TABLE IF NOT EXISTS failed_job (
     id ${d.id},
     job_name ${d.keyText} NOT NULL,
+    job_id ${d.text},
     payload ${payloadType},
     exception ${d.text} NOT NULL,
     failed_at ${d.timestamp}

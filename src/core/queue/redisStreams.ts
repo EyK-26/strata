@@ -373,6 +373,29 @@ class RedisStreamsQueue implements Queue {
     payload: TPayload,
     options: StreamsEnqueueOptions = {},
   ): Promise<string> {
+    return this.admit(job, payload, options);
+  }
+  async replay<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    jobId: string,
+  ): Promise<void> {
+    const prefix = defaultQueueKeys().find((key) => jobId.startsWith(`${streamQueueKey(key)}/`));
+    if (
+      !prefix ||
+      !/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]+-[0-9]+)$/.test(
+        jobId.slice(streamQueueKey(prefix).length + 1),
+      )
+    )
+      throw new Error("Replay identity does not belong to this Streams namespace");
+    await this.admit(job, payload, {}, jobId);
+  }
+  private async admit<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options: StreamsEnqueueOptions,
+    replayId?: string,
+  ): Promise<string> {
     if (options.cancellable !== undefined && typeof options.cancellable !== "boolean")
       throw new Error("cancellable must be a boolean");
     if (
@@ -386,7 +409,7 @@ class RedisStreamsQueue implements Queue {
     if (!name) throw new Error("Job is not registered with the queue worker registry.");
     const key = queueKeyForPriority(job.priority);
     await assertLegacyDrained(this.client, key);
-    const jobId = `${streamQueueKey(key)}/${crypto.randomUUID()}`;
+    const jobId = replayId ?? `${streamQueueKey(key)}/${crypto.randomUUID()}`;
     const deadlineAtMs =
       options.timeoutMs === undefined
         ? undefined
@@ -503,6 +526,7 @@ class RedisStreamsWorker {
     if (controlKey && (await readStreamCancellation(this.client, controlKey))) {
       await this.failedJobs.recordFailure({
         jobName: envelope.name,
+        jobId: envelope.jobId,
         payload: envelope.payload,
         exception: cancellationError.message,
       });
@@ -517,6 +541,7 @@ class RedisStreamsWorker {
     if (remainingMs !== undefined && remainingMs <= 0) {
       await this.failedJobs.recordFailure({
         jobName: envelope.name,
+        jobId: envelope.jobId,
         payload: envelope.payload,
         exception: deadlineError.message,
       });
@@ -607,6 +632,7 @@ class RedisStreamsWorker {
       if (!failureRecorded)
         await this.failedJobs.recordFailure({
           jobName: envelope.name,
+          jobId: envelope.jobId,
           payload: envelope.payload,
           exception: cancellationError.message,
         });
@@ -622,6 +648,7 @@ class RedisStreamsWorker {
       if (!failureRecorded)
         await this.failedJobs.recordFailure({
           jobName: envelope.name,
+          jobId: envelope.jobId,
           payload: envelope.payload,
           exception: deadlineError.message,
         });

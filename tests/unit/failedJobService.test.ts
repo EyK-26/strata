@@ -39,11 +39,13 @@ describe("FailedJobService", () => {
 
     const record = await service.recordFailure({
       jobName: "webhooks.dispatch",
+      jobId: "logical-id",
       payload: { id: 1 },
       exception: "boom",
     });
 
     expect(record.job_name).toBe("webhooks.dispatch");
+    expect(record.job_id).toBe("logical-id");
     expect(record.failed_at).toBeInstanceOf(Date);
   });
 
