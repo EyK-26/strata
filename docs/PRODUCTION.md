@@ -88,7 +88,41 @@ A configured Redis throttle returns JSON `503` with `Retry-After: 1` when Redis 
 
 Bucket keys change in 2.0, so existing throttle windows restart during migration. Retire old throttle keys separately during maintenance using bounded Redis SCAN; do not use KEYS. Unmatched dispatchers share a bucket. Custom dispatchers should carry trusted registered templates through request context as described above.
 
-This increment addresses Redis atomicity and failure admission. Core plan multipliers, generic app quota injection, and bounded memory-store pruning are still pending in the production program. Memory throttles remain local to a process and are not a distributed production substitute.
+### Application-owned quotas
+
+Core does not interpret plan names or apply plan multipliers. `TenantContext` contains identity, optional trusted `metadata` and opaque application extensions. Populate entitlement metadata through the application's trusted tenant resolver; do not derive it from arbitrary request headers.
+
+Register `CORE_THROTTLE_QUOTA_POLICY_TOKEN` from `@getstrata/core/contracts/serviceTokens` during provider registration, before API middleware is composed:
+
+```ts
+import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import { CORE_THROTTLE_QUOTA_POLICY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import type { ThrottleQuotaPolicy } from "@getstrata/core/http/throttleMiddleware";
+
+const quotaPolicy: ThrottleQuotaPolicy = ({ tenant, maxAttempts }) => {
+  const allowance = tenant?.metadata?.apiAttemptsPerWindow;
+  return typeof allowance === "number" ? allowance : maxAttempts;
+};
+
+export const quotaProvider: ServiceProvider = {
+  name: "app.quotas",
+  register({ container }) {
+    container.set(CORE_THROTTLE_QUOTA_POLICY_TOKEN, quotaPolicy);
+  },
+};
+```
+
+Add this provider to the application's provider list. The generated HTTP kernel injects it into API Redis or memory throttles. Direct middleware construction accepts the same `quotaPolicy` option. The callback receives the request, current tenant, caller identity, registered route template and configured base limit. It is synchronous and changes only the attempt limit, not the fixed window (60 seconds for the generated API group). Without a policy, the configured base limit applies to all plans. Core does not fetch billing state or infer entitlements.
+
+Return a nonnegative safe integer. Zero blocks the first attempt with 429 when the store is available. Thrown errors, promises and invalid limits produce controlled 503 without calling the business handler; a generous allowance cannot bypass a Redis failure. Resolve required entitlement data before throttling and keep the policy cheap. The policy does not replace dedicated login or SCIM limits. Routes also wrapped in the API group remain subject to its policy; the tenant can be null before protocol authentication, so provide a safe base allowance. See [tenancy](TENANCY.md) for trusted resolution and [typed providers](BUILDING-APPS.md#typed-service-tokens-and-narrow-controller-dependencies).
+
+### Bounded local throttle storage
+
+API, login and SCIM memory throttles use bounded, per-middleware-instance storage. `maxBuckets` defaults to 10,000 (supported range 1–1,000,000); `pruneBatchSize` defaults to 32 (range 1–1,024). Both must be safe integers. Windows use a monotonic clock and hits do not extend expiry. Each attempt prunes at most the configured batch of oldest expired entries and can separately replace its own expired bucket. There is no background timer or full-map scan per request.
+
+A saturated store refuses a new identity with controlled 503 instead of evicting a live lockout. Existing identities keep their windows and limits. Direct constructors accept the storage options and expose `stats()` with retained bucket count, last-consume pruning count and disposal state. `dispose()` clears retained entries and denies future consumption. The HTTP kernel owns constructed throttles; generated context cleanup disposes them. Custom kernels and standalone middleware must retain and dispose their owners. Budget aggregate memory across middleware instances; the cap is not an application-wide byte budget.
+
+These mechanisms were implemented in [#108](https://github.com/EyK-26/strata/pull/108), [#110](https://github.com/EyK-26/strata/pull/110) and [#111](https://github.com/EyK-26/strata/pull/111). Memory throttles remain process-local and are not a distributed production substitute. Configure Redis for shared enforcement; no memory fallback occurs when a configured Redis store fails.
 
 ## OpenTelemetry tracing
 

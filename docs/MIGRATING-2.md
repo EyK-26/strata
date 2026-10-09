@@ -72,7 +72,7 @@ Adopt the generated `tracingProvider` and maintained OpenTelemetry runtime rathe
 
 Use the [distributed scheduler](SCHEDULER.md) ownership contracts for multi-runner deployments. Occurrence identity and renewable leases reduce overlap; owner death can still repeat an effect. Scheduled handlers require application idempotency.
 
-Distributed Redis throttling must fail in a controlled way when Redis is unavailable rather than silently becoming process-local. Bucket identities change in 2.x, resetting existing windows. Generic app-owned quota injection and bounded memory pruning remain separate pending framework work; this guide does not present them as completed APIs. See [production throttling](PRODUCTION.md).
+Distributed Redis throttling must fail in a controlled way when Redis is unavailable rather than silently becoming process-local. Bucket identities change in 2.x, resetting existing windows. Core no longer interprets plan names or multipliers. Move allowances into trusted application metadata and register `CORE_THROTTLE_QUOTA_POLICY_TOKEN` before API middleware composition; without it, the configured base limit applies. Local API/login/SCIM throttles now bound retained buckets and pruning and fail closed on saturation, but remain process-local. Adopt owner disposal for custom middleware and budget memory across instances. See [quota policy and bounded storage](PRODUCTION.md#application-owned-quotas) for supported contracts.
 
 ## 8. Preserve auth, seed and API contracts
 
