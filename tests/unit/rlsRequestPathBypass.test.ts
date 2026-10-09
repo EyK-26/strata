@@ -23,6 +23,8 @@ async function listTsFiles(directory: string): Promise<string[]> {
 const unboundedNeedle = "runWithMigrationBypass(";
 
 const allowedUnbounded = new Set([
+  // CLI-only bootstrap administration; generated placement and HTTP isolation asserted below.
+  join(repoRoot, "packages/strata-starter/src/renderInitialAdmin.ts"),
   join(repoRoot, "apps/hiroapp/src/db/migrate.ts"),
   join(repoRoot, "src/db/migrations/runner.ts"),
   join(repoRoot, "src/db/seeders/runner.ts"),
@@ -80,6 +82,35 @@ describe("request-path RLS bypass fence", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  test("initial-admin global bypass is confined to the explicit operator command", async () => {
+    const renderer = await readFile(
+      join(repoRoot, "packages/strata-starter/src/renderInitialAdmin.ts"),
+      "utf8",
+    );
+    expect([...renderer.matchAll(/runWithMigrationBypass\(/g)]).toHaveLength(1);
+    expect(renderer).toContain("export async function initialAdminCommand");
+    expect(renderer).toContain("await assertRlsLiveDatabaseRole()");
+    expect(renderer).toContain("runInTransaction(async db");
+    const generation = await readFile(
+      join(repoRoot, "packages/strata-starter/src/generate.ts"),
+      "utf8",
+    );
+    expect(generation).toContain(
+      'writeText(join(src, "cli/initialAdmin.ts"), initialAdminCommand)',
+    );
+    for (const directory of [
+      "apps/hiroapp/src/modules",
+      "apps/hiroapp-team/src/modules",
+      "src/bootstrap",
+    ]) {
+      for (const file of await listTsFiles(join(repoRoot, directory))) {
+        const text = await readFile(file, "utf8");
+        expect(text, file).not.toContain("initialAdminCommand");
+        expect(text, file).not.toContain("cli/initialAdmin");
+      }
+    }
   });
 
   test("outbox publication never bypasses RLS and coordination rejects an active business transaction", async () => {

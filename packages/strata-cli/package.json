@@ -36,6 +36,10 @@
     "./schedule": {
       "import": "./src/schedule.ts",
       "default": "./src/schedule.ts"
+    },
+    "./initialAdmin": {
+      "import": "./src/initialAdmin.ts",
+      "default": "./src/initialAdmin.ts"
     }
   },
   "files": [

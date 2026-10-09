@@ -1211,10 +1211,10 @@ export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
 `;
 }
 
-function renderCliRegisterTs(): string {
+function renderCliRegisterTs(layers?: StarterLayers): string {
   return `import type { StrataCommandMap } from "@getstrata/cli";
 
-const commands: StrataCommandMap = {
+const commands: StrataCommandMap = {${layers && authNeedsUsers(layers.auth) ? '\n  "auth:provision-admin": async () => (await import("./initialAdmin.ts")).initialAdminCommand,' : ""}
   "make:module": async () => (await import("@getstrata/cli/scaffold")).makeModuleCommand,
   "make:policy": async () => (await import("@getstrata/cli/scaffold")).makePolicyCommand,
   "make:job": async () => (await import("@getstrata/cli/scaffold")).makeJobCommand,

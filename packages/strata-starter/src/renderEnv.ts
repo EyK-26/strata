@@ -824,6 +824,8 @@ Open http://localhost:3000. Health check: \`GET /health\`. Redis worker: \`bun r
 ${renderSupportingToolsReadme(layers)}${
   layers.auth !== "headers"
     ? `
+For the first production admin, apply migrations and run \`bunx strata auth:provision-admin --email operator@example.test --name "Initial Operator" --password-stdin${layers.tenancy !== "none" ? " --tenant 1" : ""} < /run/secrets/initial_admin_password\` before admitting traffic. Supply your own private secret-manager-mounted file, not a demo password. Passwords require at least 16 characters and at most 72 UTF-8 bytes. Tenant-enabled applications require an existing tenant ID; this command does not create tenants. It refuses existing admins/accounts, records a transactional one-time claim, and does not mark email verified or enroll MFA. Additional admins and recovery remain explicit application administration. The command does not migrate or seed automatically.
+
 Optional development demo accounts: run \`bun run db:seed:demo\` explicitly after migrations. This command refuses production and staging. It creates these accounts with password \`StrataDemo!ChangeMe\`:
 
 - \`demo@example.com\` (member)

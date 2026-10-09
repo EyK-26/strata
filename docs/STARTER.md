@@ -76,6 +76,8 @@ Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is 
 
 Migrations and resets do not seed by default. Use `bun run db:seed:demo` explicitly in development, or pass `--seed` to the CLI when an app provides a seed export. Generated demo seeds reject production and staging before accessing the database. Existing databases retain their current users; audit and disable or rotate known demo accounts before promotion. When upgrading, remove unconditional `seed()` calls from existing migration/fresh entries as well as upgrading the CLI, so seeding occurs exactly once when requested.
 
+User-auth starters also generate explicit `auth:provision-admin` and the separate `0004_initial_admin_provisioning` file migration. This production bootstrap command reads a private password from standard input, refuses existing accounts/admins, and commits a one-time claim with the new account. It does not seed, migrate, approve email or enroll MFA. See [initial-admin provisioning](INITIAL-ADMIN.md).
+
 Redis queue apps can opt into consumer-group recovery with `QUEUE_REDIS_TRANSPORT=streams` after the required maintenance conversion. See [queue recovery and Streams rollout](QUEUES.md) for ownership, cancellation, priority, durability, and migration contracts.
 
 `queue:retry` dispatches through the bootstrapped app queue and retains the failed-job row until admission succeeds. Replay remains at least once; see [safe failed-job retry](BUILDING-APPS.md#retrying-failed-jobs-safely) for the direct API migration and duplicate-delivery boundary.
