@@ -1,5 +1,7 @@
 # Production readiness
 
+Existing applications should follow the [1.x → 2.x migration guide](MIGRATING-2.md) before enabling new runtime mechanisms.
+
 `assertProductionSecrets()` runs when `isProductionEnv()` is true: `APP_ENV=production` or `NODE_ENV=production` (case-insensitive), `APP_ENV=staging`, or an unrecognized `APP_ENV` value. HiroApp and generated apps call it from `createApp()`. The check is feature-gated: flags that are off do not demand their secrets.
 
 Validate:
