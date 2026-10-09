@@ -9,6 +9,8 @@ interface Grammar {
 
 function compileColumnType(driver: DatabaseDriver, column: ColumnDefinition): string {
   switch (column.kind) {
+    case "bigId":
+      return driver === "pgsql" ? "BIGSERIAL" : compileIdType(driver);
     case "id":
       return compileIdType(driver);
     case "string":
