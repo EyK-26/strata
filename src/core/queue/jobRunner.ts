@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import type FailedJobService from "./failedJobService";
 import { jobRegistry } from "./jobRegistry";
 import { queueConfig } from "./queueConfig";
@@ -8,11 +9,53 @@ interface QueueJobEnvelope {
   attempts?: number;
 }
 
+function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(rawPayload);
+  } catch {
+    console.error("[QueueWorker] Ignoring malformed queue payload");
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    console.error("[QueueWorker] Ignoring non-object queue payload");
+    return null;
+  }
+
+  const envelope = parsed as Partial<QueueJobEnvelope>;
+  if (typeof envelope.name !== "string" || envelope.name.length === 0) {
+    console.error("[QueueWorker] Ignoring queue payload without job name");
+    return null;
+  }
+
+  if (!jobRegistry.create(envelope.name)) {
+    console.error(`[QueueWorker] Ignoring unknown job name: ${envelope.name}`);
+    return null;
+  }
+
+  if (
+    envelope.payload !== undefined &&
+    (typeof envelope.payload !== "object" || envelope.payload === null)
+  ) {
+    console.error("[QueueWorker] Ignoring queue payload with invalid payload object");
+    return null;
+  }
+
+  return {
+    name: envelope.name,
+    payload: (envelope.payload ?? {}) as Record<string, unknown>,
+    attempts: typeof envelope.attempts === "number" ? envelope.attempts : 0,
+  };
+}
+
 async function runQueueJob(
   envelope: QueueJobEnvelope,
   failedJobs: FailedJobService,
-  options: { onFailureRecorded?: () => void } = {},
+  options: { onFailureRecorded?: () => void; context?: import("./index").JobContext } = {},
 ): Promise<void> {
+  options.context?.signal.throwIfAborted();
   const job = jobRegistry.create(envelope.name);
 
   if (!job) {
@@ -22,14 +65,15 @@ async function runQueueJob(
   const attempts = envelope.attempts ?? 0;
 
   try {
-    await job.handle(envelope.payload);
+    await job.handle(envelope.payload, options.context);
   } catch (error) {
+    options.context?.signal.throwIfAborted();
     const nextAttempt = attempts + 1;
     const maxAttempts = job.maxAttempts ?? queueConfig.maxAttempts;
 
     if (nextAttempt < maxAttempts) {
       const backoffMs = job.backoffMs ?? queueConfig.backoffMs;
-      await new Promise((resolve) => setTimeout(resolve, backoffMs * nextAttempt));
+      await delay(backoffMs * nextAttempt, undefined, { signal: options.context?.signal });
       await runQueueJob(
         {
           ...envelope,
@@ -53,4 +97,4 @@ async function runQueueJob(
 }
 
 export type { QueueJobEnvelope };
-export { runQueueJob };
+export { parseQueueJobEnvelope, runQueueJob };

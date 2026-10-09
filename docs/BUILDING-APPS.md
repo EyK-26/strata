@@ -406,6 +406,8 @@ Generated HTTP, queue worker and scheduler entrypoints coordinate stop, drain, f
 
 Jobs and listener modules load through awaited ESM imports before provider startup finishes. Malformed exports and duplicate discovered job/module names fail startup with their locations. Use explicit manifests for bundles and preserve DI factories instead of reconstructing their dependencies. See [DISCOVERY.md](DISCOVERY.md) for supported file/export shapes, caching and migration requirements.
 
+Redis queue apps can opt into consumer-group recovery with `QUEUE_REDIS_TRANSPORT=streams` after the required maintenance conversion. See [queue recovery and Streams rollout](QUEUES.md) for ownership, cancellation, priority, durability, and migration contracts.
+
 ## Retrying failed jobs safely
 
 `queue:retry <id>` boots the generated application, resolves its configured queue, recreates the registered job, and dispatches its persisted payload at the job's configured priority. It removes the `failed_job` row only after dispatch resolves. Unknown jobs and rejected dispatches leave that recovery row intact. The standalone command uses `QUEUE_DRIVER` and `REDIS_URL`, closing only the queue it creates; the generated app owns its bootstrapped queue's lifecycle.

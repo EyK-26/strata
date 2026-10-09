@@ -3,7 +3,9 @@ import FailedJobService from "./failedJobService.ts";
 import type { Job, Queue } from "./index.ts";
 import { jobRegistry } from "./jobRegistry.ts";
 import { runQueueJob } from "./jobRunner.ts";
+import { resolveRedisQueueTransport } from "./queueConfig";
 import { QueueWorker, RedisQueue } from "./redisQueue.ts";
+import { RedisStreamsQueue, RedisStreamsWorker } from "./redisStreams";
 import { ResilientQueue } from "./resilientQueue.ts";
 
 function createFailedJobService(): FailedJobService {
@@ -34,7 +36,9 @@ function createProductionQueue(
       throw new Error('QUEUE_DRIVER="redis" requires REDIS_URL to be set.');
     }
 
-    return new RedisQueue(options.redisUrl);
+    return resolveRedisQueueTransport() === "streams"
+      ? new RedisStreamsQueue(options.redisUrl)
+      : new RedisQueue(options.redisUrl);
   }
 
   return new ResilientQueue(failedJobs, driver === "async");
@@ -43,8 +47,10 @@ function createProductionQueue(
 function createQueueWorker(
   redisUrl: string,
   failedJobs: FailedJobService = createFailedJobService(),
-): QueueWorker {
-  return new QueueWorker(redisUrl, failedJobs);
+): QueueWorker | RedisStreamsWorker {
+  return resolveRedisQueueTransport() === "streams"
+    ? new RedisStreamsWorker(redisUrl, failedJobs)
+    : new QueueWorker(redisUrl, failedJobs);
 }
 
 export {
