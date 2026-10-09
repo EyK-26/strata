@@ -1,5 +1,12 @@
 # create-strata changelog
 
+## 2.2.1
+
+F02 — complete queue durability. Queues have leased reservations, recovery and fenced acknowledgement, but still use Redis lists. Persisted retry schedules, execution deadlines, cancellation and the planned Streams migration remain unfinished. Retries currently wait inside the running worker.
+F10 — production public-route tenancy. Separate anonymous access from development tenant headers, support a trusted-host resolver, reject unknown hosts, and accept forwarded hosts only through configured trusted proxies. The shop still lacks the approved-domain mapping.
+F12 — initial administrator provisioning and migration guidance. Automatic demo seeding is fixed. Secure initial-admin provisioning and a consolidated upgrade/operations guide remain.
+Distributed qualification. Cache generations/fill leases, scheduler ownership, OpenTelemetry, body limits and lifecycle controls now exist. Their implementation should no longer be described as entirely pending, but broader failure and capacity qualification is still required.
+
 ## 2.2.0
 
 Consistent model scopes.
