@@ -2,6 +2,8 @@
 
 HiroApp (`apps/hiroapp`) is in-repo dogfood for internal end-to-end testing. For a product app, use `bunx create-strata` and the published packages.
 
+Existing applications: follow the [1.x → 2.x migration guide](MIGRATING-2.md) for schema prerequisites and coordinated runtime rollout.
+
 ## Scaffold
 
 ```bash
@@ -87,7 +89,7 @@ Successful initialization returns an `InitializedAppContext` with `dispose(): Pr
 
 **Startup API migration:** `createAppContext()`, `createAppDependencies()`, `runProviderPhase()` and the monorepo `App.serve()` are now awaited APIs. This is a source compatibility change and must be included in release migration notes. The `appContext` getters stay synchronous and throw before initialization or after disposal; they no longer initiate hidden startup. Prefer existing async `bootstrapApp()` / `createApp()` in generated apps. Those entry points keep their promise contract, await discovery and database readiness, and close providers before their owned database when later migration/route construction fails. The exported generated `createAppContext()` also awaits module discovery. Calls to the low-level `runProviderPhase()` must supply a complete `ProviderContext` and await it; prefer the lifecycle for failure cleanup.
 
-Generated HTTP binds its socket only after bootstrap succeeds, and bind failure disposes the completed context. Queue workers await boot before constructing a worker and close application resources on failed boot or worker termination. Scheduled commands await boot before inspecting tasks and dispose resources after completion/failure. Custom outbox runners must follow the same ordering: await app bootstrap, then start `outbox.run`; on exit await the worker and dispose its context before database closure. Full bounded HTTP/worker draining and signal deadlines remain the separate lifecycle qualification task.
+Generated HTTP binds its socket only after bootstrap succeeds, and bind failure disposes the completed context. Queue workers await boot before constructing a worker and close application resources on failed boot or worker termination. Scheduled commands await boot before inspecting tasks and dispose resources after completion/failure. Custom outbox runners must follow the same ordering: await app bootstrap, then start the outbox instance's `work({ signal })`; on exit await the worker and dispose its context before database closure. Generated entrypoints coordinate stop, drain, flush and close through `LifecycleCoordinator`, with a configurable shutdown deadline. Custom entrypoints must adopt that coordinator explicitly; see [lifecycle](LIFECYCLE.md). Deployment-level outage and forced-termination qualification still requires the application's operational tests.
 
 ## Database migrations
 
@@ -217,7 +219,7 @@ Stop and drain old workers before starting this reservation implementation. Prod
 
 Malformed and unregistered jobs are kept as raw payloads in `queue:<priority>:invalid` (under the app namespace) after ownership-checked quarantine. Inspect and repair those payloads before deliberately re-enqueuing them; do not delete them as deployment cleanup. Identical pending payloads have separate reservations and leases. A failure-record database outage leaves the reservation available for recovery rather than acknowledging it. A crash after failure persistence but before acknowledgement may create another failure record on replay.
 
-A stalled process or Redis outage can still lose its lease; its effects may overlap a replay. Lease ownership fences acknowledgement, not arbitrary external side effects. Handlers must use business idempotency. The full F02 Redis Streams migration, stable job IDs, persisted retry schedules, deadlines and cancellation remain follow-up work; this list-based correction does not claim those contracts or measured production capacity.
+A stalled process or Redis outage can still lose its lease; its effects may overlap a replay. Lease ownership fences acknowledgement, not arbitrary external side effects. Handlers must use business idempotency. The opt-in Streams transport adds stable job IDs, persisted retry schedules, deadlines and cancellation through a separate maintenance rollout; see [QUEUES.md](QUEUES.md). These contracts do not apply to legacy list workers and do not establish measured production capacity.
 
 ### HTTP completion includes commit and deferred hooks
 
@@ -419,10 +421,15 @@ await failedJobs.retry(id, async (record) => {
   const job = jobRegistry.create(record.job_name);
   if (!job) throw new Error(`Unknown job "${record.job_name}".`);
   jobRegistry.track(record.job_name, job);
-  await queue.dispatch(job, record.payload);
+  if (record.job_id != null) {
+    if (!queue.replay) throw new Error("This queue cannot preserve replay identity.");
+    await queue.replay(job, record.payload, record.job_id);
+  } else {
+    await queue.dispatch(job, record.payload);
+  }
 });
 ```
 
-The former one-argument call is rejected before reading or deleting any recovery row. Upgrade `@getstrata/core` and `@getstrata/cli` together when adopting this contract. The CLI reports enqueue success, not eventual handler success. `sync` runs inline and `async` remains process-local; use Redis for shared worker admission. This change does not introduce Streams or persist delayed retries.
+The former one-argument call is rejected before reading or deleting any recovery row. Upgrade `@getstrata/core` and `@getstrata/cli` together when adopting this contract. The CLI reports enqueue success, not eventual handler success. `sync` runs inline and `async` remains process-local; use Redis for shared worker admission. Opt-in Streams and persisted delayed retries require the separate [queue migration](QUEUES.md), including the failed-job identity schema change.
 
 SQL record deletion and Redis admission are separate operations. A crash, lost Redis acknowledgement, concurrent retry, or SQL deletion failure after admission can cause duplicate delivery on another retry. Handlers must be idempotent. The admission callback must resolve only when its queue has accepted the replay; it must not fire and forget. If record deletion fails, inspect both queue and recovery state before retrying. Queue durability still depends on Redis persistence and failover configuration.

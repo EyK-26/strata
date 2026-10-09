@@ -105,13 +105,15 @@ SQL applications that need recoverable model cache effects should adopt the dura
 
 Generated `.env.example` includes commented CORS origin and additional-header examples. Keep them unset for same-origin applications. For an approved cross-origin browser API, configure explicit `CORS_ALLOWED_ORIGINS` and optionally `CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id`. The official HTTP kernel applies them; additional names are validated and extend existing defaults. OpenAPI metadata does not implicitly widen CORS policy. See [BUILDING-APPS](./BUILDING-APPS.md#explicit-application-cors-headers).
 
+For existing applications, use the consolidated [1.x → 2.x migration guide](MIGRATING-2.md) alongside the selected release's generated output.
+
 ## Shared model and bootstrap contracts
 
 Generated bootstrap code instantiates the public `ConfigStore` from `@getstrata/bootstrap/contracts`. There is no app-owned store implementation or cast to its type. It uses the framework's existing presence-based contract: missing keys throw `Config key "..." is not defined.`, while a deliberately registered `undefined` is present. Existing applications adopting this shape should check any reliance on the old copied store's error text or rejection of registered `undefined`.
 
-Generated models keep explicit record types, table definitions, fillable/hidden fields and `registerModelRepository` calls. Models that need only standard repository behavior register `new BaseRepository(table)` directly; a constructor-only repository subclass is unnecessary. Keep a custom subclass when it contains application queries, overrides or a custom connection, and register that instance through the same API. Table metadata and mass-assignment policy remain separate: declaring a table column does not make it writable.
+Generated models extend `defineModel(table)` with typed table metadata and explicit fillable/hidden fields. Awaited `discoverModels` supplies default repositories and registers relationship names before boot. Use `bootModels` with static imports when filesystem discovery is unsuitable. Table metadata and mass-assignment policy remain separate: declaring a table column does not make it writable.
 
-`src/models/register.ts` contains side-effect imports that execute each model's registration before discovery. It need not import or call `registerModelClass` for constructor names already registered by `registerModelRepository`. Import that helper only when using a distinct string alias. Existing custom repositories and explicit registrations remain supported; adopting this generator shape does not require a schema or data migration.
+Keep `registerModelRepository` for custom query behavior, overrides or explicit connections; existing manual registrations remain supported. Deliberate string aliases can still use `registerModelClass`. There is no need for constructor-only repository subclasses or a second manual constructor-name registry for ordinary declarative models. See [declarative model binding](DATABASE.md#declarative-model-binding). This generator adoption requires no schema or data migration.
 
 ### Awaited provider startup migration
 
