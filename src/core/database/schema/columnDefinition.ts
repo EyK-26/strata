@@ -1,5 +1,6 @@
 type ColumnKind =
   | "id"
+  | "bigId"
   | "string"
   | "text"
   | "boolean"

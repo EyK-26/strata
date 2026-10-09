@@ -48,6 +48,15 @@ class Blueprint {
     return column;
   }
 
+  /** Generated 64-bit primary key; does not change existing id() migrations. */
+  bigId(name = "id"): ColumnDefinition {
+    const column = new ColumnDefinition(name, "bigId");
+    column.primary();
+    column.autoIncrement = true;
+    this.columns.push(column);
+    return column;
+  }
+
   string(name: string, length?: number): ColumnDefinition {
     if (length !== undefined && (!Number.isSafeInteger(length) || length <= 0)) {
       throw new Error("String length must be a positive safe integer.");
