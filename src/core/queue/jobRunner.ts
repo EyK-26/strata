@@ -8,6 +8,7 @@ interface QueueJobEnvelope {
   payload: Record<string, unknown>;
   attempts?: number;
   jobId?: string;
+  deadlineAtMs?: number;
 }
 
 function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
@@ -55,7 +56,14 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
   )
     return null;
 
+  if (
+    envelope.deadlineAtMs !== undefined &&
+    (!Number.isSafeInteger(envelope.deadlineAtMs) || envelope.deadlineAtMs <= 0)
+  )
+    return null;
+
   return {
+    ...(envelope.deadlineAtMs === undefined ? {} : { deadlineAtMs: envelope.deadlineAtMs }),
     jobId: envelope.jobId,
     name: envelope.name,
     payload: (envelope.payload ?? {}) as Record<string, unknown>,

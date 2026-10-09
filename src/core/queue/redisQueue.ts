@@ -345,7 +345,7 @@ async function countPendingQueueJobs(redisUrl: string): Promise<number> {
   }
 }
 
-export type { StreamReservation } from "./redisStreams";
+export type { StreamReservation, StreamsEnqueueOptions } from "./redisStreams";
 export {
   migrateLegacyQueueToStreams,
   RedisStreamsQueue,

@@ -96,6 +96,199 @@ async function agePending(client: RedisClient, key: string) {
 }
 
 describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
+  test("expired queued jobs never invoke handlers and retain recovery state if SQL recording fails", async () => {
+    await fixture(async (client, keys) => {
+      let calls = 0;
+      let records = 0;
+      const job = new (class extends Job {
+        async handle() {
+          calls++;
+        }
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(
+        redisUrl,
+        {
+          recordFailure: async (failure: { exception: string }) => {
+            expect(failure.exception).toBe("Streams job deadline exceeded");
+            if (++records === 1) throw new Error("SQL unavailable");
+          },
+        } as never,
+        0,
+        keys,
+      );
+      try {
+        const id = await queue.enqueue(job, {}, { timeoutMs: 20 });
+        const envelope = JSON.parse(required((await entries(client, keys[1]))[0])[1][1] ?? "{}");
+        expect(envelope.jobId).toBe(id);
+        expect(envelope.deadlineAtMs).toBeGreaterThan(0);
+        await Bun.sleep(40);
+        await expect(worker.processNext()).rejects.toThrow("SQL unavailable");
+        expect((await entries(client, keys[1])).length).toBe(1);
+        await agePending(client, keys[1]);
+        expect(await worker.processNext()).toBe(true);
+        expect(calls).toBe(0);
+        expect(records).toBe(2);
+        expect(await entries(client, keys[1])).toEqual([]);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("live deadlines abort cooperative handlers without retrying them", async () => {
+    await fixture(async (client, keys) => {
+      let aborted = false;
+      let failures = 0;
+      const job = new (class extends Job {
+        override readonly maxAttempts = 10;
+        async handle(_payload: object, context?: JobContext) {
+          const signal = required(context).signal;
+          await new Promise<void>((_resolve, reject) => {
+            signal.addEventListener(
+              "abort",
+              () => {
+                aborted = true;
+                reject(signal.reason);
+              },
+              { once: true },
+            );
+          });
+        }
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(
+        redisUrl,
+        {
+          recordFailure: async () => {
+            failures++;
+          },
+        } as never,
+        0,
+        keys,
+      );
+      try {
+        await worker.processNext();
+        await queue.enqueue(job, {}, { timeoutMs: 200 });
+        expect(await worker.processNext()).toBe(true);
+        expect(aborted).toBe(true);
+        expect(failures).toBe(1);
+        expect(await entries(client, keys[1])).toEqual([]);
+        expect(await client.send("ZCARD", [streamRetryKey(keys[1])])).toBe(0);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("deadline persists across retry admission and restart and caps the retry due time", async () => {
+    await fixture(async (client, keys) => {
+      let calls = 0;
+      let failures = 0;
+      const job = new (class extends Job {
+        override readonly backoffMs = 10000;
+        async handle() {
+          calls++;
+          throw new Error("Retry");
+        }
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const failed = {
+        recordFailure: async () => {
+          failures++;
+        },
+      };
+      const first = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+      try {
+        await first.processNext();
+        await queue.enqueue(job, {}, { timeoutMs: 300 });
+        const original = JSON.parse(required((await entries(client, keys[1]))[0])[1][1] ?? "{}");
+        expect(await first.processNext()).toBe(true);
+        first.close();
+        const scheduled = (await client.send("ZRANGE", [
+          streamRetryKey(keys[1]),
+          "0",
+          "-1",
+        ])) as string[];
+        expect(JSON.parse(required(scheduled[0])).deadlineAtMs).toBe(original.deadlineAtMs);
+        expect(
+          Number(await client.send("ZSCORE", [streamRetryKey(keys[1]), required(scheduled[0])])),
+        ).toBe(original.deadlineAtMs);
+        await Bun.sleep(320);
+        const second = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+        try {
+          expect(await second.processNext()).toBe(true);
+        } finally {
+          second.close();
+        }
+        expect(calls).toBe(1);
+        expect(failures).toBe(1);
+        expect(await entries(client, keys[1])).toEqual([]);
+      } finally {
+        first.close();
+        queue.close();
+      }
+    });
+  });
+  test("deadline does not release ownership while a handler ignores its aborted signal", async () => {
+    await fixture(async (client, keys) => {
+      let returned = false;
+      let failures = 0;
+      const job = new (class extends Job {
+        async handle(_payload: object, context?: JobContext) {
+          await Bun.sleep(250);
+          expect(required(context).signal.aborted).toBe(true);
+          returned = true;
+        }
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      const worker = new RedisStreamsWorker(
+        redisUrl,
+        {
+          recordFailure: async () => {
+            expect(returned).toBe(true);
+            failures++;
+          },
+        } as never,
+        0,
+        keys,
+      );
+      try {
+        await worker.processNext();
+        await queue.enqueue(job, {}, { timeoutMs: 100 });
+        const running = worker.processNext();
+        await Bun.sleep(150);
+        expect(returned).toBe(false);
+        expect((await entries(client, keys[1])).length).toBe(1);
+        expect(await running).toBe(true);
+        expect(failures).toBe(1);
+        expect(await entries(client, keys[1])).toEqual([]);
+      } finally {
+        worker.close();
+        queue.close();
+      }
+    });
+  });
+  test("invalid admission timeouts cannot enqueue work", async () => {
+    await fixture(async (client, keys) => {
+      const job = new (class extends Job {
+        async handle() {}
+      })();
+      tracked(job);
+      const queue = new RedisStreamsQueue(redisUrl);
+      try {
+        for (const timeoutMs of [0, -1, 0.1, NaN, Infinity, 2147483648])
+          await expect(queue.enqueue(job, {}, { timeoutMs })).rejects.toThrow("timeoutMs");
+        expect(await entries(client, keys[1])).toEqual([]);
+      } finally {
+        queue.close();
+      }
+    });
+  });
   test("persisted backoff frees workers and resumes attempts and identity after restart", async () => {
     await fixture(async (client, keys) => {
       process.env.QUEUE_REDIS_TRANSPORT = "streams";

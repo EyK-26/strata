@@ -122,6 +122,10 @@ describe("runQueueJob", () => {
       expect(parseQueueJobEnvelope(raw)).toBeNull();
     jobRegistry.register("test.validated-envelope", () => new FlakyJob());
     for (const fields of [
+      { deadlineAtMs: 0 },
+      { deadlineAtMs: -1 },
+      { deadlineAtMs: "1" },
+      { deadlineAtMs: 1.5 },
       { jobId: "" },
       { jobId: 1 },
       { attempts: -1 },
