@@ -405,6 +405,7 @@ function renderDockerfile(layers: StarterLayers): string {
     );
   }
   lines.push(
+    "# Readiness: anonymous dependency/schema probe; use a separate process check for liveness.",
     'HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD ["bun", "-e", "fetch(\'http://127.0.0.1:\' + process.env.PORT + \'/health\').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]',
     'CMD ["bun", "run", "start"]',
   );
@@ -586,7 +587,7 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
 function renderApiDocs(projectName: string, layers: StarterLayers): string {
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
   rows.push(
-    "| `GET` | `/health` | Plain text `ok` (200) when the database ping succeeds and `notes` is readable under the request tenant (zero rows is still 200). `degraded` (503) when the ping or that read fails. Docker HEALTHCHECK uses this path. |",
+    "| `GET` | `/health` | Plain text `ok` (200) when configured database/Redis checks succeed and `notes` is readable (zero rows is still 200). This infrastructure probe runs outside API auth/tenancy admission, never selects a tenant or bypasses RLS, and returns no rows. `degraded` (503) when a dependency or schema check fails. Docker HEALTHCHECK uses this path. |",
     '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
   );
   rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
@@ -936,7 +937,7 @@ ${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : 
 `
     : ""
 }
-\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` is 200 when \`notes\` is readable (including zero rows) and 503 when that read fails. Redis jobs need a worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
+\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` is 200 when \`notes\` is readable (including zero rows) and configured dependencies are available; it returns only \`ok\` or \`degraded\` without authentication or tenant selection, and 503 when a dependency or schema check fails. Use it for readiness, not process liveness. Redis jobs need a worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
 `;
 }
 
