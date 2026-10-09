@@ -1,4 +1,5 @@
 import type { KeysetCursor, KeysetOptions } from "../pagination/index.ts";
+import { currentSqlDialect } from "./dialect.ts";
 import type { TableDefinition } from "./table.ts";
 import type { QueryWhere } from "./types.ts";
 import type { WhereNode } from "./whereBuilder.ts";
@@ -46,6 +47,23 @@ function keysetBoundary<TEntity extends object>(
   cursor?: KeysetCursor,
 ): WhereNode<TEntity>[] {
   if (!cursor) return [];
+  if (
+    currentSqlDialect().driver === "pgsql" &&
+    order.length > 1 &&
+    order.every((item) => item.direction === order[0]?.direction)
+  ) {
+    // A native row bound lets PostgreSQL seek the compound index at the cursor.
+    return [
+      {
+        kind: "and",
+        compareRow: {
+          columns: order.map((item) => item.column),
+          operator: order[0]?.direction === "asc" ? "gt" : "lt",
+          values: [...cursor.values],
+        },
+      },
+    ];
+  }
   const branches = order.map((item, i): WhereNode<TEntity> => {
     const where: Record<string, unknown> = {};
     order.slice(0, i).forEach((prefix, j) => {

@@ -232,6 +232,20 @@ function buildWhereNodeClause<TEntity extends object>(
   node: WhereNode<TEntity>,
   params: unknown[],
 ): string {
+  if ("compareRow" in node) {
+    const { columns, operator, values } = node.compareRow;
+    if (
+      !Array.isArray(columns) ||
+      !columns.length ||
+      !Array.isArray(values) ||
+      columns.length !== values.length ||
+      !["lt", "gt"].includes(operator) ||
+      Array.from(columns).some((column) => typeof column !== "string" || !column.length)
+    )
+      throw new TypeError("Invalid row comparison columns, values or operator.");
+    return `(${columns.map((column) => qualifyColumn(tableName, column)).join(", ")}) ${operator === "lt" ? "<" : ">"} (${values.map((value) => pushParam(params, value)).join(", ")})`;
+  }
+
   if ("exists" in node) {
     const body = remapExistsSql(node.exists.sql, node.exists.params, params);
     return `${node.exists.not ? "NOT " : ""}EXISTS (${body})`;

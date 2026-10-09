@@ -9,6 +9,10 @@ import {
   resetBoundDatabaseConnection,
 } from "@getstrata/core/database/boundConnection";
 import {
+  getActiveDatabaseConnection,
+  runWithDatabaseConnection,
+} from "@getstrata/core/database/connectionContext";
+import {
   getDefaultDatabasePool,
   registerDefaultDatabasePool,
 } from "@getstrata/core/database/defaultConnection";
@@ -138,6 +142,81 @@ for (const driver of ["pgsql", "mysql"] as const) {
               .keysetPaginate({ perPage: 10, orderBy, cursor: a.meta.next_cursor! }),
           );
           expect(rows.data).toEqual([]);
+        },
+      );
+      test.skipIf(driver !== "pgsql")(
+        "same-direction middle cursors seek the compound index under RLS",
+        async () => {
+          await owner.unsafe(`INSERT INTO ${name}
+          SELECT 20000+g,1,'2035-01-01'::timestamptz+(g/5)*interval '1 microsecond','bulk',0
+          FROM generate_series(1,12000) g`);
+          await owner.unsafe(
+            `CREATE INDEX ${name}_seek ON ${name} (tenant_id,stamp,id); ANALYZE ${name}`,
+          );
+          await scope(1, async () => {
+            const active = getActiveDatabaseConnection(runtime as unknown as SqlDatabaseConnection);
+            const [boundary] = await active.unsafe<{ stamp: string; id: string }>(
+              `SELECT stamp::text AS stamp,id::text AS id FROM ${name} WHERE tenant_id=1 AND id=26000`,
+            );
+            expect(boundary).toBeDefined();
+            for (const direction of ["asc", "desc"] as const) {
+              const ordering = orderBy.map((item) => ({ ...item, direction }));
+              let query = "";
+              let params: readonly unknown[] = [];
+              const page = await runWithDatabaseConnection(
+                {
+                  async unsafe<T>(sql: string, values: readonly unknown[] = []) {
+                    query = sql;
+                    params = values;
+                    return active.unsafe<T>(sql, values);
+                  },
+                },
+                () =>
+                  repo
+                    .query()
+                    .where({ tenant_id: 1 })
+                    .keysetPaginate({
+                      perPage: 20,
+                      orderBy: ordering,
+                      cursor: {
+                        version: 1,
+                        order: ordering,
+                        values: [boundary!.stamp, boundary!.id],
+                      },
+                    }),
+              );
+              expect(page.data).toHaveLength(20);
+              expect(page.data.every((row) => row.tenant_id === 1)).toBe(true);
+              const [row] = await active.unsafe<{
+                "QUERY PLAN": Array<{ Plan: Record<string, unknown> }>;
+              }>(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query}`, params);
+              expect(row).toBeDefined();
+              let scanned = 0;
+              let filtered = 0;
+              let range = false;
+              const walk = (node: Record<string, unknown>) => {
+                if (
+                  String(node["Index Name"] ?? "") === `${name}_seek` &&
+                  String(node["Index Cond"] ?? "").includes("ROW")
+                )
+                  range = true;
+                if (String(node["Node Type"]).includes("Scan"))
+                  scanned += Number(node["Actual Rows"] ?? 0) * Number(node["Actual Loops"] ?? 1);
+                filtered +=
+                  Number(node["Rows Removed by Filter"] ?? 0) * Number(node["Actual Loops"] ?? 1);
+                for (const child of (node.Plans ?? []) as Record<string, unknown>[]) walk(child);
+              };
+              walk(row!["QUERY PLAN"][0]!.Plan);
+              expect(range).toBe(true);
+              expect(scanned).toBeLessThanOrEqual(32);
+              expect(filtered).toBeLessThanOrEqual(32);
+              expect(page.data.map((row) => row.id)).toEqual(
+                direction === "desc"
+                  ? Array.from({ length: 20 }, (_, i) => 25999 - i)
+                  : Array.from({ length: 20 }, (_, i) => 26001 + i),
+              );
+            }
+          });
         },
       );
     },
