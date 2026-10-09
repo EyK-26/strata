@@ -40,6 +40,7 @@ import type {
   ModelWhere,
   ModelWriteValues,
   MutationValues,
+  QueryLockOptions,
   QueryOptions,
   QueryWhere,
   UpdateValues,
@@ -695,6 +696,16 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
           >,
       );
     });
+  }
+
+  lockForUpdate(options: QueryLockOptions = {}): this {
+    this.query.lockForUpdate(options);
+    return this;
+  }
+
+  sharedLock(options: QueryLockOptions = {}): this {
+    this.query.sharedLock(options);
+    return this;
   }
 
   orderBy(orderBy: QueryOptions<ModelAttributes<TModel>>["orderBy"]): this {

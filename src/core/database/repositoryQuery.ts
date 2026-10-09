@@ -12,7 +12,7 @@ import type {
   MorphToRelation,
 } from "./relationships.ts";
 import { getByRelationKey } from "./relationships.ts";
-import type { QueryJoin, QueryOptions, QueryWhere } from "./types.ts";
+import type { QueryJoin, QueryLockOptions, QueryOptions, QueryWhere } from "./types.ts";
 import { WhereBuilder, type WhereNode } from "./whereBuilder.ts";
 
 type LoadedRow = Record<string, unknown>;
@@ -105,6 +105,22 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     }
 
     this.whereNodes.push({ kind: "or", where: input });
+    return this;
+  }
+
+  lockForUpdate(options: QueryLockOptions = {}): this {
+    this.queryOptions = {
+      ...this.queryOptions,
+      lock: { ...options, of: options.of ? [...options.of] : undefined, mode: "update" },
+    };
+    return this;
+  }
+
+  sharedLock(options: QueryLockOptions = {}): this {
+    this.queryOptions = {
+      ...this.queryOptions,
+      lock: { ...options, of: options.of ? [...options.of] : undefined, mode: "share" },
+    };
     return this;
   }
 

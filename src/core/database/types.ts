@@ -71,7 +71,15 @@ type QuerySelectItem =
   | { kind: "subqueryCount"; sql: string; params: readonly unknown[]; as: string }
   | { kind: "tsRank"; table: string; column: string; query: string; as: string };
 
+type QueryLockOptions = {
+  wait?: "wait" | "nowait" | "skipLocked";
+  /** PostgreSQL table names in this query; aliases are not inferred. */
+  of?: readonly string[];
+};
+type QueryLock = QueryLockOptions & { mode: "update" | "share" };
+
 interface QueryOptions<TEntity extends object> {
+  lock?: QueryLock;
   whereNodes?: WhereNode<TEntity>[];
   where?: QueryWhere<TEntity>;
   orderBy?: QueryOrder<TEntity> | QueryOrder<TEntity>[] | QueryOrderShorthand<TEntity>;
@@ -100,6 +108,8 @@ export type {
   QueryFilterValue,
   QueryJoin,
   QueryJoinOn,
+  QueryLock,
+  QueryLockOptions,
   QueryOperator,
   QueryOptions,
   QueryOrder,
