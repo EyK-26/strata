@@ -120,10 +120,12 @@ function compileColumn(
   }
 
   if (column.isPrimary && mode === "create") {
-    if (driver === "sqlite") {
+    if (driver === "sqlite" && column.autoIncrement) {
       parts.push("PRIMARY KEY AUTOINCREMENT");
     } else {
-      parts.push("PRIMARY KEY");
+      parts.push(
+        driver === "sqlite" && !column.isNullable ? "PRIMARY KEY NOT NULL" : "PRIMARY KEY",
+      );
     }
   } else if (!column.isNullable) {
     parts.push("NOT NULL");

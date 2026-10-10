@@ -308,7 +308,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.11");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.12");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
