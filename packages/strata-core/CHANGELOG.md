@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.8
+
+- Add bounded read-only Postgres outbox metrics
+
 ## 2.2.7
 
 - Where an ordinary operation needs SQL because the framework cannot express it

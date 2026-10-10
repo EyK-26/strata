@@ -1,6 +1,6 @@
 {
   "name": "create-strata",
-  "version": "2.2.7",
+  "version": "2.2.8",
   "description": "Create a new Strata app. Interactive wizard; choose each layer; one database engine.",
   "type": "module",
   "license": "MIT",
