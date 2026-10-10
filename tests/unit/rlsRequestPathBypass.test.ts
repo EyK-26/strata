@@ -174,10 +174,10 @@ test("outbox metrics bypass is confined to bounded read-only platform observatio
   const collector = await readFile(join(repoRoot, "src/core/events/outbox/metrics.ts"), "utf8");
   expect([...collector.matchAll(/runWithMigrationBypass\(/g)]).toHaveLength(1);
   const lifecycle = await readFile(
-    join(repoRoot, "src/core/database/postgresReadOnlyCollector.ts"),
+    join(repoRoot, "src/core/database/readOnlyCollector.ts"),
     "utf8",
   );
-  expect(collector).toContain("createPostgresReadOnlyCollector(");
+  expect(collector).toContain("createReadOnlyCollector(");
   expect(lifecycle).toContain("hasActiveTransaction()");
   expect(lifecycle).toContain("SET TRANSACTION READ ONLY");
   expect(lifecycle).toContain("statement_timeout");
@@ -196,7 +196,7 @@ test("outbox metrics bypass is confined to bounded read-only platform observatio
 
 test("failed-job observation uses a bounded ID projection without an RLS bypass", async () => {
   const collector = await readFile(join(repoRoot, "src/core/queue/failedJobMetrics.ts"), "utf8");
-  expect(collector).toContain("createPostgresReadOnlyCollector(");
+  expect(collector).toContain("createReadOnlyCollector(");
   expect(collector).toContain('.project(["id"], sampleLimit + 1)');
   expect(collector).toContain("NOT c.relrowsecurity");
   expect(collector).toContain("i.indisprimary");

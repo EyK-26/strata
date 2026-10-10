@@ -877,14 +877,14 @@ const { routes, config, context } = await bootstrapApp({
   runtimeMetrics: {
     // Match the deployed Redis queue transport; this does not convert queues.
     queue: { redisUrl, transport: "streams", timeoutMs: 1000 },
-    // Enable only on Postgres after explicitly installing the corresponding schema.
+    // Enable on Postgres or file-backed SQLite after explicitly installing the corresponding schema.
     // outbox: { sampleLimit: 500, timeoutMs: 1000 },
     // failedJobs: { sampleLimit: 500, timeoutMs: 1000 },
   },
 });
 \`\`\`
 
-The generated provider drains owned SQL collectors through \`context.drain()\` before database closure, including workers and startup-failure cleanup. Keep the generated HTTP admission/drain and provider lifecycle order. Observation factories never migrate, seed, start a worker, or enable durable delivery. Missing schemas/unsupported SQL dialects produce collector failures on scrape; PostgreSQL collector schema requirements still apply. Tracing and selected-transaction acquisition collectors can be injected as borrowed options; their existing owners retain lifecycle/instrumentation responsibility. Shared queue/outbox/failed-job gauges use a designated target or max across replicas; never sum them. See the framework runtime metrics guide for semantics and operational qualification.
+The generated provider drains owned SQL collectors through \`context.drain()\` before database closure, including workers and startup-failure cleanup. Keep the generated HTTP admission/drain and provider lifecycle order. Observation factories never migrate, seed, start a worker, or enable durable delivery. Missing schemas/unsupported SQL dialects produce collector failures on scrape; Dialect-specific collector schema/index and interruption requirements still apply. Tracing and selected-transaction acquisition collectors can be injected as borrowed options; their existing owners retain lifecycle/instrumentation responsibility. Shared queue/outbox/failed-job gauges use a designated target or max across replicas; never sum them. See the framework runtime metrics guide for semantics and operational qualification.
 `
     : ""
 }${

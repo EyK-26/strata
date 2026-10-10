@@ -22,9 +22,9 @@ describe("durable SQL outbox on SQLite", () => {
   let previous: ReturnType<typeof getBoundDatabaseConnection>;
   let tenancy: string | undefined;
   const migration = createOutboxMigration("outbox", "sqlite");
-  test("metrics reject unsupported dialects rather than returning a healthy zero", async () => {
+  test("metrics reject private in-memory SQLite rather than returning a healthy zero", async () => {
     const collector = createOutboxMetricsCollector();
-    await expect(collector.collect()).rejects.toThrow("require Postgres");
+    await expect(collector.collect()).rejects.toThrow("file-backed SQLite");
     await collector.close();
     for (const timeoutMs of [0, 5001, NaN])
       expect(() => createOutboxMetricsCollector({ timeoutMs })).toThrow();

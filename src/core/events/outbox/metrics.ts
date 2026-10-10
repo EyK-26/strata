@@ -1,4 +1,5 @@
-import { createPostgresReadOnlyCollector } from "../../database/postgresReadOnlyCollector";
+import { currentSqlDialect } from "../../database/dialect";
+import { createReadOnlyCollector } from "../../database/readOnlyCollector";
 import { repositoryConnection as db } from "../../database/repositoryConnection";
 import { runWithMigrationBypass } from "../../tenant/databaseTenantContext";
 
@@ -79,22 +80,85 @@ ${specifications
   )
   .join("\nUNION ALL\n")}`;
 
+async function readSqliteSnapshot(sampleLimit: number, remaining: () => number) {
+  const schema = await db.unsafe<{ valid: number }>(
+    "SELECT 1 AS valid FROM main.sqlite_schema WHERE name='strata_outbox_delivery' AND type='table' AND rootpage>0 LIMIT 1",
+  );
+  if (schema.length !== 1 || schema[0]?.valid !== 1)
+    throw new Error("Outbox metrics require the standard delivery table.");
+  for (const [index, column] of [
+    ["strata_outbox_due", "available_at"],
+    ["strata_outbox_expired", "lease_until"],
+  ]) {
+    const rows = await db.unsafe<{ name: string; seqno: number }>(
+      "SELECT name, seqno FROM pragma_index_info(?, 'main') ORDER BY seqno LIMIT 5",
+      [index],
+    );
+    const expected = ["status", column, "event_id", "listener_name"];
+    if (
+      rows.length !== expected.length ||
+      rows.some((row, i) => row.seqno !== i || row.name !== expected[i])
+    )
+      throw new Error("Outbox metrics require the standard delivery indexes.");
+    remaining();
+  }
+  const [clock] = await db.unsafe<{ now_ms: number }>(
+    "SELECT CAST(unixepoch('subsec') * 1000 AS INTEGER) AS now_ms",
+  );
+  if (!Number.isSafeInteger(clock?.now_ms) || !clock || clock.now_ms < 0)
+    throw new Error("Invalid outbox clock.");
+  const rows = [];
+  for (const spec of specifications) {
+    remaining();
+    const index = spec.column === "lease_until" ? "strata_outbox_expired" : "strata_outbox_due";
+    const predicate = spec.predicate
+      ? ` AND ${spec.column} ${spec.predicate}${spec.predicate === "IS NULL" ? "" : " ?"}`
+      : "";
+    const values = await db.unsafe<{ timestamp_ms: number | null }>(
+      `SELECT ${spec.column} AS timestamp_ms
+      FROM strata_outbox_delivery INDEXED BY ${index} WHERE status = ?${predicate}
+      ORDER BY ${spec.column}, event_id, listener_name LIMIT ?`,
+      [
+        spec.status,
+        ...(spec.predicate && spec.predicate !== "IS NULL" ? [clock.now_ms] : []),
+        sampleLimit + 1,
+      ],
+    );
+    const timestamp = values[0]?.timestamp_ms;
+    if (
+      spec.age &&
+      values.length &&
+      (!Number.isSafeInteger(timestamp) || timestamp == null || timestamp < 0)
+    )
+      throw new Error("Invalid outbox timestamp.");
+    rows.push({
+      state: spec.state,
+      count: values.length,
+      lateness_ms: spec.age ? Math.max(0, clock.now_ms - (timestamp ?? clock.now_ms)) : null,
+    });
+  }
+  return rows;
+}
+
 /** Explicit platform observation, using the same transaction-local RLS bypass as coordination.
- * Initially Postgres-only: other engines fail rather than receiving a false empty snapshot.
+ * Postgres uses scoped bypass; file-backed SQLite uses an isolated read-only snapshot.
  */
 function createOutboxMetricsCollector(options: OutboxMetricsOptions = {}): OutboxMetricsCollector {
   const timeoutMs = options.timeoutMs ?? 1000;
   const sampleLimit = options.sampleLimit ?? 500;
   if (!Number.isSafeInteger(sampleLimit) || sampleLimit < 1 || sampleLimit > 1000)
     throw new TypeError("Outbox metrics sample limit must be between 1 and 1000.");
-  return createPostgresReadOnlyCollector("Outbox metrics", timeoutMs, (remaining) =>
-    runWithMigrationBypass(async () => {
+  return createReadOnlyCollector("Outbox metrics", timeoutMs, async (remaining) => {
+    const read = async () => {
       remaining();
-      const rows = await db.unsafe<{
-        state: string;
-        count: number | string;
-        lateness_ms: number | string | null;
-      }>(snapshotQuery, [sampleLimit + 1]);
+      const rows =
+        currentSqlDialect().driver === "sqlite"
+          ? await readSqliteSnapshot(sampleLimit, remaining)
+          : await db.unsafe<{
+              state: string;
+              count: number | string;
+              lateness_ms: number | string | null;
+            }>(snapshotQuery, [sampleLimit + 1]);
       remaining();
       if (rows.length !== specifications.length)
         throw new Error("Invalid outbox metrics response.");
@@ -117,8 +181,9 @@ function createOutboxMetricsCollector(options: OutboxMetricsOptions = {}): Outbo
         };
       });
       return { sampleLimit, states };
-    }),
-  );
+    };
+    return currentSqlDialect().driver === "pgsql" ? runWithMigrationBypass(read) : read();
+  });
 }
 
 function renderOutboxMetrics(snapshot: OutboxMetricsSnapshot): string {

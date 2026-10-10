@@ -1,6 +1,6 @@
-import { hasActiveDatabaseConnection } from "./connectionContext";
+import { hasActiveDatabaseConnection, runWithDatabaseConnection } from "./connectionContext";
 import { currentSqlDialect } from "./dialect";
-import { repositoryConnection as db } from "./repositoryConnection";
+import { repositoryConnection as db, resolveRepositoryConnection } from "./repositoryConnection";
 import { hasActiveTransaction, runInTransaction } from "./transaction";
 
 interface ReadOnlyCollector<T> {
@@ -8,7 +8,7 @@ interface ReadOnlyCollector<T> {
   close(): Promise<void>;
 }
 /** Internal shared observation lifecycle. No bypass, payload or tenant enumeration. */
-function createPostgresReadOnlyCollector<T>(
+function createReadOnlyCollector<T>(
   name: string,
   timeoutMs: number,
   collect: (remaining: () => number) => Promise<T>,
@@ -22,8 +22,10 @@ function createPostgresReadOnlyCollector<T>(
       if (closed) throw new Error(`${name} collector is closed.`);
       if (hasActiveTransaction() || hasActiveDatabaseConnection())
         throw new Error(`${name} require an independent transaction.`);
-      if (currentSqlDialect().driver !== "pgsql")
-        throw new Error(`${name} currently require Postgres.`);
+      const driver = currentSqlDialect().driver;
+      const pool = resolveRepositoryConnection();
+      if (driver !== "pgsql" && driver !== "sqlite")
+        throw new Error(`${name} require Postgres or an interruptible file-backed SQLite adapter.`);
       if (active) throw new Error(`${name} collection is still settling.`);
       const deadline = performance.now() + timeoutMs;
       let expired = false;
@@ -34,17 +36,37 @@ function createPostgresReadOnlyCollector<T>(
         if (expired || value < 1) throw new Error(`${name} collection timed out.`);
         return value;
       };
-      const work = runInTransaction(
-        async () => {
-          await db.unsafe("SELECT set_config('statement_timeout', $1, true)", [`${remaining()}ms`]);
-          await db.unsafe("SET TRANSACTION READ ONLY");
-          remaining();
-          const result = await collect(remaining);
-          remaining();
-          return result;
-        },
-        { acquisitionSignal: acquisition.signal },
-      );
+      const work =
+        driver === "pgsql"
+          ? runInTransaction(
+              async () => {
+                await db.unsafe("SELECT set_config('statement_timeout', $1, true)", [
+                  `${remaining()}ms`,
+                ]);
+                await db.unsafe("SET TRANSACTION READ ONLY");
+                remaining();
+                const result = await collect(remaining);
+                remaining();
+                return result;
+              },
+              { acquisitionSignal: acquisition.signal },
+            )
+          : (async () => {
+              if (!pool.observeReadOnly)
+                throw new Error(
+                  `${name} require Postgres or an interruptible file-backed SQLite adapter.`,
+                );
+              return pool.observeReadOnly(
+                async (connection) =>
+                  await runWithDatabaseConnection(connection, async () => {
+                    remaining();
+                    const result = await collect(remaining);
+                    remaining();
+                    return result;
+                  }),
+                { signal: acquisition.signal, timeoutMs: remaining() },
+              );
+            })();
       active = work;
       void work
         .finally(() => {
@@ -74,4 +96,4 @@ function createPostgresReadOnlyCollector<T>(
   };
 }
 
-export { createPostgresReadOnlyCollector };
+export { createReadOnlyCollector };

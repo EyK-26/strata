@@ -12,7 +12,7 @@ if (!redisUrl) throw new Error("REDIS_URL is required");
 const { routes, config, context } = await bootstrapApp({
   runtimeMetrics: {
     queue: { redisUrl, transport: "streams", timeoutMs: 1000 },
-    // Postgres only, after explicitly deploying these schemas:
+    // Postgres or file-backed SQLite, after explicitly deploying these schemas:
     // outbox: { sampleLimit: 500, timeoutMs: 1000 },
     // failedJobs: { sampleLimit: 500, timeoutMs: 1000 },
   },
@@ -61,7 +61,7 @@ This is the Redis observation slice of [#139](https://github.com/EyK-26/strata/i
 
 Tests cover both transports, empty/pre-consumer state, ready/inflight/retry/quarantine state, capped output, unchanged source state, three independent processes, wrong key types, deadline/connection cleanup and concurrent scraping. Environment-specific alert routing, thresholds, sustained scrape/load costs, multi-worker recovery and failure drills remain required before production promotion.
 
-## Opt-in SQL outbox observations (Postgres)
+## Opt-in SQL outbox observations
 
 ```ts
 import { createOutboxMetricsCollector } from "@getstrata/core/events/outbox";
@@ -73,7 +73,7 @@ const metrics = createMetricsRoutes({ outbox: outboxMetrics });
 // Queue and outbox options may be enabled together; their failures are independent.
 ```
 
-This is an explicit **platform-wide** observation using the framework's existing transaction-local migration bypass. It must run outside business/tenant transactions and uses the bound runtime connection with SELECT access to the installed outbox schema; no administrative URL, superuser or BYPASSRLS role is needed. It never invokes a listener, writes a delivery, loads event payloads or enumerates tenants/listeners. The collector is initially Postgres-only: opting in on SQLite/MySQL fails with an unavailable signal rather than emitting zero. Their outbox delivery mechanisms remain supported and unchanged.
+This is an explicit **platform-wide** observation using the framework's existing transaction-local migration bypass. It must run outside business/tenant transactions and uses the bound runtime connection with SELECT access to the installed outbox schema; no administrative URL, superuser or BYPASSRLS role is needed. It never invokes a listener, writes a delivery, loads event payloads or enumerates tenants/listeners. Postgres keeps this scoped transaction. File-backed SQLite instead uses the adapter’s independent, interruptible read-only snapshot with no tenant bypass. MySQL remains unavailable until its interruptible observation adapter is installed; delivery mechanisms are unchanged.
 
 `sampleLimit` is 1–1,000 (default 500). One SQL snapshot, using database wall-clock time, reads at most limit+1 records from each of six indexed state ranges. Completed history is excluded. Existing `(status,available_at,event_id,listener_name)` and `(status,lease_until,event_id,listener_name)` indexes are required; the standard outbox migration already creates them. No schema change is needed. Real restricted-role RLS `EXPLAIN ANALYZE` regressions with 20,000 completed and 1,000 pending deliveries verify index seeks and capped row reads. Keep database statistics current and measure the plan/scrape cost against your production distribution.
 
@@ -143,7 +143,7 @@ These are process-local observations of **selected `runInTransaction` outer rese
 Tests cover saturated restricted-role Postgres waits, native cancellation without late admission, unchanged tenant scopes/savepoints, error identity, release and business failure boundaries, simultaneous waits, immutable snapshots, 10,000 observations with constant histogram/scrape cardinality, authenticated no-SQL scraping and invalid observation rejection. The API/type fixtures compile against source and packed root/subpath exports. Operational alert thresholds and sustained multi-process load/recovery qualification remain #139 work, alongside additional outbox dialects. #140 remains separate.
 
 
-## Opt-in SQL failed-job observations (Postgres)
+## Opt-in SQL failed-job observations
 
 ```ts
 import { createFailedJobMetricsCollector } from "@getstrata/core/queue/queueMetrics";
@@ -162,8 +162,16 @@ The collector observes retained records in the framework's **global** `failed_jo
 
 These are shared-database gauges. Use one designated collector or `max` across replicas reading the same schema; never sum them into a backlog total. No job/tenant/priority/error labels or IDs appear. Failed records require operator replay/removal; this collector deliberately emits **no age**. The standard schema lacks a time index that supports a bounded oldest-failure query, and oldest ID is not oldest failure time. Do not invent an age from that ordering or label terminal failed records as automatically actionable work.
 
-Initially Postgres-only, using the existing runtime role's SELECT access; there is **no RLS bypass** or administrative credential. A metadata lookup requires a persistent, ordinary global table with a valid single integer-ID primary key and no enabled RLS. RLS-enabled, partitioned, temporary/unlogged, view-backed or differently keyed schemas fail explicitly, rather than producing a misleading hidden zero or falling back to a table sort. A transaction-local ACCESS SHARE lock prevents concurrent DDL/schema/RLS changes between validation and projection. The lock and catalog validation are Postgres mechanisms; the ordinary data read uses the ORM.
+On Postgres, using the existing runtime role's SELECT access; there is **no RLS bypass** or administrative credential. A metadata lookup requires a persistent, ordinary global table with a valid single integer-ID primary key and no enabled RLS. RLS-enabled, partitioned, temporary/unlogged, view-backed or differently keyed schemas fail explicitly, rather than producing a misleading hidden zero or falling back to a table sort. A transaction-local ACCESS SHARE lock prevents concurrent DDL/schema/RLS changes between validation and projection. The lock and catalog validation are Postgres mechanisms; the ordinary data read uses the ORM.
 
 The collector and outbox observations share one internal read-only lifecycle: a 1–5,000ms response deadline (default 1,000ms), native cancellable checkout, transaction-local statement timeout, rejection of any active framework or raw connection scope, one unsettled transaction per collector and `close()` draining release/rollback. Outbox's existing narrowly scoped platform bypass remains confined to its callback; the shared helper contains none. Authorized concurrent scrapes of a route instance coalesce. Collection does not write data; local settings/locks restore on settlement. Underlying SQL/rollback/network cleanup can outlast the response deadline, so lifecycle hard deadlines and infrastructure supervision still matter. The row limit bounds returned IDs, not all physical index/MVCC work in a bloated or poorly maintained database; keep vacuum/statistics healthy and qualify costs against the production distribution.
 
 Regressions cover 20,000 private records with an actual restricted-role primary-index `EXPLAIN ANALYZE`, empty/capped/recovered state, unchanged private source data, RLS/key/persistence/missing-table rejection, twenty authenticated concurrent blocked scrapes, native pool cancellation, rollback/release draining, three independent processes, malformed observations and unchanged outbox lease/worker/crash behavior. Both new source files are coverage-enforced at 100%, with no added exemptions. Additional SQL dialects and sustained load/operational qualification remain #139 work; encryption rotation (#140) remains separate.
+
+### SQLite collector requirements and costs
+
+File-backed official SQLite adapters now support both collectors through the independent observation capability described in [DATABASE.md](DATABASE.md#independent-sqlite-observations). A disposable read-only Bun process per collection avoids blocking the request event loop or changing the business connection. It does not inherit application environment/config preloads. Deadlines include startup and IPC; close drains process exit before the business connection closes. In-memory databases and custom adapters lacking this capability fail explicitly. No SQL schema is created or migrated by observation.
+
+Failed-job validation requires a persistent ordinary main-schema table with one integer ID primary key. Data still uses the ORM ID-only projection. Outbox validation requires the ordinary delivery table and both standard four-column indexes; fixed index hints prohibit fallback scans/sorts. Database time and six capped indexed ranges are read in one snapshot. No SQLite tenant bypass, payload, error message, event/listener/tenant identity or file path enters metrics. SQLite query plans prove covering-index range reads and no temporary order sort against large retained histories; LIMIT bounds returned rows, not all filesystem/MVCC work. Keep vacuum/statistics/storage healthy and measure startup/scrape cost. Three processes reading one file report shared gauges: use a designated target or max, never sum. Different independent files represent different databases and must be identified by deployment target labels.
+
+Postgres cancellation, transaction-local statement timeout, RLS bypass scope and histogram acquisition semantics are unchanged. Additional MySQL observations and sustained deployment qualification remain #139 work; encryption rotation remains #140.
