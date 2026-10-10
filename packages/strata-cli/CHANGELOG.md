@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.6
+
+-  fix(cli): relay shutdown to children and simplify container launcher
+
 ## 2.2.5
 
 -  fix(starter): keep container readiness independent of API admission
