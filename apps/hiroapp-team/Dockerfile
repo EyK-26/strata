@@ -1,10 +1,10 @@
 # Production image. Build once, run with env from your platform; see README "Deploy".
-FROM oven/bun:1.4 AS deps
+FROM oven/bun:1.4.3 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-FROM oven/bun:1.4-slim AS runtime
+FROM oven/bun:1.4.3-slim AS runtime
 WORKDIR /app
 ENV APP_ENV=production
 ENV AUTH_DEV_HEADERS=false

@@ -1,7 +1,7 @@
 # check=skip=SecretsUsedInArgOrEnv
 # APP_KEY_PREFIX namespaces cookies and Redis keys. It is not a secret, but the
 # linter matches any ENV whose name contains KEY.
-FROM oven/bun:1.4 AS base
+FROM oven/bun:1.4.3 AS base
 WORKDIR /app
 
 FROM base AS install

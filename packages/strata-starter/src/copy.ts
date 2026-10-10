@@ -10,6 +10,7 @@ import {
 import { join } from "node:path";
 
 const PLACEHOLDER = /\{\{PROJECT_NAME\}\}/g;
+const LOCAL_ARTIFACTS = new Set(["node_modules", "dist", "coverage", ".git", ".DS_Store"]);
 
 function copyTree(
   source: string,
@@ -20,7 +21,7 @@ function copyTree(
   mkdirSync(target, { recursive: true });
 
   for (const entry of readdirSync(source)) {
-    if (skipNames.has(entry) || entry === ".DS_Store") {
+    if (skipNames.has(entry) || LOCAL_ARTIFACTS.has(entry)) {
       continue;
     }
 
@@ -47,6 +48,7 @@ function copyOverlayTree(sourceRoot: string, targetRoot: string): void {
   }
 
   for (const entry of readdirSync(sourceRoot, { withFileTypes: true })) {
+    if (LOCAL_ARTIFACTS.has(entry.name)) continue;
     const sourcePath = join(sourceRoot, entry.name);
     const targetPath = join(targetRoot, entry.name);
 

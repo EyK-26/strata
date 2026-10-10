@@ -1,6 +1,6 @@
 # @getstrata/bootstrap
 
-Application bootstrap for [Strata](https://github.com/EyK-26/strata) apps: HttpKernel, service container, and web session helpers. Requires Bun (tested on 1.4.x).
+Application bootstrap for [Strata](https://github.com/EyK-26/strata) apps: HttpKernel, service container, and web session helpers. Requires Bun >=1.4.3 (tested on 1.4.3).
 
 Generate an app rather than wiring this by hand:
 

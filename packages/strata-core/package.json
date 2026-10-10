@@ -967,7 +967,7 @@
     }
   },
   "engines": {
-    "bun": ">=1.4.0"
+    "bun": ">=1.4.3"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",

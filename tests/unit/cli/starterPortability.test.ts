@@ -537,7 +537,11 @@ describe("generated deploy files", () => {
       "--yes",
     ]);
     const dockerfile = await readFile(join(app, "Dockerfile"), "utf8");
-    expect(dockerfile).toContain("FROM oven/bun:1.4 AS deps");
+    expect(dockerfile).toContain("FROM oven/bun:1.4.3 AS deps");
+    expect(await readFile(join(app, ".bun-version"), "utf8")).toBe("1.4.3\n");
+    const manifest = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
+    expect(manifest.engines.bun).toBe(">=1.4.3");
+    expect(manifest.overrides["bun-types"]).toBe(">=1.4.3");
     expect(dockerfile).toContain("bun install --frozen-lockfile --production");
     expect(dockerfile).toContain("ENV APP_ENV=production");
     expect(dockerfile).toContain("ENV AUTH_DEV_HEADERS=false");
@@ -572,7 +576,7 @@ describe("generated deploy files", () => {
       "--yes",
     ]);
     const dockerfile = await readFile(join(app, "Dockerfile"), "utf8");
-    expect(dockerfile).toContain("FROM oven/bun:1.4 AS frontend");
+    expect(dockerfile).toContain("FROM oven/bun:1.4.3 AS frontend");
     expect(dockerfile).toContain("COPY --from=frontend /app/frontend/dist ./frontend/dist");
     expect(dockerfile).not.toContain("VOLUME");
 

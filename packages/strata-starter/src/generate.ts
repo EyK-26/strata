@@ -159,6 +159,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   const { targetDir, projectName, layers } = options;
   const src = join(targetDir, "src");
 
+  writeText(join(targetDir, ".bun-version"), "1.4.3\n");
   writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, layers));
   writeText(join(targetDir, ".gitignore"), renderGitignore());
   writeText(
