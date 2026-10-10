@@ -65,6 +65,11 @@ interface DatabaseConnection {
   reserve?(options: {
     signal?: AbortSignal;
   }): Promise<DatabaseConnection & { release(): void | Promise<void> }>;
+  /** Optional independent, interruptible read-only observation; no business transaction or pool slot. */
+  observeReadOnly?<T>(
+    operation: (connection: DatabaseConnection) => Promise<T>,
+    options: { signal: AbortSignal; timeoutMs: number },
+  ): Promise<T>;
   /** SQLite closes synchronously; pooled drivers return a promise. */
   close?(): void | Promise<void>;
 }
