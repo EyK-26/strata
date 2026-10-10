@@ -10,6 +10,7 @@ export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD}@
 export MIGRATION_DATABASE_URL="${MIGRATION_DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD}@localhost:54329/hiroapp_test}"
 export APP_DATABASE_URL="${APP_DATABASE_URL:-postgresql://strata_app:${STRATA_APP_PASSWORD}@localhost:54329/hiroapp_test}"
 export REDIS_URL="${REDIS_URL:-redis://:dev-redis-change-me@localhost:6379}"
+export MYSQL_OBSERVABILITY_ADMIN_URL="${MYSQL_OBSERVABILITY_ADMIN_URL:-mysql://root:dev-mysql-change-me@localhost:33061/mysql}"
 export MYSQL_URL="${MYSQL_URL:-mysql://strata:dev-mysql-change-me@localhost:33061/strata}"
 export PORT="${PORT:-3000}"
 export CACHE_DRIVER="${CACHE_DRIVER:-redis}"

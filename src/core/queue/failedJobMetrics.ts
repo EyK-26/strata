@@ -1,4 +1,5 @@
-import { createPostgresReadOnlyCollector } from "../database/postgresReadOnlyCollector";
+import { currentSqlDialect } from "../database/dialect";
+import { createReadOnlyCollector } from "../database/readOnlyCollector";
 import { repositoryConnection as db } from "../database/repositoryConnection";
 import FailedJobRepository from "./failedJobRepository";
 
@@ -23,6 +24,21 @@ const schemaQuery = `SELECT c.relkind = 'r' AND c.relpersistence = 'p' AND NOT c
     AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
 ) AS supported FROM pg_class c WHERE c.oid = 'failed_job'::regclass`;
 
+const sqliteSchemaQuery = `SELECT 1 AS supported FROM main.sqlite_schema
+WHERE name='failed_job' AND type='table' AND rootpage > 0
+AND (SELECT COUNT(*) FROM pragma_table_xinfo('failed_job', 'main') WHERE pk > 0) = 1
+AND EXISTS (SELECT 1 FROM pragma_table_xinfo('failed_job', 'main')
+  WHERE name='id' AND pk=1 AND upper(type)='INTEGER' AND hidden=0) LIMIT 1`;
+
+const mysqlSchemaQuery = `SELECT 1 AS supported FROM information_schema.TABLES t
+WHERE t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME='failed_job' AND t.TABLE_TYPE='BASE TABLE' AND t.ENGINE='InnoDB'
+AND (SELECT COUNT(*) FROM information_schema.STATISTICS i WHERE i.TABLE_SCHEMA=t.TABLE_SCHEMA
+  AND i.TABLE_NAME=t.TABLE_NAME AND i.INDEX_NAME='PRIMARY')=1
+AND EXISTS(SELECT 1 FROM information_schema.STATISTICS i JOIN information_schema.COLUMNS c
+  ON c.TABLE_SCHEMA=i.TABLE_SCHEMA AND c.TABLE_NAME=i.TABLE_NAME AND c.COLUMN_NAME=i.COLUMN_NAME
+  WHERE i.TABLE_SCHEMA=t.TABLE_SCHEMA AND i.TABLE_NAME=t.TABLE_NAME AND i.INDEX_NAME='PRIMARY'
+    AND i.SEQ_IN_INDEX=1 AND i.COLUMN_NAME='id' AND c.DATA_TYPE IN ('tinyint','smallint','mediumint','int','bigint')) LIMIT 1`;
+
 function createFailedJobMetricsCollector(
   options: FailedJobMetricsOptions = {},
 ): FailedJobMetricsCollector {
@@ -30,14 +46,19 @@ function createFailedJobMetricsCollector(
   if (!Number.isSafeInteger(sampleLimit) || sampleLimit < 1 || sampleLimit > 1000)
     throw new TypeError("Failed-job metrics sample limit must be between 1 and 1000.");
   const repository = new FailedJobRepository();
-  return createPostgresReadOnlyCollector(
+  return createReadOnlyCollector(
     "Failed-job metrics",
     options.timeoutMs ?? 1000,
     async (remaining) => {
       // ACCESS SHARE prevents concurrent DDL/RLS/index changes between validation and projection.
-      await db.unsafe('LOCK TABLE "failed_job" IN ACCESS SHARE MODE');
-      const schema = await db.unsafe<{ supported: boolean }>(schemaQuery);
-      if (schema.length !== 1 || schema[0]?.supported !== true)
+      const driver = currentSqlDialect().driver;
+      const postgres = driver === "pgsql";
+      if (postgres) await db.unsafe('LOCK TABLE "failed_job" IN ACCESS SHARE MODE');
+      if (driver === "mysql") await db.unsafe("SELECT id FROM failed_job LIMIT 0");
+      const schema = await db.unsafe<{ supported: boolean | number }>(
+        postgres ? schemaQuery : driver === "mysql" ? mysqlSchemaQuery : sqliteSchemaQuery,
+      );
+      if (schema.length !== 1 || schema[0]?.supported !== (postgres ? true : 1))
         throw new Error(
           "Failed-job metrics require the standard global table with an ID primary key and no RLS.",
         );

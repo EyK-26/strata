@@ -1,12 +1,22 @@
 import { Database } from "bun:sqlite";
+import { resolve } from "node:path";
+import type { DatabaseConnection } from "./baseRepository.ts";
 import {
   type ActiveDatabaseHandle,
   getActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "./connectionContext.ts";
+import {
+  observeIsolatedReadOnly,
+  type ReadOnlyObservationOptions,
+} from "./isolatedReadOnlyObservation.ts";
 
 type SqliteConnection = ActiveDatabaseHandle & {
   begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T>;
+  observeReadOnly<T>(
+    operation: (connection: DatabaseConnection) => Promise<T>,
+    options: ReadOnlyObservationOptions,
+  ): Promise<T>;
   close(): void;
 };
 
@@ -28,7 +38,8 @@ function createSqliteConnection(filename: string): SqliteConnection {
     throw new Error("SQLite path is not configured. Pass a filename or :memory:.");
   }
 
-  const db = new Database(filename, { create: true });
+  const absoluteFilename = filename === ":memory:" ? filename : resolve(filename);
+  const db = new Database(absoluteFilename, { create: true });
   db.exec("PRAGMA foreign_keys = ON");
   // Web apps run concurrent requests against one file: WAL lets readers proceed
   // during writes and busy_timeout waits instead of throwing SQLITE_BUSY.
@@ -97,6 +108,27 @@ function createSqliteConnection(filename: string): SqliteConnection {
           open = false;
         }
       });
+    },
+    async observeReadOnly<T>(
+      operation: (connection: DatabaseConnection) => Promise<T>,
+      options: ReadOnlyObservationOptions,
+    ): Promise<T> {
+      if (closed) throw new Error("SQLite connection is closed.");
+      if (absoluteFilename === ":memory:")
+        throw new Error("SQL observations require file-backed SQLite.");
+      pending++;
+      try {
+        return await observeIsolatedReadOnly(
+          { driver: "sqlite", filename: absoluteFilename },
+          async (transaction) => {
+            transactions.add(transaction);
+            return await runWithDatabaseConnection(transaction, () => operation(transaction));
+          },
+          options,
+        );
+      } finally {
+        pending--;
+      }
     },
     close(): void {
       if (pending > 0) throw new Error("Drain SQLite operations before closing the connection.");

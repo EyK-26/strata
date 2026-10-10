@@ -1,9 +1,14 @@
 import { missingOptionalPeer } from "../runtime/optionalPeer.ts";
+import type { DatabaseConnection } from "./baseRepository.ts";
 import {
   type ActiveDatabaseHandle,
   getActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "./connectionContext.ts";
+import {
+  observeIsolatedReadOnly,
+  type ReadOnlyObservationOptions,
+} from "./isolatedReadOnlyObservation.ts";
 
 type MysqlPromiseModule = {
   createPool: (config: { uri: string; timezone: string }) => MysqlPool;
@@ -32,6 +37,10 @@ type MysqlPoolConnection = MysqlExecutable & {
 type MysqlConnection = ActiveDatabaseHandle & {
   begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T>;
   close(): Promise<void>;
+  observeReadOnly<T>(
+    operation: (connection: DatabaseConnection) => Promise<T>,
+    options: ReadOnlyObservationOptions,
+  ): Promise<T>;
 };
 
 const MYSQL_SESSION_UTC = "SET time_zone = '+00:00'";
@@ -119,8 +128,14 @@ async function executeMysql<T>(
 function createMysqlAdapter(
   getPool: () => Promise<MysqlExecutable>,
   close: () => Promise<void>,
+  observer?: <T>(
+    operation: (connection: DatabaseConnection) => Promise<T>,
+    options: ReadOnlyObservationOptions,
+  ) => Promise<T>,
 ): MysqlConnection {
   const transactions = new WeakSet<ActiveDatabaseHandle>();
+  const observations = new Set<Promise<unknown>>();
+  let observationsClosed = false;
   const connection: MysqlConnection = {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
       const active = getActiveDatabaseConnection(connection);
@@ -172,7 +187,28 @@ function createMysqlAdapter(
         if (!discard) reserved.release();
       }
     },
-    close,
+    async observeReadOnly<T>(
+      operation: (connection: DatabaseConnection) => Promise<T>,
+      options: ReadOnlyObservationOptions,
+    ): Promise<T> {
+      if (observationsClosed) throw new Error("MySQL observations are closed.");
+      if (!observer) throw new Error("MySQL observations require the URL-backed official adapter.");
+      const work = observer(async (transaction) => {
+        transactions.add(transaction);
+        return await runWithDatabaseConnection(transaction, () => operation(transaction));
+      }, options);
+      observations.add(work);
+      try {
+        return await work;
+      } finally {
+        observations.delete(work);
+      }
+    },
+    async close() {
+      observationsClosed = true;
+      await Promise.allSettled([...observations]);
+      await close();
+    },
   };
   return connection;
 }
@@ -229,13 +265,22 @@ function createMysqlConnection(url: string): MysqlConnection {
     return poolPending;
   }
 
-  return createMysqlAdapter(ensurePool, async () => {
-    if (!poolPending) return;
-    const pending = poolPending;
-    poolPending = undefined;
-    const pool = await pending.catch(() => undefined);
-    await pool?.end();
-  });
+  return createMysqlAdapter(
+    ensurePool,
+    async () => {
+      if (!poolPending) return;
+      const pending = poolPending;
+      poolPending = undefined;
+      const pool = await pending.catch(() => undefined);
+      await pool?.end();
+    },
+    async (operation, options) => {
+      // Reuse optional-peer diagnostics before resolving the child's module.
+      await loadMysql();
+      const module = import.meta.resolve("mysql2/promise");
+      return await observeIsolatedReadOnly({ driver: "mysql", url, module }, operation, options);
+    },
+  );
 }
 
 export type { MysqlConnection, MysqlExecutable, MysqlPool, MysqlPoolConnection };

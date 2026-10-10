@@ -308,7 +308,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.10");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.11");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -1169,7 +1169,7 @@ export default probeModule;
   });
 
   appTest(
-    "generated metrics ownership drains explicit SQL collectors without provisioning them",
+    "generated metrics ownership drains SQL collectors without provisioning an outbox",
     async () => {
       const root = await tempDir();
       const app = generateFromArgs(root, ["metrics-runtime-boot", "--metrics", "--yes"]);
@@ -1209,8 +1209,8 @@ export default probeModule;
         const body = await scrape();
         expect(body).toContain("http_requests_total");
         expect(body).toContain("strata_outbox_collector_success 0");
-        expect(body).toContain("strata_queue_failed_job_collector_success 0");
-        // Unsupported SQL observations must not silently create their schemas or switch dialects.
+        expect(body).toContain("strata_queue_failed_job_collector_success 1");
+        // Observations must not silently create an outbox schema or switch dialects.
         const tables = await getSql().unsafe("SELECT name FROM sqlite_master WHERE type='table'");
         expect(tables.some((row: { name: string }) => row.name === "strata_outbox_delivery")).toBe(
           false,
