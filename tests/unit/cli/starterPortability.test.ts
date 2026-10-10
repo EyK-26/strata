@@ -544,7 +544,7 @@ describe("generated deploy files", () => {
     expect(dockerfile).toContain("USER bun");
     expect(dockerfile).toContain('VOLUME ["/app/storage"]');
     expect(dockerfile).toContain("HEALTHCHECK");
-    expect(dockerfile).toContain('CMD ["bun", "run", "start"]');
+    expect(dockerfile).toContain('CMD ["bun", "./node_modules/.bin/strata", "start"]');
     expect(dockerfile).not.toContain("AS frontend");
 
     const ignore = await readFile(join(app, ".dockerignore"), "utf8");

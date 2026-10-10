@@ -13,7 +13,20 @@ async function spawnBun(app: StrataAppConfig, bunArgs: string[]): Promise<number
     env: process.env,
   });
 
-  return await proc.exited;
+  // The CLI owns this child. A container signals its supervisor, not the server.
+  const signals = ["SIGINT", "SIGTERM"] as const;
+  const relays = signals.map((signal) => {
+    const relay = () => {
+      if (proc.exitCode === null) proc.kill(signal);
+    };
+    process.on(signal, relay);
+    return () => process.off(signal, relay);
+  });
+  try {
+    return await proc.exited;
+  } finally {
+    for (const remove of relays) remove();
+  }
 }
 
 export { bunExecutable, spawnBun };
