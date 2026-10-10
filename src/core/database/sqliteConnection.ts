@@ -7,9 +7,9 @@ import {
   runWithDatabaseConnection,
 } from "./connectionContext.ts";
 import {
-  observeSqliteReadOnly,
+  observeIsolatedReadOnly,
   type ReadOnlyObservationOptions,
-} from "./isolatedSqliteObservation.ts";
+} from "./isolatedReadOnlyObservation.ts";
 
 type SqliteConnection = ActiveDatabaseHandle & {
   begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T>;
@@ -118,8 +118,8 @@ function createSqliteConnection(filename: string): SqliteConnection {
         throw new Error("SQL observations require file-backed SQLite.");
       pending++;
       try {
-        return await observeSqliteReadOnly(
-          absoluteFilename,
+        return await observeIsolatedReadOnly(
+          { driver: "sqlite", filename: absoluteFilename },
           async (transaction) => {
             transactions.add(transaction);
             return await runWithDatabaseConnection(transaction, () => operation(transaction));

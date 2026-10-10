@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
-import { observeSqliteReadOnly } from "../../src/core/database/isolatedSqliteObservation";
+import { observeIsolatedReadOnly } from "../../src/core/database/isolatedReadOnlyObservation";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 async function fixture(
@@ -43,7 +43,11 @@ test("independent read-only SQLite snapshots preserve rows and reject writes", a
     await expect(scope.unsafe("SELECT 1")).rejects.toThrow("closed");
     expect(await db.unsafe("SELECT value FROM source")).toEqual([{ value: "changed" }]);
     await expect(
-      observeSqliteReadOnly(join(filename, "missing"), async () => {}, options()),
+      observeIsolatedReadOnly(
+        { driver: "sqlite", filename: join(filename, "missing") },
+        async () => {},
+        options(),
+      ),
     ).rejects.toThrow("Read-only SQL observation failed");
     await expect(
       db.observeReadOnly(async () => {

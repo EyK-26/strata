@@ -443,9 +443,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.10",
-        "@getstrata/cli": "^2.2.10",
-        "@getstrata/core": "^2.2.10",
+        "@getstrata/bootstrap": "^2.2.11",
+        "@getstrata/cli": "^2.2.11",
+        "@getstrata/core": "^2.2.11",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
@@ -877,7 +877,7 @@ const { routes, config, context } = await bootstrapApp({
   runtimeMetrics: {
     // Match the deployed Redis queue transport; this does not convert queues.
     queue: { redisUrl, transport: "streams", timeoutMs: 1000 },
-    // Enable on Postgres or file-backed SQLite after explicitly installing the corresponding schema.
+    // Enable on Postgres, file-backed SQLite or URL-backed MySQL after explicitly installing the corresponding schema.
     // outbox: { sampleLimit: 500, timeoutMs: 1000 },
     // failedJobs: { sampleLimit: 500, timeoutMs: 1000 },
   },

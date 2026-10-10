@@ -80,9 +80,13 @@ ${specifications
   )
   .join("\nUNION ALL\n")}`;
 
-async function readSqliteSnapshot(sampleLimit: number, remaining: () => number) {
+async function readIndexedSnapshot(sampleLimit: number, remaining: () => number) {
+  const mysql = currentSqlDialect().driver === "mysql";
+  if (mysql) await db.unsafe("SELECT event_id FROM strata_outbox_delivery LIMIT 0");
   const schema = await db.unsafe<{ valid: number }>(
-    "SELECT 1 AS valid FROM main.sqlite_schema WHERE name='strata_outbox_delivery' AND type='table' AND rootpage>0 LIMIT 1",
+    mysql
+      ? "SELECT 1 AS valid FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='strata_outbox_delivery' AND TABLE_TYPE='BASE TABLE' AND ENGINE='InnoDB' LIMIT 1"
+      : "SELECT 1 AS valid FROM main.sqlite_schema WHERE name='strata_outbox_delivery' AND type='table' AND rootpage>0 LIMIT 1",
   );
   if (schema.length !== 1 || schema[0]?.valid !== 1)
     throw new Error("Outbox metrics require the standard delivery table.");
@@ -91,7 +95,9 @@ async function readSqliteSnapshot(sampleLimit: number, remaining: () => number) 
     ["strata_outbox_expired", "lease_until"],
   ]) {
     const rows = await db.unsafe<{ name: string; seqno: number }>(
-      "SELECT name, seqno FROM pragma_index_info(?, 'main') ORDER BY seqno LIMIT 5",
+      mysql
+        ? "SELECT IF(SUB_PART IS NULL AND COLLATION='A' AND IS_VISIBLE='YES', COLUMN_NAME, NULL) AS name, SEQ_IN_INDEX-1 AS seqno FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='strata_outbox_delivery' AND INDEX_NAME=? ORDER BY SEQ_IN_INDEX LIMIT 5"
+        : "SELECT name, seqno FROM pragma_index_info(?, 'main') ORDER BY seqno LIMIT 5",
       [index],
     );
     const expected = ["status", column, "event_id", "listener_name"];
@@ -103,7 +109,9 @@ async function readSqliteSnapshot(sampleLimit: number, remaining: () => number) 
     remaining();
   }
   const [clock] = await db.unsafe<{ now_ms: number }>(
-    "SELECT CAST(unixepoch('subsec') * 1000 AS INTEGER) AS now_ms",
+    mysql
+      ? "SELECT CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AS now_ms"
+      : "SELECT CAST(unixepoch('subsec') * 1000 AS INTEGER) AS now_ms",
   );
   if (!Number.isSafeInteger(clock?.now_ms) || !clock || clock.now_ms < 0)
     throw new Error("Invalid outbox clock.");
@@ -116,7 +124,7 @@ async function readSqliteSnapshot(sampleLimit: number, remaining: () => number) 
       : "";
     const values = await db.unsafe<{ timestamp_ms: number | null }>(
       `SELECT ${spec.column} AS timestamp_ms
-      FROM strata_outbox_delivery INDEXED BY ${index} WHERE status = ?${predicate}
+      FROM strata_outbox_delivery ${mysql ? `FORCE INDEX (${index})` : `INDEXED BY ${index}`} WHERE status = ?${predicate}
       ORDER BY ${spec.column}, event_id, listener_name LIMIT ?`,
       [
         spec.status,
@@ -141,7 +149,7 @@ async function readSqliteSnapshot(sampleLimit: number, remaining: () => number) 
 }
 
 /** Explicit platform observation, using the same transaction-local RLS bypass as coordination.
- * Postgres uses scoped bypass; file-backed SQLite uses an isolated read-only snapshot.
+ * Postgres uses scoped bypass; official SQLite/MySQL adapters use isolated read-only snapshots.
  */
 function createOutboxMetricsCollector(options: OutboxMetricsOptions = {}): OutboxMetricsCollector {
   const timeoutMs = options.timeoutMs ?? 1000;
@@ -152,8 +160,8 @@ function createOutboxMetricsCollector(options: OutboxMetricsOptions = {}): Outbo
     const read = async () => {
       remaining();
       const rows =
-        currentSqlDialect().driver === "sqlite"
-          ? await readSqliteSnapshot(sampleLimit, remaining)
+        currentSqlDialect().driver !== "pgsql"
+          ? await readIndexedSnapshot(sampleLimit, remaining)
           : await db.unsafe<{
               state: string;
               count: number | string;

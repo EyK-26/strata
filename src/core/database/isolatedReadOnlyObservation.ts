@@ -1,20 +1,31 @@
 import type { DatabaseConnection } from "./baseRepository";
 
 // An isolated CLI process keeps synchronous SQLite I/O off the request event loop.
-// Builtins only; env files and inherited application credentials are not loaded.
+// MySQL loads only its resolved optional peer; app config/env files are not loaded.
 const childSource = `
 import { Database } from 'bun:sqlite';
 let db;
-process.on('message', message => {
+let mysql;
+process.on('message', async message => {
   try {
     if (message.init) {
-      db = new Database(message.filename, { readonly: true, create: false });
-      db.exec('PRAGMA busy_timeout = 0');
-      db.exec('PRAGMA query_only = ON');
-      db.exec('BEGIN');
+      if (message.driver === 'mysql') {
+        const module = await import(message.module);
+        mysql = await module.createConnection({ uri: message.url, timezone: 'Z', connectTimeout: message.timeoutMs });
+        await mysql.query("SET time_zone = '+00:00'");
+        await mysql.query('SET SESSION max_execution_time = ' + message.timeoutMs);
+        await mysql.query('SET SESSION lock_wait_timeout = 1');
+        await mysql.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        await mysql.query('START TRANSACTION READ ONLY');
+      } else {
+        db = new Database(message.filename, { readonly: true, create: false });
+        db.exec('PRAGMA busy_timeout = 0');
+        db.exec('PRAGMA query_only = ON');
+        db.exec('BEGIN');
+      }
       process.send({ ok: true, rows: [] });
     } else {
-      const rows = db.query(message.query).all(...message.params);
+      const rows = mysql ? (message.params.length ? await mysql.execute(message.query, message.params) : await mysql.query(message.query))[0] : db.query(message.query).all(...message.params);
       process.send({ ok: true, rows });
     }
   } catch {
@@ -28,8 +39,10 @@ interface ReadOnlyObservationOptions {
   signal: AbortSignal;
   timeoutMs: number;
 }
-async function observeSqliteReadOnly<T>(
-  filename: string,
+async function observeIsolatedReadOnly<T>(
+  profile:
+    | { driver: "sqlite"; filename: string }
+    | { driver: "mysql"; url: string; module: string },
   operation: (connection: DatabaseConnection) => Promise<T>,
   options: ReadOnlyObservationOptions,
 ): Promise<T> {
@@ -89,13 +102,15 @@ async function observeSqliteReadOnly<T>(
   try {
     if (options.signal.aborted) onAbort();
     const work = (async () => {
-      await request({ init: true, filename });
+      await request({ init: true, ...profile, timeoutMs: options.timeoutMs });
       options.signal.throwIfAborted();
       return operation({
         async unsafe<TValue>(query: string, params: readonly unknown[] = []) {
           return (await request({
             query,
-            params: params.map((value) => (value instanceof Date ? value.toISOString() : value)),
+            params: params.map((value) =>
+              profile.driver === "sqlite" && value instanceof Date ? value.toISOString() : value,
+            ),
           })) as TValue[];
         },
       });
@@ -112,4 +127,4 @@ async function observeSqliteReadOnly<T>(
 }
 
 export type { ReadOnlyObservationOptions };
-export { observeSqliteReadOnly };
+export { observeIsolatedReadOnly };

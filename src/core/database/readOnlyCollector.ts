@@ -24,8 +24,8 @@ function createReadOnlyCollector<T>(
         throw new Error(`${name} require an independent transaction.`);
       const driver = currentSqlDialect().driver;
       const pool = resolveRepositoryConnection();
-      if (driver !== "pgsql" && driver !== "sqlite")
-        throw new Error(`${name} require Postgres or an interruptible file-backed SQLite adapter.`);
+      if (driver !== "pgsql" && driver !== "sqlite" && driver !== "mysql")
+        throw new Error(`${name} require Postgres or an interruptible SQLite/MySQL adapter.`);
       if (active) throw new Error(`${name} collection is still settling.`);
       const deadline = performance.now() + timeoutMs;
       let expired = false;
@@ -54,7 +54,7 @@ function createReadOnlyCollector<T>(
           : (async () => {
               if (!pool.observeReadOnly)
                 throw new Error(
-                  `${name} require Postgres or an interruptible file-backed SQLite adapter.`,
+                  `${name} require Postgres or an interruptible SQLite/MySQL adapter.`,
                 );
               return pool.observeReadOnly(
                 async (connection) =>

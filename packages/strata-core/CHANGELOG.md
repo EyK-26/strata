@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.11
+
+Add independently interruptible read-only SQLite and MySQL observations; extend bounded failed-job and outbox metrics to file-backed SQLite and URL-backed MySQL with schema/index guards, real-engine regressions and three-process consistency tests. Preserve Postgres RLS and business transaction behavior.
+
 ## 2.2.10
 
 - Add bounded OpenTelemetry SDK health observations and selected native transaction-acquisition histograms through explicit metrics options.
