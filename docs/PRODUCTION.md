@@ -42,13 +42,15 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md).
 
 | Feature flag | Required env | Notes |
 |--------------|--------------|-------|
-| `FEATURE_FIELD_ENCRYPTION=true` | `KMS_ENCRYPTION_KEY` (32-byte hex or base64) | Encrypted columns you opt into |
-| `FEATURE_MFA=true` | `KMS_ENCRYPTION_KEY` (32-byte hex or base64) | Required to store TOTP secrets, including local/dogfood |
+| `FEATURE_FIELD_ENCRYPTION=true` | `KMS_ENCRYPTION_KEY` (32-byte hex or base64), or explicit `KMS_ENCRYPTION_KEYRING` | Encrypted columns you opt into |
+| `FEATURE_MFA=true` | `KMS_ENCRYPTION_KEY` (32-byte hex or base64), or explicit `KMS_ENCRYPTION_KEYRING` | Required to store TOTP secrets, including local/dogfood |
 | `FEATURE_SCIM=true` | `SCIM_BEARER_TOKEN` (rotated) | Optional `SCIM_TENANT_TOKENS` per tenant |
 | `FEATURE_BILLING=true` | `STRIPE_WEBHOOK_SECRET` | Stripe SDK stays in the app, not core |
 | `FEATURE_SIEM_EXPORT=true` | `SIEM_EXPORT_URL` (optional `SIEM_EXPORT_TOKEN`) | Warns if missing; export job no-ops |
 | `FEATURE_OAUTH=true` | Provider credentials (`GITHUB_*`, `OIDC_*`) | See `.env.example` |
 | `FEATURE_SAML=true` | `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`, `SAML_SP_ENTITY_ID`, `SAML_ACS_URL`, `SAML_IDP_ISSUER` | Signed responses are required. Production boot rejects `SAML_WANT_RESPONSE_SIGNED=false`. Install `@node-saml/node-saml`. |
+
+Keyring configuration is validated at boot and by `secrets:check`, including disabled-feature configurations. Use the [reader-first rotation contract](ENCRYPTION-ROTATION.md#auth-configuration-and-reader-first-rollout); never replace a retained key or lookup key in place.
 
 ## Recommended (not all enforced at boot)
 

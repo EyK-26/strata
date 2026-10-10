@@ -35,7 +35,7 @@ function isFieldEncryptionEnabled(): boolean {
     return true;
   }
 
-  return Boolean(resolveEncryptionKey());
+  return Boolean(resolveFieldEncryptionKeyring() || resolveEncryptionKey());
 }
 
 function encryptField(plaintext: string, key: Buffer): string {
@@ -73,6 +73,13 @@ function normalizeEmail(email: string): string {
 
 function protectEmail(email: string): { storedEmail: string; emailLookup: string } {
   const normalized = normalizeEmail(email);
+  const configured = resolveFieldEncryptionKeyring();
+  if (configured && isFieldEncryptionEnabled()) {
+    return {
+      storedEmail: configured.encrypt(normalized, "email"),
+      emailLookup: configured.keyring.lookup(normalized),
+    };
+  }
   const key = resolveEncryptionKey();
 
   if (!key || !isFieldEncryptionEnabled()) {
@@ -86,6 +93,11 @@ function protectEmail(email: string): { storedEmail: string; emailLookup: string
 }
 
 function revealEmail(storedEmail: string): string {
+  const configured = resolveFieldEncryptionKeyring();
+  if (configured && storedEmail.startsWith("enc:"))
+    return configured.keyring.decrypt(storedEmail, "email");
+  if (storedEmail.startsWith("enc:") && !storedEmail.startsWith(ENCRYPTION_PREFIX))
+    throw new Error("Identified encrypted fields require KMS_ENCRYPTION_KEYRING.");
   const key = resolveEncryptionKey();
 
   if (!key || !storedEmail.startsWith(ENCRYPTION_PREFIX)) {
@@ -97,6 +109,8 @@ function revealEmail(storedEmail: string): string {
 
 function emailLookupForQuery(email: string): string {
   const normalized = normalizeEmail(email);
+  const configured = resolveFieldEncryptionKeyring();
+  if (configured && isFieldEncryptionEnabled()) return configured.keyring.lookup(normalized);
   const key = resolveEncryptionKey();
 
   if (!key || !isFieldEncryptionEnabled()) {
@@ -215,3 +229,78 @@ function createFieldEncryptionKeyring(
 
 export type { FieldEncryptionKeyring, FieldEncryptionKeyringOptions };
 export { createFieldEncryptionKeyring };
+
+interface ConfiguredFieldEncryption {
+  readonly keyring: FieldEncryptionKeyring;
+  readonly writeVersion: 1 | 2;
+  encrypt(plaintext: string, purpose: string): string;
+}
+/** Stateless resolution keeps separately bundled auth entrypoints on the same configuration. */
+function resolveFieldEncryptionKeyring(
+  env: Record<string, string | undefined> = process.env,
+): ConfiguredFieldEncryption | null {
+  const raw = env.KMS_ENCRYPTION_KEYRING;
+  if (raw === undefined) return null;
+  try {
+    if (!raw.trim() || raw.length > 16384 || env.KMS_ENCRYPTION_KEY?.trim())
+      throw new Error("Invalid configuration");
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      throw new Error("Invalid configuration");
+    const config = parsed as Record<string, unknown>;
+    if (
+      Object.keys(config).some(
+        (key) =>
+          !["activeKeyId", "encryptionKeys", "legacyV1Key", "lookupKey", "writeVersion"].includes(
+            key,
+          ),
+      )
+    )
+      throw new Error("Unknown option");
+    if (
+      typeof config.activeKeyId !== "string" ||
+      (config.writeVersion !== 1 && config.writeVersion !== 2) ||
+      !config.encryptionKeys ||
+      typeof config.encryptionKeys !== "object" ||
+      Array.isArray(config.encryptionKeys)
+    )
+      throw new Error("Invalid configuration");
+    const decodeKey = (value: unknown): Buffer => {
+      if (typeof value !== "string") throw new Error("Invalid key");
+      if (/^[0-9a-f]{64}$/i.test(value)) return Buffer.from(value, "hex");
+      const decoded = Buffer.from(value, "base64");
+      if (decoded.length !== 32 || decoded.toString("base64") !== value)
+        throw new Error("Invalid key");
+      return decoded;
+    };
+    const keys = Object.fromEntries(
+      Object.entries(config.encryptionKeys).map(([id, value]) => [id, decodeKey(value)]),
+    );
+    const legacy = config.legacyV1Key === undefined ? undefined : decodeKey(config.legacyV1Key);
+    const lookup = decodeKey(config.lookupKey);
+    // Lookup-key migration is deliberately unsupported; existing v1 hashes must stay identical.
+    if ((config.writeVersion === 1 && !legacy) || (legacy && !legacy.equals(lookup)))
+      throw new Error("Incompatible lookup key");
+    const keyring = createFieldEncryptionKeyring({
+      activeKeyId: config.activeKeyId,
+      encryptionKeys: keys,
+      legacyV1Key: legacy,
+      lookupKey: lookup,
+    });
+    const writeVersion = config.writeVersion;
+    return Object.freeze({
+      keyring,
+      writeVersion,
+      encrypt(plaintext: string, purpose: string): string {
+        return writeVersion === 1 && legacy
+          ? encryptField(plaintext, legacy)
+          : keyring.encrypt(plaintext, purpose);
+      },
+    });
+  } catch {
+    throw new Error("Invalid KMS_ENCRYPTION_KEYRING configuration.");
+  }
+}
+
+export type { ConfiguredFieldEncryption };
+export { resolveFieldEncryptionKeyring };

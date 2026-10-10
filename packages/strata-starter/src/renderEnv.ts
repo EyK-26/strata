@@ -230,6 +230,12 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   } else {
     lines.push("# KMS_ENCRYPTION_KEY=");
   }
+  lines.push(
+    "# Optional reader-first encryption rotation; replaces KMS_ENCRYPTION_KEY, never set both.",
+  );
+  lines.push(
+    "# KMS_ENCRYPTION_KEYRING= (see framework ENCRYPTION-ROTATION.md; no automatic migration)",
+  );
   lines.push(`FEATURE_EMAIL_VERIFICATION=${envFlag(layers.extras.emailVerification)}`);
 
   if (layers.extras.metrics) {
