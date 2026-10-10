@@ -1,5 +1,13 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.10
+
+- Add bounded OpenTelemetry SDK health observations and selected native transaction-acquisition histograms through explicit metrics options.
+- Add bounded Postgres failed-job counts using ORM ID projections, with schema guards, native acquisition deadlines and read-only collector draining.
+- Observe Streams retry promotion lateness using Redis time; cancellation cleanup sentinels omit unavailable age instead of reporting age since epoch.
+- Generate typed runtimeMetrics opt-in and provider-owned SQL collector draining, including startup cleanup; HTTP-only defaults and borrowed tracing ownership remain intact.
+- Keep additional SQL observation dialects, sustained operational qualification and encryption rotation explicit follow-up work.
+
 ## 2.2.9
 
 - Support native cancellable transaction acquisition

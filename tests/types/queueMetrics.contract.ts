@@ -19,5 +19,8 @@ export async function queueMetricsContract(): Promise<void> {
   readRedisQueueSnapshot("redis://localhost", { transport: "memory" });
   // @ts-expect-error Redis URL is mandatory for an opt-in collector.
   createMetricsRoutes({ queue: { timeoutMs: 1000 } });
+  const lateness: number | null | undefined =
+    snapshot.priorities[0]?.retryActionableLatenessSeconds;
+  void lateness;
   void ready;
 }

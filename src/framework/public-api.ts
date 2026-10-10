@@ -566,6 +566,15 @@ export type {
   PaginatedResult,
   PaginationMeta,
 } from "../core/pagination/index.ts";
+export type {
+  FailedJobMetricsCollector,
+  FailedJobMetricsOptions,
+  FailedJobMetricsSnapshot,
+} from "../core/queue/failedJobMetrics.ts";
+export {
+  createFailedJobMetricsCollector,
+  renderFailedJobMetrics,
+} from "../core/queue/failedJobMetrics.ts";
 export type { Queue, QueuePriority } from "../core/queue/index.ts";
 export { AsyncQueue, createQueue, Job, SyncQueue } from "../core/queue/index.ts";
 export { JobRegistry } from "../core/queue/jobRegistry.ts";

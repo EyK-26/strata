@@ -1109,9 +1109,11 @@ function renderCreateAppTs(layers: StarterLayers): string {
     ? `import { ensureAppDatabase } from "./ensureDatabase.ts";\n`
     : "";
   const metricsImport = layers.extras.metrics
-    ? `import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";\n`
+    ? `import { createMetricsRoutes, createMetricsRuntime, type MetricsRuntime, type MetricsRuntimeOptions } from "@getstrata/bootstrap/metricsRoutes";\n`
     : "";
-  const metricsSpread = layers.extras.metrics ? "\n    ...createMetricsRoutes()," : "";
+  const metricsSpread = layers.extras.metrics
+    ? "\n    ...createMetricsRoutes(metricsRuntime?.options),"
+    : "";
   return `import { join } from "node:path";
 import "./preload.ts";
 import { createAppContext as createProviderAppContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
@@ -1136,7 +1138,7 @@ import { closeDatabase, getSql, pingDatabase } from "./database.ts";
 ${ensureLine}import { starterProviders } from "./providers/index.ts";
 
 export interface BootstrapOptions {
-  migrate?: boolean;
+  migrate?: boolean;${layers.extras.metrics ? "\n  /** Explicit opt-in; HTTP-only metrics remain the default. */\n  runtimeMetrics?: MetricsRuntimeOptions;" : ""}
 }
 
 export interface BootstrappedApp {
@@ -1145,14 +1147,24 @@ export interface BootstrappedApp {
   config: ReturnType<typeof loadConfig>;
 }
 
-async function createAppContext(): Promise<InitializedAppContext> {
+async function createAppContext(${layers.extras.metrics ? "metricsRuntime?: MetricsRuntime" : ""}): Promise<InitializedAppContext> {
   await ensureModulesLoaded();
   const moduleProviders = discoverModules().flatMap((module) => module.providers ?? []);
-  return createProviderAppContext([...starterProviders, ...moduleProviders]);
+${
+  layers.extras.metrics
+    ? `  const metricsProviders = metricsRuntime ? [{
+    name: "starter.runtime-metrics",
+    register({ onCleanup }: import("@getstrata/core/contracts/di").ProviderContext) {
+      onCleanup(() => metricsRuntime.close(), "drain");
+    },
+  }] : [];
+`
+    : ""
+}  return createProviderAppContext([...starterProviders, ...moduleProviders${layers.extras.metrics ? ", ...metricsProviders" : ""}]);
 }
 
 export async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
-  let context: InitializedAppContext | undefined;
+  let context: InitializedAppContext | undefined;${layers.extras.metrics ? "\n  let metricsRuntime: MetricsRuntime | undefined;" : ""}
   try {
     const isProduction = isProductionEnv();
     // Dev boots migrate for convenience. Production must not mutate schema on
@@ -1171,7 +1183,7 @@ ${needsEnsure(layers) ? "    await ensureAppDatabase({ provision: !isProduction 
     }
     configureModulesDirectory(join(import.meta.dir, "../modules"));
     await ensureModulesLoaded();
-    context = await createAppContext();
+${layers.extras.metrics ? "    metricsRuntime = createMetricsRuntime(options.runtimeMetrics);\n" : ""}    context = await createAppContext(${layers.extras.metrics ? "metricsRuntime" : ""});
 
     if (runMigrate) {
       await migrate();
@@ -1195,7 +1207,7 @@ ${needsEnsure(layers) ? "    await ensureAppDatabase({ provision: !isProduction 
     return { context, routes, config: appConfig };
   } catch (error) {
     const failures: unknown[] = [];
-    for (const cleanup of [() => context?.dispose(), closeDatabase]) {
+    for (const cleanup of [() => context?.dispose(), ${layers.extras.metrics ? "() => metricsRuntime?.close(), " : ""}closeDatabase]) {
       try { await cleanup(); } catch (failure) { failures.push(failure); }
     }
     if (failures.length) throw new AggregateError([error, ...failures], "Application startup and cleanup failed.", { cause: error });
