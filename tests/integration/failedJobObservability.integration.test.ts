@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+import { createMetricsRoutes, createMetricsRuntime } from "@getstrata/bootstrap/metricsRoutes";
 import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
@@ -213,6 +213,62 @@ describe.skipIf(!adminUrl || !restrictedUrl)("bounded Postgres failed-job observ
       await holder;
       await collector.close();
       restoreEnvVar("METRICS_TOKEN", previousToken);
+    }
+  });
+
+  test("managed runtime close waits for admitted SQL release and stops new collections", async () => {
+    const runtime = createMetricsRuntime({ failedJobs: { timeoutMs: 1000 } });
+    const collector = runtime.options.failedJobs;
+    if (!collector) throw new Error("Missing owned collector");
+    let release: () => void = () => {};
+    let acquired: () => void = () => {};
+    const locked = new Promise<void>((resolve) => {
+      acquired = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const holder = admin.begin(async (tx) => {
+      await tx.unsafe("LOCK TABLE failed_job IN ACCESS EXCLUSIVE MODE");
+      acquired();
+      await held;
+    });
+    await locked;
+    const collection = collector.collect();
+    // Observe lock admission, not an arbitrary sleep, before starting drain.
+    try {
+      let waiting = false;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const rows = await admin.unsafe(
+          "SELECT 1 FROM pg_locks WHERE relation='failed_job'::regclass AND NOT granted",
+        );
+        if (rows.length) {
+          waiting = true;
+          break;
+        }
+        await Bun.sleep(5);
+      }
+      expect(waiting).toBe(true);
+      let closed = false;
+      const closing = runtime.close().then(() => {
+        closed = true;
+      });
+      await Bun.sleep(10);
+      expect(closed).toBe(false);
+      await expect(collector.collect()).rejects.toThrow("closed");
+      release();
+      await holder;
+      expect((await collection).count).toBe(0);
+      await closing;
+      expect(closed).toBe(true);
+      // Both pool slots are available again before pool closure.
+      const slots = await Promise.all([pool.reserve(), pool.reserve()]);
+      for (const slot of slots) slot.release();
+    } finally {
+      release();
+      await holder;
+      await collection.catch(() => {});
+      await runtime.close();
     }
   });
 

@@ -91,6 +91,12 @@ export {
 } from "./http/securedRouteModelBinding.ts";
 export { createHttpKernel, type HttpKernel, type MiddlewareGroupName } from "./httpKernel.ts";
 export { resolveMembershipService } from "./membershipService.ts";
+export type {
+  MetricsRoutesOptions,
+  MetricsRuntime,
+  MetricsRuntimeOptions,
+} from "./metricsRoutes.ts";
+export { createMetricsRoutes, createMetricsRuntime } from "./metricsRoutes.ts";
 export { prefixRouteMap } from "./prefixRouteMap.ts";
 export { coreProviders } from "./providers/index.ts";
 export { default as tracingProvider } from "./providers/tracing.ts";

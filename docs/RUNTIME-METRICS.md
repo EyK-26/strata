@@ -2,6 +2,27 @@
 
 HTTP observations remain bounded and available through `createMetricsRoutes()` with no runtime collectors enabled. Production/staging requires the existing `METRICS_TOKEN` bearer authentication. Responses are private operational data and use `Cache-Control: no-store`. Invalid authorization never starts collection.
 
+## Generated collector ownership
+
+The metrics extra now generates a typed `BootstrapOptions.runtimeMetrics` option. Defaults remain HTTP-only. In the generated HTTP entrypoint, opt in explicitly:
+
+```ts
+const redisUrl = process.env.REDIS_URL;
+if (!redisUrl) throw new Error("REDIS_URL is required");
+const { routes, config, context } = await bootstrapApp({
+  runtimeMetrics: {
+    queue: { redisUrl, transport: "streams", timeoutMs: 1000 },
+    // Postgres only, after explicitly deploying these schemas:
+    // outbox: { sampleLimit: 500, timeoutMs: 1000 },
+    // failedJobs: { sampleLimit: 500, timeoutMs: 1000 },
+  },
+});
+```
+
+`createMetricsRuntime(options)` is also available through the bootstrap root and `metricsRoutes` subpath. It creates lazy, owned SQL collectors and returns `options` for `createMetricsRoutes` plus an idempotent `close()`. No connection, schema, worker or tracing provider is created by this factory. The generated provider registers close in the context's drain phase; generated startup-failure cleanup also closes it before the database. Existing applications adopt the current generated `createApp.ts` shape explicitly. Preserve the official stop HTTP admission, drain HTTP/workers, drain providers, flush telemetry and close infrastructure order, under the lifecycle hard deadline. A Redis scrape owns its own short-lived connection and closes it when its existing deadline settles.
+
+Tracing and acquisition observers are borrowed: pass an already-owned tracing runtime or acquisition collector. Closing metrics does not flush/shut down tracing and does not change which transactions are instrumented. The generated worker/scheduler entrypoints use the same context drain path; they do not acquire new metrics settings from arbitrary environment flags. Configuration applies to the bootstrap invocation receiving the options. Disabled extras generate no metrics route or runtime ownership code. Enabling observations does not migrate an outbox, activate durable listeners or grant SQL privileges. Unsupported dialects and absent schemas report collector failures; there is no fallback query or process-local replacement.
+
 ## Opt-in shared Redis queue observations
 
 ```ts
@@ -15,7 +36,7 @@ const metrics = createMetricsRoutes({
 // Merge metrics into the existing server routes as usual.
 ```
 
-Match transport to the deployed queue. Omitting it uses `QUEUE_REDIS_TRANSPORT` (legacy default `lists`). No queue is converted, consumer group created, job acknowledged, payload logged or failed-job table queried by a scrape. Apps opt in explicitly; generated defaults stay compatible until the rest of the runtime collector contracts are settled.
+Match transport to the deployed queue. Omitting it uses `QUEUE_REDIS_TRANSPORT` (legacy default `lists`). No queue is converted, consumer group created, job acknowledged, payload logged or failed-job table queried by a scrape. Apps opt in explicitly; generated defaults stay HTTP-only and explicit options enable owned collectors.
 
 `readRedisQueueSnapshot(redisUrl, options)` is also exported from `@getstrata/core/queue/queueMetrics`. Each snapshot reads the three namespaced priorities. One deadline (default 1 second, configurable 1–5,000 milliseconds) covers connection establishment and all reads; the dedicated Redis client closes on success, error or timeout and does not reconnect. Concurrent authorized scrapes of one route instance share the in-progress collection. The low-cardinality renderer never includes consumer, tenant or job identities, keys, payloads or URLs.
 
@@ -36,7 +57,7 @@ The older `collectQueueMetrics()` API remains compatible. Its `failedCount` is a
 
 ## Remaining work and promotion gates
 
-This is the Redis observation slice of [#139](https://github.com/EyK-26/strata/issues/139), not complete operational qualification. additional SQL dialects, generated wiring remain follow-up work. A Bun pool statistic or SDK queue occupancy must not be invented when its supported API cannot observe it. Use infrastructure exporters for persistence, server connection capacity and backup health.
+This is the Redis observation slice of [#139](https://github.com/EyK-26/strata/issues/139), not complete operational qualification. Additional SQL dialects and operational qualification remain follow-up work. A Bun pool statistic or SDK queue occupancy must not be invented when its supported API cannot observe it. Use infrastructure exporters for persistence, server connection capacity and backup health.
 
 Tests cover both transports, empty/pre-consumer state, ready/inflight/retry/quarantine state, capped output, unchanged source state, three independent processes, wrong key types, deadline/connection cleanup and concurrent scraping. Environment-specific alert routing, thresholds, sustained scrape/load costs, multi-worker recovery and failure drills remain required before production promotion.
 
@@ -65,7 +86,7 @@ All values are shared-schema platform gauges: use one designated collector or `m
 
 A 1–5,000ms deadline (default 1,000ms) bounds the scrape result. Collection uses a read-only transaction with a transaction-local [Postgres statement timeout](https://www.postgresql.org/docs/16/runtime-config-client.html), restored automatically on transaction completion/rollback. The collector passes its deadline signal through `runInTransaction` native cancellable acquisition. A timed-out Bun pool wait is removed without admitting a later callback; unsupported checkout adapters fail collection explicitly. It still refuses another transaction while cancellation/rollback/release is settling. `close()` stops new collection and waits for release; integrate it before pool closure and within the application's hard shutdown deadline. Admission/SQL/rollback network operations can still outlast the response deadline; this is not a claim that every underlying resource is released at that instant. Native connection/network timeout and infrastructure supervision still matter during a server outage.
 
-Three independent restricted-role processes, SQL table-lock, saturated-pool, cancellation/rollback, scope restoration, read-only source state, recovery, unsupported-dialect and authenticated failure regressions accompany the collector. The remaining #139 items include generated lifecycle wiring and deployment qualification. This addition does not close #139 or address encryption-key rotation (#140).
+Three independent restricted-role processes, SQL table-lock, saturated-pool, cancellation/rollback, scope restoration, read-only source state, recovery, unsupported-dialect and authenticated failure regressions accompany the collector. The remaining #139 items include additional SQL dialects and deployment qualification. This addition does not close #139 or address encryption-key rotation (#140).
 
 
 ## Opt-in tracing health
@@ -91,7 +112,7 @@ These measurements are **process-local**, per injected runtime. Scrape each repl
 
 The adapter uses the pinned OpenTelemetry **2.12.0 public experimental** `BatchSpanProcessor.selfObsMeterProvider` option through `@opentelemetry/sdk-trace`, with a fixed projection of three [SDK self-observation instruments](https://opentelemetry.io/docs/specs/semconv/otel/sdk-metrics/). It does not read private processor fields, replace global meter/diagnostic providers, or implement batching/export transport. No arbitrary instrument/attribute registry, per-span history or error sample collection is allocated. One SDK queue callback and scalar counters are retained per runtime; callback-deadline timers hold scalar accounting only, expire within the configured bound and are unreferenced. Keep the SDK version pinned and rerun queue, outage and lifecycle regressions when upgrading this experimental API. Unknown queue instruments leave measurements unavailable.
 
-Tests exercise real Bun HTTP collector outage and callback deadlines, 10,000 overflow observations, draining, late/duplicate callbacks, synchronous failures, no-op meter isolation, custom error-name collisions, disabled/unconfigured states, authenticated no-flush scraping and lifecycle rejection. Sustained memory/CPU/load qualification and operational thresholds remain #139 promotion work, along with acquisition measurements, additional outbox dialects and generated wiring. Encryption-key rotation (#140) remains separate.
+Tests exercise real Bun HTTP collector outage and callback deadlines, 10,000 overflow observations, draining, late/duplicate callbacks, synchronous failures, no-op meter isolation, custom error-name collisions, disabled/unconfigured states, authenticated no-flush scraping and lifecycle rejection. Sustained memory/CPU/load qualification and operational thresholds remain #139 promotion work, along with additional outbox dialects. Encryption-key rotation (#140) remains separate.
 
 
 ## Opt-in transaction acquisition observations
@@ -119,7 +140,7 @@ Snapshots contain three fixed outcome records and twelve finite buckets each, cl
 
 These are process-local observations of **selected `runInTransaction` outer reservations**, not a global Bun pool statistic. Direct SQL, unobserved transactions and tenant scopes that already own their connection are outside this boundary. Actual server connection capacity, connection establishment versus pool wait, all driver operations and deployment-wide availability require other supported instrumentation/infrastructure exporters. Do not infer total pool occupancy or connection capacity from the inflight gauge. Apply `rate` to per-target histogram counters before aggregation; preserve the monitored boundary/database in deployment target labels. No arbitrary per-tenant/pool label API is provided.
 
-Tests cover saturated restricted-role Postgres waits, native cancellation without late admission, unchanged tenant scopes/savepoints, error identity, release and business failure boundaries, simultaneous waits, immutable snapshots, 10,000 observations with constant histogram/scrape cardinality, authenticated no-SQL scraping and invalid observation rejection. The API/type fixtures compile against source and packed root/subpath exports. Operational alert thresholds and sustained multi-process load/recovery qualification remain #139 work, alongside additional outbox dialects and generated wiring. #140 remains separate.
+Tests cover saturated restricted-role Postgres waits, native cancellation without late admission, unchanged tenant scopes/savepoints, error identity, release and business failure boundaries, simultaneous waits, immutable snapshots, 10,000 observations with constant histogram/scrape cardinality, authenticated no-SQL scraping and invalid observation rejection. The API/type fixtures compile against source and packed root/subpath exports. Operational alert thresholds and sustained multi-process load/recovery qualification remain #139 work, alongside additional outbox dialects. #140 remains separate.
 
 
 ## Opt-in SQL failed-job observations (Postgres)
@@ -145,4 +166,4 @@ Initially Postgres-only, using the existing runtime role's SELECT access; there 
 
 The collector and outbox observations share one internal read-only lifecycle: a 1–5,000ms response deadline (default 1,000ms), native cancellable checkout, transaction-local statement timeout, rejection of any active framework or raw connection scope, one unsettled transaction per collector and `close()` draining release/rollback. Outbox's existing narrowly scoped platform bypass remains confined to its callback; the shared helper contains none. Authorized concurrent scrapes of a route instance coalesce. Collection does not write data; local settings/locks restore on settlement. Underlying SQL/rollback/network cleanup can outlast the response deadline, so lifecycle hard deadlines and infrastructure supervision still matter. The row limit bounds returned IDs, not all physical index/MVCC work in a bloated or poorly maintained database; keep vacuum/statistics healthy and qualify costs against the production distribution.
 
-Regressions cover 20,000 private records with an actual restricted-role primary-index `EXPLAIN ANALYZE`, empty/capped/recovered state, unchanged private source data, RLS/key/persistence/missing-table rejection, twenty authenticated concurrent blocked scrapes, native pool cancellation, rollback/release draining, three independent processes, malformed observations and unchanged outbox lease/worker/crash behavior. Both new source files are coverage-enforced at 100%, with no added exemptions. Additional SQL dialects, generated runtime wiring and sustained load/operational qualification remain #139 work; encryption rotation (#140) remains separate.
+Regressions cover 20,000 private records with an actual restricted-role primary-index `EXPLAIN ANALYZE`, empty/capped/recovered state, unchanged private source data, RLS/key/persistence/missing-table rejection, twenty authenticated concurrent blocked scrapes, native pool cancellation, rollback/release draining, three independent processes, malformed observations and unchanged outbox lease/worker/crash behavior. Both new source files are coverage-enforced at 100%, with no added exemptions. Additional SQL dialects and sustained load/operational qualification remain #139 work; encryption rotation (#140) remains separate.

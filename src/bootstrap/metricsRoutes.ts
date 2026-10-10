@@ -131,5 +131,7 @@ function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
   };
 }
 
+export type { MetricsRuntime, MetricsRuntimeOptions } from "./metricsRuntime";
+export { createMetricsRuntime } from "./metricsRuntime";
 export type { MetricsRoutesOptions };
 export { createMetricsRoutes };

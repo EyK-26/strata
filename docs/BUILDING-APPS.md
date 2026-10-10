@@ -406,6 +406,10 @@ For ordinary SQL models, extend `defineModel(table)` from `@getstrata/core/datab
 
 Generated HTTP, queue worker and scheduler entrypoints coordinate stop, drain, flush and close phases. Providers can register `onCleanup(handler, "drain")` for admitted work, `onCleanup(handler, "flush")` for telemetry, and default cleanup for resource closure. The generated provider list includes the shared `tracingProvider` for OpenTelemetry flush and shutdown; older generated lists must add it explicitly. See [TRACING.md](TRACING.md) for collector configuration and sampling. Existing custom entrypoints must adopt the coordinator explicitly. See [LIFECYCLE.md](LIFECYCLE.md) for integration, deadlines and recovery contracts.
 
+### Runtime observation ownership
+
+The metrics extra accepts explicit `BootstrapOptions.runtimeMetrics` settings. Its generated provider drains owned outbox/failed-job collectors before database closure and cleans them up on startup failure. Defaults stay HTTP-only; schemas and durable workers remain explicit deployment/application choices. Existing tracing/acquisition observers are borrowed and retain their original owners. See [runtime metrics](RUNTIME-METRICS.md) for the generated shape and operational boundaries.
+
 ### Awaited infrastructure discovery
 
 Jobs and listener modules load through awaited ESM imports before provider startup finishes. Malformed exports and duplicate discovered job/module names fail startup with their locations. Use explicit manifests for bundles and preserve DI factories instead of reconstructing their dependencies. See [DISCOVERY.md](DISCOVERY.md) for supported file/export shapes, caching and migration requirements.

@@ -443,9 +443,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.9",
-        "@getstrata/cli": "^2.2.9",
-        "@getstrata/core": "^2.2.9",
+        "@getstrata/bootstrap": "^2.2.10",
+        "@getstrata/cli": "^2.2.10",
+        "@getstrata/core": "^2.2.10",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
@@ -867,6 +867,24 @@ JWT mint: \`POST /api/auth/token\` with email and password. Short-lived. Do not 
   layers.extras.metrics
     ? `
 Prometheus scrape: \`GET /metrics\`. Production requires \`Authorization: Bearer <METRICS_TOKEN>\`.
+
+Metrics default to HTTP-only. In \`src/bootstrap/server.ts\`, pass explicit \`runtimeMetrics\` options to \`bootstrapApp\`:
+
+\`\`\`ts
+const redisUrl = process.env.REDIS_URL;
+if (!redisUrl) throw new Error("REDIS_URL is required for queue observations");
+const { routes, config, context } = await bootstrapApp({
+  runtimeMetrics: {
+    // Match the deployed Redis queue transport; this does not convert queues.
+    queue: { redisUrl, transport: "streams", timeoutMs: 1000 },
+    // Enable only on Postgres after explicitly installing the corresponding schema.
+    // outbox: { sampleLimit: 500, timeoutMs: 1000 },
+    // failedJobs: { sampleLimit: 500, timeoutMs: 1000 },
+  },
+});
+\`\`\`
+
+The generated provider drains owned SQL collectors through \`context.drain()\` before database closure, including workers and startup-failure cleanup. Keep the generated HTTP admission/drain and provider lifecycle order. Observation factories never migrate, seed, start a worker, or enable durable delivery. Missing schemas/unsupported SQL dialects produce collector failures on scrape; PostgreSQL collector schema requirements still apply. Tracing and selected-transaction acquisition collectors can be injected as borrowed options; their existing owners retain lifecycle/instrumentation responsibility. Shared queue/outbox/failed-job gauges use a designated target or max across replicas; never sum them. See the framework runtime metrics guide for semantics and operational qualification.
 `
     : ""
 }${
