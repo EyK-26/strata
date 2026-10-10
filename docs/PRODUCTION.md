@@ -138,3 +138,10 @@ Production due-task runners require Redis coordination by default. Stable task n
 Generated apps register `/health` in bootstrap with `createHealthRoutes`, `pingOnHealth: true`, `healthFormat: "text"`, and a non-mutating `schemaCheck`. It returns only `ok` (200) or `degraded` (503), with no authentication, tenant selection, RLS bypass, or business data. Database, configured Redis, and schema readability must succeed; zero visible rows is healthy. `/ready` checks dependencies only and can succeed before migrations. Use `/health` for readiness, and a separate process/TCP check for liveness so dependency outages do not cause restart loops. Restrict infrastructure probes at the network boundary when needed.
 
 Existing generated apps must adopt the bootstrap health registration and remove their site-module `/health` handler; otherwise the module handler overrides the infrastructure probe and applies API admission middleware. Preserve any application-specific schema checks in the bootstrap callback using the runtime role. No database migration is needed for this change.
+
+
+### CLI child shutdown and containers
+
+The CLI relays SIGINT/SIGTERM to the server/run/dev child, waits for its completion, preserves its exit code, and removes only its own listeners. The child owns admission, draining, flushing and infrastructure shutdown through its lifecycle coordinator. Scheduled and queue/outbox commands retain their own lifecycle ownership.
+
+Generated images invoke the official local CLI directly with `CMD ["bun", "./node_modules/.bin/strata", "start"]`. Adopt this launcher alongside the CLI update instead of layering `bun run start` above the supervisor; signals must reach the process that owns the child. Keep the platform termination grace longer than the framework shutdown deadline. Test SIGTERM on the deployed Linux/Bun image, including active work, before promotion.

@@ -15,4 +15,4 @@ RUN mkdir -p storage && chown -R bun:bun /app
 USER bun
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD ["bun", "-e", "fetch('http://127.0.0.1:' + process.env.PORT + '/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-CMD ["bun", "run", "start"]
+CMD ["bun", "./node_modules/.bin/strata", "start"]
