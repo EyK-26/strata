@@ -46,7 +46,13 @@ async function observeSqliteReadOnly<T>(
     pending = undefined;
   };
   const child = Bun.spawn({
-    cmd: [executable, "--no-env-file", "-e", childSource],
+    cmd: [
+      executable,
+      "--no-env-file",
+      `--config=${process.platform === "win32" ? "NUL" : "/dev/null"}`,
+      "-e",
+      childSource,
+    ],
     env: {},
     stdout: "ignore",
     stderr: "ignore",

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
@@ -151,5 +151,28 @@ test("observation admission rejects memory databases, closed adapters, invalid d
       await expect(tx.unsafe("SELECT 2")).rejects.toThrow("Concurrent");
       await first;
     }, options());
+  });
+});
+
+test("observation startup ignores application config preloads and env files", async () => {
+  await fixture(async (db, filename) => {
+    const directory = join(filename, "..");
+    const marker = join(directory, "preload-ran");
+    await writeFile(
+      join(directory, "preload.ts"),
+      `await Bun.write(${JSON.stringify(marker)}, process.env.PRIVATE_PASSWORD ?? "none");`,
+    );
+    await writeFile(join(directory, "bunfig.toml"), 'preload = ["./preload.ts"]\n');
+    await writeFile(join(directory, ".env"), "PRIVATE_PASSWORD=fixture-private\n");
+    const previous = process.cwd();
+    process.chdir(directory);
+    try {
+      expect(
+        await db.observeReadOnly((tx) => tx.unsafe("SELECT count(*) AS n FROM source"), options()),
+      ).toEqual([{ n: 1 }]);
+      await expect(access(marker)).rejects.toThrow();
+    } finally {
+      process.chdir(previous);
+    }
   });
 });
