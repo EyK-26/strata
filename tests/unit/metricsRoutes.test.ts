@@ -76,3 +76,29 @@ describe("createMetricsRoutes", () => {
     }
   });
 });
+
+test("unauthorized scrapes never start an opted-in Redis collection", async () => {
+  const previousToken = process.env.METRICS_TOKEN;
+  process.env.METRICS_TOKEN = "fixture-token";
+  let connections = 0;
+  const server = Bun.listen({
+    hostname: "127.0.0.1",
+    port: 0,
+    socket: {
+      open() {
+        connections++;
+      },
+      data() {},
+    },
+  });
+  try {
+    const routes = createMetricsRoutes({
+      queue: { redisUrl: `redis://127.0.0.1:${server.port}`, timeoutMs: 50 },
+    });
+    expect((await routes["/metrics"](metricsRequest())).status).toBe(404);
+    expect(connections).toBe(0);
+  } finally {
+    server.stop(true);
+    restoreEnvVar("METRICS_TOKEN", previousToken);
+  }
+});

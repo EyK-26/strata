@@ -147,3 +147,8 @@ Conversion validates Redis types and copies each FIFO entry into its priority St
 5. Validate all three priorities, SQL failure recording, and worker recovery in the target environment before restoring admission. Do not switch back to `lists` while Streams contains unacknowledged entries; drain/reconcile Streams first. No automatic backwards conversion is provided.
 
 No shop-only worker, signer, delivery insert, or queue format is required. Handlers retain the published `Job` contract; commerce event selection and idempotent effects stay in the application.
+
+
+## Operational observations
+
+See [runtime metrics](RUNTIME-METRICS.md) for opt-in bounded Redis queue snapshots and authenticated scrape wiring. Shared gauges, capped inflight samples, omitted unavailable values and stream-residence age have explicit semantics; they are not end-to-end delivery guarantees.
