@@ -134,7 +134,7 @@ The publish job runs on GitHub-hosted `ubuntu-latest` with `id-token: write`. OI
 Then:
 
 1. The [`@getstrata`](https://www.npmjs.com/org/getstrata) org must exist on npm, and the trusted publishers above must be saved.
-2. Push `vX.Y.Z` as above. The release workflow publishes from the tag. If that version is already on npm, it skips publish. It does not unpublish older versions. GitHub Release and GHCR wait on npm (they do not wait on each other). The container job uses `docker build --pull` (same as CI `docker-install`) so it refreshes `oven/bun:1.4` and does not pull BuildKit from Docker Hub.
+2. Push `vX.Y.Z` as above. The release workflow publishes from the tag. If that version is already on npm, it skips publish. It does not unpublish older versions. GitHub Release and GHCR wait on npm (they do not wait on each other). The container job uses `docker build --pull` (same as CI `docker-install`) so it refreshes the tested `oven/bun:1.4.3` tag and does not pull BuildKit from Docker Hub.
 3. If npm fails after the tag exists (trusted publisher misconfigured, or a later package in the five fails), do not delete the tag. Actions, Release, Run workflow, set `tag` to the existing tag (example `v1.0.5`). That retries publish and skips versions already on npm, then creates the GitHub Release and GHCR image. Use the same path to finish GHCR or notes if those jobs failed after npm succeeded.
 
 See `packages/strata-core/CHANGELOG.md` for release notes.

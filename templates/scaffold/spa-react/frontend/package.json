@@ -13,9 +13,15 @@
     "react-router-dom": "^7.8.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.4.0",
+    "@types/bun": ">=1.4.2",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "overrides": {
+    "bun-types": ">=1.4.3"
   }
 }

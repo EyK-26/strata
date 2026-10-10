@@ -374,7 +374,7 @@ function renderDockerfile(layers: StarterLayers): string {
   const frontend = needsFrontendBuild(layers.frontend);
   const lines = [
     '# Production image. Build once, run with env from your platform; see README "Deploy".',
-    "FROM oven/bun:1.4 AS deps",
+    "FROM oven/bun:1.4.3 AS deps",
     "WORKDIR /app",
     "COPY package.json bun.lock ./",
     "RUN bun install --frozen-lockfile --production",
@@ -382,7 +382,7 @@ function renderDockerfile(layers: StarterLayers): string {
   ];
   if (frontend) {
     lines.push(
-      "FROM oven/bun:1.4 AS frontend",
+      "FROM oven/bun:1.4.3 AS frontend",
       "WORKDIR /app/frontend",
       "COPY frontend/package.json frontend/bun.lock ./",
       "RUN bun install --frozen-lockfile",
@@ -392,7 +392,7 @@ function renderDockerfile(layers: StarterLayers): string {
     );
   }
   lines.push(
-    "FROM oven/bun:1.4-slim AS runtime",
+    "FROM oven/bun:1.4.3-slim AS runtime",
     "WORKDIR /app",
     "ENV APP_ENV=production",
     "ENV AUTH_DEV_HEADERS=false",
@@ -480,9 +480,11 @@ function renderPackageJson(
       private: true,
       type: "module",
       scripts,
+      engines: { bun: ">=1.4.3" },
+      overrides: { "bun-types": ">=1.4.3" },
       dependencies: coreDeps,
       devDependencies: {
-        "@types/bun": "^1.4.0",
+        "@types/bun": ">=1.4.2",
         typescript: "^7.0.2",
       },
     },
@@ -927,6 +929,8 @@ The app uses the database named in \`DATABASE_URL\` and creates it on first migr
 }
 ${renderOpenApiReadme()}
 ## Deploy
+
+Bun >=1.4.3 is required. \`.bun-version\` and Docker stages pin the tested 1.4.3 runtime; upgrade pins deliberately and rerun checks before deployment. The official @types/bun shim currently lags the runtime release, so package.json overrides bun-types to >=1.4.3. Refresh and commit root/frontend lockfiles when upgrading. Updating framework packages does not rewrite an existing app Dockerfile, runtime pin or manifest.
 
 \`Dockerfile\` builds a production image from the committed \`bun.lock\` (run \`bun install\` once and commit the lockfile).${
     needsFrontendBuild(layers.frontend) ? " The React frontend is built inside the image." : ""

@@ -6,7 +6,7 @@ This guide assumes you can run a terminal, Docker, and Bun.
 
 ## 1. Install tools
 
-- [Bun](https://bun.sh) 1.4.x (latest 1.4 patch; CI reads `.bun-version`)
+- [Bun](https://bun.sh) >=1.4.3 (CI reads the tested 1.4.3 pin from `.bun-version`)
 - Docker Compose (for PostgreSQL 18 and Redis)
 
 Clone the repo and install JavaScript packages:

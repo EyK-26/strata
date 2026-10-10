@@ -24,7 +24,7 @@
       "devDependencies": {
         "@biomejs/biome": "^2.5.7",
         "@node-saml/node-saml": "^5.1.0",
-        "@types/bun": "^1.4.0",
+        "@types/bun": ">=1.4.2",
         "lefthook": "^2.1.10",
         "typescript": "^7.0.2",
         "xml-crypto": "^6.1.2",
@@ -40,7 +40,7 @@
         "eta": "^4.6.0",
       },
       "devDependencies": {
-        "@types/bun": "^1.4.0",
+        "@types/bun": ">=1.4.2",
         "typescript": "^7.0.2",
       },
     },
@@ -54,7 +54,7 @@
         "eta": "^4.6.0",
       },
       "devDependencies": {
-        "@types/bun": "^1.4.0",
+        "@types/bun": ">=1.4.2",
         "typescript": "^7.0.2",
       },
     },
@@ -68,7 +68,7 @@
         "eta": "^4.6.0",
       },
       "devDependencies": {
-        "@types/bun": "^1.4.0",
+        "@types/bun": ">=1.4.2",
         "typescript": "^7.0.2",
       },
     },
@@ -83,7 +83,7 @@
       "name": "@getstrata/bootstrap",
       "version": "2.2.12",
       "peerDependencies": {
-        "@getstrata/core": "^2.0.1",
+        "@getstrata/core": "^2.2.12",
         "typescript": "^5.9.0 || ^6.0.0 || ^7.0.0",
       },
     },
@@ -94,8 +94,8 @@
         "strata": "./cli.ts",
       },
       "peerDependencies": {
-        "@getstrata/bootstrap": "^2.0.1",
-        "@getstrata/core": "^2.0.1",
+        "@getstrata/bootstrap": "^2.2.12",
+        "@getstrata/core": "^2.2.12",
       },
     },
     "packages/strata-core": {
@@ -130,6 +130,9 @@
         "create-strata": "./dist/cli.js",
       },
     },
+  },
+  "overrides": {
+    "bun-types": ">=1.4.3",
   },
   "packages": {
     "@biomejs/biome": ["@biomejs/biome@2.5.7", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.5.7", "@biomejs/cli-darwin-x64": "2.5.7", "@biomejs/cli-linux-arm64": "2.5.7", "@biomejs/cli-linux-arm64-musl": "2.5.7", "@biomejs/cli-linux-x64": "2.5.7", "@biomejs/cli-linux-x64-musl": "2.5.7", "@biomejs/cli-win32-arm64": "2.5.7", "@biomejs/cli-win32-x64": "2.5.7" }, "bin": { "biome": "bin/biome" } }, "sha512-zr8K/DcY5tYsQOQwqMJ0AWElo6QgmgNI7idXgXLhevVszlt8RGVpesEJPqx3ThazLaOwjJ5Y8fz3BtH5fGZNsw=="],
@@ -190,7 +193,7 @@
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.43.0", "", {}, "sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg=="],
 
-    "@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+    "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
     "@types/debug": ["@types/debug@4.1.13", "", { "dependencies": { "@types/ms": "*" } }, "sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw=="],
 
@@ -250,7 +253,7 @@
 
     "aws-ssl-profiles": ["aws-ssl-profiles@1.1.2", "", {}, "sha512-NZKeq9AfyQvEeNlN0zSYAaWrmBffJh3IELMZfRpJVWgrpEbtEpnjvzqBPf+mxoI287JohRDoa+/nsfqqiZmF6g=="],
 
-    "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+    "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
     "create-strata": ["create-strata@workspace:packages/create-strata"],
 
