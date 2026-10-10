@@ -90,9 +90,44 @@ describe("bounded Redis queue observations", () => {
         retryWaiting: 1,
         quarantined: 1,
       });
+      expect(row?.retryActionableLatenessSeconds).toBeGreaterThan(1_000_000);
       expect(row?.oldestStreamEntryAgeSeconds).toBeGreaterThan(1_000_000);
       expect(await client.send("XLEN", [stream])).toBe(2);
       expect(await client.send("ZCARD", [streamRetryKey(key)])).toBe(2);
+    });
+  });
+
+  test("retry lateness uses Redis time, excludes future waits and omits cancellation sentinel age", async () => {
+    await fixture(async (client, key) => {
+      const retries = streamRetryKey(key);
+      const now = await client.send("TIME", []);
+      if (!Array.isArray(now)) throw new Error("Invalid fixture time");
+      const ms = Number(now[0]) * 1000 + Math.floor(Number(now[1]) / 1000);
+      await client.send("ZADD", [retries, String(ms + 60_000), "private-future"]);
+      const read = async () => readRedisQueueSnapshot(redisUrl, { transport: "streams" });
+      expect((await read()).priorities[1]?.retryActionableLatenessSeconds).toBe(0);
+      await client.send("ZADD", [retries, String(ms - 5000), "private-overdue"]);
+      const before = await client.send("ZRANGE", [retries, "0", "-1", "WITHSCORES"]);
+      const snapshot = await read();
+      expect(snapshot.priorities[1]?.retryActionableLatenessSeconds).toBeGreaterThanOrEqual(5);
+      expect(snapshot.priorities[1]?.retryActionableLatenessSeconds).toBeLessThan(10);
+      expect(renderRedisQueueMetrics(snapshot)).toContain(
+        'strata_queue_retry_actionable_lateness_seconds{priority="default"}',
+      );
+      expect(await client.send("ZRANGE", [retries, "0", "-1", "WITHSCORES"])).toEqual(before);
+      await client.send("ZADD", [retries, "0", "private-cancelled"]);
+      const cancelled = await read();
+      expect(cancelled.priorities[1]?.retryActionableLatenessSeconds).toBeNull();
+      expect(cancelled.priorities[1]?.retryDue).toBe(2);
+      expect(renderRedisQueueMetrics(cancelled)).not.toContain(
+        'strata_queue_retry_actionable_lateness_seconds{priority="default"}',
+      );
+      await client.send("ZREM", [retries, "private-cancelled", "private-overdue"]);
+      expect((await read()).priorities[1]?.retryActionableLatenessSeconds).toBe(0);
+      for (const invalid of ["-1", "1.5"]) {
+        await client.send("ZADD", [retries, invalid, "private-invalid-score"]);
+        await expect(read()).rejects.toThrow();
+      }
     });
   });
 
@@ -123,7 +158,7 @@ describe("bounded Redis queue observations", () => {
       expect(rendered).not.toContain('priority="default",state="ready"');
       expect(rendered).toContain('strata_queue_inflight_sample_capped{priority="default"} 1');
       // Fixed output size even when the shared queue contains more than the sample cap.
-      expect(rendered.length).toBeLessThan(3500);
+      expect(rendered.length).toBeLessThan(4500);
     });
   });
 
@@ -139,6 +174,7 @@ describe("bounded Redis queue observations", () => {
         inflight: 1,
         quarantined: 1,
         oldestStreamEntryAgeSeconds: null,
+        retryActionableLatenessSeconds: null,
       });
       const rendered = renderRedisQueueMetrics(snapshot);
       expect(rendered).not.toContain('state="retry_due"');

@@ -107,6 +107,8 @@ interface QueuePrioritySnapshot {
   inflightCapped: boolean;
   retryDue: number;
   retryWaiting: number;
+  /** Oldest positive due-score lateness; unavailable for lists or cancellation sentinels. */
+  retryActionableLatenessSeconds?: number | null;
   quarantined: number;
   /** Residence age of the oldest current stream entry, not original job age across retries. */
   oldestStreamEntryAgeSeconds: number | null;
@@ -132,18 +134,28 @@ local ready = capped == 1 and -1 or size-inflight
 if ready < 0 and capped == 0 then return redis.error_reply('Inconsistent stream pending state') end
 local retries = redis.call('ZCARD', KEYS[2])
 local due = redis.call('ZCOUNT', KEYS[2], '-inf', ms)
+local lateness = 0
+if due > 0 then
+  local oldest = redis.call('ZRANGE', KEYS[2], 0, 0, 'WITHSCORES')
+  local score = tonumber(oldest[2])
+  if not score or score < 0 or score ~= math.floor(score) or score > ms then
+    return redis.error_reply('Invalid retry due score')
+  end
+  -- Cancellation sets score zero to request immediate promotion/cleanup; it is not a timestamp.
+  lateness = score == 0 and -1 or (ms-score)/1000
+end
 local first = redis.call('XRANGE', KEYS[1], '-', '+', 'COUNT', 1)
 local age = 0
 if #first > 0 then
   local timestamp = tonumber(string.match(first[1][1], '^(%d+)-'))
   age = math.max(0, ms-timestamp)/1000
 end
-return {size+retries, ready, inflight, capped, due, retries-due, redis.call('LLEN', KEYS[3]), tostring(age)}
+return {size+retries, ready, inflight, capped, due, retries-due, redis.call('LLEN', KEYS[3]), tostring(age), tostring(lateness)}
 `;
 const LIST_SNAPSHOT = `
 local ready = redis.call('LLEN', KEYS[1])
 local inflight = redis.call('LLEN', KEYS[2])
-return {ready+inflight, ready, inflight, 0, 0, 0, redis.call('LLEN', KEYS[3]), '-1'}
+return {ready+inflight, ready, inflight, 0, 0, 0, redis.call('LLEN', KEYS[3]), '-1', '-1'}
 `;
 
 /** Shared state, not per-process counters. Throws on missing configuration, failure or timeout. */
@@ -174,7 +186,7 @@ async function readRedisQueueSnapshot(
           STREAM_GROUP,
           String(INFLIGHT_SAMPLE_LIMIT),
         ]);
-        if (!Array.isArray(raw) || raw.length !== 8)
+        if (!Array.isArray(raw) || raw.length !== 9)
           throw new Error("Invalid queue metrics response.");
         const values = raw.map(Number);
         if (
@@ -184,8 +196,17 @@ async function readRedisQueueSnapshot(
             .some((value, i) => !Number.isSafeInteger(value) || value < (i === 1 ? -1 : 0))
         )
           throw new Error("Invalid queue metrics values.");
-        const [unfinished, ready, inflight, capped, retryDue, retryWaiting, quarantined, age] =
-          values;
+        const [
+          unfinished,
+          ready,
+          inflight,
+          capped,
+          retryDue,
+          retryWaiting,
+          quarantined,
+          age,
+          lateness,
+        ] = values;
         if (
           unfinished === undefined ||
           ready === undefined ||
@@ -195,6 +216,8 @@ async function readRedisQueueSnapshot(
           retryWaiting === undefined ||
           quarantined === undefined ||
           age === undefined ||
+          lateness === undefined ||
+          (lateness < 0 && lateness !== -1) ||
           (capped !== 0 && capped !== 1) ||
           age < (transport === "lists" ? -1 : 0)
         )
@@ -207,6 +230,7 @@ async function readRedisQueueSnapshot(
           inflightCapped: capped === 1,
           retryDue,
           retryWaiting,
+          retryActionableLatenessSeconds: lateness === -1 ? null : lateness,
           quarantined,
           oldestStreamEntryAgeSeconds: transport === "streams" ? age : null,
         };
@@ -244,6 +268,9 @@ function renderRedisQueueMetrics(snapshot: RedisQueueSnapshot): string {
         (value) => !Number.isSafeInteger(value) || value < 0,
       ) ||
       (row.ready !== null && (!Number.isSafeInteger(row.ready) || row.ready < 0)) ||
+      (row.retryActionableLatenessSeconds != null &&
+        (!Number.isFinite(row.retryActionableLatenessSeconds) ||
+          row.retryActionableLatenessSeconds < 0)) ||
       (row.oldestStreamEntryAgeSeconds !== null &&
         (!Number.isFinite(row.oldestStreamEntryAgeSeconds) || row.oldestStreamEntryAgeSeconds < 0))
     )
@@ -261,6 +288,8 @@ function renderRedisQueueMetrics(snapshot: RedisQueueSnapshot): string {
     "# TYPE strata_queue_inflight_sample_capped gauge",
     "# HELP strata_queue_oldest_stream_entry_age_seconds Oldest current stream entry residence age; resets when a retry is promoted.",
     "# TYPE strata_queue_oldest_stream_entry_age_seconds gauge",
+    "# HELP strata_queue_retry_actionable_lateness_seconds Oldest retry due-score lateness; unavailable for cancellation sentinels or lists.",
+    "# TYPE strata_queue_retry_actionable_lateness_seconds gauge",
   ];
   for (const priority of snapshot.priorities) {
     const label = `priority="${priority.priority}"`;
@@ -275,6 +304,10 @@ function renderRedisQueueMetrics(snapshot: RedisQueueSnapshot): string {
     for (const [state, value] of Object.entries(states))
       if (value !== null) lines.push(`strata_queue_jobs{${label},state="${state}"} ${value}`);
     lines.push(`strata_queue_inflight_sample_capped{${label}} ${Number(priority.inflightCapped)}`);
+    if (snapshot.transport === "streams" && priority.retryActionableLatenessSeconds != null)
+      lines.push(
+        `strata_queue_retry_actionable_lateness_seconds{${label}} ${priority.retryActionableLatenessSeconds}`,
+      );
     if (priority.oldestStreamEntryAgeSeconds !== null)
       lines.push(
         `strata_queue_oldest_stream_entry_age_seconds{${label}} ${priority.oldestStreamEntryAgeSeconds}`,
