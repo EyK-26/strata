@@ -61,6 +61,10 @@ type ExtendedQueryOptions<TEntity extends object> = QueryOptions<TEntity> & {
 interface DatabaseConnection {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
   begin?<T>(callback: (transaction: DatabaseConnection) => Promise<T>): Promise<T>;
+  /** Optional native cancellable pool checkout; absence must not be silently emulated. */
+  reserve?(options: {
+    signal?: AbortSignal;
+  }): Promise<DatabaseConnection & { release(): void | Promise<void> }>;
   /** SQLite closes synchronously; pooled drivers return a promise. */
   close?(): void | Promise<void>;
 }

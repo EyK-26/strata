@@ -111,6 +111,22 @@ await counters.upsert({ slug: "home" }, ["slug"], []);
 
 `runInTransaction()` is the business transaction boundary. Inside an open `runWithTenantDatabase()` transaction it uses a savepoint, so a throw rolls back that unit and leaves the outer transaction open. `withJsonErrorHandling()`, `withErrorHandling()`, and the JSON error middleware call `requestTransactionRollback()` when they catch an exception and return an error response. The open transaction or savepoint then rolls back instead of committing. A handler that returns a 4xx response without throwing does not roll back. If you catch inside the transaction yourself and still return a response, call `requestTransactionRollback()` or the writes commit. Nested same-tenant scopes and migration bypass scopes use SQL savepoints on the active connection and restore `app.tenant_id`, `app.bypass_rls`, and `app.bypass_identifier`. Cross-tenant nesting and concurrent sibling savepoints are rejected. Previously unset custom PostgreSQL settings restore to an empty value, which represents no identity.
 
+### Cancellable transaction acquisition
+
+```ts
+import { runInTransaction } from "@getstrata/core/database/transaction";
+
+await runInTransaction(async db => {
+  await db.unsafe("SELECT 1");
+}, { acquisitionSignal: AbortSignal.timeout(1000) });
+```
+
+The optional `acquisitionSignal` controls admission and native pool checkout, **not** SQL execution or cancellation of an admitted business callback. A pre-aborted signal fails before any transaction/reservation. At the outer boundary the adapter must implement native `reserve({signal})`, `begin()` on its reservation and `release()`; unsupported adapters fail explicitly rather than pretending a Promise race cancels checkout. The tested Bun 1.4.2 SQL pool implements this [native acquisition contract](https://bun.sh/docs/runtime/sql). Existing calls without an option continue using `begin()` directly, including SQLite/MySQL adapters.
+
+The reservation is released on success, rollback, malformed-adapter rejection or cancellation between checkout and callback admission. Once the callback starts, later aborts do not silently roll back or suppress commit; use database query deadlines or explicit business rollback separately. Nested calls use the existing connection/savepoint and never reserve another slot. Cancellation before a nested callback rolls back that savepoint; cancellation of a running callback does not automatically abort its parent. Admission cancellation does not cancel an in-flight BEGIN/SAVEPOINT command; the signal is rechecked before the business callback. Connection/network timeouts still apply to those commands.
+
+Release occurs before committed deferred observers flush, so reentrant observers can acquire the same single-slot pool. Existing observer, SQL failure, deferred-event and tenant-scope semantics remain unchanged. This option does not install signal handlers, change tenancy or bind a global connection.
+
 `BaseRepository.create` / `updateById` / `deleteById` / `restoreById` dispatch `table.created` (and the matching write events) through `dispatchModelEvent()`. Outside a framework transaction that is immediate. Inside `runInTransaction()`, `runWithTenantDatabase()`, or `runWithMigrationBypass()`, the event waits for a successful commit and is dropped on rollback. Nested `begin` callbacks promote queued events to the outer commit. A savepoint rollback drops only the events queued inside that savepoint. Wrap a raw `pool.begin()` with `runWithDeferredModelEvents()` if you need the same contract. Model observers still run before commit.
 
 `Model.firstOrCreate` reads first, then inserts. If a concurrent writer wins that race the unique violation is caught and the existing row is returned, so a duplicate never surfaces as a conflict. Any other error propagates.

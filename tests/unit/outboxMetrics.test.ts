@@ -32,7 +32,15 @@ beforeEach(() => {
   }));
   const unsafe = async <T>(query: string): Promise<T[]> =>
     query.includes("WITH snapshot_clock") ? (rows as T[]) : [];
+  const reserved = {
+    unsafe,
+    release() {},
+    async begin<T>(run: (tx: UnsafeQueryable) => Promise<T>) {
+      return run({ unsafe });
+    },
+  };
   bindDatabaseConnection({
+    reserve: async () => reserved,
     unsafe,
     async begin<T>(run: (tx: UnsafeQueryable) => Promise<T>) {
       return run({ unsafe });

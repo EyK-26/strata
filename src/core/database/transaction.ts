@@ -71,13 +71,24 @@ function supportsTransactions(
   return typeof (connection as TransactionCapableConnection).begin === "function";
 }
 
+interface TransactionOptions {
+  /** Cancel admission/pool checkout only. Does not cancel SQL or an admitted business callback. */
+  acquisitionSignal?: AbortSignal;
+}
 async function runInTransaction<TValue>(
   operation: (connection: DatabaseConnection) => Promise<TValue>,
+  options: TransactionOptions = {},
 ): Promise<TValue> {
+  const signal = options.acquisitionSignal;
+  signal?.throwIfAborted();
+  const admittedOperation = (connection: DatabaseConnection): Promise<TValue> => {
+    signal?.throwIfAborted();
+    return operation(connection);
+  };
   const pool = resolveRepositoryConnection();
 
   if (hasActiveDatabaseConnection()) {
-    return await runInSavepoint(getActiveDatabaseConnection(pool), operation);
+    return await runInSavepoint(getActiveDatabaseConnection(pool), admittedOperation);
   }
 
   if (!supportsTransactions(pool)) {
@@ -88,17 +99,34 @@ async function runInTransaction<TValue>(
 
   return await settleTransaction(() =>
     runWithDeferredModelEvents(async () => {
-      return await pool.begin(async (transaction) => {
-        return await runWithDatabaseConnection(transaction, () =>
-          transactionFrame.run({ connection: transaction, childActive: false }, () =>
-            runWithTransactionScope(async () =>
-              commitOrRollbackScope(await operation(createDatabaseConnection(transaction))),
-            ),
-          ),
+      if (signal && !pool.reserve)
+        throw new Error(
+          "Active database connection does not support cancellable transaction acquisition.",
         );
-      });
+      const reserved = signal ? await pool.reserve?.({ signal }) : undefined;
+      const connection = reserved ?? pool;
+      try {
+        signal?.throwIfAborted();
+        if (!supportsTransactions(connection))
+          throw new Error("Reserved database connection does not support transactions.");
+        return await connection.begin(async (transaction) => {
+          return await runWithDatabaseConnection(transaction, () =>
+            transactionFrame.run({ connection: transaction, childActive: false }, () =>
+              runWithTransactionScope(async () =>
+                commitOrRollbackScope(
+                  await admittedOperation(createDatabaseConnection(transaction)),
+                ),
+              ),
+            ),
+          );
+        });
+      } finally {
+        // Release before deferred observers flush; reentrant listeners may need this slot.
+        await reserved?.release();
+      }
     }),
   );
 }
 
+export type { TransactionOptions };
 export { hasActiveTransaction, requestTransactionRollback, runInTransaction };

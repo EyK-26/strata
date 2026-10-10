@@ -292,13 +292,41 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
     const collector = createOutboxMetricsCollector({ timeoutMs: 50 });
     try {
       await expect(collector.collect()).rejects.toThrow("timed out");
-      await expect(collector.collect()).rejects.toThrow("settling");
+      await Bun.sleep(10);
+      await expect(collector.collect()).rejects.toThrow("timed out");
     } finally {
       for (const connection of reserved) connection.release();
       await collector.close();
     }
     expect(await runInTransaction(() => db.unsafe("SELECT * FROM strata_outbox_event"))).toEqual(
       [],
+    );
+  });
+
+  test("native transaction acquisition cancellation never admits a late callback", async () => {
+    const reserved = await Promise.all(Array.from({ length: 8 }, () => pool.reserve()));
+    let admissions = 0;
+    try {
+      await expect(
+        runInTransaction(
+          async () => {
+            admissions++;
+          },
+          { acquisitionSignal: AbortSignal.timeout(50) },
+        ),
+      ).rejects.toThrow();
+    } finally {
+      for (const connection of reserved) connection.release();
+    }
+    await Bun.sleep(20);
+    expect(admissions).toBe(0);
+    await runInTransaction(
+      async (connection) => {
+        const [direct] = await connection.unsafe<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+        const [repository] = await db.unsafe<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+        expect(direct?.pid).toBe(repository?.pid);
+      },
+      { acquisitionSignal: new AbortController().signal },
     );
   });
 
