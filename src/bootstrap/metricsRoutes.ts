@@ -1,4 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
+import {
+  renderTransactionAcquisitionMetrics,
+  type TransactionAcquisitionMetrics,
+} from "@getstrata/core/database/transaction";
 import { type OutboxMetricsCollector, renderOutboxMetrics } from "@getstrata/core/events/outbox";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 import {
@@ -48,13 +52,16 @@ interface MetricsRoutesOptions {
   outbox?: Pick<OutboxMetricsCollector, "collect">;
   /** Read an existing runtime; scraping never initializes tracing or flushes spans. */
   tracing?: Pick<TracingRuntime, "metrics">;
+  /** Fixed process-local observations; scrape does not reserve a database connection. */
+  transactionAcquisition?: Pick<TransactionAcquisitionMetrics, "snapshot">;
 }
 function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
   // One concurrent collection per route instance, including failed/timed-out scrapes.
   let collection: Promise<string> | undefined;
   const collect = (): Promise<string> => {
-    if (!options.queue && !options.outbox && !options.tracing) return Promise.resolve("");
-    const failure = (name: "queue" | "outbox" | "tracing") =>
+    if (!options.queue && !options.outbox && !options.tracing && !options.transactionAcquisition)
+      return Promise.resolve("");
+    const failure = (name: "queue" | "outbox" | "tracing" | "database_acquisition") =>
       `# HELP strata_${name}_collector_success Whether the configured ${name} collection succeeded.\n# TYPE strata_${name}_collector_success gauge\nstrata_${name}_collector_success 0\n`;
     collection ??= Promise.all([
       options.queue
@@ -72,6 +79,15 @@ function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
         ? Promise.resolve()
             .then(() => (options.tracing ? renderTracingMetrics(options.tracing.metrics()) : ""))
             .catch(() => failure("tracing"))
+        : Promise.resolve(""),
+      options.transactionAcquisition
+        ? Promise.resolve()
+            .then(() =>
+              options.transactionAcquisition
+                ? renderTransactionAcquisitionMetrics(options.transactionAcquisition.snapshot())
+                : "",
+            )
+            .catch(() => failure("database_acquisition"))
         : Promise.resolve(""),
     ])
       .then((parts) => parts.join(""))

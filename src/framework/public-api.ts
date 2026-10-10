@@ -98,6 +98,14 @@ export {
 } from "../core/contracts/container.ts";
 export type { ServiceProvider } from "../core/contracts/di.ts";
 export { resolveService } from "../core/contracts/di.ts";
+export type {
+  TransactionAcquisitionMetrics,
+  TransactionAcquisitionSnapshot,
+} from "../core/database/acquisitionMetrics.ts";
+export {
+  createTransactionAcquisitionMetrics,
+  renderTransactionAcquisitionMetrics,
+} from "../core/database/acquisitionMetrics.ts";
 export type { DatabaseConnection } from "../core/database/baseRepository.ts";
 export { default as BaseRepository } from "../core/database/baseRepository.ts";
 export {

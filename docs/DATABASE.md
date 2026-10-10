@@ -131,6 +131,10 @@ Release occurs before committed deferred observers flush, so reentrant observers
 
 `Model.firstOrCreate` reads first, then inserts. If a concurrent writer wins that race the unique violation is caught and the existing row is returned, so a duplicate never surfaces as a conflict. Any other error propagates.
 
+### Observing native transaction checkout
+
+`createTransactionAcquisitionMetrics()` creates an optional bounded process-local collector. Pass it as `runInTransaction(operation, { acquisitionMetrics })` and to `createMetricsRoutes({ transactionAcquisition: acquisitionMetrics })`. Opting in requires native reservation support and measures only the outer checkout, including pool wait and connection establishment. Nested savepoints do not produce another acquisition observation; business errors do not become checkout errors. Without metrics or an acquisition signal the existing direct `begin()` path is unchanged. See [runtime metrics](RUNTIME-METRICS.md#opt-in-transaction-acquisition-observations) for outcomes, cancellation semantics, aggregation and coverage limits. This is not a global pool statistic or a claim to instrument every direct SQL/tenant request.
+
 ### Walking large tables
 
 `chunkById` pages by keyset instead of `OFFSET`, so rows are neither skipped nor repeated when the callback mutates what it reads. Return `false` to stop early. Prefer it over `chunk` for anything that writes.
