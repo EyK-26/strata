@@ -131,7 +131,9 @@ coveragePathIgnorePatterns = [
   "src/core/contracts/container.ts",
   "src/core/contracts/di.ts",
   "src/core/contracts/serviceTokens.ts",
-  "src/core/tracing/**",
+  "src/core/tracing/otel.ts",
+  "src/core/tracing/traceContext.ts",
+  "src/core/tracing/tracingMiddleware.ts",
 
   # ActiveRecord-style model wrapper (covered in tests/unit/model.test.ts)
   "src/core/database/model.ts",

@@ -3,16 +3,17 @@ import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-ho
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace";
 import {
   AlwaysOffSampler,
   AlwaysOnSampler,
-  BatchSpanProcessor,
   ParentBasedSampler,
   type SpanExporter,
   TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { otelServiceName } from "../runtime/appKeyPrefix";
+import { createTracingHealth, type TracingMetricsSnapshot } from "./health";
 
 type TracingOptions = {
   exporter?: SpanExporter;
@@ -28,6 +29,7 @@ type TracingRuntime = {
   tracer: Tracer;
   propagator: W3CTraceContextPropagator;
   run<T>(parent: Context, callback: () => T): T;
+  metrics(): TracingMetricsSnapshot;
   forceFlush(): Promise<void>;
   shutdown(): Promise<void>;
 };
@@ -115,12 +117,15 @@ function createTracingRuntime(options: TracingOptions = {}): TracingRuntime {
       (endpoint
         ? new OTLPTraceExporter({ url: endpoint, timeoutMillis: timeout, concurrencyLimit: 1 })
         : undefined));
+  const health = createTracingHealth(!disabled, exporter !== undefined, timeout);
   const provider = new NodeTracerProvider({
     resource: resourceFromAttributes({ "service.name": options.serviceName ?? otelServiceName() }),
     sampler,
     spanProcessors: exporter
       ? [
-          new BatchSpanProcessor(exporter, {
+          new BatchSpanProcessor({
+            exporter: health.wrap(exporter),
+            selfObsMeterProvider: health.meterProvider,
             maxQueueSize: queueSize,
             maxExportBatchSize: batchSize,
             scheduledDelayMillis: delay,
@@ -141,8 +146,25 @@ function createTracingRuntime(options: TracingOptions = {}): TracingRuntime {
     tracer: provider.getTracer("@getstrata/http"),
     propagator: new W3CTraceContextPropagator(),
     run: (parent, callback) => context.with(parent, callback),
-    forceFlush: () => provider.forceFlush(),
-    shutdown: () => (shutdown ??= provider.shutdown()),
+    metrics: () => health.snapshot(),
+    async forceFlush() {
+      try {
+        await provider.forceFlush();
+      } catch (error) {
+        health.state.flushFailures++;
+        throw error;
+      }
+    },
+    shutdown: () =>
+      (shutdown ??= provider
+        .shutdown()
+        .catch((error) => {
+          health.state.shutdownFailures++;
+          throw error;
+        })
+        .finally(() => {
+          health.state.active = false;
+        })),
   };
 }
 
