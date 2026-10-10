@@ -31,6 +31,8 @@ const allowedUnbounded = new Set([
   join(repoRoot, "src/core/audit/exportAuditLogs.ts"),
   // Worker-only coordination; publication is fenced to the business transaction below.
   join(repoRoot, "src/core/events/outbox/index.ts"),
+  // Explicit authenticated platform observation: capped, read-only, deadline-bound.
+  join(repoRoot, "src/core/events/outbox/metrics.ts"),
 ]);
 
 const requestPathRoots = [
@@ -166,4 +168,19 @@ describe("request-path RLS bypass fence", () => {
     expect(text.slice(jobStart, jobEnd)).toContain(unboundedNeedle);
     expect(text.slice(billingStart)).not.toContain(unboundedNeedle);
   });
+});
+
+test("outbox metrics bypass is confined to bounded read-only platform observation", async () => {
+  const collector = await readFile(join(repoRoot, "src/core/events/outbox/metrics.ts"), "utf8");
+  expect([...collector.matchAll(/runWithMigrationBypass\(/g)]).toHaveLength(1);
+  expect(collector).toContain("hasActiveTransaction()");
+  expect(collector).toContain("SET TRANSACTION READ ONLY");
+  expect(collector).toContain("statement_timeout");
+  expect(collector).toContain("LIMIT $1");
+  expect(collector).not.toContain("SELECT payload");
+  const routes = await readFile(join(repoRoot, "src/bootstrap/metricsRoutes.ts"), "utf8");
+  expect(routes.indexOf("if (!authorizeMetrics(request))")).toBeLessThan(
+    routes.indexOf("(await collect())"),
+  );
+  expect(routes).toContain("if (!options.queue && !options.outbox)");
 });

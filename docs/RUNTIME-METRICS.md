@@ -35,6 +35,33 @@ The older `collectQueueMetrics()` API remains compatible. Its `failedCount` is a
 
 ## Remaining work and promotion gates
 
-This is the Redis observation slice of [#139](https://github.com/EyK-26/strata/issues/139), not complete operational qualification. Bounded SQL outbox/failed-state observations, actionable retry age, connection acquisition measurements where observable, OpenTelemetry exporter failure/saturation observations and generated wiring remain follow-up work. A Bun pool statistic or SDK queue occupancy must not be invented when its supported API cannot observe it. Use infrastructure exporters for persistence, server connection capacity and backup health.
+This is the Redis observation slice of [#139](https://github.com/EyK-26/strata/issues/139), not complete operational qualification. SQL failed-job observations, additional outbox dialects, actionable queue retry age, connection acquisition measurements where observable, OpenTelemetry exporter failure/saturation observations and generated wiring remain follow-up work. A Bun pool statistic or SDK queue occupancy must not be invented when its supported API cannot observe it. Use infrastructure exporters for persistence, server connection capacity and backup health.
 
 Tests cover both transports, empty/pre-consumer state, ready/inflight/retry/quarantine state, capped output, unchanged source state, three independent processes, wrong key types, deadline/connection cleanup and concurrent scraping. Environment-specific alert routing, thresholds, sustained scrape/load costs, multi-worker recovery and failure drills remain required before production promotion.
+
+## Opt-in SQL outbox observations (Postgres)
+
+```ts
+import { createOutboxMetricsCollector } from "@getstrata/core/events/outbox";
+import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+
+const outboxMetrics = createOutboxMetricsCollector({ timeoutMs: 1000, sampleLimit: 500 });
+const metrics = createMetricsRoutes({ outbox: outboxMetrics });
+// Register outboxMetrics.close() with lifecycle draining before closing the database.
+// Queue and outbox options may be enabled together; their failures are independent.
+```
+
+This is an explicit **platform-wide** observation using the framework's existing transaction-local migration bypass. It must run outside business/tenant transactions and uses the bound runtime connection with SELECT access to the installed outbox schema; no administrative URL, superuser or BYPASSRLS role is needed. It never invokes a listener, writes a delivery, loads event payloads or enumerates tenants/listeners. The collector is initially Postgres-only: opting in on SQLite/MySQL fails with an unavailable signal rather than emitting zero. Their outbox delivery mechanisms remain supported and unchanged.
+
+`sampleLimit` is 1–1,000 (default 500). One SQL snapshot, using database wall-clock time, reads at most limit+1 records from each of six indexed state ranges. Completed history is excluded. Existing `(status,available_at,event_id,listener_name)` and `(status,lease_until,event_id,listener_name)` indexes are required; the standard outbox migration already creates them. No schema change is needed. Real restricted-role RLS `EXPLAIN ANALYZE` regressions with 20,000 completed and 1,000 pending deliveries verify index seeks and capped row reads. Keep database statistics current and measure the plan/scrape cost against your production distribution.
+
+- `strata_outbox_collector_success`: 1 on success; 0 on timeout, missing schema, unsupported dialect or collection failure. Failure omits all outbox observations, preserves HTTP and any successful queue observations, and logs no database error text.
+- `strata_outbox_deliveries_sample{state}`: capped count for `pending_due`, `pending_waiting`, `processing_active`, `processing_expired`, `processing_unleased`, `failed`. Pending states split at `available_at <= database_now`; processing states split at `lease_until <= database_now`, with null leases reported separately. These are delivery counts, not unique events. Failed deliveries require explicit operator replay; they are not due jobs.
+- `strata_outbox_sample_capped{state}`: 1 when the count is a lower bound; 0 when that state's count is exact at the snapshot. Never sum capped values into an authoritative backlog total.
+- `strata_outbox_actionable_lateness_seconds{state}`: oldest due-time lateness for pending_due or lease-expiry lateness for processing_expired; 0 when empty. Indexed ascending selection retains the oldest boundary even when the count is capped. This is not original event age, execution duration, or the time a failed delivery entered terminal failure. Other states omit this measurement.
+
+All values are shared-schema platform gauges: use one designated collector or `max`, not sum across replicas. No tenant, event, listener, SQL, payload or secret labels are exposed. Metrics routes remain bearer-authenticated, and the default is still HTTP-only.
+
+A 1–5,000ms deadline (default 1,000ms) bounds the scrape result. Collection uses a read-only transaction with a transaction-local [Postgres statement timeout](https://www.postgresql.org/docs/16/runtime-config-client.html), restored automatically on transaction completion/rollback. The framework transaction contract does not yet expose cancellation of pending pool checkout. If that wait exceeds the deadline, its late callback performs no collection, and a collector refuses another transaction while the first is still settling. `close()` stops new collection and waits for release; integrate it before pool closure and within the application's hard shutdown deadline. This is deliberately not a claim that every underlying resource is released at the scrape deadline. Native connection/network timeout and infrastructure supervision still matter during a server outage.
+
+Three independent restricted-role processes, SQL table-lock, saturated-pool, cancellation/rollback, scope restoration, read-only source state, recovery, unsupported-dialect and authenticated failure regressions accompany the collector. The remaining #139 items include SQL failed-job observations, queue retry lateness, supported acquisition/tracing signals, generated lifecycle wiring and deployment qualification. This addition does not close #139 or address encryption-key rotation (#140).
