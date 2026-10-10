@@ -1,5 +1,9 @@
 import { runWithDeferredModelEvents } from "../events/deferredModelEvents.ts";
 import { createAsyncContextStore } from "../runtime/asyncContextStore.ts";
+import {
+  observeTransactionAcquisition,
+  type TransactionAcquisitionMetrics,
+} from "./acquisitionMetrics.ts";
 import type { DatabaseConnection } from "./baseRepository.ts";
 import { createDatabaseConnection, type UnsafeQueryable } from "./connection.ts";
 import {
@@ -74,6 +78,8 @@ function supportsTransactions(
 interface TransactionOptions {
   /** Cancel admission/pool checkout only. Does not cancel SQL or an admitted business callback. */
   acquisitionSignal?: AbortSignal;
+  /** Observe native checkout only; requires a reserve-capable adapter. */
+  acquisitionMetrics?: TransactionAcquisitionMetrics;
 }
 async function runInTransaction<TValue>(
   operation: (connection: DatabaseConnection) => Promise<TValue>,
@@ -99,11 +105,23 @@ async function runInTransaction<TValue>(
 
   return await settleTransaction(() =>
     runWithDeferredModelEvents(async () => {
-      if (signal && !pool.reserve)
-        throw new Error(
-          "Active database connection does not support cancellable transaction acquisition.",
-        );
-      const reserved = signal ? await pool.reserve?.({ signal }) : undefined;
+      let reserved: (DatabaseConnection & { release(): void | Promise<void> }) | undefined;
+      if (signal || options.acquisitionMetrics) {
+        if (!pool.reserve)
+          throw new Error(
+            signal
+              ? "Active database connection does not support cancellable transaction acquisition."
+              : "Active database connection does not support observable transaction acquisition.",
+          );
+        const reserve = pool.reserve.bind(pool);
+        reserved = options.acquisitionMetrics
+          ? await observeTransactionAcquisition(
+              options.acquisitionMetrics,
+              () => reserve({ signal }),
+              signal,
+            )
+          : await reserve({ signal });
+      }
       const connection = reserved ?? pool;
       try {
         signal?.throwIfAborted();
@@ -128,5 +146,13 @@ async function runInTransaction<TValue>(
   );
 }
 
+export type {
+  TransactionAcquisitionMetrics,
+  TransactionAcquisitionSnapshot,
+} from "./acquisitionMetrics.ts";
+export {
+  createTransactionAcquisitionMetrics,
+  renderTransactionAcquisitionMetrics,
+} from "./acquisitionMetrics.ts";
 export type { TransactionOptions };
 export { hasActiveTransaction, requestTransactionRollback, runInTransaction };

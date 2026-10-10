@@ -20,6 +20,12 @@ const sharedSubpathSet = new Set<string>(CORE_SHARED_SUBPATHS);
 
 /** Runtime names that must exist on the published JS entry even without a sibling checkout. */
 const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
+  "database/transaction": [
+    "hasActiveTransaction",
+    "runInTransaction",
+    "createTransactionAcquisitionMetrics",
+    "renderTransactionAcquisitionMetrics",
+  ],
   "tracing/tracingMiddleware": ["createTracingRuntime", "renderTracingMetrics"],
   "database/model": [
     "Model",
@@ -51,7 +57,6 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "createOutboxMetricsCollector",
     "renderOutboxMetrics",
   ],
-  "database/transaction": ["hasActiveTransaction", "runInTransaction"],
   "database/bunSql": ["bindBunSql", "createBunSqlPool"],
   "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],
   "database/mysqlConnection": [

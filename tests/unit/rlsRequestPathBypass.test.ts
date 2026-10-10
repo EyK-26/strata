@@ -182,5 +182,7 @@ test("outbox metrics bypass is confined to bounded read-only platform observatio
   expect(routes.indexOf("if (!authorizeMetrics(request))")).toBeLessThan(
     routes.indexOf("(await collect())"),
   );
-  expect(routes).toContain("if (!options.queue && !options.outbox && !options.tracing)");
+  expect(routes).toContain(
+    "if (!options.queue && !options.outbox && !options.tracing && !options.transactionAcquisition)",
+  );
 });

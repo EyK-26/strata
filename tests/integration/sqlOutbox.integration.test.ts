@@ -13,7 +13,10 @@ import {
 import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
 import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
-import { runInTransaction } from "@getstrata/core/database/transaction";
+import {
+  createTransactionAcquisitionMetrics,
+  runInTransaction,
+} from "@getstrata/core/database/transaction";
 import {
   createOutboxMetricsCollector,
   createOutboxMigration,
@@ -306,13 +309,14 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
   test("native transaction acquisition cancellation never admits a late callback", async () => {
     const reserved = await Promise.all(Array.from({ length: 8 }, () => pool.reserve()));
     let admissions = 0;
+    const metrics = createTransactionAcquisitionMetrics();
     try {
       await expect(
         runInTransaction(
           async () => {
             admissions++;
           },
-          { acquisitionSignal: AbortSignal.timeout(50) },
+          { acquisitionSignal: AbortSignal.timeout(50), acquisitionMetrics: metrics },
         ),
       ).rejects.toThrow();
     } finally {
@@ -320,6 +324,9 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
     }
     await Bun.sleep(20);
     expect(admissions).toBe(0);
+    expect(metrics.snapshot().inflight).toBe(0);
+    expect(metrics.snapshot().outcomes[2]?.count).toBe(1);
+    expect(metrics.snapshot().outcomes[2]?.sumSeconds).toBeGreaterThan(0.03);
     await runInTransaction(
       async (connection) => {
         const [direct] = await connection.unsafe<{ pid: number }>("SELECT pg_backend_pid() AS pid");
@@ -327,6 +334,49 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
         expect(direct?.pid).toBe(repository?.pid);
       },
       { acquisitionSignal: new AbortController().signal },
+    );
+  });
+
+  test("native acquisition measures a saturated pool wait and keeps restricted-role tenant scopes", async () => {
+    const reserved = await Promise.all(Array.from({ length: 8 }, () => pool.reserve()));
+    const metrics = createTransactionAcquisitionMetrics();
+    const operation = runInTransaction(
+      async () => {
+        const observed = metrics.snapshot();
+        expect(observed.inflight).toBe(0);
+        expect(observed.outcomes[0]?.count).toBe(1);
+        expect(observed.outcomes[0]?.sumSeconds).toBeGreaterThan(0.025);
+        await runWithTenantDatabase(tenant, async () => {
+          const [settings] = await db.unsafe<{ bypass: string; tenant: string }>(
+            "SELECT current_setting('app.bypass_rls', true) AS bypass, current_setting('app.tenant_id', true) AS tenant",
+          );
+          expect(settings).toEqual({ bypass: "false", tenant: "101" });
+          await runInTransaction(
+            async () => {
+              await db.unsafe("SELECT 1");
+            },
+            { acquisitionMetrics: metrics },
+          );
+          await Bun.sleep(20);
+        });
+        expect(metrics.snapshot()).toEqual(observed);
+      },
+      { acquisitionMetrics: metrics },
+    );
+    expect(metrics.snapshot().inflight).toBe(1);
+    const release = setTimeout(() => {
+      reserved.shift()?.release();
+    }, 40);
+    try {
+      await operation;
+    } finally {
+      clearTimeout(release);
+      for (const connection of reserved) connection.release();
+    }
+    expect(metrics.snapshot().inflight).toBe(0);
+    expect(metrics.snapshot().outcomes.map((state) => state.count)).toEqual([1, 0, 0]);
+    expect(await runInTransaction(() => db.unsafe("SELECT * FROM strata_outbox_event"))).toEqual(
+      [],
     );
   });
 
