@@ -117,3 +117,101 @@ export {
   resolveEncryptionKey,
   revealEmail,
 };
+
+interface FieldEncryptionKeyringOptions {
+  /** Public stable identifiers; never reuse an ID for different key material. */
+  activeKeyId: string;
+  encryptionKeys: Readonly<Record<string, Uint8Array>>;
+  /** Explicitly retained key for unidentified enc:v1 records and historical backups. */
+  legacyV1Key?: Uint8Array;
+  /** Pinned independently of write-key rotation. Use the original key to preserve v1 email hashes. */
+  lookupKey: Uint8Array;
+}
+interface FieldEncryptionKeyring {
+  encrypt(plaintext: string, purpose: string): string;
+  decrypt(ciphertext: string, purpose: string): string;
+  /** Input must already be normalized using the application's existing lookup contract. */
+  lookup(normalizedValue: string): string;
+}
+
+/** Opt-in primitives only. This does not activate auth rotation or migrate persisted rows. */
+function createFieldEncryptionKeyring(
+  options: FieldEncryptionKeyringOptions,
+): FieldEncryptionKeyring {
+  const identifier = /^[A-Za-z0-9_-]{1,64}$/;
+  const copyKey = (value: Uint8Array): Buffer => {
+    if (!(value instanceof Uint8Array) || value.byteLength !== 32)
+      throw new TypeError("Field encryption keys must be 32 bytes.");
+    return Buffer.from(value);
+  };
+  const entries = Object.entries(options.encryptionKeys);
+  if (entries.length < 1 || entries.length > 32)
+    throw new TypeError("Field encryption keyrings require 1 to 32 keys.");
+  const keys = new Map<string, Buffer>();
+  for (const [id, key] of entries) {
+    if (!identifier.test(id)) throw new TypeError("Invalid field encryption key identifier.");
+    keys.set(id, copyKey(key));
+  }
+  const activeKeyId = options.activeKeyId;
+  const active = keys.get(activeKeyId);
+  if (!active) throw new TypeError("Active field encryption key is not retained.");
+  const legacy = options.legacyV1Key === undefined ? undefined : copyKey(options.legacyV1Key);
+  const lookup = copyKey(options.lookupKey);
+  const associatedData = (id: string, purpose: string): Buffer => {
+    if (!identifier.test(purpose)) throw new TypeError("Invalid field encryption purpose.");
+    return Buffer.from(`strata:field:v2:${id}:${purpose}`, "utf8");
+  };
+  const decodePayload = (encoded: string): Buffer => {
+    const payload = Buffer.from(encoded, "base64");
+    if (payload.length < IV_LENGTH + TAG_LENGTH || payload.toString("base64") !== encoded)
+      throw new Error("Invalid encrypted field.");
+    return payload;
+  };
+  return Object.freeze({
+    encrypt(plaintext: string, purpose: string): string {
+      const aad = associatedData(activeKeyId, purpose);
+      const iv = randomBytes(IV_LENGTH);
+      const cipher = createCipheriv("aes-256-gcm", active, iv, { authTagLength: TAG_LENGTH });
+      cipher.setAAD(aad);
+      const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+      const payload = Buffer.concat([iv, ciphertext, cipher.getAuthTag()]).toString("base64");
+      return `enc:v2:${activeKeyId}:${payload}`;
+    },
+    decrypt(value: string, purpose: string): string {
+      // Validate purpose even for legacy values, whose old format did not authenticate it.
+      associatedData(activeKeyId, purpose);
+      try {
+        if (value.startsWith(ENCRYPTION_PREFIX)) {
+          if (!legacy) throw new Error("Missing legacy key");
+          decodePayload(value.slice(ENCRYPTION_PREFIX.length));
+          return decryptField(value, legacy);
+        }
+        const parts = value.split(":");
+        if (parts.length !== 4 || parts[0] !== "enc" || parts[1] !== "v2")
+          throw new Error("Invalid envelope");
+        const id = parts[2] ?? "";
+        const key = keys.get(id);
+        if (!key) throw new Error("Missing retained key");
+        const payload = decodePayload(parts[3] ?? "");
+        const decipher = createDecipheriv("aes-256-gcm", key, payload.subarray(0, IV_LENGTH), {
+          authTagLength: TAG_LENGTH,
+        });
+        decipher.setAAD(associatedData(id, purpose));
+        decipher.setAuthTag(payload.subarray(payload.length - TAG_LENGTH));
+        return Buffer.concat([
+          decipher.update(payload.subarray(IV_LENGTH, payload.length - TAG_LENGTH)),
+          decipher.final(),
+        ]).toString("utf8");
+      } catch {
+        // Neither ciphertext, key IDs, key material nor native exception details enter errors.
+        throw new Error("Unable to decrypt encrypted field.");
+      }
+    },
+    lookup(normalizedValue: string): string {
+      return hashLookupValue(normalizedValue, lookup);
+    },
+  });
+}
+
+export type { FieldEncryptionKeyring, FieldEncryptionKeyringOptions };
+export { createFieldEncryptionKeyring };

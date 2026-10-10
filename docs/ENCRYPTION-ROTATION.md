@@ -1,0 +1,17 @@
+# Encryption rotation foundations
+
+Issue #140 is not resolved by this first layer. The generated email/MFA APIs still use the existing KMS_ENCRYPTION_KEY and enc:v1 contract. Do not replace that variable to rotate persisted auth data. Auth integration and an explicit resumable migration are separate dependent work; no schema or stored record is changed by the keyring API.
+
+## Explicit keyring primitive
+
+`createFieldEncryptionKeyring` is exported from `@getstrata/core/crypto/fieldEncryption`. Supply an active public key ID, a retained map of 1–32 AES-256 keys, a pinned lookup key, and optionally the explicit original key for unidentified enc:v1 ciphertext. Keys are 32-byte Uint8Arrays, copied at construction; the returned API is immutable. Resolve secret material in application infrastructure, never source control. IDs and purposes are 1–64 ASCII letters, digits, underscores or hyphens. IDs are permanent identities: never assign different key material to an existing ID.
+
+New writes use `enc:v2:<key-id>:<base64 payload>` with a random 96-bit nonce and a full 128-bit AES-GCM tag. Version, key ID and caller-supplied purpose are authenticated as associated data. Callers must keep purpose stable (for example `email` versus `mfa`). Retained-key reads support old and new write keys; the explicit legacy key reads v1 without trial-decrypting every retained key. Legacy v1 did not authenticate purpose, so that guarantee cannot be retroactively added until a record is re-encrypted. Plaintext, unknown versions, missing keys, noncanonical/truncated payloads and authentication failures reject. Errors exclude ciphertext, plaintext, key material and key identifiers. The implementation follows Node's [authenticated encryption API](https://nodejs.org/api/crypto.html#ciphersetaadbuffer-options).
+
+`lookup(normalizedValue)` uses the separately pinned HMAC-SHA256 lookup key. Passing the original encryption key as lookupKey preserves existing normalized email hashes while write keys change. It does not normalize input itself. Never rotate this lookup key as a side effect of write-key rotation: persisted indexes, uniqueness and concurrent account operations need an explicit migration protocol. A lookup key must remain secret even when the historical encryption key is retired; separating future encryption keys does not erase that dependency.
+
+## Boundaries for the remaining layers
+
+Retaining keys lets a future configured reader decrypt previous writes; it does not make an old binary understand v2. All readers must support v2 before activating v2 writers, and rollback must target a compatible reader retaining all written key IDs. Configuration validation cannot determine that two separately deployed processes reused an ID with different bytes; enforce consistent immutable secret versions in deployment.
+
+Auth integration must retain lookup compatibility and encrypted/plaintext policy without silent record rewriting. The migration must checkpoint only committed batches, compare original values before updating, serialize collisions and concurrent writes, preserve tenant/RLS boundaries, recover interrupted batches and keep failed records retryable without logging values. Key retirement must include live records, retained backups and restoration tests. Do not enable new auth writes or retire keys merely because primitive tests pass. Independent security review and deployment qualification remain required by the production plan.
