@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.5
+
+-  fix(starter): keep container readiness independent of API admission
+
 ## 2.2.4
 
 -  perf(database): seek Postgres composite keyset bounds
