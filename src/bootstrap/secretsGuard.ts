@@ -1,3 +1,4 @@
+import { resolveFieldEncryptionKeyring } from "@getstrata/core/crypto/fieldEncryption";
 import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isViewsMode, parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
@@ -150,10 +151,11 @@ function assertFeatureProductionSecrets(env: Record<string, string | undefined>)
 
   if (
     (envFlagEnabled(env.FEATURE_FIELD_ENCRYPTION) || envFlagEnabled(env.FEATURE_MFA)) &&
-    !env.KMS_ENCRYPTION_KEY?.trim()
+    !env.KMS_ENCRYPTION_KEY?.trim() &&
+    !env.KMS_ENCRYPTION_KEYRING
   ) {
     throw new Error(
-      "Production startup blocked: set KMS_ENCRYPTION_KEY when field encryption or MFA is enabled.",
+      "Production startup blocked: set KMS_ENCRYPTION_KEY or KMS_ENCRYPTION_KEYRING when field encryption or MFA is enabled.",
     );
   }
 
@@ -342,6 +344,8 @@ function assertPublicAppUrl(env: Record<string, string | undefined>): void {
 }
 
 function assertProductionSecrets(env: Record<string, string | undefined> = process.env): void {
+  // Explicit keyring configuration is validated at boot, also in development.
+  resolveFieldEncryptionKeyring(env);
   if (!isProductionEnv(env)) {
     return;
   }
