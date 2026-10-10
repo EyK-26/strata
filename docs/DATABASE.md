@@ -76,6 +76,20 @@ await repository.query().where({ status: { ne: "archived" } }).get();
 await repository.query().whereNotIn("status", ["draft", "void"]).get();
 ```
 
+### Explicit null ordering
+
+Ordinary repository/model ordering accepts `nulls: "first" | "last"` on a column order item. Omit it to preserve the database's default; shorthand ordering remains unchanged. Use a final unique tie-breaker for bounded deterministic batches:
+
+```typescript
+await receipts.query().where({ processing_state: { ne: "processed" } }).orderBy([
+  { column: "last_attempt_at", direction: "ASC", nulls: "first" },
+  { column: "received_at", direction: "ASC" },
+  { column: "id", direction: "ASC" },
+]).project(["id"]);
+```
+
+Postgres/SQLite compile native `NULLS FIRST/LAST`; MySQL uses a null discriminator before the value within that order item. Invalid placement values reject before query execution. Values, column identifiers and direction retain their existing validation/binding contracts. Model selection and plain projections share this ordering. This does not add nullable keyset cursors: keyset source/cursor values must still be non-null bounded scalars. Explicit placement can affect index usage; measure representative plans rather than assuming every ordering has an index seek.
+
 ### Aggregates
 
 `count`, `sum`, `avg`, `min`, and `max` are available on the repository and accept an optional filter. They return the raw value; `avg` is not rounded.

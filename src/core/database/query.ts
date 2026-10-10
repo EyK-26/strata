@@ -410,8 +410,19 @@ function buildOrderByClause<TEntity extends object>(
   tableName: string,
   orderBy?: QueryOptions<TEntity>["orderBy"],
 ): string {
-  const parts = normalizeOrderBy(orderBy).map(({ column, direction }) => {
-    return `${resolveQualifiedColumn(tableName, column)} ${normalizeDirection(direction)}`;
+  const parts = normalizeOrderBy(orderBy).map(({ column, direction, nulls }) => {
+    if (nulls !== undefined && nulls !== "first" && nulls !== "last") {
+      throw new TypeError("Invalid null ordering: expected first or last.");
+    }
+    const reference = resolveQualifiedColumn(tableName, column);
+    const ordered = `${reference} ${normalizeDirection(direction)}`;
+    if (nulls === undefined) return ordered;
+    // MySQL lacks NULLS FIRST/LAST. A null discriminator precedes the value
+    // in the same order item, leaving subsequent tie-breakers unchanged.
+    if (currentSqlDialect().driver === "mysql") {
+      return `(${reference} IS NULL) ${nulls === "first" ? "DESC" : "ASC"}, ${ordered}`;
+    }
+    return `${ordered} NULLS ${nulls.toUpperCase()}`;
   });
 
   return parts.length > 0 ? ` ORDER BY ${parts.join(", ")}` : "";

@@ -48,6 +48,8 @@ type ModelWriteValues<TEntity> = Partial<TEntity>;
 type QueryOrder<TEntity> = {
   column: keyof TEntity & string;
   direction?: "ASC" | "DESC" | "asc" | "desc";
+  /** Explicit placement; omitted retains the database's default. */
+  nulls?: "first" | "last";
 };
 
 type QueryOrderShorthand<TEntity> = Partial<
