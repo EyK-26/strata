@@ -99,6 +99,14 @@ export {
 export type { ServiceProvider } from "../core/contracts/di.ts";
 export { resolveService } from "../core/contracts/di.ts";
 export type {
+  FieldEncryptionRotationBatch,
+  FieldEncryptionRotationOptions,
+} from "../core/crypto/fieldEncryptionRotation";
+export {
+  createFieldEncryptionRotationMigration,
+  runFieldEncryptionRotationBatch,
+} from "../core/crypto/fieldEncryptionRotation";
+export type {
   TransactionAcquisitionMetrics,
   TransactionAcquisitionSnapshot,
 } from "../core/database/acquisitionMetrics.ts";

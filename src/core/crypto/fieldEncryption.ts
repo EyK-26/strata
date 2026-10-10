@@ -142,6 +142,7 @@ interface FieldEncryptionKeyringOptions {
   lookupKey: Uint8Array;
 }
 interface FieldEncryptionKeyring {
+  readonly activeKeyId: string;
   encrypt(plaintext: string, purpose: string): string;
   decrypt(ciphertext: string, purpose: string): string;
   /** Input must already be normalized using the application's existing lookup contract. */
@@ -182,6 +183,7 @@ function createFieldEncryptionKeyring(
     return payload;
   };
   return Object.freeze({
+    activeKeyId,
     encrypt(plaintext: string, purpose: string): string {
       const aad = associatedData(activeKeyId, purpose);
       const iv = randomBytes(IV_LENGTH);

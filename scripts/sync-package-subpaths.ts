@@ -59,6 +59,7 @@ const CORE_SUBPATHS = [
   "contracts/container",
   "contracts/di",
   "crypto/fieldEncryption",
+  "crypto/fieldEncryptionRotation",
   "crypto/mfaSecret",
   "database",
   "database/baseRepository",

@@ -12,6 +12,7 @@ export const CORE_SHARED_SUBPATHS = [
   "auth/authContext",
   "auth/guard",
   "auth/membershipContext",
+  "crypto/fieldEncryptionRotation",
   "database",
   "database/dialect",
   "database/mysqlConnection",
