@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
@@ -13,10 +14,16 @@ import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect
 import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { runInTransaction } from "@getstrata/core/database/transaction";
-import { createOutboxMigration, SqlOutbox } from "@getstrata/core/events/outbox";
+import {
+  createOutboxMetricsCollector,
+  createOutboxMigration,
+  SqlOutbox,
+} from "@getstrata/core/events/outbox";
+import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { currentTenant } from "@getstrata/core/tenant/tenantContext";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { SQL } from "bun";
+import { snapshotQuery } from "../../src/core/events/outbox/metrics";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const adminUrl = process.env.MIGRATION_DATABASE_URL;
@@ -86,6 +93,215 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
       resolveTenant: async () => tenant,
       listeners: [{ name: "effect", event: "order", handle }],
     });
+  test("platform observations are bounded, read-only and restore restricted-role scope", async () => {
+    const collector = createOutboxMetricsCollector({ sampleLimit: 2 });
+    try {
+      const empty = await collector.collect();
+      expect(empty.states.every((row) => row.count === 0)).toBe(true);
+      await admin.unsafe(
+        `INSERT INTO strata_outbox_event VALUES ('metrics', 'private-name', 1, 999, 'private-payload', 1, 'private-token')`,
+      );
+      for (const [listener, status, available, lease] of [
+        ["due1", "pending", 1, null],
+        ["due2", "pending", 2, null],
+        ["due3", "pending", 3, null],
+        ["waiting", "pending", 9007199254740991, null],
+        ["expired", "processing", 1, 1],
+        ["active", "processing", 1, 9007199254740991],
+        ["unleased", "processing", 1, null],
+        ["failed", "failed", 1, null],
+        ["completed", "completed", 1, null],
+      ])
+        await admin.unsafe(
+          `INSERT INTO strata_outbox_delivery (event_id, listener_name, status, max_attempts, available_at, lease_until) VALUES ('metrics', $1, $2, 3, $3, $4)`,
+          [listener, status, available, lease],
+        );
+      const snapshot = await collector.collect();
+      expect(snapshot.states.find((row) => row.state === "pending_due")).toMatchObject({
+        count: 2,
+        capped: true,
+      });
+      for (const state of [
+        "pending_waiting",
+        "processing_active",
+        "processing_expired",
+        "processing_unleased",
+        "failed",
+      ])
+        expect(snapshot.states.find((row) => row.state === state)).toMatchObject({
+          count: 1,
+          capped: false,
+        });
+      expect(
+        snapshot.states.find((row) => row.state === "pending_due")?.actionableLatenessSeconds,
+      ).toBeGreaterThan(1000000);
+      expect(
+        snapshot.states.find((row) => row.state === "processing_active")?.actionableLatenessSeconds,
+      ).toBe(null);
+      const previousMetricsToken = process.env.METRICS_TOKEN;
+      process.env.METRICS_TOKEN = "outbox-metrics-fixture";
+      try {
+        const routes = createMetricsRoutes({
+          outbox: collector,
+          queue: { redisUrl: "invalid-url", timeoutMs: 50 },
+        });
+        const response = await routes["/metrics"](
+          new Request("http://localhost/metrics", {
+            headers: { authorization: "Bearer outbox-metrics-fixture" },
+          }),
+        );
+        const body = await response.text();
+        expect(response.status).toBe(200);
+        expect(body).toContain('strata_outbox_deliveries_sample{state="pending_due"} 2');
+        expect(body).toContain('strata_outbox_sample_capped{state="pending_due"} 1');
+        expect(body).toContain("strata_outbox_collector_success 1");
+        expect(body).toContain("strata_queue_collector_success 0");
+        for (const privateValue of ["private-payload", "private-token", "private-name"])
+          expect(body).not.toContain(privateValue);
+      } finally {
+        restoreEnvVar("METRICS_TOKEN", previousMetricsToken);
+      }
+      const base = new URL("../../src/core/", import.meta.url);
+      const processSnapshots = await Promise.all(
+        Array.from({ length: 3 }, async () => {
+          const code = `import {SQL} from "bun";
+          import {registerDefaultDatabasePool} from ${JSON.stringify(new URL("database/defaultConnection.ts", base).pathname)};
+          import {createOutboxMetricsCollector} from ${JSON.stringify(new URL("events/outbox/index.ts", base).pathname)};
+          const pool=new SQL(process.env.OUTBOX_TEST_DATABASE_URL);
+          registerDefaultDatabasePool(pool);
+          const collector=createOutboxMetricsCollector({sampleLimit:2});
+          try { console.log(JSON.stringify((await collector.collect()).states.map(({state,count,capped})=>({state,count,capped})))); }
+          finally { await collector.close(); await pool.close(); }`;
+          const child = Bun.spawn([process.execPath, "--no-env-file", "-e", code], {
+            env: { ...process.env, OUTBOX_TEST_DATABASE_URL: workerUrl },
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+          const output = await new Response(child.stdout).text();
+          expect(await child.exited).toBe(0);
+          return JSON.parse(output);
+        }),
+      );
+      expect(processSnapshots[0]).toEqual(processSnapshots[1]);
+      expect(processSnapshots[1]).toEqual(processSnapshots[2]);
+      expect(processSnapshots[0]).toEqual(
+        snapshot.states.map(({ state, count, capped }) => ({ state, count, capped })),
+      );
+      expect(
+        (
+          await admin.unsafe<unknown[]>(
+            "SELECT * FROM strata_outbox_delivery WHERE event_id='metrics'",
+          )
+        ).length,
+      ).toBe(9);
+      expect(
+        await runInTransaction(() =>
+          db.unsafe("SELECT * FROM strata_outbox_event WHERE id='metrics'"),
+        ),
+      ).toEqual([]);
+      const [settings] = await pool.unsafe<{ timeout: string; bypass: string | null }[]>(
+        "SELECT current_setting('statement_timeout') AS timeout, current_setting('app.bypass_rls', true) AS bypass",
+      );
+      expect(settings?.timeout).toBe("0");
+      expect(settings?.bypass === "true").toBe(false);
+      await expect(runInTransaction(() => collector.collect())).rejects.toThrow(
+        "independent transaction",
+      );
+    } finally {
+      await collector.close();
+      await admin.unsafe("DELETE FROM strata_outbox_event WHERE id='metrics'");
+    }
+    await expect(collector.collect()).rejects.toThrow("closed");
+  });
+
+  test("real RLS plans seek indexes instead of scanning completed history", async () => {
+    await admin.unsafe(
+      `INSERT INTO strata_outbox_event VALUES ('metrics-plan', 'private', 1, 999, 'private', 1, 'private')`,
+    );
+    try {
+      await admin.unsafe(`INSERT INTO strata_outbox_delivery (event_id, listener_name, status, max_attempts, available_at)
+        SELECT 'metrics-plan', 'completed-' || n, 'completed', 3, n FROM generate_series(1, 20000) n`);
+      await admin.unsafe(`INSERT INTO strata_outbox_delivery (event_id, listener_name, status, max_attempts, available_at)
+        SELECT 'metrics-plan', 'pending-' || n, 'pending', 3, n FROM generate_series(1, 1000) n`);
+      await admin.unsafe("ANALYZE strata_outbox_delivery");
+      const plans = await runInTransaction(() =>
+        runWithMigrationBypass(() =>
+          db.unsafe<{ "QUERY PLAN": unknown }>(
+            `EXPLAIN (ANALYZE, FORMAT JSON) ${snapshotQuery}`,
+            [3],
+          ),
+        ),
+      );
+      const text = JSON.stringify(plans);
+      expect(text).toContain("strata_outbox_due");
+      expect(text).toContain("strata_outbox_expired");
+      const visit = (value: unknown): void => {
+        if (Array.isArray(value)) {
+          for (const child of value) visit(child);
+          return;
+        }
+        if (value === null || typeof value !== "object") return;
+        const node = value as Record<string, unknown>;
+        if (node["Relation Name"] === "strata_outbox_delivery") {
+          expect(node["Node Type"]).not.toBe("Seq Scan");
+          expect(Number(node["Actual Rows"])).toBeLessThanOrEqual(3);
+        }
+        for (const child of Object.values(node)) visit(child);
+      };
+      visit(plans);
+    } finally {
+      await admin.unsafe("DELETE FROM strata_outbox_event WHERE id='metrics-plan'");
+    }
+  });
+
+  test("a blocked SQL scrape times out, rolls back and allows recovery", async () => {
+    const collector = createOutboxMetricsCollector({ timeoutMs: 100 });
+    let unlock: (() => void) | undefined;
+    let locked: (() => void) | undefined;
+    const admitted = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      unlock = resolve;
+    });
+    const locking = admin.begin(async (tx) => {
+      await tx.unsafe("LOCK TABLE strata_outbox_delivery IN ACCESS EXCLUSIVE MODE");
+      locked?.();
+      await gate;
+    });
+    try {
+      await admitted;
+      const started = performance.now();
+      await expect(collector.collect()).rejects.toThrow();
+      expect(performance.now() - started).toBeLessThan(1000);
+    } finally {
+      unlock?.();
+      await locking;
+      await collector.close();
+    }
+    const recovered = createOutboxMetricsCollector();
+    try {
+      expect((await recovered.collect()).states.every((row) => row.count === 0)).toBe(true);
+    } finally {
+      await recovered.close();
+    }
+  });
+
+  test("pool checkout timeout does not multiply pending transactions", async () => {
+    const reserved = await Promise.all(Array.from({ length: 8 }, () => pool.reserve()));
+    const collector = createOutboxMetricsCollector({ timeoutMs: 50 });
+    try {
+      await expect(collector.collect()).rejects.toThrow("timed out");
+      await expect(collector.collect()).rejects.toThrow("settling");
+    } finally {
+      for (const connection of reserved) connection.release();
+      await collector.close();
+    }
+    expect(await runInTransaction(() => db.unsafe("SELECT * FROM strata_outbox_event"))).toEqual(
+      [],
+    );
+  });
+
   test("tenant publication rolls back atomically and delivery runs with captured RLS scope", async () => {
     const outbox = make(async (event) => {
       expect(currentTenant()?.id).toBe(tenant.id);

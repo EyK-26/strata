@@ -44,7 +44,12 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "RedisSchedulerLeaseStore",
     "SchedulerLeaseLostError",
   ],
-  "events/outbox": ["SqlOutbox", "createOutboxMigration"],
+  "events/outbox": [
+    "SqlOutbox",
+    "createOutboxMigration",
+    "createOutboxMetricsCollector",
+    "renderOutboxMetrics",
+  ],
   "database/transaction": ["hasActiveTransaction", "runInTransaction"],
   "database/bunSql": ["bindBunSql", "createBunSqlPool"],
   "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],

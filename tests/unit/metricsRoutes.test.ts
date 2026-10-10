@@ -102,3 +102,32 @@ test("unauthorized scrapes never start an opted-in Redis collection", async () =
     restoreEnvVar("METRICS_TOKEN", previousToken);
   }
 });
+
+test("outbox failure preserves HTTP metrics and exposes failure rather than empty delivery counts", async () => {
+  const previousToken = process.env.METRICS_TOKEN;
+  process.env.METRICS_TOKEN = "fixture-token";
+  let calls = 0;
+  try {
+    const routes = createMetricsRoutes({
+      outbox: {
+        async collect() {
+          calls++;
+          throw new Error("secret database detail");
+        },
+      },
+    });
+    expect((await routes["/metrics"](metricsRequest())).status).toBe(404);
+    expect(calls).toBe(0);
+    const response = await routes["/metrics"](
+      metricsRequest({ authorization: "Bearer fixture-token" }),
+    );
+    const body = await response.text();
+    expect(body).toContain("http_requests_total");
+    expect(body).toContain("strata_outbox_collector_success 0");
+    expect(body).not.toContain("strata_outbox_deliveries_sample");
+    expect(body).not.toContain("secret database detail");
+    expect(calls).toBe(1);
+  } finally {
+    restoreEnvVar("METRICS_TOKEN", previousToken);
+  }
+});

@@ -324,9 +324,18 @@ export {
 export type {
   DurableEvent,
   DurableListener,
+  OutboxMetricState,
+  OutboxMetricsCollector,
+  OutboxMetricsOptions,
+  OutboxMetricsSnapshot,
   SqlOutboxOptions,
 } from "../core/events/outbox/index.ts";
-export { createOutboxMigration, SqlOutbox } from "../core/events/outbox/index.ts";
+export {
+  createOutboxMetricsCollector,
+  createOutboxMigration,
+  renderOutboxMetrics,
+  SqlOutbox,
+} from "../core/events/outbox/index.ts";
 export {
   auth,
   cache,

@@ -9,6 +9,7 @@ import { repositoryConnection as db } from "@getstrata/core/database/repositoryC
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
 import { runInTransaction } from "@getstrata/core/database/transaction";
 import {
+  createOutboxMetricsCollector,
   createOutboxMigration,
   type DurableListener,
   SqlOutbox,
@@ -21,6 +22,15 @@ describe("durable SQL outbox on SQLite", () => {
   let previous: ReturnType<typeof getBoundDatabaseConnection>;
   let tenancy: string | undefined;
   const migration = createOutboxMigration("outbox", "sqlite");
+  test("metrics reject unsupported dialects rather than returning a healthy zero", async () => {
+    const collector = createOutboxMetricsCollector();
+    await expect(collector.collect()).rejects.toThrow("require Postgres");
+    await collector.close();
+    for (const timeoutMs of [0, 5001, NaN])
+      expect(() => createOutboxMetricsCollector({ timeoutMs })).toThrow();
+    for (const sampleLimit of [0, 1001, 1.5])
+      expect(() => createOutboxMetricsCollector({ sampleLimit })).toThrow();
+  });
   beforeEach(async () => {
     tenancy = process.env.TENANCY_DRIVER;
     process.env.TENANCY_DRIVER = "none";

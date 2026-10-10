@@ -402,6 +402,13 @@ class SqlOutbox {
   }
 }
 
+export type {
+  OutboxMetricState,
+  OutboxMetricsCollector,
+  OutboxMetricsOptions,
+  OutboxMetricsSnapshot,
+} from "./metrics";
+export { createOutboxMetricsCollector, renderOutboxMetrics } from "./metrics";
 export { createOutboxMigration } from "./migration";
 export type { DurableEvent, DurableListener, SqlOutboxOptions };
 export { SqlOutbox };
