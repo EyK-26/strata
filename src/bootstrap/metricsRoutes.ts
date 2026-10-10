@@ -6,8 +6,10 @@ import {
 import { type OutboxMetricsCollector, renderOutboxMetrics } from "@getstrata/core/events/outbox";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 import {
+  type FailedJobMetricsCollector,
   type RedisQueueSnapshotOptions,
   readRedisQueueSnapshot,
+  renderFailedJobMetrics,
   renderRedisQueueMetrics,
 } from "@getstrata/core/queue/queueMetrics";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
@@ -54,14 +56,24 @@ interface MetricsRoutesOptions {
   tracing?: Pick<TracingRuntime, "metrics">;
   /** Fixed process-local observations; scrape does not reserve a database connection. */
   transactionAcquisition?: Pick<TransactionAcquisitionMetrics, "snapshot">;
+  /** Explicit global failed-job observation; caller owns collector shutdown. */
+  failedJobs?: Pick<FailedJobMetricsCollector, "collect">;
 }
 function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
   // One concurrent collection per route instance, including failed/timed-out scrapes.
   let collection: Promise<string> | undefined;
   const collect = (): Promise<string> => {
-    if (!options.queue && !options.outbox && !options.tracing && !options.transactionAcquisition)
+    if (
+      !options.queue &&
+      !options.outbox &&
+      !options.tracing &&
+      !options.transactionAcquisition &&
+      !options.failedJobs
+    )
       return Promise.resolve("");
-    const failure = (name: "queue" | "outbox" | "tracing" | "database_acquisition") =>
+    const failure = (
+      name: "queue" | "outbox" | "tracing" | "database_acquisition" | "queue_failed_job",
+    ) =>
       `# HELP strata_${name}_collector_success Whether the configured ${name} collection succeeded.\n# TYPE strata_${name}_collector_success gauge\nstrata_${name}_collector_success 0\n`;
     collection ??= Promise.all([
       options.queue
@@ -88,6 +100,12 @@ function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
                 : "",
             )
             .catch(() => failure("database_acquisition"))
+        : Promise.resolve(""),
+      options.failedJobs
+        ? Promise.resolve()
+            .then(() => options.failedJobs?.collect())
+            .then((snapshot) => (snapshot ? renderFailedJobMetrics(snapshot) : ""))
+            .catch(() => failure("queue_failed_job"))
         : Promise.resolve(""),
     ])
       .then((parts) => parts.join(""))

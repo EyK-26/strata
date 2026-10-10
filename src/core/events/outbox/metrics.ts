@@ -1,6 +1,5 @@
-import { currentSqlDialect } from "../../database/dialect";
+import { createPostgresReadOnlyCollector } from "../../database/postgresReadOnlyCollector";
 import { repositoryConnection as db } from "../../database/repositoryConnection";
-import { hasActiveTransaction, runInTransaction } from "../../database/transaction";
 import { runWithMigrationBypass } from "../../tenant/databaseTenantContext";
 
 type OutboxMetricState =
@@ -86,96 +85,40 @@ ${specifications
 function createOutboxMetricsCollector(options: OutboxMetricsOptions = {}): OutboxMetricsCollector {
   const timeoutMs = options.timeoutMs ?? 1000;
   const sampleLimit = options.sampleLimit ?? 500;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 5000)
-    throw new TypeError("Outbox metrics timeout must be between 1 and 5000 milliseconds.");
   if (!Number.isSafeInteger(sampleLimit) || sampleLimit < 1 || sampleLimit > 1000)
     throw new TypeError("Outbox metrics sample limit must be between 1 and 1000.");
-  let active: Promise<OutboxMetricsSnapshot> | undefined;
-  let closed = false;
-  return {
-    async collect() {
-      if (closed) throw new Error("Outbox metrics collector is closed.");
-      if (hasActiveTransaction())
-        throw new Error("Outbox metrics require an independent transaction.");
-      if (currentSqlDialect().driver !== "pgsql")
-        throw new Error("Outbox metrics currently require Postgres.");
-      if (active) throw new Error("Outbox metrics collection is still settling.");
-      const deadline = performance.now() + timeoutMs;
-      let expired = false;
-      const acquisition = new AbortController();
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const remaining = () => {
-        const value = Math.floor(deadline - performance.now());
-        if (expired || value < 1) throw new Error("Outbox metrics collection timed out.");
-        return value;
-      };
-      const work = runInTransaction(
-        async () => {
-          // Native cancellable checkout prevents a timed-out wait from consuming a later slot.
-          // Keep active set until rollback/release completes.
-          await db.unsafe("SELECT set_config('statement_timeout', $1, true)", [`${remaining()}ms`]);
-          await db.unsafe("SET TRANSACTION READ ONLY");
-          return runWithMigrationBypass(async () => {
-            remaining();
-            const rows = await db.unsafe<{
-              state: string;
-              count: number | string;
-              lateness_ms: number | string | null;
-            }>(snapshotQuery, [sampleLimit + 1]);
-            remaining();
-            if (rows.length !== specifications.length)
-              throw new Error("Invalid outbox metrics response.");
-            const states = specifications.map((spec) => {
-              const row = rows.find((value) => value.state === spec.state);
-              const count = Number(row?.count);
-              const lateness = row?.lateness_ms == null ? null : Number(row.lateness_ms);
-              if (
-                !Number.isSafeInteger(count) ||
-                count < 0 ||
-                count > sampleLimit + 1 ||
-                (spec.age && (lateness === null || !Number.isFinite(lateness) || lateness < 0))
-              )
-                throw new Error("Invalid outbox metrics values.");
-              return {
-                state: spec.state,
-                count: Math.min(count, sampleLimit),
-                capped: count > sampleLimit,
-                actionableLatenessSeconds: lateness === null ? null : lateness / 1000,
-              };
-            });
-            return { sampleLimit, states };
-          });
-        },
-        { acquisitionSignal: acquisition.signal },
-      );
-      active = work;
-      // Observe late rejection even after the scrape deadline, with no error/SQL logging.
-      void work
-        .finally(() => {
-          if (active === work) active = undefined;
-        })
-        .catch(() => {});
-      try {
-        return await Promise.race([
-          work,
-          new Promise<never>((_, reject) => {
-            timer = setTimeout(() => {
-              expired = true;
-              const error = new Error("Outbox metrics collection timed out.");
-              acquisition.abort(error);
-              reject(error);
-            }, timeoutMs);
-          }),
-        ]);
-      } finally {
-        if (timer !== undefined) clearTimeout(timer);
-      }
-    },
-    async close() {
-      closed = true;
-      await active?.catch(() => {});
-    },
-  };
+  return createPostgresReadOnlyCollector("Outbox metrics", timeoutMs, (remaining) =>
+    runWithMigrationBypass(async () => {
+      remaining();
+      const rows = await db.unsafe<{
+        state: string;
+        count: number | string;
+        lateness_ms: number | string | null;
+      }>(snapshotQuery, [sampleLimit + 1]);
+      remaining();
+      if (rows.length !== specifications.length)
+        throw new Error("Invalid outbox metrics response.");
+      const states = specifications.map((spec) => {
+        const row = rows.find((value) => value.state === spec.state);
+        const count = Number(row?.count);
+        const lateness = row?.lateness_ms == null ? null : Number(row.lateness_ms);
+        if (
+          !Number.isSafeInteger(count) ||
+          count < 0 ||
+          count > sampleLimit + 1 ||
+          (spec.age && (lateness === null || !Number.isFinite(lateness) || lateness < 0))
+        )
+          throw new Error("Invalid outbox metrics values.");
+        return {
+          state: spec.state,
+          count: Math.min(count, sampleLimit),
+          capped: count > sampleLimit,
+          actionableLatenessSeconds: lateness === null ? null : lateness / 1000,
+        };
+      });
+      return { sampleLimit, states };
+    }),
+  );
 }
 
 function renderOutboxMetrics(snapshot: OutboxMetricsSnapshot): string {

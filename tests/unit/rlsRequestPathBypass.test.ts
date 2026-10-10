@@ -173,16 +173,34 @@ describe("request-path RLS bypass fence", () => {
 test("outbox metrics bypass is confined to bounded read-only platform observation", async () => {
   const collector = await readFile(join(repoRoot, "src/core/events/outbox/metrics.ts"), "utf8");
   expect([...collector.matchAll(/runWithMigrationBypass\(/g)]).toHaveLength(1);
-  expect(collector).toContain("hasActiveTransaction()");
-  expect(collector).toContain("SET TRANSACTION READ ONLY");
-  expect(collector).toContain("statement_timeout");
+  const lifecycle = await readFile(
+    join(repoRoot, "src/core/database/postgresReadOnlyCollector.ts"),
+    "utf8",
+  );
+  expect(collector).toContain("createPostgresReadOnlyCollector(");
+  expect(lifecycle).toContain("hasActiveTransaction()");
+  expect(lifecycle).toContain("SET TRANSACTION READ ONLY");
+  expect(lifecycle).toContain("statement_timeout");
+  expect(lifecycle).toContain("acquisitionSignal: acquisition.signal");
+  expect(lifecycle).not.toContain("runWithMigrationBypass(");
   expect(collector).toContain("LIMIT $1");
   expect(collector).not.toContain("SELECT payload");
   const routes = await readFile(join(repoRoot, "src/bootstrap/metricsRoutes.ts"), "utf8");
   expect(routes.indexOf("if (!authorizeMetrics(request))")).toBeLessThan(
     routes.indexOf("(await collect())"),
   );
-  expect(routes).toContain(
-    "if (!options.queue && !options.outbox && !options.tracing && !options.transactionAcquisition)",
+  expect(routes).toMatch(
+    /!options\.queue\s*&&\s*!options\.outbox\s*&&\s*!options\.tracing\s*&&\s*!options\.transactionAcquisition\s*&&\s*!options\.failedJobs/,
   );
+});
+
+test("failed-job observation uses a bounded ID projection without an RLS bypass", async () => {
+  const collector = await readFile(join(repoRoot, "src/core/queue/failedJobMetrics.ts"), "utf8");
+  expect(collector).toContain("createPostgresReadOnlyCollector(");
+  expect(collector).toContain('.project(["id"], sampleLimit + 1)');
+  expect(collector).toContain("NOT c.relrowsecurity");
+  expect(collector).toContain("i.indisprimary");
+  expect(collector).not.toContain(unboundedNeedle);
+  expect(collector).not.toContain("listRecent(");
+  expect(collector).not.toContain('project(["payload"');
 });

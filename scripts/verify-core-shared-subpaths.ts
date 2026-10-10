@@ -26,6 +26,7 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "createTransactionAcquisitionMetrics",
     "renderTransactionAcquisitionMetrics",
   ],
+  "queue/queueMetrics": ["createFailedJobMetricsCollector", "renderFailedJobMetrics"],
   "tracing/tracingMiddleware": ["createTracingRuntime", "renderTracingMetrics"],
   "database/model": [
     "Model",

@@ -283,5 +283,11 @@ function renderRedisQueueMetrics(snapshot: RedisQueueSnapshot): string {
   return `${lines.join("\n")}\n`;
 }
 
+export type {
+  FailedJobMetricsCollector,
+  FailedJobMetricsOptions,
+  FailedJobMetricsSnapshot,
+} from "./failedJobMetrics";
+export { createFailedJobMetricsCollector, renderFailedJobMetrics } from "./failedJobMetrics";
 export type { QueuePrioritySnapshot, RedisQueueSnapshot, RedisQueueSnapshotOptions };
 export { INFLIGHT_SAMPLE_LIMIT, readRedisQueueSnapshot, renderRedisQueueMetrics };
