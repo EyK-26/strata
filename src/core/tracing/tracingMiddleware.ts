@@ -67,6 +67,8 @@ function createTracingMiddleware(runtime?: TracingRuntime): Middleware {
   };
 }
 
+export type { TracingMetricsSnapshot } from "./health";
+export { renderTracingMetrics } from "./health";
 export type { TracingOptions, TracingRuntime } from "./otel";
 export { acquireTracingRuntime, createTracingRuntime, getTracingRuntime } from "./otel";
 export { createTracingMiddleware };

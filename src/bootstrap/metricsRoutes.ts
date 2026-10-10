@@ -7,6 +7,10 @@ import {
   renderRedisQueueMetrics,
 } from "@getstrata/core/queue/queueMetrics";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import {
+  renderTracingMetrics,
+  type TracingRuntime,
+} from "@getstrata/core/tracing/tracingMiddleware";
 
 function tokensMatch(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
@@ -42,13 +46,15 @@ interface MetricsRoutesOptions {
   queue?: RedisQueueSnapshotOptions & { redisUrl: string };
   /** Explicit platform outbox observation; caller owns collector shutdown. */
   outbox?: Pick<OutboxMetricsCollector, "collect">;
+  /** Read an existing runtime; scraping never initializes tracing or flushes spans. */
+  tracing?: Pick<TracingRuntime, "metrics">;
 }
 function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
   // One concurrent collection per route instance, including failed/timed-out scrapes.
   let collection: Promise<string> | undefined;
   const collect = (): Promise<string> => {
-    if (!options.queue && !options.outbox) return Promise.resolve("");
-    const failure = (name: "queue" | "outbox") =>
+    if (!options.queue && !options.outbox && !options.tracing) return Promise.resolve("");
+    const failure = (name: "queue" | "outbox" | "tracing") =>
       `# HELP strata_${name}_collector_success Whether the configured ${name} collection succeeded.\n# TYPE strata_${name}_collector_success gauge\nstrata_${name}_collector_success 0\n`;
     collection ??= Promise.all([
       options.queue
@@ -61,6 +67,11 @@ function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
             .then(() => options.outbox?.collect())
             .then((snapshot) => (snapshot ? renderOutboxMetrics(snapshot) : ""))
             .catch(() => failure("outbox"))
+        : Promise.resolve(""),
+      options.tracing
+        ? Promise.resolve()
+            .then(() => (options.tracing ? renderTracingMetrics(options.tracing.metrics()) : ""))
+            .catch(() => failure("tracing"))
         : Promise.resolve(""),
     ])
       .then((parts) => parts.join(""))

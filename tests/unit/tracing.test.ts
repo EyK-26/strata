@@ -296,6 +296,10 @@ test("real HTTP collector outage times out, preserves request availability and c
     const started = performance.now();
     await expect(runtime.forceFlush()).rejects.toBeDefined();
     expect(requests).toBe(1);
+    await Bun.sleep(10); // The callback-deadline observer may settle just after SDK timeout.
+    expect(runtime.metrics().flushFailures).toBe(1);
+    expect(runtime.metrics().exportDeadlineExceededBatches).toBe(1);
+    expect(runtime.metrics().queueSize).toBe(0);
     expect(performance.now() - started).toBeLessThan(1500);
   } finally {
     unblock();

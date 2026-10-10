@@ -677,6 +677,8 @@ export {
   normalizeTenantHostname,
   resolveUserTenantId,
 } from "../core/tenant/tenantMiddleware.ts";
+export type { TracingMetricsSnapshot } from "../core/tracing/health.ts";
+export { renderTracingMetrics } from "../core/tracing/health.ts";
 export type { TraceContext } from "../core/tracing/traceContext.ts";
 export {
   currentTraceId,

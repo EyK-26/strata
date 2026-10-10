@@ -1,6 +1,13 @@
 /** Compiled against source and packed public exports; never executed. */
 import { type ServiceProvider, tracingProvider } from "@getstrata/bootstrap";
-import { createTracingRuntime, type TracingOptions, type TracingRuntime } from "@getstrata/core";
+import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+import {
+  createTracingRuntime,
+  renderTracingMetrics,
+  type TracingMetricsSnapshot,
+  type TracingOptions,
+  type TracingRuntime,
+} from "@getstrata/core";
 import { createTracingMiddleware } from "@getstrata/core/tracing/tracingMiddleware";
 
 export async function tracingContracts(): Promise<void> {
@@ -10,6 +17,7 @@ export async function tracingContracts(): Promise<void> {
     exportTimeoutMillis: 3000,
   };
   const runtime: TracingRuntime = createTracingRuntime(options);
+  createMetricsRoutes({ tracing: runtime });
   const provider: ServiceProvider = tracingProvider;
   const response: Response = await createTracingMiddleware(runtime)(
     new Request("http://shop"),
@@ -18,6 +26,9 @@ export async function tracingContracts(): Promise<void> {
   const span = runtime.tracer.startSpan("business-operation");
   const identity: string = span.spanContext().traceId;
   span.end();
+  const snapshot: TracingMetricsSnapshot = runtime.metrics();
+  const metrics: string = renderTracingMetrics(snapshot);
+  void metrics;
   await runtime.forceFlush();
   await runtime.shutdown();
   // @ts-expect-error Sampling ratios are numeric, never implicit string flags.
