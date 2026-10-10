@@ -28,7 +28,7 @@ Guides: [1.x → 2.x migration](docs/MIGRATING-2.md), [docs/STARTER.md](docs/STA
 
 ## Packages
 
-Published as **2.2.6**:
+Published as **2.2.7**:
 
 | Package | What it is |
 |---------|------------|

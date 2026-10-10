@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.7
+
+- Where an ordinary operation needs SQL because the framework cannot express it
+
 ## 2.2.6
 
 -  fix(cli): relay shutdown to children and simplify container launcher
