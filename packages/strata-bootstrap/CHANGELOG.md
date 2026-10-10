@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.9
+
+- Support native cancellable transaction acquisition
+
 ## 2.2.8
 
 - Add bounded read-only Postgres outbox metrics

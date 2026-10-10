@@ -73,14 +73,14 @@
     },
     "packages/create-strata": {
       "name": "create-strata",
-      "version": "2.2.8",
+      "version": "2.2.9",
       "bin": {
         "create-strata": "./dist/cli.js",
       },
     },
     "packages/strata-bootstrap": {
       "name": "@getstrata/bootstrap",
-      "version": "2.2.8",
+      "version": "2.2.9",
       "peerDependencies": {
         "@getstrata/core": "^2.0.1",
         "typescript": "^5.9.0 || ^6.0.0 || ^7.0.0",
@@ -88,7 +88,7 @@
     },
     "packages/strata-cli": {
       "name": "@getstrata/cli",
-      "version": "2.2.8",
+      "version": "2.2.9",
       "bin": {
         "strata": "./cli.ts",
       },
@@ -99,7 +99,7 @@
     },
     "packages/strata-core": {
       "name": "@getstrata/core",
-      "version": "2.2.8",
+      "version": "2.2.9",
       "dependencies": {
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/context-async-hooks": "2.12.0",
@@ -123,7 +123,7 @@
     },
     "packages/strata-starter": {
       "name": "@getstrata/starter",
-      "version": "2.2.8",
+      "version": "2.2.9",
       "bin": {
         "create-strata": "./dist/cli.js",
       },
