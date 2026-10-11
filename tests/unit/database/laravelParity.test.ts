@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
-import { dehydrateValue, filterMassAssignable } from "@getstrata/core/database/model";
+import { applyCasts, dehydrateValue, filterMassAssignable } from "@getstrata/core/database/model";
 import { buildSelectQuery } from "@getstrata/core/database/query";
 import { defineTable } from "@getstrata/core/database/table";
 import { isAllowedMimeType } from "../../../src/core/http/uploads";
@@ -144,5 +144,16 @@ describe("hashed cast", async () => {
   test("leaves null and undefined alone", async () => {
     expect(await dehydrateValue(null, "hashed")).toBeNull();
     expect(await dehydrateValue(undefined, "hashed")).toBeUndefined();
+  });
+
+  test("hashes independent fields concurrently", async () => {
+    const stored = await applyCasts(
+      { password: "secret", pin: "secret" },
+      { password: "hashed", pin: "hashed" },
+      "dehydrate",
+    );
+    expect(String(stored.password).startsWith("$2")).toBe(true);
+    expect(String(stored.pin).startsWith("$2")).toBe(true);
+    expect(stored.password).not.toBe(stored.pin);
   });
 });
