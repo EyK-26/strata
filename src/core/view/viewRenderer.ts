@@ -15,6 +15,22 @@ interface HtmxViewResponseOptions extends ViewResponseOptions {
   fragment?: string;
 }
 
+interface NamespacedViewRenderer {
+  render: ViewRenderer["render"];
+  renderHtmx: ViewRenderer["renderHtmx"];
+}
+
+function validateRelativeViewName(name: string): void {
+  if (
+    !/^[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/.test(name) ||
+    name.split("/").some((part) => part === "." || part === "..")
+  ) {
+    throw new TypeError(
+      "View namespace and names must be relative template paths without dot segments.",
+    );
+  }
+}
+
 const HTMX_VARY_HEADERS = ["HX-Request", "HX-Boosted", "HX-History-Restore-Request"];
 
 function varyByHtmx(headers: Headers): void {
@@ -33,6 +49,23 @@ class ViewRenderer {
     private readonly engine: ViewEngine,
     private readonly defaultLayout?: string | false,
   ) {}
+
+  /** Explicit template prefix; layout names and response contracts remain unchanged. */
+  namespace(prefix: string): NamespacedViewRenderer {
+    validateRelativeViewName(prefix);
+    const qualify = (name: string) => {
+      validateRelativeViewName(name);
+      return `${prefix}/${name}`;
+    };
+    return {
+      render: async (name, data, options) => this.render(qualify(name), data, options),
+      renderHtmx: async (name, data, options = {}) =>
+        this.renderHtmx(qualify(name), data, {
+          ...options,
+          ...(options.fragment === undefined ? {} : { fragment: qualify(options.fragment) }),
+        }),
+    };
+  }
 
   async render(
     name: string,
@@ -77,5 +110,5 @@ class ViewRenderer {
 
 const CORE_VIEW_RENDERER_TOKEN = createServiceToken<ViewRenderer>("core.viewRenderer");
 
-export type { HtmxViewResponseOptions, ViewResponseOptions };
+export type { HtmxViewResponseOptions, NamespacedViewRenderer, ViewResponseOptions };
 export { CORE_VIEW_RENDERER_TOKEN, ViewRenderer };

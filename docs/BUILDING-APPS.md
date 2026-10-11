@@ -208,6 +208,21 @@ configuration or automatically negotiate HTMX fragments. Explicit scoped
 error rendering remains separate follow-up work. Generated HTML apps now register
 the factory and resolve the typed renderer directly; see [STARTER.md](STARTER.md).
 
+### Explicit view namespaces
+
+A controller can receive `views.namespace("orders")` once during module composition, typed as `NamespacedViewRenderer` from `@getstrata/core/view`. It then renders relative template names without deriving them from the controller class, action, URL or request input:
+
+```ts
+const orderViews = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace("orders");
+// In the controller:
+return orderViews.render("show", { order }, { request, layout: "layouts/admin" });
+// views/orders/show.eta, wrapped in views/layouts/admin.eta
+```
+
+`renderHtmx("index", { orders }, { request, fragment: "table" })` selects `orders/index.eta` for full pages and `orders/table.eta` for targeted requests. Omitting `fragment` uses the relative page template without its layout, as on the root renderer. Namespace prefixes and template/fragment names must be relative paths without dot segments or trailing slashes; `.eta` remains optional. Layout names stay relative to the app's view directory and never gain the namespace prefix. Use the original renderer for a template outside the namespace.
+
+Scopes delegate to their app's renderer, preserving request-specific data, escaping, headers, status, errors, HTMX selection and `Vary`. They hold no current action/request state; independent controllers and concurrent requests do not change each other's prefix. Template data remains explicitly passed and every action still returns a native response or its promise. No controller base class, implicit rendering, filename inference or automatic model loading is introduced.
+
 ### Opt-in HTMX page and fragment responses
 
 Use `views.renderHtmx()` only on HTML routes designed for both representations:
@@ -442,6 +457,26 @@ class CatalogController {
 Use constructor parameters for the services a controller actually needs; resolve them in module/provider composition. Stateful services can remain classes, while stateless business operations can remain functions. This API does not alter request scoping, model typing, middleware typing, queues or transactions, and upgrading packages does not rewrite existing controllers.
 
 For tenant-specific API allowances, bind `CORE_THROTTLE_QUOTA_POLICY_TOKEN` during provider registration rather than adding plan rules to core. Use trusted tenant metadata and the synchronous `ThrottleQuotaPolicy` contract. The generated kernel applies it to API throttles. Dedicated login and SCIM limits remain additional controls when those routes also use the API group. See [application-owned quotas and local storage bounds](PRODUCTION.md#application-owned-quotas) for an example, failure semantics and cleanup requirements.
+
+## Optional resource routes
+
+`resourceRoutes` from `@getstrata/core/http/route` expands explicitly supplied actions into the existing native Bun route map. It does not inspect controller methods, instantiate controllers, select middleware, authorize models, or infer views.
+
+```ts
+return mergeRouteMaps(
+  resourceRoutes("/orders", {
+    index: kernel.wrapWebAuthenticated(controller.index),
+    show: kernel.wrapWebAuthenticated(controller.show),
+  }),
+  { "/orders/:id/cancel": { POST: kernel.wrapWebAuthenticated(controller.cancel) } },
+);
+```
+
+Import both helpers from `@getstrata/core/http/route`. Paths are static absolute prefixes without a trailing slash (for example `/orders` or `/admin/orders`); member actions receive the typed `request.params.id`. Nested parent parameters and different member parameter names remain explicit route maps. Only supplied actions are registered: `index` is `GET /orders`, `create` is `GET /orders/create`, `store` is `POST /orders`, `show` is `GET /orders/:id`, `edit` is `GET /orders/:id/edit`, `update` handles `PUT` and `PATCH /orders/:id`, and `destroy` is `DELETE /orders/:id`. Empty action maps register nothing; unsupported actions or non-function values fail at construction. Supply bound handlers (such as arrow fields) when a controller uses `this`.
+
+Web resources belong in `webRoutes`; API resources belong in `routes`, with operation metadata under their expanded paths in `openApi`. The existing kernel wrappers still own auth, tenancy, CSRF and error contracts. Resource helpers introduce no HTTP method spoofing: ordinary HTML mutation forms need explicit POST endpoints; JavaScript/API clients may send PUT/PATCH/DELETE. Refunds, cancellation and other business commands remain explicit app routes.
+
+`mergeRouteMaps` returns a fresh map and rejects duplicate paths, including two method maps for the same path, before handlers can be silently replaced. Define all methods of a shared path together. Use it when composing resource and custom maps; object spreads and existing cross-module overrides retain their prior semantics and do not gain collision checking automatically. Explicit maps remain fully supported.
 
 ## Preserve route request types through middleware
 

@@ -741,7 +741,7 @@ async function completeBrowserSsoLogin(
                 }`
                     : ""
                 }
-                return views.render("auth/login.eta", { layout: { title: "Sign in" }, errors: { email: "These credentials do not match our records." }, email, password: "" }, { request });
+                return views.render("login.eta", { layout: { title: "Sign in" }, errors: { email: "These credentials do not match our records." }, email, password: "" }, { request });
               }
               await persistAuthRecovery(user.id, user.mfa_recovery_codes, mfaResult.consumedRecoveryHash);`;
 
@@ -765,11 +765,11 @@ async function completeBrowserSsoLogin(
     ? `
     webRoutes({ kernel, dependencies }) {
       const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
-      const views = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN);
+      const views = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace("auth");
       return {
         "/login": {
           GET: kernel.wrapWebGuest(async (request) =>
-            views.render("auth/login.eta", { layout: { title: "Sign in" }, errors: {}, email: "", password: "" }, { request }),
+            views.render("login.eta", { layout: { title: "Sign in" }, errors: {}, email: "", password: "" }, { request }),
           ),
           POST: wrapWebLogin(
             kernel,
@@ -778,13 +778,13 @@ async function completeBrowserSsoLogin(
               const { email, password, mfa_code } = parseLoginCredentials(fields);
               const user = await starterAuthDirectory.findByEmail?.(email);
               if (!user?.password || !(await verifyPassword(password, user.password))) {
-                return views.render("auth/login.eta", { layout: { title: "Sign in" }, errors: { email: "These credentials do not match our records." }, email, password: "" }, { request });
+                return views.render("login.eta", { layout: { title: "Sign in" }, errors: { email: "These credentials do not match our records." }, email, password: "" }, { request });
               }
               ${mfaLoginBranch}
               return auth.signInRedirect(sessionUser(user), "/");
             },
             async (request) =>
-              views.render("auth/login.eta", { layout: { title: "Sign in" }, errors: { email: "Too many login attempts. Try again shortly." }, email: "", password: "" }, { request, status: 429 }),
+              views.render("login.eta", { layout: { title: "Sign in" }, errors: { email: "Too many login attempts. Try again shortly." }, email: "", password: "" }, { request, status: 429 }),
           ),
         },
         "/register": {
@@ -792,7 +792,7 @@ async function completeBrowserSsoLogin(
             if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
               return new Response("Not found", { status: 404 });
             }
-            return views.render("auth/register.eta", { layout: { title: "Create account" }, errors: {}, name: "", email: "", password: "" }, { request });
+            return views.render("register.eta", { layout: { title: "Create account" }, errors: {}, name: "", email: "", password: "" }, { request });
           }),
           POST: wrapWebRegister(
             kernel,
@@ -825,12 +825,12 @@ async function completeBrowserSsoLogin(
               }
             },
             async (request) =>
-              views.render("auth/register.eta", { layout: { title: "Create account" }, errors: { form: "Too many registration attempts. Try again shortly." }, name: "", email: "", password: "" }, { request, status: 429 }),
+              views.render("register.eta", { layout: { title: "Create account" }, errors: { form: "Too many registration attempts. Try again shortly." }, name: "", email: "", password: "" }, { request, status: 429 }),
           ),
         },
         "/forgot-password": {
           GET: kernel.wrapWebGuest(async (request) =>
-            views.render("auth/forgot-password.eta", { layout: { title: "Forgot password" }, errors: {}, email: "" }, { request }),
+            views.render("forgot-password.eta", { layout: { title: "Forgot password" }, errors: {}, email: "" }, { request }),
           ),
           POST: kernel.wrapWeb(async (request) => {
             const { fields } = await parseFormBody(request);
@@ -848,7 +848,7 @@ async function completeBrowserSsoLogin(
         "/reset-password": {
           GET: kernel.wrapWeb(kernel.wrapSigned(async (request) => {
             const email = new URL(request.url).searchParams.get("email") ?? "";
-            return views.render("auth/reset-password.eta", { layout: { title: "Reset password" }, errors: {}, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
+            return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: {}, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
           })),
           POST: kernel.wrapWeb(kernel.wrapSigned(async (request) => {
             const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.passwordReset);
@@ -856,7 +856,7 @@ async function completeBrowserSsoLogin(
             const email = new URL(request.url).searchParams.get("email") ?? fields.email ?? "";
             const password = fields.password ?? "";
             if (!userId || !email || password.length < 8) {
-              return views.render("auth/reset-password.eta", { layout: { title: "Reset password" }, errors: { password: "Invalid or expired reset link." }, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
+              return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: { password: "Invalid or expired reset link." }, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
             }
             await runAuthWrite(userId, async () => {
               const user = await User.find(userId);
@@ -892,7 +892,7 @@ async function completeBrowserSsoLogin(
                 { level: "error", message: "Invalid or expired verification link." },
               );
             }
-            return views.render("auth/verify-email.eta", { layout: { title: "Verify email" } }, { request });
+            return views.render("verify-email.eta", { layout: { title: "Verify email" } }, { request });
           }),
         },
         "/email/verification-notification": {
@@ -914,7 +914,7 @@ async function completeBrowserSsoLogin(
             if (!readPendingMfaUserId(request)) {
               return redirectTo("/login");
             }
-            return views.render("auth/mfa-challenge.eta", { layout: { title: "MFA" }, errors: {}, code: "" }, { request });
+            return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: {}, code: "" }, { request });
           }),
           POST: wrapWebLogin(
             kernel,
@@ -928,7 +928,7 @@ async function completeBrowserSsoLogin(
             const record = await starterAuthDirectory.findByIdOrThrow(pendingId);
             const mfaResult = completePasswordLogin(record, { mfaCode: submitted });
             if (!mfaResult.ok) {
-              return views.render("auth/mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" }, { request });
+              return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" }, { request });
             }
             await persistAuthRecovery(pendingId, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
             const signed = await auth.signInRedirect(sessionUser(record), "/");
@@ -936,12 +936,12 @@ async function completeBrowserSsoLogin(
             return signed;
           },
             async (request) =>
-              views.render("auth/mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "Too many login attempts. Try again shortly." }, code: "" }, { request, status: 429 }),
+              views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "Too many login attempts. Try again shortly." }, code: "" }, { request, status: 429 }),
           ),
         },
         "/confirm-password": {
           GET: kernel.wrapWebAuthenticated(async (request) =>
-            views.render("auth/confirm-password.eta", { layout: { title: "Confirm password" }, errors: {}, password: "" }, { request }),
+            views.render("confirm-password.eta", { layout: { title: "Confirm password" }, errors: {}, password: "" }, { request }),
           ),
           POST: kernel.wrapWebAuthenticated(async (request) => {
             const user = await auth.user(request);
@@ -952,7 +952,7 @@ async function completeBrowserSsoLogin(
             const password = fields.password ?? "";
             const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
             if (!record.password || !(await verifyPassword(password, record.password))) {
-              return views.render("auth/confirm-password.eta", { layout: { title: "Confirm password" }, errors: { password: "That password is not correct." }, password: "" }, { request });
+              return views.render("confirm-password.eta", { layout: { title: "Confirm password" }, errors: { password: "That password is not correct." }, password: "" }, { request });
             }
             const next = sanitizeInternalPath(new URL(request.url).searchParams.get("redirect") ?? "/account/mfa");
             const confirmed = redirectTo(next);
@@ -970,7 +970,7 @@ async function completeBrowserSsoLogin(
               account: record?.email ?? "user",
               issuer: process.env.APP_NAME ?? "Strata",
             });
-            return views.render("auth/mfa-setup.eta", { layout: { title: "MFA" }, errors: {}, code: "", secret, otpauth }, { request });
+            return views.render("mfa-setup.eta", { layout: { title: "MFA" }, errors: {}, code: "", secret, otpauth }, { request });
           }),
           POST: kernel.wrapWebPasswordConfirm(async (request) => {
             const user = await auth.user(request);
@@ -981,7 +981,7 @@ async function completeBrowserSsoLogin(
             const secret = (fields.secret ?? "").trim();
             const submitted = (fields.code ?? "").trim();
             if (!secret || !verifyTotp(secret, submitted)) {
-              return views.render("auth/mfa-setup.eta", {
+              return views.render("mfa-setup.eta", {
                   layout: { title: "MFA" },
                   errors: { code: "Could not confirm that code." },
                   code: "",
@@ -1000,7 +1000,7 @@ async function completeBrowserSsoLogin(
               });
             });
             await revokeUserSessions(Number(user.id));
-            return views.render("auth/mfa-setup.eta", {
+            return views.render("mfa-setup.eta", {
                 layout: { title: "MFA" },
                 errors: {},
                 code: "",

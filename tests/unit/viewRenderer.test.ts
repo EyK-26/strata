@@ -20,6 +20,14 @@ beforeAll(async () => {
     join(directory, "identity.eta"),
     "<p><%= it.currentUser.email %>:<%= it.app %>:<%= it.cspNonce %>:<%= it.csrfToken %>:<%= it.flash.message %></p>",
   );
+  for (const namespace of ["orders", "products"]) {
+    await mkdir(join(directory, namespace));
+    await writeFile(join(directory, namespace, "show.eta"), `<p>${namespace}:<%= it.title %></p>`);
+    await writeFile(
+      join(directory, namespace, "table.eta"),
+      `<table>${namespace}:<%= it.title %></table>`,
+    );
+  }
   await writeFile(join(directory, "layouts/app.eta"), "<main><%~ it.body %></main>");
   await writeFile(join(directory, "layouts/admin.eta"), "<aside><%~ it.body %></aside>");
 });
@@ -123,5 +131,81 @@ test("two app providers and interleaved requests retain isolated shared data", a
     resetWebLayoutDataConfigForTests();
     if (previousMode === undefined) delete process.env.FRONTEND_MODE;
     else process.env.FRONTEND_MODE = previousMode;
+  }
+});
+
+test("explicit namespaces preserve native responses and independent template prefixes", async () => {
+  const renderer = new ViewRenderer(new EtaViewEngine(directory), "layouts/admin");
+  const orders = renderer.namespace("orders");
+  const products = renderer.namespace("products");
+  const responses = await Promise.all([
+    orders.render(
+      "show",
+      { title: "<script>" },
+      { status: 202, statusText: "Accepted", headers: { "X-Page": "orders" } },
+    ),
+    products.render("show.eta", { title: "Product" }, { layout: false }),
+    renderer.render("page", { title: "Root" }),
+  ]);
+  expect(responses[0]?.status).toBe(202);
+  expect(responses[0]?.statusText).toBe("Accepted");
+  expect(responses[0]?.headers.get("X-Page")).toBe("orders");
+  expect(responses[0]?.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+  expect(await responses[0]?.text()).toBe("<aside><p>orders:&lt;script&gt;</p></aside>");
+  expect(await responses[1]?.text()).toBe("<p>products:Product</p>");
+  expect(await responses[2]?.text()).toBe("<aside><p>Root</p></aside>");
+  expect(
+    await (await orders.render("show", { title: "App" }, { layout: "layouts/app" })).text(),
+  ).toBe("<main><p>orders:App</p></main>");
+  await expect(orders.render("missing")).rejects.toThrow();
+});
+
+test("namespaced HTMX templates and fragments keep layouts global and preserve selection contracts", async () => {
+  const orders = new ViewRenderer(new EtaViewEngine(directory)).namespace("orders");
+  for (const extra of [undefined, "HX-Boosted", "HX-History-Restore-Request"]) {
+    const headers = new Headers({ "HX-Request": "true" });
+    if (extra) headers.set(extra, "true");
+    const options = {
+      request: new Request("http://test/orders", { headers }),
+      fragment: "table",
+      headers: { Vary: "Accept" },
+      status: 203,
+    };
+    const response = await orders.renderHtmx("show", { title: "Order" }, options);
+    expect(response.status).toBe(203);
+    expect(await response.text()).toBe(
+      extra ? "<main><p>orders:Order</p></main>" : "<table>orders:Order</table>",
+    );
+    expect(response.headers.get("vary")).toContain("HX-Request");
+    expect(options.fragment).toBe("table");
+  }
+  const plain = new Request("http://test/orders");
+  expect(
+    await (await orders.renderHtmx("show", { title: "Plain" }, { request: plain })).text(),
+  ).toBe("<main><p>orders:Plain</p></main>");
+  const fragment = new Request("http://test/orders", { headers: { "HX-Request": "true" } });
+  expect(
+    await (await orders.renderHtmx("show", { title: "Body" }, { request: fragment })).text(),
+  ).toBe("<p>orders:Body</p>");
+  await expect(orders.renderHtmx("show")).rejects.toThrow("requires a request");
+});
+
+test("namespaces reject ambiguous template paths and never derive names from request input", async () => {
+  const renderer = new ViewRenderer(new EtaViewEngine(directory));
+  for (const invalid of [
+    "",
+    "/orders",
+    "orders/",
+    "../orders",
+    "orders/./show",
+    "orders?x",
+    "orders\\show",
+  ]) {
+    expect(() => renderer.namespace(invalid)).toThrow(TypeError);
+  }
+  const orders = renderer.namespace("orders");
+  for (const invalid of ["", "../page", "/page", "./show"]) {
+    await expect(orders.render(invalid)).rejects.toThrow(TypeError);
+    await expect(orders.renderHtmx("show", {}, { fragment: invalid })).rejects.toThrow(TypeError);
   }
 });
