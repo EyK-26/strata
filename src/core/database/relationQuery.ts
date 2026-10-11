@@ -485,6 +485,24 @@ class BelongsToRelationQuery<
   }
 }
 
+function hasRepeatedId(ids: readonly unknown[]): boolean {
+  const seen = new Set<unknown>();
+  for (const id of ids) {
+    if (seen.has(id)) return true;
+    seen.add(id);
+  }
+  return false;
+}
+
+function samePivotId(stored: unknown, requested: unknown): boolean {
+  if (stored === requested) return true;
+  if (typeof stored === "number" && typeof requested === "string")
+    return String(stored) === requested;
+  if (typeof stored === "string" && typeof requested === "number")
+    return stored === String(requested);
+  return false;
+}
+
 class BelongsToManyRelationQuery<
   TParent extends object,
   ParentKey extends keyof TParent & string,
@@ -558,6 +576,15 @@ class BelongsToManyRelationQuery<
     return this.parent.getRepository().getConnection();
   }
 
+  private async atomically(work: (connection: DatabaseConnection) => Promise<void>): Promise<void> {
+    const connection = this.connection();
+    if (typeof connection.begin !== "function") {
+      await work(connection);
+      return;
+    }
+    await connection.begin(work);
+  }
+
   async get(): Promise<RelatedRecord[]> {
     const query = await this.relatedQuery();
     const rows = query ? await query.get() : [];
@@ -622,39 +649,36 @@ class BelongsToManyRelationQuery<
 
   async attach(ids: unknown | readonly unknown[]): Promise<void> {
     const list = Array.isArray(ids) ? ids : [ids];
-    const parentId = this.parent.get(this.relation.parentKey);
-    const extraKeys = Object.keys(this.pivotValues);
-    const extraColumns =
-      extraKeys.length > 0 ? `, ${extraKeys.map((key) => quoteIdentifier(key)).join(", ")}` : "";
-    const extraPlaceholders = extraKeys.map((_, index) => `$${index + 3}`).join(", ");
-    const extraValues = extraKeys.map((key) => this.pivotValues[key]);
-
-    for (const id of list) {
-      await this.connection().unsafe(
-        extraKeys.length > 0
-          ? `INSERT INTO ${quoteIdentifier(this.relation.pivotTable)} (${quoteIdentifier(String(this.relation.foreignPivotKey))}, ${quoteIdentifier(String(this.relation.relatedPivotKey))}${extraColumns}) VALUES ($1, $2, ${extraPlaceholders})`
-          : `INSERT INTO ${quoteIdentifier(this.relation.pivotTable)} (${quoteIdentifier(String(this.relation.foreignPivotKey))}, ${quoteIdentifier(String(this.relation.relatedPivotKey))}) VALUES ($1, $2)`,
-        [parentId, id, ...extraValues],
-      );
-    }
+    if (list.length === 0) return;
+    await this.atomically((connection) => this.insertPivotRows(connection, list));
   }
 
   async toggle(ids: unknown | readonly unknown[]): Promise<void> {
     const list = Array.isArray(ids) ? ids : [ids];
-    const parentId = this.parent.get(this.relation.parentKey);
-
-    for (const id of list) {
-      const existing = await this.connection().unsafe(
-        `SELECT 1 FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1 AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} = $2 LIMIT 1`,
-        [parentId, id],
-      );
-
-      if (existing.length > 0) {
-        await this.detach(id);
-      } else {
-        await this.attach(id);
+    if (list.length === 0) return;
+    if (hasRepeatedId(list)) {
+      for (const id of list) {
+        await this.toggleOne(id);
       }
+      return;
     }
+
+    await this.atomically(async (connection) => {
+      const parentId = this.parent.get(this.relation.parentKey);
+      const relatedColumn = quoteIdentifier(String(this.relation.relatedPivotKey));
+      const parentColumn = quoteIdentifier(String(this.relation.foreignPivotKey));
+      const placeholders = list.map((_, index) => currentSqlDialect().placeholder(index + 2));
+      const existing = await connection.unsafe<Record<string, unknown>>(
+        `SELECT ${relatedColumn} FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${parentColumn} = ${currentSqlDialect().placeholder(1)} AND ${relatedColumn} IN (${placeholders.join(", ")})`,
+        [parentId, ...list],
+      );
+      const present = list.filter((id) =>
+        existing.some((row) => samePivotId(row[String(this.relation.relatedPivotKey)], id)),
+      );
+      const missing = list.filter((id) => !present.includes(id));
+      if (present.length > 0) await this.deletePivotRows(connection, present);
+      if (missing.length > 0) await this.insertPivotRows(connection, missing);
+    });
   }
 
   async detach(ids?: unknown | readonly unknown[]): Promise<void> {
@@ -662,16 +686,59 @@ class BelongsToManyRelationQuery<
 
     if (ids === undefined) {
       await this.connection().unsafe(
-        `DELETE FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1`,
+        `DELETE FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)}`,
         [parentId],
       );
       return;
     }
 
     const list = Array.isArray(ids) ? ids : [ids];
-    const placeholders = list.map((_, index) => `$${index + 2}`).join(", ");
-    await this.connection().unsafe(
-      `DELETE FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = $1 AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} IN (${placeholders})`,
+    if (list.length === 0) return;
+    await this.deletePivotRows(this.connection(), list);
+  }
+
+  private async toggleOne(id: unknown): Promise<void> {
+    const parentId = this.parent.get(this.relation.parentKey);
+    const existing = await this.connection().unsafe(
+      `SELECT 1 FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)} AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} = ${currentSqlDialect().placeholder(2)} LIMIT 1`,
+      [parentId, id],
+    );
+    if (existing.length > 0) await this.detach(id);
+    else await this.attach(id);
+  }
+
+  private async insertPivotRows(
+    connection: DatabaseConnection,
+    list: readonly unknown[],
+  ): Promise<void> {
+    const parentId = this.parent.get(this.relation.parentKey);
+    const extraKeys = Object.keys(this.pivotValues);
+    const extraColumns =
+      extraKeys.length > 0 ? `, ${extraKeys.map((key) => quoteIdentifier(key)).join(", ")}` : "";
+    const extraValues = extraKeys.map((key) => this.pivotValues[key]);
+    const width = 2 + extraKeys.length;
+    const tuples = list.map((_, row) => {
+      const slots = Array.from({ length: width }, (__, column) =>
+        currentSqlDialect().placeholder(row * width + column + 1),
+      );
+      return `(${slots.join(", ")})`;
+    });
+    const params: unknown[] = [];
+    for (const id of list) params.push(parentId, id, ...extraValues);
+    await connection.unsafe(
+      `INSERT INTO ${quoteIdentifier(this.relation.pivotTable)} (${quoteIdentifier(String(this.relation.foreignPivotKey))}, ${quoteIdentifier(String(this.relation.relatedPivotKey))}${extraColumns}) VALUES ${tuples.join(", ")}`,
+      params,
+    );
+  }
+
+  private async deletePivotRows(
+    connection: DatabaseConnection,
+    list: readonly unknown[],
+  ): Promise<void> {
+    const parentId = this.parent.get(this.relation.parentKey);
+    const placeholders = list.map((_, index) => currentSqlDialect().placeholder(index + 2));
+    await connection.unsafe(
+      `DELETE FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)} AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} IN (${placeholders.join(", ")})`,
       [parentId, ...list],
     );
   }
