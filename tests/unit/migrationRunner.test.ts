@@ -6,6 +6,7 @@ import {
   freshDatabase,
   getAppliedMigrations,
   getMigrationStatus,
+  guardMigrationRollback,
   loadMigrationsFromDirectory,
   migrateDatabase,
   rollbackDatabase,
@@ -220,7 +221,10 @@ describe("explicit fresh migration context", () => {
       name: "protected",
       async up() {},
       async down(_db, context) {
-        if (context?.operation !== "fresh") throw new Error("Protected history");
+        await guardMigrationRollback(context, {
+          hasHistory: async () => true,
+          message: "Protected history",
+        });
       },
     };
     await migrateDatabase(db, [migration]);

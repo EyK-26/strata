@@ -576,4 +576,21 @@ SQL record deletion and Redis admission are separate operations. A crash, lost R
 
 Ordinary rollback and legacy `freshDatabase` calls without the option retain their existing guards. Protected migrations can distinguish intentional development reset from rollback using the typed context; encryption-rotation checkpoints use this contract without relaxing their ordinary archival requirement. Application-owned payment/order audit migrations must explicitly adopt it when intentional development reset should discard their history. Existing migrations that ignore the context keep their behavior. This is not a universal database-drop shortcut, nor an automatic archival operation. A failing `down` may leave an earlier reset step applied on drivers without transactional DDL: use disposable databases for validation, and do not assume that a failed reset preserved the whole schema.
 
+For repeated history guards, use the optional typed `guardMigrationRollback` helper from `@getstrata/core/database/migrations`:
+
+```ts
+async down(db, context) {
+  await guardMigrationRollback(context, {
+    hasHistory: async () =>
+      (await db.unsafe("SELECT id FROM order_refunds LIMIT 1")).length > 0,
+    message: "Cannot discard refund history.",
+  });
+  await Schema.run(db, "pgsql", schema => { schema.drop("order_refunds"); });
+}
+```
+
+Import `guardMigrationRollback` and `Schema` from their documented subpaths. Call and await the guard before destructive DDL. The application owns the history predicate and refusal text; it may use a repository instead of a migration query. The predicate must return a boolean (synchronously or asynchronously). Ordinary rollback and legacy resets evaluate it: `true` refuses the operation, `false` permits the following code, and a thrown/rejected read propagates without permitting the following code. An explicit fresh context skips the predicate entirely. The helper does not wrap DDL, provide transaction atomicity, archive data, authorize a reset or check environment configuration: the reset runner/CLI owns those checks. Manually passing a context is trusted application code, not an authorization token. The guard does not exclude concurrent writers between the history read and DDL; use a maintenance window for history-sensitive rollback.
+
+Most migrations need no guard. Existing `down(db, context)` checks remain supported, and migrations are never made resettable automatically. A migration that must prohibit deletion even during development reset should keep its own unconditional refusal and omit this helper. Encryption-rotation checkpoints use the helper with an unconditional ordinary-rollback refusal; their archival policy is unchanged.
+
 Default 422 HTML pages use a native same-origin return link, with `/` as the fallback when the referrer is absent, malformed, external or points to the same failed GET/HEAD path. A failed POST can return to the corresponding GET form/list path. Only the path is retained; query credentials and fragments are omitted. This works under strict CSP and without JavaScript. Postgres/SQLite foreign-key errors keep status 422 but use a neutral related-record message because their error codes cover both missing parents and protected referenced rows. Apps should express domain-specific refusal rules (for example, preserving products with order history) through their normal validation contract; database constraints remain the final integrity boundary.
