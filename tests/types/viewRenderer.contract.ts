@@ -13,6 +13,19 @@ function viewContract(container: ServiceContainer, renderer: ViewRenderer): void
     { fragment: "orders/table", request: new Request("http://test/orders") },
   );
   void htmx;
+  const scoped = renderer.namespace("orders");
+  const scopedResponse: Promise<Response> = scoped.render("show", {}, { status: 200 });
+  const scopedHtmx: Promise<Response> = scoped.renderHtmx(
+    "show",
+    {},
+    { fragment: "table", request: new Request("http://test/orders") },
+  );
+  void scopedResponse;
+  void scopedHtmx;
+  // @ts-expect-error Rendering stays explicit and requires a template name.
+  scoped.render();
+  // @ts-expect-error Scoped rendering preserves layout types.
+  scoped.render("show", {}, { layout: true });
   // @ts-expect-error A fragment is a template name, not a response mode boolean.
   renderer.renderHtmx("orders", {}, { fragment: true });
   // @ts-expect-error Typed view DI tokens reject unrelated services.

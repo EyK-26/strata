@@ -208,6 +208,21 @@ configuration or automatically negotiate HTMX fragments. Explicit scoped
 error rendering remains separate follow-up work. Generated HTML apps now register
 the factory and resolve the typed renderer directly; see [STARTER.md](STARTER.md).
 
+### Explicit view namespaces
+
+A controller can receive `views.namespace("orders")` once during module composition, typed as `NamespacedViewRenderer` from `@getstrata/core/view`. It then renders relative template names without deriving them from the controller class, action, URL or request input:
+
+```ts
+const orderViews = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace("orders");
+// In the controller:
+return orderViews.render("show", { order }, { request, layout: "layouts/admin" });
+// views/orders/show.eta, wrapped in views/layouts/admin.eta
+```
+
+`renderHtmx("index", { orders }, { request, fragment: "table" })` selects `orders/index.eta` for full pages and `orders/table.eta` for targeted requests. Omitting `fragment` uses the relative page template without its layout, as on the root renderer. Namespace prefixes and template/fragment names must be relative paths without dot segments or trailing slashes; `.eta` remains optional. Layout names stay relative to the app's view directory and never gain the namespace prefix. Use the original renderer for a template outside the namespace.
+
+Scopes delegate to their app's renderer, preserving request-specific data, escaping, headers, status, errors, HTMX selection and `Vary`. They hold no current action/request state; independent controllers and concurrent requests do not change each other's prefix. Template data remains explicitly passed and every action still returns a native response or its promise. No controller base class, implicit rendering, filename inference or automatic model loading is introduced.
+
 ### Opt-in HTMX page and fragment responses
 
 Use `views.renderHtmx()` only on HTML routes designed for both representations:
