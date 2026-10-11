@@ -1,3 +1,4 @@
+import { guardMigrationRollback } from "../../database/migrations/rollbackGuard";
 import type { Migration } from "../../database/migrations/types";
 import type { DatabaseDriver } from "../../database/schema/driver";
 
@@ -51,12 +52,16 @@ function createOutboxMigration(
           SELECT 1 FROM strata_outbox_event WHERE id = strata_outbox_delivery.event_id))`);
       }
     },
-    async down(db) {
-      const [row] = await db.unsafe<{ pending: number }>(
-        "SELECT COUNT(*) AS pending FROM strata_outbox_delivery WHERE status <> 'completed'",
-      );
-      if (Number(row?.pending) > 0)
-        throw new Error("Cannot drop outbox tables while undelivered events remain.");
+    async down(db, context) {
+      await guardMigrationRollback(context, {
+        async hasHistory() {
+          const [row] = await db.unsafe<{ pending: number }>(
+            "SELECT COUNT(*) AS pending FROM strata_outbox_delivery WHERE status <> 'completed'",
+          );
+          return Number(row?.pending) > 0;
+        },
+        message: "Cannot drop outbox tables while undelivered events remain.",
+      });
       await db.unsafe("DROP TABLE strata_outbox_delivery");
       await db.unsafe("DROP TABLE strata_outbox_event");
     },

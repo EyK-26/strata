@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.19
+
+Fix explicit development fresh resets with unfinished outbox deliveries while preserving ordinary rollback guards. Record each completed reset down immediately so later refusal leaves recoverable migration progress; document partial-DDL/crash limits and old-history reconciliation. Add independent outbox-state and reset failure/migrate/retry regressions on real Postgres, MySQL and SQLite, history-write/reapplication fault injection, and a documented stateful regression review flow.
+
 ## 2.2.18
 
 Add optional typed guardMigrationRollback for application-owned rollback history predicates; skip history reads only during explicit development fresh resets, propagate predicate failures, and reuse the contract for encryption-checkpoint archival protection. Document guard placement and unchanged reset/rollback safety; cover type, runner and real SQLite history regressions.

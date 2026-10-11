@@ -255,3 +255,104 @@ describe("explicit fresh migration context", () => {
     }
   });
 });
+
+describe("fresh reset progress", () => {
+  test("a later down failure retains only unapplied rollback steps; migrate restores completed downs", async () => {
+    for (const destructive of [false, true]) {
+      const { db, applied } = createMemoryDb();
+      let blocked = true;
+      const definitions: Migration[] = [
+        {
+          name: "base",
+          async up() {},
+          async down() {
+            if (blocked) throw new Error("Injected refusal");
+          },
+        },
+        { name: "later", async up() {}, async down() {} },
+      ];
+      await migrateDatabase(db, definitions);
+      await expect(freshDatabase(db, definitions, { destructive })).rejects.toThrow(
+        "Injected refusal",
+      );
+      expect(applied.map((row) => row.name)).toEqual(["base"]);
+      expect(await migrateDatabase(db, definitions)).toBe(1);
+      expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+      blocked = false;
+      await freshDatabase(db, definitions, { destructive });
+      expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+    }
+  });
+  test("completed down records use dialect placeholders", async () => {
+    useSqlDialect("mysql");
+    try {
+      const { db } = createMemoryDb();
+      const original = db.unsafe.bind(db);
+      const removals: { sql: string; params: readonly unknown[] }[] = [];
+      db.unsafe = async <T = unknown>(sql: string, params: readonly unknown[] = []) => {
+        if (sql.startsWith("DELETE FROM framework_migrations WHERE name"))
+          removals.push({ sql, params });
+        return original<T>(sql, params);
+      };
+      await migrateDatabase(db, migrations);
+      await freshDatabase(db, migrations, { destructive: true });
+      expect(removals.map((row) => row.sql)).toEqual([
+        "DELETE FROM framework_migrations WHERE name = ?",
+        "DELETE FROM framework_migrations WHERE name = ?",
+      ]);
+      expect(removals.map((row) => row.params[0])).toEqual([
+        migrations[1]?.name,
+        migrations[0]?.name,
+      ]);
+    } finally {
+      resetSqlDialect();
+    }
+  });
+  test("history removal failure stops before earlier downs and never clears all history", async () => {
+    const { db, applied } = createMemoryDb();
+    const definitions: Migration[] = [
+      {
+        name: "base",
+        async up() {},
+        async down() {
+          throw new Error("Must not reach earlier down");
+        },
+      },
+      { name: "later", async up() {}, async down() {} },
+    ];
+    await migrateDatabase(db, definitions);
+    const original = db.unsafe.bind(db);
+    db.unsafe = async <T = unknown>(sql: string, params: readonly unknown[] = []) => {
+      if (sql.startsWith("DELETE FROM framework_migrations WHERE name"))
+        throw new Error("History write unavailable");
+      return original<T>(sql, params);
+    };
+    await expect(freshDatabase(db, definitions, { destructive: true })).rejects.toThrow(
+      "History write unavailable",
+    );
+    expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+  });
+  test("reapplication failure retains completed ups and retry resumes pending migrations", async () => {
+    const { db, applied } = createMemoryDb();
+    let refuseUp = false;
+    const definitions: Migration[] = [
+      { name: "base", async up() {}, async down() {} },
+      {
+        name: "later",
+        async up() {
+          if (refuseUp) throw new Error("Injected up refusal");
+        },
+        async down() {},
+      },
+    ];
+    await migrateDatabase(db, definitions);
+    refuseUp = true;
+    await expect(freshDatabase(db, definitions, { destructive: true })).rejects.toThrow(
+      "Injected up refusal",
+    );
+    expect(applied.map((row) => row.name)).toEqual(["base"]);
+    refuseUp = false;
+    expect(await migrateDatabase(db, definitions)).toBe(1);
+    expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+  });
+});

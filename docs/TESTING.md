@@ -85,3 +85,23 @@ bun run hiroapp:dev
 ```
 
 See [GETTING-STARTED.md](./GETTING-STARTED.md).
+
+
+## Stateful mechanism regression review
+
+A passing clean bootstrap is insufficient evidence for migrations, workers or operator commands. Review the reachable persisted states and the failure boundaries before selecting fixtures. A regression PR must identify the invariant it protects, how it reproduces the original failure, what adjacent paths were checked and what remains unqualified.
+
+For migration/reset changes:
+
+- Populate every framework-owned history store installed by the generated app, as well as app-owned protected history. Exercise each unfinished outbox state independently; mixed fixtures can hide a broken guard for another state.
+- Keep ordinary rollback and legacy reset protections, explicit development reset, unsupported environment rejection before database access, opt-in seeding and repeat reset as separate assertions.
+- Inject refusal after an earlier successful down, history-record write failure and reapplication failure. Assert both physical schema and migration records, then exercise migrate/retry. A count of applied migrations alone cannot establish schema correctness.
+- Run disposable real Postgres, MySQL and SQLite regressions for supported mechanisms. A skipped dialect requires an explicit qualification gap; SQL-string assertions do not substitute for executing the dialect.
+- Inspect migration lists for duplicates, invalid exports and applied names missing from disk. Do not assume file discovery or successful status output proves schema consistency.
+- State the recovery limits. Partial DDL, process death between DDL and history updates, and concurrent writers require explicit investigation; successful reset does not demonstrate crash atomicity or restore deleted records.
+
+`tests/integration/freshOutboxRecovery.integration.test.ts` executes populated outbox and failure/migrate/retry paths across the three database engines. `tests/unit/migrationRunner.test.ts` additionally injects history-write and reapplication failures. The published-package shop acceptance must populate its complete installed history set and invoke the real CLI after publication; framework source tests alone cannot qualify shop adoption.
+
+Use the same review flow for other stateful changes: enumerate persistent states, define invariants, inject failures at side-effect boundaries, verify persisted outcomes and recovery, then test generated and published consumers. Record newly reproduced defects separately rather than claiming an audit proves no bugs remain. Run the mandatory full validation gate after the final change and disclose intermittent failures, skipped tests and external-provider checks in the PR.
+
+The retroactive reset review reproduced [#174](https://github.com/EyK-26/strata/issues/174): a supplied migration set missing an applied definition leaves its schema in place while the final reset clear removes its history. That needs a separate preflight-validation fix. The reset progress/outbox regressions do not claim to resolve this case. The earlier shop reset fixture also omitted populated outbox deliveries; published-package adoption must correct that omission before declaring the full installed reset path qualified.
