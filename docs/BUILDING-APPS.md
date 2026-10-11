@@ -443,6 +443,26 @@ Use constructor parameters for the services a controller actually needs; resolve
 
 For tenant-specific API allowances, bind `CORE_THROTTLE_QUOTA_POLICY_TOKEN` during provider registration rather than adding plan rules to core. Use trusted tenant metadata and the synchronous `ThrottleQuotaPolicy` contract. The generated kernel applies it to API throttles. Dedicated login and SCIM limits remain additional controls when those routes also use the API group. See [application-owned quotas and local storage bounds](PRODUCTION.md#application-owned-quotas) for an example, failure semantics and cleanup requirements.
 
+## Optional resource routes
+
+`resourceRoutes` from `@getstrata/core/http/route` expands explicitly supplied actions into the existing native Bun route map. It does not inspect controller methods, instantiate controllers, select middleware, authorize models, or infer views.
+
+```ts
+return mergeRouteMaps(
+  resourceRoutes("/orders", {
+    index: kernel.wrapWebAuthenticated(controller.index),
+    show: kernel.wrapWebAuthenticated(controller.show),
+  }),
+  { "/orders/:id/cancel": { POST: kernel.wrapWebAuthenticated(controller.cancel) } },
+);
+```
+
+Import both helpers from `@getstrata/core/http/route`. Paths are static absolute prefixes without a trailing slash (for example `/orders` or `/admin/orders`); member actions receive the typed `request.params.id`. Nested parent parameters and different member parameter names remain explicit route maps. Only supplied actions are registered: `index` is `GET /orders`, `create` is `GET /orders/create`, `store` is `POST /orders`, `show` is `GET /orders/:id`, `edit` is `GET /orders/:id/edit`, `update` handles `PUT` and `PATCH /orders/:id`, and `destroy` is `DELETE /orders/:id`. Empty action maps register nothing; unsupported actions or non-function values fail at construction. Supply bound handlers (such as arrow fields) when a controller uses `this`.
+
+Web resources belong in `webRoutes`; API resources belong in `routes`, with operation metadata under their expanded paths in `openApi`. The existing kernel wrappers still own auth, tenancy, CSRF and error contracts. Resource helpers introduce no HTTP method spoofing: ordinary HTML mutation forms need explicit POST endpoints; JavaScript/API clients may send PUT/PATCH/DELETE. Refunds, cancellation and other business commands remain explicit app routes.
+
+`mergeRouteMaps` returns a fresh map and rejects duplicate paths, including two method maps for the same path, before handlers can be silently replaced. Define all methods of a shared path together. Use it when composing resource and custom maps; object spreads and existing cross-module overrides retain their prior semantics and do not gain collision checking automatically. Explicit maps remain fully supported.
+
 ## Preserve route request types through middleware
 
 `RouteHandler<TRequest>` defaults to the standard `Request`, and accepts a narrower native request contract when a controller needs route parameters. `composeMiddleware`, `withMiddleware`, the `HttpKernel` wrappers and web login/register throttles preserve that contract, so casting parameterized handlers to an untyped `RouteHandler` is unnecessary.

@@ -56,8 +56,13 @@ export {
   noContentResponse,
   withErrorHandling,
 } from "./response";
-export type { RouteRequest } from "./route";
-export { getRouteParams } from "./route";
+export type {
+  ResourceActions,
+  ResourceMemberHandler,
+  ResourceRouteMap,
+  RouteRequest,
+} from "./route";
+export { getRouteParams, mergeRouteMaps, resourceRoutes } from "./route";
 export { withMiddleware } from "./routeMiddleware";
 export { bindRouteModel } from "./routeModelBinding";
 export {

@@ -481,8 +481,13 @@ export {
   noContentResponse,
   withErrorHandling,
 } from "../core/http/response.ts";
-export type { RouteRequest } from "../core/http/route.ts";
-export { getRouteParams } from "../core/http/route.ts";
+export type {
+  ResourceActions,
+  ResourceMemberHandler,
+  ResourceRouteMap,
+  RouteRequest,
+} from "../core/http/route.ts";
+export { getRouteParams, mergeRouteMaps, resourceRoutes } from "../core/http/route.ts";
 export {
   loginRedirectLocation,
   safeInternalRedirectPath,
