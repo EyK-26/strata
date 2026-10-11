@@ -51,12 +51,47 @@ import { RepositoryQuery } from "./repositoryQuery.ts";
 import type { TableDefinition } from "./table.ts";
 import { runInTransaction } from "./transaction.ts";
 import { hasActiveTransaction } from "./transactionControl.ts";
-import type { MutationValues, QueryOptions, QueryWhere, UpdateValues } from "./types.ts";
+import type {
+  MutationValues,
+  QueryOptions,
+  QueryOrder,
+  QueryWhere,
+  UpdateValues,
+} from "./types.ts";
 import type { WhereNode } from "./whereBuilder.ts";
 
 type ExtendedQueryOptions<TEntity extends object> = QueryOptions<TEntity> & {
   whereNodes?: WhereNode<TEntity>[];
 };
+
+function listOrders<TEntity extends object>(
+  orderBy:
+    | QueryOptions<TEntity>["orderBy"]
+    | QueryOrder<TEntity>
+    | QueryOrder<TEntity>[]
+    | undefined,
+): Array<{ column: string; direction: "asc" | "desc"; nulls?: string }> {
+  if (!orderBy) return [];
+  if (Array.isArray(orderBy)) return orderBy.map(readOrder);
+  if (typeof orderBy === "object" && "column" in orderBy) return [readOrder(orderBy)];
+  return Object.entries(orderBy).map(([column, direction]) =>
+    readOrder({ column, direction: direction as QueryOrder<TEntity>["direction"] }),
+  );
+}
+
+function readOrder<TEntity extends object>(
+  order: QueryOrder<TEntity>,
+): {
+  column: string;
+  direction: "asc" | "desc";
+  nulls?: string;
+} {
+  return {
+    column: String(order.column),
+    direction: String(order.direction).toUpperCase() === "DESC" ? "desc" : "asc",
+    ...(order.nulls === undefined ? {} : { nulls: order.nulls }),
+  };
+}
 
 interface DatabaseConnection {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
@@ -151,18 +186,26 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       },
       whereNodes,
     );
+    const meta = buildPaginationMeta({ page, perPage, total });
+    if (total === 0) {
+      return { data: [], meta };
+    }
     const offset = (page - 1) * perPage;
-    const data = await this.findAll({
-      ...queryOptions,
-      where,
-      whereNodes,
-      limit: perPage,
-      offset,
-    });
+    const direction = this.primaryKeySeekDirection(queryOptions);
+    const data =
+      direction && offset > 0
+        ? await this.findPrimaryKeyPage(queryOptions, where, whereNodes, perPage, offset, direction)
+        : await this.findAll({
+            ...queryOptions,
+            where,
+            whereNodes,
+            limit: perPage,
+            offset,
+          });
 
     return {
       data,
-      meta: buildPaginationMeta({ page, perPage, total }),
+      meta,
     };
   }
 
@@ -173,6 +216,17 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   ): Promise<void> {
     if (!Number.isInteger(count) || count <= 0) {
       throw new Error("Chunk size must be a positive integer.");
+    }
+
+    if (this.primaryKeySeekDirection(options) === "asc") {
+      const seekOptions = { ...options };
+      delete seekOptions.orderBy;
+      await this.chunkById(
+        count,
+        async (rows) => ((await callback(rows)) === false ? false : undefined),
+        seekOptions,
+      );
+      return;
     }
 
     let offset = 0;
@@ -614,6 +668,74 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         return entity;
       }),
     );
+  }
+
+  private primaryKeySeekDirection(options: ExtendedQueryOptions<TEntity>): "asc" | "desc" | null {
+    if (
+      options.joins?.length ||
+      options.groupBy ||
+      options.having ||
+      options.select?.length ||
+      options.offset !== undefined ||
+      options.limit !== undefined ||
+      options.lock
+    ) {
+      return null;
+    }
+
+    const orders = listOrders(options.orderBy ?? this.table.defaultOrderBy);
+    const order = orders[0];
+    if (orders.length !== 1 || !order || order.nulls || order.column !== this.table.primaryKey) {
+      return null;
+    }
+
+    return order.direction;
+  }
+
+  private async findPrimaryKeyPage(
+    queryOptions: ExtendedQueryOptions<TEntity>,
+    where: ExtendedQueryOptions<TEntity>["where"],
+    whereNodes: WhereNode<TEntity>[] | undefined,
+    perPage: number,
+    offset: number,
+    direction: "asc" | "desc",
+  ): Promise<TEntity[]> {
+    const primaryKey = this.table.primaryKey;
+    const [boundary] = await this.findAll({
+      ...queryOptions,
+      where,
+      whereNodes,
+      orderBy: { [primaryKey]: direction },
+      select: [{ kind: "column", table: this.table.name, column: primaryKey }],
+      limit: 1,
+      offset,
+    });
+    const cursor = boundary?.[primaryKey];
+    if (cursor === undefined) {
+      return [];
+    }
+
+    const filters: WhereNode<TEntity>[] = [];
+    if (where && Object.keys(where).length > 0) filters.push({ kind: "and", where });
+    filters.push(...(whereNodes ?? []));
+    const cursorWhere: QueryWhere<TEntity> = {};
+    (cursorWhere as Record<string, unknown>)[primaryKey] =
+      direction === "asc" ? { gte: cursor } : { lte: cursor };
+    const scoped: WhereNode<TEntity>[] =
+      filters.length > 0
+        ? [
+            { kind: "and", group: filters },
+            { kind: "and", where: cursorWhere },
+          ]
+        : [{ kind: "and", where: cursorWhere }];
+
+    return await this.findAll({
+      ...queryOptions,
+      where: {},
+      whereNodes: scoped,
+      orderBy: { [primaryKey]: direction },
+      limit: perPage,
+    });
   }
 
   withConnection(connection: DatabaseConnection): this {

@@ -137,7 +137,9 @@ Release occurs before committed deferred observers flush, so reentrant observers
 
 ### Walking large tables
 
-`chunkById` pages by keyset instead of `OFFSET`, so rows are neither skipped nor repeated when the callback mutates what it reads. Return `false` to stop early. Prefer it over `chunk` for anything that writes.
+`chunkById` pages by keyset instead of `OFFSET`, so rows are neither skipped nor repeated when the callback mutates what it reads. Return `false` to stop early. `chunk` uses that same primary-key walk when the query is already ordered only by its primary key ascending, including the table's default order. Joins, grouping, locks, projections, and any other order stay on `OFFSET`.
+
+`paginate` still returns page numbers and a total. Page 1 reads `LIMIT n`. A later page of a primary-key-ordered table first reads the boundary id with `OFFSET`, then loads the full rows with `id >= boundary` (or `<=` when descending). That keeps the page contract and stops Postgres from walking wide rows it will throw away. Joins, grouping, and other orders still apply `OFFSET` to the full select.
 
 ```typescript
 await orders.chunkById(500, async (rows) => {

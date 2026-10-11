@@ -1,5 +1,12 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- `chunk` walks by the primary key when that is already the only ascending order, so later batches do not use `OFFSET`.
+- `paginate` past page 1 seeks from the boundary primary key instead of applying `OFFSET` to the full row. An empty total returns before that lookup.
+- Independent `hashed` write casts run concurrently.
+- An idle Streams worker promotes, reclaims, and reads every priority in one Redis script.
+
 ## 2.2.14
 
 Complete the scoped HTML rendering starter adoption: generated apps inject ViewRenderer through createViewProvider instead of copying renderPage; welcome pages opt into HTMX fragments with full-page fallbacks, auth retains existing contracts, and CORS preserves representation Vary headers. Includes generator, runtime auth and cache-header regressions.
