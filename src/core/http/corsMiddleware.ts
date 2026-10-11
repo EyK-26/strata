@@ -85,7 +85,17 @@ function createCorsMiddleware(options: CorsOptions = {}): Middleware {
     const headers = new Headers(response.headers);
 
     for (const [key, value] of buildCorsHeaders(request, captured)) {
-      headers.set(key, value);
+      if (key === "vary") {
+        const fields = (headers.get("Vary") ?? "")
+          .split(",")
+          .map((field) => field.trim())
+          .filter(Boolean);
+        if (fields.includes("*")) continue;
+        if (!fields.some((field) => field.toLowerCase() === "origin")) fields.push(value);
+        headers.set("Vary", fields.join(", "));
+      } else {
+        headers.set(key, value);
+      }
     }
 
     return new Response(response.body, {
