@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.17
+
+Add explicit development-only migration reset context while preserving guarded rollback and encryption archival; align generated fresh entries and reject production/staging or unsupported reset arguments before provisioning. Replace CSP-blocked error-page JavaScript navigation with safe same-origin links, and correct ambiguous Postgres/SQLite foreign-key messages without changing their HTTP status.
+
 ## 2.2.16
 
 Allow managed outbox workers to reuse a configured instance, preserving application tenant resolution, listener registration and delivery settings. Keep generated listeners-only defaults compatible, reject ambiguous worker sources, and cover configured SQL delivery, cancellation, cleanup and TypeScript contracts.

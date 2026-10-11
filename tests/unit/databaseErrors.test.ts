@@ -210,7 +210,9 @@ describe("mapDatabaseError", () => {
 
   test("uses default postgres error messages when detail is missing", () => {
     expect(mapDatabaseError({ errno: "23505" }).message).toContain("already exists");
-    expect(mapDatabaseError({ errno: "23503" }).message).toContain("Referenced record");
+    expect(mapDatabaseError({ errno: "23503" }).message).toBe(
+      "Operation conflicts with related records.",
+    );
     expect(mapDatabaseError({ errno: "23502" }).message).toContain("Required field");
     expect(mapDatabaseError({ errno: "23514" }).message).toContain("database constraint");
     expect(mapDatabaseError({ errno: "99999", message: undefined }).message).toBe(
@@ -239,4 +241,18 @@ describe("withDatabaseErrorHandling", () => {
       }),
     ).rejects.toBeInstanceOf(HttpError);
   });
+});
+
+test("ambiguous foreign-key failures never claim every failure is a missing parent", () => {
+  for (const error of [
+    { errno: "23503", detail: 'Key is still referenced from table "order_items".' },
+    { code: "23503", detail: 'Key is not present in table "products".' },
+    { code: "SQLITE_CONSTRAINT_FOREIGNKEY", errno: 787 },
+  ]) {
+    const mapped = mapDatabaseError(error);
+    expect(mapped.status).toBe(422);
+    expect(mapped.message).toBe("Operation conflicts with related records.");
+    expect(mapped.message).not.toContain("order_items");
+    expect(mapped.message).not.toContain("products");
+  }
 });

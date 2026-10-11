@@ -52,7 +52,7 @@ function mapSqliteError(error: PostgresErrorLike): HttpError | null {
     return new ConflictError("A record with these values already exists.");
   }
   if (code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
-    return new UnprocessableEntityError("Referenced record does not exist.");
+    return new UnprocessableEntityError("Operation conflicts with related records.");
   }
   if (code === "SQLITE_CONSTRAINT_NOTNULL") {
     return new BadRequestError("Required field is missing.");
@@ -109,7 +109,7 @@ function mapDatabaseError(error: unknown): HttpError {
       if (error.detail) {
         console.error("[database] foreign-key violation", error.detail);
       }
-      return new UnprocessableEntityError("Referenced record does not exist.");
+      return new UnprocessableEntityError("Operation conflicts with related records.");
     case "23502":
       if (error.detail) {
         console.error("[database] not-null violation", error.detail);
