@@ -3,10 +3,15 @@ interface MigrationDatabase {
   schema?: import("../schema/schema.ts").SchemaBuilder;
 }
 
+/** Explicit destructive reset is distinct from an ordinary rollback. */
+interface MigrationDownContext {
+  operation: "fresh";
+}
+
 interface Migration {
   name: string;
   up(db: MigrationDatabase): Promise<void>;
-  down(db: MigrationDatabase): Promise<void>;
+  down(db: MigrationDatabase, context?: MigrationDownContext): Promise<void>;
 }
 
 type MigrationStatus = {
@@ -15,4 +20,4 @@ type MigrationStatus = {
   batch: number | null;
 };
 
-export type { Migration, MigrationDatabase, MigrationStatus };
+export type { Migration, MigrationDatabase, MigrationDownContext, MigrationStatus };

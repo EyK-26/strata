@@ -643,6 +643,8 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "docker/postgres-init/01-strata-app-role.sql"))).toBe(false);
     const fresh = await readFile(join(app, "src/db/fresh.ts"), "utf8");
     expect(fresh).toContain("freshDatabase");
+    expect(fresh).toContain("{ destructive: true }");
+    expect(fresh).toContain("if (isProductionEnv())");
     expect(fresh).toContain("withMigrationDatabase");
     expect(fresh).toContain('from "@getstrata/core/database/migrations"');
     expect(fresh).not.toContain("@getstrata/core/database/migrations/runner");

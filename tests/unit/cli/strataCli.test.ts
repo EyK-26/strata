@@ -177,6 +177,63 @@ describe("published strata CLI", () => {
     });
   }
 
+  test.each(["production", "staging", "unknown-environment"])(
+    "fresh rejects %s before importing reset code",
+    async (environment) => {
+      const workspace = await createTempApp();
+      await writeFile(
+        join(workspace, "src/db/fresh.ts"),
+        'console.log("must-not-import"); export async function fresh() {}',
+      );
+      const proc = Bun.spawn(
+        ["bun", join(import.meta.dir, "../../../packages/strata-cli/cli.ts"), "migrate:fresh"],
+        {
+          cwd: workspace,
+          env: { ...process.env, APP_ENV: environment },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+      expect(code).not.toBe(0);
+      expect(stdout).not.toContain("must-not-import");
+      expect(stderr).toContain("development/test");
+    },
+  );
+
+  test("fresh rejects unsupported flags before importing reset code", async () => {
+    const workspace = await createTempApp();
+    await writeFile(
+      join(workspace, "src/db/fresh.ts"),
+      'console.log("must-not-import"); export async function fresh() {}',
+    );
+    const proc = Bun.spawn(
+      [
+        "bun",
+        join(import.meta.dir, "../../../packages/strata-cli/cli.ts"),
+        "migrate:fresh",
+        "--force",
+      ],
+      {
+        cwd: workspace,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(code).not.toBe(0);
+    expect(stdout).not.toContain("must-not-import");
+    expect(stderr).toContain("supports only --seed");
+  });
+
   test("fresh without --seed does not seed", async () => {
     const workspace = await createTempApp();
     const proc = Bun.spawn(

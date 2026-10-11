@@ -732,13 +732,15 @@ function dropTables(layers: StarterLayers): string[] {
 }
 
 function renderFreshTs(layers: StarterLayers): string {
-  return `${ensureImport(layers)}import { freshDatabase } from "@getstrata/core/database/migrations";
+  return `${ensureImport(layers)}import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { freshDatabase } from "@getstrata/core/database/migrations";
 import { closeDatabase } from "../bootstrap/database.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function fresh() {
+  if (isProductionEnv()) throw new Error("migrate:fresh is only available in development/test environments.");
 ${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
-    await freshDatabase(db, await loadStarterMigrations());
+    await freshDatabase(db, await loadStarterMigrations(), { destructive: true });
   });
 }
 

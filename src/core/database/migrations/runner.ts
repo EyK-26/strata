@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isProductionEnv } from "../../runtime/appEnv.ts";
 import { currentSqlDialect } from "../dialect.ts";
 import { withMigrationLock } from "./advisoryLock.ts";
 import type { Migration, MigrationDatabase, MigrationStatus } from "./types.ts";
@@ -188,8 +189,17 @@ async function rollbackDatabase(
 async function freshDatabase(
   db: MigrationDatabase,
   migrations: Migration[],
-  options: { advisoryLock?: boolean; onMigration?: (name: string) => void } = {},
+  options: {
+    advisoryLock?: boolean;
+    onMigration?: (name: string) => void;
+    destructive?: boolean;
+  } = {},
 ): Promise<void> {
+  if (options.destructive && isProductionEnv()) {
+    throw new Error(
+      "Destructive migration reset is only available in development/test environments.",
+    );
+  }
   const runFresh = async (): Promise<void> => {
     const applied = await getAppliedMigrations(db);
     const appliedNames = new Set(applied.map(({ name }) => name));
@@ -197,7 +207,8 @@ async function freshDatabase(
 
     for (const migration of [...appliedMigrations].reverse()) {
       options.onMigration?.(migration.name);
-      await migration.down(db);
+      if (options.destructive) await migration.down(db, { operation: "fresh" });
+      else await migration.down(db);
     }
 
     if (appliedMigrations.length > 0) {
