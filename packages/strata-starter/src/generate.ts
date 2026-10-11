@@ -50,6 +50,7 @@ import {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
   renderCliOpenApiTs,
+  renderCliOutboxWorkTs,
   renderCliQueueFailedTs,
   renderCliQueueWorkTs,
   renderCliRegisterTs,
@@ -64,6 +65,8 @@ import {
   renderMigrationRuntimeTs,
   renderModelsRegister,
   renderNoteModel,
+  renderOutboxMigration,
+  renderOutboxRegistryTs,
   renderPolicyProvider,
   renderPreloadTs,
   renderProvidersIndex,
@@ -226,6 +229,8 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     removeIfExists(join(src, "db/migrations/0004_initial_admin_provisioning.ts"));
   }
   writeText(join(src, "cli/queueWork.ts"), renderCliQueueWorkTs());
+  writeText(join(src, "cli/outboxWork.ts"), renderCliOutboxWorkTs());
+  writeText(join(src, "outbox/registry.ts"), renderOutboxRegistryTs());
   writeText(join(src, "cli/queueFailed.ts"), renderCliQueueFailedTs());
   writeText(join(src, "cli/openapi.ts"), renderCliOpenApiTs());
   writeText(join(src, "cli/scheduleRun.ts"), renderCliScheduleRunTs());
@@ -254,6 +259,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     join(src, "db/migrations/0001_starter_schema.ts"),
     renderStarterSchemaMigration(layers),
   );
+  writeText(join(src, "db/migrations/0005_outbox.ts"), renderOutboxMigration(layers));
   removeIfExists(join(src, "db/migrations/0002_webhooks_schema.ts"));
   removeIfExists(join(src, "db/migrations/0002_billing_schema.ts"));
   removeIfExists(join(src, "db/migrations/0003_billing_schema.ts"));

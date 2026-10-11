@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- An idle list worker reclaims every priority and reserves the first job in one Redis script. Later empty polls in that wait only reserve.
+- `belongsToMany` attach and toggle write the unique ids in one statement per insert or delete. A repeated id in `toggle` still flips one at a time. When the connection can begin a transaction, the batch commits or rolls back together.
+
 ## 2.2.14
 
 Complete the scoped HTML rendering starter adoption: generated apps inject ViewRenderer through createViewProvider instead of copying renderPage; welcome pages opt into HTMX fragments with full-page fallbacks, auth retains existing contracts, and CORS preserves representation Vary headers. Includes generator, runtime auth and cache-header regressions.

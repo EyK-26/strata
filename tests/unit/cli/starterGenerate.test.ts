@@ -1171,68 +1171,63 @@ export default probeModule;
     }
   });
 
-  appTest(
-    "generated metrics ownership drains SQL collectors without provisioning an outbox",
-    async () => {
-      const root = await tempDir();
-      const app = generateFromArgs(root, ["metrics-runtime-boot", "--metrics", "--yes"]);
-      const packagePath = join(app, "package.json");
-      const pkg = JSON.parse(await readFile(packagePath, "utf8"));
-      for (const name of ["core", "bootstrap", "cli"]) {
-        pkg.dependencies[`@getstrata/${name}`] =
-          `file:${join(repoRoot, `packages/strata-${name}`)}`;
-      }
-      await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
-      installGeneratedAppDependencies(app);
-      process.chdir(app);
-      process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
-      process.env.APP_ENV = "local";
-      process.env.FRONTEND_MODE = "api";
-      process.env.AUTH_DEV_HEADERS = "true";
-      process.env.TENANCY_DRIVER = "none";
-      process.env.MAIL_DRIVER = "log";
-      process.env.CACHE_DRIVER = "array";
-      process.env.QUEUE_DRIVER = "sync";
-      process.env.METRICS_TOKEN = "generated-metrics-fixture";
-      resetDiscoverModulesForTests();
-      const { bootstrapApp, createAppServer } = await import(
-        join(app, "src/bootstrap/createApp.ts")
+  appTest("generated metrics read the migrated outbox instead of creating one", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, ["metrics-runtime-boot", "--metrics", "--yes"]);
+    const packagePath = join(app, "package.json");
+    const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+    for (const name of ["core", "bootstrap", "cli"]) {
+      pkg.dependencies[`@getstrata/${name}`] = `file:${join(repoRoot, `packages/strata-${name}`)}`;
+    }
+    await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
+    installGeneratedAppDependencies(app);
+    process.chdir(app);
+    process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+    process.env.APP_ENV = "local";
+    process.env.FRONTEND_MODE = "api";
+    process.env.AUTH_DEV_HEADERS = "true";
+    process.env.TENANCY_DRIVER = "none";
+    process.env.MAIL_DRIVER = "log";
+    process.env.CACHE_DRIVER = "array";
+    process.env.QUEUE_DRIVER = "sync";
+    process.env.METRICS_TOKEN = "generated-metrics-fixture";
+    resetDiscoverModulesForTests();
+    const { bootstrapApp, createAppServer } = await import(join(app, "src/bootstrap/createApp.ts"));
+    const { closeDatabase, getSql } = await import(join(app, "src/bootstrap/database.ts"));
+    let context: Awaited<ReturnType<typeof bootstrapApp>>["context"] | undefined;
+    let server: ReturnType<typeof createAppServer> | undefined;
+    try {
+      const boot = await bootstrapApp({ runtimeMetrics: { outbox: {}, failedJobs: {} } });
+      context = boot.context;
+      server = createAppServer(boot.routes, 0);
+      const scrape = () =>
+        fetch(`http://localhost:${server?.port}/metrics`, {
+          headers: { authorization: "Bearer generated-metrics-fixture" },
+        }).then((response) => response.text());
+      const body = await scrape();
+      expect(body).toContain("http_requests_total");
+      expect(body).toContain("strata_outbox_collector_success 1");
+      expect(body).toContain('strata_outbox_deliveries_sample{state="pending_due"} 0');
+      expect(body).toContain("strata_queue_failed_job_collector_success 1");
+      // Dev boot runs file migrations. The collector only reads strata_outbox_*.
+      const tables = await getSql().unsafe("SELECT name FROM sqlite_master WHERE type='table'");
+      expect(tables.some((row: { name: string }) => row.name === "strata_outbox_delivery")).toBe(
+        true,
       );
-      const { closeDatabase, getSql } = await import(join(app, "src/bootstrap/database.ts"));
-      let context: Awaited<ReturnType<typeof bootstrapApp>>["context"] | undefined;
-      let server: ReturnType<typeof createAppServer> | undefined;
-      try {
-        const boot = await bootstrapApp({ runtimeMetrics: { outbox: {}, failedJobs: {} } });
-        context = boot.context;
-        server = createAppServer(boot.routes, 0);
-        const scrape = () =>
-          fetch(`http://localhost:${server?.port}/metrics`, {
-            headers: { authorization: "Bearer generated-metrics-fixture" },
-          }).then((response) => response.text());
-        const body = await scrape();
-        expect(body).toContain("http_requests_total");
-        expect(body).toContain("strata_outbox_collector_success 0");
-        expect(body).toContain("strata_queue_failed_job_collector_success 1");
-        // Observations must not silently create an outbox schema or switch dialects.
-        const tables = await getSql().unsafe("SELECT name FROM sqlite_master WHERE type='table'");
-        expect(tables.some((row: { name: string }) => row.name === "strata_outbox_delivery")).toBe(
-          false,
-        );
-        server.stop(true);
-        server = undefined;
-        await context.drain();
-        await context.dispose();
-        // Invalid runtime options must also follow the generated startup cleanup path.
-        await expect(
-          bootstrapApp({ runtimeMetrics: { failedJobs: { sampleLimit: 0 } } }),
-        ).rejects.toThrow();
-      } finally {
-        server?.stop(true);
-        await context?.dispose();
-        await closeDatabase();
-      }
-    },
-  );
+      server.stop(true);
+      server = undefined;
+      await context.drain();
+      await context.dispose();
+      // Invalid runtime options must also follow the generated startup cleanup path.
+      await expect(
+        bootstrapApp({ runtimeMetrics: { failedJobs: { sampleLimit: 0 } } }),
+      ).rejects.toThrow();
+    } finally {
+      server?.stop(true);
+      await context?.dispose();
+      await closeDatabase();
+    }
+  });
 
   appTest("sqlite API app boots and answers GET /health", async () => {
     const root = await tempDir();

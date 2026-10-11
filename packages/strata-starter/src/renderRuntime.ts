@@ -837,7 +837,7 @@ ${databaseDefaults}process.env.FRONTEND_MODE ??= ${JSON.stringify(layers.fronten
 process.env.SPA_PREFIX ??= ${JSON.stringify(layers.spaPrefix)};
 process.env.CACHE_DRIVER ??= ${JSON.stringify(layers.cache)};
 process.env.QUEUE_DRIVER ??= ${JSON.stringify(layers.queue)};
-process.env.MAIL_DRIVER ??= ${JSON.stringify(layers.mail)};
+${layers.queue === "redis" ? 'process.env.QUEUE_REDIS_TRANSPORT ??= "streams";\n' : ""}process.env.MAIL_DRIVER ??= ${JSON.stringify(layers.mail)};
 process.env.TENANCY_DRIVER ??= ${JSON.stringify(layers.tenancy)};
 configureModulesDirectory(join(import.meta.dir, "../modules"));
 `;
@@ -1262,6 +1262,7 @@ const commands: StrataCommandMap = {${layers && authNeedsUsers(layers.auth) ? '\
   "make:factory": async () => (await import("@getstrata/cli/scaffold")).makeFactoryCommand,
   "make:migration": async () => (await import("@getstrata/cli/scaffold")).makeMigrationCommand,
   "queue:work": async () => (await import("./queueWork.ts")).queueWorkCommand,
+  "outbox:work": async () => (await import("./outboxWork.ts")).outboxWorkCommand,
   "queue:failed": async () => (await import("./queueFailed.ts")).queueFailedCommand,
   "queue:retry": async () => (await import("./queueFailed.ts")).queueRetryCommand,
   "queue:flush-failed": async () => (await import("./queueFailed.ts")).queueFlushFailedCommand,
@@ -1303,6 +1304,54 @@ function renderCliQueueWorkTs(): string {
 }
 
 export { queueWorkCommand };
+`;
+}
+
+function renderCliOutboxWorkTs(): string {
+  return `async function outboxWorkCommand(): Promise<void> {
+  const { runOutboxWorkerCommand } = await import("@getstrata/cli/outboxWorker");
+  const { listeners } = await import("../outbox/registry.ts");
+  const { bootstrapApp } = await import("../bootstrap/createApp.ts");
+  const { closeDatabase } = await import("../bootstrap/database.ts");
+
+  let app: Awaited<ReturnType<typeof bootstrapApp>> | undefined;
+  await runOutboxWorkerCommand({
+    listeners,
+    boot: async () => {
+      app = await bootstrapApp({ migrate: false });
+    },
+    drain: () => app?.context.drain(),
+    flush: () => app?.context.flush(),
+    close: async () => {
+      try {
+        await app?.context.dispose();
+      } finally {
+        await closeDatabase();
+      }
+    },
+  });
+}
+
+export { outboxWorkCommand };
+`;
+}
+
+function renderOutboxRegistryTs(): string {
+  return `import type { DurableListener } from "@getstrata/core/events/outbox";
+
+/** Add listeners before publishing. An empty registry can run, and publish rejects unknown events. */
+const listeners: readonly DurableListener[] = [];
+
+export { listeners };
+`;
+}
+
+function renderOutboxMigration(layers: StarterLayers): string {
+  const driver = layers.database === "postgres" ? "pgsql" : layers.database;
+  const rls = layers.tenancy === "rls" && layers.database === "postgres";
+  return `import { createOutboxMigration } from "@getstrata/core/events/outbox";
+
+export default createOutboxMigration("0005_outbox", "${driver}", { rls: ${rls} });
 `;
 }
 
@@ -1407,6 +1456,7 @@ export {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
   renderCliOpenApiTs,
+  renderCliOutboxWorkTs,
   renderCliQueueFailedTs,
   renderCliQueueWorkTs,
   renderCliRegisterTs,
@@ -1421,6 +1471,8 @@ export {
   renderMigrationRuntimeTs,
   renderModelsRegister,
   renderNoteModel,
+  renderOutboxMigration,
+  renderOutboxRegistryTs,
   renderPolicyProvider,
   renderPreloadTs,
   renderProvidersIndex,

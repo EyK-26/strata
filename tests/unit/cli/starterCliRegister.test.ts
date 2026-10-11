@@ -58,6 +58,7 @@ const PRODUCT_COMMANDS = [
   "make:factory",
   "make:migration",
   "queue:work",
+  "outbox:work",
   "queue:failed",
   "queue:retry",
   "queue:flush-failed",
@@ -110,6 +111,22 @@ describe("generated src/cli/register.ts", () => {
     expect(register).not.toContain("createAppContext");
     expect(config).toContain('commands: "./src/cli/register.ts"');
     expect(pkg.scripts["queue:work"]).toBe("strata queue:work");
+    expect(pkg.scripts["outbox:work"]).toBe("strata outbox:work");
+    expect(await readFile(join(app, "src/outbox/registry.ts"), "utf8")).toContain(
+      "DurableListener",
+    );
+    expect(await readFile(join(app, "src/db/migrations/0005_outbox.ts"), "utf8")).toContain(
+      "createOutboxMigration",
+    );
+  });
+
+  test("a new Redis app selects Streams without changing the framework default", async () => {
+    const root = await tempDir();
+    const app = generateFromArgs(root, ["cli-register-streams", "--queue", "redis", "--yes"]);
+    const env = await readFile(join(app, ".env.example"), "utf8");
+    const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
+    expect(env).toContain("QUEUE_REDIS_TRANSPORT=streams");
+    expect(preload).toContain('process.env.QUEUE_REDIS_TRANSPORT ??= "streams"');
   });
 
   test("user-auth generation registers admin provisioning and adds its independent file migration", async () => {

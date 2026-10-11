@@ -105,6 +105,12 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     `TENANCY_DRIVER=${layers.tenancy}`,
     `CACHE_DRIVER=${layers.cache}`,
     `QUEUE_DRIVER=${layers.queue}`,
+    ...(layers.queue === "redis"
+      ? [
+          "# New apps use Streams. Do not point this at Redis that still holds list jobs.",
+          "QUEUE_REDIS_TRANSPORT=streams",
+        ]
+      : []),
     `MAIL_DRIVER=${layers.mail}`,
     `AUTH_DEV_HEADERS=${envFlag(layers.auth === "headers")}`,
   ];
@@ -465,6 +471,7 @@ function renderPackageJson(
     "db:seed:demo": "bun run src/db/seed.ts",
     "db:fresh": "strata migrate:fresh",
     "queue:work": "strata queue:work",
+    "outbox:work": "strata outbox:work",
     check: "tsc --noEmit",
   };
   if (options.layers && needsFrontendBuild(options.layers.frontend)) {
@@ -830,7 +837,7 @@ ${renderIntegrationsReadme(layers)}
 ${next.join("\n")}
 \`\`\`
 
-Open http://localhost:3000. Health check: \`GET /health\`. Redis worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
+Open http://localhost:3000. Health check: \`GET /health\`. Redis worker: \`bun run queue:work\` (requires \`REDIS_URL\`). Durable events: \`bun run outbox:work\` after \`bun run db:migrate\`. Add listeners in \`src/outbox/registry.ts\` before publishing.
 
 ${renderSupportingToolsReadme(layers)}${
   layers.auth !== "headers"

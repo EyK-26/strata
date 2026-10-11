@@ -21,6 +21,10 @@
       "import": "./src/queueWorker.ts",
       "default": "./src/queueWorker.ts"
     },
+    "./outboxWorker": {
+      "import": "./src/outboxWorker.ts",
+      "default": "./src/outboxWorker.ts"
+    },
     "./queueFailed": {
       "import": "./src/queueFailed.ts",
       "default": "./src/queueFailed.ts"

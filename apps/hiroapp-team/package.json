@@ -10,6 +10,7 @@
     "db:seed:demo": "bun run src/db/seed.ts",
     "db:fresh": "strata migrate:fresh",
     "queue:work": "strata queue:work",
+    "outbox:work": "strata outbox:work",
     "check": "tsc --noEmit"
   },
   "dependencies": {

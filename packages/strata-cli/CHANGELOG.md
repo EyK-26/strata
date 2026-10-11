@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## Unreleased
+
+- `runOutboxWorkerCommand` on `@getstrata/cli/outboxWorker` boots an app, runs `SqlOutbox.work({ signal })`, and stops, drains, flushes, and closes through `LifecycleCoordinator`.
+
 ## 2.2.14
 
 Complete the scoped HTML rendering starter adoption: generated apps inject ViewRenderer through createViewProvider instead of copying renderPage; welcome pages opt into HTMX fragments with full-page fallbacks, auth retains existing contracts, and CORS preserves representation Vary headers. Includes generator, runtime auth and cache-header regressions.

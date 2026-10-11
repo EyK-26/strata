@@ -1,5 +1,10 @@
 # create-strata changelog
 
+## Unreleased
+
+- A new Redis app sets `QUEUE_REDIS_TRANSPORT=streams`. An unset variable still means lists.
+- Generated apps include `0005_outbox`, an empty `src/outbox/registry.ts`, and `bun run outbox:work`.
+
 ## 2.2.14
 
 Complete the scoped HTML rendering starter adoption: generated apps inject ViewRenderer through createViewProvider instead of copying renderPage; welcome pages opt into HTMX fragments with full-page fallbacks, auth retains existing contracts, and CORS preserves representation Vary headers. Includes generator, runtime auth and cache-header regressions.
