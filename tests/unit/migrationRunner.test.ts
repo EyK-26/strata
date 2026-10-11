@@ -240,9 +240,18 @@ describe("explicit fresh migration context", () => {
   });
   test("production and staging fail before database access", async () => {
     const previous = process.env.APP_ENV;
+    const previousNode = process.env.NODE_ENV;
     try {
-      for (const environment of ["production", "staging", "unknown-environment"]) {
-        process.env.APP_ENV = environment;
+      for (const [app, node] of [
+        ["production", "development"],
+        ["staging", "test"],
+        ["unknown-environment", "development"],
+        [" StAgInG ", "development"],
+        ["local", "production"],
+        ["test", " PRODUCTION "],
+      ]) {
+        process.env.APP_ENV = app;
+        process.env.NODE_ENV = node;
         const db: MigrationDatabase = {
           unsafe() {
             throw new Error("Database must not be touched");
@@ -255,6 +264,53 @@ describe("explicit fresh migration context", () => {
     } finally {
       if (previous === undefined) delete process.env.APP_ENV;
       else process.env.APP_ENV = previous;
+      if (previousNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNode;
+    }
+  });
+  test("production and staging permit normal migrate/rollback without bypassing history guards", async () => {
+    const previous = process.env.APP_ENV;
+    const previousNode = process.env.NODE_ENV;
+    try {
+      for (const environment of ["production", "staging"]) {
+        process.env.APP_ENV = environment;
+        process.env.NODE_ENV = "production";
+        const { db, applied } = createMemoryDb();
+        let historyChecks = 0;
+        const protectedMigration: Migration = {
+          name: "protected",
+          async up() {},
+          async down(_db, context) {
+            expect(context).toBeUndefined();
+            await guardMigrationRollback(context, {
+              hasHistory() {
+                historyChecks += 1;
+                return true;
+              },
+              message: "Retain history",
+            });
+          },
+        };
+        const ordinary: Migration = {
+          name: "ordinary",
+          async up() {},
+          async down(_db, context) {
+            expect(context).toBeUndefined();
+          },
+        };
+        expect(await migrateDatabase(db, [protectedMigration])).toBe(1);
+        expect(await migrateDatabase(db, [ordinary])).toBe(1);
+        expect(await rollbackDatabase(db, [ordinary])).toBe(1);
+        await expect(rollbackDatabase(db, [protectedMigration])).rejects.toThrow("Retain history");
+        await expect(freshDatabase(db, [protectedMigration])).rejects.toThrow("Retain history");
+        expect(historyChecks).toBe(2);
+        expect(applied.map((row) => row.name)).toEqual(["protected"]);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.APP_ENV;
+      else process.env.APP_ENV = previous;
+      if (previousNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNode;
     }
   });
 });

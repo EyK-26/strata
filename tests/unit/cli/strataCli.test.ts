@@ -177,7 +177,7 @@ describe("published strata CLI", () => {
     });
   }
 
-  test.each(["production", "staging", "unknown-environment"])(
+  test.each(["production", "staging", "unknown-environment", " StAgInG ", "NODE_ENV production"])(
     "fresh rejects %s before importing reset code",
     async (environment) => {
       const workspace = await createTempApp();
@@ -189,7 +189,11 @@ describe("published strata CLI", () => {
         ["bun", join(import.meta.dir, "../../../packages/strata-cli/cli.ts"), "migrate:fresh"],
         {
           cwd: workspace,
-          env: { ...process.env, APP_ENV: environment },
+          env: {
+            ...process.env,
+            APP_ENV: environment === "NODE_ENV production" ? "local" : environment,
+            NODE_ENV: environment === "NODE_ENV production" ? "production" : "development",
+          },
           stdout: "pipe",
           stderr: "pipe",
         },
