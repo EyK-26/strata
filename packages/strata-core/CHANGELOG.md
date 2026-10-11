@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.13
+
+- Improve view rendering and better htmx support
+
 ## 2.2.12
 
 - Require Bun >=1.4.3; align CI, generated/existing example runtime pins and Docker stages to 1.4.3, with bun-types >=1.4.3 behind the official @types/bun shim.
