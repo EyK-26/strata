@@ -6,6 +6,7 @@
 - `paginate` past page 1 seeks from the boundary primary key instead of applying `OFFSET` to the full row. An empty total returns before that lookup.
 - Independent `hashed` write casts run concurrently.
 - An idle Streams worker promotes, reclaims, and reads every priority in one Redis script.
+- Remove `docs/MIGRATING-2.md`. Existing applications are upgraded individually.
 
 ## 2.2.14
 
@@ -78,7 +79,7 @@ Add independently interruptible read-only SQLite and MySQL observations; extend 
 - Failed jobs stay recorded until retry admission succeeds. Manual replay keeps `failed_job.job_id` when the row has one.
 - Public reads and tenant host selection are separate. Unknown hosts fail closed. Forwarded hosts are accepted only from configured trusted proxies.
 - Generated apps can provision one initial administrator with `auth:provision-admin` and a one-time claim migration. Demo seeding stays explicit and is rejected in production and staging.
-- `docs/MIGRATING-2.md` collects the 2.x upgrade and rollout steps. Quota and in-memory throttle docs match the code: memory throttles stay process-local, and a Redis failure does not fall back to them.
+- Quota and in-memory throttle docs match the code: memory throttles stay process-local, and a Redis failure does not fall back to them.
 
 ## 2.2.0
 
