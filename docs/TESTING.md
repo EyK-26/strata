@@ -86,7 +86,6 @@ bun run hiroapp:dev
 
 See [GETTING-STARTED.md](./GETTING-STARTED.md).
 
-
 ## Stateful mechanism regression review
 
 A passing clean bootstrap is insufficient evidence for migrations, workers or operator commands. Review the reachable persisted states and the failure boundaries before selecting fixtures. A regression PR must identify the invariant it protects, how it reproduces the original failure, what adjacent paths were checked and what remains unqualified.
@@ -104,4 +103,4 @@ For migration/reset changes:
 
 Use the same review flow for other stateful changes: enumerate persistent states, define invariants, inject failures at side-effect boundaries, verify persisted outcomes and recovery, then test generated and published consumers. Record newly reproduced defects separately rather than claiming an audit proves no bugs remain. Run the mandatory full validation gate after the final change and disclose intermittent failures, skipped tests and external-provider checks in the PR.
 
-The retroactive reset review reproduced [#174](https://github.com/EyK-26/strata/issues/174): a supplied migration set missing an applied definition leaves its schema in place while the final reset clear removes its history. That needs a separate preflight-validation fix. The reset progress/outbox regressions do not claim to resolve this case. The earlier shop reset fixture also omitted populated outbox deliveries; published-package adoption must correct that omission before declaring the full installed reset path qualified.
+The retroactive reset review reproduced [#174](https://github.com/EyK-26/strata/issues/174): a supplied migration set missing an applied definition leaves its schema in place while the final reset clear removes its history. The preflight fix now refuses reset with missing applied definitions and refuses latest-batch rollback with incomplete definitions, before downs or history deletion. Three-engine regressions verify physical schema, sentinel data and history preservation; unit/file-loader regressions cover duplicates, malformed exports, infrastructure exclusions and partial forward migration. The earlier shop reset fixture also omitted populated outbox deliveries; published-package adoption must correct that omission before declaring the full installed reset path qualified.

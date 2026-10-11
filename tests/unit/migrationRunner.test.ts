@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
 import {
@@ -10,6 +12,7 @@ import {
   loadMigrationsFromDirectory,
   migrateDatabase,
   rollbackDatabase,
+  runPendingMigrations,
 } from "@getstrata/core/database/migrations/runner";
 import type { Migration, MigrationDatabase } from "@getstrata/core/database/migrations/types";
 
@@ -354,5 +357,138 @@ describe("fresh reset progress", () => {
     refuseUp = false;
     expect(await migrateDatabase(db, definitions)).toBe(1);
     expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+  });
+});
+
+describe("migration preflight", () => {
+  test("malformed and duplicate definitions fail before any database or callback effects", async () => {
+    const valid = migrations[0];
+    const invalid = [
+      null,
+      {},
+      { name: "" },
+      { name: "   ", up() {}, down() {} },
+      { name: 1, up() {}, down() {} },
+      { name: "bad", up: true, down() {} },
+      { name: "bad", up() {} },
+      { name: "bad", up() {}, down: 1 },
+      [],
+    ];
+    const denied: MigrationDatabase = {
+      unsafe() {
+        throw new Error("Database touched");
+      },
+    };
+    const callback = () => {
+      throw new Error("Callback touched");
+    };
+    for (const entries of [...invalid.map((item) => [valid, item]), [valid, valid]]) {
+      const definitions: Migration[] = entries as Migration[];
+      for (const operation of [
+        () => migrateDatabase(denied, definitions, { advisoryLock: true, onMigration: callback }),
+        () => runPendingMigrations(denied, definitions, { onMigration: callback }),
+        () => rollbackDatabase(denied, definitions, { onMigration: callback }),
+        () =>
+          freshDatabase(denied, definitions, {
+            destructive: true,
+            advisoryLock: true,
+            onMigration: callback,
+          }),
+        () => getMigrationStatus(denied, definitions),
+      ])
+        await expect(operation()).rejects.toThrow(/Invalid|Duplicate/);
+    }
+    await expect(migrateDatabase(denied, JSON.parse("{}"))).rejects.toThrow("must be an array");
+  });
+
+  test("missing applied definitions reject both reset modes and latest-batch rollback before downs", async () => {
+    const { db, applied } = createMemoryDb();
+    await migrateDatabase(db, migrations);
+    const original = applied.map((row) => ({ ...row }));
+    for (const definitions of [[], migrations.slice(0, 1)]) {
+      for (const destructive of [false, true]) {
+        await expect(freshDatabase(db, definitions, { destructive })).rejects.toThrow(
+          "missing applied migration definitions",
+        );
+        expect(applied).toEqual(original);
+      }
+      await expect(rollbackDatabase(db, definitions)).rejects.toThrow(
+        "missing applied migration definitions",
+      );
+      expect(applied).toEqual(original);
+    }
+  });
+
+  test("forward migration and latest rollback allow older applied definitions outside the supplied set", async () => {
+    const { db, applied } = createMemoryDb();
+    await migrateDatabase(db, migrations.slice(0, 1));
+    expect(await migrateDatabase(db, migrations.slice(1))).toBe(1);
+    expect(await rollbackDatabase(db, migrations.slice(1))).toBe(1);
+    expect(applied.map((row) => row.name)).toEqual(["0001_create_widgets"]);
+    expect(await migrateDatabase(db, [])).toBe(0);
+  });
+
+  test("reset removes only completed-down records rather than blanket-clearing history", async () => {
+    const { db, applied } = createMemoryDb();
+    const definition: Migration = {
+      name: "known",
+      async up() {},
+      async down() {
+        // Simulate a record appearing after preflight; this is not writer exclusion.
+        applied.push({ name: "unrelated", batch: 2 });
+      },
+    };
+    await migrateDatabase(db, [definition]);
+    await freshDatabase(db, [definition], { destructive: true });
+    expect(applied.map((row) => row.name)).toEqual(["unrelated", "known"]);
+  });
+
+  test("directory loading rejects malformed exports and reports duplicate source files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "migration-preflight-"));
+    try {
+      const valid = 'export default {name:"fixture", async up(){}, async down(){}};';
+      for (const name of [
+        "types.ts",
+        "index.ts",
+        "runner.ts",
+        "advisoryLock.ts",
+        "types.js",
+        "index.js",
+        "runner.js",
+        "advisoryLock.js",
+        "migration.d.ts",
+        "migrationDatabase.ts",
+        "migrationDatabase.js",
+      ]) {
+        await Bun.write(
+          join(dir, name),
+          "// Reserved infrastructure and declarations are not migrations.",
+        );
+      }
+      await Bun.write(join(dir, "0001_valid.ts"), valid);
+      for (const [index, source] of [
+        'export const name="missing default";',
+        "export default null;",
+        'export default {name:"bad",async up(){}};',
+      ].entries()) {
+        const file = join(dir, `0002_bad_${index}.ts`);
+        await Bun.write(file, source);
+        await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow(file);
+        await rm(file);
+      }
+      const duplicate = join(dir, "0002_duplicate.js");
+      await Bun.write(duplicate, valid);
+      await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("Duplicate migration name");
+      await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("0001_valid.ts");
+      await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("0002_duplicate.js");
+      await rm(duplicate);
+      expect((await loadMigrationsFromDirectory(dir)).map((item) => item.name)).toEqual([
+        "fixture",
+      ]);
+      await rm(join(dir, "0001_valid.ts"));
+      expect(await loadMigrationsFromDirectory(dir)).toEqual([]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
