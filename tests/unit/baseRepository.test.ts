@@ -157,7 +157,6 @@ describe("base repository", () => {
     const repository = new CrewRepository(connection);
 
     connection.queue([{ count: "25" }]);
-    connection.queue([{ id: 11 }]);
     connection.queue([
       { id: 11, name: "Arthur", squad_id: 1, is_active: true },
       { id: 12, name: "Ford", squad_id: 1, is_active: true },
@@ -172,55 +171,53 @@ describe("base repository", () => {
       last_page: 3,
     });
     expect(result.data).toHaveLength(2);
-    expect(connection.calls[1]?.query).toContain("LIMIT 1 OFFSET 10");
-    expect(connection.calls[1]?.query).not.toContain('"crew_member"."name"');
-    expect(connection.calls[2]).toEqual({
+    expect(connection.calls).toHaveLength(2);
+    expect(connection.calls[1]).toEqual({
       query:
-        'SELECT "crew_member"."id", "crew_member"."name", "crew_member"."squad_id", "crew_member"."is_active" FROM "crew_member" WHERE "crew_member"."id" >= $1 ORDER BY "crew_member"."id" ASC LIMIT 10',
-      params: [11],
+        'SELECT "crew_member"."id", "crew_member"."name", "crew_member"."squad_id", "crew_member"."is_active" FROM "crew_member" ORDER BY "crew_member"."id" ASC LIMIT 10 OFFSET 10',
+      params: [],
     });
   });
 
-  test("does not look up a page boundary when the filtered total is zero", async () => {
+  test("skips the row query when the filtered total is zero", async () => {
     const connection = new FakeConnection();
     const repository = new CrewRepository(connection);
     connection.queue([{ count: "0" }]);
-
     const result = await repository.paginate({ page: 2, perPage: 10 });
-
     expect(result.data).toEqual([]);
     expect(result.meta.total).toBe(0);
     expect(connection.calls).toHaveLength(1);
   });
 
-  test("seeks a descending primary-key page from the boundary id", async () => {
+  test("keeps a two-query budget on a deep descending filtered page", async () => {
     const connection = new FakeConnection();
     const repository = new CrewRepository(connection);
-    connection.queue([{ count: "4" }]);
-    connection.queue([{ id: 8 }]);
+    connection.queue([{ count: "50000" }]);
     connection.queue([{ id: 8, name: "Zaphod", squad_id: 1, is_active: true }]);
-
     const result = await repository.paginate({
-      page: 2,
-      perPage: 1,
+      page: 4001,
+      perPage: 10,
+      where: { squad_id: 1 },
       orderBy: { id: "desc" },
     });
-
     expect(result.data.map((row) => row.id)).toEqual([8]);
-    expect(connection.calls[2]?.query).toContain('"crew_member"."id" <= $1');
-    expect(connection.calls[2]?.params).toEqual([8]);
+    expect(connection.calls).toHaveLength(2);
+    expect(connection.calls[1]?.query).toContain('"crew_member"."squad_id" = $1');
+    expect(connection.calls[1]?.query).toContain(
+      'ORDER BY "crew_member"."id" DESC LIMIT 10 OFFSET 40000',
+    );
+    expect(connection.calls[1]?.params).toEqual([1]);
   });
 
-  test("returns no rows when the page boundary is past the last key", async () => {
+  test("keeps the row-query budget for an out-of-range page", async () => {
     const connection = new FakeConnection();
     const repository = new CrewRepository(connection);
     connection.queue([{ count: "1" }]);
     connection.queue([]);
-
     const result = await repository.paginate({ page: 3, perPage: 10 });
-
     expect(result.data).toEqual([]);
     expect(connection.calls).toHaveLength(2);
+    expect(connection.calls[1]?.query).toContain("LIMIT 10 OFFSET 20");
   });
 
   test("eager loads hasMany relations for multiple parents in one query", async () => {

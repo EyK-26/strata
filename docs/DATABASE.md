@@ -139,7 +139,7 @@ Release occurs before committed deferred observers flush, so reentrant observers
 
 `chunkById` pages by keyset instead of `OFFSET`, so rows are neither skipped nor repeated when the callback mutates what it reads. Return `false` to stop early. `chunk` uses that same primary-key walk when the query is already ordered only by its primary key ascending, including the table's default order. Joins, grouping, locks, projections, and any other order stay on `OFFSET`.
 
-`paginate` still returns page numbers and a total. Page 1 reads `LIMIT n`. A later page of a primary-key-ordered table first reads the boundary id with `OFFSET`, then loads the full rows with `id >= boundary` (or `<=` when descending). That keeps the page contract and stops Postgres from walking wide rows it will throw away. Joins, grouping, and other orders still apply `OFFSET` to the full select.
+`paginate` retains page-number `OFFSET` semantics and its count-plus-row-query budget. An empty filtered total skips the row query. Deep offsets still scan skipped rows; use explicit `cursorPaginate` or composite `keysetPaginate` when the application can expose cursors. A key-only boundary lookup is not enabled automatically: it adds a database round trip and may still fetch heap tuples for visibility or filtering, so it requires workload-specific qualification.
 
 ```typescript
 await orders.chunkById(500, async (rows) => {

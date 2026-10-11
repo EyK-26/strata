@@ -198,17 +198,13 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       return { data: [], meta };
     }
     const offset = (page - 1) * perPage;
-    const direction = this.primaryKeySeekDirection(queryOptions);
-    const data =
-      direction && offset > 0
-        ? await this.findPrimaryKeyPage(queryOptions, where, whereNodes, perPage, offset, direction)
-        : await this.findAll({
-            ...queryOptions,
-            where,
-            whereNodes,
-            limit: perPage,
-            offset,
-          });
+    const data = await this.findAll({
+      ...queryOptions,
+      where,
+      whereNodes,
+      limit: perPage,
+      offset,
+    });
 
     return {
       data,
@@ -697,52 +693,6 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
 
     return order.direction;
-  }
-
-  private async findPrimaryKeyPage(
-    queryOptions: ExtendedQueryOptions<TEntity>,
-    where: ExtendedQueryOptions<TEntity>["where"],
-    whereNodes: WhereNode<TEntity>[] | undefined,
-    perPage: number,
-    offset: number,
-    direction: "asc" | "desc",
-  ): Promise<TEntity[]> {
-    const primaryKey = this.table.primaryKey;
-    const [boundary] = await this.findAll({
-      ...queryOptions,
-      where,
-      whereNodes,
-      orderBy: { column: primaryKey, direction } as QueryOrder<TEntity>,
-      select: [{ kind: "column", table: this.table.name, column: primaryKey }],
-      limit: 1,
-      offset,
-    });
-    const cursor = boundary?.[primaryKey];
-    if (cursor === undefined) {
-      return [];
-    }
-
-    const filters: WhereNode<TEntity>[] = [];
-    if (where && Object.keys(where).length > 0) filters.push({ kind: "and", where });
-    filters.push(...(whereNodes ?? []));
-    const cursorWhere: QueryWhere<TEntity> = {};
-    (cursorWhere as Record<string, unknown>)[primaryKey] =
-      direction === "asc" ? { gte: cursor } : { lte: cursor };
-    const scoped: WhereNode<TEntity>[] =
-      filters.length > 0
-        ? [
-            { kind: "and", group: filters },
-            { kind: "and", where: cursorWhere },
-          ]
-        : [{ kind: "and", where: cursorWhere }];
-
-    return await this.findAll({
-      ...queryOptions,
-      where: {},
-      whereNodes: scoped,
-      orderBy: { column: primaryKey, direction } as QueryOrder<TEntity>,
-      limit: perPage,
-    });
   }
 
   withConnection(connection: DatabaseConnection): this {

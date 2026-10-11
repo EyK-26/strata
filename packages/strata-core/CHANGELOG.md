@@ -3,8 +3,8 @@
 ## Unreleased
 
 - `chunk` walks by the primary key when that is already the only ascending order, so later batches do not use `OFFSET`.
-- `paginate` past page 1 seeks from the boundary primary key instead of applying `OFFSET` to the full row. An empty total returns before that lookup.
-- Independent `hashed` write casts run concurrently.
+- Empty page-number pagination totals skip the row query; nonempty pages preserve the existing count-plus-row-query budget and `OFFSET` semantics.
+- Independent `hashed` write casts run concurrently, with deterministic start/await and rejected-cast-before-write regressions.
 - An idle Streams worker promotes, reclaims, and reads every priority in one Redis script.
 - Remove `docs/MIGRATING-2.md`. Existing applications are upgraded individually.
 

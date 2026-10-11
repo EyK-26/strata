@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { applyCasts, dehydrateValue, filterMassAssignable } from "@getstrata/core/database/model";
 import { buildSelectQuery } from "@getstrata/core/database/query";
@@ -146,14 +146,42 @@ describe("hashed cast", async () => {
     expect(await dehydrateValue(undefined, "hashed")).toBeUndefined();
   });
 
-  test("hashes independent fields concurrently", async () => {
-    const stored = await applyCasts(
-      { password: "secret", pin: "secret" },
-      { password: "hashed", pin: "hashed" },
+  test("starts both hashes before either resolves and awaits both results", async () => {
+    let finishPassword!: (value: string) => void;
+    let finishPin!: (value: string) => void;
+    const password = new Promise<string>((resolve) => {
+      finishPassword = resolve;
+    });
+    const pin = new Promise<string>((resolve) => {
+      finishPin = resolve;
+    });
+    const hash = spyOn(Bun.password, "hash").mockReturnValueOnce(password).mockReturnValueOnce(pin);
+    const input = { password: "password-plain", pin: "pin-plain", count: "2" };
+    const writing = applyCasts(
+      input,
+      { password: "hashed", pin: "hashed", count: "int" },
       "dehydrate",
     );
-    expect(String(stored.password).startsWith("$2")).toBe(true);
-    expect(String(stored.pin).startsWith("$2")).toBe(true);
-    expect(stored.password).not.toBe(stored.pin);
+    let settled = false;
+    void writing.then(() => {
+      settled = true;
+    });
+    try {
+      expect(hash).toHaveBeenCalledTimes(2);
+      expect(hash.mock.calls.map(([value]) => value)).toEqual(["password-plain", "pin-plain"]);
+      input.password = "changed";
+      input.pin = "changed";
+      finishPin("$2b$12$pin");
+      await pin;
+      expect(settled).toBe(false);
+      finishPassword("$2b$12$password");
+      expect(await writing).toEqual({ password: "$2b$12$password", pin: "$2b$12$pin", count: 2 });
+      expect(input).toEqual({ password: "changed", pin: "changed", count: "2" });
+    } finally {
+      finishPassword("$2b$12$password");
+      finishPin("$2b$12$pin");
+      await writing;
+      hash.mockRestore();
+    }
   });
 });
