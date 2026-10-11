@@ -209,6 +209,12 @@ async function freshDatabase(
       options.onMigration?.(migration.name);
       if (options.destructive) await migration.down(db, { operation: "fresh" });
       else await migration.down(db);
+      // Record each completed down before continuing: a later refusal must not
+      // leave already-dropped schema falsely recorded as applied.
+      await db.unsafe(
+        `DELETE FROM ${MIGRATIONS_TABLE} WHERE name = ${currentSqlDialect().placeholder(1)}`,
+        [migration.name],
+      );
     }
 
     if (appliedMigrations.length > 0) {
