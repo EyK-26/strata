@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.14
+
+Complete the scoped HTML rendering starter adoption: generated apps inject ViewRenderer through createViewProvider instead of copying renderPage; welcome pages opt into HTMX fragments with full-page fallbacks, auth retains existing contracts, and CORS preserves representation Vary headers. Includes generator, runtime auth and cache-header regressions.
+
 ## 2.2.13
 
 - Improve view rendering and better htmx support

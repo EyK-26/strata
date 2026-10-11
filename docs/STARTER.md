@@ -78,6 +78,10 @@ Migrations and resets do not seed by default. Use `bun run db:seed:demo` explici
 
 User-auth starters also generate explicit `auth:provision-admin` and the separate `0004_initial_admin_provisioning` file migration. This production bootstrap command reads a private password from standard input, refuses existing accounts/admins, and commits a one-time claim with the new account. It does not seed, migrate, approve email or enroll MFA. See [initial-admin provisioning](INITIAL-ADMIN.md).
 
+Generated HTML apps register `createViewProvider` in `src/bootstrap/providers/view.ts` and resolve `CORE_VIEW_RENDERER_TOKEN` in their route factories. There is no generated `src/lib/view.ts` helper. The provider owns the view directory and request-scoped CSRF, flash, CSP nonce and `currentUser` data; presentation fields and navigation remain app-owned. The default user projection contains `id`, `email` and `role`; use the provider's `data.loadUser` option for additional display fields.
+
+The welcome route explicitly uses `views.renderHtmx`: an ordinary link returns the layout, a targeted HTMX request returns the page body, and boosted/history restoration requests retain the layout. Its refresh link targets `#page-content` and still works without JavaScript. Auth pages use `views.render` and always retain their full-page responses, including validation and throttling errors. Existing apps can migrate their rendering helper to this provider and token without changing their auth handshakes; see [view rendering and HTMX](BUILDING-APPS.md#views-and-errors).
+
 Redis queue apps can opt into consumer-group recovery with `QUEUE_REDIS_TRANSPORT=streams` after the required maintenance conversion. See [queue recovery and Streams rollout](QUEUES.md) for ownership, cancellation, priority, durability, and migration contracts.
 
 `queue:retry` dispatches through the bootstrapped app queue and retains the failed-job row until admission succeeds. Replay remains at least once; see [safe failed-job retry](BUILDING-APPS.md#retrying-failed-jobs-safely) for the direct API migration and duplicate-delivery boundary.

@@ -35,6 +35,9 @@ const ENV_KEYS = [
   "QUEUE_DRIVER",
   "MAIL_DRIVER",
   "METRICS_TOKEN",
+  "FEATURE_OAUTH",
+  "OIDC_CLIENT_ID",
+  "OIDC_CLIENT_SECRET",
 ] as const;
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
@@ -308,7 +311,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.13");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.14");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -1295,10 +1298,43 @@ export default probeModule;
     }
   });
 
+  test("HTML generators use the scoped provider and opt into fragments only on the welcome route", async () => {
+    const root = await tempDir();
+    for (const auth of ["cookie", "headers", "token", "jwt"]) {
+      const app = generateFromArgs(root, [
+        `views-${auth}`,
+        "--frontend=server-htmx",
+        "--database=sqlite",
+        `--auth=${auth}`,
+        "--oidc",
+        "--yes",
+      ]);
+      expect(existsSync(join(app, "src/lib/view.ts"))).toBe(false);
+      const provider = await readFile(join(app, "src/bootstrap/providers/view.ts"), "utf8");
+      expect(provider).toContain("createViewProvider");
+      expect(provider).toContain('userKey: "currentUser"');
+      expect(provider).not.toContain("EtaViewEngine");
+      expect(await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8")).toContain(
+        "  viewProvider,",
+      );
+      const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
+      expect(site).toContain("resolve(CORE_VIEW_RENDERER_TOKEN)");
+      expect(site).toContain("views.renderHtmx(");
+      if (auth === "cookie") {
+        const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+        expect(authModule).toContain("views.render(");
+        expect(authModule).toContain("status: 429");
+        expect(authModule).not.toContain("renderHtmx");
+        expect(provider).toContain('process.env.FEATURE_OAUTH === "true"');
+      }
+    }
+  });
+
   appTest("cookie sqlite HTML app serves welcome, login, register, and signs in", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, [
       "cookie-app",
+      "--oidc",
       "--frontend=server-htmx",
       "--database=sqlite",
       "--auth=cookie",
@@ -1380,7 +1416,27 @@ export default probeModule;
         const health = await fetch(`${origin}/health`);
         const loginHtml = await login.text();
         expect(home.status).toBe(200);
-        expect(await home.text()).toContain("Welcome to cookie-app");
+        const homeHtml = await home.text();
+        expect(homeHtml).toContain("Welcome to cookie-app");
+        expect(homeHtml).toContain('<div id="page-content">');
+        expect(homeHtml).toContain('hx-target="#page-content"');
+        const representations: Record<string, string>[] = [
+          { "HX-Request": "true" },
+          { "HX-Request": "true", "HX-Boosted": "true" },
+          { "HX-Request": "true", "HX-History-Restore-Request": "true" },
+        ];
+        for (const headers of representations) {
+          const response = await fetch(`${origin}/`, { headers });
+          const html = await response.text();
+          expect(response.status).toBe(200);
+          expect(html).toContain("Welcome to cookie-app");
+          expect(html.includes('<div id="page-content">')).toBe(Object.keys(headers).length > 1);
+          expect(response.headers.get("vary")?.toLowerCase()).toContain(
+            "hx-history-restore-request",
+          );
+        }
+        const htmxLogin = await fetch(`${origin}/login`, { headers: { "HX-Request": "true" } });
+        expect(await htmxLogin.text()).toContain('<div id="page-content">');
         expect(login.status).toBe(200);
         expect(loginHtml).toContain("Sign in");
         expect(loginHtml).toContain('name="_token"');
@@ -1391,9 +1447,39 @@ export default probeModule;
         expect(health.status).toBe(200);
         expect(await health.text()).toBe("ok");
 
+        process.env.OIDC_CLIENT_ID = "fixture-client";
+        process.env.OIDC_CLIENT_SECRET = "fixture-secret";
+        for (const flag of ["true", "1", "false"]) {
+          process.env.FEATURE_OAUTH = flag;
+          const page = await fetch(`${origin}/login`);
+          expect((await page.text()).includes('href="/auth/oidc"')).toBe(flag === "true");
+        }
+        process.env.FEATURE_OAUTH = "false";
+
         const token = /name="_token" value="([^"]+)"/.exec(loginHtml)?.[1];
         expect(token).toBeTruthy();
         const cookies = cookieHeader(login);
+        const csrfRejected = await fetch(`${origin}/login`, {
+          method: "POST",
+          headers: { cookie: cookies, origin },
+          body: new URLSearchParams({ email: "demo@example.com", password: "incorrect" }),
+        });
+        expect(csrfRejected.status).toBe(403);
+        const invalidLogin = await fetch(`${origin}/login`, {
+          method: "POST",
+          headers: { cookie: cookies, origin, "HX-Request": "true" },
+          body: new URLSearchParams({
+            _token: token ?? "",
+            email: "demo@example.com",
+            password: "incorrect",
+          }),
+        });
+        expect(invalidLogin.status).toBe(200);
+        const invalidHtml = await invalidLogin.text();
+        expect(invalidHtml).toContain("These credentials do not match our records.");
+        expect(invalidHtml).toContain('<div id="page-content">');
+        expect(invalidHtml).toContain('name="_token"');
+
         const signedIn = await fetch(`${origin}/login`, {
           method: "POST",
           headers: {

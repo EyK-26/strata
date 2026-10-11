@@ -8,11 +8,12 @@
     <meta name="description" content="<%= it.layout.description %>" />
     <% } %>
     <link rel="stylesheet" href="/assets/site.css" />
+    <script src="/assets/htmx.min.js" defer></script>
   </head>
   <body>
     <header class="site-header">
       <a class="brand" href="/">Strata</a>
     </header>
-    <main><%~ it.body %></main>
+    <main><div id="page-content"><%~ it.body %></div></main>
   </body>
 </html>

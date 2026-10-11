@@ -1077,6 +1077,7 @@ import configProvider from "./config.ts";
 import policyProvider from "./policy.ts";
 import queueProvider from "./queue.ts";
 import storageProvider from "./storage.ts";
+import viewProvider from "./view.ts";
 
 const listenersProvider: ServiceProvider = {
   name: "starter.listeners",
@@ -1096,6 +1097,7 @@ const starterProviders: ServiceProvider[] = [
   storageProvider,
   queueProvider,
   authProvider,
+  viewProvider,
   policyProvider,
   listenersProvider,
 ];
@@ -1235,13 +1237,14 @@ export { createAppContext };
 function renderRoutesTs(): string {
   return `import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
+import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 
 export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
   const api = buildModuleRoutes(dependencies);
   return {
     ...api,
-    ...buildWebModuleRoutes(dependencies, { clearRegistry: false }),
+    ...(isViewsEnabled() ? buildWebModuleRoutes(dependencies, { clearRegistry: false }) : {}),
   };
 }
 `;
@@ -1378,68 +1381,24 @@ export { appSchedule };
 `;
 }
 
-function renderViewTs(layers: StarterLayers): string {
-  const authImport = authNeedsUsers(layers.auth)
-    ? `import { currentAuthUser } from "@getstrata/core/auth/authContext";
-import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
-import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { EtaViewEngine, htmlResponse } from "@getstrata/core/view";
-import { starterAuthDirectory } from "../bootstrap/authDirectory.ts";
-`
-    : `import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
-import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { EtaViewEngine, htmlResponse } from "@getstrata/core/view";
-`;
-
-  const userBlock = authNeedsUsers(layers.auth)
-    ? `  let currentUser: { id: number; email: string; name: string | null } | null = null;
-  const authUser = currentAuthUser();
-  if (authUser) {
-    try {
-      const row = await starterAuthDirectory.findByIdOrThrow(Number(authUser.id));
-      currentUser = { id: row.id, email: row.email ?? "", name: row.name ?? null };
-    } catch {
-      currentUser = null;
-    }
-  }`
-    : `  const currentUser = null;`;
-
+function renderViewProvider(layers: StarterLayers): string {
   return `import { join } from "node:path";
-${authImport}
-const engine = new EtaViewEngine(join(import.meta.dir, "../../views"));
+import { createViewProvider } from "@getstrata/bootstrap/providers/view";
 
-export interface LayoutData {
-  title: string;
-  description?: string;
-}
-
-export async function renderPage(
-  template: string,
-  data: Record<string, unknown> & { layout: LayoutData },
-  request?: Request,
-  status = 200,
-): Promise<Response> {
-  const csrfToken = request ? resolveCsrfTokenForRequest(request) : "";
-  const flash = currentRequestMeta().flash ?? null;
-${userBlock}${
-  layers.extras.oidc
-    ? `
-  const oidcLogin =
-    process.env.FEATURE_OAUTH === "true" &&
-    Boolean(process.env.OIDC_CLIENT_ID?.trim() && process.env.OIDC_CLIENT_SECRET?.trim());`
-    : ""
-}
-  const html = await engine.render(
-    template,
-    { ...data, csrfToken, flash, currentUser${layers.extras.oidc ? ", oidcLogin" : ""} },
-    { request },
-  );
-  return htmlResponse(html, { status });
-}
-
-export function plainText(body: string, status = 200): Response {
-  return new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
-}
+export default createViewProvider({
+  directory: join(import.meta.dir, "../../../views"),
+  data: {
+    userKey: "currentUser",${
+      layers.extras.oidc
+        ? `
+    extra: () => ({
+      oidcLogin: process.env.FEATURE_OAUTH === "true" &&
+        Boolean(process.env.OIDC_CLIENT_ID?.trim() && process.env.OIDC_CLIENT_SECRET?.trim()),
+    }),`
+        : ""
+    }
+  },
+});
 `;
 }
 
@@ -1474,5 +1433,5 @@ export {
   renderStarterSchemaMigration,
   renderStatusTs,
   renderUserModel,
-  renderViewTs,
+  renderViewProvider,
 };

@@ -37,6 +37,31 @@ async function run(origin: string | null, method = "GET"): Promise<Response> {
 }
 
 describe("createCorsMiddleware", () => {
+  test("preserves representation Vary fields and wildcard for allowed, denied and absent origins", async () => {
+    setEnv({ CORS_ALLOWED_ORIGINS: "https://app.example" });
+    const middleware = createCorsMiddleware();
+    for (const origin of ["https://app.example", "https://evil.example", null]) {
+      for (const vary of [
+        "HX-Request, HX-Boosted, HX-History-Restore-Request",
+        "origin, Accept",
+        "*",
+      ]) {
+        const response = await middleware(
+          new Request("http://app.test/", { headers: origin ? { origin } : {} }),
+          async () => new Response("fragment", { status: 202, headers: { Vary: vary } }),
+        );
+        const fields = response.headers.get("vary")?.toLowerCase().split(/,\s*/) ?? [];
+        if (vary === "*") expect(fields).toEqual(["*"]);
+        else {
+          expect(fields.filter((field) => field === "origin")).toHaveLength(1);
+          for (const field of vary.toLowerCase().split(/,\s*/)) expect(fields).toContain(field);
+        }
+        expect(response.status).toBe(202);
+        expect(await response.text()).toBe("fragment");
+      }
+    }
+  });
+
   test("an unset allow list is APP_URL only and never *", async () => {
     setEnv({
       CORS_ALLOWED_ORIGINS: undefined,

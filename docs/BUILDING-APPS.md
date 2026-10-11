@@ -205,7 +205,8 @@ existing string-output `core.view` engine and the new typed response renderer.
 The legacy provider/global configuration APIs remain compatible, including
 their existing error-view setup. The factory does not change global error-view
 configuration or automatically negotiate HTMX fragments. Explicit scoped
-error rendering and starter integration are separate follow-up work.
+error rendering remains separate follow-up work. Generated HTML apps now register
+the factory and resolve the typed renderer directly; see [STARTER.md](STARTER.md).
 
 ### Opt-in HTMX page and fragment responses
 

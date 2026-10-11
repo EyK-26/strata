@@ -76,7 +76,7 @@ import {
   renderStarterSchemaMigration,
   renderStatusTs,
   renderUserModel,
-  renderViewTs,
+  renderViewProvider,
 } from "./renderRuntime.ts";
 import { renderScimModule } from "./renderScim.ts";
 import type { GenerateOptions, StarterLayers } from "./types.ts";
@@ -203,7 +203,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
   }
 
   writeText(join(src, "routes.ts"), renderRoutesTs());
-  writeText(join(src, "lib/view.ts"), renderViewTs(layers));
+  writeText(join(src, "bootstrap/providers/view.ts"), renderViewProvider(layers));
   writeText(join(src, "bootstrap/config.ts"), renderConfigTs());
   writeText(join(src, "bootstrap/preload.ts"), renderPreloadTs(layers, projectName));
   writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(layers));

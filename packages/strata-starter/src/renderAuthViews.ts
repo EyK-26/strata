@@ -184,7 +184,7 @@ function renderLayout(layers: StarterLayers, projectName: string): string {
       <% if (it.flash && it.flash.message) { %>
       <p class="flash flash-<%= it.flash.level %>"><%= it.flash.message %></p>
       <% } %>
-      <%~ it.body %>
+      <div id="page-content"><%~ it.body %></div>
     </main>
   </body>
 </html>
@@ -217,6 +217,7 @@ function renderHomeView(projectName: string, layers: StarterLayers): string {
 
   return `<section class="section hero">
   <h1>Welcome to ${projectName}</h1>
+  <p><a href="/" hx-get="/" hx-target="#page-content" hx-swap="innerHTML">Refresh this page</a></p>
   ${guest}
   <p>Health check: <a href="/health"><code>/health</code></a>.</p>${extras ? `\n  ${extras}` : ""}
 </section>
