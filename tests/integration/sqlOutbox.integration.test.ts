@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+import { runOutboxWorkerCommand } from "@getstrata/cli/outboxWorker";
 import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
@@ -22,6 +23,10 @@ import {
   createOutboxMigration,
   SqlOutbox,
 } from "@getstrata/core/events/outbox";
+import {
+  LifecycleCoordinator,
+  resetGracefulShutdownForTests,
+} from "@getstrata/core/lifecycle/gracefulShutdown";
 import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { currentTenant } from "@getstrata/core/tenant/tenantContext";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
@@ -378,6 +383,47 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
     expect(await runInTransaction(() => db.unsafe("SELECT * FROM strata_outbox_event"))).toEqual(
       [],
     );
+  });
+
+  test("managed configured worker preserves tenant extensions and restricted-role RLS", async () => {
+    const id = "managed-configured";
+    const lifecycle = new LifecycleCoordinator();
+    let observed: unknown;
+    const outbox = make(async (event) => {
+      observed = currentTenant();
+      const [scope] = await db.unsafe<{ tenant_id: string }>(
+        "SELECT current_setting('app.tenant_id') AS tenant_id",
+      );
+      expect(scope?.tenant_id).toBe("101");
+      await db.unsafe("INSERT INTO effects VALUES ($1, $2)", [event.id, 101]);
+    });
+    await runWithTenantDatabase(tenant, () => outbox.publish("order", {}, { id }));
+    const running = runOutboxWorkerCommand({ outbox, lifecycle, boot: () => {} });
+    try {
+      const start = Date.now();
+      for (;;) {
+        const [delivery] = await admin.unsafe<{ status: string }[]>(
+          "SELECT status FROM strata_outbox_delivery WHERE event_id=$1",
+          [id],
+        );
+        if (delivery?.status === "completed") break;
+        if (Date.now() - start > 2000) throw new Error("Managed delivery did not complete");
+        await Bun.sleep(10);
+      }
+      expect(observed).toEqual(tenant);
+      expect(await pool.unsafe("SELECT * FROM effects WHERE event_id=$1", [id])).toEqual([]);
+      await runWithTenantDatabase(tenant, async () => {
+        expect(await db.unsafe("SELECT * FROM effects WHERE event_id=$1", [id])).toEqual([
+          { event_id: id, tenant_id: 101 },
+        ]);
+      });
+    } finally {
+      await lifecycle.shutdown("TEST_COMPLETE");
+      await running;
+      resetGracefulShutdownForTests();
+      await admin.unsafe("DELETE FROM effects WHERE event_id=$1", [id]);
+      await admin.unsafe("DELETE FROM strata_outbox_event WHERE id=$1", [id]);
+    }
   });
 
   test("tenant publication rolls back atomically and delivery runs with captured RLS scope", async () => {

@@ -381,6 +381,21 @@ Publication requires a framework business transaction (`runInTransaction` or `ru
 
 Durable listeners execute only in workers outside the business transaction; publication never calls a listener or a Redis queue. This differs from synchronous observers and commit-aware in-process model listeners, which are useful hooks but do not survive process death. Register the same durable listeners in producers and workers. Removing or renaming a listener leaves its existing delivery recoverable as a failure. Do not automatically convert all model hooks to durable events: apps choose which effects need durability.
 
+The official `runOutboxWorkerCommand` from `@getstrata/cli/outboxWorker` owns stop/drain/flush/close handling. Generated apps pass `listeners`, which constructs an outbox with framework defaults. Apps with a configured outbox pass `outbox` instead, preserving their tenant resolver, lease/retry settings and complete listener registry. Choose exactly one source; TypeScript and runtime validation reject ambiguous configuration. A supplied instance is reused directly after successful boot, with the same cancellation and cleanup contracts.
+
+```typescript
+await runOutboxWorkerCommand({
+  outbox: appOutbox,
+  boot: async () => { app = await bootstrapApp({ migrate: false }); },
+  drain: () => app?.context.drain(),
+  flush: () => app?.context.flush(),
+  close: async () => {
+    try { await app?.context.dispose(); }
+    finally { await closeDatabase(); }
+  },
+});
+```
+
 Workers use database time, indexed claim scans, renewable unique ownership tokens and ownership-checked acknowledgement. Expired ownership is reclaimed before new work. Short coordination transactions retry only database deadlock/serialization aborts, with a bounded retry budget; persistent infrastructure errors propagate to the worker supervisor. Delivery is **at least once**. A lease fences acknowledgement, not arbitrary provider effects: a killed worker may have already sent email or charged a provider. Handlers must support replay and observe the abort signal. Cancellation does not delete work. Failed delivery persists a bounded code, not provider exception text; attempts and exponential retry deadlines survive restart. Defaults are a 60-second lease, five attempts, and a one-second initial retry delay capped at five minutes. Provision pool headroom for lease renewal in addition to active listeners. SQLite has one writer per connection; keep application write transactions short.
 
 Tenant listeners resolve the captured tenant and run through `runWithTenantDatabase`, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use `runInTransaction` for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
