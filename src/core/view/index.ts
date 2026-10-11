@@ -9,7 +9,7 @@ export {
   xmlResponse,
 } from "./htmlResponse";
 export type { ViewEngine } from "./viewEngine";
-export type { ViewResponseOptions } from "./viewRenderer";
+export type { HtmxViewResponseOptions, ViewResponseOptions } from "./viewRenderer";
 export { CORE_VIEW_RENDERER_TOKEN, ViewRenderer } from "./viewRenderer";
 export type { WebErrorViewInput, WebErrorViewOptions } from "./webErrorView";
 export {

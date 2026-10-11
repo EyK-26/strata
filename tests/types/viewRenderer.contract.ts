@@ -7,6 +7,14 @@ function viewContract(container: ServiceContainer, renderer: ViewRenderer): void
     .resolve(CORE_VIEW_RENDERER_TOKEN)
     .render("orders", {}, { layout: false, headers: new Headers(), status: 422 });
   void response;
+  const htmx: Promise<Response> = renderer.renderHtmx(
+    "orders",
+    {},
+    { fragment: "orders/table", request: new Request("http://test/orders") },
+  );
+  void htmx;
+  // @ts-expect-error A fragment is a template name, not a response mode boolean.
+  renderer.renderHtmx("orders", {}, { fragment: true });
   // @ts-expect-error Typed view DI tokens reject unrelated services.
   container.set(CORE_VIEW_RENDERER_TOKEN, {});
   // @ts-expect-error Layout selection is a template name or false.
