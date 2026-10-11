@@ -455,9 +455,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.20",
-        "@getstrata/cli": "^2.2.20",
-        "@getstrata/core": "^2.2.20",
+        "@getstrata/bootstrap": "^2.2.21",
+        "@getstrata/cli": "^2.2.21",
+        "@getstrata/core": "^2.2.21",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
@@ -837,7 +837,9 @@ ${renderIntegrationsReadme(layers)}
 ${next.join("\n")}
 \`\`\`
 
-Open http://localhost:3000. Health check: \`GET /health\`. Redis worker: \`bun run queue:work\` (requires \`REDIS_URL\`). Durable events: \`bun run outbox:work\` after \`bun run db:migrate\`. Add listeners in \`src/outbox/registry.ts\` before publishing.
+Open http://localhost:3000. Health check: \`GET /health\`. Discover registered commands with \`bunx strata help\`. \`dev\` and \`start\` run HTTP only; workers are explicit, separate processes.
+
+${layers.queue === "redis" ? "Redis jobs need `bun run queue:work` in another terminal (requires `REDIS_URL`).\n\n" : "The synchronous queue handles jobs inline; no Redis queue worker is needed for it.\n\n"}For durable events, add listeners in \`src/outbox/registry.ts\`, apply \`bun run db:migrate\`, then run \`bun run outbox:work\` in another terminal. Apps that do not publish durable events do not need this worker. Durable cache invalidation also needs the outbox worker when explicitly configured. Use the same application environment, database, Redis URL and \`APP_KEY_PREFIX\` for HTTP and its workers. An idle worker is normal; startup output confirms entry into polling, not dependency health. Stop HTTP and workers before resetting the development database.
 
 ${renderSupportingToolsReadme(layers)}${
   layers.auth !== "headers"

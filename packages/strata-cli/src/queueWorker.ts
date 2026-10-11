@@ -38,6 +38,7 @@ async function runQueueWorkerCommand(options: {
       // Completion, including failed startup/run, means no admitted worker remains.
       await booting?.catch(() => {});
       await running?.catch(() => {});
+      if (running) console.log("[queue:work] Polling stopped.");
       await options.drain?.();
     },
     "drain",
@@ -78,10 +79,9 @@ async function runQueueWorkerCommand(options: {
     await booting;
     if (!stopping && !lifecycle.isShuttingDown) {
       worker = createQueueWorker(redisUrl, options.failedJobs ?? createFailedJobService());
-      console.log("[queue:work] Listening for jobs on Redis...");
+      console.log("[queue:work] Starting Redis queue polling; idle until jobs are available.");
       running = worker.run();
       await running;
-      console.log("[queue:work] Worker stopped.");
     }
   } catch (error) {
     failed = true;

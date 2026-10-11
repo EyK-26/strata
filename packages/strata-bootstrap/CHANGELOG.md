@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.21
+
+Make registered queue/outbox workers discoverable in CLI help and generated startup guidance. Announce polling after boot and when it stops without claiming dependency health, printing secrets, or starting workers automatically. Preserve explicit process ownership, delivery semantics and graceful lifecycle; cover idle, boot/runtime/cleanup failures and real SIGTERM draining.
+
 ## 2.2.20
 
 Validate complete migration definitions before callbacks, locks or database effects; reject malformed exports and duplicate names with source diagnostics. Refuse fresh with missing applied definitions and rollback with incomplete latest batches; preserve partial forward migration and remove blanket history deletion. Cover physical schema/data/history preservation and reset recovery on real Postgres, MySQL and SQLite, plus loader and preflight regressions; document safe missing-file recovery and unchanged atomicity limits.

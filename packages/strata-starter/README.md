@@ -36,6 +36,8 @@ A Bun and TypeScript app on `@getstrata/core` and `@getstrata/bootstrap` that bo
 
 The `strata` binary installs into the app rather than globally, so use the generated `bun run` scripts. Generated apps ship `src/cli/register.ts` with `queue:work` (`bun run queue:work`, requires `REDIS_URL`), `make:*`, `openapi:*`, and `schedule:run`. `queue:work` boots that app rather than the framework-repo worker.
 
+Discover registered commands with `bunx strata help`. `dev` and `start` run HTTP only. Run `queue:work` separately for Redis jobs, and `outbox:work` separately for published durable events (after migrations and listener registration). Synchronous queues and apps without durable events do not need these workers. Worker startup messages indicate polling, not dependency health; idle polling is normal. HTTP and workers use the same application configuration.
+
 ## Docs
 
 - [Getting started](https://github.com/EyK-26/strata/blob/main/docs/GETTING-STARTED.md)

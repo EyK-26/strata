@@ -43,6 +43,7 @@ async function runOutboxWorkerCommand(options: OutboxWorkerOptions): Promise<voi
     async () => {
       await booting?.catch(() => {});
       await running?.catch(() => {});
+      if (running) console.log("[outbox:work] Polling stopped.");
       await options.drain?.();
     },
     "drain",
@@ -69,6 +70,9 @@ async function runOutboxWorkerCommand(options: OutboxWorkerOptions): Promise<voi
     await booting;
     if (!stopping && !lifecycle.isShuttingDown) {
       const outbox = options.outbox ?? new SqlOutbox({ listeners: options.listeners ?? [] });
+      console.log(
+        "[outbox:work] Starting SQL outbox polling; idle until deliveries are available.",
+      );
       running = outbox.work({ signal: admission.signal });
       await running;
     }
