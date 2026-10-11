@@ -1,12 +1,12 @@
 # @getstrata/core changelog
 
-## Unreleased
+## 2.2.15
 
-- `chunk` walks by the primary key when that is already the only ascending order, so later batches do not use `OFFSET`.
-- Empty page-number pagination totals skip the row query; nonempty pages preserve the existing count-plus-row-query budget and `OFFSET` semantics.
-- Independent `hashed` write casts run concurrently, with deterministic start/await and rejected-cast-before-write regressions.
-- An idle Streams worker promotes, reclaims, and reads every priority in one Redis script.
-- Remove `docs/MIGRATING-2.md`. Existing applications are upgraded individually.
+- Primary-key ascending `chunk` queries reuse the existing keyset walk, including default primary-key ordering; projections, joins, grouping, locks and other orders retain OFFSET behavior.
+- Empty filtered pagination totals skip the row query. Nonempty page-number pagination preserves OFFSET semantics and its count-plus-row-query budget; explicit cursor/keyset APIs remain available for deep traversal.
+- Independent hashed write casts run concurrently. Deterministic regressions prove concurrent start, complete awaiting and failure before model observers or SQL writes; hydration and existing-hash behavior are preserved.
+- Streams workers poll retry promotion, pending recovery and new delivery across priorities in one bounded Redis script, preserving priority, ownership fencing and at-least-once delivery contracts.
+- Clarify historical 2.1.0–2.2.13 release notes and database/queue documentation. Remove the consolidated 1.x-to-2.x migration guide; existing projects are upgraded individually.
 
 ## 2.2.14
 
