@@ -63,6 +63,7 @@ describe("queueWorkCommand", () => {
     const pending = new Promise<void>((resolve) => {
       release = resolve;
     });
+    const output = captureConsole();
     mock.module("@getstrata/core/queue/createAppQueue", () => ({
       createFailedJobService: () => ({}),
       createQueueWorker: () => {
@@ -80,10 +81,16 @@ describe("queueWorkCommand", () => {
       });
       await Promise.resolve();
       expect(created).toBe(0);
+      expect(output.logs).toEqual([]);
       release();
       await running;
       expect(created).toBe(1);
       expect(closed).toBe(1);
+      expect(output.logs).toEqual([
+        "[queue:work] Starting Redis queue polling; idle until jobs are available.",
+        "[queue:work] Polling stopped.",
+      ]);
+      output.logs.length = 0;
       await expect(
         runQueueWorkerCommand({
           boot: async () => {
@@ -96,10 +103,12 @@ describe("queueWorkCommand", () => {
       ).rejects.toThrow("provider failed");
       expect(created).toBe(1);
       expect(closed).toBe(2);
+      expect(output.logs).toEqual([]);
       await runGracefulShutdown("TEST");
       expect(closed).toBe(2);
     } finally {
       release();
+      output.restore();
       restoreEnvVar("REDIS_URL", previousRedisUrl);
     }
   });
@@ -143,9 +152,9 @@ describe("queueWorkCommand", () => {
 
     expect(workerStarted).toBe(true);
     expect(
-      output.logs.some((line) => line.includes("[queue:work] Listening for jobs on Redis")),
+      output.logs.some((line) => line.includes("[queue:work] Starting Redis queue polling")),
     ).toBe(true);
-    expect(output.logs.some((line) => line.includes("[queue:work] Worker stopped."))).toBe(true);
+    expect(output.logs.some((line) => line.includes("[queue:work] Polling stopped."))).toBe(true);
 
     await runGracefulShutdown("TEST");
     expect(workerStopped).toBe(true);

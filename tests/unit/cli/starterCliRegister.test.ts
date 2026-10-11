@@ -127,6 +127,9 @@ describe("generated src/cli/register.ts", () => {
     const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
     expect(env).toContain("QUEUE_REDIS_TRANSPORT=streams");
     expect(preload).toContain('process.env.QUEUE_REDIS_TRANSPORT ??= "streams"');
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("Redis jobs need `bun run queue:work` in another terminal");
+    expect(readme).not.toContain("The synchronous queue handles jobs inline");
   });
 
   test("user-auth generation registers admin provisioning and adds its independent file migration", async () => {
@@ -166,6 +169,12 @@ describe("generated src/cli/register.ts", () => {
 
     const help = output.logs.join("\n");
     expect(help).toContain("queue:work");
+    expect(help).toContain("outbox:work");
+    expect(help).toContain("dev/start do not start workers");
+    const readme = await readFile(join(app, "README.md"), "utf8");
+    expect(readme).toContain("bunx strata help");
+    expect(readme).toContain("Apps that do not publish durable events do not need this worker");
+    expect(readme).toContain("The synchronous queue handles jobs inline");
     expect(help).toContain("make:module");
     expect(help).toContain("schedule:run");
     expect(help).not.toContain("coreProviders");

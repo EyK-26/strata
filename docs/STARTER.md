@@ -92,6 +92,10 @@ The monorepo fixture keeps its own file-based history under the framework repo's
 
 ## Scaffold commands (`make:*`)
 
+Run `bunx strata help` in an app to discover its registered commands. Worker descriptions distinguish Redis queued jobs (`queue:work`) from SQL durable listener deliveries (`outbox:work`). `dev` and `start` start HTTP only. Run workers in separate terminals when the app uses those mechanisms; synchronous queues and apps without durable events do not need background workers. Use the same application configuration across HTTP and workers, including the database, Redis URL and `APP_KEY_PREFIX`. Explicitly configured durable cache invalidation needs its outbox worker too.
+
+Both worker helpers announce polling after application boot and report when polling stops. Idle polling is normal. The startup message is not a Redis/SQL health probe or proof of successful delivery; boot/runtime/cleanup errors still reject the command. No credentials, payloads or connection URLs are printed by these messages, and there is no repeating idle log. Stop HTTP and workers before resetting a development database. Production keeps independently supervised workers and the existing stop/drain/flush/close lifecycle.
+
 `bunx strata` in a generated app ships lifecycle commands plus the generated `src/cli/register.ts` map: `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` boots **this app** (`bootstrapApp({ migrate: false })` / `createApp()`). Do not copy the monorepo `src/cli/register.ts` or `queue:work` into a product app; that worker calls `createAppContext()` from `@getstrata/bootstrap/context` (`coreProviders`).
 
 `make:*` resolves paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`, `src/listeners`). `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `await discoverJobs()` on boot. `make:module` appends a `registerModelClass` hint to `src/models/register.ts` when that file exists. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
