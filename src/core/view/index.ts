@@ -1,4 +1,4 @@
-export type { LayoutDataResolver } from "./etaViewEngine";
+export type { LayoutDataResolver, RenderOptions } from "./etaViewEngine";
 export { DEFAULT_VIEWS_DIRECTORY, EtaViewEngine } from "./etaViewEngine";
 export {
   htmlResponse,
@@ -9,6 +9,8 @@ export {
   xmlResponse,
 } from "./htmlResponse";
 export type { ViewEngine } from "./viewEngine";
+export type { ViewResponseOptions } from "./viewRenderer";
+export { CORE_VIEW_RENDERER_TOKEN, ViewRenderer } from "./viewRenderer";
 export type { WebErrorViewInput, WebErrorViewOptions } from "./webErrorView";
 export {
   configureWebErrorView,
@@ -24,4 +26,8 @@ export type {
   WebLayoutDataOptions,
   WebLayoutUserKey,
 } from "./webLayoutData";
-export { configureWebLayoutData, resolveWebLayoutData } from "./webLayoutData";
+export {
+  configureWebLayoutData,
+  createWebLayoutDataResolver,
+  resolveWebLayoutData,
+} from "./webLayoutData";

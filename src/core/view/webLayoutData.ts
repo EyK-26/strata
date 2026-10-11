@@ -94,6 +94,26 @@ async function resolveWebLayoutData(
   options: WebLayoutDataOptions = {},
 ): Promise<Record<string, unknown>> {
   const resolved: WebLayoutDataOptions = { ...configuredLayoutOptions, ...options };
+  return loadWebLayoutData(container, request, resolved);
+}
+
+/** Isolated configuration for one app; does not read legacy global defaults. */
+function createWebLayoutDataResolver(
+  container: ServiceContainerLike,
+  options: WebLayoutDataOptions = {},
+): (request?: Request) => Promise<Record<string, unknown>> {
+  const scoped = {
+    ...options,
+    extra: typeof options.extra === "function" ? options.extra : { ...options.extra },
+  };
+  return (request) => loadWebLayoutData(container, request, scoped);
+}
+
+async function loadWebLayoutData(
+  container: ServiceContainerLike,
+  request: Request | undefined,
+  resolved: WebLayoutDataOptions,
+): Promise<Record<string, unknown>> {
   const csrfToken = request ? resolveCsrfTokenForRequest(request) : "";
   const flash = request ? (currentRequestMeta().flash ?? pullFlash(request)) : null;
   const userKey = layoutUserKey(resolved);
@@ -112,4 +132,9 @@ async function resolveWebLayoutData(
 }
 
 export type { WebLayoutAuthUser, WebLayoutData, WebLayoutDataOptions, WebLayoutUserKey };
-export { configureWebLayoutData, resetWebLayoutDataConfigForTests, resolveWebLayoutData };
+export {
+  configureWebLayoutData,
+  createWebLayoutDataResolver,
+  resetWebLayoutDataConfigForTests,
+  resolveWebLayoutData,
+};

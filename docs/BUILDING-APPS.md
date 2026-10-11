@@ -166,6 +166,47 @@ The starter wizard covers MFA, email verification, SCIM, metrics, plus optional 
 
 Configure layout data (`currentUser`, `csrfToken`, `flash`) and error templates (`errors/not-found.eta`, `errors/forbidden.eta`, `errors/error.eta`). Production 5xx must not leak stacks.
 
+For per-app HTML rendering, register `createViewProvider` from
+`@getstrata/bootstrap/providers/view` in your provider list, then inject the
+typed `CORE_VIEW_RENDERER_TOKEN` from `@getstrata/core/view` into controllers:
+
+```ts
+createViewProvider({
+  directory: join(import.meta.dir, "../../views"),
+  layout: "layouts/app",
+  data: {
+    userKey: "currentUser",
+    extra: { appName: "My app" },
+    // Optional loadUser(container, request) supplies app-owned display fields.
+  },
+});
+const views = container.resolve(CORE_VIEW_RENDERER_TOKEN);
+return views.render("orders/index", { title: "Orders", orders }, {
+  request,
+  layout: "layouts/account", // false renders only the template
+  status: 200,
+  headers: { "Cache-Control": "private, no-store" },
+});
+```
+
+`ViewRenderer` returns `Promise<Response>` with HTML UTF-8 content type and
+copies supplied headers. A render failure propagates to normal error handling.
+Template data and layout selection are separate: `data.layout` is ordinary
+application data; `options.layout` chooses the wrapping template. Omitting it
+uses the provider default (otherwise the engine's existing `layouts/app.eta`).
+Eta continues to own escaping and includes; templates and navigation stay in
+the app. Direct `EtaViewEngine.render()` remains available for string output.
+
+The factory resolves auth/CSRF/flash/CSP data on each render using the existing
+request context and configured directory, without reading or changing legacy
+global layout configuration. Its options are local to that app; use it instead
+of registering the legacy `viewProvider` alongside it. It registers both the
+existing string-output `core.view` engine and the new typed response renderer.
+The legacy provider/global configuration APIs remain compatible, including
+their existing error-view setup. The factory does not change global error-view
+configuration or automatically negotiate HTMX fragments. Explicit scoped
+error rendering and HTMX/starter integration are separate follow-up work.
+
 ## Secrets
 
 Call `assertProductionSecrets()` from your `createApp` / `serve` path when `isProductionEnv()` is true. Staging counts as production for this check. It is feature-gated: a cookie HTML app with `SESSION_SECRET` and `AUTH_DEV_HEADERS=false` does not need API tokens if those features are off. Generated apps call it at boot. Production boot rejects `TENANT_DEV_HEADERS=true`; public-read admission has a separate trusted-host tenancy contract.

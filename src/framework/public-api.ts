@@ -727,8 +727,10 @@ export {
   validateObject,
 } from "../core/validation/rules.ts";
 export {
+  CORE_VIEW_RENDERER_TOKEN,
   configureWebErrorView,
   configureWebLayoutData,
+  createWebLayoutDataResolver,
   DEFAULT_VIEWS_DIRECTORY,
   EtaViewEngine,
   errorTemplateName,
@@ -742,9 +744,11 @@ export {
   resolveWebLayoutData,
   rssResponse,
   textResponse,
+  ViewRenderer,
   xmlResponse,
 } from "../core/view/index.ts";
 export type { ViewEngine } from "../core/view/viewEngine.ts";
+export type { ViewResponseOptions } from "../core/view/viewRenderer.ts";
 export type {
   WebLayoutAuthUser,
   WebLayoutData,

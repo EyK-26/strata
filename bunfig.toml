@@ -151,7 +151,13 @@ coveragePathIgnorePatterns = [
 
   # HTTP stack, views, and middleware (exercised via integration tests)
   "src/core/http/**",
-  "src/core/view/**",
+  "src/core/view/assertEtaHtmlSource.ts",
+  "src/core/view/etaViewEngine.ts",
+  "src/core/view/htmlResponse.ts",
+  "src/core/view/index.ts",
+  "src/core/view/viewEngine.ts",
+  "src/core/view/webErrorView.ts",
+  "src/core/view/webLayoutData.ts",
 
   # Environment schema (validated at bootstrap)
   "src/core/config/**",
