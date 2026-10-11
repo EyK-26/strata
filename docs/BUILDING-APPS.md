@@ -205,7 +205,47 @@ existing string-output `core.view` engine and the new typed response renderer.
 The legacy provider/global configuration APIs remain compatible, including
 their existing error-view setup. The factory does not change global error-view
 configuration or automatically negotiate HTMX fragments. Explicit scoped
-error rendering and HTMX/starter integration are separate follow-up work.
+error rendering and starter integration are separate follow-up work.
+
+### Opt-in HTMX page and fragment responses
+
+Use `views.renderHtmx()` only on HTML routes designed for both representations:
+
+```ts
+return views.renderHtmx("orders/index", { orders }, {
+  request,
+  fragment: "orders/_table",
+  layout: "layouts/account",
+  headers: { "Cache-Control": "private, no-store" },
+});
+```
+
+Ordinary requests, boosted navigation (`HX-Boosted: true`), and history cache
+miss restoration (`HX-History-Restore-Request: true`) use the page template and
+configured layout. Only `HX-Request: true` without those two flags selects the
+fragment, always with `layout: false`. Without a fragment name, it renders the
+page template without its layout. Layout names are chosen by application code,
+never by incoming headers. A request must be provided or available in the
+framework request context; rendering without one fails explicitly. Plain
+`views.render()` keeps its existing behavior regardless of HX headers.
+
+Every negotiated response varies on all three selecting headers, including
+full pages. Existing `Vary` values are preserved and deduplicated without
+case-sensitive duplicates; `Vary: *` remains intact. Status, other headers,
+escaping, request data and normal route auth/CSRF/tenant scopes are preserved.
+These client headers select presentation only, never permission to access data.
+Keep personalized responses private; Vary does not replace authorization or
+cache privacy. If using ETags, derive them from the selected representation
+rather than sharing one validator between different HTML bodies.
+
+The page endpoint must remain usable as a normal URL for history restoration
+and JavaScript-free navigation. `hx-get`/`hx-target` selectors and fragment
+markup must agree; the helper does not infer targets, perform DOM swaps, emit
+redirect/trigger instructions, or change HTMX's handling of 4xx/5xx responses.
+Configure any desired validation-error swapping explicitly in the client.
+See the official [HTMX history](https://htmx.org/docs/#history),
+[caching](https://htmx.org/docs/#caching) and
+[boosted navigation](https://htmx.org/attributes/hx-boost/) contracts.
 
 ## Secrets
 

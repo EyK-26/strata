@@ -748,7 +748,7 @@ export {
   xmlResponse,
 } from "../core/view/index.ts";
 export type { ViewEngine } from "../core/view/viewEngine.ts";
-export type { ViewResponseOptions } from "../core/view/viewRenderer.ts";
+export type { HtmxViewResponseOptions, ViewResponseOptions } from "../core/view/viewRenderer.ts";
 export type {
   WebLayoutAuthUser,
   WebLayoutData,
