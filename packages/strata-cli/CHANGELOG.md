@@ -8,7 +8,8 @@ Add optional typed resourceRoutes and strict mergeRouteMaps composition, preserv
 
 ## 2.2.13
 
-- Improve view rendering and better htmx support
+- Add a typed per-app HTML renderer on top of the native response path.
+- Add explicit HTMX page and fragment responses. A fragment can fall back to the full page. Layout and auth response contracts stay the same.
 
 ## 2.2.12
 
@@ -30,42 +31,47 @@ Add independently interruptible read-only SQLite and MySQL observations; extend 
 
 ## 2.2.9
 
-- Support native cancellable transaction acquisition
+- Pool checkout can be cancelled. `reserve({ signal })` on the native driver aborts while it is still waiting for a connection. Drivers without that method are not given a fake one.
 
 ## 2.2.8
 
-- Add bounded read-only Postgres outbox metrics
+- Add bounded, read-only Postgres outbox metrics.
+- Add bounded, opt-in Redis queue metrics. List and Streams depth stay separate.
 
 ## 2.2.7
 
-- Where an ordinary operation needs SQL because the framework cannot express it
+- `ORDER BY` accepts explicit `nulls: "first" | "last"`. Postgres and SQLite emit `NULLS FIRST` / `NULLS LAST`. MySQL has no `NULLS FIRST` / `NULLS LAST` clause, so it orders nulls with an `IS NULL` discriminator and leaves the rest of the sort unchanged.
 
 ## 2.2.6
 
--  fix(cli): relay shutdown to children and simplify container launcher
+- The CLI, when it supervises the app or worker as a child, forwards shutdown signals to that child and waits for it. The container launcher no longer exits while the child is still running.
 
 ## 2.2.5
 
--  fix(starter): keep container readiness independent of API admission
+- Container readiness no longer means the API is admitting traffic. Database readiness no longer provisions roles or creates a missing database. A failed configured admin connection does not fall back to a generated password.
 
 ## 2.2.4
 
--  perf(database): seek Postgres composite keyset bounds
+- Composite keyset pages on Postgres seek with a row comparison (`(a, b) > (cursor)`), so the planner can start at the index bound instead of expanding the cursor into a chain of OR predicates.
 
 ## 2.2.3
 
-- feat(database): add scoped composite keyset pagination
+- Add scoped composite keyset pagination. The order must end with the primary key. Global scopes and caller filters stay in force across the cursor. Joins, grouping, and offset queries are rejected.
 
 ## 2.2.2
 
-- orm improvments
+- Schema `bigId` emits an explicit 64-bit generated identity.
+- Repository writes can be conditional and set-based.
+- Repositories and models can take a typed row lock inside the current transaction.
+- Generated Postgres query handles keep tagged-SQL typing.
 
 ## 2.2.1
 
-F02 — complete queue durability. Queues have leased reservations, recovery and fenced acknowledgement, but still use Redis lists. Persisted retry schedules, execution deadlines, cancellation and the planned Streams migration remain unfinished. Retries currently wait inside the running worker.
-F10 — production public-route tenancy. Separate anonymous access from development tenant headers, support a trusted-host resolver, reject unknown hosts, and accept forwarded hosts only through configured trusted proxies. The shop still lacks the approved-domain mapping.
-F12 — initial administrator provisioning and migration guidance. Automatic demo seeding is fixed. Secure initial-admin provisioning and a consolidated upgrade/operations guide remain.
-Distributed qualification. Cache generations/fill leases, scheduler ownership, OpenTelemetry, body limits and lifecycle controls now exist. Their implementation should no longer be described as entirely pending, but broader failure and capacity qualification is still required.
+- Opt-in Redis Streams (`QUEUE_REDIS_TRANSPORT=streams`). Lists stay the default. Streams adds consumer-group recovery, persisted retry schedules, total job deadlines, opt-in cancellation, and a stable job id across replay. Conversion from lists is a stopped maintenance step.
+- Failed jobs stay recorded until retry admission succeeds. Manual replay keeps `failed_job.job_id` when the row has one.
+- Public reads and tenant host selection are separate. Unknown hosts fail closed. Forwarded hosts are accepted only from configured trusted proxies.
+- Generated apps can provision one initial administrator with `auth:provision-admin` and a one-time claim migration. Demo seeding stays explicit and is rejected in production and staging.
+- `docs/MIGRATING-2.md` collects the 2.x upgrade and rollout steps. Quota and in-memory throttle docs match the code: memory throttles stay process-local, and a Redis failure does not fall back to them.
 
 ## 2.2.0
 
@@ -84,7 +90,9 @@ Bounded memory throttling.
 
 ## 2.1.0
 
-- refactor(starter): reuse shared config and base repositories - fix(database): await password casts before model writes - fix(database): preserve concrete model types in query results
+- Generated apps reuse the shared config store and base repositories instead of a copied stack.
+- Password casts are awaited before the write reaches SQL or observers. Hydration does not hash.
+- Model queries keep the concrete model type in their results. Service tokens, route handlers, and the starter's generated infrastructure were tightened in the same release.
 
 ## 2.0.9
 
