@@ -13,6 +13,49 @@ type AppliedMigrationRow = {
 
 const MIGRATIONS_TABLE = "framework_migrations";
 
+/** Validate the complete set before callbacks, locks or database effects. */
+function validateMigrations(
+  migrations: unknown,
+  sources?: readonly string[],
+): asserts migrations is Migration[] {
+  if (!Array.isArray(migrations)) throw new Error("Migrations must be an array of definitions.");
+  const names = new Map<string, string>();
+  for (const [index, migration] of migrations.entries()) {
+    const source = sources?.[index] ?? `migration at index ${index}`;
+    if (
+      !migration ||
+      typeof migration !== "object" ||
+      Array.isArray(migration) ||
+      typeof migration.name !== "string" ||
+      migration.name.trim().length === 0 ||
+      typeof migration.up !== "function" ||
+      typeof migration.down !== "function"
+    ) {
+      throw new Error(
+        `Invalid ${source}: expected a migration with a non-empty string name and up/down functions.`,
+      );
+    }
+    const previous = names.get(migration.name);
+    if (previous !== undefined)
+      throw new Error(`Duplicate migration name "${migration.name}" in ${previous} and ${source}.`);
+    names.set(migration.name, source);
+  }
+}
+
+function requireMigrationDefinitions(
+  applied: AppliedMigrationRow[],
+  migrations: Migration[],
+  operation: string,
+): void {
+  const names = new Set(migrations.map(({ name }) => name));
+  const missing = applied.filter(({ name }) => !names.has(name)).map(({ name }) => name);
+  if (missing.length > 0) {
+    throw new Error(
+      `Cannot ${operation}: missing applied migration definitions: ${missing.join(", ")}. Restore the migration files before retrying; history has not been removed.`,
+    );
+  }
+}
+
 function migrationsNameColumn(): string {
   return currentSqlDialect().driver === "mysql" ? "VARCHAR(255) PRIMARY KEY" : "TEXT PRIMARY KEY";
 }
@@ -76,29 +119,33 @@ async function loadMigrationsFromDirectory(directory: string): Promise<Migration
     .filter(
       (entry) =>
         (entry.endsWith(".ts") || entry.endsWith(".js")) &&
-        entry !== "types.ts" &&
-        entry !== "index.ts" &&
-        entry !== "runner.ts",
+        !entry.endsWith(".d.ts") &&
+        !["types", "index", "runner", "advisoryLock", "migrationDatabase"].some(
+          (name) => entry === `${name}.ts` || entry === `${name}.js`,
+        ),
     )
     .sort();
 
   const loadedMigrations = await Promise.all(
     migrationFiles.map(async (fileName) => {
       const moduleUrl = pathToFileURL(join(directory, fileName)).href;
-      const module = (await import(moduleUrl)) as { default: Migration };
+      const module = (await import(moduleUrl)) as { default?: unknown };
       return module.default;
     }),
   );
 
-  return loadedMigrations.filter(
-    (migration): migration is Migration => migration?.name !== undefined,
+  validateMigrations(
+    loadedMigrations,
+    migrationFiles.map((file) => join(directory, file)),
   );
+  return loadedMigrations;
 }
 
 async function getMigrationStatus(
   db: MigrationDatabase,
   migrations: Migration[],
 ): Promise<MigrationStatus[]> {
+  validateMigrations(migrations);
   const applied = await getAppliedMigrations(db);
   const appliedByName = new Map(applied.map(({ name, batch }) => [name, Number(batch)]));
 
@@ -114,6 +161,7 @@ async function runPendingMigrations(
   migrations: Migration[],
   options: { onMigration?: (name: string) => void } = {},
 ): Promise<number> {
+  validateMigrations(migrations);
   const applied = await getAppliedMigrations(db);
   const appliedNames = new Set(applied.map(({ name }) => name));
   const nextBatch =
@@ -139,6 +187,7 @@ async function migrateDatabase(
   migrations: Migration[],
   options: { advisoryLock?: boolean; onMigration?: (name: string) => void } = {},
 ): Promise<number> {
+  validateMigrations(migrations);
   const { advisoryLock = false, onMigration } = options;
 
   if (advisoryLock) {
@@ -153,6 +202,7 @@ async function rollbackDatabase(
   migrations: Migration[],
   options: { onMigration?: (name: string) => void } = {},
 ): Promise<number> {
+  validateMigrations(migrations);
   const applied = await getAppliedMigrations(db);
 
   if (applied.length === 0) {
@@ -162,6 +212,11 @@ async function rollbackDatabase(
   const lastBatch = applied.reduce(
     (currentMax, { batch }) => Math.max(currentMax, Number(batch)),
     0,
+  );
+  requireMigrationDefinitions(
+    applied.filter(({ batch }) => Number(batch) === lastBatch),
+    migrations,
+    "roll back latest batch",
   );
   const migrationsToRollback = new Set(
     applied.filter(({ batch }) => Number(batch) === lastBatch).map(({ name }) => name),
@@ -200,8 +255,10 @@ async function freshDatabase(
       "Destructive migration reset is only available in development/test environments.",
     );
   }
+  validateMigrations(migrations);
   const runFresh = async (): Promise<void> => {
     const applied = await getAppliedMigrations(db);
+    requireMigrationDefinitions(applied, migrations, "reset database");
     const appliedNames = new Set(applied.map(({ name }) => name));
     const appliedMigrations = migrations.filter(({ name }) => appliedNames.has(name));
 
@@ -215,10 +272,6 @@ async function freshDatabase(
         `DELETE FROM ${MIGRATIONS_TABLE} WHERE name = ${currentSqlDialect().placeholder(1)}`,
         [migration.name],
       );
-    }
-
-    if (appliedMigrations.length > 0) {
-      await db.unsafe(`DELETE FROM ${MIGRATIONS_TABLE}`);
     }
 
     await runPendingMigrations(db, migrations, options);

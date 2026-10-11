@@ -147,4 +147,71 @@ for (const driver of ["sqlite", "pgsql", "mysql"] as const) {
     },
     30000,
   );
+  test.skipIf(!enabled)(
+    `${driver}: missing definitions retain physical schema, data and history before reset or rollback`,
+    async () => {
+      await fixture(driver, async (db) => {
+        const definitions: Migration[] = [
+          {
+            name: "known",
+            async up() {},
+            async down() {
+              throw new Error("Must not execute known down");
+            },
+          },
+          {
+            name: "missing",
+            async up(connection) {
+              await Schema.run(connection, driver, (schema) => {
+                schema.create("preserved_fixture", (table) => {
+                  table.integer("id");
+                });
+              });
+              await connection.unsafe("INSERT INTO preserved_fixture (id) VALUES (7)");
+            },
+            async down(connection) {
+              await connection.unsafe("DROP TABLE preserved_fixture");
+            },
+          },
+        ];
+        await migrateDatabase(db, definitions);
+        await db.unsafe("INSERT INTO preserved_fixture (id) VALUES (8)");
+        const history = await db.unsafe(
+          "SELECT name,batch FROM framework_migrations ORDER BY name",
+        );
+        for (const supplied of [[], definitions.slice(0, 1)]) {
+          for (const destructive of [false, true]) {
+            await expect(freshDatabase(db, supplied, { destructive })).rejects.toThrow(
+              "missing applied migration definitions",
+            );
+            expect(
+              await db.unsafe("SELECT name,batch FROM framework_migrations ORDER BY name"),
+            ).toEqual(history);
+            expect(await db.unsafe("SELECT id FROM preserved_fixture ORDER BY id")).toEqual([
+              { id: 7 },
+              { id: 8 },
+            ]);
+          }
+          await expect(rollbackDatabase(db, supplied)).rejects.toThrow(
+            "missing applied migration definitions",
+          );
+          expect(
+            await db.unsafe("SELECT name,batch FROM framework_migrations ORDER BY name"),
+          ).toEqual(history);
+          expect(await db.unsafe("SELECT id FROM preserved_fixture ORDER BY id")).toEqual([
+            { id: 7 },
+            { id: 8 },
+          ]);
+        }
+        // Complete definitions restore normal reset behavior and intentional data discard.
+        definitions[0] = { name: "known", async up() {}, async down() {} };
+        await freshDatabase(db, definitions, { destructive: true });
+        expect(await db.unsafe("SELECT id FROM preserved_fixture ORDER BY id")).toEqual([
+          { id: 7 },
+        ]);
+        expect((await db.unsafe("SELECT name FROM framework_migrations")).length).toBe(2);
+      });
+    },
+    30000,
+  );
 }

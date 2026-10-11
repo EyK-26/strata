@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.20
+
+Validate complete migration definitions before callbacks, locks or database effects; reject malformed exports and duplicate names with source diagnostics. Refuse fresh with missing applied definitions and rollback with incomplete latest batches; preserve partial forward migration and remove blanket history deletion. Cover physical schema/data/history preservation and reset recovery on real Postgres, MySQL and SQLite, plus loader and preflight regressions; document safe missing-file recovery and unchanged atomicity limits.
+
 ## 2.2.19
 
 Fix explicit development fresh resets with unfinished outbox deliveries while preserving ordinary rollback guards. Record each completed reset down immediately so later refusal leaves recoverable migration progress; document partial-DDL/crash limits and old-history reconciliation. Add independent outbox-state and reset failure/migrate/retry regressions on real Postgres, MySQL and SQLite, history-write/reapplication fault injection, and a documented stateful regression review flow.
