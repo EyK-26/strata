@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.16
+
+Allow managed outbox workers to reuse a configured instance, preserving application tenant resolution, listener registration and delivery settings. Keep generated listeners-only defaults compatible, reject ambiguous worker sources, and cover configured SQL delivery, cancellation, cleanup and TypeScript contracts.
+
 ## 2.2.15
 
 - Batch legacy list-queue priority polling while retaining recovery and ownership contracts.

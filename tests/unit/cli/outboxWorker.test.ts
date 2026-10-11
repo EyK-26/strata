@@ -10,6 +10,52 @@ afterEach(() => {
 });
 
 describe("outbox worker", () => {
+  test("configured worker retains its receiver and startup/runtime cleanup", async () => {
+    const { runOutboxWorkerCommand } = await import("@getstrata/cli/outboxWorker");
+    const phases: string[] = [];
+    const outbox = {
+      async work({ signal }: { signal: AbortSignal }) {
+        expect(this).toBe(outbox);
+        expect(signal.aborted).toBe(false);
+        phases.push("work");
+        throw new Error("configured failure");
+      },
+    };
+    await expect(
+      runOutboxWorkerCommand({
+        outbox,
+        boot: () => {
+          phases.push("boot");
+        },
+        drain: () => {
+          phases.push("drain");
+        },
+        flush: () => {
+          phases.push("flush");
+        },
+        close: () => {
+          phases.push("close");
+        },
+      }),
+    ).rejects.toThrow("configured failure");
+    expect(phases).toEqual(["boot", "work", "drain", "flush", "close"]);
+  });
+  test("ambiguous or missing sources fail before boot", async () => {
+    const { runOutboxWorkerCommand } = await import("@getstrata/cli/outboxWorker");
+    let boots = 0;
+    const boot = () => {
+      boots += 1;
+    };
+    await expect(
+      // @ts-expect-error Exercise untyped callers, which must reject ambiguous configuration.
+      runOutboxWorkerCommand({ boot, listeners: [], outbox: new SqlOutbox({ listeners: [] }) }),
+    ).rejects.toThrow("exactly one");
+    // @ts-expect-error Exercise an untyped caller without a worker source.
+    await expect(runOutboxWorkerCommand({ boot })).rejects.toThrow("exactly one");
+    // @ts-expect-error Runtime validation also checks the configured worker contract.
+    await expect(runOutboxWorkerCommand({ boot, outbox: {} })).rejects.toThrow("work()");
+    expect(boots).toBe(0);
+  });
   test("real SIGTERM drains an active SQL delivery before infrastructure closes", async () => {
     const child = Bun.spawn([process.execPath, "run", "tests/fixtures/outboxShutdownWorker.ts"], {
       cwd: process.cwd(),

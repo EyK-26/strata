@@ -7,15 +7,22 @@ import {
 
 type OutboxWorkerBoot = () => unknown | Promise<unknown>;
 type OutboxWorkerClose = () => unknown | Promise<unknown>;
-
-async function runOutboxWorkerCommand(options: {
+type OutboxWorkerSource =
+  | { listeners: readonly DurableListener[]; outbox?: never }
+  | { outbox: Pick<SqlOutbox, "work">; listeners?: never };
+type OutboxWorkerOptions = OutboxWorkerSource & {
   boot: OutboxWorkerBoot;
-  listeners: readonly DurableListener[];
   close?: OutboxWorkerClose;
   flush?: OutboxWorkerClose;
   drain?: OutboxWorkerClose;
   lifecycle?: LifecycleCoordinator;
-}): Promise<void> {
+};
+
+async function runOutboxWorkerCommand(options: OutboxWorkerOptions): Promise<void> {
+  if ((options.outbox !== undefined) === (options.listeners !== undefined))
+    throw new TypeError("Select exactly one outbox worker source: outbox or listeners.");
+  if (options.outbox !== undefined && typeof options.outbox?.work !== "function")
+    throw new TypeError("Configured outbox must provide work().");
   const lifecycle = options.lifecycle ?? new LifecycleCoordinator();
   if (lifecycle.isShuttingDown) throw new Error("Cannot start an outbox worker during shutdown.");
   const admission = new AbortController();
@@ -61,7 +68,7 @@ async function runOutboxWorkerCommand(options: {
     booting = Promise.resolve(options.boot());
     await booting;
     if (!stopping && !lifecycle.isShuttingDown) {
-      const outbox = new SqlOutbox({ listeners: options.listeners });
+      const outbox = options.outbox ?? new SqlOutbox({ listeners: options.listeners ?? [] });
       running = outbox.work({ signal: admission.signal });
       await running;
     }
@@ -79,5 +86,5 @@ async function runOutboxWorkerCommand(options: {
   if (failed) throw failure;
 }
 
-export type { OutboxWorkerBoot, OutboxWorkerClose };
+export type { OutboxWorkerBoot, OutboxWorkerClose, OutboxWorkerOptions, OutboxWorkerSource };
 export { runOutboxWorkerCommand };

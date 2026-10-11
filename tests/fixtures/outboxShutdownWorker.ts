@@ -8,16 +8,20 @@ import {
   type DurableListener,
   SqlOutbox,
 } from "@getstrata/core/events/outbox";
+import { currentTenant, runWithTenant } from "@getstrata/core/tenant/tenantContext";
 
 process.env.TENANCY_DRIVER = "none";
 useSqlDialect("sqlite");
 const db = createSqliteConnection(":memory:");
 bindDatabaseConnection(db);
+const tenant = { id: 42, slug: "configured", metadata: { plan: "custom", region: "test" } };
 const listeners: DurableListener[] = [
   {
     name: "shutdown-regression",
     event: "test.created",
     handle: async (_event, { signal }) => {
+      if (JSON.stringify(currentTenant()) !== JSON.stringify(tenant))
+        throw new Error("Configured tenant resolver must be preserved");
       console.log("ACTIVE");
       await new Promise<void>((resolve) => {
         signal.addEventListener("abort", () => resolve(), { once: true });
@@ -27,12 +31,12 @@ const listeners: DurableListener[] = [
     },
   },
 ];
+const outbox = new SqlOutbox({ listeners, resolveTenant: async () => tenant, leaseMs: 500 });
 await runOutboxWorkerCommand({
-  listeners,
+  outbox,
   boot: async () => {
     await createOutboxMigration("outbox", "sqlite").up(db);
-    const publisher = new SqlOutbox({ listeners });
-    await runInTransaction(() => publisher.publish("test.created", {}));
+    await runWithTenant(tenant, () => runInTransaction(() => outbox.publish("test.created", {})));
   },
   drain: async () => {
     const [delivery] = await db.unsafe<{ status: string }>(
