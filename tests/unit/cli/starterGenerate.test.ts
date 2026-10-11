@@ -311,7 +311,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.16");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.17");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -643,6 +643,8 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "docker/postgres-init/01-strata-app-role.sql"))).toBe(false);
     const fresh = await readFile(join(app, "src/db/fresh.ts"), "utf8");
     expect(fresh).toContain("freshDatabase");
+    expect(fresh).toContain("{ destructive: true }");
+    expect(fresh).toContain("if (isProductionEnv())");
     expect(fresh).toContain("withMigrationDatabase");
     expect(fresh).toContain('from "@getstrata/core/database/migrations"');
     expect(fresh).not.toContain("@getstrata/core/database/migrations/runner");

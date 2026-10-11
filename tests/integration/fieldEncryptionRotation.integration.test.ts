@@ -603,3 +603,36 @@ test("MySQL published entrypoints resume and serialize maintenance batches acros
     await root.end();
   }
 });
+
+test("explicit development fresh reset drops populated checkpoints while rollback remains protected", async () => {
+  const { freshDatabase, migrateDatabase, rollbackDatabase } = await import(
+    "@getstrata/core/database/migrations/runner"
+  );
+  const directory = await mkdtemp(join(tmpdir(), "rotation-fresh-"));
+  const db = createSqliteConnection(join(directory, "app.sqlite"));
+  const migration = createFieldEncryptionRotationMigration("rotation", "sqlite");
+  try {
+    useSqlDialect("sqlite");
+    await migrateDatabase(db, [migration]);
+    await db.unsafe(
+      "INSERT INTO strata_encryption_rotation (run_id,definition_hash,probe,lookup_probe,claim_token,completed) VALUES (?,?,?,?,?,?)",
+      ["fixture", "hash", "probe", "lookup", "claim", false],
+    );
+    await expect(rollbackDatabase(db, [migration])).rejects.toThrow("administrative archival");
+    await expect(freshDatabase(db, [migration])).rejects.toThrow("administrative archival");
+    expect(
+      (await db.unsafe<{ n: number }>("SELECT COUNT(*) AS n FROM strata_encryption_rotation"))[0]
+        ?.n,
+    ).toBe(1);
+    await freshDatabase(db, [migration], { destructive: true });
+    expect(
+      (await db.unsafe<{ n: number }>("SELECT COUNT(*) AS n FROM strata_encryption_rotation"))[0]
+        ?.n,
+    ).toBe(0);
+    await freshDatabase(db, [migration], { destructive: true });
+  } finally {
+    await db.close();
+    resetSqlDialect();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

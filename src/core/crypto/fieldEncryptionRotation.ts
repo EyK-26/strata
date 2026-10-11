@@ -62,7 +62,13 @@ function createFieldEncryptionRotationMigration(
       });
       if (options.rls) await db.unsafe(enableTenantRlsSql(checkpointTable.name));
     },
-    async down() {
+    async down(db, context) {
+      if (context?.operation === "fresh") {
+        await Schema.run(db, driver, (schema) => {
+          schema.drop(checkpointTable.name);
+        });
+        return;
+      }
       // Removing checkpoints would make interrupted operations appear never started.
       throw new Error("Encryption rotation checkpoints require explicit administrative archival.");
     },

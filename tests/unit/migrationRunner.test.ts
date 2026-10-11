@@ -212,3 +212,42 @@ describe("migration runner", () => {
     }
   });
 });
+
+describe("explicit fresh migration context", () => {
+  test("legacy resets and rollbacks retain guards; explicit resets receive fresh context", async () => {
+    const { db } = createMemoryDb();
+    const migration: Migration = {
+      name: "protected",
+      async up() {},
+      async down(_db, context) {
+        if (context?.operation !== "fresh") throw new Error("Protected history");
+      },
+    };
+    await migrateDatabase(db, [migration]);
+    await expect(freshDatabase(db, [migration])).rejects.toThrow("Protected history");
+    await expect(rollbackDatabase(db, [migration])).rejects.toThrow("Protected history");
+    await freshDatabase(db, [migration], { destructive: true });
+    expect(await getMigrationStatus(db, [migration])).toEqual([
+      { name: "protected", status: "up", batch: 1 },
+    ]);
+  });
+  test("production and staging fail before database access", async () => {
+    const previous = process.env.APP_ENV;
+    try {
+      for (const environment of ["production", "staging", "unknown-environment"]) {
+        process.env.APP_ENV = environment;
+        const db: MigrationDatabase = {
+          unsafe() {
+            throw new Error("Database must not be touched");
+          },
+        };
+        await expect(freshDatabase(db, [], { destructive: true })).rejects.toThrow(
+          "development/test",
+        );
+      }
+    } finally {
+      if (previous === undefined) delete process.env.APP_ENV;
+      else process.env.APP_ENV = previous;
+    }
+  });
+});

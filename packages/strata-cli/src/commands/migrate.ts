@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import type { StrataAppConfig } from "../types.ts";
 
 type MigrateModule = {
@@ -50,6 +51,9 @@ async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<voi
 }
 
 async function migrateFreshCommand(app: StrataAppConfig, args: string[]): Promise<void> {
+  if (args.some((arg) => arg !== "--seed")) throw new Error("migrate:fresh supports only --seed.");
+  if (isProductionEnv())
+    throw new Error("migrate:fresh is only available in development/test environments.");
   if (app.fresh) {
     const entry = await importEntry(app.fresh);
     if (typeof entry.fresh !== "function") {

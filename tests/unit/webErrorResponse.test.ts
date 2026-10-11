@@ -216,3 +216,40 @@ describe("webErrorResponse", () => {
     expect(html).toContain("I am a teapot");
   });
 });
+
+describe("CSP-safe validation return links", () => {
+  test.each([
+    ["http://example.test/admin/products?token=private#fragment", "/admin/products"],
+    ["https://attacker.test/steal", "/"],
+    ["javascript:alert(1)", "/"],
+    ["http://example.test/widgets", "/"],
+    ["http://example.test/%2f%2fattacker.test", "/"],
+    ["invalid referrer", "/"],
+    ["", "/"],
+  ])("referrer %s produces safe native navigation", async (referer, expected) => {
+    const { renderKernelErrorChrome } = await import("@getstrata/core/view/webErrorView");
+    const html = renderKernelErrorChrome({
+      status: 422,
+      title: "Invalid operation",
+      message: "Cannot delete",
+      request: new Request("http://example.test/widgets", { headers: { referer } }),
+    });
+    expect(html).toContain(`href="${expected}">Go back`);
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("private");
+  });
+});
+
+test("a failed POST may return to the same safe GET form/list path", async () => {
+  const { renderKernelErrorChrome } = await import("@getstrata/core/view/webErrorView");
+  const html = renderKernelErrorChrome({
+    status: 422,
+    title: "Invalid operation",
+    message: "Cannot delete",
+    request: new Request("http://example.test/widgets", {
+      method: "POST",
+      headers: { referer: "http://example.test/widgets" },
+    }),
+  });
+  expect(html).toContain('href="/widgets">Go back');
+});

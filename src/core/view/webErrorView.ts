@@ -1,4 +1,5 @@
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { sanitizeInternalPath } from "../http/safeInternalPath";
 import { htmlResponse } from "./htmlResponse";
 
 interface WebErrorViewInput {
@@ -31,6 +32,25 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
+/** Native navigation works with strict CSP and without JavaScript. Never trust external referrers. */
+function errorReturnPath(request: Request | undefined): string {
+  if (!request) return "/";
+  try {
+    const current = new URL(request.url);
+    const previous = new URL(request.headers.get("referer") ?? "");
+    if (
+      previous.origin !== current.origin ||
+      ((request.method === "GET" || request.method === "HEAD") &&
+        previous.pathname === current.pathname)
+    )
+      return "/";
+    // Do not reflect credentials, capability query values or fragments into error pages.
+    return sanitizeInternalPath(previous.pathname, "/");
+  } catch {
+    return "/";
+  }
+}
+
 function renderKernelErrorChrome(input: WebErrorViewInput): string {
   const title = escapeHtml(input.title);
   const message = escapeHtml(input.message);
@@ -40,7 +60,9 @@ function renderKernelErrorChrome(input: WebErrorViewInput): string {
     .join("");
   const details = errorLines ? `<ul class="error-list">${errorLines}</ul>` : "";
   const goBack =
-    input.status === 422 ? `<p><a href="javascript:history.back()">Go back</a></p>` : "";
+    input.status === 422
+      ? `<p><a href="${escapeHtml(errorReturnPath(input.request ?? currentRequestMeta().request))}">Go back</a></p>`
+      : "";
 
   return `<!doctype html>
 <html lang="en">
