@@ -88,6 +88,7 @@ CI fails if `docs/openapi.json` drifts. Commit regenerated files.
 - Framework unit: `bun run unit`
 - Integration (Postgres/Redis): `bun run integration`
 - Add coverage for auth, tenancy, and flags when you touch those areas
+- For stateful mechanisms, follow the [regression review flow](docs/TESTING.md#stateful-mechanism-regression-review), including persisted failure/recovery assertions and explicit qualification gaps
 
 ## Security
 

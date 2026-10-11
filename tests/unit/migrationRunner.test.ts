@@ -308,4 +308,51 @@ describe("fresh reset progress", () => {
       resetSqlDialect();
     }
   });
+  test("history removal failure stops before earlier downs and never clears all history", async () => {
+    const { db, applied } = createMemoryDb();
+    const definitions: Migration[] = [
+      {
+        name: "base",
+        async up() {},
+        async down() {
+          throw new Error("Must not reach earlier down");
+        },
+      },
+      { name: "later", async up() {}, async down() {} },
+    ];
+    await migrateDatabase(db, definitions);
+    const original = db.unsafe.bind(db);
+    db.unsafe = async <T = unknown>(sql: string, params: readonly unknown[] = []) => {
+      if (sql.startsWith("DELETE FROM framework_migrations WHERE name"))
+        throw new Error("History write unavailable");
+      return original<T>(sql, params);
+    };
+    await expect(freshDatabase(db, definitions, { destructive: true })).rejects.toThrow(
+      "History write unavailable",
+    );
+    expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+  });
+  test("reapplication failure retains completed ups and retry resumes pending migrations", async () => {
+    const { db, applied } = createMemoryDb();
+    let refuseUp = false;
+    const definitions: Migration[] = [
+      { name: "base", async up() {}, async down() {} },
+      {
+        name: "later",
+        async up() {
+          if (refuseUp) throw new Error("Injected up refusal");
+        },
+        async down() {},
+      },
+    ];
+    await migrateDatabase(db, definitions);
+    refuseUp = true;
+    await expect(freshDatabase(db, definitions, { destructive: true })).rejects.toThrow(
+      "Injected up refusal",
+    );
+    expect(applied.map((row) => row.name)).toEqual(["base"]);
+    refuseUp = false;
+    expect(await migrateDatabase(db, definitions)).toBe(1);
+    expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+  });
 });

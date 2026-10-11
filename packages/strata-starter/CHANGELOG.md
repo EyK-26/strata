@@ -2,7 +2,7 @@
 
 ## 2.2.19
 
-Fix explicit development fresh resets with unfinished outbox deliveries while preserving ordinary rollback guards. Record each completed reset down immediately so later refusal leaves recoverable migration progress; document partial-DDL/crash limits and old-history reconciliation. Add populated outbox, reset failure/migrate/retry and dialect regressions.
+Fix explicit development fresh resets with unfinished outbox deliveries while preserving ordinary rollback guards. Record each completed reset down immediately so later refusal leaves recoverable migration progress; document partial-DDL/crash limits and old-history reconciliation. Add independent outbox-state and reset failure/migrate/retry regressions on real Postgres, MySQL and SQLite, history-write/reapplication fault injection, and a documented stateful regression review flow.
 
 ## 2.2.18
 
