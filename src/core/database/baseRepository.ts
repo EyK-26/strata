@@ -73,10 +73,17 @@ function listOrders<TEntity extends object>(
 ): Array<{ column: string; direction: "asc" | "desc"; nulls?: string }> {
   if (!orderBy) return [];
   if (Array.isArray(orderBy)) return orderBy.map(readOrder);
-  if (typeof orderBy === "object" && "column" in orderBy) return [readOrder(orderBy)];
-  return Object.entries(orderBy).map(([column, direction]) =>
-    readOrder({ column, direction: direction as QueryOrder<TEntity>["direction"] }),
-  );
+  if ("column" in orderBy) return [readOrder(orderBy)];
+  return Object.entries(orderBy as Record<string, unknown>).flatMap(([column, direction]) => {
+    if (direction === undefined) return [];
+    return [
+      {
+        column,
+        direction:
+          String(direction).toUpperCase() === "DESC" ? ("desc" as const) : ("asc" as const),
+      },
+    ];
+  });
 }
 
 function readOrder<TEntity extends object>(
@@ -705,7 +712,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       ...queryOptions,
       where,
       whereNodes,
-      orderBy: { [primaryKey]: direction },
+      orderBy: { column: primaryKey, direction } as QueryOrder<TEntity>,
       select: [{ kind: "column", table: this.table.name, column: primaryKey }],
       limit: 1,
       offset,
@@ -733,7 +740,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       ...queryOptions,
       where: {},
       whereNodes: scoped,
-      orderBy: { [primaryKey]: direction },
+      orderBy: { column: primaryKey, direction } as QueryOrder<TEntity>,
       limit: perPage,
     });
   }
