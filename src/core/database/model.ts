@@ -554,9 +554,23 @@ function applyCasts(
   }
 
   return (async () => {
+    const hashes: Array<Promise<void>> = [];
+
     for (const [key, cast] of entries) {
-      if (key in result && cast) result[key] = await dehydrateValue(result[key], cast);
+      if (!(key in result) || !cast) continue;
+      if (cast === "hashed") {
+        const current = result[key];
+        hashes.push(
+          hashCastValue(current).then((hashed) => {
+            result[key] = hashed;
+          }),
+        );
+        continue;
+      }
+      result[key] = dehydrateValue(result[key], cast);
     }
+
+    await Promise.all(hashes);
     return result;
   })();
 }

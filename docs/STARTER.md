@@ -111,8 +111,6 @@ SQL applications that need recoverable model cache effects should adopt the dura
 
 Generated `.env.example` includes commented CORS origin and additional-header examples. Keep them unset for same-origin applications. For an approved cross-origin browser API, configure explicit `CORS_ALLOWED_ORIGINS` and optionally `CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id`. The official HTTP kernel applies them; additional names are validated and extend existing defaults. OpenAPI metadata does not implicitly widen CORS policy. See [BUILDING-APPS](./BUILDING-APPS.md#explicit-application-cors-headers).
 
-For existing applications, use the consolidated [1.x → 2.x migration guide](MIGRATING-2.md) alongside the selected release's generated output.
-
 ## Shared model and bootstrap contracts
 
 Generated bootstrap code instantiates the public `ConfigStore` from `@getstrata/bootstrap/contracts`. There is no app-owned store implementation or cast to its type. It uses the framework's existing presence-based contract: missing keys throw `Config key "..." is not defined.`, while a deliberately registered `undefined` is present. Existing applications adopting this shape should check any reliance on the old copied store's error text or rejection of registered `undefined`.
@@ -137,7 +135,7 @@ Production/staging SQL bootstrap resolves `APP_DATABASE_URL` before `DATABASE_UR
 
 `ensureAppDatabase({ provision: false })` resolves runtime configuration without provisioning. Its default still provisions locally, while production/staging defaults to resolution only. Generated migrate/fresh paths select `{ provision: true }` explicitly; status/rollback select resolution only and do not change role credentials. Postgres production provisioning requires `MIGRATION_DATABASE_URL` and an explicit non-development `STRATA_APP_PASSWORD`; this command can alter the generated role's password, so supply the administratively chosen credential and coordinate rotation. Do not give these administrative values to HTTP or background worker containers. MySQL explicit provisioning retains its configured account's CREATE DATABASE behavior; use a pre-created database with restricted runtime credentials for production boot.
 
-Existing apps must merge the new `ensureDatabase.ts`, `preload.ts`, `createApp.ts` and explicit database-command calls after publication. Package installation alone does not replace these generated files. PostgreSQL administrative helpers no longer try inferred development passwords in production/staging: configure `migrationUrl`/`MIGRATION_DATABASE_URL` or explicitly pass the administrative `superuserPassword`. Local fallback compatibility remains. See [migration guidance](MIGRATING-2.md).
+Existing apps must merge the new `ensureDatabase.ts`, `preload.ts`, `createApp.ts` and explicit database-command calls after publication. Package installation alone does not replace these generated files. PostgreSQL administrative helpers no longer try inferred development passwords in production/staging: configure `migrationUrl`/`MIGRATION_DATABASE_URL` or explicitly pass the administrative `superuserPassword`. Local fallback compatibility remains.
 
 ### Runtime metrics ownership
 

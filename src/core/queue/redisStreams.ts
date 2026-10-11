@@ -200,6 +200,103 @@ async function promoteStreamRetries(client: RedisClient, key: string): Promise<n
     await client.send("EVAL", [PROMOTE_RETRIES, "2", streamQueueKey(key), streamRetryKey(key)]),
   );
 }
+
+// One script walks priorities in order: promote due retries, reclaim one idle entry, then read one new entry.
+// Idle workers pay one Redis round trip instead of a claim and a read on every priority.
+const POLL_STREAM_PRIORITIES = `
+local group = ARGV[1]
+local owner = ARGV[2]
+local visibility = ARGV[3]
+local function payloadOf(fields)
+  for index = 1, #fields, 2 do
+    if fields[index] == 'payload' and type(fields[index + 1]) == 'string' then return fields[index + 1] end
+  end
+  return ''
+end
+local cursors = {}
+for i = 1, #KEYS / 2 do cursors[i] = ARGV[3 + i] end
+for i = 1, #KEYS / 2 do
+  local stream = KEYS[(i - 1) * 2 + 1]
+  local retries = KEYS[(i - 1) * 2 + 2]
+  local cursor = ARGV[3 + i]
+  local streamKind = redis.call('TYPE', stream).ok
+  local retryKind = redis.call('TYPE', retries).ok
+  if streamKind ~= 'none' and streamKind ~= 'stream' then return redis.error_reply('Invalid stream retry promotion key type') end
+  if retryKind ~= 'none' and retryKind ~= 'zset' then return redis.error_reply('Invalid stream retry promotion key type') end
+  if streamKind == 'stream' then
+    local now = redis.call('TIME')
+    local due = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+    local ready = redis.call('ZRANGE', retries, '-inf', due, 'BYSCORE', 'LIMIT', 0, 100)
+    for _, payload in ipairs(ready) do
+      redis.call('XADD', stream, '*', 'payload', payload)
+      redis.call('ZREM', retries, payload)
+    end
+    local window = redis.call('XPENDING', stream, group, cursor, '+', 10)
+    local claimed = redis.call('XAUTOCLAIM', stream, group, owner, visibility, cursor, 'COUNT', 1)
+    for _, entry in ipairs(window) do
+      if entry[2] ~= owner and #redis.call('XPENDING', stream, group, '-', '+', 1, entry[2]) == 0 then
+        redis.call('XGROUP', 'DELCONSUMER', stream, group, entry[2])
+      end
+    end
+    if #redis.call('XPENDING', stream, group, '-', '+', 1, owner) == 0 then
+      redis.call('XGROUP', 'DELCONSUMER', stream, group, owner)
+    end
+    cursors[i] = claimed[1]
+    if #claimed[2] > 0 then
+      return {'1', tostring(i), claimed[2][1][1], payloadOf(claimed[2][1][2]), unpack(cursors)}
+    end
+    local fresh = redis.call('XREADGROUP', 'GROUP', group, owner, 'COUNT', 1, 'STREAMS', stream, '>')
+    if not fresh and #redis.call('XPENDING', stream, group, '-', '+', 1, owner) == 0 then
+      redis.call('XGROUP', 'DELCONSUMER', stream, group, owner)
+    end
+    if fresh and #fresh > 0 and #fresh[1][2] > 0 then
+      return {'1', tostring(i), fresh[1][2][1][1], payloadOf(fresh[1][2][1][2]), unpack(cursors)}
+    end
+  end
+end
+return {'0', unpack(cursors)}
+`;
+
+async function pollStreamPriorities(
+  client: RedisClient,
+  queueKeys: readonly string[],
+  owner: string,
+  cursors: readonly string[],
+): Promise<{
+  cursors: string[];
+  hit: { index: number; reservation: StreamReservation } | null;
+}> {
+  const keys: string[] = [];
+  for (const key of queueKeys) keys.push(streamQueueKey(key), streamRetryKey(key));
+  const raw = await client.send("EVAL", [
+    POLL_STREAM_PRIORITIES,
+    String(keys.length),
+    ...keys,
+    STREAM_GROUP,
+    owner,
+    String(readQueueVisibilityMs()),
+    ...cursors,
+  ]);
+  if (!Array.isArray(raw)) throw new Error("Invalid Redis stream poll response");
+  const flag = String(raw[0]);
+  const cursorCount = queueKeys.length;
+  if (flag === "0") {
+    if (raw.length !== cursorCount + 1) throw new Error("Invalid Redis stream poll response");
+    return { cursors: raw.slice(1).map(String), hit: null };
+  }
+  if (flag !== "1" || raw.length !== cursorCount + 4)
+    throw new Error("Invalid Redis stream poll response");
+  const index = Number(raw[1]);
+  if (!Number.isInteger(index) || index < 1 || index > queueKeys.length)
+    throw new Error("Invalid Redis stream poll response");
+  return {
+    cursors: raw.slice(4).map(String),
+    hit: {
+      index: index - 1,
+      reservation: { id: String(raw[2]), owner, payload: String(raw[3]) },
+    },
+  };
+}
 async function readStreamQueueDepth(client: RedisClient, key: string): Promise<number> {
   // An atomic snapshot avoids double-counting during promotion or scheduling.
   return Number(
@@ -474,12 +571,6 @@ class RedisStreamsWorker {
     for (const key of this.queueKeys) await ensureStreamGroup(this.client, key);
     this.initialized = true;
   }
-  private async reserve(key: string): Promise<StreamReservation | null> {
-    await promoteStreamRetries(this.client, key);
-    const result = await reserveStreamJob(this.client, key, this.owner, this.cursors.get(key));
-    this.cursors.set(key, result.cursor);
-    return result.reservation;
-  }
   async processNext(): Promise<boolean> {
     if (this.processing) throw new Error("Queue worker already processing a job.");
     this.processing = true;
@@ -494,11 +585,21 @@ class RedisStreamsWorker {
     await this.initialize();
     const deadline = performance.now() + this.timeoutSeconds * 1000;
     do {
-      for (const key of this.queueKeys) {
-        if (this.stopping) return false;
-        const reservation = await this.reserve(key);
-        if (!reservation) continue;
-        await this.handle(key, reservation);
+      if (this.stopping) return false;
+      const polled = await pollStreamPriorities(
+        this.client,
+        this.queueKeys,
+        this.owner,
+        this.queueKeys.map((key) => this.cursors.get(key) ?? "0-0"),
+      );
+      this.queueKeys.forEach((key, index) => {
+        const cursor = polled.cursors[index];
+        if (cursor) this.cursors.set(key, cursor);
+      });
+      if (polled.hit) {
+        const key = this.queueKeys[polled.hit.index];
+        if (!key) throw new Error("Invalid Redis stream poll response");
+        await this.handle(key, polled.hit.reservation);
         return true;
       }
       if (performance.now() >= deadline || this.stopping) return false;
@@ -719,6 +820,7 @@ export {
   cancelStreamJob,
   ensureStreamGroup,
   migrateLegacyQueueToStreams,
+  pollStreamPriorities,
   promoteStreamRetries,
   RedisStreamsQueue,
   RedisStreamsWorker,

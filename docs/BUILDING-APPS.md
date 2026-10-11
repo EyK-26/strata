@@ -2,8 +2,6 @@
 
 HiroApp (`apps/hiroapp`) is in-repo dogfood for internal end-to-end testing. For a product app, use `bunx create-strata` and the published packages.
 
-Existing applications: follow the [1.x → 2.x migration guide](MIGRATING-2.md) for schema prerequisites and coordinated runtime rollout.
-
 ## Scaffold
 
 ```bash
