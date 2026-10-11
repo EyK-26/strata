@@ -1,6 +1,8 @@
 # Redis queue recovery and Streams rollout
 
-Strata's application queue is selected by `QUEUE_DRIVER=sync|async|redis`. For Redis, `QUEUE_REDIS_TRANSPORT=lists|streams` selects the transport; unset means `lists` for upgrade compatibility. Invalid transport values fail Redis startup/admission. Use the published `createAppQueue` and `createQueueWorker` factories (generated providers and CLI commands already do). Direct `RedisQueue`/`QueueWorker` construction remains the legacy list implementation; `RedisStreamsQueue`/`RedisStreamsWorker` is explicit Streams construction.
+Strata's application queue is selected by `QUEUE_DRIVER=sync|async|redis`. For Redis, `QUEUE_REDIS_TRANSPORT=lists|streams` selects the transport; unset means `lists` for upgrade compatibility. Invalid transport values fail Redis startup/admission. A new generated Redis app sets `streams` in `.env.example` and preload. An existing app stays on lists until that variable is set after the maintenance conversion below. Use the published `createAppQueue` and `createQueueWorker` factories (generated providers and CLI commands already do). Direct `RedisQueue`/`QueueWorker` construction remains the legacy list implementation; `RedisStreamsQueue`/`RedisStreamsWorker` is explicit Streams construction.
+
+An idle list worker reclaims every priority and reserves the first job in one script. Later empty polls in that wait only reserve, so they do not scan processing lists again. `reclaimExpiredQueueReservations` remains the stopped-maintenance helper and still runs one script per priority.
 
 The worker factory can now return either implementation. Type injected workers with `ReturnType<typeof createQueueWorker>` (as the generated CLI does), rather than annotating the concrete legacy `QueueWorker` class. Existing one-argument `Job.handle(payload)` implementations remain supported.
 

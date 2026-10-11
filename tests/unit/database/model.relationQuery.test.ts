@@ -315,6 +315,12 @@ describe("Eloquent-style model relations", () => {
     await user.tags().attach(30);
     expect(connection.calls.at(-1)?.query).toContain("INSERT");
     await user.tags().attach([31, 32]);
+    expect(connection.calls.at(-1)?.query).toContain("VALUES ($1, $2), ($3, $4)");
+    expect(connection.calls.at(-1)?.params).toEqual([1, 31, 1, 32]);
+    connection.queue([{ tag_id: 31 }]);
+    await user.tags().toggle([31, 32]);
+    expect(connection.calls.at(-2)?.query).toContain("DELETE");
+    expect(connection.calls.at(-1)?.query).toContain("INSERT");
     expect(connection.calls.at(-1)?.params).toEqual([1, 32]);
 
     await user.tags().detach();

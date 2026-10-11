@@ -120,6 +120,69 @@ end
 return reclaimed
 `;
 
+// Reclaim every priority, then reserve the first job, in one round trip.
+// A later idle poll passes reclaim=0 so an empty wait does not scan processing lists again.
+const POLL_LIST_PRIORITIES = `${SCRIPT_HEADER}
+local owner = ARGV[1]
+local visibility = ARGV[2]
+local reservationId = ARGV[3]
+local reclaim = ARGV[4] == '1'
+local function reclaimQueue(listKey, processingKey, leaseKey)
+  local err = checkType(listKey, 'list') or checkType(processingKey, 'list') or checkType(leaseKey, 'hash')
+  if err then return err end
+  local now = nowMs()
+  for _, record in ipairs(redis.call('LRANGE', processingKey, 0, -1)) do
+    local payload, field = record, record
+    local modern = false
+    local ok, reservation = pcall(cjson.decode, record)
+    if ok and type(reservation) == 'table' and reservation.strataReservation == 1 then
+      payload, field, modern = reservation.payload, reservation.id, true
+    end
+    local raw = redis.call('HGET', leaseKey, field)
+    local expired = true
+    if raw then
+      if modern then
+        local leaseOk, lease = pcall(cjson.decode, raw)
+        expired = not leaseOk or type(lease) ~= 'table' or not tonumber(lease.expiresAt) or tonumber(lease.expiresAt) <= now
+      else
+        local reservedAt = tonumber(raw)
+        expired = not reservedAt or now - reservedAt >= tonumber(visibility)
+      end
+    end
+    if expired then
+      redis.call('LPUSH', listKey, payload)
+      redis.call('LREM', processingKey, 1, record)
+      redis.call('HDEL', leaseKey, field)
+    end
+  end
+end
+local function reserveQueue(listKey, processingKey, leaseKey)
+  local err = checkType(listKey, 'list') or checkType(processingKey, 'list') or checkType(leaseKey, 'hash')
+  if err then return err end
+  local payload = redis.call('LINDEX', listKey, -1)
+  if not payload then return nil end
+  local record = cjson.encode({strataReservation=1, id=reservationId, owner=owner, payload=payload})
+  local lease = cjson.encode({owner=owner, expiresAt=nowMs()+tonumber(visibility)})
+  redis.call('LPUSH', processingKey, record)
+  redis.call('HSET', leaseKey, reservationId, lease)
+  redis.call('RPOP', listKey)
+  return record
+end
+local count = #KEYS / 3
+if reclaim then
+  for i = 1, count do
+    local err = reclaimQueue(KEYS[(i - 1) * 3 + 1], KEYS[(i - 1) * 3 + 2], KEYS[(i - 1) * 3 + 3])
+    if err then return err end
+  end
+end
+for i = 1, count do
+  local record = reserveQueue(KEYS[(i - 1) * 3 + 1], KEYS[(i - 1) * 3 + 2], KEYS[(i - 1) * 3 + 3])
+  if type(record) == 'string' then return {'1', tostring(i), record} end
+  if record then return record end
+end
+return {'0'}
+`;
+
 function queueInvalidKey(queueKey: string): string {
   return `${queueKey}:invalid`;
 }
@@ -167,6 +230,49 @@ async function updateQueueReservation(
       ]),
     ) === 1
   );
+}
+
+async function pollListPriorities(
+  client: RedisClient,
+  queueKeys: readonly string[],
+  owner: string,
+  reservationId: string,
+  reclaim: boolean,
+): Promise<{ queueKey: string; reservation: QueueReservation } | null> {
+  const keys: string[] = [];
+  for (const key of queueKeys) {
+    keys.push(key, queueProcessingKey(key), queueProcessingLeaseKey(key));
+  }
+  const raw = await client.send("EVAL", [
+    POLL_LIST_PRIORITIES,
+    String(keys.length),
+    ...keys,
+    owner,
+    String(readVisibilityMs()),
+    reservationId,
+    reclaim ? "1" : "0",
+  ]);
+  if (!Array.isArray(raw)) throw new Error("Invalid Redis list poll response");
+  const flag = String(raw[0]);
+  if (flag === "0") {
+    if (raw.length !== 1) throw new Error("Invalid Redis list poll response");
+    return null;
+  }
+  if (flag !== "1" || raw.length !== 3) throw new Error("Invalid Redis list poll response");
+  const index = Number(raw[1]);
+  const record = raw[2];
+  if (
+    !Number.isInteger(index) ||
+    index < 1 ||
+    index > queueKeys.length ||
+    typeof record !== "string"
+  ) {
+    throw new Error("Invalid Redis list poll response");
+  }
+  const queueKey = queueKeys[index - 1];
+  if (!queueKey) throw new Error("Invalid Redis list poll response");
+  const reservation = JSON.parse(record) as Omit<QueueReservation, "record">;
+  return { queueKey, reservation: { ...reservation, record } };
 }
 
 async function reclaimExpiredQueueReservations(
@@ -243,12 +349,18 @@ class QueueWorker {
 
   private async reserve(): Promise<{ queueKey: string; reservation: QueueReservation } | null> {
     const deadline = performance.now() + this.timeoutSeconds * 1000;
+    let reclaim = true;
     do {
-      for (const key of this.queueKeys) {
-        if (this.stopping) return null;
-        const reservation = await reserveQueueJob(this.client, key, this.owner);
-        if (reservation) return { queueKey: key, reservation };
-      }
+      if (this.stopping) return null;
+      const reserved = await pollListPriorities(
+        this.client,
+        this.queueKeys,
+        this.owner,
+        crypto.randomUUID(),
+        reclaim,
+      );
+      reclaim = false;
+      if (reserved) return reserved;
       if (this.stopping || performance.now() >= deadline) return null;
       await Bun.sleep(Math.min(100, Math.max(1, deadline - performance.now())));
     } while (!this.stopping);
@@ -257,7 +369,6 @@ class QueueWorker {
 
   async processNext(): Promise<boolean> {
     if (this.stopping) return false;
-    await reclaimExpiredQueueReservations(this.client, this.queueKeys);
     const reserved = await this.reserve();
     if (!reserved) return false;
     const { queueKey, reservation } = reserved;
@@ -359,6 +470,7 @@ export type { QueueJobEnvelope, QueueReservation };
 export {
   countPendingQueueJobs,
   parseQueueJobEnvelope,
+  pollListPriorities,
   QUEUE_HIGH_KEY,
   QUEUE_LIST_KEY,
   QUEUE_LOW_KEY,

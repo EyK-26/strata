@@ -131,6 +131,7 @@ export {
 export {
   getDefaultDatabasePool,
   getDefaultDatabaseQuery,
+  isDefaultDatabaseConnection,
   registerDefaultDatabasePool,
   resetDefaultDatabasePoolForTests,
 } from "../core/database/defaultConnection.ts";

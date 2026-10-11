@@ -10,6 +10,7 @@ const commands: StrataCommandMap = {
   "make:factory": async () => (await import("@getstrata/cli/scaffold")).makeFactoryCommand,
   "make:migration": async () => (await import("@getstrata/cli/scaffold")).makeMigrationCommand,
   "queue:work": async () => (await import("./queueWork.ts")).queueWorkCommand,
+  "outbox:work": async () => (await import("./outboxWork.ts")).outboxWorkCommand,
   "queue:failed": async () => (await import("./queueFailed.ts")).queueFailedCommand,
   "queue:retry": async () => (await import("./queueFailed.ts")).queueRetryCommand,
   "queue:flush-failed": async () => (await import("./queueFailed.ts")).queueFlushFailedCommand,
