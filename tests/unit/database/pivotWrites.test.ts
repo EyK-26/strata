@@ -102,6 +102,37 @@ describe("transactional pivot writes", () => {
       expect(await db.unsafe("SELECT * FROM pivot_links")).toEqual([]);
     });
   });
+  test("integer coercions are compared by the database, including existing links", async () => {
+    await runWithSqlDialect("sqlite", async () => {
+      const model = user(true);
+      for (const alias of ["02", "+2", "2.0", " 2 ", "2e0"]) {
+        await model.tags().toggle([2, alias]);
+        expect(await db.unsafe("SELECT * FROM pivot_links")).toEqual([]);
+        await model.tags().attach(2);
+        await model.tags().toggle(alias);
+        expect(await db.unsafe("SELECT * FROM pivot_links")).toEqual([]);
+      }
+    });
+  });
+  test("text IDs retain distinct padding and database collation semantics", async () => {
+    await runWithSqlDialect("sqlite", async () => {
+      await db.unsafe("DROP TABLE pivot_links");
+      await db.unsafe(
+        "CREATE TABLE pivot_links (user_id INTEGER, tag_id TEXT COLLATE NOCASE, UNIQUE(user_id, tag_id))",
+      );
+      const model = user(true);
+      await model.tags().toggle(["2", "02"]);
+      expect(await db.unsafe("SELECT tag_id FROM pivot_links ORDER BY tag_id")).toEqual([
+        { tag_id: "02" },
+        { tag_id: "2" },
+      ]);
+      await model.tags().toggle(["alpha", "ALPHA"]);
+      expect(await db.unsafe("SELECT tag_id FROM pivot_links ORDER BY tag_id")).toEqual([
+        { tag_id: "02" },
+        { tag_id: "2" },
+      ]);
+    });
+  });
   test("an independent custom repository keeps its own connection", async () => {
     const custom = createSqliteConnection(":memory:");
     try {

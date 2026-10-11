@@ -504,6 +504,19 @@ function hasRepeatedId(ids: readonly unknown[]): boolean {
   return false;
 }
 
+function canBatchPivotToggle(ids: readonly unknown[]): boolean {
+  // Without column types/collations, only canonical integer identifiers have
+  // predictable equality here. Let database comparisons decide other IDs.
+  return ids.every(
+    (id) =>
+      (typeof id === "bigint" &&
+        id >= BigInt(Number.MIN_SAFE_INTEGER) &&
+        id <= BigInt(Number.MAX_SAFE_INTEGER)) ||
+      (typeof id === "number" && Number.isSafeInteger(id)) ||
+      (typeof id === "string" && /^(?:0|-?[1-9]\d*)$/.test(id) && Number.isSafeInteger(Number(id))),
+  );
+}
+
 function isConfiguredConnection(connection: DatabaseConnection): boolean {
   const bound = getBoundDatabaseConnection();
   return (
@@ -678,7 +691,7 @@ class BelongsToManyRelationQuery<
     const list = Array.isArray(ids) ? ids : [ids];
     if (list.length === 0) return;
     await this.atomically(async (connection) => {
-      if (hasRepeatedId(list)) {
+      if (!canBatchPivotToggle(list) || hasRepeatedId(list)) {
         for (const id of list) await this.toggleOne(connection, id);
         return;
       }

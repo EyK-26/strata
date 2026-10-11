@@ -113,6 +113,9 @@ for (const dialect of ["pgsql", "mysql"] as const) {
           { tag_id: 4 },
         ]);
         await owner.tags().toggle([7, "7"]);
+        await owner.tags().toggle([8, "08"]);
+        await owner.tags().attach(9);
+        await owner.tags().toggle("09");
         expect(await db.unsafe(`SELECT tag_id FROM ${table} ORDER BY tag_id`)).toEqual([
           { tag_id: 1 },
           { tag_id: 4 },

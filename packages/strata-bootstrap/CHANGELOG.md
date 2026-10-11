@@ -3,7 +3,7 @@
 ## 2.2.15
 
 - Batch legacy list-queue priority polling while retaining recovery and ownership contracts.
-- Batch dialect-portable pivot writes with framework transaction/savepoint composition and consistent numeric/string ID toggle semantics.
+- Batch dialect-portable pivot writes with framework transaction/savepoint composition and consistent numeric/string ID toggle semantics. Noncanonical or textual IDs use sequential database comparisons to preserve coercion and collation behavior.
 - New Redis scaffolds explicitly select Streams; existing unset transport settings continue to select lists.
 - Generate the SQL outbox migration, listener registry and managed worker command. Durable publication and cache-invalidation activation remain explicit.
 
