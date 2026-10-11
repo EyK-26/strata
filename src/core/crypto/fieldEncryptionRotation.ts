@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { BaseRepository } from "../database/baseRepository";
 import { getBoundDatabaseConnection } from "../database/boundConnection";
+import { guardMigrationRollback } from "../database/migrations/rollbackGuard";
 import type { Migration } from "../database/migrations/types";
 import {
   repositoryConnection,
@@ -63,14 +64,14 @@ function createFieldEncryptionRotationMigration(
       if (options.rls) await db.unsafe(enableTenantRlsSql(checkpointTable.name));
     },
     async down(db, context) {
-      if (context?.operation === "fresh") {
-        await Schema.run(db, driver, (schema) => {
-          schema.drop(checkpointTable.name);
-        });
-        return;
-      }
       // Removing checkpoints would make interrupted operations appear never started.
-      throw new Error("Encryption rotation checkpoints require explicit administrative archival.");
+      await guardMigrationRollback(context, {
+        hasHistory: () => true,
+        message: "Encryption rotation checkpoints require explicit administrative archival.",
+      });
+      await Schema.run(db, driver, (schema) => {
+        schema.drop(checkpointTable.name);
+      });
     },
   };
 }

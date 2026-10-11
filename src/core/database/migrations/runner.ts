@@ -227,6 +227,7 @@ async function freshDatabase(
 }
 
 export { withMigrationLock } from "./advisoryLock.ts";
+export { guardMigrationRollback, type MigrationRollbackGuard } from "./rollbackGuard.ts";
 export {
   ensureMigrationsTable,
   freshDatabase,
