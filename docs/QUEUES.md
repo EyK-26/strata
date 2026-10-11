@@ -8,7 +8,7 @@ The worker factory can now return either implementation. Type injected workers w
 
 ## Streams delivery contract
 
-Streams requires Redis 6.2 or newer for [`XAUTOCLAIM`](https://redis.io/docs/latest/commands/xautoclaim/). Each existing priority namespace gets a `:stream` key and the framework's `strata-workers-v1` group. Producers use `XADD`; workers use nonblocking `XREADGROUP`, checking high/default/low in that order. High priority can starve lower priority; bound high-priority traffic accordingly. Group creation starts at `0`, preserving entries produced before workers start.
+Streams requires Redis 6.2 or newer for [`XAUTOCLAIM`](https://redis.io/docs/latest/commands/xautoclaim/). Each existing priority namespace gets a `:stream` key and the framework's `strata-workers-v1` group. Producers use `XADD`. An idle worker promotes due retries, reclaims one pending entry, and reads one new entry for every priority inside a single script, still in high/default/low order. High priority can starve lower priority; bound high-priority traffic accordingly. Group creation starts at `0`, preserving entries produced before workers start.
 
 A bounded `XAUTOCLAIM COUNT 1` scan retains its cursor across polls and recovers idle pending work. `QUEUE_VISIBILITY_MS` defaults to 60000 and must be an integer of at least 30; choose a value comfortably above Redis round-trip latency and expected event-loop stalls. A worker renews at approximately one third of that interval. An atomic owner-and-idle check fences renewal and acknowledgement, so an expired or replaced consumer cannot acknowledge work owned by its successor. Empty consumers are removed after polling, completion, and reclaim to avoid accumulating metadata after worker restarts.
 

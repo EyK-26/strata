@@ -48,6 +48,11 @@ function getDefaultDatabaseQuery(): SqlDatabaseConnection {
   return query;
 }
 
+function isDefaultDatabaseConnection(connection: unknown): boolean {
+  const { pool, query } = defaultConnectionState();
+  return connection !== null && (connection === pool || connection === query);
+}
+
 function resetDefaultDatabasePoolForTests(): void {
   const holder = defaultConnectionState();
   holder.pool = null;
@@ -57,6 +62,7 @@ function resetDefaultDatabasePoolForTests(): void {
 export {
   getDefaultDatabasePool,
   getDefaultDatabaseQuery,
+  isDefaultDatabaseConnection,
   registerDefaultDatabasePool,
   resetDefaultDatabasePoolForTests,
 };

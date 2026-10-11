@@ -51,12 +51,54 @@ import { RepositoryQuery } from "./repositoryQuery.ts";
 import type { TableDefinition } from "./table.ts";
 import { runInTransaction } from "./transaction.ts";
 import { hasActiveTransaction } from "./transactionControl.ts";
-import type { MutationValues, QueryOptions, QueryWhere, UpdateValues } from "./types.ts";
+import type {
+  MutationValues,
+  QueryOptions,
+  QueryOrder,
+  QueryWhere,
+  UpdateValues,
+} from "./types.ts";
 import type { WhereNode } from "./whereBuilder.ts";
 
 type ExtendedQueryOptions<TEntity extends object> = QueryOptions<TEntity> & {
   whereNodes?: WhereNode<TEntity>[];
 };
+
+function listOrders<TEntity extends object>(
+  orderBy:
+    | QueryOptions<TEntity>["orderBy"]
+    | QueryOrder<TEntity>
+    | QueryOrder<TEntity>[]
+    | undefined,
+): Array<{ column: string; direction: "asc" | "desc"; nulls?: string }> {
+  if (!orderBy) return [];
+  if (Array.isArray(orderBy)) return orderBy.map(readOrder);
+  if ("column" in orderBy) return [readOrder(orderBy)];
+  return Object.entries(orderBy as Record<string, unknown>).flatMap(([column, direction]) => {
+    if (direction === undefined) return [];
+    return [
+      {
+        column,
+        direction:
+          String(direction).toUpperCase() === "DESC" ? ("desc" as const) : ("asc" as const),
+      },
+    ];
+  });
+}
+
+function readOrder<TEntity extends object>(
+  order: QueryOrder<TEntity>,
+): {
+  column: string;
+  direction: "asc" | "desc";
+  nulls?: string;
+} {
+  return {
+    column: String(order.column),
+    direction: String(order.direction).toUpperCase() === "DESC" ? "desc" : "asc",
+    ...(order.nulls === undefined ? {} : { nulls: order.nulls }),
+  };
+}
 
 interface DatabaseConnection {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
@@ -151,6 +193,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       },
       whereNodes,
     );
+    const meta = buildPaginationMeta({ page, perPage, total });
+    if (total === 0) {
+      return { data: [], meta };
+    }
     const offset = (page - 1) * perPage;
     const data = await this.findAll({
       ...queryOptions,
@@ -162,7 +208,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
 
     return {
       data,
-      meta: buildPaginationMeta({ page, perPage, total }),
+      meta,
     };
   }
 
@@ -173,6 +219,17 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   ): Promise<void> {
     if (!Number.isInteger(count) || count <= 0) {
       throw new Error("Chunk size must be a positive integer.");
+    }
+
+    if (this.primaryKeySeekDirection(options) === "asc") {
+      const seekOptions = { ...options };
+      delete seekOptions.orderBy;
+      await this.chunkById(
+        count,
+        async (rows) => ((await callback(rows)) === false ? false : undefined),
+        seekOptions,
+      );
+      return;
     }
 
     let offset = 0;
@@ -614,6 +671,28 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         return entity;
       }),
     );
+  }
+
+  private primaryKeySeekDirection(options: ExtendedQueryOptions<TEntity>): "asc" | "desc" | null {
+    if (
+      options.joins?.length ||
+      options.groupBy ||
+      options.having ||
+      options.select?.length ||
+      options.offset !== undefined ||
+      options.limit !== undefined ||
+      options.lock
+    ) {
+      return null;
+    }
+
+    const orders = listOrders(options.orderBy ?? this.table.defaultOrderBy);
+    const order = orders[0];
+    if (orders.length !== 1 || !order || order.nulls || order.column !== this.table.primaryKey) {
+      return null;
+    }
+
+    return order.direction;
   }
 
   withConnection(connection: DatabaseConnection): this {

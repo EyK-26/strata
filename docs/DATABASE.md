@@ -137,7 +137,9 @@ Release occurs before committed deferred observers flush, so reentrant observers
 
 ### Walking large tables
 
-`chunkById` pages by keyset instead of `OFFSET`, so rows are neither skipped nor repeated when the callback mutates what it reads. Return `false` to stop early. Prefer it over `chunk` for anything that writes.
+`chunkById` pages by keyset instead of `OFFSET`, so rows are neither skipped nor repeated when the callback mutates what it reads. Return `false` to stop early. `chunk` uses that same primary-key walk when the query is already ordered only by its primary key ascending, including the table's default order. Joins, grouping, locks, projections, and any other order stay on `OFFSET`.
+
+`paginate` retains page-number `OFFSET` semantics and its count-plus-row-query budget. An empty filtered total skips the row query. Deep offsets still scan skipped rows; use explicit `cursorPaginate` or composite `keysetPaginate` when the application can expose cursors. A key-only boundary lookup is not enabled automatically: it adds a database round trip and may still fetch heap tuples for visibility or filtering, so it requires workload-specific qualification.
 
 ```typescript
 await orders.chunkById(500, async (rows) => {
@@ -243,6 +245,10 @@ Normal model reads, `Model.chunk()` and `Model.cursorPaginate()` retain global s
 Model-defined relations apply the **related target model's** global filters to lazy reads, batched eager loads, existence/absence predicates and projected counts. This covers hasMany/hasOne, belongsTo, belongsToMany, hasManyThrough and polymorphic relations. Relation `where()` filters also compose with AND and are retained during eager loading; association keys and morph discriminators cannot be overwritten by those filters. Target soft-delete filters apply to existence and count subqueries as well as normal reads.
 
 Eager loads reuse the parent repository connection (`withConnection`), preserving Postgres RLS `SET LOCAL` on the request transaction. Collection loading stays batched, with one target query per known morph type. Morph targets match both type and ID, so a missing or filtered target cannot borrow another type's row with the same ID. Eager hasOne selects the first visible row per parent, rather than limiting the entire batch to one row.
+
+`belongsToMany().attach(ids)` batches inserts and `detach(ids)` batches deletion with the active SQL dialect's bound parameters. `toggle(ids)` reads unique IDs together, then deletes present links and inserts missing links. Repeated IDs retain sequential flip semantics, including equivalent numeric, string and bigint IDs such as `2`, `"2"` and `2n`.
+
+Configured/default repositories reuse the active transaction for pivot writes; nested `attach` and `toggle` use framework savepoints. A caught failed toggle rolls back its earlier deletions. An independent custom repository keeps its own connection and transaction, so it does not become part of another database's transaction. Custom connections without `begin()` cannot provide atomic multi-statement toggles.
 
 `hasManyThrough` applies target model scopes to the far table; intermediate/pivot tables are joins, not hydrated related models, and their model boot scopes are not automatically applied. Use RLS on every tenant-owned table or explicit scoped join constraints. Explicit low-level repository relation loaders remain unscoped with respect to model global filters. Legacy raw morph indexing helpers key their map by ID; callers mixing types with overlapping IDs must partition by type, as the model eager loader does.
 

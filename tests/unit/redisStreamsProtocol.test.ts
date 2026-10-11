@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   ensureStreamGroup,
+  pollStreamPriorities,
   readStreamCancellation,
   readStreamEntry,
   readStreamTime,
@@ -179,5 +180,42 @@ describe("Streams protocol boundaries", () => {
       },
     };
     await expect(ensureStreamGroup(createFail as never, "key")).rejects.toThrow("WRONGTYPE");
+  });
+});
+
+describe("pollStreamPriorities", () => {
+  test("reads an empty priority set and a hit from one reply", async () => {
+    const idle = replies([["0", "4-0", "0-0"]]);
+    await expect(
+      pollStreamPriorities(idle as never, ["high", "low"], "owner", ["0-0", "0-0"]),
+    ).resolves.toEqual({
+      cursors: ["4-0", "0-0"],
+      hit: null,
+    });
+
+    const hit = replies([["1", "1", "9-1", '{"id":1}', "8-0", "0-0"]]);
+    await expect(
+      pollStreamPriorities(hit as never, ["high", "low"], "owner", ["0-0", "0-0"]),
+    ).resolves.toEqual({
+      cursors: ["8-0", "0-0"],
+      hit: { index: 0, reservation: { id: "9-1", owner: "owner", payload: '{"id":1}' } },
+    });
+  });
+
+  test("rejects a reply that does not match the priority count", async () => {
+    await expect(
+      pollStreamPriorities(replies([null]) as never, ["high"], "owner", ["0-0"]),
+    ).rejects.toThrow("stream poll response");
+    await expect(
+      pollStreamPriorities(replies([["0"]]) as never, ["high"], "owner", ["0-0"]),
+    ).rejects.toThrow("stream poll response");
+    await expect(
+      pollStreamPriorities(
+        replies([["1", "2", "9-1", "body", "0-0"]]) as never,
+        ["high"],
+        "owner",
+        ["0-0"],
+      ),
+    ).rejects.toThrow("stream poll response");
   });
 });

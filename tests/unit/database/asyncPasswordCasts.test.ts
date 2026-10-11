@@ -216,6 +216,62 @@ describe("awaited password write casts", () => {
     }
   });
 
+  test("a rejected concurrent cast never reaches model observers or SQL", async () => {
+    await connection.unsafe("ALTER TABLE async_password_accounts ADD COLUMN pin TEXT");
+    interface MultiHashRecord extends AccountRecord {
+      pin: string;
+    }
+    const multiTable = defineTable<MultiHashRecord, "id">({
+      ...table,
+      columns: [...table.columns, "pin"],
+    });
+    class MultiHashAccount extends Model<MultiHashRecord, "id"> {
+      static override $timestamps = false;
+      static override $fillable = ["name", "password", "pin"];
+      static override $casts = { password: "hashed", pin: "hashed" } as const;
+    }
+    const Accounts = registerModelRepository(
+      MultiHashAccount,
+      new BaseRepository(multiTable, connection),
+    );
+    const observed: string[] = [];
+    Accounts.observe({
+      creating: () => {
+        observed.push("creating");
+      },
+      saving: () => {
+        observed.push("saving");
+      },
+    });
+    let finish!: (value: string) => void;
+    const firstHash = new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+    const hash = spyOn(Bun.password, "hash")
+      .mockReturnValueOnce(firstHash)
+      .mockRejectedValueOnce(new Error("second hash failed"));
+    const creation = Promise.resolve(
+      runWithSqlDialect("sqlite", () =>
+        Accounts.create({ name: "new", password: "plain", pin: "pin" }),
+      ),
+    );
+    try {
+      await expect(creation).rejects.toThrow("second hash failed");
+      expect(hash).toHaveBeenCalledTimes(2);
+      expect(observed).toEqual([]);
+      expect(await connection.unsafe("SELECT * FROM async_password_accounts")).toEqual([]);
+      finish("$2b$12$resolved");
+      await firstHash;
+      await expect(creation).rejects.toThrow("second hash failed");
+      expect(observed).toEqual([]);
+      expect(await connection.unsafe("SELECT * FROM async_password_accounts")).toEqual([]);
+    } finally {
+      finish("$2b$12$resolved");
+      await creation.catch(() => {});
+      hash.mockRestore();
+    }
+  });
+
   test("hash failure rolls back earlier writes and their deferred events", async () => {
     const delivered: unknown[] = [];
     const stop = eventBus.listen(modelEventName(table.name, "created"), (value) => {

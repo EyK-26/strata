@@ -45,6 +45,7 @@ describe("Phase 3 BaseRepository chunk and cursorPaginate", () => {
     connection.queue([
       { id: 1, title: "One", published_at: new Date() },
       { id: 2, title: "Two", published_at: new Date() },
+      { id: 3, title: "Three", published_at: new Date() },
     ]);
     connection.queue([{ id: 3, title: "Three", published_at: new Date() }]);
 
@@ -54,8 +55,21 @@ describe("Phase 3 BaseRepository chunk and cursorPaginate", () => {
 
     expect(batches).toEqual([[1, 2], [3]]);
     expect(connection.calls).toHaveLength(2);
-    expect(connection.calls[0]?.query).toContain("LIMIT 2 OFFSET 0");
-    expect(connection.calls[1]?.query).toContain("LIMIT 2 OFFSET 2");
+    expect(connection.calls[0]?.query).toContain("LIMIT 3");
+    expect(connection.calls[0]?.query).not.toContain("OFFSET");
+    expect(connection.calls[1]?.query).toContain('"post"."id" > $1');
+    expect(connection.calls[1]?.params).toEqual([2]);
+  });
+
+  test("chunk keeps OFFSET when ordered by a non-key column", async () => {
+    const connection = new FakeConnection();
+    const repository = new PostRepository(connection);
+    connection.queue([{ id: 1, title: "A", published_at: new Date() }]);
+
+    await repository.chunk(2, async () => false, { orderBy: { title: "asc" } });
+
+    expect(connection.calls[0]?.query).toContain("OFFSET 0");
+    expect(connection.calls[0]?.query).toContain('"post"."title"');
   });
 
   test("cursorPaginate returns next cursor metadata for keyset pagination", async () => {

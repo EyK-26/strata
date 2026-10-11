@@ -1,5 +1,8 @@
 import type BaseRepository from "./baseRepository.ts";
 import type { DatabaseConnection } from "./baseRepository.ts";
+import { getBoundDatabaseConnection } from "./boundConnection.ts";
+import { getActiveDatabaseConnection, hasActiveDatabaseConnection } from "./connectionContext.ts";
+import { isDefaultDatabaseConnection } from "./defaultConnection.ts";
 import { currentSqlDialect } from "./dialect.ts";
 import { projectPluck } from "./pluck.ts";
 import { buildJoinClause, buildQueryWhereClause, qualifyColumn, quoteIdentifier } from "./query.ts";
@@ -13,7 +16,9 @@ import type {
   MorphOneRelation,
   MorphToRelation,
 } from "./relationships.ts";
+import { repositoryConnection } from "./repositoryConnection.ts";
 import type { RepositoryQuery } from "./repositoryQuery.ts";
+import { runInTransaction } from "./transaction.ts";
 import type { QueryOptions, QueryWhere } from "./types.ts";
 
 type RelatedRecord = {
@@ -485,22 +490,26 @@ class BelongsToRelationQuery<
   }
 }
 
+function pivotIdKey(id: unknown): unknown {
+  return typeof id === "number" || typeof id === "bigint" ? String(id) : id;
+}
+
 function hasRepeatedId(ids: readonly unknown[]): boolean {
   const seen = new Set<unknown>();
   for (const id of ids) {
-    if (seen.has(id)) return true;
-    seen.add(id);
+    const key = pivotIdKey(id);
+    if (seen.has(key)) return true;
+    seen.add(key);
   }
   return false;
 }
 
-function samePivotId(stored: unknown, requested: unknown): boolean {
-  if (stored === requested) return true;
-  if (typeof stored === "number" && typeof requested === "string")
-    return String(stored) === requested;
-  if (typeof stored === "string" && typeof requested === "number")
-    return stored === String(requested);
-  return false;
+function isConfiguredConnection(connection: DatabaseConnection): boolean {
+  const bound = getBoundDatabaseConnection();
+  return (
+    connection === repositoryConnection ||
+    (bound ? connection === bound : isDefaultDatabaseConnection(connection))
+  );
 }
 
 class BelongsToManyRelationQuery<
@@ -573,11 +582,23 @@ class BelongsToManyRelationQuery<
   }
 
   private connection() {
-    return this.parent.getRepository().getConnection();
+    const connection = this.parent.getRepository().getConnection();
+    // Configured repositories share the request's reserved connection. An
+    // independent custom repository must retain its own connection instead.
+    return isConfiguredConnection(connection)
+      ? getActiveDatabaseConnection(connection)
+      : connection;
   }
 
   private async atomically(work: (connection: DatabaseConnection) => Promise<void>): Promise<void> {
     const connection = this.connection();
+    if (
+      isConfiguredConnection(connection) ||
+      (hasActiveDatabaseConnection() && connection === getActiveDatabaseConnection(connection))
+    ) {
+      await runInTransaction(work);
+      return;
+    }
     if (typeof connection.begin !== "function") {
       await work(connection);
       return;
@@ -656,14 +677,11 @@ class BelongsToManyRelationQuery<
   async toggle(ids: unknown | readonly unknown[]): Promise<void> {
     const list = Array.isArray(ids) ? ids : [ids];
     if (list.length === 0) return;
-    if (hasRepeatedId(list)) {
-      for (const id of list) {
-        await this.toggleOne(id);
-      }
-      return;
-    }
-
     await this.atomically(async (connection) => {
+      if (hasRepeatedId(list)) {
+        for (const id of list) await this.toggleOne(connection, id);
+        return;
+      }
       const parentId = this.parent.get(this.relation.parentKey);
       const relatedColumn = quoteIdentifier(String(this.relation.relatedPivotKey));
       const parentColumn = quoteIdentifier(String(this.relation.foreignPivotKey));
@@ -672,10 +690,11 @@ class BelongsToManyRelationQuery<
         `SELECT ${relatedColumn} FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${parentColumn} = ${currentSqlDialect().placeholder(1)} AND ${relatedColumn} IN (${placeholders.join(", ")})`,
         [parentId, ...list],
       );
-      const present = list.filter((id) =>
-        existing.some((row) => samePivotId(row[String(this.relation.relatedPivotKey)], id)),
+      const existingIds = new Set(
+        existing.map((row) => pivotIdKey(row[String(this.relation.relatedPivotKey)])),
       );
-      const missing = list.filter((id) => !present.includes(id));
+      const present = list.filter((id) => existingIds.has(pivotIdKey(id)));
+      const missing = list.filter((id) => !existingIds.has(pivotIdKey(id)));
       if (present.length > 0) await this.deletePivotRows(connection, present);
       if (missing.length > 0) await this.insertPivotRows(connection, missing);
     });
@@ -697,14 +716,14 @@ class BelongsToManyRelationQuery<
     await this.deletePivotRows(this.connection(), list);
   }
 
-  private async toggleOne(id: unknown): Promise<void> {
+  private async toggleOne(connection: DatabaseConnection, id: unknown): Promise<void> {
     const parentId = this.parent.get(this.relation.parentKey);
-    const existing = await this.connection().unsafe(
+    const existing = await connection.unsafe(
       `SELECT 1 FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)} AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} = ${currentSqlDialect().placeholder(2)} LIMIT 1`,
       [parentId, id],
     );
-    if (existing.length > 0) await this.detach(id);
-    else await this.attach(id);
+    if (existing.length > 0) await this.deletePivotRows(connection, [id]);
+    else await this.insertPivotRows(connection, [id]);
   }
 
   private async insertPivotRows(
