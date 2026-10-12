@@ -259,4 +259,39 @@ describe("Mailer", () => {
     expect(messages[0]).toContain("[redacted-url]");
     expect(messages[0]).not.toContain("super-secret");
   });
+  test("SMTP validates deadlines/ports and rejects already-aborted sends before connecting", async () => {
+    const config = { host: "127.0.0.1", port: 1, from: "sender@example.test", secure: false };
+    const message = { to: "recipient@example.test", subject: "Synthetic", body: "Fixture" };
+    for (const timeoutMs of [0, -1, Number.NaN, Infinity, 0.5, 2147483648]) {
+      await expect(defaultSmtpTransport({ ...config, timeoutMs }, message)).rejects.toThrow(
+        /timeoutMs/,
+      );
+    }
+    await expect(defaultSmtpTransport({ ...config, port: 65536 }, message)).rejects.toThrow(/port/);
+    const reason = new Error("Synthetic pre-connect cancellation");
+    expect(
+      await defaultSmtpTransport(config, { ...message, signal: AbortSignal.abort(reason) }).catch(
+        (error) => error,
+      ),
+    ).toBe(reason);
+    const previous = {
+      MAIL_TIMEOUT_MS: process.env.MAIL_TIMEOUT_MS,
+      MAIL_HOST: process.env.MAIL_HOST,
+      MAIL_FROM: process.env.MAIL_FROM,
+    };
+    try {
+      process.env.MAIL_HOST = "localhost";
+      process.env.MAIL_FROM = "sender@example.test";
+      process.env.MAIL_TIMEOUT_MS = "125";
+      const smtp = resolveSmtpConfig();
+      expect(smtp.timeoutMs).toBe(125);
+      process.env.MAIL_TIMEOUT_MS = "125bad";
+      expect(() => resolveSmtpConfig()).toThrow(/timeoutMs/);
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
 });

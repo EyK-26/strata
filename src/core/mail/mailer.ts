@@ -1,3 +1,4 @@
+import type { TLSOptions } from "bun";
 import { smtpEhloHost } from "../runtime/appKeyPrefix";
 
 interface MailMessage {
@@ -5,6 +6,7 @@ interface MailMessage {
   subject: string;
   body: string;
   html?: string;
+  signal?: AbortSignal;
 }
 
 interface MailDriver {
@@ -18,14 +20,11 @@ interface SmtpConfig {
   password?: string;
   from: string;
   secure: boolean;
+  timeoutMs?: number;
+  tls?: Pick<TLSOptions, "ca" | "serverName">;
 }
 
 type SmtpTransport = (config: SmtpConfig, message: MailMessage) => Promise<void>;
-
-interface SmtpSocket {
-  write: (data: string | ArrayBuffer | Uint8Array) => number | Promise<number>;
-  end: () => void;
-}
 
 function resolveSmtpConfig(): SmtpConfig {
   const host = process.env.MAIL_HOST?.trim();
@@ -40,9 +39,9 @@ function resolveSmtpConfig(): SmtpConfig {
     throw new Error('MAIL_DRIVER="smtp" requires MAIL_FROM to be set.');
   }
 
-  const port = Number.parseInt(process.env.MAIL_PORT ?? "587", 10);
+  const port = Number(process.env.MAIL_PORT ?? "587");
 
-  if (!Number.isInteger(port) || port <= 0) {
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error('Environment variable "MAIL_PORT" must be a positive integer.');
   }
 
@@ -51,6 +50,9 @@ function resolveSmtpConfig(): SmtpConfig {
     port,
     from,
     secure: (process.env.MAIL_SECURE ?? "false") === "true",
+    ...(process.env.MAIL_TIMEOUT_MS !== undefined
+      ? { timeoutMs: smtpTimeout(Number(process.env.MAIL_TIMEOUT_MS)) }
+      : {}),
     ...(process.env.MAIL_USERNAME?.trim() ? { username: process.env.MAIL_USERNAME.trim() } : {}),
     ...(process.env.MAIL_PASSWORD?.trim() ? { password: process.env.MAIL_PASSWORD.trim() } : {}),
   };
@@ -92,134 +94,219 @@ function encodeBase64(value: string): string {
   return Buffer.from(value, "utf8").toString("base64");
 }
 
-function parseSmtpResponses(buffer: string): { responses: string[]; remainder: string } {
-  const responses: string[] = [];
-  let remainder = buffer;
-
-  while (remainder.includes("\r\n")) {
-    const index = remainder.indexOf("\r\n");
-    const line = remainder.slice(0, index);
-    remainder = remainder.slice(index + 2);
-
-    if (line.length >= 4 && line[3] === "-") {
-      continue;
-    }
-
-    responses.push(line);
+function smtpTimeout(value = 10000): number {
+  if (!Number.isSafeInteger(value) || value < 1 || value > 2147483647) {
+    throw new RangeError("SMTP timeoutMs must be a positive integer within the timer range.");
   }
-
-  return { responses, remainder };
-}
-
-async function waitForSmtpResponse(
-  readResponse: () => Promise<string>,
-  expectedCodes: string[],
-): Promise<string> {
-  const response = await readResponse();
-  const code = response.slice(0, 3);
-
-  if (!expectedCodes.includes(code)) {
-    throw new Error(`Unexpected SMTP response: ${response}`);
-  }
-
-  return response;
-}
-
-async function openSmtpConnection(config: SmtpConfig): Promise<{
-  socket: SmtpSocket;
-  readResponse: () => Promise<string>;
-}> {
-  let buffer = "";
-  const waiters: Array<{ resolve: (value: string) => void; reject: (error: Error) => void }> = [];
-
-  const readResponse = (): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const parsed = parseSmtpResponses(buffer);
-
-      if (parsed.responses.length > 0) {
-        buffer = parsed.remainder;
-        resolve(parsed.responses.shift() as string);
-        return;
-      }
-
-      waiters.push({ resolve, reject });
-    });
-
-  const socket = await Bun.connect({
-    hostname: config.host,
-    port: config.port,
-    socket: {
-      open() {},
-      data(_socket, chunk) {
-        buffer += Buffer.from(chunk).toString("utf8");
-        const parsed = parseSmtpResponses(buffer);
-        buffer = parsed.remainder;
-
-        while (parsed.responses.length > 0 && waiters.length > 0) {
-          const response = parsed.responses.shift() as string;
-          waiters.shift()?.resolve(response);
-        }
-      },
-      error(_socket, error) {
-        const pending = waiters.splice(0);
-
-        for (const waiter of pending) {
-          waiter.reject(error instanceof Error ? error : new Error(String(error)));
-        }
-      },
-    },
-  });
-
-  return { socket, readResponse };
+  return value;
 }
 
 async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): Promise<void> {
-  if (config.username) {
-    assertSafeSmtpField(config.username, "username");
+  const timeoutMs = smtpTimeout(config.timeoutMs);
+  if (
+    !config.host.trim() ||
+    !Number.isInteger(config.port) ||
+    config.port < 1 ||
+    config.port > 65535
+  ) {
+    throw new RangeError("SMTP requires a host and a port between 1 and 65535.");
   }
-  if (config.password) {
-    assertSafeSmtpField(config.password, "password");
-  }
+  if (config.username) assertSafeSmtpField(config.username, "username");
+  if (config.password) assertSafeSmtpField(config.password, "password");
+  const fromHeader = assertSafeSmtpAddress(config.from, "from");
+  const toHeader = assertSafeSmtpAddress(message.to, "to");
+  assertSafeSmtpField(message.subject, "subject");
+  message.signal?.throwIfAborted();
 
-  const { socket, readResponse } = await openSmtpConnection(config);
-
-  try {
-    await waitForSmtpResponse(readResponse, ["220"]);
-    await socket.write(`EHLO ${smtpEhloHost()}\r\n`);
-    await waitForSmtpResponse(readResponse, ["250"]);
-
-    if (config.username && config.password) {
-      await socket.write("AUTH LOGIN\r\n");
-      await waitForSmtpResponse(readResponse, ["334"]);
-      await socket.write(`${encodeBase64(config.username)}\r\n`);
-      await waitForSmtpResponse(readResponse, ["334"]);
-      await socket.write(`${encodeBase64(config.password)}\r\n`);
-      await waitForSmtpResponse(readResponse, ["235"]);
+  let socket: import("bun").Socket<undefined> | undefined;
+  let finished = false;
+  let failed = false;
+  let failure: unknown;
+  let rejectFailure!: (reason: unknown) => void;
+  const failurePromise = new Promise<never>((_, reject) => {
+    rejectFailure = reject;
+  });
+  // A socket may close while no operation is awaiting it; keep rejection observed.
+  void failurePromise.catch(() => {});
+  const responses: string[] = [];
+  const waiters: ((response: string) => void)[] = [];
+  let drain: (() => void) | undefined;
+  let drainVersion = 0;
+  let buffer = "";
+  let multilineCode: string | undefined;
+  let multilineLines = 0;
+  const decoder = new TextDecoder();
+  const fail = (reason: unknown) => {
+    if (finished || failed) return;
+    failed = true;
+    failure = reason;
+    rejectFailure(reason);
+    waiters.length = 0;
+    drain?.();
+    drain = undefined;
+    socket?.terminate();
+  };
+  const onAbort = () =>
+    fail(message.signal?.reason ?? new DOMException("Mail send aborted.", "AbortError"));
+  const timer = setTimeout(
+    () => fail(new DOMException("SMTP send deadline exceeded.", "TimeoutError")),
+    timeoutMs,
+  );
+  message.signal?.addEventListener("abort", onAbort, { once: true });
+  if (message.signal?.aborted) onAbort();
+  const readResponse = async (expected: string[]) => {
+    // A complete reply received before EOF remains readable, including final DATA acceptance.
+    const queued = responses.shift();
+    const response =
+      queued ??
+      (await Promise.race([
+        failed ? Promise.reject(failure) : new Promise<string>((resolve) => waiters.push(resolve)),
+        failurePromise,
+      ]));
+    const code = response.slice(0, 3);
+    if (!expected.includes(code)) throw new Error(`Unexpected SMTP response code: ${code}`);
+  };
+  const write = async (text: string) => {
+    const bytes = Buffer.from(text, "utf8");
+    let offset = 0;
+    while (offset < bytes.length) {
+      if (failed) throw failure;
+      const version = drainVersion;
+      if (!socket) throw new Error("SMTP socket is not connected.");
+      const written = socket.write(bytes.subarray(offset));
+      if (written < 0) throw new Error("SMTP socket write failed.");
+      offset += written;
+      if (offset < bytes.length && version === drainVersion) {
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            drain = resolve;
+          }),
+          failurePromise,
+        ]);
+      }
     }
-
-    const fromHeader = assertSafeSmtpAddress(config.from, "from");
-    const toHeader = assertSafeSmtpAddress(message.to, "to");
-    const from = smtpEnvelopeAddress(config.from, "from");
-    const to = smtpEnvelopeAddress(message.to, "to");
-    await socket.write(`MAIL FROM:<${from}>\r\n`);
-    await waitForSmtpResponse(readResponse, ["250"]);
-    await socket.write(`RCPT TO:<${to}>\r\n`);
-    await waitForSmtpResponse(readResponse, ["250", "251"]);
-    await socket.write("DATA\r\n");
-    await waitForSmtpResponse(readResponse, ["354"]);
-
-    const payload = buildSmtpPayload(fromHeader, {
-      ...message,
-      to: toHeader,
-      subject: assertSafeSmtpField(message.subject, "subject"),
+  };
+  try {
+    const connecting = Bun.connect<undefined>({
+      hostname: config.host,
+      port: config.port,
+      ...(config.secure
+        ? {
+            tls: {
+              ...config.tls,
+              serverName: config.tls?.serverName ?? config.host,
+              rejectUnauthorized: true,
+            },
+          }
+        : {}),
+      socket: {
+        open(value) {
+          socket = value;
+          if (failed || finished) value.terminate();
+        },
+        data(_socket, chunk) {
+          if (failed || finished) return;
+          buffer += decoder.decode(chunk, { stream: true });
+          if (buffer.length > 16384) {
+            fail(new Error("SMTP response exceeded the buffer limit."));
+            return;
+          }
+          while (buffer.includes("\r\n")) {
+            const index = buffer.indexOf("\r\n");
+            const line = buffer.slice(0, index);
+            buffer = buffer.slice(index + 2);
+            const match = /^([2-5]\d{2})([- ]|$)/.exec(line);
+            if (!match || (multilineCode !== undefined && match[1] !== multilineCode)) {
+              fail(new Error("Malformed SMTP reply."));
+              return;
+            }
+            if (++multilineLines > 128) {
+              fail(new Error("SMTP reply exceeded the line limit."));
+              return;
+            }
+            if (match[2] === "-") {
+              multilineCode = match[1];
+              continue;
+            }
+            multilineCode = undefined;
+            multilineLines = 0;
+            const waiter = waiters.shift();
+            if (waiter) waiter(line);
+            else {
+              responses.push(line);
+              if (responses.length > 32) {
+                fail(new Error("Too many buffered SMTP replies."));
+                return;
+              }
+            }
+          }
+        },
+        drain() {
+          drainVersion++;
+          const waiting = drain;
+          drain = undefined;
+          waiting?.();
+        },
+        end() {
+          fail(new Error("SMTP peer closed before the send completed."));
+        },
+        close() {
+          fail(new Error("SMTP connection closed before the send completed."));
+        },
+        error() {
+          fail(new Error("SMTP socket failed."));
+        },
+        connectError() {
+          fail(new Error("SMTP connection failed."));
+        },
+        handshake(_socket, success) {
+          if (!success) fail(new Error("SMTP TLS verification failed."));
+        },
+      },
     });
-
-    await socket.write(payload);
-    await waitForSmtpResponse(readResponse, ["250"]);
-    await socket.write("QUIT\r\n");
-    await waitForSmtpResponse(readResponse, ["221"]);
+    // Connect may settle after cancellation; never leave its late socket open.
+    void connecting.then(
+      (value) => {
+        socket = value;
+        if (failed || finished) value.terminate();
+      },
+      () => {},
+    );
+    socket = await Promise.race([connecting, failurePromise]);
+    await readResponse(["220"]);
+    await write(`EHLO ${smtpEhloHost()}\r\n`);
+    await readResponse(["250"]);
+    if (config.username && config.password) {
+      await write("AUTH LOGIN\r\n");
+      await readResponse(["334"]);
+      await write(`${encodeBase64(config.username)}\r\n`);
+      await readResponse(["334"]);
+      await write(`${encodeBase64(config.password)}\r\n`);
+      await readResponse(["235"]);
+    }
+    await write(`MAIL FROM:<${smtpEnvelopeAddress(config.from, "from")}>\r\n`);
+    await readResponse(["250"]);
+    await write(`RCPT TO:<${smtpEnvelopeAddress(message.to, "to")}>\r\n`);
+    await readResponse(["250", "251"]);
+    await write("DATA\r\n");
+    await readResponse(["354"]);
+    await write(buildSmtpPayload(fromHeader, { ...message, to: toHeader }));
+    await readResponse(["250"]);
+    // Final DATA 250 is known acceptance. QUIT failure must not turn it into a retry.
+    finished = true;
+    try {
+      socket.write("QUIT\r\n");
+    } catch {
+      /* best-effort session cleanup */
+    }
   } finally {
-    socket.end();
+    finished = true;
+    clearTimeout(timer);
+    message.signal?.removeEventListener("abort", onAbort);
+    waiters.length = 0;
+    responses.length = 0;
+    drain = undefined;
+    socket?.end();
   }
 }
 
