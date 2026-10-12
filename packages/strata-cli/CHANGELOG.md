@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.24
+
+Fix Redis cache recovery after transport failures and command deadlines: retire failed connections, abort active fills, and lazily reconnect for later operations without replaying uncertain commands; preserve permanent explicit closure and shared invalidation fencing.
+
 ## 2.2.23
 
 Fix native SMTP hangs with bounded whole-send deadlines, cancellation, buffered multiline replies, complete writes and verified implicit TLS. Preserve known final DATA acceptance through cleanup failures. Correct DATA transparency, CRLF, UTF-8 MIME/header encoding and long-line framing; reject incomplete AUTH and unsupported SMTPUTF8 envelopes explicitly. Generate documented SMTP timeout and TLS defaults. Real socket/TLS/protocol regressions cover outages, cancellation, accepted sends and framing; SMTP delivery before final acknowledgement remains uncertain.

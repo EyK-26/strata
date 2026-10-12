@@ -60,3 +60,5 @@ The new format uses `APP_KEY_PREFIX:cache:v3:{namespace-hash}:…`. Legacy per-k
 4. A rollback also requires draining new processes and clearing legacy cache entries before restarting old workers. Otherwise old permanent values can reappear.
 
 Integration regressions use Redis 7.4 and Bun 1.4.2, including three actual Bun processes, lease renewal, killed and paused owners, ACLs denying keyspace enumeration, metadata pressure, idle expiration and unavailable Redis. They do not replace representative load tests or a production Redis failover exercise.
+
+Transport failures and command deadlines retire the failed connection and abort active local fills. The operation still rejects; uncertain commands are never automatically replayed. A later operation lazily opens a fresh connection through the same store. Replies from retired connections and ignored loader cancellation cannot publish into a successor's cache lifecycle. Explicit `close()` remains permanent. This permits recovery after Redis becomes available again without replacing the application's cache singleton, while retaining bounded commands and shared ownership/generation fencing.
