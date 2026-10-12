@@ -8,11 +8,11 @@ import { checkPackagePeerCompatibility, type PackageVersion } from "./release-re
 const ROOT = join(import.meta.dir, "..");
 
 const EXPECTED: Record<string, string> = {
-  "@getstrata/core": "2.2.22",
-  "@getstrata/bootstrap": "2.2.22",
-  "@getstrata/cli": "2.2.22",
-  "@getstrata/starter": "2.2.22",
-  "create-strata": "2.2.22",
+  "@getstrata/core": "2.2.23",
+  "@getstrata/bootstrap": "2.2.23",
+  "@getstrata/cli": "2.2.23",
+  "@getstrata/starter": "2.2.23",
+  "create-strata": "2.2.23",
 };
 
 const PACKAGE_DIRS: Record<string, string> = {

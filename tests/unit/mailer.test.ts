@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   assertSafeSmtpAddress,
   assertSafeSmtpField,
+  buildSmtpPayload,
   defaultSmtpTransport,
   LogMailDriver,
   Mailer,
@@ -258,5 +259,103 @@ describe("Mailer", () => {
     }
     expect(messages[0]).toContain("[redacted-url]");
     expect(messages[0]).not.toContain("super-secret");
+  });
+  test("SMTP validates deadlines/ports and rejects already-aborted sends before connecting", async () => {
+    const config = { host: "127.0.0.1", port: 1, from: "sender@example.test", secure: false };
+    const message = { to: "recipient@example.test", subject: "Synthetic", body: "Fixture" };
+    for (const timeoutMs of [0, -1, Number.NaN, Infinity, 0.5, 2147483648]) {
+      await expect(defaultSmtpTransport({ ...config, timeoutMs }, message)).rejects.toThrow(
+        /timeoutMs/,
+      );
+    }
+    await expect(defaultSmtpTransport({ ...config, port: 65536 }, message)).rejects.toThrow(/port/);
+    await expect(
+      defaultSmtpTransport({ ...config, username: "synthetic-user" }, message),
+    ).rejects.toThrow(/both username and password/);
+    await expect(
+      defaultSmtpTransport({ ...config, password: "synthetic-password" }, message),
+    ).rejects.toThrow(/both username and password/);
+    await expect(
+      defaultSmtpTransport(config, { ...message, to: `${"x".repeat(65)}@example.test` }),
+    ).rejects.toThrow(/length limit/);
+    const reason = new Error("Synthetic pre-connect cancellation");
+    expect(
+      await defaultSmtpTransport(config, { ...message, signal: AbortSignal.abort(reason) }).catch(
+        (error) => error,
+      ),
+    ).toBe(reason);
+    const previous = {
+      MAIL_TIMEOUT_MS: process.env.MAIL_TIMEOUT_MS,
+      MAIL_HOST: process.env.MAIL_HOST,
+      MAIL_FROM: process.env.MAIL_FROM,
+    };
+    try {
+      process.env.MAIL_HOST = "localhost";
+      process.env.MAIL_FROM = "sender@example.test";
+      process.env.MAIL_TIMEOUT_MS = "125";
+      const smtp = resolveSmtpConfig();
+      expect(smtp.timeoutMs).toBe(125);
+      process.env.MAIL_TIMEOUT_MS = "125bad";
+      expect(() => resolveSmtpConfig()).toThrow(/timeoutMs/);
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+  test("SMTP framing normalizes line endings, escapes dots, and has exactly one terminator", () => {
+    const payload = buildSmtpPayload("sender@example.test", {
+      to: "recipient@example.test",
+      subject: "Fixture",
+      body: ".\n..value\r.\r\nafter",
+    });
+    expect(payload.endsWith("\r\n.\r\n")).toBe(true);
+    expect(payload.match(/\r\n\.\r\n/gu)).toHaveLength(1);
+    expect(payload).toContain("\r\n..\r\n...value\r\n..\r\nafter\r\n.\r\n");
+    expect(payload.replace(/\r\n/gu, "")).not.toMatch(/[\r\n]/u);
+  });
+  test("SMTP MIME encodes Unicode headers/text and folds long body lines", () => {
+    const subject = "Čau 🛒 ".repeat(25),
+      body = `Příliš žluťoučký 🛒\n.\n${"x".repeat(1500)}`;
+    const payload = buildSmtpPayload("Žluťoučký <sender@example.test>", {
+      to: "recipient@example.test",
+      subject,
+      body,
+    });
+    const [headers, encoded] = payload.split("\r\n\r\n");
+    expect(headers).toContain("Content-Transfer-Encoding: base64");
+    const subjectLines = headers?.split("Subject: ")[1]?.split("\r\nMIME-Version")[0] ?? "";
+    const words = [...subjectLines.matchAll(/=\?UTF-8\?B\?([A-Za-z0-9+/=]+)\?=/gu)];
+    expect(words.every((word) => word[0].length <= 75)).toBe(true);
+    expect(
+      words.map((word) => Buffer.from(word[1] ?? "", "base64").toString("utf8")).join(""),
+    ).toBe(subject);
+    expect(Buffer.from(encoded?.slice(0, -5) ?? "", "base64").toString("utf8")).toBe(
+      body.replace(/\n/gu, "\r\n"),
+    );
+    expect(payload.split("\r\n").every((line) => line.length <= 998)).toBe(true);
+  });
+  test("SMTP multipart delimiters differ and unsupported Unicode envelopes fail before connect", async () => {
+    const message = {
+      to: "recipient@example.test",
+      subject: "Fixture",
+      body: "ascii",
+      html: "<p>ascii</p>",
+    };
+    const first = buildSmtpPayload("sender@example.test", message),
+      second = buildSmtpPayload("sender@example.test", message);
+    expect(first.match(/boundary="([^"]+)"/u)?.[1]).not.toBe(
+      second.match(/boundary="([^"]+)"/u)?.[1],
+    );
+    await expect(
+      defaultSmtpTransport(
+        { host: "127.0.0.1", port: 1, from: "sender@example.test", secure: false },
+        { ...message, to: "čau@example.test" },
+      ),
+    ).rejects.toThrow(/SMTPUTF8/);
+    expect(() =>
+      buildSmtpPayload("sender@example.test", { ...message, subject: "unsafe\x00" }),
+    ).toThrow(/control characters/);
   });
 });

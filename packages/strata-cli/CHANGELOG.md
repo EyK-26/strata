@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.23
+
+Fix native SMTP hangs with bounded whole-send deadlines, cancellation, buffered multiline replies, complete writes and verified implicit TLS. Preserve known final DATA acceptance through cleanup failures. Correct DATA transparency, CRLF, UTF-8 MIME/header encoding and long-line framing; reject incomplete AUTH and unsupported SMTPUTF8 envelopes explicitly. Generate documented SMTP timeout and TLS defaults. Real socket/TLS/protocol regressions cover outages, cancellation, accepted sends and framing; SMTP delivery before final acknowledgement remains uncertain.
+
 ## 2.2.22
 
 Preserve caller auth, credential sources, request metadata and application async stores through cold/queued native transaction callbacks. Serialize Postgres privilege grants with full provisioning using atomic database-scoped batches, retaining delegated-admin permissions and rollback/retry safety. Add real constrained-pool JSON/HTML bearer/session-CSRF and concurrent grant/atomicity regressions; no automatic workers, auth bypass or production runtime provisioning.
