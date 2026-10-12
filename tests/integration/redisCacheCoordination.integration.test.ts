@@ -448,14 +448,14 @@ describeRedis("bounded shared Redis cache coordination", () => {
     }
   });
 
-  test("a nonresponding Redis connection hits its command deadline and closes the store", async () => {
+  test("a nonresponding Redis connection is retired at each bounded command deadline", async () => {
     const server = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } });
     const store = new RedisCacheStore(`redis://127.0.0.1:${server.port}`, 1000, 10, {
       commandTimeoutMs: 120,
     });
     try {
       await expect(store.get("item")).rejects.toThrow("command deadline");
-      await expect(store.get("item")).rejects.toThrow("closed");
+      await expect(store.get("item")).rejects.toThrow("command deadline");
     } finally {
       store.close();
       server.stop(true);

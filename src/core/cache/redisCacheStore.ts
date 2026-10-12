@@ -223,14 +223,14 @@ type ScriptResult = {
 };
 
 class RedisCacheStore implements CacheStore {
-  private readonly client: RedisClient;
+  private client: RedisClient | undefined;
   private readonly keys: string[];
   private readonly options: Required<RedisCacheOptions>;
   private readonly fills = new Set<AbortController>();
   private closed = false;
 
   constructor(
-    redisUrl: string,
+    private readonly redisUrl: string,
     private readonly ttlMs: number,
     private readonly maxEntries: number,
     options: RedisCacheOptions = {},
@@ -265,7 +265,11 @@ class RedisCacheStore implements CacheStore {
     this.keys = ["entries", "expiry", "order", "metadata", "metadata-expiry"].map(
       (name) => `${namespace}{${slot}}:${name}`,
     );
-    this.client = new RedisClient(redisUrl, {
+    this.client = this.createClient();
+  }
+
+  private createClient(): RedisClient {
+    return new RedisClient(this.redisUrl, {
       connectionTimeout: this.options.commandTimeoutMs,
       maxRetries: 1,
     });
@@ -274,7 +278,8 @@ class RedisCacheStore implements CacheStore {
   close(): void {
     this.closed = true;
     for (const fill of this.fills) fill.abort(new Error("Redis cache store is closed."));
-    this.client.close();
+    this.client?.close();
+    this.client = undefined;
   }
 
   async get<T>(key: string): Promise<T | undefined> {
@@ -378,6 +383,7 @@ class RedisCacheStore implements CacheStore {
         Promise.resolve().then(() => loader(controller.signal)),
         aborted,
       ]);
+      controller.signal.throwIfAborted();
       done = true;
       clearInterval(renew);
       await this.execute("publish", key, {
@@ -425,16 +431,25 @@ class RedisCacheStore implements CacheStore {
     const ttlMs = extra.ttlMs ?? this.ttlMs;
     if (typeof ttlMs !== "number" || !Number.isSafeInteger(ttlMs) || ttlMs < 0)
       throw new RangeError("ttlMs must be a non-negative safe integer.");
+    if (!this.client) this.client = this.createClient();
+    const client = this.client;
+    const retire = (reason: unknown) => {
+      if (this.client !== client) return;
+      this.client = undefined;
+      for (const fill of this.fills) fill.abort(reason);
+      client.close();
+    };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        reject(new Error("Redis cache command deadline exceeded; recreate the store."));
-        this.close();
+        const error = new Error("Redis cache command deadline exceeded.");
+        reject(error);
+        retire(error);
       }, this.options.commandTimeoutMs);
     });
     try {
       const raw = await Promise.race([
-        this.client.send("EVAL", [
+        client.send("EVAL", [
           CACHE_SCRIPT,
           String(this.keys.length),
           ...this.keys,
@@ -452,7 +467,19 @@ class RedisCacheStore implements CacheStore {
         ]),
         timeout,
       ]);
+      if (this.closed || this.client !== client)
+        throw new Error("Redis cache connection was retired.");
       return JSON.parse(String(raw)) as ScriptResult;
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        typeof error.code === "string" &&
+        error.code.startsWith("ERR_REDIS_CONNECTION")
+      )
+        retire(error);
+      throw error;
     } finally {
       clearTimeout(timer);
     }
