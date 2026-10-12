@@ -267,7 +267,11 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     lines.push("MAIL_HOST=localhost");
     lines.push("MAIL_PORT=1025");
     lines.push(`MAIL_FROM=noreply@${projectName}.local`);
+    lines.push(
+      "# true selects verified implicit TLS; false is plaintext (local Mailpit). STARTTLS is not negotiated.",
+    );
     lines.push("MAIL_SECURE=false");
+    lines.push("MAIL_TIMEOUT_MS=10000");
   } else {
     lines.push("# MAIL_HOST=");
     lines.push("# MAIL_FROM=");
@@ -455,9 +459,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.22",
-        "@getstrata/cli": "^2.2.22",
-        "@getstrata/core": "^2.2.22",
+        "@getstrata/bootstrap": "^2.2.23",
+        "@getstrata/cli": "^2.2.23",
+        "@getstrata/core": "^2.2.23",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {

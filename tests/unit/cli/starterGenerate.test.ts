@@ -311,7 +311,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.22");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.23");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -434,6 +434,9 @@ describe("create-strata generate", () => {
       "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/ent_app",
     );
     expect(env).toContain("NOSUPERUSER NOBYPASSRLS");
+    expect(env).toContain("MAIL_TIMEOUT_MS=10000");
+    expect(env).toContain("MAIL_SECURE=false");
+    expect(env).toContain("STARTTLS is not negotiated");
     expect(env).not.toContain("MYSQL_URL");
     const init = await readFile(join(app, "docker/postgres-init/01-strata-app-role.sql"), "utf8");
     expect(init).toContain("CREATE ROLE strata_app LOGIN");

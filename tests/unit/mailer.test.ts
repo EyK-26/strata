@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   assertSafeSmtpAddress,
   assertSafeSmtpField,
+  buildSmtpPayload,
   defaultSmtpTransport,
   LogMailDriver,
   Mailer,
@@ -268,6 +269,15 @@ describe("Mailer", () => {
       );
     }
     await expect(defaultSmtpTransport({ ...config, port: 65536 }, message)).rejects.toThrow(/port/);
+    await expect(
+      defaultSmtpTransport({ ...config, username: "synthetic-user" }, message),
+    ).rejects.toThrow(/both username and password/);
+    await expect(
+      defaultSmtpTransport({ ...config, password: "synthetic-password" }, message),
+    ).rejects.toThrow(/both username and password/);
+    await expect(
+      defaultSmtpTransport(config, { ...message, to: `${"x".repeat(65)}@example.test` }),
+    ).rejects.toThrow(/length limit/);
     const reason = new Error("Synthetic pre-connect cancellation");
     expect(
       await defaultSmtpTransport(config, { ...message, signal: AbortSignal.abort(reason) }).catch(
@@ -293,5 +303,59 @@ describe("Mailer", () => {
         else process.env[key] = value;
       }
     }
+  });
+  test("SMTP framing normalizes line endings, escapes dots, and has exactly one terminator", () => {
+    const payload = buildSmtpPayload("sender@example.test", {
+      to: "recipient@example.test",
+      subject: "Fixture",
+      body: ".\n..value\r.\r\nafter",
+    });
+    expect(payload.endsWith("\r\n.\r\n")).toBe(true);
+    expect(payload.match(/\r\n\.\r\n/gu)).toHaveLength(1);
+    expect(payload).toContain("\r\n..\r\n...value\r\n..\r\nafter\r\n.\r\n");
+    expect(payload.replace(/\r\n/gu, "")).not.toMatch(/[\r\n]/u);
+  });
+  test("SMTP MIME encodes Unicode headers/text and folds long body lines", () => {
+    const subject = "Čau 🛒 ".repeat(25),
+      body = `Příliš žluťoučký 🛒\n.\n${"x".repeat(1500)}`;
+    const payload = buildSmtpPayload("Žluťoučký <sender@example.test>", {
+      to: "recipient@example.test",
+      subject,
+      body,
+    });
+    const [headers, encoded] = payload.split("\r\n\r\n");
+    expect(headers).toContain("Content-Transfer-Encoding: base64");
+    const subjectLines = headers?.split("Subject: ")[1]?.split("\r\nMIME-Version")[0] ?? "";
+    const words = [...subjectLines.matchAll(/=\?UTF-8\?B\?([A-Za-z0-9+/=]+)\?=/gu)];
+    expect(words.every((word) => word[0].length <= 75)).toBe(true);
+    expect(
+      words.map((word) => Buffer.from(word[1] ?? "", "base64").toString("utf8")).join(""),
+    ).toBe(subject);
+    expect(Buffer.from(encoded?.slice(0, -5) ?? "", "base64").toString("utf8")).toBe(
+      body.replace(/\n/gu, "\r\n"),
+    );
+    expect(payload.split("\r\n").every((line) => line.length <= 998)).toBe(true);
+  });
+  test("SMTP multipart delimiters differ and unsupported Unicode envelopes fail before connect", async () => {
+    const message = {
+      to: "recipient@example.test",
+      subject: "Fixture",
+      body: "ascii",
+      html: "<p>ascii</p>",
+    };
+    const first = buildSmtpPayload("sender@example.test", message),
+      second = buildSmtpPayload("sender@example.test", message);
+    expect(first.match(/boundary="([^"]+)"/u)?.[1]).not.toBe(
+      second.match(/boundary="([^"]+)"/u)?.[1],
+    );
+    await expect(
+      defaultSmtpTransport(
+        { host: "127.0.0.1", port: 1, from: "sender@example.test", secure: false },
+        { ...message, to: "čau@example.test" },
+      ),
+    ).rejects.toThrow(/SMTPUTF8/);
+    expect(() =>
+      buildSmtpPayload("sender@example.test", { ...message, subject: "unsafe\x00" }),
+    ).toThrow(/control characters/);
   });
 });

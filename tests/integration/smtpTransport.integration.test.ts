@@ -17,6 +17,7 @@ type Mode =
   | "accepted-quit-stall"
   | "reject"
   | "oversized"
+  | "unicode-oversized"
   | "malformed";
 function fixture(mode: Mode, tls?: TLSOptions) {
   const sockets = new Set<Socket<{ buffer: string; data: boolean; auth: number }>>();
@@ -72,6 +73,10 @@ function fixture(mode: Mode, tls?: TLSOptions) {
             }
             if (mode === "oversized") {
               socket.write(`250-${"x".repeat(17000)}`);
+              return;
+            }
+            if (mode === "unicode-oversized") {
+              socket.write(`250-${"🛒".repeat(5000)}`);
               return;
             }
             if (mode === "malformed") {
@@ -199,7 +204,7 @@ for (const mode of ["accepted-close", "accepted-quit-stall"] as const) {
     }
   });
 }
-for (const mode of ["reject", "oversized", "malformed"] as const) {
+for (const mode of ["reject", "oversized", "unicode-oversized", "malformed"] as const) {
   test(`native SMTP ${mode} rejects with bounded sanitized protocol errors`, async () => {
     const server = fixture(mode);
     try {
@@ -219,7 +224,12 @@ test("native SMTP drains partial writes without truncating a large DATA body", a
   try {
     await defaultSmtpTransport({ ...server.config, timeoutMs: 10000 }, { ...message, body });
     expect(server.messages).toHaveLength(1);
-    expect(server.messages[0]?.endsWith(body)).toBe(true);
+    const wire = server.messages[0];
+    expect(wire).toBeDefined();
+    const encoded = wire?.split("\r\n\r\n")[1];
+    expect(encoded).toBeDefined();
+    expect(Buffer.from(encoded ?? "", "base64").toString("utf8")).toBe(body);
+    expect(wire?.split("\r\n").every((line) => line.length <= 998)).toBe(true);
   } finally {
     server.close();
   }
@@ -275,3 +285,23 @@ test("secure SMTP uses verified implicit TLS and refuses plaintext/untrusted pee
     await rm(directory, { recursive: true, force: true });
   }
 }, 15000);
+
+test("native SMTP DATA cannot terminate early or inject commands from text/HTML", async () => {
+  const server = fixture("normal");
+  const body = ".\nbefore\r\n.\r\nMAIL FROM:<injected@example.test>\rRSET\n..after";
+  const html = "<p>fixture</p>\n.\nRCPT TO:<injected@example.test>";
+  try {
+    await defaultSmtpTransport(server.config, { ...message, body, html });
+    expect(server.messages).toHaveLength(1);
+    expect(server.messages[0]).toContain("\r\n..\r\nMAIL FROM:<injected@example.test>");
+    expect(server.commands.filter((line) => line.startsWith("MAIL FROM:"))).toEqual([
+      "MAIL FROM:<sender@example.test>",
+    ]);
+    expect(server.commands.filter((line) => line.startsWith("RCPT TO:"))).toEqual([
+      "RCPT TO:<recipient@example.test>",
+    ]);
+    expect(server.commands).not.toContain("RSET");
+  } finally {
+    server.close();
+  }
+});

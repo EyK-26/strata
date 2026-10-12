@@ -65,6 +65,12 @@ function assertSafeSmtpField(value: string, field: string): string {
     throw new Error(`Mail ${field} must not contain CR or LF.`);
   }
 
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if ((code < 32 && code !== 9) || code === 127) {
+      throw new Error(`Mail ${field} must not contain control characters.`);
+    }
+  }
   return value;
 }
 
@@ -111,11 +117,25 @@ async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): P
   ) {
     throw new RangeError("SMTP requires a host and a port between 1 and 65535.");
   }
+  if (Boolean(config.username) !== Boolean(config.password)) {
+    throw new Error("SMTP authentication requires both username and password.");
+  }
   if (config.username) assertSafeSmtpField(config.username, "username");
   if (config.password) assertSafeSmtpField(config.password, "password");
   const fromHeader = assertSafeSmtpAddress(config.from, "from");
   const toHeader = assertSafeSmtpAddress(message.to, "to");
   assertSafeSmtpField(message.subject, "subject");
+  const fromEnvelope = smtpEnvelopeAddress(config.from, "from");
+  const toEnvelope = smtpEnvelopeAddress(message.to, "to");
+  if (/[^\x21-\x7e]/u.test(fromEnvelope + toEnvelope)) {
+    throw new Error("Default SMTP transport requires ASCII envelopes; SMTPUTF8 is not negotiated.");
+  }
+  for (const address of [fromEnvelope, toEnvelope]) {
+    const at = address.lastIndexOf("@");
+    if (Buffer.byteLength(address) > 254 || Buffer.byteLength(address.slice(0, at)) > 64) {
+      throw new RangeError("SMTP envelope address exceeds the path/local-part length limit.");
+    }
+  }
   message.signal?.throwIfAborted();
 
   let socket: import("bun").Socket<undefined> | undefined;
@@ -207,7 +227,7 @@ async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): P
         data(_socket, chunk) {
           if (failed || finished) return;
           buffer += decoder.decode(chunk, { stream: true });
-          if (buffer.length > 16384) {
+          if (Buffer.byteLength(buffer, "utf8") > 16384) {
             fail(new Error("SMTP response exceeded the buffer limit."));
             return;
           }
@@ -284,9 +304,9 @@ async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): P
       await write(`${encodeBase64(config.password)}\r\n`);
       await readResponse(["235"]);
     }
-    await write(`MAIL FROM:<${smtpEnvelopeAddress(config.from, "from")}>\r\n`);
+    await write(`MAIL FROM:<${fromEnvelope}>\r\n`);
     await readResponse(["250"]);
-    await write(`RCPT TO:<${smtpEnvelopeAddress(message.to, "to")}>\r\n`);
+    await write(`RCPT TO:<${toEnvelope}>\r\n`);
     await readResponse(["250", "251"]);
     await write("DATA\r\n");
     await readResponse(["354"]);
@@ -310,37 +330,75 @@ async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): P
   }
 }
 
+function encodeSmtpHeader(value: string): string {
+  if (/^[\x20-\x7e]{0,60}$/u.test(value)) return value;
+  const words: string[] = [];
+  let part = "";
+  // Encoded words stay <=75 bytes and never split a UTF-8 code point.
+  for (const character of value) {
+    if (Buffer.byteLength(part + character, "utf8") > 45) {
+      words.push(`=?UTF-8?B?${encodeBase64(part)}?=`);
+      part = "";
+    }
+    part += character;
+  }
+  if (part) words.push(`=?UTF-8?B?${encodeBase64(part)}?=`);
+  return words.join("\r\n ");
+}
+
+function smtpAddressHeader(value: string): string {
+  if (!value.includes("<")) return value;
+  const name = value.slice(0, value.lastIndexOf("<")).trim();
+  const address = smtpEnvelopeAddress(value, "address");
+  if (!name) return address;
+  const encoded = encodeSmtpHeader(name);
+  const display = encoded.startsWith("=?UTF-8?B?")
+    ? encoded
+    : `"${encoded.replace(/[\\"]/gu, "\\$&")}"`;
+  return `${display} <${address}>`;
+}
+
+function smtpMimePart(type: "text/plain" | "text/html", value: string): string[] {
+  const normalized = value.replace(/\r\n|\r|\n/gu, "\r\n");
+  const base64 =
+    /[^\t\r\n\x20-\x7e]/u.test(normalized) ||
+    normalized.split("\r\n").some((line) => line.length > 998);
+  return [
+    `Content-Type: ${type}; charset=utf-8`,
+    `Content-Transfer-Encoding: ${base64 ? "base64" : "7bit"}`,
+    "",
+    base64 ? (encodeBase64(normalized).match(/.{1,76}/gu) ?? []).join("\r\n") : normalized,
+  ];
+}
+
 function buildSmtpPayload(from: string, message: MailMessage): string {
-  const safeFrom = assertSafeSmtpAddress(from, "from");
-  const safeTo = assertSafeSmtpAddress(message.to, "to");
-  const safeSubject = assertSafeSmtpField(message.subject, "subject");
   const headers = [
-    `From: ${safeFrom}`,
-    `To: ${safeTo}`,
-    `Subject: ${safeSubject}`,
+    `From: ${smtpAddressHeader(assertSafeSmtpAddress(from, "from"))}`,
+    `To: ${smtpAddressHeader(assertSafeSmtpAddress(message.to, "to"))}`,
+    `Subject: ${encodeSmtpHeader(assertSafeSmtpField(message.subject, "subject"))}`,
     "MIME-Version: 1.0",
   ];
-
+  let lines: string[];
   if (message.html) {
-    const boundary = `strata-${Date.now().toString(36)}`;
-    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
-    const parts = [
-      `--${boundary}`,
-      "Content-Type: text/plain; charset=utf-8",
+    let boundary: string;
+    do {
+      boundary = `strata-${crypto.randomUUID()}`;
+    } while (message.body.includes(boundary) || message.html.includes(boundary));
+    lines = [
+      ...headers,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
       "",
-      message.body,
       `--${boundary}`,
-      "Content-Type: text/html; charset=utf-8",
-      "",
-      message.html,
+      ...smtpMimePart("text/plain", message.body),
+      `--${boundary}`,
+      ...smtpMimePart("text/html", message.html),
       `--${boundary}--`,
       "",
     ];
-    return [...headers, "", ...parts, ".", ""].join("\r\n");
-  }
-
-  headers.push("Content-Type: text/plain; charset=utf-8");
-  return [...headers, "", message.body, ".", ""].join("\r\n");
+  } else lines = [...headers, ...smtpMimePart("text/plain", message.body)];
+  // Canonical CRLF plus SMTP transparency before the sole DATA terminator.
+  const content = lines.join("\r\n").replace(/(^|\r\n)\./gu, "$1..");
+  return `${content}${content.endsWith("\r\n") ? "" : "\r\n"}.\r\n`;
 }
 
 class LogMailDriver implements MailDriver {
