@@ -94,12 +94,15 @@ async function runWithScopedTenantTransaction<T>(
 
   return await settleTransaction(() =>
     runWithDeferredModelEvents(async () => {
-      return await begin.bind(pool)(async (transaction) => {
-        await apply(transaction);
-        return await runWithDatabaseConnection(transaction, () =>
-          runWithTransactionScope(async () => commitOrRollbackScope(await callback())),
-        );
-      });
+      // A bypass scope must preserve its caller's stores, not a pooled connection's context.
+      return await begin.bind(pool)(
+        AsyncLocalStorage.bind(async (transaction) => {
+          await apply(transaction);
+          return await runWithDatabaseConnection(transaction, () =>
+            runWithTransactionScope(async () => commitOrRollbackScope(await callback())),
+          );
+        }),
+      );
     }),
   );
 }
@@ -127,3 +130,5 @@ export {
   runWithMigrationBypassForIdentifier,
   runWithScopedTenantTransaction,
 };
+
+import { AsyncLocalStorage } from "node:async_hooks";

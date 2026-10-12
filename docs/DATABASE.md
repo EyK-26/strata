@@ -38,6 +38,8 @@ Pick **one** primary database per app. Named connections can attach another engi
 
 When `TENANCY_DRIVER=rls`, production `DATABASE_URL` must not be a superuser or `BYPASSRLS` role. Generated Compose and `--no-docker` apps create `strata_app` for that. Production boot rejects username `postgres` or `root`, then inspects live `pg_roles`. See [TENANCY.md](./TENANCY.md).
 
+Explicit Postgres provisioning and `grantPostgresAppRolePrivileges` serialize cooperative ACL writers with one database-scoped transaction advisory lock. Full provisioning takes this lock before its existing role-catalog lock; standalone grants do not create/alter roles or require role-catalog rights. They send one atomic privilege batch, so a late SQL failure rolls back earlier grants and releases the lock (or the caller rolls back its enclosing transaction). Use the target application database connection; generated init SQL wraps the same renderer in `BEGIN`/`COMMIT`. Mixed old/uncoordinated grant writers are outside this lock protocol. Production/staging HTTP and workers remain runtime-only and never provision roles or apply grants on boot.
+
 ## Query builder
 
 `@getstrata/core/database/query` compiles SQL through `currentSqlDialect()`. Tests can wrap a block:
@@ -110,6 +112,8 @@ await counters.upsert({ slug: "home" }, ["slug"], []);
 `incrementById` and `decrementById` update in place with `column = column + n`, so two concurrent callers cannot lose an update the way a read-then-write would.
 
 `runInTransaction()` is the business transaction boundary. Inside an open `runWithTenantDatabase()` transaction it uses a savepoint, so a throw rolls back that unit and leaves the outer transaction open. `withJsonErrorHandling()`, `withErrorHandling()`, and the JSON error middleware call `requestTransactionRollback()` when they catch an exception and return an error response. The open transaction or savepoint then rolls back instead of committing. A handler that returns a 4xx response without throwing does not roll back. If you catch inside the transaction yourself and still return a response, call `requestTransactionRollback()` or the writes commit. Nested same-tenant scopes and migration bypass scopes use SQL savepoints on the active connection and restore `app.tenant_id`, `app.bypass_rls`, and `app.bypass_identifier`. Cross-tenant nesting and concurrent sibling savepoints are rejected. Previously unset custom PostgreSQL settings restore to an empty value, which represents no identity.
+
+Framework transaction, tenant and bypass helpers bind native transaction callbacks to the complete caller async context before database admission. This preserves auth users/credential sources, request metadata and application-owned async stores when a Bun SQL pool opens a connection or queues acquisition. RLS still installs its own tenant/connection scope inside that callback; callers do not manually reconstruct authentication or bypass CSRF. Direct native `SQL.begin()` callbacks are outside this framework boundary and need their own caller-context binding when they depend on async-local state.
 
 ### Cancellable transaction acquisition
 

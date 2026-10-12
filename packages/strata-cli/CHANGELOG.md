@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.22
+
+Preserve caller auth, credential sources, request metadata and application async stores through cold/queued native transaction callbacks. Serialize Postgres privilege grants with full provisioning using atomic database-scoped batches, retaining delegated-admin permissions and rollback/retry safety. Add real constrained-pool JSON/HTML bearer/session-CSRF and concurrent grant/atomicity regressions; no automatic workers, auth bypass or production runtime provisioning.
+
 ## 2.2.21
 
 Make registered queue/outbox workers discoverable in CLI help and generated startup guidance. Announce polling after boot and when it stops without claiming dependency health, printing secrets, or starting workers automatically. Preserve explicit process ownership, delivery semantics and graceful lifecycle; cover idle, boot/runtime/cleanup failures and real SIGTERM draining.

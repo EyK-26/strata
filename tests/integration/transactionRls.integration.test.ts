@@ -1,4 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { AsyncLocalStorage } from "node:async_hooks";
+import {
+  currentAuthUser,
+  currentCredentialSource,
+  runWithAuthContext,
+} from "@getstrata/core/auth/authContext";
+import { AuthManager } from "@getstrata/core/auth/guard";
 import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
@@ -17,10 +24,16 @@ import {
   runWithMigrationBypass,
   runWithMigrationBypassForIdentifier,
 } from "@getstrata/core/tenant/databaseTenantContext";
-import { currentTenantId } from "@getstrata/core/tenant/tenantContext";
+import { currentTenantId, runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { SQL } from "bun";
+import { createAuthMiddleware } from "../../src/core/http/authMiddleware";
+import { createCsrfMiddleware } from "../../src/core/http/csrfMiddleware";
+import { createCsrfTokenCookie } from "../../src/core/http/csrfToken";
+import { composeMiddleware } from "../../src/core/http/middleware";
+import { currentRequestMeta, runWithRequestMeta } from "../../src/core/http/requestMetaContext";
+import { withErrorHandling, withJsonErrorHandling } from "../../src/core/http/response";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { defaultTestTenant } from "../unit/testHelpers";
 
@@ -66,6 +79,194 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
     if (!row) throw new Error("Postgres returned no transaction settings.");
     return row;
   }
+
+  test.each(["transaction", "reserved", "tenant", "bypass", "identifier"])(
+    "cold and queued %s callbacks retain complete caller context",
+    async (mode) => {
+      if (!rlsUrl) throw new Error("A restricted Postgres test URL is required.");
+      const single = new SQL({ url: rlsUrl, max: 1 });
+      const appContext = new AsyncLocalStorage<string>();
+      registerDefaultDatabasePool(single as unknown as SqlDatabaseConnection);
+      try {
+        const values = await Promise.all(
+          Array.from({ length: 6 }, (_, index) => {
+            const id = index + 1;
+            const tenant = { ...defaultTestTenant, id };
+            return runWithTenant(tenant, () =>
+              runWithAuthContext({ id, role: "member" }, "bearer", () =>
+                runWithRequestMeta(
+                  { ipAddress: "127.0.0.1", userAgent: `caller-${id}`, cspNonce: `nonce-${id}` },
+                  () =>
+                    appContext.run(`app-${id}`, async () => {
+                      const check = () => {
+                        expect(currentAuthUser()?.id).toBe(id);
+                        expect(currentCredentialSource()).toBe("bearer");
+                        expect(currentTenantId()).toBe(id);
+                        expect(currentRequestMeta().userAgent).toBe(`caller-${id}`);
+                        expect(currentRequestMeta().cspNonce).toBe(`nonce-${id}`);
+                        expect(appContext.getStore()).toBe(`app-${id}`);
+                      };
+                      const work = async () => {
+                        check();
+                        // One native pool slot and held SQL ensure subsequent callbacks wait for acquisition.
+                        await db.unsafe("SELECT pg_sleep(0.005)");
+                        check();
+                        await runInTransaction(async () => {
+                          check();
+                        });
+                        await expect(
+                          runInTransaction(async () => {
+                            check();
+                            throw new Error("Nested caller failure");
+                          }),
+                        ).rejects.toThrow("Nested caller failure");
+                        check();
+                        return id;
+                      };
+                      const result =
+                        mode === "reserved"
+                          ? await runInTransaction(work, {
+                              acquisitionSignal: new AbortController().signal,
+                            })
+                          : mode === "transaction"
+                            ? await runInTransaction(work)
+                            : mode === "tenant"
+                              ? await runWithTenantDatabase(tenant, work)
+                              : mode === "bypass"
+                                ? await runWithMigrationBypass(work)
+                                : await runWithMigrationBypassForIdentifier(id, work);
+                      check();
+                      return result;
+                    }),
+                ),
+              ),
+            );
+          }),
+        );
+        expect(values).toEqual([1, 2, 3, 4, 5, 6]);
+        expect(currentAuthUser()).toBeNull();
+        expect(currentCredentialSource()).toBeNull();
+        expect(appContext.getStore()).toBeUndefined();
+      } finally {
+        registerDefaultDatabasePool(pool as unknown as SqlDatabaseConnection);
+        await single.close();
+      }
+    },
+  );
+
+  test("real concurrent JSON/HTML requests preserve bearer admission and cookie CSRF", async () => {
+    if (!rlsUrl) throw new Error("A restricted Postgres test URL is required.");
+    const single = new SQL({ url: rlsUrl, max: 1 });
+    const marker = new AsyncLocalStorage<string>();
+    registerDefaultDatabasePool(single as unknown as SqlDatabaseConnection);
+    // Synthetic guards isolate transaction propagation; no app auth/crypto is copied.
+    const auth = new AuthManager({ resolve: () => null });
+    auth.registerGuard("api", {
+      resolve(request) {
+        const match = /^Bearer fixture-(\d+)$/.exec(request.headers.get("authorization") ?? "");
+        return match ? { id: Number(match[1]), role: "member" } : null;
+      },
+    });
+    auth.registerGuard("web", {
+      resolve(request) {
+        const match = /fixture_user=(\d+)/.exec(request.headers.get("cookie") ?? "");
+        return match ? { id: Number(match[1]), role: "member" } : null;
+      },
+    });
+    const handler = composeMiddleware(
+      async (request, next) =>
+        await marker.run(request.headers.get("x-fixture-marker") ?? "", () =>
+          runWithRequestMeta({ ipAddress: "127.0.0.1", userAgent: "fixture" }, next),
+        ),
+      createAuthMiddleware(auth),
+      async (_request, next) => {
+        const user = currentAuthUser();
+        if (!user) return Response.json({ error: "Unauthenticated" }, { status: 401 });
+        return runWithTenantDatabase({ ...defaultTestTenant, id: Number(user.id) }, next);
+      },
+      createCsrfMiddleware(),
+    )(async (request) => {
+      await db.unsafe("SELECT pg_sleep(0.005)");
+      const result = {
+        id: currentAuthUser()?.id,
+        source: currentCredentialSource(),
+        tenant: currentTenantId(),
+        marker: marker.getStore(),
+      };
+      return new URL(request.url).pathname === "/html"
+        ? new Response(`<p>${result.id}:${result.source}:${result.tenant}:${result.marker}</p>`, {
+            headers: { "content-type": "text/html" },
+          })
+        : Response.json(result);
+    });
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        return new URL(request.url).pathname === "/html"
+          ? withErrorHandling(handler)(request)
+          : withJsonErrorHandling(handler)(request);
+      },
+    });
+    const origin = `http://localhost:${server.port}`;
+    try {
+      const responses = await Promise.all(
+        Array.from({ length: 6 }, async (_, index) => {
+          const id = index + 1,
+            path = index % 2 ? "/html" : "/json";
+          const response = await fetch(origin + path, {
+            method: "POST",
+            headers: { authorization: `Bearer fixture-${id}`, "x-fixture-marker": `request-${id}` },
+          });
+          expect(response.status).toBe(200);
+          if (path === "/json")
+            expect(await response.json()).toEqual({
+              id,
+              source: "bearer",
+              tenant: id,
+              marker: `request-${id}`,
+            });
+          else expect(await response.text()).toBe(`<p>${id}:bearer:${id}:request-${id}</p>`);
+          return response.status;
+        }),
+      );
+      expect(responses).toEqual([200, 200, 200, 200, 200, 200]);
+      const csrf = createCsrfTokenCookie();
+      await Promise.all(
+        Array.from({ length: 6 }, async (_, index) => {
+          const id = index + 1;
+          const headers = {
+            origin,
+            cookie: `fixture_user=${id}; ${csrf.cookie.split(";")[0]}`,
+            "x-fixture-marker": `cookie-${id}`,
+          };
+          const rejected = await fetch(`${origin}/json`, { method: "POST", headers });
+          expect(rejected.status).toBe(403);
+          const accepted = await fetch(`${origin}/json`, {
+            method: "POST",
+            headers: { ...headers, "x-csrf-token": csrf.token },
+          });
+          expect(accepted.status).toBe(200);
+          expect(await accepted.json()).toEqual({
+            id,
+            source: "session",
+            tenant: id,
+            marker: `cookie-${id}`,
+          });
+          const invalid = await fetch(`${origin}/json`, {
+            method: "POST",
+            headers: { ...headers, authorization: "Bearer invalid", "x-csrf-token": csrf.token },
+          });
+          expect(invalid.status).toBe(401);
+        }),
+      );
+      expect(currentAuthUser()).toBeNull();
+      expect(marker.getStore()).toBeUndefined();
+    } finally {
+      await server.stop(true);
+      registerDefaultDatabasePool(pool as unknown as SqlDatabaseConnection);
+      await single.close();
+    }
+  });
 
   test("tenant switching is rejected without changing SQL or async context", async () => {
     await runWithTenantDatabase(defaultTestTenant, async () => {

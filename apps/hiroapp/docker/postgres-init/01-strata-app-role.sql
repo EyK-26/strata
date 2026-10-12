@@ -2,6 +2,7 @@ BEGIN;
 -- Application login role. FORCE RLS applies because this role is NOSUPERUSER and NOBYPASSRLS.
 -- Superuser remains for CREATE ROLE / CREATE DATABASE / GRANT / migrate / migrate:fresh DROP.
 -- This script is repeatable on an already-existing volume (not only docker-entrypoint-initdb.d).
+SELECT pg_advisory_xact_lock(hashtext('strata:postgres-privileges'), hashtext(current_database()));
 DO $$
 BEGIN
   -- pg_authid is shared across databases. Database-local advisory locks cannot
@@ -25,4 +26,5 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO strata_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO strata_app;
+
 COMMIT;
