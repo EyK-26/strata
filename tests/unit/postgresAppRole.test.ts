@@ -274,6 +274,14 @@ describe("postgresAppRole", () => {
     const calls: string[] = [];
     await grantPostgresAppRolePrivileges(fakeSql(calls), { database: "hiroapp" });
     expect(calls.some((line) => line.includes("GRANT CONNECT ON DATABASE hiroapp"))).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("pg_advisory_xact_lock");
+    expect(calls[0]).not.toContain("pg_authid");
+    expect(calls[0]).not.toContain("ALTER ROLE");
+    const full = postgresAppRoleSql({ database: "hiroapp" });
+    expect(full.indexOf("pg_advisory_xact_lock")).toBeLessThan(
+      full.indexOf("LOCK TABLE pg_catalog.pg_authid"),
+    );
     await ensurePostgresAppRole(fakeSql(calls), { database: "hiroapp" });
   });
 

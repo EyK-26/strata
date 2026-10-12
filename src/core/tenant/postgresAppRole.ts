@@ -258,19 +258,15 @@ END
 $$`;
 }
 
-function postgresAppRoleSql(options: {
-  database: string;
-  role?: string;
-  password?: string;
-}): string {
+// Database-wide: ACL tuples can be shared by grants to different roles.
+// Acquire before the role catalog lock so provisioning and delegated grants agree on order.
+const POSTGRES_PRIVILEGE_LOCK_SQL =
+  "SELECT pg_advisory_xact_lock(hashtext('strata:postgres-privileges'), hashtext(current_database()))";
+
+function postgresAppRolePrivilegeSql(options: { database: string; role?: string }): string {
   const database = assertSafeSqlIdentifier(options.database, "database name");
   const role = assertSafeSqlIdentifier(options.role ?? POSTGRES_APP_ROLE, "role name");
-  return `-- Application login role. FORCE RLS applies because this role is NOSUPERUSER and NOBYPASSRLS.
--- Superuser remains for CREATE ROLE / CREATE DATABASE / GRANT / migrate / migrate:fresh DROP.
--- This script is repeatable on an already-existing volume (not only docker-entrypoint-initdb.d).
-${postgresAppRoleCreateSql(options)};
-
-GRANT CONNECT ON DATABASE ${database} TO ${role};
+  return `GRANT CONNECT ON DATABASE ${database} TO ${role};
 GRANT USAGE, CREATE ON SCHEMA public TO ${role};
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${role};
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${role};
@@ -281,22 +277,30 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO ${role};
 `;
 }
 
+function postgresAppRoleSql(options: {
+  database: string;
+  role?: string;
+  password?: string;
+}): string {
+  const privileges = postgresAppRolePrivilegeSql(options);
+  return `-- Application login role. FORCE RLS applies because this role is NOSUPERUSER and NOBYPASSRLS.
+-- Superuser remains for CREATE ROLE / CREATE DATABASE / GRANT / migrate / migrate:fresh DROP.
+-- This script is repeatable on an already-existing volume (not only docker-entrypoint-initdb.d).
+${POSTGRES_PRIVILEGE_LOCK_SQL};
+${postgresAppRoleCreateSql(options)};
+
+${privileges}
+`;
+}
+
 async function grantPostgresAppRolePrivileges(
   sql: PostgresSql,
   options: { database: string; role?: string },
 ): Promise<void> {
-  const database = assertSafeSqlIdentifier(options.database, "database name");
-  const role = assertSafeSqlIdentifier(options.role ?? POSTGRES_APP_ROLE, "role name");
-  await sql.unsafe(`GRANT CONNECT ON DATABASE ${database} TO ${role}`);
-  await sql.unsafe(`GRANT USAGE, CREATE ON SCHEMA public TO ${role}`);
-  await sql.unsafe(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${role}`);
-  await sql.unsafe(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${role}`);
-  await sql.unsafe(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${role}`);
-  await sql.unsafe(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${role}`);
-  await sql.unsafe(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${role}`);
-  await sql.unsafe(
-    `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO ${role}`,
-  );
+  // A single native SQL batch is atomic, also when composed inside a caller transaction.
+  // Grant-only owners can acquire the advisory lock without role-administration privileges.
+  const privileges = postgresAppRolePrivilegeSql(options);
+  await sql.unsafe(`${POSTGRES_PRIVILEGE_LOCK_SQL};\n${privileges}`);
 }
 
 async function ensurePostgresAppRole(
