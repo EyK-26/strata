@@ -111,6 +111,8 @@ await counters.upsert({ slug: "home" }, ["slug"], []);
 
 `runInTransaction()` is the business transaction boundary. Inside an open `runWithTenantDatabase()` transaction it uses a savepoint, so a throw rolls back that unit and leaves the outer transaction open. `withJsonErrorHandling()`, `withErrorHandling()`, and the JSON error middleware call `requestTransactionRollback()` when they catch an exception and return an error response. The open transaction or savepoint then rolls back instead of committing. A handler that returns a 4xx response without throwing does not roll back. If you catch inside the transaction yourself and still return a response, call `requestTransactionRollback()` or the writes commit. Nested same-tenant scopes and migration bypass scopes use SQL savepoints on the active connection and restore `app.tenant_id`, `app.bypass_rls`, and `app.bypass_identifier`. Cross-tenant nesting and concurrent sibling savepoints are rejected. Previously unset custom PostgreSQL settings restore to an empty value, which represents no identity.
 
+Framework transaction, tenant and bypass helpers bind native transaction callbacks to the complete caller async context before database admission. This preserves auth users/credential sources, request metadata and application-owned async stores when a Bun SQL pool opens a connection or queues acquisition. RLS still installs its own tenant/connection scope inside that callback; callers do not manually reconstruct authentication or bypass CSRF. Direct native `SQL.begin()` callbacks are outside this framework boundary and need their own caller-context binding when they depend on async-local state.
+
 ### Cancellable transaction acquisition
 
 ```ts

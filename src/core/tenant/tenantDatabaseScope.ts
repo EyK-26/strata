@@ -56,15 +56,18 @@ async function runWithTenantDatabase<T>(
 
   return await settleTransaction(() =>
     runWithDeferredModelEvents(async () => {
-      return await begin.bind(pool)(async (transaction) => {
-        await applyTenantContextToTransaction(transaction, tenant.id);
+      // Preserve auth, request metadata and application stores across native pool admission.
+      return await begin.bind(pool)(
+        AsyncLocalStorage.bind(async (transaction) => {
+          await applyTenantContextToTransaction(transaction, tenant.id);
 
-        return await runWithDatabaseConnection(transaction, async () => {
-          return await runWithTransactionScope(async () =>
-            commitOrRollbackScope(await runWithTenant(tenant, callback)),
-          );
-        });
-      });
+          return await runWithDatabaseConnection(transaction, async () => {
+            return await runWithTransactionScope(async () =>
+              commitOrRollbackScope(await runWithTenant(tenant, callback)),
+            );
+          });
+        }),
+      );
     }),
   );
 }
@@ -74,3 +77,5 @@ function isInsideTenantDatabaseScope(tenantId = currentTenant()?.id): boolean {
 }
 
 export { applyTenantContextToTransaction, isInsideTenantDatabaseScope, runWithTenantDatabase };
+
+import { AsyncLocalStorage } from "node:async_hooks";

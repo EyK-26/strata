@@ -127,17 +127,20 @@ async function runInTransaction<TValue>(
         signal?.throwIfAborted();
         if (!supportsTransactions(connection))
           throw new Error("Reserved database connection does not support transactions.");
-        return await connection.begin(async (transaction) => {
-          return await runWithDatabaseConnection(transaction, () =>
-            transactionFrame.run({ connection: transaction, childActive: false }, () =>
-              runWithTransactionScope(async () =>
-                commitOrRollbackScope(
-                  await admittedOperation(createDatabaseConnection(transaction)),
+        // Native drivers can invoke queued callbacks outside the caller's async resource.
+        return await connection.begin(
+          AsyncLocalStorage.bind(async (transaction) => {
+            return await runWithDatabaseConnection(transaction, () =>
+              transactionFrame.run({ connection: transaction, childActive: false }, () =>
+                runWithTransactionScope(async () =>
+                  commitOrRollbackScope(
+                    await admittedOperation(createDatabaseConnection(transaction)),
+                  ),
                 ),
               ),
-            ),
-          );
-        });
+            );
+          }),
+        );
       } finally {
         // Release before deferred observers flush; reentrant listeners may need this slot.
         await reserved?.release();
@@ -156,3 +159,5 @@ export {
 } from "./acquisitionMetrics.ts";
 export type { TransactionOptions };
 export { hasActiveTransaction, requestTransactionRollback, runInTransaction };
+
+import { AsyncLocalStorage } from "node:async_hooks";
