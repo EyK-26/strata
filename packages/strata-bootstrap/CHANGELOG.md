@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.25
+
+Queue worker run loops recover native Redis connection closure with bounded backoff and a fresh connection. Uncertain Redis mutations are not replayed; retained reservations and retries use normal recovery. Explicit closure remains terminal and non-connection errors remain fatal. Native poll/ack closure regressions cover Streams and list transports.
+
 ## 2.2.24
 
 Fix Redis cache recovery after transport failures and command deadlines: retire failed connections, abort active fills, and lazily reconnect for later operations without replaying uncertain commands; preserve permanent explicit closure and shared invalidation fencing.
