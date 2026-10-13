@@ -538,7 +538,7 @@ class RedisStreamsQueue implements Queue {
 }
 
 class RedisStreamsWorker {
-  private readonly client: RedisClient;
+  private client: RedisClient;
   private readonly owner = crypto.randomUUID();
   private readonly cursors = new Map<string, string>();
   private processing = false;
@@ -547,7 +547,7 @@ class RedisStreamsWorker {
   private stopping = false;
   private active?: AbortController;
   constructor(
-    redisUrl: string,
+    private readonly redisUrl: string,
     private readonly failedJobs: FailedJobService,
     private readonly timeoutSeconds = 5,
     private readonly queueKeys: readonly string[] = defaultQueueKeys(),
@@ -761,7 +761,29 @@ class RedisStreamsWorker {
   async run(): Promise<void> {
     this.running = true;
     try {
-      while (!this.stopping) await this.processNext();
+      while (!this.stopping) {
+        try {
+          await this.processNext();
+        } catch (error) {
+          if (
+            !(
+              error &&
+              typeof error === "object" &&
+              "code" in error &&
+              error.code === "ERR_REDIS_CONNECTION_CLOSED"
+            )
+          )
+            throw error;
+          // Never replay an uncertain Redis mutation. Pending reservations/retries
+          // remain authoritative and are recovered through the normal protocol.
+          this.client.close();
+          await Bun.sleep(250);
+          if (this.stopping) return;
+          this.client = new RedisClient(this.redisUrl);
+          this.initialized = false;
+          this.cursors.clear();
+        }
+      }
     } finally {
       this.running = false;
     }

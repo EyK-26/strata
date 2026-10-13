@@ -328,10 +328,10 @@ class QueueWorker {
   private readonly owner = crypto.randomUUID();
   private running = false;
   private stopping = false;
-  private readonly client: RedisClient;
+  private client: RedisClient;
 
   constructor(
-    redisUrl: string,
+    private readonly redisUrl: string,
     private readonly failedJobs: FailedJobService,
     private readonly timeoutSeconds = 5,
     private readonly queueKeys: readonly string[] = QUEUE_KEYS,
@@ -423,7 +423,25 @@ class QueueWorker {
 
     try {
       while (!this.stopping) {
-        await this.processNext();
+        try {
+          await this.processNext();
+        } catch (error) {
+          if (
+            !(
+              error &&
+              typeof error === "object" &&
+              "code" in error &&
+              error.code === "ERR_REDIS_CONNECTION_CLOSED"
+            )
+          )
+            throw error;
+          // Never replay an uncertain Redis mutation. Pending reservations/retries
+          // remain authoritative and are recovered through the normal protocol.
+          this.client.close();
+          await Bun.sleep(250);
+          if (this.stopping) return;
+          this.client = new RedisClient(this.redisUrl);
+        }
       }
     } finally {
       this.running = false;
@@ -431,6 +449,7 @@ class QueueWorker {
   }
 
   close(): void {
+    this.stopping = true;
     this.client.close();
   }
 }
