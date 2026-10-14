@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.27
+
+Storage distinguishes missing objects from filesystem, authorization, missing-bucket and transport failures; S3 reads use a single native GET. Adds native Bun protocol regressions and documents failure/reconciliation contracts.
+
 ## 2.2.26
 
 Fix complete safe integer validation with optional strict JSON-number input; add scoped read-only outbox delivery inspection; add typed grouped sums with exact textual totals, protected predicates and dialect/RLS regressions.

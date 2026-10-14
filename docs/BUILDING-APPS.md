@@ -129,6 +129,14 @@ When history is untrustworthy:
 
 Do not mix the monorepo fixture runner with a product app’s `src/db/migrations/` on the same database.
 
+## Storage failures
+
+The official storage provider exposes `StorageManager` and the configured local or native Bun S3 driver. `get(path)` returns `null` only for a missing object; `delete(path)` returns `false` only when the provider reports a missing object. Other failures reject: invalid local paths, filesystem errors, denied S3 access, missing buckets and unavailable endpoints must remain visible to HTTP error handling or job retry logic. Do not turn every rejected read into a 404 or mark rejected deletion as successful cleanup.
+
+S3 deletion follows the provider's acknowledgement semantics: a successful DELETE returns `true`, even when an S3-compatible provider acknowledges deletion of an already absent key. It does not establish prior existence. Reads use one GET, avoiding the old HEAD/GET race and redundant request. Native S3 signing, transport and provider errors remain Bun's responsibility; this contract does not add application retries or exactly-once guarantees. If a response is lost, callers must reconcile the uncertain outcome.
+
+Applications own the order of file and SQL writes and reconciliation of orphaned uploads; SQL transactions cannot atomically commit S3 effects. Use stable object identities and explicit commerce rules. Local storage is not shared across replicas; production apps should configure shared storage through the official provider.
+
 ## File uploads
 
 `parseMultipartUpload` (JSON / single-file API) already enforces `MAX_UPLOAD_BYTES` / `MAX_REQUEST_BODY_BYTES` and `ALLOWED_UPLOAD_MIME_TYPES` via `@getstrata/core/http/uploads`.
