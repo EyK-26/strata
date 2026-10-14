@@ -125,3 +125,77 @@ describe("validateObject", () => {
     ).toThrow(ValidationError);
   });
 });
+
+describe("complete safe integer validation", () => {
+  const rules = [integerRule(), positiveIntegerRule(), integerRange(1, 10)];
+  test("rejects malformed retained values without coercing objects", () => {
+    const unsafe: unknown[] = [
+      "2oops",
+      "2.5",
+      "2e3",
+      "0x2",
+      "2 3",
+      " ",
+      2.5,
+      NaN,
+      Infinity,
+      9007199254740992,
+      "9007199254740993",
+      true,
+      [],
+      [2],
+      {},
+      {
+        toString() {
+          throw new Error("must not coerce");
+        },
+      },
+    ];
+    for (const rule of rules)
+      for (const value of unsafe) {
+        expect(() => validateObject({ quantity: value }, { quantity: [rule] })).toThrow(
+          ValidationError,
+        );
+      }
+  });
+  test("preserves valid form strings, optional values and required error contracts", () => {
+    for (const rule of rules) {
+      for (const value of [2, "2", " +02 "])
+        expect(validateObject({ quantity: value }, { quantity: [rule] })).toEqual({
+          quantity: typeof value === "string" ? value.trim() : value,
+        });
+      for (const value of [undefined, null, ""])
+        expect(rule("quantity", value, {})).toBeUndefined();
+      expect(() => validateObject({ quantity: "" }, { quantity: [required(), rule] })).toThrow(
+        ValidationError,
+      );
+    }
+    expect(integerRule()("n", Number.MAX_SAFE_INTEGER, {})).toBeUndefined();
+    expect(integerRule()("n", Number.MIN_SAFE_INTEGER, {})).toBeUndefined();
+    expect(integerRule()("n", "-02", {})).toBeUndefined();
+    expect(positiveIntegerRule()("n", "0", {})).toBe('"n" must be a positive integer.');
+    expect(integerRange(0, 10)("n", 0, {})).toBeUndefined();
+    expect(integerRange(0, 10)("n", 10, {})).toBeUndefined();
+    expect(integerRange(0, 10)("n", 11, {})).toBe('"n" must be an integer between 0 and 10.');
+  });
+  test("offers opt-in JSON-number-only rules without changing output normalization", () => {
+    for (const rule of [
+      integerRule({ allowNumericStrings: false }),
+      positiveIntegerRule({ allowNumericStrings: false }),
+      integerRange(0, 10, { allowNumericStrings: false }),
+    ]) {
+      expect(validateObject({ n: 2 }, { n: [rule] })).toEqual({ n: 2 });
+      expect(() => validateObject({ n: "2" }, { n: [rule] })).toThrow(ValidationError);
+    }
+  });
+  test("rejects invalid range configurations before validating requests", () => {
+    for (const [min, max] of [
+      [2, 1],
+      [NaN, 2],
+      [0, Infinity],
+      [0.5, 2],
+      [0, 9007199254740992],
+    ])
+      expect(() => integerRange(min!, max!)).toThrow(TypeError);
+  });
+});
