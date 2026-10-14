@@ -671,6 +671,30 @@ function assertSafeProjectionExpression(expression: string): void {
   }
 }
 
+/** Fixed aliases and textual totals avoid driver-dependent JavaScript precision loss. */
+function buildGroupedSumQuery<TEntity extends object, K extends keyof TEntity & string>(
+  table: TableDefinition<TEntity>,
+  groupColumn: K,
+  column: keyof TEntity & string,
+  options: QueryOptions<TEntity> = {},
+  whereNodes: readonly WhereNode<TEntity>[] = options.whereNodes ?? [],
+): { text: string; params: unknown[] } {
+  if (!table.columns.includes(groupColumn) || !table.columns.includes(column))
+    throw new TypeError("Grouped sums require declared columns.");
+  for (const key of Object.keys(options))
+    if (!["where", "whereNodes", "withTrashed", "onlyTrashed"].includes(key))
+      throw new TypeError(
+        "Grouped sums do not support joins, selection, ordering, pagination, grouping or locks.",
+      );
+  const group = qualifyColumn(table.name, groupColumn);
+  const total = currentSqlDialect().castToText(`SUM(${qualifyColumn(table.name, column)})`);
+  const { clause, params } = buildQueryWhereClause(table, options, whereNodes);
+  return {
+    text: `SELECT ${group} AS ${quoteIdentifier("value")}, ${total} AS ${quoteIdentifier("sum")} FROM ${quoteIdentifier(table.name)}${clause} GROUP BY ${group} ORDER BY ${group} ASC`,
+    params,
+  };
+}
+
 function buildGroupedCountQuery<TEntity extends object, K extends keyof TEntity & string>(
   table: TableDefinition<TEntity>,
   column: K,
@@ -946,6 +970,7 @@ export {
   buildCountQuery,
   buildDeleteByIdQuery,
   buildGroupedCountQuery,
+  buildGroupedSumQuery,
   buildIncrementQuery,
   buildInsertQuery,
   buildJoinClause,

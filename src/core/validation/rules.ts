@@ -96,18 +96,28 @@ function optional(): ValidationRule {
   return () => undefined;
 }
 
-function integerRule(): ValidationRule {
+interface IntegerValidationOptions {
+  /** Default true preserves whole decimal form strings; false requires JSON numbers. */
+  allowNumericStrings?: boolean;
+}
+
+function integerValue(value: unknown, options: IntegerValidationOptions): number | undefined {
+  if (typeof value === "number") return Number.isSafeInteger(value) ? value : undefined;
+  if (
+    options.allowNumericStrings !== false &&
+    typeof value === "string" &&
+    /^[+-]?\d+$/.test(value.trim())
+  ) {
+    const parsed = Number(value.trim());
+    return Number.isSafeInteger(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function integerRule(options: IntegerValidationOptions = {}): ValidationRule {
   return (field, value) => {
-    if (value === undefined || value === null || value === "") {
-      return undefined;
-    }
-
-    const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
-
-    if (!Number.isInteger(parsed)) {
-      return `"${field}" must be an integer.`;
-    }
-
+    if (value === undefined || value === null || value === "") return undefined;
+    if (integerValue(value, options) === undefined) return `"${field}" must be an integer.`;
     return undefined;
   };
 }
@@ -141,34 +151,27 @@ function confirmed(fieldName: string): ValidationRule {
   };
 }
 
-function positiveIntegerRule(): ValidationRule {
+function positiveIntegerRule(options: IntegerValidationOptions = {}): ValidationRule {
   return (field, value) => {
-    if (value === undefined || value === null || value === "") {
-      return undefined;
-    }
-
-    const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
-
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      return `"${field}" must be a positive integer.`;
-    }
-
+    if (value === undefined || value === null || value === "") return undefined;
+    const parsed = integerValue(value, options);
+    if (parsed === undefined || parsed <= 0) return `"${field}" must be a positive integer.`;
     return undefined;
   };
 }
 
-function integerRange(minimum: number, maximum: number): ValidationRule {
+function integerRange(
+  minimum: number,
+  maximum: number,
+  options: IntegerValidationOptions = {},
+): ValidationRule {
+  if (!Number.isSafeInteger(minimum) || !Number.isSafeInteger(maximum) || minimum > maximum)
+    throw new TypeError("Integer range bounds must be safe integers in ascending order.");
   return (field, value) => {
-    if (value === undefined || value === null || value === "") {
-      return undefined;
-    }
-
-    const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
-
-    if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    if (value === undefined || value === null || value === "") return undefined;
+    const parsed = integerValue(value, options);
+    if (parsed === undefined || parsed < minimum || parsed > maximum)
       return `"${field}" must be an integer between ${minimum} and ${maximum}.`;
-    }
-
     return undefined;
   };
 }
@@ -205,7 +208,7 @@ function validateObject(payload: unknown, schema: ValidationSchema): Record<stri
   return output;
 }
 
-export type { ValidationRule, ValidationSchema };
+export type { IntegerValidationOptions, ValidationRule, ValidationSchema };
 export {
   confirmed,
   emailRule,

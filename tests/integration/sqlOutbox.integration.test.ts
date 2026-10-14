@@ -459,6 +459,38 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
       { event_id: "committed", tenant_id: 101 },
     ]);
   });
+  test("public delivery inspection retains caller RLS and explicit operator bypass", async () => {
+    const outbox = make(async () => {});
+    const id = "inspection-private";
+    try {
+      await runWithTenantDatabase(tenant, () =>
+        outbox.publish("order", { secret: "not-in-snapshot" }, { id }),
+      );
+      expect(await runWithTenantDatabase(tenant, () => outbox.getDelivery(id, "effect"))).toEqual({
+        status: "pending",
+        attempts: 0,
+        maxAttempts: 5,
+      });
+      expect(
+        await runWithTenantDatabase({ ...tenant, id: 102 }, () => outbox.getDelivery(id, "effect")),
+      ).toBeNull();
+      expect(await runInTransaction(() => outbox.getDelivery(id, "effect"))).toBeNull();
+      expect(await runWithMigrationBypass(() => outbox.getDelivery(id, "effect"))).toEqual({
+        status: "pending",
+        attempts: 0,
+        maxAttempts: 5,
+      });
+      await runWithTenantDatabase(tenant, async () => {
+        await outbox.getDelivery(id, "effect");
+        const [settings] = await db.unsafe<{ bypass: string }>(
+          "SELECT current_setting('app.bypass_rls', true) AS bypass",
+        );
+        expect(settings?.bypass).toBe("false");
+      });
+    } finally {
+      await admin.unsafe("DELETE FROM strata_outbox_event WHERE id=$1", [id]);
+    }
+  });
   test("three workers claim independently; listener retry rolls back its tenant writes", async () => {
     const outbox = make(async (event) => {
       await db.unsafe("INSERT INTO effects VALUES ($1, $2)", [event.id, tenant.id]);
@@ -587,6 +619,12 @@ describe.skipIf(!mysqlUrl)("outbox on dedicated MySQL fixture", () => {
       await runInTransaction(() => outbox.publish("order", 1, { id }));
     await Promise.all([outbox.processNext(), outbox.processNext(), outbox.processNext()]);
     expect(seen.sort()).toEqual(["A", "B", "a"]);
+    expect(await outbox.getDelivery("A", "effect")).toEqual({
+      status: "completed",
+      attempts: 1,
+      maxAttempts: 5,
+    });
+    expect(await outbox.getDelivery("missing", "effect")).toBeNull();
     expect(await outbox.processNext()).toBe(false);
     await migration.down(connection);
     owned = false;

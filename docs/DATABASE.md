@@ -100,6 +100,14 @@ Postgres/SQLite compile native `NULLS FIRST/LAST`; MySQL uses a null discriminat
 const revenue = await orders.sum("total", { status: "paid" });
 ```
 
+### Typed grouped sums
+
+`repository.query().where({ order_id }).sumBy("product_id", "quantity")` returns plain typed `{ value, sum }` rows in one SQL query. `value` has the group column's declared type (or null); `sum` is exact database text or null when the group contains only null quantities. Empty input returns an empty array. The fixed aliases cannot be supplied by request input. Declared column validation, dialect identifier quoting, bound predicates, soft-delete policy, protected filters and the active transaction/RLS connection remain in force. Numeric column compatibility is governed by the real database schema, not inferred from names.
+
+The direct form is `repository.sumBy("product_id", "quantity", { where: { order_id } })`. Grouped sums reject joins, custom selection, prior grouping/having, ordering, pagination, row locks and eager loading rather than silently discarding these options. Hold any required business row lock separately inside the same framework transaction. To retain model predicate scopes, use `Model.scopeQuery(repository.query())`; aggregate projections do not hydrate models or execute casts/hooks.
+
+Totals deliberately remain strings across Postgres/MySQL/SQLite: adding integers can exceed the JavaScript safe range or the source column range. Convert only after checking the application's required range; use a decimal/bigint representation when appropriate. Database-native overflow and nonnumeric-column behavior remain visible errors or engine semantics; this API does not promise unlimited precision, integer-only totals or identical floating-point/decimal representations across engines. Existing scalar aggregate APIs are unchanged.
+
 ### Writes
 
 `upsert` inserts or updates in one statement. Conflict columns need a unique index; passing an empty update list makes it insert-or-ignore. It compiles to `ON CONFLICT` on PostgreSQL and SQLite and to `ON DUPLICATE KEY UPDATE` on MySQL, and returns `null` when nothing was written.
