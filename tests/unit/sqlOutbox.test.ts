@@ -60,6 +60,105 @@ describe("durable SQL outbox on SQLite", () => {
       "SELECT * FROM strata_outbox_delivery ORDER BY listener_name",
     );
 
+  test("read-only delivery inspection distinguishes missing, pending, processing and completed", async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const admission = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const outbox = new SqlOutbox({
+      listeners: [
+        listener(async () => {
+          entered();
+          await gate;
+        }),
+      ],
+    });
+    expect(await outbox.getDelivery("missing", "receipt")).toBeNull();
+    await publish(outbox);
+    const before = await db.unsafe("SELECT * FROM strata_outbox_delivery");
+    expect(await outbox.getDelivery("order:1", "receipt")).toEqual({
+      status: "pending",
+      attempts: 0,
+      maxAttempts: 5,
+    });
+    expect(await outbox.getDelivery("order:1", "unknown")).toBeNull();
+    expect(await db.unsafe("SELECT * FROM strata_outbox_delivery")).toEqual(before);
+    const processing = outbox.processNext();
+    try {
+      await admission;
+      expect(await outbox.getDelivery("order:1", "receipt")).toEqual({
+        status: "processing",
+        attempts: 1,
+        maxAttempts: 5,
+      });
+    } finally {
+      release();
+      await processing;
+    }
+    const retired = new SqlOutbox({ listeners: [] });
+    expect(await retired.getDelivery("order:1", "receipt")).toEqual({
+      status: "completed",
+      attempts: 1,
+      maxAttempts: 5,
+    });
+  });
+  test("inspection observes terminal failure and replay without implementing replay itself", async () => {
+    const outbox = new SqlOutbox({
+      maxAttempts: 1,
+      listeners: [
+        listener(async () => {
+          throw new Error("provider-secret");
+        }),
+      ],
+    });
+    await publish(outbox);
+    await outbox.processNext();
+    expect(await outbox.getDelivery("order:1", "receipt")).toEqual({
+      status: "failed",
+      attempts: 1,
+      maxAttempts: 1,
+    });
+    await outbox.replay("order:1", "receipt");
+    expect(await outbox.getDelivery("order:1", "receipt")).toEqual({
+      status: "pending",
+      attempts: 0,
+      maxAttempts: 1,
+    });
+    for (const [event, name] of [
+      ["bad'", "receipt"],
+      ["order:1", "bad'"],
+      ["", "receipt"],
+      ["x".repeat(65), "receipt"],
+      ["order:1", "x".repeat(129)],
+    ] as const)
+      await expect(outbox.getDelivery(event, name)).rejects.toThrow("Invalid durable");
+  });
+  test("inspection rejects corrupt status and unsafe persisted counters", async () => {
+    const outbox = new SqlOutbox({ listeners: [listener(async () => {})] });
+    await publish(outbox);
+    await db.unsafe("PRAGMA ignore_check_constraints = ON");
+    for (const [status, attempts, max] of [
+      ["invalid", 0, 5],
+      ["pending", -1, 5],
+      ["pending", 0, 0],
+      ["pending", 9007199254740992, 5],
+      ["pending", 0, 9007199254740992],
+    ]) {
+      await db.unsafe("UPDATE strata_outbox_delivery SET status=?,attempts=?,max_attempts=?", [
+        status,
+        attempts,
+        max,
+      ]);
+      await expect(outbox.getDelivery("order:1", "receipt")).rejects.toThrow(
+        "Invalid outbox delivery snapshot",
+      );
+    }
+  });
+
   test("publication commits no side effects; restart delivers the persisted listener snapshot", async () => {
     const received: unknown[] = [];
     const original = new SqlOutbox({

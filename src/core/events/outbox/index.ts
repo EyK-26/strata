@@ -18,6 +18,12 @@ interface DurableListener {
   readonly event: string;
   handle(event: DurableEvent, context: { signal: AbortSignal }): Promise<void>;
 }
+type OutboxDeliveryStatus = "pending" | "processing" | "failed" | "completed";
+interface OutboxDeliverySnapshot {
+  readonly status: OutboxDeliveryStatus;
+  readonly attempts: number;
+  readonly maxAttempts: number;
+}
 interface SqlOutboxOptions {
   listeners: readonly DurableListener[];
   leaseMs?: number;
@@ -110,6 +116,40 @@ class SqlOutbox {
   hasListener(name: string, event?: string): boolean {
     const listener = this.listeners.get(name);
     return listener !== undefined && (event === undefined || listener.event === event);
+  }
+
+  /** Read-only advisory observation: caller owns tenant/RLS scope; no implicit bypass. */
+  async getDelivery(eventId: string, listenerName: string): Promise<OutboxDeliverySnapshot | null> {
+    identifier(eventId, 64);
+    identifier(listenerName, 128);
+    const p = placeholders(2);
+    const [row] = await db.unsafe<{
+      status: string;
+      attempts: number | string;
+      max_attempts: number | string;
+    }>(
+      `SELECT status, attempts, max_attempts FROM strata_outbox_delivery WHERE event_id = ${p[0]} AND listener_name = ${p[1]} LIMIT 1`,
+      [eventId, listenerName],
+    );
+    if (!row) return null;
+    const attempts = Number(row.attempts);
+    const maxAttempts = Number(row.max_attempts);
+    if (
+      !Number.isSafeInteger(attempts) ||
+      attempts < 0 ||
+      !Number.isSafeInteger(maxAttempts) ||
+      maxAttempts < 1
+    )
+      throw new Error("Invalid outbox delivery snapshot.");
+    const status = row.status;
+    if (
+      status !== "pending" &&
+      status !== "processing" &&
+      status !== "failed" &&
+      status !== "completed"
+    )
+      throw new Error("Invalid outbox delivery snapshot.");
+    return { status, attempts, maxAttempts };
   }
 
   async publish(
@@ -410,5 +450,11 @@ export type {
 } from "./metrics";
 export { createOutboxMetricsCollector, renderOutboxMetrics } from "./metrics";
 export { createOutboxMigration } from "./migration";
-export type { DurableEvent, DurableListener, SqlOutboxOptions };
+export type {
+  DurableEvent,
+  DurableListener,
+  OutboxDeliverySnapshot,
+  OutboxDeliveryStatus,
+  SqlOutboxOptions,
+};
 export { SqlOutbox };
