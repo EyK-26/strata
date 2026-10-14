@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { S3Client } from "bun";
 import { assertPathUnderRoot } from "../security/safePath";
 
+/** Missing objects are null/false; all other failures reject. */
 interface StorageDriver {
   put(path: string, contents: string | Uint8Array): Promise<string>;
   get(path: string): Promise<Uint8Array | null>;
@@ -15,6 +16,10 @@ interface S3StorageConfig {
   bucket: string;
   region?: string;
   endpoint?: string;
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
 class LocalStorageDriver implements StorageDriver {
@@ -38,8 +43,9 @@ class LocalStorageDriver implements StorageDriver {
   async get(path: string): Promise<Uint8Array | null> {
     try {
       return await readFile(this.resolvePath(path));
-    } catch {
-      return null;
+    } catch (error) {
+      if (hasErrorCode(error, "ENOENT")) return null;
+      throw error;
     }
   }
 
@@ -47,8 +53,9 @@ class LocalStorageDriver implements StorageDriver {
     try {
       await unlink(this.resolvePath(path));
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (hasErrorCode(error, "ENOENT")) return false;
+      throw error;
     }
   }
 }
@@ -63,21 +70,21 @@ class S3StorageDriver implements StorageDriver {
 
   async get(path: string): Promise<Uint8Array | null> {
     const normalizedPath = path.replace(/^\/+/, "");
-    const file = this.client.file(normalizedPath);
-
-    if (!(await file.exists())) {
-      return null;
+    try {
+      return new Uint8Array(await this.client.file(normalizedPath).arrayBuffer());
+    } catch (error) {
+      if (hasErrorCode(error, "NoSuchKey")) return null;
+      throw error;
     }
-
-    return new Uint8Array(await file.arrayBuffer());
   }
 
   async delete(path: string): Promise<boolean> {
     try {
       await this.client.unlink(path.replace(/^\/+/, ""));
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (hasErrorCode(error, "NoSuchKey")) return false;
+      throw error;
     }
   }
 }

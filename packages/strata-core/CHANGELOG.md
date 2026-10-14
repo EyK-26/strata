@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.27
+
+Storage distinguishes missing objects from filesystem, authorization, missing-bucket and transport failures; S3 reads use a single native GET. Adds native Bun protocol regressions and documents failure/reconciliation contracts.
+
 ## 2.2.26
 
 - Integer validation checks complete safe values instead of accepting numeric prefixes. Whole signed decimal form strings, optional values and existing error messages remain supported; `allowNumericStrings: false` requires JSON numbers. Validated strings are not implicitly cast. Invalid range bounds reject at configuration time.
