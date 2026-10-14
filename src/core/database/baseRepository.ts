@@ -15,6 +15,7 @@ import {
   buildCountQuery,
   buildDeleteByIdQuery,
   buildGroupedCountQuery,
+  buildGroupedSumQuery,
   buildIncrementQuery,
   buildInsertQuery,
   buildJoinClause,
@@ -751,6 +752,25 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     );
 
     return Number(row?.[alias] ?? 0);
+  }
+
+  /** One plain grouped projection; SQL numeric totals remain exact text, never implicit JS numbers. */
+  async sumBy<K extends keyof TEntity & string>(
+    groupColumn: K,
+    column: keyof TEntity & string,
+    options: ExtendedQueryOptions<TEntity> = {},
+  ): Promise<Array<{ value: TEntity[K] | null; sum: string | null }>> {
+    const { whereNodes, ...queryOptions } = options;
+    const { text, params } = buildGroupedSumQuery(
+      this.table,
+      groupColumn,
+      column,
+      queryOptions,
+      whereNodes ?? [],
+    );
+    return withDatabaseErrorHandling(() =>
+      this.connection.unsafe<{ value: TEntity[K] | null; sum: string | null }>(text, params),
+    );
   }
 
   async sum(column: keyof TEntity & string, where: QueryWhere<TEntity> = {}): Promise<number> {

@@ -1,5 +1,11 @@
 # @getstrata/core changelog
 
+## 2.2.26
+
+- Integer validation checks complete safe values instead of accepting numeric prefixes. Whole signed decimal form strings, optional values and existing error messages remain supported; `allowNumericStrings: false` requires JSON numbers. Validated strings are not implicitly cast. Invalid range bounds reject at configuration time.
+- `SqlOutbox.getDelivery(eventId, listenerName)` provides bounded read-only status/attempt inspection under the caller's active connection and RLS scope. It returns no payloads, owner tokens or provider errors, never establishes bypass, and remains an advisory snapshot distinct from atomic replay.
+- Repository and fluent `sumBy(groupColumn, column)` return typed groups with database textual totals, preserving precision without implicit JavaScript number conversion. Bound/protected predicates, soft deletes and transaction/RLS scopes are preserved; unsupported transformations reject explicitly. Native Postgres, MySQL and SQLite regressions cover precision, null groups, rollback and overflow behavior.
+
 ## 2.2.25
 
 Queue worker run loops recover native Redis connection closure with bounded backoff and a fresh connection. Uncertain Redis mutations are not replayed; retained reservations and retries use normal recovery. Explicit closure remains terminal and non-connection errors remain fatal. Native poll/ack closure regressions cover Streams and list transports.

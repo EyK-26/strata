@@ -416,6 +416,14 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return attached[0] ?? null;
   }
 
+  async sumBy<K extends keyof TEntity & string>(
+    groupColumn: K,
+    column: keyof TEntity & string,
+  ): Promise<Array<{ value: TEntity[K] | null; sum: string | null }>> {
+    if (this.eagerLoads.length) throw new TypeError("Grouped sums do not support eager loading.");
+    return this.repository.sumBy(groupColumn, column, this.buildOptions());
+  }
+
   async count(): Promise<number> {
     return await this.repository.count(this.buildOptions());
   }

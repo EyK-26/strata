@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.26
+
+Fix complete safe integer validation with optional strict JSON-number input; add scoped read-only outbox delivery inspection; add typed grouped sums with exact textual totals, protected predicates and dialect/RLS regressions.
+
 ## 2.2.25
 
 Queue worker run loops recover native Redis connection closure with bounded backoff and a fresh connection. Uncertain Redis mutations are not replayed; retained reservations and retries use normal recovery. Explicit closure remains terminal and non-connection errors remain fatal. Native poll/ack closure regressions cover Streams and list transports.
