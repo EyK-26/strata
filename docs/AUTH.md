@@ -109,6 +109,12 @@ This is an atomic claim, not an atomic transaction with later credential creatio
 
 Results use weak Request keys rather than a credential/global-user cache. Changing either credential header, switching authorization schemes or registering a guard invalidates reuse. Infrastructure errors are not retained, and an older failed resolution cannot remove a newer credential result. Bearer/session behavior and the `request`-omitted auth-context lookup remain unchanged. Treat an admitted Basic principal as that request's authentication snapshot; this is not cross-request caching or a revocation bypass for later requests.
 
+## JWT issuance and revocation precision
+
+Framework-signed JWTs retain millisecond issuance precision in the NumericDate `iat` claim. RFC 7519 permits fractional NumericDates. This keeps a token issued after `session_valid_after` from appearing older because of second rounding. The guard still rejects issuance before the cutoff; equality retains the existing session-cookie comparison semantics. Expiration remains the same integer-second boundary and TTL policy. Existing integer-`iat` tokens remain supported, with their original coarse ordering; no tolerance admits tokens from before revocation.
+
+This is wall-clock ordering, not a distributed logical revocation epoch: clock skew and two effects at the same millisecond remain operational boundaries. Consumers must accept valid fractional NumericDates. No authentication delay or custom claim is needed.
+
 ## Sessions table
 
 Generated cookie apps store browser sessions in `sessions`. Logout deletes the current row and clears `strata_session`. That is why rank 1 is stronger than a signed cookie alone. There is no generated "sign out other devices" screen.
