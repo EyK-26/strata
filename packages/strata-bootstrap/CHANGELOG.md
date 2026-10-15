@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.33
+
+Fix shared tenant lookups in generated SQLite column-tenancy apps through typed repositories. Generated SCIM rejects unsupported status/profile mutations before writing and runs mutations in explicit transactions, including immediate observer rollback. Add actual SQLite and restricted Postgres HTTP regressions; full account deactivation remains unsupported and explicit.
+
 ## 2.2.32
 
 Generated JSON and HTML email verification now atomically consumes the one-time link with the account update and immediate observers, including SQLite/non-RLS apps. Failed verification remains retryable. Adds actual signed HTTP rollback, purpose/expiry/admission, concurrency and replay regressions while preserving existing response contracts.

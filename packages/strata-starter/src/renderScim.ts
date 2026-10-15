@@ -11,6 +11,7 @@ import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { createScimAuthMiddleware } from "@getstrata/core/auth/scimAuthMiddleware";
 import { hashPassword } from "@getstrata/core/auth/password";
+import { runInTransaction } from "@getstrata/core/database/transaction";
 import { BadRequestError } from "@getstrata/core/errors/http";
 import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { withErrorHandling } from "@getstrata/core/http/response";
@@ -104,6 +105,59 @@ function readName(body: Record<string, unknown>, fallback: string): string {
   return fallback;
 }
 
+function isScimObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// This minimal adapter persists profile fields only. Never acknowledge a status
+// change (or part of a PATCH) that it cannot actually apply.
+function validateScimProfile(body: Record<string, unknown>, strict = false): Response | null {
+  if ("active" in body && body.active !== true) {
+    return scimError("Account status changes are not supported; no deactivation was performed.", 400);
+  }
+  const fields = ["userName", "emails", "name", "displayName", "active"];
+  if (strict && Object.keys(body).some((key) => !fields.includes(key))) {
+    return scimError("Unsupported profile attribute.", 400);
+  }
+  if (strict && !fields.some((key) => key in body)) return scimError("A profile value is required.", 400);
+  for (const key of ["userName", "displayName"]) {
+    const value = body[key];
+    if (key in body && (typeof value !== "string" || !value.trim())) {
+      return scimError("Profile strings must be non-empty.", 400);
+    }
+  }
+  if ("emails" in body) {
+    if (!Array.isArray(body.emails) || body.emails.length !== 1) {
+      return scimError("Exactly one email value is supported.", 400);
+    }
+    const email = body.emails[0];
+    if (!isScimObject(email) || typeof email.value !== "string" || !email.value.trim()) {
+      return scimError("An email value is required.", 400);
+    }
+    if (Object.keys(email).some((key) => !["value", "primary"].includes(key)) || ("primary" in email && email.primary !== true)) {
+      return scimError("Only one primary email value is supported.", 400);
+    }
+  }
+  if ("name" in body) {
+    if (!isScimObject(body.name) || Object.keys(body.name).some((key) => !["formatted", "givenName", "familyName"].includes(key))) {
+      return scimError("Unsupported name value.", 400);
+    }
+    if (!Object.values(body.name).some((value) => typeof value === "string" && value.trim()) || Object.values(body.name).some((value) => typeof value !== "string")) {
+      return scimError("Name values must be strings with a non-empty name.", 400);
+    }
+  }
+  return null;
+}
+
+async function readScimBody(request: Request): Promise<Record<string, unknown> | Response> {
+  try {
+    const body: unknown = await request.json();
+    return isScimObject(body) ? body : scimError("An object body is required.", 400);
+  } catch {
+    return scimError("Invalid JSON body.", 400);
+  }
+}
+
 function wrapScim(kernel: HttpKernel, handler: (request: Request) => Promise<Response>) {
   const throttle = kernel.ownThrottle(createScimThrottleMiddleware({
     redisUrl: process.env.REDIS_URL,
@@ -115,7 +169,9 @@ function wrapScim(kernel: HttpKernel, handler: (request: Request) => Promise<Res
       if (!scimEnabled()) {
         return scimError("SCIM is off.", 404);
       }
-      return handler(request);
+      return ["POST", "PUT", "PATCH", "DELETE"].includes(request.method)
+        ? await runInTransaction(() => handler(request))
+        : await handler(request);
     }),
   );
 }
@@ -186,7 +242,10 @@ const scimModule: AppModule = {
         POST: kernel.wrap(
           "api",
           wrapScim(kernel, async (request) => {
-            const body = (await request.json()) as Record<string, unknown>;
+            const body = await readScimBody(request);
+            if (body instanceof Response) return body;
+            const invalid = validateScimProfile(body);
+            if (invalid) return invalid;
             const email = readUserName(body);
             const name = readName(body, email.split("@")[0] ?? "User");
             if (!email) {
@@ -227,7 +286,10 @@ const scimModule: AppModule = {
             if (id instanceof Response) {
               return id;
             }
-            const body = (await request.json()) as Record<string, unknown>;
+            const body = await readScimBody(request);
+            if (body instanceof Response) return body;
+            const invalid = validateScimProfile(body);
+            if (invalid) return invalid;
             const email = readUserName(body);
             const name = readName(body, email);
             if (!email || !name) {
@@ -252,31 +314,47 @@ const scimModule: AppModule = {
             if (!user) {
               return scimError("User not found.", 404);
             }
-            const body = (await request.json()) as { schemas?: string[]; Operations?: Array<{ op?: string; path?: string; value?: unknown }> };
-            if (body.schemas && !body.schemas.includes(PATCH_SCHEMA)) {
+            const body = await readScimBody(request);
+            if (body instanceof Response) return body;
+            if (!Array.isArray(body.schemas) || !body.schemas.includes(PATCH_SCHEMA)) {
               return scimError("Unsupported patch schema.", 400);
+            }
+            if (!Array.isArray(body.Operations) || body.Operations.length === 0) {
+              return scimError("A non-empty Operations array is required.", 400);
             }
             let name = String(user.get("name") ?? "");
             let email = String(user.get("email") ?? "");
-            for (const operation of body.Operations ?? []) {
-              const op = (operation.op ?? "replace").toLowerCase();
-              if (op !== "replace" && op !== "add") {
-                continue;
+            for (const operation of body.Operations) {
+              if (!isScimObject(operation) || typeof operation.op !== "string" || !["replace", "add"].includes(operation.op.toLowerCase())) {
+                return scimError("Only add and replace profile operations are supported.", 400);
               }
-              const path = (operation.path ?? "").toLowerCase();
-              if (path === "username" || path === "emails") {
-                email = String(operation.value ?? email).trim().toLowerCase();
-              } else if (path === "name.formatted" || path === "displayname" || path === "name") {
-                if (typeof operation.value === "string") {
-                  name = operation.value.trim() || name;
-                } else if (operation.value && typeof operation.value === "object") {
-                  name = readName({ name: operation.value as Record<string, unknown> }, name);
-                }
-              } else if (!path && operation.value && typeof operation.value === "object") {
-                const value = operation.value as Record<string, unknown>;
-                email = readUserName(value) || email;
-                name = readName(value, name);
+              if (operation.path !== undefined && typeof operation.path !== "string") {
+                return scimError("Invalid patch path.", 400);
               }
+              const path = typeof operation.path === "string" ? operation.path.toLowerCase() : "";
+              let value: Record<string, unknown>;
+              if (!path) {
+                if (!isScimObject(operation.value)) return scimError("A profile object is required.", 400);
+                value = operation.value;
+              } else if (path === "username") {
+                value = { userName: operation.value };
+              } else if (path === "emails") {
+                value = { emails: operation.value };
+              } else if (path === "name.formatted") {
+                value = { name: { formatted: operation.value } };
+              } else if (path === "displayname" || (path === "name" && typeof operation.value === "string")) {
+                value = { displayName: operation.value };
+              } else if (path === "name") {
+                value = { name: operation.value };
+              } else if (path === "active") {
+                value = { active: operation.value };
+              } else {
+                return scimError("Unsupported patch path.", 400);
+              }
+              const invalid = validateScimProfile(value, true);
+              if (invalid) return invalid;
+              email = readUserName(value) || email;
+              name = readName(value, name);
             }
             await user.update({ name, email });
             return scimJson(toScimUser(user));
