@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.29
+
+MFA recovery-code persistence atomically claims the validated snapshot and rejects stale requests before credential issuance. Basic authentication fails closed and consumes under the verified RLS identifier scope. Adds native SQLite/Postgres/MySQL concurrency and restricted-role regressions.
+
 ## 2.2.28
 
 Generated JSON and HTML password resets validate input before consuming signed links and atomically commit token consumption, password updates and credential revocation. Adds real generated-app failure, retry, replay and cookie/token/JWT revocation regressions.

@@ -95,6 +95,14 @@ These are kernel helpers. Cookie apps generated with `--email-verification` ship
 
 SAML ACS verifies HMAC RelayState without a SameSite cookie so a cross-site IdP POST can succeed. Replay stores assertion IDs in `auth_saml_assertions` by default (SQL unique insert). Tests may use an in-memory store. Both drop IDs after 1 hour, which is longer than a typical assertion `NotOnOrAfter` plus `acceptedClockSkewMs` (5000). ACS also checks `profile.issuer` against `SAML_IDP_ISSUER`. Signed responses are required in production (`SAML_WANT_RESPONSE_SIGNED=false` is rejected at boot). `SAML_IDP_ISSUER` is required. JIT is skipped when `FEATURE_REGISTRATION=false`. New users and SAML JIT use `currentTenantId()`. If the account already has MFA enrolled, ACS redirects to `/login/mfa` instead of creating a session.
 
+## Single-use MFA recovery codes
+
+`completePasswordLogin` validates the submitted TOTP/recovery code against a user snapshot. When it returns `consumedRecoveryHash`, await `persistConsumedRecoveryHash` before creating a session/token or accepting the request. The persistence helper conditionally updates the exact validated recovery-code snapshot and requires one affected row. Stale, missing or inaccessible rows reject with the existing `UnprocessableEntityError(422, "mfa_invalid")`; database failures propagate. The helper keeps its `Promise<void>` contract, so existing awaited callers fail closed without adding a new boolean check.
+
+Only the winning request may proceed. A competing request, including one using another code from a now-stale snapshot, must reload/authenticate again; the helper does not retry stale decisions. A rejected stale write cannot reintroduce previously consumed hashes. Hashes and plaintext recovery codes are never included in rejection details. Ordinary TOTP and non-MFA logins perform no recovery-code write. Basic authentication maps rejected claims to no authenticated user and uses the verified user identifier's RLS scope, restoring the caller's scope afterwards.
+
+This is an atomic claim, not an atomic transaction with later credential creation or external effects. A failure after a successful claim may leave that code spent; do not restore it from an old snapshot. Published callers should retain the generated await-before-issuance ordering. This does not add TOTP replay prevention or change recovery-code generation/cryptography.
+
 ## Sessions table
 
 Generated cookie apps store browser sessions in `sessions`. Logout deletes the current row and clears `strata_session`. That is why rank 1 is stronger than a signed cookie alone. There is no generated "sign out other devices" screen.
