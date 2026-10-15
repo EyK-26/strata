@@ -1,8 +1,12 @@
+import type { AuthUserRecord } from "../contracts/authUserDirectory";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { getBoundDatabaseConnection } from "../database/boundConnection";
+import { getActiveDatabaseConnection } from "../database/connectionContext";
 import { getDefaultDatabasePool } from "../database/defaultConnection";
+import { UnprocessableEntityError } from "../errors/http";
 import { readBasicCredentials } from "../http/statelessAuth";
+import { runWithMigrationBypassForIdentifier } from "../tenant/databaseTenantContext";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
 import { verifyPassword } from "./password";
@@ -10,6 +14,24 @@ import { completePasswordLogin, persistConsumedRecoveryHash } from "./passwordLo
 
 class BasicAuthGuard implements AuthGuard {
   constructor(private readonly container: ServiceContainerLike) {}
+
+  private async persistRecovery(record: AuthUserRecord, hash: string): Promise<boolean> {
+    try {
+      await runWithMigrationBypassForIdentifier(record.id, async () => {
+        await persistConsumedRecoveryHash(
+          getActiveDatabaseConnection(getBoundDatabaseConnection() ?? getDefaultDatabasePool()),
+          record.id,
+          record.mfa_recovery_codes,
+          hash,
+        );
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof UnprocessableEntityError && error.message === "mfa_invalid")
+        return false;
+      throw error;
+    }
+  }
 
   async resolve(request: Request): Promise<AuthUser | null> {
     const credentials = readBasicCredentials(request);
@@ -42,12 +64,7 @@ class BasicAuthGuard implements AuthGuard {
       }
 
       if (mfa.consumedRecoveryHash) {
-        await persistConsumedRecoveryHash(
-          getBoundDatabaseConnection() ?? getDefaultDatabasePool(),
-          record.id,
-          record.mfa_recovery_codes,
-          mfa.consumedRecoveryHash,
-        );
+        if (!(await this.persistRecovery(record, mfa.consumedRecoveryHash))) return null;
       }
 
       return {
@@ -83,12 +100,7 @@ class BasicAuthGuard implements AuthGuard {
       }
 
       if (mfa.consumedRecoveryHash) {
-        await persistConsumedRecoveryHash(
-          getBoundDatabaseConnection() ?? getDefaultDatabasePool(),
-          record.id,
-          record.mfa_recovery_codes,
-          mfa.consumedRecoveryHash,
-        );
+        if (!(await this.persistRecovery(record, mfa.consumedRecoveryHash))) return null;
       }
 
       return user;

@@ -1,6 +1,7 @@
 import type { AuthUserRecord } from "../contracts/authUserDirectory";
 import { revealMfaSecret } from "../crypto/mfaSecret";
 import { currentSqlDialect } from "../database/dialect";
+import { UnprocessableEntityError } from "../errors/http";
 import { recoveryCodeMatches } from "../security/recoveryCodes";
 import { verifyTotp } from "../security/totp";
 
@@ -70,14 +71,23 @@ async function persistConsumedRecoveryHash(
     return;
   }
 
+  const hashes = parseRecoveryHashes(currentRaw);
+  if (typeof currentRaw !== "string" || !hashes.includes(consumedHash)) {
+    throw new UnprocessableEntityError("mfa_invalid");
+  }
   const dialect = currentSqlDialect();
-  await sql.unsafe(
-    `UPDATE users SET mfa_recovery_codes = ${dialect.placeholder(1)} WHERE id = ${dialect.placeholder(2)}`,
-    [
-      JSON.stringify(parseRecoveryHashes(currentRaw).filter((hash) => hash !== consumedHash)),
-      userId,
-    ],
+  const returning = dialect.returningClause("id");
+  const rows = await sql.unsafe(
+    `UPDATE users SET mfa_recovery_codes = ${dialect.placeholder(1)} WHERE id = ${dialect.placeholder(2)} AND mfa_recovery_codes = ${dialect.placeholder(3)}${returning}`,
+    [JSON.stringify(hashes.filter((hash) => hash !== consumedHash)), userId, currentRaw],
   );
+  const header = rows[0];
+  const affected = returning
+    ? rows.length
+    : typeof header === "object" && header !== null && "affectedRows" in header
+      ? Number(header.affectedRows)
+      : 0;
+  if (affected !== 1) throw new UnprocessableEntityError("mfa_invalid");
 }
 
 export type { PasswordLoginResult };

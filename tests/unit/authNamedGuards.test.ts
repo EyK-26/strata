@@ -279,6 +279,8 @@ describe("HTTP Basic guard", () => {
   });
 
   test("persists a consumed recovery code on Basic login", async () => {
+    const previousTenancy = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "none";
     const password = await hashPassword("secret-pass");
     const [code] = generateRecoveryCodes(1);
     const hash = hashRecoveryCode(String(code));
@@ -307,7 +309,7 @@ describe("HTTP Basic guard", () => {
     bindDatabaseConnection({
       async unsafe(_query: string, params: readonly unknown[] = []) {
         stored = String(params[0]);
-        return [];
+        return [{ id: 1 }];
       },
     } as never);
     try {
@@ -326,6 +328,50 @@ describe("HTTP Basic guard", () => {
       expect(JSON.parse(stored)).toEqual([]);
     } finally {
       resetBoundDatabaseConnection();
+      restoreEnvVar("TENANCY_DRIVER", previousTenancy);
+    }
+  });
+
+  test("Basic authentication denies stale recovery claims in both directory paths and propagates database failures", async () => {
+    const before = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "none";
+    const password = await hashPassword("secret-pass");
+    const [code] = generateRecoveryCodes(1);
+    const raw = JSON.stringify([hashRecoveryCode(String(code))]);
+    try {
+      for (const directPassword of [true, false]) {
+        const directory: AuthUserDirectory = {
+          resolveUserFromToken: async () => null,
+          findByIdOrThrow: async (id) => ({ id, role: "member" }),
+          findByEmail: async () => ({
+            id: 1,
+            role: "member",
+            password: directPassword ? password : undefined,
+            mfa_enabled: true,
+            mfa_secret: "unused",
+            mfa_recovery_codes: raw,
+          }),
+          verifyCredentials: async () => ({ id: 1 }),
+        };
+        const guard = new BasicAuthGuard(directoryContainer(directory));
+        const request = new Request("http://example.test", {
+          headers: {
+            authorization: `Basic ${Buffer.from("fixture:secret-pass").toString("base64")}`,
+            "x-mfa-code": String(code),
+          },
+        });
+        bindDatabaseConnection({ unsafe: async () => [] } as never);
+        expect(await guard.resolve(request)).toBeNull();
+        bindDatabaseConnection({
+          unsafe: async () => {
+            throw new Error("SQL unavailable");
+          },
+        } as never);
+        await expect(guard.resolve(request)).rejects.toThrow("SQL unavailable");
+      }
+    } finally {
+      resetBoundDatabaseConnection();
+      restoreEnvVar("TENANCY_DRIVER", before);
     }
   });
 
