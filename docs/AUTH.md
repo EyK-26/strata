@@ -109,6 +109,20 @@ This is an atomic claim, not an atomic transaction with later credential creatio
 
 Results use weak Request keys rather than a credential/global-user cache. Changing either credential header, switching authorization schemes or registering a guard invalidates reuse. Infrastructure errors are not retained, and an older failed resolution cannot remove a newer credential result. Bearer/session behavior and the `request`-omitted auth-context lookup remain unchanged. Treat an admitted Basic principal as that request's authentication snapshot; this is not cross-request caching or a revocation bypass for later requests.
 
+## MFA setup concurrency and unreceived responses
+
+Generated `/account/mfa` uses a typed repository conditional write against the loaded MFA enabled/secret/recovery fields and `session_valid_after`. A competing change after that snapshot produces the standard 409 conflict before any recovery-code page is returned. The trusted security payload is encrypted/hashed explicitly before this repository write; set-based writes intentionally bypass per-model observers/casts. Extensions requiring audit effects should add them to this explicit transaction rather than assuming a model hook runs. Tenant identifier scoping and the existing CSRF/password-confirmation admission remain in place.
+
+The write and cookie/API-token/JWT revocation run in an explicit transaction, including SQLite/non-RLS apps. A revocation failure rolls the setup back. A fresh deliberate replacement remains supported; this is optimistic state protection for stale writes, not an enrollment-version token tied to the earlier GET form or a distributed lock.
+
+Only the winning committed response shows plaintext recovery codes. If that response is lost, do not replay or store those codes in plaintext: the old session is revoked, the configured authenticator can perform a fresh login, and fresh password confirmation allows deliberate replacement. A later GET does not recover previous codes. If the authenticator is also unavailable, a separate account-recovery policy is needed; this flow does not invent one. Existing apps must explicitly adopt the released generated handler shape; updating packages does not rewrite their routes.
+
+## JWT issuance and revocation precision
+
+Framework-signed JWTs retain millisecond issuance precision in the NumericDate `iat` claim. RFC 7519 permits fractional NumericDates. This keeps a token issued after `session_valid_after` from appearing older because of second rounding. The guard still rejects issuance before the cutoff; equality retains the existing session-cookie comparison semantics. Expiration remains the same integer-second boundary and TTL policy. Existing integer-`iat` tokens remain supported, with their original coarse ordering; no tolerance admits tokens from before revocation.
+
+This is wall-clock ordering, not a distributed logical revocation epoch: clock skew and two effects at the same millisecond remain operational boundaries. Consumers must accept valid fractional NumericDates. No authentication delay or custom claim is needed.
+
 ## Sessions table
 
 Generated cookie apps store browser sessions in `sessions`. Logout deletes the current row and clears `strata_session`. That is why rank 1 is stronger than a signed cookie alone. There is no generated "sign out other devices" screen.

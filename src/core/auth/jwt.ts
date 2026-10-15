@@ -61,11 +61,11 @@ function signaturesMatch(left: string, right: string): boolean {
 }
 
 function signJwt(payload: JwtPayload, options: SignJwtOptions = {}): string {
-  const now = Math.floor(Date.now() / 1000);
+  const issuedAt = Date.now() / 1000;
   const body: JwtPayload = {
     ...payload,
-    iat: now,
-    exp: now + jwtTtlSeconds(options.ttlSeconds),
+    iat: issuedAt,
+    exp: Math.floor(issuedAt) + jwtTtlSeconds(options.ttlSeconds),
   };
   const header = encodeJson({ alg: "HS256", typ: "JWT" });
   const data = encodeJson(body);

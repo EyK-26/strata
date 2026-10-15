@@ -61,6 +61,53 @@ describe("JWT tokens", () => {
     }
   });
 
+  test("JWT issuance preserves ordering within a revocation second without admitting old tokens", async () => {
+    const originalNow = Date.now;
+    const second = Math.floor(originalNow() / 1000) * 1000;
+    let now = second + 100;
+    Date.now = () => now;
+    const secret = "unit-precision-jwt-secret-at-least-32-characters";
+    const cutoff = new Date(second + 500);
+    const guard = new JwtGuard({
+      secret,
+      directory: jwtDirectory((id) => ({ id, role: "admin", session_valid_after: cutoff })),
+    });
+    const request = (token: string) =>
+      new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } });
+    try {
+      const old = signJwt({ sub: 9, iat: 0 }, { secret, ttlSeconds: 60 });
+      now = second + 499;
+      const before = signJwt({ sub: 9 }, { secret, ttlSeconds: 60 });
+      now = second + 500;
+      const equal = signJwt({ sub: 9 }, { secret, ttlSeconds: 60 });
+      now = second + 501;
+      const after = signJwt({ sub: 9 }, { secret, ttlSeconds: 60 });
+      expect(await guard.resolve(request(old))).toBeNull();
+      expect(await guard.resolve(request(before))).toBeNull();
+      expect(await guard.resolve(request(equal))).toEqual({ id: 9 });
+      expect(await guard.resolve(request(after))).toEqual({ id: 9 });
+      expect(verifyJwt(after, secret)?.iat).toBe((second + 501) / 1000);
+      expect(verifyJwt(after, secret)?.exp).toBe(second / 1000 + 60);
+      now = second;
+      const integerIssued = signJwt({ sub: 9 }, { secret, ttlSeconds: 60 });
+      expect(Number.isInteger(verifyJwt(integerIssued, secret)?.iat)).toBe(true);
+      const unchangedCutoff = new JwtGuard({
+        secret,
+        directory: jwtDirectory((id) => ({
+          id,
+          role: "admin",
+          session_valid_after: new Date(second),
+        })),
+      });
+      expect(await unchangedCutoff.resolve(request(integerIssued))).toEqual({ id: 9 });
+      expect(await guard.resolve(request(integerIssued))).toBeNull();
+      now = second + 60_000;
+      expect(await guard.resolve(request(after))).toBeNull();
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
   test("JwtGuard authenticates a bearer JWT and ignores opaque tokens", async () => {
     const previous = process.env.JWT_SECRET;
     process.env.JWT_SECRET = "unit-test-jwt-secret-unit-test-jwt";
