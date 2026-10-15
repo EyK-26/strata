@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.31
+
+Preserve JWT issuance precision across millisecond revocation cutoffs without changing expiration. Generated MFA setup rejects stale concurrent state changes and atomically commits credential revocation in SQLite/non-RLS as well as Postgres RLS. Adds real HTTP initial/replacement races, revocation rollback and withheld-success recovery regressions; intentional fresh replacement remains supported.
+
 ## 2.2.30
 
 Basic authentication resolution is reused only within the same Request and unchanged credentials, preventing middleware/controller lookups from consuming MFA recovery proofs twice. Adds real HTTP replay/concurrency and credential/guard invalidation regressions.

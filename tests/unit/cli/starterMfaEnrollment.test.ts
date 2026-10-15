@@ -117,7 +117,9 @@ async function withApp(
 function recoveryCodes(html: string): string[] {
   const section = html.split("<h2>Recovery codes</h2>")[1];
   expect(section).toBeDefined();
-  const codes = [...(section ?? "").matchAll(/<li><code>([^<]+)<\/code><\/li>/g)].map((x) => x[1]!);
+  const codes = [...(section ?? "").matchAll(/<li><code>([^<]+)<\/code><\/li>/g)].map(
+    (x) => x[1] ?? "",
+  );
   expect(codes.length).toBeGreaterThan(1);
   return codes;
 }
@@ -209,6 +211,7 @@ test(
       let proxy: ReturnType<typeof Bun.serve> | undefined;
       let release = () => {};
       let attempt: Promise<Response> | undefined;
+      let abort: AbortController | undefined;
       try {
         const password = "Initial!Password123";
         const user = await User.create({
@@ -280,7 +283,7 @@ test(
             return new Response(null, { status: 502 });
           },
         });
-        const abort = new AbortController();
+        abort = new AbortController();
         attempt = actor.submit(secret, {
           destination: `http://127.0.0.1:${proxy.port}`,
           signal: abort.signal,
@@ -289,7 +292,20 @@ test(
           () => "unexpected-response",
           () => "aborted",
         );
-        await observed;
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            observed,
+            new Promise<never>((_resolve, reject) => {
+              timeout = setTimeout(
+                () => reject(new Error("Enrollment proxy did not observe backend completion")),
+                7000,
+              );
+            }),
+          ]);
+        } finally {
+          clearTimeout(timeout);
+        }
         expect(status).toBe(200);
         expect(hasCodes).toBe(true);
         const committed = await User.find(id);
@@ -320,6 +336,7 @@ test(
         expect(await renewed.statuses()).toEqual([200, 200, 200]);
       } finally {
         release();
+        abort?.abort();
         await attempt?.catch(() => {});
         await proxy?.stop(true);
         server.stop(true);
@@ -357,6 +374,7 @@ test.skipIf(!adminSource || !runtimeSource)(
         const neighbor = await runWithMigrationBypass(async () =>
           User.create({
             name: "Neighbor",
+            tenant_id: 3,
             email: "neighbor@example.test",
             password: await hashPassword(password),
             is_admin: false,
@@ -369,6 +387,7 @@ test.skipIf(!adminSource || !runtimeSource)(
           const user = await runWithMigrationBypass(async () =>
             User.create({
               name: "Race",
+              tenant_id: replacement ? 4 : 2,
               email,
               password: await hashPassword(password),
               is_admin: false,
@@ -391,15 +410,26 @@ test.skipIf(!adminSource || !runtimeSource)(
           const secrets = await Promise.all(actors.map((a) => a.setup()));
           expect(secrets[0]).not.toBe(secrets[1]);
           let ready = () => {};
-          const acquired = new Promise<void>((r) => (ready = r)),
+          let acquisitionFailed = (_error: unknown) => {};
+          const acquired = new Promise<void>((resolve, reject) => {
+              ready = resolve;
+              acquisitionFailed = reject;
+            }),
             gate = new Promise<void>((r) => (release = r));
           held = admin.begin(async (tx) => {
             await tx.unsafe("LOCK TABLE users IN SHARE MODE");
             ready();
             await gate;
           });
+          void held.catch(acquisitionFailed);
           await acquired;
-          attempts = Promise.all(actors.map((a, i) => a.submit(secrets[i]!)));
+          attempts = Promise.all(
+            actors.map((actor, index) => {
+              const secret = secrets[index];
+              if (!secret) throw new Error("Missing concurrent setup secret");
+              return actor.submit(secret);
+            }),
+          );
           let waiting = 0;
           const deadline = Date.now() + 7000;
           do {
@@ -418,18 +448,22 @@ test.skipIf(!adminSource || !runtimeSource)(
           expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
           const winner = responses.findIndex((r) => r.status === 200);
           expect(bodies[1 - winner]).not.toContain("<h2>Recovery codes</h2>");
-          const codes = recoveryCodes(bodies[winner]!);
+          const winningBody = bodies[winner],
+            winningSecret = secrets[winner];
+          if (!winningBody || !winningSecret) throw new Error("Missing winning setup response");
+          const codes = recoveryCodes(winningBody);
           const row = await runWithMigrationBypass(() => User.find(id));
-          expect(revealMfaSecret(row.get("mfa_secret"))).toBe(secrets[winner]!);
+          expect(row.get("tenant_id")).toBe(replacement ? 4 : 2);
+          expect(revealMfaSecret(row.get("mfa_secret"))).toBe(winningSecret);
           expect(JSON.parse(row.get("mfa_recovery_codes"))).toEqual(codes.map(hashRecoveryCode));
           for (const actor of actors) expect(await actor.statuses()).toEqual([401, 401, 401]);
           expect(await other.statuses()).toEqual([200, 200, 200]);
-          const login = await client(origin, email, password, secrets[winner]!);
+          const login = await client(origin, email, password, winningSecret);
           expect(await login.statuses()).toEqual([200, 200, 200]);
         }
       } finally {
         release();
-        await held;
+        await held?.catch(() => {});
         await attempts?.catch(() => {});
         server.stop(true);
         await boot.context.dispose();
