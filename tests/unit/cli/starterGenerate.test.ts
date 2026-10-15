@@ -19,12 +19,13 @@ import {
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { defaultLayers, exampleAppLayers } from "../../../packages/strata-starter/src/presets.ts";
 import { type Prompter, promptLayers } from "../../../packages/strata-starter/src/prompt.ts";
-import { jsonCsrfHeaders } from "../../helpers/jsonCsrf";
+import { jsonCsrfHeaders, mergeCookies } from "../../helpers/jsonCsrf";
 import { appTest, installGeneratedAppDependencies, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 const ENV_KEYS = [
   "DATABASE_URL",
+  "APP_URL",
   "APP_ENV",
   "FRONTEND_MODE",
   "AUTH_DEV_HEADERS",
@@ -311,7 +312,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.27");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.28");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -1331,6 +1332,187 @@ export default probeModule;
       }
     }
   });
+
+  appTest(
+    "generated JSON and HTML password resets validate before atomic consumption and revocation",
+    async () => {
+      const root = await tempDir();
+      const app = generateFromArgs(root, [
+        "reset-runtime",
+        "--frontend=hybrid",
+        "--database=sqlite",
+        "--auth=cookie-token-jwt",
+        "--yes",
+      ]);
+      const packagePath = join(app, "package.json");
+      const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+      for (const name of ["core", "bootstrap", "cli"])
+        pkg.dependencies[`@getstrata/${name}`] =
+          `file:${join(repoRoot, `packages/strata-${name}`)}`;
+      await writeFile(packagePath, JSON.stringify(pkg));
+      installGeneratedAppDependencies(app);
+      process.chdir(app);
+      process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+      process.env.APP_ENV = "local";
+      process.env.FRONTEND_MODE = "hybrid";
+      process.env.TENANCY_DRIVER = "none";
+      process.env.SESSION_SECRET = "dev-session-secret-change-me-please-32ch";
+      process.env.AUTH_DEV_HEADERS = "false";
+      process.env.MAIL_DRIVER = "log";
+      process.env.CACHE_DRIVER = "array";
+      process.env.QUEUE_DRIVER = "sync";
+      resetDiscoverModulesForTests();
+      const { bootstrapApp, createAppServer } = await import(
+        join(app, "src/bootstrap/createApp.ts")
+      );
+      const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      const { User } = await import(join(app, "src/models/User.ts"));
+      const { AuthOneTimeToken } = await import(join(app, "src/models/AuthOneTimeToken.ts"));
+      const { generateOneTimeToken, AUTH_ONE_TIME_PURPOSES } = await import(
+        "@getstrata/core/auth/oneTimeToken"
+      );
+      const { absoluteTemporarySignedUrl } = await import("@getstrata/core/http/signedUrl");
+      const { hashPassword, verifyPassword } = await import("@getstrata/core/auth/password");
+      const boot = await bootstrapApp();
+      const server = createAppServer(boot.routes, 0);
+      const origin = `http://127.0.0.1:${server.port}`;
+      process.env.APP_URL = origin;
+      try {
+        for (const html of [false, true]) {
+          const password = "Initial!Password123";
+          const replacement = "Replacement!Password123";
+          const user = await User.create({
+            name: "Reset fixture",
+            email: `reset-${html}@example.test`,
+            password: await hashPassword(password),
+            is_admin: false,
+          });
+          const id = Number(user.get("id"));
+          const csrf = await jsonCsrfHeaders(origin);
+          let cookie = csrf.cookie;
+          async function post(path: string, body: object | URLSearchParams | string, raw = false) {
+            const response = await fetch(new URL(path, origin), {
+              method: "POST",
+              redirect: "manual",
+              headers: {
+                ...csrf.headers,
+                cookie,
+                "content-type":
+                  body instanceof URLSearchParams
+                    ? "application/x-www-form-urlencoded"
+                    : "application/json",
+              },
+              body: raw
+                ? String(body)
+                : body instanceof URLSearchParams
+                  ? body
+                  : JSON.stringify(body),
+            });
+            cookie = mergeCookies(response, cookie);
+            return response;
+          }
+          const login = await post("/api/v1/auth/login", { email: user.get("email"), password });
+          expect(login.status).toBe(200);
+          const loginBody: unknown = await login.json();
+          if (
+            typeof loginBody !== "object" ||
+            loginBody === null ||
+            !("token" in loginBody) ||
+            typeof loginBody.token !== "string"
+          )
+            throw new Error("Login token missing.");
+          const token = loginBody.token;
+          const jwtResponse = await post("/api/auth/token", { email: user.get("email"), password });
+          expect(jwtResponse.status).toBe(200);
+          const jwtBody: unknown = await jwtResponse.json();
+          if (
+            typeof jwtBody !== "object" ||
+            jwtBody === null ||
+            !("token" in jwtBody) ||
+            typeof jwtBody.token !== "string"
+          )
+            throw new Error("JWT missing.");
+          const jwt = jwtBody.token;
+          const credentialStatus = (bearer?: string) =>
+            fetch(`${origin}/api/user`, {
+              headers: bearer ? { authorization: `Bearer ${bearer}` } : { cookie },
+              redirect: "manual",
+            }).then((response) => response.status);
+          for (const bearer of [undefined, token, jwt])
+            expect(await credentialStatus(bearer)).toBe(200);
+          const issued = generateOneTimeToken();
+          await AuthOneTimeToken.create({
+            purpose: AUTH_ONE_TIME_PURPOSES.passwordReset,
+            user_id: id,
+            token_hash: issued.hash,
+            expires_at: new Date(Date.now() + 60000).toISOString(),
+          });
+          const link = absoluteTemporarySignedUrl(
+            html ? "/reset-password" : "/api/v1/auth/reset-password",
+            60,
+            { token: issued.plain, email: String(user.get("email")) },
+          );
+          const consumed = async () =>
+            (await AuthOneTimeToken.query().where({ token_hash: issued.hash }).first())?.get(
+              "consumed_at",
+            );
+          const submit = (value: string) =>
+            post(
+              link,
+              html
+                ? new URLSearchParams({
+                    password: value,
+                    email: String(user.get("email")),
+                    _token: csrf.token,
+                  })
+                : { password: value },
+            );
+          expect((await submit("short")).status).toBe(html ? 200 : 403);
+          expect(await consumed()).toBeNull();
+          if (!html) {
+            for (const value of [null, 123456789, {}, []]) {
+              expect((await post(link, { password: value })).status).toBe(403);
+              expect(await consumed()).toBeNull();
+            }
+            expect((await post(link, "{", true)).status).toBeGreaterThanOrEqual(400);
+            expect(await consumed()).toBeNull();
+          }
+          for (const table of ["users", "api_tokens"]) {
+            const operation = table === "users" ? "UPDATE" : "DELETE";
+            await getSql().unsafe(
+              `CREATE TRIGGER reject_reset BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'injected reset failure'); END`,
+            );
+            try {
+              expect((await submit(replacement)).status).toBe(400);
+            } finally {
+              await getSql().unsafe("DROP TRIGGER reject_reset");
+            }
+            expect(await consumed()).toBeNull();
+            expect(await verifyPassword(password, (await User.find(id)).get("password"))).toBe(
+              true,
+            );
+            for (const bearer of [undefined, token, jwt])
+              expect(await credentialStatus(bearer)).toBe(200);
+          }
+          expect((await submit(replacement)).status).toBe(html ? 302 : 200);
+          expect(await consumed()).not.toBeNull();
+          expect(await verifyPassword(replacement, (await User.find(id)).get("password"))).toBe(
+            true,
+          );
+          for (const bearer of [undefined, token, jwt])
+            expect(await credentialStatus(bearer)).toBe(401);
+          expect((await submit("Another!Password123")).status).toBe(html ? 200 : 403);
+          expect(await verifyPassword(replacement, (await User.find(id)).get("password"))).toBe(
+            true,
+          );
+        }
+      } finally {
+        server.stop(true);
+        await boot.context.dispose();
+        await closeDatabase();
+      }
+    },
+  );
 
   appTest("cookie sqlite HTML app serves welcome, login, register, and signs in", async () => {
     const root = await tempDir();

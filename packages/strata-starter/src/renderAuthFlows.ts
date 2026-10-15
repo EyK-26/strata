@@ -116,6 +116,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
   if (authUsesJwt(layers.auth)) {
     imports.push(`import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";`);
   }
+  imports.push(`import { runInTransaction } from "@getstrata/core/database/transaction";`);
   imports.push(`import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";`);
   imports.push(
     `import { AUTH_ONE_TIME_PURPOSES, consumeOneTimeToken, generateOneTimeToken, hashOneTimeToken, revokeUserSessions as revokeStoredUserSessions } from "@getstrata/core/auth/oneTimeToken";`,
@@ -263,6 +264,21 @@ async function consumeSignedAuthToken(request: Request, purpose: string): Promis
 async function revokeUserSessions(userId: number) {
   await runAuthWrite(userId, async () => {
     await revokeStoredUserSessions(getSql(), userId);
+  });
+}
+
+async function completeSignedPasswordReset(request: Request, password: unknown): Promise<boolean> {
+  if (typeof password !== "string" || password.length < 8) return false;
+  return await runInTransaction(async () => {
+    const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.passwordReset);
+    if (!userId) return false;
+    await runAuthWrite(userId, async () => {
+      const user = await User.find(userId);
+      if (!user) throw new Error("Reset account no longer exists.");
+      await user.update({ password: await hashPassword(password) });
+      await revokeStoredUserSessions(getSql(), userId);
+    });
+    return true;
   });
 }
 
@@ -494,17 +510,11 @@ async function completeBrowserSsoLogin(
         },
         "/api/v1/auth/reset-password": {
           POST: kernel.wrap("api", kernel.wrapSigned(withErrorHandling(async (request) => {
-            const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.passwordReset);
-            const body = (await request.json()) as { password?: string };
-            const nextPassword = body.password ?? "";
-            if (!userId || nextPassword.length < 8) {
+            const body: unknown = await request.json();
+            const password = typeof body === "object" && body !== null && "password" in body ? body.password : undefined;
+            if (!(await completeSignedPasswordReset(request, password))) {
               return jsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
             }
-            await runAuthWrite(userId, async () => {
-              const user = await User.find(userId);
-              await user?.update({ password: await hashPassword(nextPassword) });
-            });
-            await revokeUserSessions(userId);
             return jsonResponse({ ok: true });
           }))),
         },`
@@ -851,18 +861,12 @@ async function completeBrowserSsoLogin(
             return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: {}, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
           })),
           POST: kernel.wrapWeb(kernel.wrapSigned(async (request) => {
-            const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.passwordReset);
             const { fields } = await parseFormBody(request);
             const email = new URL(request.url).searchParams.get("email") ?? fields.email ?? "";
             const password = fields.password ?? "";
-            if (!userId || !email || password.length < 8) {
+            if (!email || !(await completeSignedPasswordReset(request, password))) {
               return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: { password: "Invalid or expired reset link." }, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
             }
-            await runAuthWrite(userId, async () => {
-              const user = await User.find(userId);
-              await user?.update({ password: await hashPassword(password) });
-            });
-            await revokeUserSessions(userId);
             return flashResponse(redirectTo("/login"), { level: "success", message: "Password updated. Sign in." });
           })),
         },
