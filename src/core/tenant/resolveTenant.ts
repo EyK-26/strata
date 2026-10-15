@@ -1,6 +1,15 @@
-import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
+import { BaseRepository } from "../database/baseRepository";
+import { defineTable } from "../database/table";
 import { isTenancyEnabled } from "./tenancyConfig";
 import type { TenantContext } from "./tenantContext";
+
+const tenants = new BaseRepository(
+  defineTable<{ id: number; slug: string }, "id">({
+    name: "tenant",
+    primaryKey: "id",
+    columns: ["id", "slug"],
+  }),
+);
 
 async function resolveTenant(tenantId: number): Promise<TenantContext | null> {
   if (!isTenancyEnabled()) {
@@ -10,17 +19,7 @@ async function resolveTenant(tenantId: number): Promise<TenantContext | null> {
     };
   }
 
-  const rows = (await db`
-    SELECT id, slug
-    FROM tenant
-    WHERE id = ${tenantId}
-    LIMIT 1
-  `) as Array<{
-    id: number;
-    slug: string;
-  }>;
-
-  const row = rows[0];
+  const row = await tenants.findById(tenantId);
   return row ? { id: row.id, slug: row.slug } : null;
 }
 

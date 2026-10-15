@@ -24,6 +24,11 @@ import { appTest, installGeneratedAppDependencies, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 const ENV_KEYS = [
+  "APP_DATABASE_URL",
+  "FEATURE_SCIM",
+  "SCIM_BEARER_TOKEN",
+  "SCIM_TENANT_TOKENS",
+  "REDIS_URL",
   "DATABASE_URL",
   "APP_URL",
   "APP_ENV",
@@ -1332,6 +1337,143 @@ export default probeModule;
       }
     }
   });
+
+  appTest(
+    "generated SQLite column tenancy resolves repeated SCIM and authenticated requests",
+    async () => {
+      const root = await tempDir();
+      const app = generateFromArgs(root, [
+        "tenant-runtime",
+        "--frontend=api",
+        "--database=sqlite",
+        "--auth=cookie-token-jwt",
+        "--tenancy=column",
+        "--scim",
+        "--yes",
+      ]);
+      const packagePath = join(app, "package.json");
+      const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+      for (const name of ["core", "bootstrap", "cli"])
+        pkg.dependencies[`@getstrata/${name}`] =
+          `file:${join(repoRoot, `packages/strata-${name}`)}`;
+      await writeFile(packagePath, JSON.stringify(pkg));
+      installGeneratedAppDependencies(app);
+      process.chdir(app);
+      Object.assign(process.env, {
+        DATABASE_URL: "sqlite:./storage/app.sqlite",
+        APP_DATABASE_URL: "sqlite:./storage/app.sqlite",
+        APP_ENV: "local",
+        FRONTEND_MODE: "api",
+        TENANCY_DRIVER: "column",
+        AUTH_DEV_HEADERS: "false",
+        SESSION_SECRET: "dev-tenant-secret-at-least-32-characters",
+        MAIL_DRIVER: "log",
+        CACHE_DRIVER: "array",
+        QUEUE_DRIVER: "sync",
+        FEATURE_SCIM: "true",
+        SCIM_BEARER_TOKEN: "",
+        SCIM_TENANT_TOKENS: "1:fixture-first,2:fixture-second,999:fixture-missing",
+        REDIS_URL: "",
+      });
+      resetDiscoverModulesForTests();
+      const { bootstrapApp, createAppServer } = await import(
+        join(app, "src/bootstrap/createApp.ts")
+      );
+      const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      const { User } = await import(join(app, "src/models/User.ts"));
+      const { BaseRepository } = await import("@getstrata/core/database/baseRepository");
+      const { defineTable } = await import("@getstrata/core/database/table");
+      const { hashPassword } = await import("@getstrata/core/auth/password");
+      const boot = await bootstrapApp();
+      const server = createAppServer(boot.routes, 0),
+        origin = `http://127.0.0.1:${server.port}`;
+      process.env.APP_URL = origin;
+      try {
+        const tenants = new BaseRepository(
+          defineTable<{ id: number; slug: string }, "id">({
+            name: "tenant",
+            primaryKey: "id",
+            columns: ["id", "slug"],
+          }),
+        );
+        await tenants.create({ slug: "first" });
+        await tenants.create({ slug: "second" });
+        const password = await hashPassword("Initial!Password123");
+        const first = await User.create({
+          name: "First",
+          email: "tenant-first@example.test",
+          password,
+          is_admin: false,
+          tenant_id: 1,
+        });
+        const second = await User.create({
+          name: "Second",
+          email: "tenant-second@example.test",
+          password,
+          is_admin: false,
+          tenant_id: 2,
+        });
+        async function scim(token: string, path = "Users", method = "GET", payload?: object) {
+          const response = await fetch(`${origin}/scim/v2/${path}`, {
+            method,
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/scim+json" },
+            body: payload ? JSON.stringify(payload) : undefined,
+          });
+          const body: unknown = await response.json();
+          if (!body || typeof body !== "object" || Array.isArray(body))
+            throw new Error("Expected SCIM object.");
+          return { status: response.status, body: body as Record<string, unknown> };
+        }
+        function resourceIds(value: unknown) {
+          if (!Array.isArray(value)) throw new Error("Expected SCIM Resources array.");
+          return value.map((item: unknown) => {
+            if (!item || typeof item !== "object" || !("id" in item) || typeof item.id !== "string")
+              throw new Error("Expected SCIM resource identifier.");
+            return item.id;
+          });
+        }
+        // SCIM cleans up its bound connection; later calls must use the registered pool safely.
+        for (let round = 0; round < 3; round++) {
+          const own = await scim("fixture-second");
+          expect(own.status).toBe(200);
+          expect(resourceIds(own.body.Resources)).toEqual([String(second.get("id"))]);
+          expect((await scim("fixture-first", `Users/${second.get("id")}`)).status).toBe(404);
+          const other = await scim("fixture-first");
+          expect(other.status).toBe(200);
+          expect(resourceIds(other.body.Resources)).toEqual([String(first.get("id"))]);
+          expect((await scim("fixture-missing")).status).toBe(401);
+          const protectedResponse = await fetch(`${origin}/api/user`, {
+            headers: {
+              authorization: `Basic ${btoa("tenant-second@example.test:Initial!Password123")}`,
+            },
+          });
+          expect(protectedResponse.status).toBe(200);
+          expect(await protectedResponse.json()).toMatchObject({ id: second.get("id") });
+        }
+        const created = await scim("fixture-second", "Users", "POST", {
+          userName: "tenant-created@example.test",
+          displayName: "Created",
+        });
+        expect(created.status).toBe(201);
+        expect((await User.find(Number(created.body.id))).get("tenant_id")).toBe(2);
+        expect(
+          (
+            await scim("fixture-first", `Users/${created.body.id}`, "PUT", {
+              userName: "wrong@example.test",
+              displayName: "Wrong",
+            })
+          ).status,
+        ).toBe(404);
+        expect((await User.find(Number(created.body.id))).get("email")).toBe(
+          "tenant-created@example.test",
+        );
+      } finally {
+        server.stop(true);
+        await boot.context.dispose();
+        await closeDatabase();
+      }
+    },
+  );
 
   appTest(
     "generated JSON and HTML email verification keeps links retryable across failures and applies once",
