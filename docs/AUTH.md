@@ -103,6 +103,12 @@ Only the winning request may proceed. A competing request, including one using a
 
 This is an atomic claim, not an atomic transaction with later credential creation or external effects. A failure after a successful claim may leave that code spent; do not restore it from an old snapshot. Published callers should retain the generated await-before-issuance ordering. This does not add TOTP replay prevention or change recovery-code generation/cryptography.
 
+## Basic authentication within one HTTP request
+
+`AuthManager` reuses Basic credential resolution for the same native `Request` while its Authorization and `x-mfa-code` headers remain unchanged. Middleware and controller calls to `user`, `check`, `requireUser` or `resolveWithSource` therefore do not consume a recovery proof repeatedly. Concurrent lookups on that request share the in-flight resolution. A later HTTP request always authenticates again, even with identical headers; spent recovery codes remain rejected.
+
+Results use weak Request keys rather than a credential/global-user cache. Changing either credential header, switching authorization schemes or registering a guard invalidates reuse. Infrastructure errors are not retained, and an older failed resolution cannot remove a newer credential result. Bearer/session behavior and the `request`-omitted auth-context lookup remain unchanged. Treat an admitted Basic principal as that request's authentication snapshot; this is not cross-request caching or a revocation bypass for later requests.
+
 ## Sessions table
 
 Generated cookie apps store browser sessions in `sessions`. Logout deletes the current row and clears `strata_session`. That is why rank 1 is stronger than a signed cookie alone. There is no generated "sign out other devices" screen.

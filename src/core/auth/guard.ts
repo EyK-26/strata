@@ -112,6 +112,16 @@ const BASIC_GUARD_NAMES = ["basic"] as const;
 const SESSION_GUARD_NAMES = ["web", "session", "default"] as const;
 
 class AuthManager {
+  // A Basic recovery code is a single-use proof, not a repeatable lookup.
+  // Weak keys limit reuse to the actual Request, never a later HTTP request.
+  private basicResolutions = new WeakMap<
+    Request,
+    {
+      authorization: string | null;
+      mfaCode: string | null;
+      result: Promise<{ user: AuthUser | null; credentialSource: CredentialSource }>;
+    }
+  >();
   private readonly namedGuards = new Map<string, AuthGuard>();
 
   constructor(private readonly guard: AuthGuard) {
@@ -126,6 +136,7 @@ class AuthManager {
     }
 
     this.namedGuards.set(trimmed, next);
+    this.basicResolutions = new WeakMap();
     return this;
   }
 
@@ -155,7 +166,24 @@ class AuthManager {
       return { user: currentAuthUser(), credentialSource: null };
     }
 
-    return await this.authenticateRequest(request);
+    if (authorizationScheme(request) !== "basic") {
+      this.basicResolutions.delete(request);
+      return await this.authenticateRequest(request);
+    }
+    const authorization = request.headers.get("authorization");
+    const mfaCode = request.headers.get("x-mfa-code");
+    const cached = this.basicResolutions.get(request);
+    if (cached && cached.authorization === authorization && cached.mfaCode === mfaCode) {
+      return await cached.result;
+    }
+    const entry = { authorization, mfaCode, result: this.authenticateRequest(request) };
+    this.basicResolutions.set(request, entry);
+    try {
+      return await entry.result;
+    } catch (error) {
+      if (this.basicResolutions.get(request) === entry) this.basicResolutions.delete(request);
+      throw error;
+    }
   }
 
   user(request?: Request): Promise<AuthUser | null> {
