@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.30
+
+Basic authentication resolution is reused only within the same Request and unchanged credentials, preventing middleware/controller lookups from consuming MFA recovery proofs twice. Adds real HTTP replay/concurrency and credential/guard invalidation regressions.
+
 ## 2.2.29
 
 MFA recovery-code persistence atomically claims the validated snapshot and rejects stale requests before credential issuance. Basic authentication fails closed and consumes under the verified RLS identifier scope. Adds native SQLite/Postgres/MySQL concurrency and restricted-role regressions.

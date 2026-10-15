@@ -137,3 +137,94 @@ describe("AuthManager", () => {
     ).toEqual({ user: null, credentialSource: null });
   });
 });
+
+// Basic one-time proofs must survive repeated user/check/requireUser calls on one Request.
+describe("Basic request resolution", () => {
+  const request = () =>
+    new Request("http://fixture.test", {
+      headers: { authorization: "Basic fixture", "x-mfa-code": "one-use-proof" },
+    });
+  test("shares in-flight resolution within one request and isolates later requests", async () => {
+    let calls = 0;
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const auth = new AuthManager({ resolve: () => null });
+    auth.registerGuard("basic", {
+      resolve: async () => {
+        calls++;
+        await gate;
+        return { id: calls };
+      },
+    });
+    const req = request();
+    const results = Promise.all([auth.user(req), auth.check(req), auth.requireUser(req)]);
+    expect(calls).toBe(1);
+    release();
+    expect(await results).toEqual([{ id: 1 }, true, { id: 1 }]);
+    expect(await auth.user(request())).toEqual({ id: 2 });
+  });
+  test("invalidates Basic results after credential, scheme or guard changes", async () => {
+    let calls = 0;
+    const auth = new AuthManager({ resolve: () => null });
+    auth.registerGuard("basic", { resolve: () => ({ id: ++calls }) });
+    const req = request();
+    expect((await auth.user(req))?.id).toBe(1);
+    req.headers.set("x-mfa-code", "another-proof");
+    expect((await auth.user(req))?.id).toBe(2);
+    req.headers.set("authorization", "Basic another");
+    expect((await auth.user(req))?.id).toBe(3);
+    req.headers.set("authorization", "Bearer invalid");
+    expect(await auth.user(req)).toBeNull();
+    req.headers.set("authorization", "Basic another");
+    expect((await auth.user(req))?.id).toBe(4);
+    auth.registerGuard("basic", { resolve: () => ({ id: 99 }) });
+    expect((await auth.user(req))?.id).toBe(99);
+  });
+  test("retains denial only within that request and does not retain infrastructure errors", async () => {
+    let calls = 0;
+    const auth = new AuthManager({ resolve: () => null });
+    auth.registerGuard("basic", {
+      resolve: () => {
+        calls++;
+        return null;
+      },
+    });
+    const req = request();
+    expect(await auth.user(req)).toBeNull();
+    expect(await auth.user(req)).toBeNull();
+    expect(calls).toBe(1);
+    expect(await auth.user(request())).toBeNull();
+    expect(calls).toBe(2);
+    let failed = true;
+    auth.registerGuard("basic", {
+      resolve: () => {
+        if (failed) {
+          failed = false;
+          throw new Error("SQL unavailable");
+        }
+        return { id: 7 };
+      },
+    });
+    await expect(auth.user(req)).rejects.toThrow("SQL unavailable");
+    expect(await auth.user(req)).toEqual({ id: 7 });
+  });
+  test("an older failed resolution cannot discard a newer credential result", async () => {
+    let calls = 0;
+    let rejectOld = (_error: Error) => {};
+    const old = new Promise<null>((_resolve, reject) => {
+      rejectOld = reject;
+    });
+    const auth = new AuthManager({ resolve: () => null });
+    auth.registerGuard("basic", { resolve: () => (++calls === 1 ? old : { id: 8 }) });
+    const req = request();
+    const failure = auth.user(req).catch((error: unknown) => error);
+    req.headers.set("x-mfa-code", "new-proof");
+    expect(await auth.user(req)).toEqual({ id: 8 });
+    rejectOld(new Error("old failure"));
+    expect(await failure).toMatchObject({ message: "old failure" });
+    expect(await auth.user(req)).toEqual({ id: 8 });
+    expect(calls).toBe(2);
+  });
+});
