@@ -312,7 +312,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.31");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.32");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -1332,6 +1332,192 @@ export default probeModule;
       }
     }
   });
+
+  appTest(
+    "generated JSON and HTML email verification keeps links retryable across failures and applies once",
+    async () => {
+      const root = await tempDir();
+      const app = generateFromArgs(root, [
+        "verify-runtime",
+        "--frontend=hybrid",
+        "--database=sqlite",
+        "--auth=cookie-token-jwt",
+        "--email-verification",
+        "--yes",
+      ]);
+      const packagePath = join(app, "package.json");
+      const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+      for (const name of ["core", "bootstrap", "cli"])
+        pkg.dependencies[`@getstrata/${name}`] =
+          `file:${join(repoRoot, `packages/strata-${name}`)}`;
+      await writeFile(packagePath, JSON.stringify(pkg));
+      installGeneratedAppDependencies(app);
+      process.chdir(app);
+      Object.assign(process.env, {
+        DATABASE_URL: "sqlite:./storage/app.sqlite",
+        APP_ENV: "local",
+        FRONTEND_MODE: "hybrid",
+        TENANCY_DRIVER: "none",
+        AUTH_DEV_HEADERS: "false",
+        SESSION_SECRET: "dev-verification-secret-at-least-32-characters",
+        MAIL_DRIVER: "log",
+        CACHE_DRIVER: "array",
+        QUEUE_DRIVER: "sync",
+      });
+      resetDiscoverModulesForTests();
+      const { bootstrapApp, createAppServer } = await import(
+        join(app, "src/bootstrap/createApp.ts")
+      );
+      const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      const { User } = await import(join(app, "src/models/User.ts"));
+      const { AuthOneTimeToken } = await import(join(app, "src/models/AuthOneTimeToken.ts"));
+      const { generateOneTimeToken, AUTH_ONE_TIME_PURPOSES } = await import(
+        "@getstrata/core/auth/oneTimeToken"
+      );
+      const { absoluteTemporarySignedUrl } = await import("@getstrata/core/http/signedUrl");
+      const { hashPassword } = await import("@getstrata/core/auth/password");
+      const boot = await bootstrapApp();
+      const server = createAppServer(boot.routes, 0),
+        origin = `http://127.0.0.1:${server.port}`;
+      process.env.APP_URL = origin;
+      let observerFailureId: number | undefined;
+      User.observe({
+        updated(model: { get(key: string): unknown }) {
+          if (Number(model.get("id")) === observerFailureId)
+            throw new Error("injected verification observer failure");
+        },
+      });
+      try {
+        await getSql().unsafe(
+          "CREATE TABLE verification_effect_count(user_id INTEGER PRIMARY KEY, writes INTEGER NOT NULL)",
+        );
+        await getSql().unsafe(
+          "CREATE TRIGGER count_verification AFTER UPDATE OF email_verified_at ON users BEGIN INSERT INTO verification_effect_count VALUES(NEW.id,1) ON CONFLICT(user_id) DO UPDATE SET writes=writes+1; END",
+        );
+        const password = await hashPassword("Initial!Password123");
+        const neighbor = await User.create({
+          name: "Neighbor",
+          email: "verification-neighbor@example.test",
+          password,
+          is_admin: false,
+        });
+        const csrf = await jsonCsrfHeaders(origin);
+        for (const html of [false, true]) {
+          const path = html ? "/email/verify" : "/api/v1/auth/verify-email";
+          const user = await User.create({
+            name: "Verification fixture",
+            email: `verify-${html}@example.test`,
+            password,
+            is_admin: false,
+          });
+          const id = Number(user.get("id"));
+          const issue = async (purpose: string, expires = Date.now() + 60000) => {
+            const issued = generateOneTimeToken();
+            const row = await AuthOneTimeToken.create({
+              purpose,
+              user_id: id,
+              token_hash: issued.hash,
+              expires_at: new Date(expires).toISOString(),
+            });
+            const link = absoluteTemporarySignedUrl(path, 60, {
+              token: issued.plain,
+              id: String(id),
+            });
+            return { row, link };
+          };
+          const submit = (link: string, withCsrf = true) =>
+            fetch(link, {
+              method: html ? "GET" : "POST",
+              redirect: "manual",
+              headers: withCsrf ? csrf.headers : { origin, "content-type": "application/json" },
+              body: html ? undefined : "{}",
+            });
+          const consumed = async (row: { get(key: string): unknown }) =>
+            (await AuthOneTimeToken.find(row.get("id"))).get("consumed_at");
+          const valid = await issue(AUTH_ONE_TIME_PURPOSES.emailVerify);
+          expect((await submit(`${valid.link}&tampered=true`)).status).toBe(403);
+          expect(await consumed(valid.row)).toBeNull();
+          if (!html) {
+            expect((await submit(valid.link, false)).status).toBe(403);
+            expect(await consumed(valid.row)).toBeNull();
+          }
+          const wrong = await issue(AUTH_ONE_TIME_PURPOSES.passwordReset);
+          expect((await submit(wrong.link)).status).toBe(html ? 302 : 403);
+          expect(await consumed(wrong.row)).toBeNull();
+          const expired = await issue(AUTH_ONE_TIME_PURPOSES.emailVerify, Date.now() - 1000);
+          expect((await submit(expired.link)).status).toBe(html ? 302 : 403);
+          expect(await consumed(expired.row)).toBeNull();
+          expect((await User.find(id)).get("email_verified_at")).toBeNull();
+          await getSql().unsafe(
+            `CREATE TRIGGER reject_verification BEFORE UPDATE ON users WHEN OLD.id=${id} BEGIN SELECT RAISE(ABORT,'injected verification failure'); END`,
+          );
+          try {
+            expect((await submit(valid.link)).status).toBe(400);
+          } finally {
+            await getSql().unsafe("DROP TRIGGER reject_verification");
+          }
+          expect(await consumed(valid.row)).toBeNull();
+          expect((await User.find(id)).get("email_verified_at")).toBeNull();
+          observerFailureId = id;
+          try {
+            expect((await submit(valid.link)).status).toBe(500);
+          } finally {
+            observerFailureId = undefined;
+          }
+          expect(await consumed(valid.row)).toBeNull();
+          expect((await User.find(id)).get("email_verified_at")).toBeNull();
+          expect(
+            await getSql().unsafe("SELECT * FROM verification_effect_count WHERE user_id=?", [id]),
+          ).toHaveLength(0);
+          const success = await submit(valid.link);
+          expect(success.status).toBe(html ? 302 : 200);
+          expect(await consumed(valid.row)).not.toBeNull();
+          const verified = (await User.find(id)).get("email_verified_at");
+          expect(verified).not.toBeNull();
+          expect((await submit(valid.link)).status).toBe(html ? 302 : 403);
+          expect((await User.find(id)).get("email_verified_at")).toBe(verified);
+          expect(
+            await getSql().unsafe("SELECT writes FROM verification_effect_count WHERE user_id=?", [
+              id,
+            ]),
+          ).toEqual([{ writes: 1 }]);
+          const next = await User.create({
+            name: "Concurrent verification",
+            email: `concurrent-${html}@example.test`,
+            password,
+            is_admin: false,
+          });
+          const nextId = Number(next.get("id"));
+          const issued = generateOneTimeToken();
+          await AuthOneTimeToken.create({
+            purpose: AUTH_ONE_TIME_PURPOSES.emailVerify,
+            user_id: nextId,
+            token_hash: issued.hash,
+            expires_at: new Date(Date.now() + 60000).toISOString(),
+          });
+          const link = absoluteTemporarySignedUrl(path, 60, {
+            token: issued.plain,
+            id: String(nextId),
+          });
+          const attempts = await Promise.all([submit(link), submit(link)]);
+          expect(attempts.map((r) => r.status).sort()).toEqual(html ? [302, 302] : [200, 403]);
+          expect((await User.find(nextId)).get("email_verified_at")).not.toBeNull();
+          expect(
+            await getSql().unsafe("SELECT writes FROM verification_effect_count WHERE user_id=?", [
+              nextId,
+            ]),
+          ).toEqual([{ writes: 1 }]);
+          expect((await User.find(neighbor.get("id"))).get("email_verified_at")).toBeNull();
+          expect((await User.find(id)).get("password")).toBe(password);
+        }
+      } finally {
+        observerFailureId = undefined;
+        server.stop(true);
+        await boot.context.dispose();
+        await closeDatabase();
+      }
+    },
+  );
 
   appTest(
     "generated JSON and HTML password resets validate before atomic consumption and revocation",
