@@ -110,6 +110,9 @@ function renderAuthModule(layers: StarterLayers): string | null {
       imports.push(`import { appUrl } from "@getstrata/core/runtime/appKeyPrefix";`);
     }
   }
+  if (mfa) {
+    imports.push(`import { ConflictError } from "@getstrata/core/errors/http";`);
+  }
   if (jsonApi) {
     imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
   }
@@ -995,15 +998,26 @@ async function completeBrowserSsoLogin(
             }
             const recoveryCodes = generateRecoveryCodes();
             const stored = protectMfaSecret(secret);
-            await runAuthWrite(Number(user.id), async () => {
-              const record = await User.find(Number(user.id));
-              await record?.update({
-                mfa_secret: stored,
-                mfa_enabled: true,
-                mfa_recovery_codes: JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
+            const previous = await runAuthWrite(Number(user.id), () => User.find(Number(user.id)));
+            if (!previous) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
+            await runInTransaction(async () => {
+              await runAuthWrite(Number(user.id), async () => {
+                // Trusted, pre-protected security fields: atomically replace only the state we read.
+                const changed = await previous.getRepository().updateWhere({
+                  mfa_secret: stored,
+                  mfa_enabled: true,
+                  mfa_recovery_codes: JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
+                }, { where: {
+                  id: Number(user.id),
+                  mfa_enabled: previous.get("mfa_enabled"),
+                  mfa_secret: previous.get("mfa_secret"),
+                  mfa_recovery_codes: previous.get("mfa_recovery_codes"),
+                  session_valid_after: previous.get("session_valid_after"),
+                } });
+                if (changed !== 1) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
               });
+              await revokeUserSessions(Number(user.id));
             });
-            await revokeUserSessions(Number(user.id));
             return views.render("mfa-setup.eta", {
                 layout: { title: "MFA" },
                 errors: {},
