@@ -270,6 +270,25 @@ async function revokeUserSessions(userId: number) {
   });
 }
 
+${
+  verify
+    ? `
+async function completeSignedEmailVerification(request: Request): Promise<boolean> {
+  return await runInTransaction(async () => {
+    const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.emailVerify);
+    if (!userId) return false;
+    await runAuthWrite(userId, async () => {
+      const user = await User.find(userId);
+      if (!user) throw new Error("Verification account no longer exists.");
+      await user.update({ email_verified_at: ${nowTimestampLiteral(layers.database)} });
+    });
+    return true;
+  });
+}
+`
+    : ""
+}
+
 async function completeSignedPasswordReset(request: Request, password: unknown): Promise<boolean> {
   if (typeof password !== "string" || password.length < 8) return false;
   return await runInTransaction(async () => {
@@ -528,14 +547,9 @@ async function completeBrowserSsoLogin(
       ? `
         "/api/v1/auth/verify-email": {
           POST: kernel.wrap("api", kernel.wrapSigned(withErrorHandling(async (request) => {
-            const id = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.emailVerify);
-            if (!id) {
+            if (!(await completeSignedEmailVerification(request))) {
               return jsonResponse({ error: "Invalid or expired verification link." }, { status: 403 });
             }
-            await runAuthWrite(id, async () => {
-              const user = await User.find(id);
-              await user?.update({ email_verified_at: ${nowTimestampLiteral(layers.database)} });
-            });
             return jsonResponse({ ok: true });
           }))),
         },`
@@ -883,12 +897,7 @@ async function completeBrowserSsoLogin(
             const url = new URL(request.url);
             if (url.searchParams.get("signature")) {
               assertValidSignature(request);
-              const id = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.emailVerify);
-              if (id) {
-                await runAuthWrite(id, async () => {
-                  const user = await User.find(id);
-                  await user?.update({ email_verified_at: ${nowTimestampLiteral(layers.database)} });
-                });
+              if (await completeSignedEmailVerification(request)) {
                 return flashResponse(
                   redirectTo("/login"),
                   { level: "success", message: "Email verified. Sign in." },

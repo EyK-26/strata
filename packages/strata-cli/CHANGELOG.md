@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.32
+
+Generated JSON and HTML email verification now atomically consumes the one-time link with the account update and immediate observers, including SQLite/non-RLS apps. Failed verification remains retryable. Adds actual signed HTTP rollback, purpose/expiry/admission, concurrency and replay regressions while preserving existing response contracts.
+
 ## 2.2.31
 
 Preserve JWT issuance precision across millisecond revocation cutoffs without changing expiration. Generated MFA setup rejects stale concurrent state changes and atomically commits credential revocation in SQLite/non-RLS as well as Postgres RLS. Adds real HTTP initial/replacement races, revocation rollback and withheld-success recovery regressions; intentional fresh replacement remains supported.
