@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.28
+
+Generated JSON and HTML password resets validate input before consuming signed links and atomically commit token consumption, password updates and credential revocation. Adds real generated-app failure, retry, replay and cookie/token/JWT revocation regressions.
+
 ## 2.2.27
 
 Storage distinguishes missing objects from filesystem, authorization, missing-bucket and transport failures; S3 reads use a single native GET. Adds native Bun protocol regressions and documents failure/reconciliation contracts.
