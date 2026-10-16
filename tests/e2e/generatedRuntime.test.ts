@@ -7,6 +7,7 @@ for (const [name, flags] of [
   ["OpenAPI preserves API-only scope and the runtime inventory", ["--openapi"]],
   ["HTTP boot, readiness, metrics and shutdown", ["--http"]],
   ["SQLite column-tenancy packaged CLI, OpenAPI and HTTP", ["--sqlite", "--openapi", "--http"]],
+  ["MySQL column-tenancy packaged CLI, OpenAPI and HTTP", ["--mysql", "--openapi", "--http"]],
 ] as const) {
   test(`generated-runtime: ${name}`, async () => {
     const repoRoot = join(import.meta.dir, "../..");

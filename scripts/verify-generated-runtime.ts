@@ -12,7 +12,7 @@ import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityAp
 const repoRoot = join(import.meta.dir, "..");
 const args = process.argv.slice(2);
 assert.ok(
-  args.every((arg) => arg === "--http" || arg === "--openapi" || arg === "--sqlite"),
+  args.every((arg) => ["--http", "--openapi", "--sqlite", "--mysql"].includes(arg)),
   "Unknown generated-runtime verification option.",
 );
 const selectedChecks = args.includes("--openapi") || args.includes("--http");
@@ -24,27 +24,30 @@ if (checkHttp)
     "HTTP runtime acceptance requires explicit Redis infrastructure.",
   );
 const sqlite = args.includes("--sqlite");
-const fixture = await createGeneratedSecurityApp(sqlite ? "sqlite" : "postgres");
+const mysql = args.includes("--mysql");
+assert.ok(!(sqlite && mysql), "Select only one generated database engine.");
+const columnTenancy = sqlite || mysql;
+const fixture = await createGeneratedSecurityApp(sqlite ? "sqlite" : mysql ? "mysql" : "postgres");
 const cli = join(fixture.app, "node_modules/@getstrata/cli/cli.ts");
 const env: Record<string, string | undefined> = {
   ...process.env,
   DATABASE_URL: fixture.runtimeUrl,
   APP_DATABASE_URL: fixture.runtimeUrl,
   MIGRATION_DATABASE_URL: fixture.migrationUrl,
-  APP_ENV: "local",
+  APP_ENV: mysql ? "production" : "local",
   APP_DEBUG: "false",
   APP_NAME: "HiroApp",
   APP_KEY_PREFIX: `runtime_${crypto.randomUUID()}`,
-  APP_URL: "http://localhost:3000",
+  APP_URL: mysql ? "https://q01.example.test" : "http://localhost:3000",
   API_PREFIX: "/api",
   FRONTEND_MODE: "server-htmx",
-  TENANCY_DRIVER: sqlite ? "column" : "rls",
+  TENANCY_DRIVER: columnTenancy ? "column" : "rls",
   AUTH_DEV_HEADERS: "false",
   FEATURE_API_TOKENS: "true",
   FEATURE_MFA: "true",
   FEATURE_EMAIL_VERIFICATION: "true",
   FEATURE_SCIM: "true",
-  SCIM_BEARER_TOKEN: "",
+  SCIM_BEARER_TOKEN: mysql ? "q01-scim-tenant-1" : "",
   SCIM_TENANT_TOKENS: "1:q01-scim-tenant-1,2:q01-scim-tenant-2",
   FEATURE_SAML: "false",
   FEATURE_OAUTH: "false",
@@ -56,12 +59,27 @@ const env: Record<string, string | undefined> = {
   SESSION_SECRET: "generated-runtime-fixture-session-secret-32-characters",
   JWT_SECRET: "generated-runtime-fixture-jwt-secret-32-characters",
   TOKEN_HASH_PEPPER: "generated-runtime-fixture-pepper",
+  API_TOKEN_DEFAULT_EXPIRY_DAYS: "30",
+  KMS_ENCRYPTION_KEY: Buffer.alloc(32, 17).toString("base64"),
   METRICS_TOKEN: crypto.randomUUID(),
   PORT: "0",
 };
 delete env.DOGFOOD_APP;
 delete env.HIROAPP_TEST;
 delete env.STRATA_SCHEMA;
+if (mysql) {
+  for (const name of [
+    "MIGRATION_DATABASE_URL",
+    "MYSQL_OBSERVABILITY_ADMIN_URL",
+    "MYSQL_URL",
+    "RLS_TEST_DATABASE_URL",
+    "POSTGRES_PASSWORD",
+    "STRATA_APP_PASSWORD",
+    "ADMIN_API_TOKEN",
+    "MEMBER_API_TOKEN",
+  ])
+    delete env[name];
+}
 
 async function run(
   args: string[],
@@ -102,7 +120,19 @@ async function capture(stream: ReadableStream<Uint8Array>) {
   }
 }
 try {
-  await run([cli, "migrate", "--seed"]);
+  await run(
+    [cli, "migrate", "--seed"],
+    mysql
+      ? {
+          env: {
+            ...env,
+            APP_ENV: "local",
+            DATABASE_URL: fixture.migrationUrl,
+            APP_DATABASE_URL: fixture.migrationUrl,
+          },
+        }
+      : {},
+  );
   // Independent runtime inventory: metadata plus unregistered transport handlers,
   // using the same public map registrar that the former adapter used.
   const probe = join(fixture.app, "acceptance-routes.ts");
@@ -119,7 +149,7 @@ await Bun.write('acceptance-routes.json',JSON.stringify(routes));
 }finally{try{await app.context.dispose();}finally{await closeDatabase();}}`,
   );
   await run([probe]);
-  if (sqlite) {
+  if (columnTenancy) {
     const data = join(fixture.app, "acceptance-tenants.ts");
     await Bun.write(
       data,
@@ -130,6 +160,12 @@ import DefaultRepository,{BaseRepository} from '@getstrata/core/database/baseRep
 import {defineTable} from '@getstrata/core/database/table';
 const app=await bootstrapApp({migrate:false});try{
 assert.equal(DefaultRepository,BaseRepository);
+${
+  mysql
+    ? `const [identity]=await getSql().unsafe('SELECT CURRENT_USER() AS account');assert.match(identity.account,/^q01_[a-f0-9]+@/);
+await assert.rejects(()=>getSql().unsafe('CREATE TABLE q01_forbidden_ddl (id INTEGER)'),{code:'ER_TABLEACCESS_DENIED_ERROR'});`
+    : ""
+}
 const tenants=new DefaultRepository(defineTable<{id:number;slug:string},'id'>({name:'tenant',primaryKey:'id',columns:['id','slug']}),getSql());
 const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
 }finally{try{await app.context.dispose();}finally{await closeDatabase();}}`,
@@ -230,11 +266,15 @@ const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
       "Readiness must actually observe both dependencies, without skipped Redis.",
     );
     await verifyGeneratedAuthHttp(origin);
-    if (sqlite) await verifyGeneratedScimHttp(origin);
+    if (columnTenancy) await verifyGeneratedScimHttp(origin);
     console.log(
       "Generated HTTP cookie/token/JWT admission, CSRF, provider gates and credential-specific logout passed.",
     );
     if (sqlite) console.log("SQLite SCIM repeated cross-tenant CRUD/read isolation passed.");
+    if (mysql)
+      console.log(
+        "MySQL SCIM repeated cross-tenant CRUD/read isolation passed (DML-only production runtime).",
+      );
     const smokeEnv = { ...env, BASE_URL: origin, APP_URL: origin };
     await run([join(repoRoot, "scripts/smoke-test.ts")], { cwd: repoRoot, env: smokeEnv });
     await run([join(repoRoot, "scripts/smoke-webview.ts")], { cwd: repoRoot, env: smokeEnv });
