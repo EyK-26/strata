@@ -11,8 +11,6 @@
       "**",
       "!!**/docs/openapi.json",
       "!!**/sdk/typescript/client.ts",
-      "!!**/apps/*/frontend",
-      "!!**/apps/*/public",
       "!!**/htmx.min.js"
     ]
   },

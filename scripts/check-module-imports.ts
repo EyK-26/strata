@@ -2,12 +2,15 @@
 /**
  * CI gate: fail if application code reaches framework sources via relative paths
  * instead of `@getstrata/core` / `@getstrata/bootstrap` subpaths.
+ * Scan actual emitted source from every legacy profile; empty/missing input fails.
  */
 
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { createGeneratedSourceApps } from "../tests/helpers/generatedSourceApps.ts";
 
-const APPS_ROOT = join(import.meta.dir, "../apps");
+const fixtures = createGeneratedSourceApps();
+let scanned = 0;
 const violations: string[] = [];
 
 async function walk(dir: string): Promise<string[]> {
@@ -35,24 +38,27 @@ function record(fullPath: string, index: number, line: string) {
 }
 
 try {
-  for (const appEntry of await readdir(APPS_ROOT, { withFileTypes: true })) {
-    if (!appEntry.isDirectory() || appEntry.name === "node_modules") {
-      continue;
-    }
-    const appSrc = join(APPS_ROOT, appEntry.name, "src");
-    try {
-      for (const filePath of await walk(appSrc)) {
-        const lines = (await readFile(filePath, "utf8")).split("\n");
-        for (let index = 0; index < lines.length; index += 1) {
-          const line = lines[index] ?? "";
-          if (/from\s+['"](?:\.\.\/)+src\/(?:core|bootstrap)\//.test(line)) {
-            record(filePath, index, line);
-          }
+  for (const app of [fixtures.rls, fixtures.hobby, fixtures.team]) {
+    const files = await walk(join(app, "src"));
+    if (files.length === 0) throw new Error("Generated import gate found no application source.");
+    for (const filePath of files) {
+      scanned++;
+      const lines = (await readFile(filePath, "utf8")).split("\n");
+      for (let index = 0; index < lines.length; index++) {
+        const line = lines[index] ?? "";
+        if (
+          /from\s+['"](?:\.\.\/)+src\/(?:core|bootstrap)\//.test(line) ||
+          /from\s+['"]@getstrata\/core['"]/.test(line) ||
+          /from\s+['"]@getstrata\/core\/(?:database|http)['"]/.test(line)
+        ) {
+          record(filePath, index, line);
         }
       }
-    } catch {}
+    }
   }
-} catch {}
+} finally {
+  fixtures.close();
+}
 
 if (violations.length > 0) {
   console.error(
@@ -62,4 +68,4 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log("Module import gate passed.");
+console.log(`Module import gate passed (${scanned} generated source files across three profiles).`);

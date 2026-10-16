@@ -28,4 +28,4 @@ All runtime routes and API-only OpenAPI contracts run through generated apps usi
 
 The root Dockerfile packages a generated candidate app, not checked-in HiroApp. Its required native Bun acceptance test exercises explicit migrations, production seeding refusal, explicit test-only seeding, restricted-role HTTP, metrics concealment and graceful shutdown. See [testing](TESTING.md) and [retirement evidence](GENERATED-APP-ACCEPTANCE.md).
 
-The legacy directories under `apps/` remain temporarily pending the final removal PR. They are excluded from workspaces and Docker input and have no contributor `dev`/`start` aliases. To explore a storefront or admin UI, use the external shop.
+The tracked legacy app directories and their regeneration command are retired. To explore a storefront or admin UI, use the external shop.

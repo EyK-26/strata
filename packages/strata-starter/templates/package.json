@@ -12,9 +12,9 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@getstrata/bootstrap": "^2.2.34",
-    "@getstrata/cli": "^2.2.34",
-    "@getstrata/core": "^2.2.34",
+    "@getstrata/bootstrap": "^2.2.35",
+    "@getstrata/cli": "^2.2.35",
+    "@getstrata/core": "^2.2.35",
     "eta": "^4.6.0"
   },
   "devDependencies": {

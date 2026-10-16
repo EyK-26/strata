@@ -2,7 +2,7 @@
 
 `bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space. If you see `Choose [1]:` instead, bunx did not get raw keyboard mode. Retry in a real terminal, or pass `--yes` with layer flags.
 
-HiroApp in this repo (`apps/hiroapp`: Postgres + HTMX) is dogfood for internal end-to-end testing (migrate, seed, boot, OpenAPI, cookie/token/JWT, MFA/SCIM). It is not a product and it is not the source of the wizard. It does **not** cover outbound webhooks, Stripe billing sync, or GitHub OAuth cookie login. Product dogfood for those paths is an external app (`strata-shop`). Sibling apps `apps/hiroapp-hobby` (SQLite API) and `apps/hiroapp-team` (Postgres HTML + Redis) are generated layer maps and are not CI dogfood. Regenerate them with `bun run generate:example-apps`.
+Framework CI generates disposable applications from current templates, installs candidate packages, and exercises CLI, security, HTTP, API-only OpenAPI and Docker behavior. Product dogfood lives in the separate [strata-shop](https://github.com/EyK-26/strata-shop) repository. The legacy HiroApp directories have been retired; their supported preset IDs remain available as layer maps.
 
 ## Quick start
 
@@ -108,7 +108,7 @@ Apps scaffolded with `create-strata@1.1.0` should merge current `src/bootstrap/p
 
 `strata new my-app --yes` calls the same generator. `strata new --frontend=hybrid` (no project name) still overlays HTML/SPA files into the current directory.
 
-In-repo apps are generated from `scripts/generate-example-apps.ts`. Only `apps/hiroapp` is CI dogfood.
+The `exampleAppLayers` presets remain supported, including the legacy `hiroapp`, `hiroapp-hobby` and `hiroapp-team` IDs. They select layers, not repository directories. Native acceptance generates temporary source and installed-package fixtures; `generate:example-apps` is retired.
 
 SQL applications that need recoverable model cache effects should adopt the durable registrar described in [BUILDING-APPS](./BUILDING-APPS.md#recoverable-model-cache-invalidation). The generated 2.x listener is retained for compatibility; package installation alone does not provision an outbox or convert existing cache effects. Configure one complete application outbox registry, migrate separately, activate before admission, and wrap row writes in framework transactions. Use shared Redis cache across separate worker processes.
 

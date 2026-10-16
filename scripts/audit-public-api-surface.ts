@@ -10,7 +10,7 @@ const SCAN_ROOTS = [
   join(ROOT, "src"),
   join(ROOT, "tests"),
   join(ROOT, "packages/strata-starter/templates/src"),
-  join(ROOT, "..", "getstrata", "src"),
+  join(ROOT, "packages/strata-starter/src"),
 ];
 
 const ROOT_IMPORT = /import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+["']@getstrata\/core["']/g;
@@ -106,7 +106,7 @@ const unusedAtRoot = exported.filter(
 );
 
 console.log(
-  `Public API surface: ${exported.length} value exports, ${referenced.size} root-import symbols referenced in apps/tests.`,
+  `Public API surface: ${exported.length} value exports, ${referenced.size} root-import symbols referenced in framework/tests/generator.`,
 );
 if (unusedAtRoot.length > 0) {
   console.log(`Root exports with no in-repo @getstrata/core imports (${unusedAtRoot.length}):`);

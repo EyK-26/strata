@@ -37,7 +37,6 @@
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
     "test:coverage": "bun scripts/assert-core-coverage.ts",
     "test:e2e": "bun test tests/e2e",
-    "generate:example-apps": "bun scripts/generate-example-apps.ts",
     "test:parallel": "scripts/test-parallel.sh",
     "deps:dedupe": "bun dedupe",
     "deps:audit": "bun audit",

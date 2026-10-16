@@ -1,6 +1,6 @@
 # Disaster recovery
 
-Use this when HiroApp or the database is down. Times are operational targets, not promises.
+Adapt this checklist to your generated application and deployment. The framework repository does not run a product server. Times are operational targets, not promises.
 
 ## Backups
 
@@ -23,8 +23,8 @@ Use this when HiroApp or the database is down. Times are operational targets, no
 
 ## Phase 3. Verify (120 to 240 min)
 
-- Smoke: `bun run smoke` against the DR URL
-- Sign in as `admin@example.test` (cookie, `/login`) and as a token client (`POST /api/v1/auth/login`, then `GET /api/user`)
+- Run your application’s HTTP smoke and business reconciliation checks against the DR URL. The framework `bun run smoke` provisions isolated acceptance infrastructure; it does not probe your deployment.
+- Sign in with a deliberately provisioned operational test account and a scoped token client; never use published demo credentials in production.
 - Confirm HTML home `/` and `GET /health` still load
 - If you enabled SIEM export, confirm the export job still returns JSON
 
@@ -32,6 +32,6 @@ Use this when HiroApp or the database is down. Times are operational targets, no
 
 - Rotate tokens if the outage involved a leak
 - Write down what broke
-- Quarterly drills: restore a backup into a scratch database and boot HiroApp against it
+- Quarterly drills: restore a backup into a scratch database and boot your application against it
 
 See [PRODUCTION.md](./PRODUCTION.md) and [RUNBOOK.md](../RUNBOOK.md).

@@ -9,7 +9,7 @@ describe("with-host-env.sh", () => {
     expect(text).toContain("@localhost:54329/hiroapp_test");
     expect(text).toContain("@localhost:54329/bun_testing_test");
     expect(text).toContain("Fixture DATABASE_URL is fixture admin");
-    expect(text).toContain("It is not HiroApp HTTP");
-    expect(text).not.toMatch(/Fixture DATABASE_URL is HiroApp HTTP/i);
+    expect(text).toContain("It is not an HTTP runtime credential");
+    expect(text).not.toMatch(/Fixture DATABASE_URL is (?:an )?HTTP runtime/i);
   });
 });

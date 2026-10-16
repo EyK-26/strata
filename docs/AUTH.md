@@ -2,7 +2,7 @@
 
 You choose the frontend. You also choose how clients prove who they are. Register the guards you need. Do not enable every option "just in case."
 
-Generated HiroApp (`apps/hiroapp`) is dogfood for internal end-to-end testing. It shows one working mix: cookie sessions for HTML, opaque tokens for JSON, and short-lived JWTs. Copy those patterns, not every class in `@getstrata/core/auth`.
+Generated acceptance exercises one supported mix: cookie sessions for HTML, opaque tokens for JSON, and short-lived JWTs. Copy those patterns, not every class in `@getstrata/core/auth`.
 
 ## Strength ladder
 
@@ -10,16 +10,16 @@ From most locked down for browsers, to weaker or narrower tools:
 
 | Rank | Mechanism | Good for | Revoke? | Notes |
 |------|-----------|----------|---------|-------|
-| 1 | Cookie session stored in `sessions` + CSRF | HTML apps, same-site browsers | Yes. Delete the row. | Generated HiroApp HTML login. Cookie name is `strata_session`. `SameSite=Lax`, `HttpOnly`. |
+| 1 | Cookie session stored in `sessions` + CSRF | HTML apps, same-site browsers | Yes. Delete the row. | Generated HTML login. Cookie name is `strata_session`. `SameSite=Lax`, `HttpOnly`. |
 | 2 | Opaque access token (hashed in `api_tokens`) | SPA, mobile, machine clients | Yes. Delete or expire the row. | Send `Authorization: Bearer`. Skip CSRF. Scope with abilities. `POST /api/v1/auth/login`. |
-| 3 | HMAC signed session cookie (no `sessions` row) | JSON APIs that want a signed cookie without a table | Partial. `session_valid_after` or a custom directory check. | Not HiroApp HTML login. |
-| 4 | JWT HS256 | Service-to-service, short-lived scripts | Password reset sets `session_valid_after`; JwtGuard rejects older `iat`. Also wait for `exp`. | HiroApp `POST /api/auth/token`. |
-| 5 | HTTP Basic over TLS | Private scripts, health cron, first-party tools | Change the password. | HiroApp `GET /api/user` accepts Basic when that guard is registered. Never on the public internet without TLS. |
+| 3 | HMAC signed session cookie (no `sessions` row) | JSON APIs that want a signed cookie without a table | Partial. `session_valid_after` or a custom directory check. | Not generated HTML login. |
+| 4 | JWT HS256 | Service-to-service, short-lived scripts | Password reset sets `session_valid_after`; JwtGuard rejects older `iat`. Also wait for `exp`. | Generated `POST /api/auth/token`. |
+| 5 | HTTP Basic over TLS | Private scripts, health cron, first-party tools | Change the password. | Generated `GET /api/user` accepts Basic when that guard is registered. Never on the public internet without TLS. |
 | 6 | `x-authenticated-user-id` headers | Automated tests | N/A | `GuestGuard` reads request headers only when `AUTH_DEV_HEADERS=true` exactly and `isProductionEnv()` is false. Unset, `false`, `0`, and `FALSE` leave headers off. Production (`isProductionEnv`, including staging) is always null even when the flag is true. Local `AUTH_DEV_HEADERS=true` still reads request headers. |
 
 If you are building a browser app, start at rank 1. If you are building a SPA, use rank 2 with a tight ability list. JWT is for clients that cannot store a revocable server token and can live with expiry. Do not use JWT as an HTML cookie session.
 
-The leftover fixture schema still uses the table name `api_token`. Generated apps use `api_tokens`.
+The framework test fixture schema still uses the table name `api_token`. Generated apps use `api_tokens`.
 
 ## Named guards
 
@@ -31,7 +31,7 @@ auth.registerGuard("jwt", new JwtGuard(container));
 auth.registerGuard("basic", new BasicAuthGuard(container));
 ```
 
-Generated HiroApp does this in `apps/hiroapp/src/bootstrap/providers/auth.ts`. `JwtGuard` needs a directory (or container) so it can reject tokens whose `iat` is before `session_valid_after`. A `JwtGuard` without a directory returns null. It does not call `configureAbilityCatalog`. Default token abilities for HMAC sessions and test headers stay `profile:read` plus `auth:tokens:*` unless you replace the catalog:
+Generated applications do this in the generated `src/bootstrap/providers/auth.ts`. `JwtGuard` needs a directory (or container) so it can reject tokens whose `iat` is before `session_valid_after`. A `JwtGuard` without a directory returns null. It does not call `configureAbilityCatalog`. Default token abilities for HMAC sessions and test headers stay `profile:read` plus `auth:tokens:*` unless you replace the catalog:
 
 ```typescript
 import { configureAbilityCatalog } from "@getstrata/core/auth/abilityCatalog";
@@ -60,7 +60,7 @@ You can still call `auth.use("jwt")` when a route must accept only JWTs.
 
 Cookie sessions need CSRF on POST, PUT, PATCH, and DELETE. HTML forms send `_token`. JSON with a cookie sends `x-csrf-token`.
 
-`Authorization: Bearer` and `Authorization: Basic` skip CSRF only after that guard actually authenticates. A garbage Bearer plus a session cookie is not CSRF-exempt. `tests/unit/csrf.test.ts` `failed Bearer header does not skip CSRF when credentialSource is null` is the Bearer header skip when `credentialSource` is null. `tests/unit/authGuard.test.ts` `failed bearer does not fall back to a session or guest guard` is failed Bearer not resolving a session or guest user. HiroApp e2e `cookie login requires CSRF and ignores garbage Bearer` is garbage Bearer still requiring CSRF on POST `/login`. Successful skip is `successful bearer or basic skips CSRF`.
+`Authorization: Bearer` and `Authorization: Basic` skip CSRF only after that guard actually authenticates. A garbage Bearer plus a session cookie is not CSRF-exempt. `tests/unit/csrf.test.ts` `failed Bearer header does not skip CSRF when credentialSource is null` is the Bearer header skip when `credentialSource` is null. `tests/unit/authGuard.test.ts` `failed bearer does not fall back to a session or guest guard` is failed Bearer not resolving a session or guest user. generated security E2E `cookie login requires CSRF and ignores garbage Bearer` is garbage Bearer still requiring CSRF on POST `/login`. Successful skip is `successful bearer or basic skips CSRF`.
 
 The API group runs CSRF on mutating guest and session requests. `POST /api/v1/auth/login` needs `GET /api/v1/auth/csrf` first. That GET Set-Cookies the HttpOnly CSRF cookie and returns the same token in JSON. Send it as `x-csrf-token` (or form `_token`). Bearer and Basic skip CSRF only after that guard authenticates. SCIM and SAML ACS skip CSRF by path; those authenticators still run. After cookie login, JSON logout and other session POSTs still need the token. JavaScript cannot read the CSRF cookie.
 
@@ -72,7 +72,7 @@ A missing CSRF token on an API route is JSON 403, not a 500.
 
 Opaque tokens store an ability list. `*` means all.
 
-Generated HiroApp JWT mint stores `[]` abilities. JwtGuard looks up the user and rejects tokens whose `iat` is before `session_valid_after`. Opaque login tokens are stored with `[]`.
+Generated applications JWT mint stores `[]` abilities. JwtGuard looks up the user and rejects tokens whose `iat` is before `session_valid_after`. Opaque login tokens are stored with `[]`.
 
 Use policies (`Policy` / `PolicyGate`) for resource authorization. That is not the same as a token ability.
 
@@ -127,15 +127,15 @@ This is wall-clock ordering, not a distributed logical revocation epoch: clock s
 
 Generated cookie apps store browser sessions in `sessions`. Logout deletes the current row and clears `strata_session`. That is why rank 1 is stronger than a signed cookie alone. There is no generated "sign out other devices" screen.
 
-`APP_KEY_PREFIX` names Redis keys (`hiroapp:queue:default`). It does not name the HTML session cookie. Change `cookieName` in the auth provider if you want `hiroapp_session`.
+`APP_KEY_PREFIX` names Redis keys (`myapp:queue:default`). It does not name the HTML session cookie. Change `cookieName` in the auth provider if you want `myapp_session`.
 
 ## What not to copy from core
 
-These exist for generic apps, tests, or the leftover fixture. Generated HiroApp does not use them as its product model:
+These exist for generic apps, tests, or framework fixtures. Generated applications do not use them as its product model:
 
 - `GuestGuard` (dev headers)
 - HMAC `SessionGuard` as the HTML login
-- `MembershipService` / org membership tables (HiroApp scopes rows with `users.tenant_id` when tenancy is `rls` or `column`)
+- `MembershipService` / org membership tables (Generated apps scope rows with `users.tenant_id` when tenancy is `rls` or `column`)
 - Fixture table `api_token` (generated apps use `api_tokens`)
 
 ## Environment

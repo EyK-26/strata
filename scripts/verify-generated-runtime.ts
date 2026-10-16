@@ -1,6 +1,7 @@
 /** Actual generated CLI, route inventory, API-only OpenAPI and HTTP smoke acceptance. */
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp.ts";
 
@@ -133,6 +134,28 @@ await Bun.write('acceptance-routes.json',JSON.stringify(routes));
     await Bun.write(specPath, actual);
     await run([cli, "openapi:check"]);
     const spec = JSON.parse(actual);
+    // Resolve the candidate package installed into this fixture, not a monorepo alias.
+    const require = createRequire(join(fixture.app, "package.json"));
+    const { renderTypeScriptSdk } = await import(
+      require.resolve("@getstrata/core/openapi/generator")
+    );
+    const previousName = process.env.APP_NAME;
+    const previousClass = process.env.APP_SDK_CLASS;
+    try {
+      process.env.APP_NAME = env.APP_NAME;
+      delete process.env.APP_SDK_CLASS;
+      assert.equal(
+        renderTypeScriptSdk(spec, "/api"),
+        await readFile(join(repoRoot, "sdk/typescript/client.ts"), "utf8"),
+        "Generated API-only SDK differs from the committed snapshot.",
+      );
+    } finally {
+      if (previousName === undefined) delete process.env.APP_NAME;
+      else process.env.APP_NAME = previousName;
+      if (previousClass === undefined) delete process.env.APP_SDK_CLASS;
+      else process.env.APP_SDK_CLASS = previousClass;
+    }
+
     for (const path of Object.keys(spec.paths)) {
       assert.ok(
         !/^(?:\/$|\/login(?:\/|$)|\/register$|\/logout$|\/account\/|\/confirm-password$|\/forgot-password$|\/reset-password$|\/email\/|\/app(?:\/|$)|\/assets\/)/.test(

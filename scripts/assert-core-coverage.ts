@@ -15,11 +15,7 @@ import {
 } from "./coverage-scope.ts";
 
 const env = { ...process.env };
-delete env.HIROAPP_TEST;
 delete env.API_PREFIX;
-if ((env.DOGFOOD_APP ?? "").trim().toLowerCase() === "hiroapp") {
-  delete env.DOGFOOD_APP;
-}
 
 const proc = Bun.spawn(
   [

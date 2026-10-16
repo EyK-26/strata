@@ -8,7 +8,7 @@ import { CORE_SHARED_SUBPATHS } from "./core-shared-subpaths.ts";
 const ROOT = join(import.meta.dir, "..");
 const ENTRIES_DIR = join(ROOT, "packages/strata-core/dist/entries");
 const CONSUMER_SCAN_ROOTS = [
-  join(ROOT, "apps"),
+  join(ROOT, "packages/strata-starter/src"),
   join(ROOT, "packages/strata-starter/templates"),
   join(ROOT, "src"),
 ];

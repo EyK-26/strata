@@ -69,7 +69,7 @@ Smoke tests that POST a Stripe fixture and then `GET /api/v1/billing/subscriptio
 
 ## Design rule
 
-Keep vendor SDKs outside `src/core/`. Wrap them in `apps/<your-app>/src/modules/...` adapters so the framework stays usable without Stripe or a specific IdP.
+Keep vendor SDKs outside `src/core/`. Wrap them in your application’s `src/modules/...` adapters so the framework stays usable without Stripe or a specific IdP.
 
 ## Outbound request lifecycle
 

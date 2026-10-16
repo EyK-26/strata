@@ -1,6 +1,6 @@
 # Testing
 
-`bun run test:e2e` runs the preserved security suite against a disposable generated app installed from candidate runtime tarballs, with an owned restricted-role Postgres database. It no longer imports `apps/hiroapp`. Generated CLI/OpenAPI/HTTP smoke acceptance now also runs on an owned temporary app; the private CLI now manages fixtures only, and Docker/workspace wiring no longer depends on checked-in apps during the staged [acceptance migration](GENERATED-APP-ACCEPTANCE.md). External product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop). Framework tests also use a **fixture** schema (`src/db`) so RLS and tenant helpers have tables; that fixture is not a product.
+`bun run test:e2e` runs the preserved security suite against a disposable generated app installed from candidate runtime tarballs, with an owned restricted-role Postgres database. It no longer imports `apps/hiroapp`. Generated CLI/OpenAPI/HTTP smoke acceptance now also runs on an owned temporary app; the private CLI now manages fixtures only, and Docker/workspace wiring no longer depends on checked-in apps after the completed [acceptance migration](GENERATED-APP-ACCEPTANCE.md). External product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop). Framework tests also use a **fixture** schema (`src/db`) so RLS and tenant helpers have tables; that fixture is not a product.
 
 ## Commands and infrastructure
 
