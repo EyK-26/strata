@@ -1,5 +1,11 @@
 # @getstrata/cli changelog
 
+## 2.2.34
+
+Complete opt-in persisted account-state adoption: atomic SCIM suspension/reactivation and credential revocation, serialized generated password/SSO issuance, version-bound session/MFA/confirmation proofs, safe optional credential-table handling and malformed-cookie rejection. Includes explicit schema migration and upgrade instructions; installing packages alone does not rewrite existing apps.
+
+Compatibility release aligning CLI peers and packaged scaffolding with the completed account-state contracts. No automatic application rewrite, migration, demo seeding or package publication is performed by installing this release.
+
 ## 2.2.33
 
 Fix shared tenant lookups in generated SQLite column-tenancy apps through typed repositories. Generated SCIM rejects unsupported status/profile mutations before writing and runs mutations in explicit transactions, including immediate observer rollback. Add actual SQLite and restricted Postgres HTTP regressions; full account deactivation remains unsupported and explicit.

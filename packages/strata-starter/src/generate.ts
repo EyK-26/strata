@@ -47,6 +47,7 @@ import {
   webhookMigrationName,
 } from "./renderIntegrations.ts";
 import {
+  renderAccountStateMigration,
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
   renderCliOpenApiTs,
@@ -260,6 +261,14 @@ function writeGeneratedFiles(options: GenerateOptions): void {
     renderStarterSchemaMigration(layers),
   );
   writeText(join(src, "db/migrations/0005_outbox.ts"), renderOutboxMigration(layers));
+  if (authNeedsUsers(layers.auth)) {
+    writeText(
+      join(src, "db/migrations/0006_account_state.ts"),
+      renderAccountStateMigration(layers),
+    );
+  } else {
+    removeIfExists(join(src, "db/migrations/0006_account_state.ts"));
+  }
   removeIfExists(join(src, "db/migrations/0002_webhooks_schema.ts"));
   removeIfExists(join(src, "db/migrations/0002_billing_schema.ts"));
   removeIfExists(join(src, "db/migrations/0003_billing_schema.ts"));

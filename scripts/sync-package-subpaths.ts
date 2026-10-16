@@ -37,6 +37,7 @@ const CORE_SUBPATHS = [
   "auth/saml/samlServiceProvider",
   "auth/password",
   "auth/passwordLogin",
+  "auth/pendingMfaCookie",
   "auth/oneTimeToken",
   "auth/intendedUrlCookie",
   "auth/passwordConfirmCookie",

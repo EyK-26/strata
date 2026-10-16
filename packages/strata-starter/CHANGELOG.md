@@ -1,5 +1,11 @@
 # create-strata changelog
 
+## 2.2.34
+
+Complete opt-in persisted account-state adoption: atomic SCIM suspension/reactivation and credential revocation, serialized generated password/SSO issuance, version-bound session/MFA/confirmation proofs, safe optional credential-table handling and malformed-cookie rejection. Includes explicit schema migration and upgrade instructions; installing packages alone does not rewrite existing apps.
+
+User-backed scaffolds emit an additive 0006 account-state migration and typed live directory projection. Cookie/token/JWT/SSO issuance and SCIM transitions share the official transaction/account-lock protocol; SQLite uses explicit write transactions. Generated pending MFA delegates crypto to core, and MFA replacement/password reset advance the epoch. Existing apps require a coordinated explicit adoption, with old auth writers stopped.
+
 ## 2.2.33
 
 Fix shared tenant lookups in generated SQLite column-tenancy apps through typed repositories. Generated SCIM rejects unsupported status/profile mutations before writing and runs mutations in explicit transactions, including immediate observer rollback. Add actual SQLite and restricted Postgres HTTP regressions; full account deactivation remains unsupported and explicit.

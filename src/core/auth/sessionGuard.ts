@@ -28,7 +28,10 @@ class SessionGuard implements AuthGuard {
       if (!isAccountActive(user) || !matchesAuthVersion(session.authVersion, user.auth_version))
         return null;
 
-      if (isSessionInvalidated(session.issuedAt, user.session_valid_after)) {
+      if (
+        user.auth_version === undefined &&
+        isSessionInvalidated(session.issuedAt, user.session_valid_after)
+      ) {
         return null;
       }
 
@@ -43,6 +46,7 @@ class SessionGuard implements AuthGuard {
       return {
         id: user.id,
         role: user.role,
+        ...(user.auth_version !== undefined ? { authVersion: user.auth_version } : {}),
         abilities: resolveAbilitiesForRole(user.role),
         emailVerifiedAt: user.email_verified_at ?? null,
       };

@@ -582,7 +582,7 @@ function renderUserModel(layers: StarterLayers): string {
   mfa_enabled: number | boolean;
   mfa_recovery_codes: string | null;`
     : "";
-  const columns = ["id", "name", "email", "password", "is_admin"];
+  const columns = ["id", "name", "email", "password", "is_admin", "is_active", "auth_version"];
   if (tenancyOn) {
     columns.push("tenant_id");
   }
@@ -590,7 +590,7 @@ function renderUserModel(layers: StarterLayers): string {
     columns.push("mfa_secret", "mfa_enabled", "mfa_recovery_codes");
   }
   columns.push("session_valid_after", "email_verified_at", "created_at");
-  const fillable = ["name", "email", "password", "is_admin"];
+  const fillable = ["name", "email", "password", "is_admin", "is_active"];
   if (tenancyOn) {
     fillable.push("tenant_id");
   }
@@ -613,6 +613,8 @@ interface UserRecord {
   name: string;
   email: string;
   password: string;
+  is_active: number | boolean;
+  auth_version: number;
   is_admin: number | boolean;${tenantField}${mfaFields}
   session_valid_after: Date | string | null;
   email_verified_at: Date | string | null;
@@ -1348,6 +1350,14 @@ export { listeners };
 `;
 }
 
+function renderAccountStateMigration(layers: StarterLayers): string {
+  const driver = layers.database === "postgres" ? "pgsql" : layers.database;
+  return `import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
+
+export default createAccountStateMigration("0006_account_state", "${driver}", { sessions: ${authUsesCookie(layers.auth)} });
+`;
+}
+
 function renderOutboxMigration(layers: StarterLayers): string {
   const driver = layers.database === "postgres" ? "pgsql" : layers.database;
   const rls = layers.tenancy === "rls" && layers.database === "postgres";
@@ -1455,6 +1465,7 @@ export default createViewProvider({
 
 export {
   dialectFragments,
+  renderAccountStateMigration,
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
   renderCliOpenApiTs,

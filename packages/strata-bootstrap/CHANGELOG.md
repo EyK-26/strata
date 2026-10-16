@@ -1,5 +1,11 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.34
+
+Complete opt-in persisted account-state adoption: atomic SCIM suspension/reactivation and credential revocation, serialized generated password/SSO issuance, version-bound session/MFA/confirmation proofs, safe optional credential-table handling and malformed-cookie rejection. Includes explicit schema migration and upgrade instructions; installing packages alone does not rewrite existing apps.
+
+Database-cookie stores persist and compare optional session epochs, reject inactive/invalid creation state and project the current epoch for sensitive-write fencing. Legacy stores without epoch metadata retain timestamp-watermark behavior. Cookie-session schemas must explicitly opt into the additive session column before deploying epoch-aware writers.
+
 ## 2.2.33
 
 Fix shared tenant lookups in generated SQLite column-tenancy apps through typed repositories. Generated SCIM rejects unsupported status/profile mutations before writing and runs mutations in explicit transactions, including immediate observer rollback. Add actual SQLite and restricted Postgres HTTP regressions; full account deactivation remains unsupported and explicit.

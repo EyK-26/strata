@@ -123,6 +123,10 @@ Generated models extend `defineModel(table)` with typed table metadata and expli
 
 Keep `registerModelRepository` for custom query behavior, overrides or explicit connections; existing manual registrations remain supported. Deliberate string aliases can still use `registerModelClass`. There is no need for constructor-only repository subclasses or a second manual constructor-name registry for ordinary declarative models. See [declarative model binding](DATABASE.md#declarative-model-binding). This generator adoption requires no schema or data migration.
 
+### Account-state adoption
+
+User-backed scaffolds add `0006_account_state.ts`, persisted status/epoch fields and typed live directory projection. Cookie apps also persist the session epoch. Password/SSO and pending-MFA issuance use the official transaction and account-lock protocol; SCIM transitions revoke old credentials atomically. Existing apps must add an unused file migration and explicitly merge the generated auth shapes while old auth writers are stopped. Do not overwrite `0001_starter_schema` or assume a dependency upgrade rewrites application code. See [AUTH.md](AUTH.md#persisted-account-state-and-explicit-adoption) for upgrade, downgrade and custom-auth responsibilities.
+
 ### Awaited provider startup migration
 
 Generated applications now use the framework `createAppContext([...starterProviders, ...moduleProviders])` lifecycle. Await every registration before booting any provider. Existing `bootstrapApp()` / `createApp()` callers already await; direct `createAppContext()`, `createAppDependencies()` and `runProviderPhase()` callers must adopt the new promise return types. `appContext` no longer boots lazily through getters.

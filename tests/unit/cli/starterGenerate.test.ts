@@ -317,7 +317,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.33");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.34");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -718,7 +718,7 @@ describe("create-strata generate", () => {
     expect(auth).toContain("/forgot-password");
     expect(auth).toContain("/email/verify");
     expect(auth).toContain("if (record.mfa_enabled)");
-    expect(auth).toContain("pendingMfaSetCookie(record.id)");
+    expect(auth).toContain("pendingMfaSetCookie(record.id, record.auth_version)");
     expect(auth).toContain("await revokeUserSessions(Number(user.id))");
     expect(auth).toContain("kernel.wrapWebPasswordConfirm(");
     expect(auth).toMatch(/"\/reset-password":[\s\S]*?wrapWeb\(kernel\.wrapSigned\(/);
@@ -749,7 +749,9 @@ describe("create-strata generate", () => {
     expect(scim).toContain("parsePositiveIntParam");
     expect(scim).toContain("User.create({");
     expect(scim).toContain("tenant_id: tenantId()");
-    expect(scim).toContain("user.update({ name, email })");
+    expect(scim).toContain(
+      "await user.update({ name, email, ...(active === undefined ? {} : { is_active: active }) })",
+    );
     expect(scim).toContain("user.delete()");
     expect(scim).not.toContain("FROM users");
     expect(scim).not.toContain("INTO users");
@@ -798,7 +800,10 @@ describe("create-strata generate", () => {
     expect(directory).toContain('user.get("password")');
     expect(directory).not.toContain("toArray()");
     expect(directory).not.toContain("as User");
-    expect(directory).toContain("function mapUserRow(user: LoadedUser): AuthUserRecord");
+    expect(directory).toContain("function mapUserRow(user: LoadedUser): StarterAuthUserRecord");
+    expect(directory).toContain(
+      "StarterAuthUserRecord = AuthUserRecord & { is_active: boolean; auth_version: number }",
+    );
     expect(directory).toContain('asTimestamp(user.get("email_verified_at"))');
     expect(directory).toContain('asTimestamp(user.get("session_valid_after"))');
     expect(directory).toContain('asNullableString(user.get("mfa_secret"))');
@@ -1612,12 +1617,12 @@ export default probeModule;
             404,
           );
           for (const body of [
-            patch([{ op: "replace", path: "active", value: false }]),
+            patch([{ op: "replace", path: "active", value: "false" }]),
             patch([
               { op: "replace", path: "displayName", value: "Partial" },
-              { op: "replace", path: "active", value: false },
+              { op: "replace", path: "active", value: "false" },
             ]),
-            patch([{ op: "replace", value: { displayName: "Partial", active: false } }]),
+            patch([{ op: "replace", value: { displayName: "Partial", active: "false" } }]),
             patch([{ op: "remove", path: "displayName" }]),
             patch([{ op: "replace", path: "unsupported", value: "ignored" }]),
             patch([{ op: "replace", value: { unsupported: "ignored" } }]),
@@ -1670,7 +1675,7 @@ export default probeModule;
             const rejected = await request(method === "POST" ? "Users" : `Users/${id}`, method, {
               userName: "inactive@example.test",
               displayName: "Inactive",
-              active: false,
+              active: "false",
             });
             expect(rejected.status).toBe(400);
             expect(await User.where({ email: "inactive@example.test" }).count()).toBe(0);
