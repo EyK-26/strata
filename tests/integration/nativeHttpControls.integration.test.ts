@@ -85,7 +85,7 @@ describe("native HTTP controls and streaming consumption limits", () => {
   test("Bun transport rejects oversized streamed requests on native and fallback dispatch", async () => {
     const server = createWebServer({
       port: 0,
-      native: { maxRequestBodySize: 8, development: false },
+      native: { hostname: "127.0.0.1", maxRequestBodySize: 8, development: false },
       routes: {
         "/native": { POST: async (request: Request) => new Response(await request.text()) },
       },
@@ -109,7 +109,7 @@ describe("native HTTP controls and streaming consumption limits", () => {
     let validIdentity = false;
     const server = createWebServer({
       port: 0,
-      native: { maxRequestBodySize: 4096 },
+      native: { hostname: "127.0.0.1", maxRequestBodySize: 4096 },
       routes: {
         "/upload/:id": {
           POST: composeMiddleware(createBodySizeLimitMiddleware(8))(async (request) => {
@@ -144,7 +144,7 @@ describe("native HTTP controls and streaming consumption limits", () => {
   test("multipart and cloned JSON bodies obey limits", async () => {
     const server = createWebServer({
       port: 0,
-      native: { maxRequestBodySize: 4096 },
+      native: { hostname: "127.0.0.1", maxRequestBodySize: 4096 },
       routes: {
         "/json": {
           POST: composeMiddleware(createBodySizeLimitMiddleware(16))(async (request) => {
@@ -201,6 +201,7 @@ describe("native HTTP controls and streaming consumption limits", () => {
     const server = createWebServer<{ prefix: string }>({
       port: 0,
       native: {
+        hostname: "127.0.0.1",
         websocket: {
           message(socket, message) {
             socket.send(socket.data.prefix + message);
@@ -241,7 +242,7 @@ describe("native HTTP controls and streaming consumption limits", () => {
     });
     const server = createWebServer({
       port: 0,
-      native: { idleTimeout: 2 },
+      native: { hostname: "127.0.0.1", idleTimeout: 2 },
       handle: composeMiddleware(createBodySizeLimitMiddleware(1024))(async (request) => {
         request.signal.addEventListener("abort", aborted, { once: true });
         admitted();
@@ -351,8 +352,8 @@ describe("native HTTP controls and streaming consumption limits", () => {
         createWebServer({ port: 0, native: { [field]: () => new Response("bad") } }),
       ).toThrow("owned by createWebServer");
     }
-    expect(() => createWebServer({ port: 0, native: { maxRequestBodySize: 0 } })).toThrow(
-      RangeError,
-    );
+    expect(() =>
+      createWebServer({ port: 0, native: { hostname: "127.0.0.1", maxRequestBodySize: 0 } }),
+    ).toThrow(RangeError);
   });
 });

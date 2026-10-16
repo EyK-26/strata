@@ -48,6 +48,7 @@ describe.skipIf(!restricted || !migration)(
           GRANT SELECT,INSERT ON ${table} TO "${role.role}"`);
           server = createWebServer({
             port: 0,
+            native: { hostname: "127.0.0.1" },
             lifecycle,
             routes: {
               "/transaction": {
@@ -123,7 +124,7 @@ test("a real signalled process enforces its hard deadline and does not report su
 import { LifecycleCoordinator, installGracefulShutdownSignals } from ${JSON.stringify(new URL("../../src/core/lifecycle/gracefulShutdown.ts", import.meta.url).href)};
 import { createWebServer } from ${JSON.stringify(new URL("../../src/bootstrap/web/server.ts", import.meta.url).href)};
 const lifecycle = new LifecycleCoordinator({timeoutMs:100});
-const server = createWebServer({port:0,lifecycle,handle:async()=>{console.log('admitted');return new Promise(()=>{});}});
+const server = createWebServer({port:0,native:{hostname:"127.0.0.1"},lifecycle,handle:async()=>{console.log('admitted');return new Promise(()=>{});}});
 lifecycle.register('database',()=>console.log('infra-closed'),'close');
 installGracefulShutdownSignals(undefined,lifecycle);
 void fetch(server.url).catch(()=>{});

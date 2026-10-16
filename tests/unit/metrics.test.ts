@@ -128,7 +128,12 @@ describe("bounded route metrics", () => {
     const unmatched = composeMiddleware(createMetricsMiddleware())(
       () => new Response(null, { status: 404 }),
     );
-    const server = createWebServer({ port: 0, routes, handle: unmatched });
+    const server = createWebServer({
+      port: 0,
+      native: { hostname: "127.0.0.1" },
+      routes,
+      handle: unmatched,
+    });
     try {
       const responses = await Promise.all(
         Array.from({ length: 100 }, async (_, index) => {

@@ -57,9 +57,9 @@ describe("native registered-route preflights", () => {
         },
       ],
     });
-    const server = createWebServer({ port: 0, routes });
+    const server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" }, routes });
     try {
-      const url = `http://localhost:${server.port}/api/v1/orders`;
+      const url = `http://127.0.0.1:${server.port}/api/v1/orders`;
       const allowed = await fetch(url, preflight());
       expect(allowed.status).toBe(204);
       expect(allowed.headers.get("access-control-allow-origin")).toBe("https://client.example");
@@ -85,7 +85,7 @@ describe("native registered-route preflights", () => {
       expect(Object.keys(spec.paths["/api/v1/orders"] ?? {})).toEqual(["post"]);
       expect(routeRegistry.list().some((route) => route.method === "OPTIONS")).toBe(false);
       expect(routes["/api/v1/orders"]).not.toHaveProperty("OPTIONS");
-      expect((await fetch(`http://localhost:${server.port}/unknown`, preflight())).status).toBe(
+      expect((await fetch(`http://127.0.0.1:${server.port}/unknown`, preflight())).status).toBe(
         404,
       );
     } finally {
@@ -97,6 +97,7 @@ describe("native registered-route preflights", () => {
     let calls = 0;
     const server = createWebServer({
       port: 0,
+      native: { hostname: "127.0.0.1" },
       routes: {
         "/read": () => {
           calls++;
@@ -111,7 +112,7 @@ describe("native registered-route preflights", () => {
       },
     });
     try {
-      const url = `http://localhost:${server.port}`;
+      const url = `http://127.0.0.1:${server.port}`;
       for (const path of ["/read", "/things/123"]) {
         expect((await fetch(`${url}${path}`, preflight())).status).toBe(204);
       }
@@ -133,6 +134,7 @@ describe("native registered-route preflights", () => {
     expect(Object.keys(invalid)).toEqual([]);
     const server = createWebServer({
       port: 0,
+      native: { hostname: "127.0.0.1" },
       routes: {
         "/explicit": {
           GET: () => new Response("get"),
@@ -141,7 +143,7 @@ describe("native registered-route preflights", () => {
       },
     });
     try {
-      const response = await fetch(`http://localhost:${server.port}/explicit`, preflight());
+      const response = await fetch(`http://127.0.0.1:${server.port}/explicit`, preflight());
       expect(response.status).toBe(202);
       expect(await response.text()).toBe("/explicit");
     } finally {
@@ -153,17 +155,19 @@ describe("native registered-route preflights", () => {
     expect(() =>
       createWebServer({
         port: 0,
+        native: { hostname: "127.0.0.1" },
         routes: { "/read": () => new Response("read") },
         cors: { additionalAllowedHeaders: ["*"] },
       }),
     ).toThrow(TypeError);
     const server = createWebServer({
       port: 0,
+      native: { hostname: "127.0.0.1" },
       routes: { "/read": () => new Response("read") },
       cors: { additionalAllowedHeaders: ["X-Native"] },
     });
     try {
-      const response = await fetch(`http://localhost:${server.port}/read`, preflight());
+      const response = await fetch(`http://127.0.0.1:${server.port}/read`, preflight());
       expect(response.headers.get("access-control-allow-headers")).toContain("X-Native");
       expect(response.headers.get("access-control-allow-headers")).toContain("Idempotency-Key");
     } finally {

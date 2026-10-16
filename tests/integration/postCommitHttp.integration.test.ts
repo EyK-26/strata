@@ -166,9 +166,14 @@ describe.skipIf(!restrictedUrl || !adminUrl)("real HTTP post-commit boundaries",
           format === "api"
             ? buildModuleRoutes(dependencies, { modules })
             : buildWebModuleRoutes(dependencies, { modules });
-        const server = createWebServer({ port: 0, publicDir: "./public", routes });
+        const server = createWebServer({
+          port: 0,
+          native: { hostname: "127.0.0.1" },
+          publicDir: "./public",
+          routes,
+        });
         try {
-          const response = await fetch(`http://localhost:${server.port}${path}`, {
+          const response = await fetch(`http://127.0.0.1:${server.port}${path}`, {
             headers: { accept: "text/html" },
             redirect: "manual",
           });

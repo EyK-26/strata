@@ -27,6 +27,7 @@ afterAll(async () => {
 test("actual HTTP page/fragment variants vary on every selecting header", async () => {
   const server = createWebServer({
     port: 0,
+    native: { hostname: "127.0.0.1" },
     routes: {
       "/page": (request: Request) =>
         renderer.renderHtmx(
@@ -44,7 +45,7 @@ test("actual HTTP page/fragment variants vary on every selecting header", async 
     for (const hx of [false, true])
       for (const boost of [false, true])
         for (const history of [false, true]) {
-          const response = await fetch(`http://localhost:${server.port}/page`, {
+          const response = await fetch(`http://127.0.0.1:${server.port}/page`, {
             headers: {
               "HX-Request": String(hx),
               "HX-Boosted": String(boost),

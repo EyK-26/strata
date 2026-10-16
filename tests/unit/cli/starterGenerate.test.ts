@@ -1218,9 +1218,9 @@ export default probeModule;
     try {
       const boot = await bootstrapApp({ runtimeMetrics: { outbox: {}, failedJobs: {} } });
       context = boot.context;
-      server = createAppServer(boot.routes, 0);
+      server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" });
       const scrape = () =>
-        fetch(`http://localhost:${server?.port}/metrics`, {
+        fetch(`http://127.0.0.1:${server?.port}/metrics`, {
           headers: { authorization: "Bearer generated-metrics-fixture" },
         }).then((response) => response.text());
       const body = await scrape();
@@ -1280,7 +1280,9 @@ export default probeModule;
 
       // Unmigrated database: the process is up but must not enter rotation.
       const unmigrated = await bootstrapApp({ migrate: false });
-      const coldServer = createAppServer(unmigrated.routes, 0);
+      const coldServer = createAppServer(unmigrated.routes, 0, undefined, {
+        hostname: "127.0.0.1",
+      });
       try {
         const cold = await fetch(`http://127.0.0.1:${coldServer.port}/health`);
         expect(cold.status).toBe(503);
@@ -1298,7 +1300,7 @@ export default probeModule;
 
       const { routes } = await bootstrapApp();
       await (await import(join(app, "src/db/migrate.ts"))).seed();
-      const server = createAppServer(routes, 0);
+      const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
       try {
         const response = await fetch(`http://127.0.0.1:${server.port}/health`);
         expect(response.status).toBe(200);
@@ -1393,7 +1395,7 @@ export default probeModule;
       const { defineTable } = await import("@getstrata/core/database/table");
       const { hashPassword } = await import("@getstrata/core/auth/password");
       const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0),
+      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
         origin = `http://127.0.0.1:${server.port}`;
       process.env.APP_URL = origin;
       try {
@@ -1531,7 +1533,7 @@ export default probeModule;
         const { defineTable } = await import("@getstrata/core/database/table");
         const { hashPassword } = await import("@getstrata/core/auth/password");
         const boot = await bootstrapApp();
-        const server = createAppServer(boot.routes, 0),
+        const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
           origin = `http://127.0.0.1:${server.port}`;
         process.env.APP_URL = origin;
         try {
@@ -1824,7 +1826,7 @@ export default probeModule;
       const { absoluteTemporarySignedUrl } = await import("@getstrata/core/http/signedUrl");
       const { hashPassword } = await import("@getstrata/core/auth/password");
       const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0),
+      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
         origin = `http://127.0.0.1:${server.port}`;
       process.env.APP_URL = origin;
       let observerFailureId: number | undefined;
@@ -2007,7 +2009,7 @@ export default probeModule;
       const { absoluteTemporarySignedUrl } = await import("@getstrata/core/http/signedUrl");
       const { hashPassword, verifyPassword } = await import("@getstrata/core/auth/password");
       const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0);
+      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" });
       const origin = `http://127.0.0.1:${server.port}`;
       process.env.APP_URL = origin;
       try {
@@ -2223,7 +2225,7 @@ export default probeModule;
       }
       expect(await getSql().unsafe("SELECT COUNT(*) AS count FROM users")).toEqual([{ count: 0 }]);
       await (await import(join(app, "src/db/migrate.ts"))).seed();
-      const server = createAppServer(routes, 0);
+      const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
       const origin = `http://127.0.0.1:${server.port}`;
       try {
         const home = await fetch(`${origin}/`);
@@ -2366,7 +2368,7 @@ export default probeModule;
       const { closeDatabase, getSql } = await import(`${join(app, "src/bootstrap/database.ts")}`);
       const { routes } = await bootstrapApp();
       await (await import(join(app, "src/db/migrate.ts"))).seed();
-      const server = createAppServer(routes, 0);
+      const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
       const origin = `http://127.0.0.1:${server.port}`;
       try {
         const blocked = await fetch(`${origin}/api/v1/auth/login`, {

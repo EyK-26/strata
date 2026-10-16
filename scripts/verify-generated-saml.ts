@@ -91,7 +91,7 @@ try {
     join(fixture.app, "src/bootstrap/createApp.ts")
   );
   const { routes, context } = await bootstrapApp({ migrate: false });
-  const server = createAppServer(routes, 0);
+  const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
   stop = async () => {
     server.stop(true);
     try {
@@ -100,7 +100,7 @@ try {
       await database.closeDatabase();
     }
   };
-  const origin = `http://127.0.0.1:${server.port}`;
+  const origin = server.url.origin;
   const destination = `${origin}/auth/saml/acs`;
   process.env.SAML_ACS_URL = destination;
   async function relay() {

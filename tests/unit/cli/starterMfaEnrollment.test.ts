@@ -205,7 +205,7 @@ test(
       const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
       const { User } = await import(join(app, "src/models/User.ts"));
       const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0);
+      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" });
       const origin = `http://127.0.0.1:${server.port}`;
       process.env.APP_URL = origin;
       let proxy: ReturnType<typeof Bun.serve> | undefined;
@@ -358,7 +358,7 @@ test.skipIf(!adminSource || !runtimeSource)(
       const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
       const { User } = await import(join(app, "src/models/User.ts"));
       const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0),
+      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
         origin = `http://127.0.0.1:${server.port}`;
       process.env.APP_URL = origin;
       let release = () => {};

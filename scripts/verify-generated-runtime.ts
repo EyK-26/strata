@@ -63,6 +63,7 @@ const env: Record<string, string | undefined> = {
   KMS_ENCRYPTION_KEY: Buffer.alloc(32, 17).toString("base64"),
   METRICS_TOKEN: crypto.randomUUID(),
   PORT: "0",
+  HOST: "127.0.0.1",
 };
 delete env.DOGFOOD_APP;
 delete env.HIROAPP_TEST;
@@ -276,7 +277,7 @@ const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
         throw new Error(
           `Generated CLI exited before admission (${server.exitCode}): ${diagnostic}`,
         );
-      const match = /Listening on (http:\/\/localhost:\d+)/.exec(diagnostic);
+      const match = /Listening on (http:\/\/127\.0\.0\.1:\d+)/.exec(diagnostic);
       if (match) {
         origin = match[1];
         break;

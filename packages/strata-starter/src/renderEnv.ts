@@ -85,6 +85,8 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     `APP_KEY_PREFIX=${projectName}`,
     "APP_ENV=local",
     "PORT=3000",
+    "# Optional TCP listen address, separate from public APP_URL / tenant hosts.",
+    "# HOST=0.0.0.0",
     "# Total graceful shutdown budget in milliseconds; keep deployment grace longer.",
     "SHUTDOWN_TIMEOUT_MS=30000",
     "APP_URL=http://localhost:3000",
