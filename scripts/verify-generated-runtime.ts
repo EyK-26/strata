@@ -126,10 +126,11 @@ await Bun.write('acceptance-routes.json',JSON.stringify(routes));
       `import assert from 'node:assert/strict';
 import {bootstrapApp} from './src/bootstrap/createApp.ts';
 import {getSql,closeDatabase} from './src/bootstrap/database.ts';
-import {BaseRepository} from '@getstrata/core/database/baseRepository';
+import DefaultRepository,{BaseRepository} from '@getstrata/core/database/baseRepository';
 import {defineTable} from '@getstrata/core/database/table';
 const app=await bootstrapApp({migrate:false});try{
-const tenants=new BaseRepository(defineTable<{id:number;slug:string},'id'>({name:'tenant',primaryKey:'id',columns:['id','slug']}),getSql());
+assert.equal(DefaultRepository,BaseRepository);
+const tenants=new DefaultRepository(defineTable<{id:number;slug:string},'id'>({name:'tenant',primaryKey:'id',columns:['id','slug']}),getSql());
 const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
 }finally{try{await app.context.dispose();}finally{await closeDatabase();}}`,
     );

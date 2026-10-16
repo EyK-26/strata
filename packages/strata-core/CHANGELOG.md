@@ -2,6 +2,8 @@
 
 ## 2.2.36
 
+Add a mandatory installed-package SQLite column-tenancy CLI/OpenAPI/HTTP profile, including cookie/token/JWT/Basic and repeated SCIM isolation, while preserving existing Postgres security, route inventories, compiler combinations and Docker gates. Reconcile observability/rotation trackers against shipped capabilities and remaining operational qualification.
+
 Fix declared default exports missing from nine published core subpaths. Preserve defaults in generated non-shared entries and alias the shared BaseRepository default to its canonical root constructor, retaining named exports and singleton/class identity. Extend declaration/runtime verification with value-default and type-only-default regressions; compile all nine imports across the existing 18 generated compiler combinations and execute them in every installed candidate app. Records the published 2.2.35 reproduction from Q01 dogfooding; no shop adapter or node_modules patch.
 
 ## 2.2.35
