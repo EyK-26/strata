@@ -19,6 +19,7 @@ const repoRoot = join(import.meta.dir, "../..");
 /** Owned acceptance infrastructure; no checked-in app or source-path runtime dependencies. */
 export async function createGeneratedSecurityApp(
   database: "postgres" | "sqlite" | "mysql" = "postgres",
+  extraFlags: readonly string[] = [],
 ) {
   const migrationUrl = process.env.MIGRATION_DATABASE_URL;
   const runtimeUrl = process.env.RLS_TEST_DATABASE_URL ?? process.env.APP_DATABASE_URL;
@@ -82,6 +83,7 @@ export async function createGeneratedSecurityApp(
           "--email-verification",
           "--scim",
           "--metrics",
+          ...extraFlags,
           "--yes",
         ]),
       ),

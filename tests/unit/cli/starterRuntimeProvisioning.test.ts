@@ -32,7 +32,8 @@ for (const database of ["postgres", "mysql"] as const)
       overlayRoot: resolveOverlayRoot(),
     });
     const createApp = await readFile(join(dir, "src/bootstrap/createApp.ts"), "utf8");
-    expect(createApp).toContain("ensureAppDatabase({ provision: !isProduction })");
+    expect(createApp).toContain("ensureAppDatabase({ provision: !isProduction && runMigrate })");
+    expect(createApp).toContain("migrate: runMigrate = !isProduction");
     for (const file of ["migrate", "fresh"])
       expect(await readFile(join(dir, `src/db/${file}.ts`), "utf8")).toContain(
         "ensureAppDatabase({ provision: true })",
