@@ -4,7 +4,9 @@ const BASE_URL = (process.env.BASE_URL ?? process.env.APP_URL ?? "http://localho
 );
 
 async function assertOk(url: string, init?: RequestInit): Promise<Response> {
-  const response = await fetch(url, init);
+  const headers = new Headers(init?.headers);
+  if (process.env.SMOKE_HOST) headers.set("host", process.env.SMOKE_HOST);
+  const response = await fetch(url, { ...init, headers });
 
   if (!response.ok) {
     throw new Error(`Smoke check failed: ${url} returned ${response.status}`);
@@ -28,7 +30,10 @@ if (metricsToken) {
   await assertOk(`${BASE_URL}/metrics`);
 }
 
-const login = await fetch(`${BASE_URL}/login`, { redirect: "manual" });
+const login = await fetch(`${BASE_URL}/login`, {
+  redirect: "manual",
+  headers: process.env.SMOKE_HOST ? { host: process.env.SMOKE_HOST } : undefined,
+});
 if (!login.ok) {
   throw new Error(`Smoke check failed: ${BASE_URL}/login returned ${login.status}`);
 }

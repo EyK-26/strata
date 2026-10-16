@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SQL } from "bun";
+import { createConnection } from "mysql2/promise";
 import {
   generateProject,
   resolveOverlayRoot,
@@ -16,19 +17,27 @@ import {
 const repoRoot = join(import.meta.dir, "../..");
 
 /** Owned acceptance infrastructure; no checked-in app or source-path runtime dependencies. */
-export async function createGeneratedSecurityApp(database: "postgres" | "sqlite" = "postgres") {
+export async function createGeneratedSecurityApp(
+  database: "postgres" | "sqlite" | "mysql" = "postgres",
+) {
   const migrationUrl = process.env.MIGRATION_DATABASE_URL;
   const runtimeUrl = process.env.RLS_TEST_DATABASE_URL ?? process.env.APP_DATABASE_URL;
   if (database === "postgres" && (!migrationUrl || !runtimeUrl))
     throw new Error(
       "Generated security acceptance requires migration and restricted runtime Postgres URLs.",
     );
+  const mysqlUrl = process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
+  if (database === "mysql" && !mysqlUrl?.trim())
+    throw new Error("Generated MySQL acceptance requires MYSQL_OBSERVABILITY_ADMIN_URL.");
   const root = await mkdtemp(join(tmpdir(), "strata-security-"));
   const app = join(root, "app");
   const databaseName = `generated_security_${crypto.randomUUID().replaceAll("-", "")}`;
   const controlUrl = database === "postgres" && migrationUrl ? new URL(migrationUrl) : null;
   if (controlUrl) controlUrl.pathname = "/postgres";
   const control = controlUrl ? new SQL(controlUrl.href) : null;
+  let mysqlControl: Awaited<ReturnType<typeof createConnection>> | undefined;
+  const mysqlUser = `q01_${crypto.randomUUID().replaceAll("-", "").slice(0, 18)}`;
+  let mysqlUserCreated = false;
   let created = false;
   let closed = false;
   async function close() {
@@ -39,9 +48,20 @@ export async function createGeneratedSecurityApp(database: "postgres" | "sqlite"
         await control.unsafe(`DROP DATABASE ${databaseName} WITH (FORCE)`);
         created = false;
       }
+      if (mysqlControl) {
+        try {
+          if (mysqlUserCreated) await mysqlControl.query(`DROP USER '${mysqlUser}'@'%'`);
+        } finally {
+          if (created) await mysqlControl.query(`DROP DATABASE ${databaseName}`);
+        }
+      }
     } finally {
       try {
-        await control?.close();
+        try {
+          await control?.close();
+        } finally {
+          await mysqlControl?.end();
+        }
       } finally {
         await rm(root, { recursive: true, force: true });
       }
@@ -113,6 +133,25 @@ export async function createGeneratedSecurityApp(database: "postgres" | "sqlite"
       const admin = new URL(migrationUrl),
         runtime = new URL(runtimeUrl);
       admin.pathname = runtime.pathname = `/${databaseName}`;
+      adminUrl = admin.href;
+      appUrl = runtime.href;
+    } else if (database === "mysql") {
+      if (!mysqlUrl) throw new Error("Missing MySQL fixture credentials.");
+      mysqlControl = await createConnection(mysqlUrl);
+      // Owned ASCII UUID identifiers/credentials only; never application/request data.
+      await mysqlControl.query(`CREATE DATABASE ${databaseName}`);
+      created = true;
+      const password = crypto.randomUUID().replaceAll("-", "");
+      await mysqlControl.query(`CREATE USER '${mysqlUser}'@'%' IDENTIFIED BY '${password}'`);
+      mysqlUserCreated = true;
+      await mysqlControl.query(
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON ${databaseName}.* TO '${mysqlUser}'@'%'`,
+      );
+      const admin = new URL(mysqlUrl);
+      admin.pathname = `/${databaseName}`;
+      const runtime = new URL(admin);
+      runtime.username = mysqlUser;
+      runtime.password = password;
       adminUrl = admin.href;
       appUrl = runtime.href;
     } else {

@@ -17,11 +17,16 @@ const tempDirectories: string[] = [];
 const bootstrap = async () => ({
   routes: { "/api/acceptance": { GET: async () => Response.json({ ok: true }) } },
 });
+let cleanupRuns = 0;
+const close = () => {
+  cleanupRuns++;
+};
 const registerOpenApiRoutes = () => registerAppOpenApiRoutes(bootstrap);
-const openapiValidateCommand = createOpenApiValidateCommand(bootstrap);
-const openapiCheckCommand = createOpenApiCheckCommand(bootstrap);
+const openapiValidateCommand = createOpenApiValidateCommand(bootstrap, close);
+const openapiCheckCommand = createOpenApiCheckCommand(bootstrap, close);
 
 afterEach(async () => {
+  cleanupRuns = 0;
   process.chdir(repoRoot);
 
   while (tempDirectories.length > 0) {
@@ -57,6 +62,7 @@ describe("openapiValidateCommand", () => {
       output.restore();
     }
 
+    expect(cleanupRuns).toBe(1);
     expect(output.errors).toHaveLength(0);
     expect(output.logs).toHaveLength(1);
     expect(output.logs[0]).toMatch(/^OpenAPI spec valid \(\d+ routes\)\.$/);
@@ -76,6 +82,7 @@ describe("openapiCheckCommand", () => {
 
     output.restore();
 
+    expect(cleanupRuns).toBe(1);
     expect(output.errors).toHaveLength(0);
     expect(output.logs).toHaveLength(1);
     expect(output.logs[0]).toMatch(/^OpenAPI spec matches committed file \(\d+ routes\)\.$/);
@@ -94,6 +101,7 @@ describe("openapiCheckCommand", () => {
       exit.restore();
     }
 
+    expect(cleanupRuns).toBe(1);
     expect(exit.getCode()).toBe(1);
     expect(output.errors.some((line) => line.includes("OpenAPI spec drift detected."))).toBe(true);
   });
@@ -109,8 +117,8 @@ describe("openapi CLI validation failures", () => {
     }));
 
     const commands = await import("../../../packages/strata-cli/src/openapi");
-    invalidOpenapiValidateCommand = commands.createOpenApiValidateCommand(bootstrap);
-    invalidOpenapiCheckCommand = commands.createOpenApiCheckCommand(bootstrap);
+    invalidOpenapiValidateCommand = commands.createOpenApiValidateCommand(bootstrap, close);
+    invalidOpenapiCheckCommand = commands.createOpenApiCheckCommand(bootstrap, close);
   });
 
   afterAll(() => {
@@ -128,6 +136,7 @@ describe("openapi CLI validation failures", () => {
       exit.restore();
     }
 
+    expect(cleanupRuns).toBe(1);
     expect(exit.getCode()).toBe(1);
     expect(output.errors.some((line) => line.includes("OpenAPI validation failed:"))).toBe(true);
     expect(output.errors.some((line) => line.includes("Missing bearerAuth security scheme."))).toBe(
@@ -151,6 +160,7 @@ describe("openapi CLI validation failures", () => {
       exit.restore();
     }
 
+    expect(cleanupRuns).toBe(1);
     expect(exit.getCode()).toBe(1);
     expect(output.errors.some((line) => line.includes("OpenAPI validation failed:"))).toBe(true);
     expect(output.errors.some((line) => line.includes("Missing bearerAuth security scheme."))).toBe(

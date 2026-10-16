@@ -40,7 +40,13 @@ describe("createOpenApiGenerateCommand", () => {
     await withTempWorkspace(async (workspace) => {
       expect(existsSync(join(workspace, "docs"))).toBe(false);
 
-      const command = createOpenApiGenerateCommand(async () => ({ routes: {} }));
+      let cleanupRuns = 0;
+      const command = createOpenApiGenerateCommand(
+        async () => ({ routes: {} }),
+        () => {
+          cleanupRuns++;
+        },
+      );
       const output = captureConsole();
 
       try {
@@ -52,6 +58,7 @@ describe("createOpenApiGenerateCommand", () => {
       const jsonPath = join(workspace, "docs/openapi.json");
       const contents = await readFile(jsonPath, "utf8");
       expect(contents).toContain('"openapi"');
+      expect(cleanupRuns).toBe(1);
       expect(output.logs[0]).toMatch(
         /^OpenAPI spec written to .*docs\/openapi\.json \(\d+ routes\)\.$/,
       );
@@ -159,5 +166,37 @@ describe("registerAppOpenApiRoutes", () => {
     } finally {
       restoreEnvVar("SPA_PREFIX", previousPrefix);
     }
+  });
+});
+
+test("OpenAPI closes after bootstrap or output failure and propagates cleanup failure", async () => {
+  let closes = 0;
+  const close = () => {
+    closes++;
+  };
+  const bootFailure = new Error("bootstrap failed");
+  await expect(
+    createOpenApiGenerateCommand(async () => {
+      throw bootFailure;
+    }, close)(),
+  ).rejects.toBe(bootFailure);
+  expect(closes).toBe(1);
+  await withTempWorkspace(async (workspace) => {
+    await Bun.write(join(workspace, "docs"), "not a directory");
+    await expect(
+      createOpenApiGenerateCommand(async () => ({ routes: {} }), close)(),
+    ).rejects.toThrow();
+    expect(closes).toBe(2);
+  });
+  await withTempWorkspace(async () => {
+    const failure = new Error("cleanup failed");
+    await expect(
+      createOpenApiGenerateCommand(
+        async () => ({ routes: {} }),
+        () => {
+          throw failure;
+        },
+      )(),
+    ).rejects.toBe(failure);
   });
 });

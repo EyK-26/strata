@@ -1368,49 +1368,46 @@ export default createOutboxMigration("0005_outbox", "${driver}", { rls: ${rls} }
 }
 
 function renderCliQueueFailedTs(): string {
-  return `async function bootApp(): Promise<void> {
-  const { bootstrapApp } = await import("../bootstrap/createApp.ts");
-  await bootstrapApp({ migrate: false });
-}
+  return `import { createQueueFailedCommands } from "@getstrata/cli/queueFailed";
+import { bootstrapApp } from "../bootstrap/createApp.ts";
+import { closeDatabase } from "../bootstrap/database.ts";
 
-async function queueFailedCommand(): Promise<void> {
-  const { queueFailedCommand: run } = await import("@getstrata/cli/queueFailed");
-  await run(bootApp);
-}
-
-async function queueRetryCommand(id?: string): Promise<void> {
-  const { queueRetryCommand: run } = await import("@getstrata/cli/queueFailed");
-  await run(id, bootApp);
-}
-
-async function queueFlushFailedCommand(): Promise<void> {
-  const { queueFlushFailedCommand: run } = await import("@getstrata/cli/queueFailed");
-  await run(bootApp);
-}
+let app: Awaited<ReturnType<typeof bootstrapApp>> | undefined;
+const { queueFailedCommand, queueFlushFailedCommand, queueRetryCommand } = createQueueFailedCommands(
+  async () => { app = await bootstrapApp({ migrate: false }); },
+  async () => { try { await app?.context.dispose(); } finally { app = undefined; await closeDatabase(); } },
+);
 
 export { queueFailedCommand, queueFlushFailedCommand, queueRetryCommand };
 `;
 }
 
 function renderCliOpenApiTs(): string {
-  return `async function bootstrap() {
-  const { createApp } = await import("../bootstrap/createApp.ts");
-  return createApp({ migrate: false });
+  return `import { createApp } from "../bootstrap/createApp.ts";
+import { closeDatabase } from "../bootstrap/database.ts";
+
+let app: Awaited<ReturnType<typeof createApp>> | undefined;
+async function bootstrap() {
+  app = await createApp({ migrate: false });
+  return app;
+}
+async function close() {
+  try { await app?.context.dispose(); } finally { app = undefined; await closeDatabase(); }
 }
 
 async function openapiGenerateCommand(): Promise<void> {
   const { createOpenApiGenerateCommand } = await import("@getstrata/cli/openapi");
-  await createOpenApiGenerateCommand(bootstrap)();
+  await createOpenApiGenerateCommand(bootstrap, close)();
 }
 
 async function openapiValidateCommand(): Promise<void> {
   const { createOpenApiValidateCommand } = await import("@getstrata/cli/openapi");
-  await createOpenApiValidateCommand(bootstrap)();
+  await createOpenApiValidateCommand(bootstrap, close)();
 }
 
 async function openapiCheckCommand(): Promise<void> {
   const { createOpenApiCheckCommand } = await import("@getstrata/cli/openapi");
-  await createOpenApiCheckCommand(bootstrap)();
+  await createOpenApiCheckCommand(bootstrap, close)();
 }
 
 export { openapiCheckCommand, openapiGenerateCommand, openapiValidateCommand };
