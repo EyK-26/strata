@@ -12,6 +12,7 @@ import {
   registerDefaultDatabasePool,
   resetDefaultDatabasePoolForTests,
 } from "@getstrata/core/database/defaultConnection";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { getDatabase } from "../../src/db/connection";
 
 function currentPoolOrNull(): SqlDatabaseConnection | null {
@@ -59,6 +60,24 @@ function fakePool(calls: string[], uniqueOn = ""): SqlDatabaseConnection {
 }
 
 describe("SqlSamlAssertionReplayStore", () => {
+  test("formats both stored and retention cutoff timestamps for MySQL", async () => {
+    const restored = currentPoolOrNull();
+    const calls: string[] = [];
+    registerDefaultDatabasePool(fakePool(calls));
+    setSamlAssertionReplayStoreForTests(null);
+    try {
+      await runWithSqlDialect("mysql", () => consumeSamlAssertion("mysql-timestamp"));
+      expect(calls).toHaveLength(2);
+      for (const call of calls) {
+        expect(call).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+        expect(call).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+        expect(call).toContain("?");
+      }
+    } finally {
+      resetSamlReplayCacheForTests();
+      restorePool(restored);
+    }
+  });
   test("inserts consumed_at and garbage-collects stale rows after a live insert", async () => {
     const restored = currentPoolOrNull();
     const calls: string[] = [];

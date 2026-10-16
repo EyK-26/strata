@@ -20,6 +20,22 @@ interface SamlServiceProviderOptions {
   disableRequestedAuthnContext?: boolean;
 }
 
+interface VerifiedSamlAssertion {
+  Assertion?: {
+    $?: { ID?: string };
+    Subject?: Array<{
+      SubjectConfirmation?: Array<{
+        $?: { Method?: string };
+        SubjectConfirmationData?: Array<{
+          $?: { Recipient?: string; NotBefore?: string; NotOnOrAfter?: string };
+        }>;
+      }>;
+    }>;
+  };
+}
+
+const CLOCK_SKEW_MS = 5000;
+
 interface NodeSamlProfile {
   ID?: string;
   nameID?: string;
@@ -27,7 +43,7 @@ interface NodeSamlProfile {
   name?: string;
   issuer?: string;
   sessionIndex?: string | string[];
-  getAssertion?: () => { Assertion?: { $?: { ID?: string } } };
+  getAssertion?: () => VerifiedSamlAssertion;
   [key: string]: unknown;
 }
 
@@ -39,6 +55,27 @@ function readAssertionId(profile: NodeSamlProfile): string {
   const parsed = typeof profile.getAssertion === "function" ? profile.getAssertion() : null;
   const assertionId = parsed?.Assertion?.$?.ID;
   return typeof assertionId === "string" ? assertionId.trim() : "";
+}
+
+/** Read only the signature-verified assertion exposed by node-saml. */
+function assertBearerRecipient(profile: NodeSamlProfile, acsUrl: string): void {
+  const subjects = profile.getAssertion?.()?.Assertion?.Subject;
+  const confirmations =
+    Array.isArray(subjects) && subjects.length === 1 ? subjects[0]?.SubjectConfirmation : undefined;
+  const now = Date.now();
+  const matches =
+    Array.isArray(confirmations) &&
+    confirmations.some((confirmation) => {
+      if (confirmation?.$?.Method !== "urn:oasis:names:tc:SAML:2.0:cm:bearer") return false;
+      const data = confirmation.SubjectConfirmationData;
+      if (!Array.isArray(data) || data.length !== 1) return false;
+      const attributes = data[0]?.$;
+      if (attributes?.Recipient !== acsUrl || attributes.NotBefore !== undefined) return false;
+      if (typeof attributes.NotOnOrAfter !== "string") return false;
+      const expires = Date.parse(attributes.NotOnOrAfter);
+      return Number.isFinite(expires) && now < expires + CLOCK_SKEW_MS;
+    });
+  if (!matches) throw new Error("SAML assertion bearer recipient is invalid.");
 }
 
 type NodeSamlClient = {
@@ -130,7 +167,7 @@ class SamlServiceProvider {
       idpCert: this.options.idpCert,
       audience: this.options.spEntityId,
       idpIssuer: this.options.idpIssuer,
-      acceptedClockSkewMs: 5000,
+      acceptedClockSkewMs: CLOCK_SKEW_MS,
       wantAssertionsSigned: this.options.wantAssertionsSigned ?? true,
       wantAuthnResponseSigned: this.options.wantAuthnResponseSigned ?? true,
       disableRequestedAuthnContext: this.options.disableRequestedAuthnContext ?? false,
@@ -167,6 +204,7 @@ class SamlServiceProvider {
     if (!assertionId) {
       throw new Error("SAML assertion did not include an ID.");
     }
+    assertBearerRecipient(profile, this.options.acsUrl);
     await consumeSamlAssertion(assertionId);
 
     const email =

@@ -1,7 +1,6 @@
-import { getBoundDatabaseConnection } from "../../database/boundConnection";
-import { getDefaultDatabasePool } from "../../database/defaultConnection";
 import { currentSqlDialect } from "../../database/dialect";
 import { isUniqueConstraintError } from "../../database/errors";
+import { runInTransaction } from "../../database/transaction";
 
 interface SamlAssertionReplayStore {
   consume(assertionId: string): Promise<void>;
@@ -43,14 +42,19 @@ class InMemorySamlAssertionReplayStore implements SamlAssertionReplayStore {
 
 class SqlSamlAssertionReplayStore implements SamlAssertionReplayStore {
   async consume(assertionId: string): Promise<void> {
-    const sql = getBoundDatabaseConnection() ?? getDefaultDatabasePool();
     const dialect = currentSqlDialect();
 
     try {
-      await sql.unsafe(
-        `INSERT INTO auth_saml_assertions (assertion_id, consumed_at) VALUES (${dialect.placeholder(1)}, ${dialect.placeholder(2)})`,
-        [assertionId, new Date().toISOString()],
-      );
+      await runInTransaction(async (connection) => {
+        await connection.unsafe(
+          `INSERT INTO auth_saml_assertions (assertion_id, consumed_at) VALUES (${dialect.placeholder(1)}, ${dialect.placeholder(2)})`,
+          [assertionId, dialect.timestampValue(new Date())],
+        );
+        await connection.unsafe(
+          `DELETE FROM auth_saml_assertions WHERE consumed_at < ${dialect.placeholder(1)}`,
+          [dialect.timestampValue(new Date(Date.now() - REPLAY_RETENTION_MS))],
+        );
+      });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         throw new Error("SAML assertion replay detected.");
@@ -58,11 +62,6 @@ class SqlSamlAssertionReplayStore implements SamlAssertionReplayStore {
 
       throw error;
     }
-
-    await sql.unsafe(
-      `DELETE FROM auth_saml_assertions WHERE consumed_at < ${dialect.placeholder(1)}`,
-      [new Date(Date.now() - REPLAY_RETENTION_MS).toISOString()],
-    );
   }
 }
 

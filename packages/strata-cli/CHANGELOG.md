@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.38
+
+Qualify packed OIDC and SAML callbacks across Postgres, SQLite and MySQL. Fix explicitly non-migrating local bootstrap provisioning, dialect-safe transactional SAML replay, and verified bearer ACS recipient binding. Preserve existing generated auth, production guards, compiler/runtime assertions and coverage gates; live provider and deployment qualification remain separate.
+
 ## 2.2.37
 
 Fix MySQL repository entity-returning mutations with transaction-pinned readback, persisted keys/defaults, honest null and deletion outcomes, complete model event payloads and injected connection ownership. Preserve native Postgres/SQLite RETURNING and conditional affected-row metadata. Close owned generated OpenAPI and failed-job command applications on success and failure before exit; retain both command and cleanup errors. Add mandatory packaged MySQL production column-tenancy CLI and HTTP auth/SCIM acceptance with an owned DML-only account, unchanged route/spec/SDK contracts, native ORM regressions and cleanup tests. Records dogfood issues #232 and #233 without application SQL workarounds.
