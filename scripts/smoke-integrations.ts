@@ -1,6 +1,6 @@
 /**
  * HTTP smoke for create-strata integration extras (OAuth GitHub, billing, webhooks).
- * Runs in CI after HiroApp smoke — isolated subprocess, not part of bun test coverage.
+ * Runs after generated CLI HTTP smoke — isolated subprocess, not part of bun test coverage.
  */
 import { createHmac } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";

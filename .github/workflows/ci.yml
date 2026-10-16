@@ -88,36 +88,5 @@ jobs:
             bun run verify:framework
           "
 
-      - name: Start app for smoke tests
-        env:
-          DOGFOOD_APP: hiroapp
-          FRONTEND_MODE: server-htmx
-          APP_KEY_PREFIX: hiroapp
-          APP_NAME: HiroApp
-          API_PREFIX: /api
-          REDIS_URL: redis://:dev-redis-change-me@localhost:6379
-          DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/bun_testing_test
-          MIGRATION_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@localhost:54329/hiroapp_test
-          APP_DATABASE_URL: postgresql://strata_app:dev-strata-app-change-me@localhost:54329/hiroapp_test
-          METRICS_TOKEN: strata-metrics-test-token
-        run: |
-          scripts/with-host-env.sh sh -c "bun run start" &
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:3000/health >/dev/null; then
-              echo "App ready after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "App failed to become ready" >&2
-          exit 1
-
-      - name: Run smoke tests
-        env:
-          BASE_URL: http://localhost:3000
-          APP_URL: http://localhost:3000
-          FRONTEND_MODE: server-htmx
-          METRICS_TOKEN: strata-metrics-test-token
-        run: |
-          bun run smoke
-          bun run deps:audit
+      - name: Audit dependencies
+        run: bun run deps:audit

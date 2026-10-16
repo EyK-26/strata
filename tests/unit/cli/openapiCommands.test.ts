@@ -2,19 +2,24 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bu
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
-import { openapiCheckCommand } from "../../../src/cli/commands/openapiCheck";
-import { openapiValidateCommand } from "../../../src/cli/commands/openapiValidate";
-import { registerOpenApiRoutes } from "../../../src/cli/commands/registerOpenApiRoutes";
+import {
+  createOpenApiCheckCommand,
+  createOpenApiValidateCommand,
+  registerAppOpenApiRoutes,
+} from "../../../packages/strata-cli/src/openapi";
 import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 
-beforeAll(async () => {
-  await ensureModulesLoaded();
+// Exercise the public command factories without booting a checked-in application.
+const bootstrap = async () => ({
+  routes: { "/api/acceptance": { GET: async () => Response.json({ ok: true }) } },
 });
+const registerOpenApiRoutes = () => registerAppOpenApiRoutes(bootstrap);
+const openapiValidateCommand = createOpenApiValidateCommand(bootstrap);
+const openapiCheckCommand = createOpenApiCheckCommand(bootstrap);
 
 afterEach(async () => {
   process.chdir(repoRoot);
@@ -103,13 +108,9 @@ describe("openapi CLI validation failures", () => {
       validateOpenApiSpec: () => ["Missing bearerAuth security scheme."],
     }));
 
-    [
-      { openapiValidateCommand: invalidOpenapiValidateCommand },
-      { openapiCheckCommand: invalidOpenapiCheckCommand },
-    ] = await Promise.all([
-      import("../../../src/cli/commands/openapiValidate"),
-      import("../../../src/cli/commands/openapiCheck"),
-    ]);
+    const commands = await import("../../../packages/strata-cli/src/openapi");
+    invalidOpenapiValidateCommand = commands.createOpenApiValidateCommand(bootstrap);
+    invalidOpenapiCheckCommand = commands.createOpenApiCheckCommand(bootstrap);
   });
 
   afterAll(() => {
