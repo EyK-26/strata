@@ -16,32 +16,32 @@ import {
 const repoRoot = join(import.meta.dir, "../..");
 
 /** Owned acceptance infrastructure; no checked-in app or source-path runtime dependencies. */
-export async function createGeneratedSecurityApp() {
+export async function createGeneratedSecurityApp(database: "postgres" | "sqlite" = "postgres") {
   const migrationUrl = process.env.MIGRATION_DATABASE_URL;
   const runtimeUrl = process.env.RLS_TEST_DATABASE_URL ?? process.env.APP_DATABASE_URL;
-  if (!migrationUrl || !runtimeUrl)
+  if (database === "postgres" && (!migrationUrl || !runtimeUrl))
     throw new Error(
       "Generated security acceptance requires migration and restricted runtime Postgres URLs.",
     );
   const root = await mkdtemp(join(tmpdir(), "strata-security-"));
   const app = join(root, "app");
   const databaseName = `generated_security_${crypto.randomUUID().replaceAll("-", "")}`;
-  const controlUrl = new URL(migrationUrl);
-  controlUrl.pathname = "/postgres";
-  const control = new SQL(controlUrl.href);
+  const controlUrl = database === "postgres" && migrationUrl ? new URL(migrationUrl) : null;
+  if (controlUrl) controlUrl.pathname = "/postgres";
+  const control = controlUrl ? new SQL(controlUrl.href) : null;
   let created = false;
   let closed = false;
   async function close() {
     if (closed) return;
     closed = true;
     try {
-      if (created) {
+      if (created && control) {
         await control.unsafe(`DROP DATABASE ${databaseName} WITH (FORCE)`);
         created = false;
       }
     } finally {
       try {
-        await control.close();
+        await control?.close();
       } finally {
         await rm(root, { recursive: true, force: true });
       }
@@ -55,8 +55,8 @@ export async function createGeneratedSecurityApp() {
         parseCreateStrataArgs([
           "security-acceptance",
           "--frontend=server-htmx",
-          "--database=postgres",
-          "--tenancy=rls",
+          `--database=${database}`,
+          database === "postgres" ? "--tenancy=rls" : "--tenancy=column",
           "--auth=cookie-token-jwt",
           "--mfa",
           "--email-verification",
@@ -103,15 +103,25 @@ export async function createGeneratedSecurityApp() {
       throw new Error(
         `Generated security installation failed: ${new TextDecoder().decode(install.stderr)}`,
       );
-    await control.unsafe(`CREATE DATABASE ${databaseName}`);
-    created = true;
-    const admin = new URL(migrationUrl),
-      runtime = new URL(runtimeUrl);
-    admin.pathname = runtime.pathname = `/${databaseName}`;
+    let adminUrl: string;
+    let appUrl: string;
+    if (database === "postgres") {
+      if (!control || !migrationUrl || !runtimeUrl)
+        throw new Error("Missing Postgres fixture credentials.");
+      await control.unsafe(`CREATE DATABASE ${databaseName}`);
+      created = true;
+      const admin = new URL(migrationUrl),
+        runtime = new URL(runtimeUrl);
+      admin.pathname = runtime.pathname = `/${databaseName}`;
+      adminUrl = admin.href;
+      appUrl = runtime.href;
+    } else {
+      adminUrl = appUrl = `sqlite:${join(root, "acceptance.sqlite")}`;
+    }
     return {
       app,
-      migrationUrl: admin.href,
-      runtimeUrl: runtime.href,
+      migrationUrl: adminUrl,
+      runtimeUrl: appUrl,
       resolve: createRequire(manifestPath).resolve,
       close,
     };

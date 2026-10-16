@@ -3,22 +3,28 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import {
+  verifyGeneratedAuthHttp,
+  verifyGeneratedScimHttp,
+} from "../tests/helpers/generatedAuthHttp.ts";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp.ts";
 
 const repoRoot = join(import.meta.dir, "..");
 const args = process.argv.slice(2);
 assert.ok(
-  args.every((arg) => arg === "--http" || arg === "--openapi"),
+  args.every((arg) => arg === "--http" || arg === "--openapi" || arg === "--sqlite"),
   "Unknown generated-runtime verification option.",
 );
-const checkOpenApi = args.length === 0 || args.includes("--openapi");
-const checkHttp = args.length === 0 || args.includes("--http");
+const selectedChecks = args.includes("--openapi") || args.includes("--http");
+const checkOpenApi = !selectedChecks || args.includes("--openapi");
+const checkHttp = !selectedChecks || args.includes("--http");
 if (checkHttp)
   assert.ok(
     process.env.REDIS_URL?.trim(),
     "HTTP runtime acceptance requires explicit Redis infrastructure.",
   );
-const fixture = await createGeneratedSecurityApp();
+const sqlite = args.includes("--sqlite");
+const fixture = await createGeneratedSecurityApp(sqlite ? "sqlite" : "postgres");
 const cli = join(fixture.app, "node_modules/@getstrata/cli/cli.ts");
 const env: Record<string, string | undefined> = {
   ...process.env,
@@ -32,12 +38,14 @@ const env: Record<string, string | undefined> = {
   APP_URL: "http://localhost:3000",
   API_PREFIX: "/api",
   FRONTEND_MODE: "server-htmx",
-  TENANCY_DRIVER: "rls",
+  TENANCY_DRIVER: sqlite ? "column" : "rls",
   AUTH_DEV_HEADERS: "false",
   FEATURE_API_TOKENS: "true",
   FEATURE_MFA: "true",
   FEATURE_EMAIL_VERIFICATION: "true",
   FEATURE_SCIM: "true",
+  SCIM_BEARER_TOKEN: "",
+  SCIM_TENANT_TOKENS: "1:q01-scim-tenant-1,2:q01-scim-tenant-2",
   FEATURE_SAML: "false",
   FEATURE_OAUTH: "false",
   FEATURE_REGISTRATION: "true",
@@ -46,6 +54,7 @@ const env: Record<string, string | undefined> = {
   QUEUE_DRIVER: "sync",
   MAIL_DRIVER: "log",
   SESSION_SECRET: "generated-runtime-fixture-session-secret-32-characters",
+  JWT_SECRET: "generated-runtime-fixture-jwt-secret-32-characters",
   TOKEN_HASH_PEPPER: "generated-runtime-fixture-pepper",
   METRICS_TOKEN: crypto.randomUUID(),
   PORT: "0",
@@ -110,6 +119,24 @@ await Bun.write('acceptance-routes.json',JSON.stringify(routes));
 }finally{try{await app.context.dispose();}finally{await closeDatabase();}}`,
   );
   await run([probe]);
+  if (sqlite) {
+    const data = join(fixture.app, "acceptance-tenants.ts");
+    await Bun.write(
+      data,
+      `import assert from 'node:assert/strict';
+import {bootstrapApp} from './src/bootstrap/createApp.ts';
+import {getSql,closeDatabase} from './src/bootstrap/database.ts';
+import DefaultRepository,{BaseRepository} from '@getstrata/core/database/baseRepository';
+import {defineTable} from '@getstrata/core/database/table';
+const app=await bootstrapApp({migrate:false});try{
+assert.equal(DefaultRepository,BaseRepository);
+const tenants=new DefaultRepository(defineTable<{id:number;slug:string},'id'>({name:'tenant',primaryKey:'id',columns:['id','slug']}),getSql());
+const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
+}finally{try{await app.context.dispose();}finally{await closeDatabase();}}`,
+    );
+    await run([data]);
+  }
+
   const baseline = JSON.parse(
     await readFile(join(repoRoot, "tests/fixtures/generated-runtime-routes.json"), "utf8"),
   );
@@ -202,6 +229,12 @@ await Bun.write('acceptance-routes.json',JSON.stringify(routes));
       { database: "ok", redis: "ok" },
       "Readiness must actually observe both dependencies, without skipped Redis.",
     );
+    await verifyGeneratedAuthHttp(origin);
+    if (sqlite) await verifyGeneratedScimHttp(origin);
+    console.log(
+      "Generated HTTP cookie/token/JWT admission, CSRF, provider gates and credential-specific logout passed.",
+    );
+    if (sqlite) console.log("SQLite SCIM repeated cross-tenant CRUD/read isolation passed.");
     const smokeEnv = { ...env, BASE_URL: origin, APP_URL: origin };
     await run([join(repoRoot, "scripts/smoke-test.ts")], { cwd: repoRoot, env: smokeEnv });
     await run([join(repoRoot, "scripts/smoke-webview.ts")], { cwd: repoRoot, env: smokeEnv });

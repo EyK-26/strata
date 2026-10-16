@@ -57,7 +57,7 @@ The older `collectQueueMetrics()` API remains compatible. Its `failedCount` is a
 
 ## Remaining work and promotion gates
 
-This is the Redis observation slice of [#139](https://github.com/EyK-26/strata/issues/139), not complete operational qualification. Additional SQL dialects and operational qualification remain follow-up work. A Bun pool statistic or SDK queue occupancy must not be invented when its supported API cannot observe it. Use infrastructure exporters for persistence, server connection capacity and backup health.
+The Redis observation slice and the SQL/acquisition/tracing collectors described below implement substantial parts of [#139](https://github.com/EyK-26/strata/issues/139); Postgres, file-backed SQLite and URL-backed MySQL SQL collectors are already supported. Operational qualification remains open. See the [current qualification record](QUALIFICATION-STATUS.md) for implemented evidence, deliberate limits and remaining gates. A Bun pool statistic or SDK queue occupancy must not be invented when its supported API cannot observe it. Use infrastructure exporters for persistence, server connection capacity and backup health.
 
 Tests cover both transports, empty/pre-consumer state, ready/inflight/retry/quarantine state, capped output, unchanged source state, three independent processes, wrong key types, deadline/connection cleanup and concurrent scraping. Environment-specific alert routing, thresholds, sustained scrape/load costs, multi-worker recovery and failure drills remain required before production promotion.
 
