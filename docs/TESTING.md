@@ -1,6 +1,6 @@
 # Testing
 
-`apps/hiroapp` is Strata dogfood for internal end-to-end testing. Framework tests use a leftover **fixture** schema (`src/db`) so RLS and tenant helpers have tables. That fixture is not a product.
+`bun run test:e2e` runs the preserved security suite against a disposable generated app installed from candidate runtime tarballs, with an owned restricted-role Postgres database. It no longer imports `apps/hiroapp`. The checked-in app still supplies boot/OpenAPI/smoke fixtures during the staged [acceptance migration](GENERATED-APP-ACCEPTANCE.md). External product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop). Framework tests also use a **fixture** schema (`src/db`) so RLS and tenant helpers have tables; that fixture is not a product.
 
 ## Seeded example users
 

@@ -34,3 +34,7 @@ bun run generate:example-apps
 ```
 
 Wizard and flags: [STARTER.md](./STARTER.md).
+
+## Transition to generated acceptance fixtures
+
+The 23-case security suite now runs against a freshly generated temporary app with packed candidate runtime packages, not this directory. CI/release validation runs it through `validate:ci`. Checked-in HiroApp still supplies boot, OpenAPI and smoke fixtures until their replacements pass. See [the staged removal gates](GENERATED-APP-ACCEPTANCE.md); the apps are deliberately retained during this first step.
