@@ -1144,6 +1144,7 @@ import { closeDatabase, getSql, pingDatabase } from "./database.ts";
 ${ensureLine}import { starterProviders } from "./providers/index.ts";
 
 export interface BootstrapOptions {
+  /** Automatic migrations and local database provisioning; false uses existing infrastructure. */
   migrate?: boolean;${layers.extras.metrics ? "\n  /** Explicit opt-in; HTTP-only metrics remain the default. */\n  runtimeMetrics?: MetricsRuntimeOptions;" : ""}
 }
 
@@ -1181,7 +1182,7 @@ export async function bootstrapApp(options: BootstrapOptions = {}): Promise<Boot
       assertProductionSecrets();
     }
 
-${needsEnsure(layers) ? "    await ensureAppDatabase({ provision: !isProduction });\n" : ""}    const appConfig = loadConfig();
+${needsEnsure(layers) ? "    await ensureAppDatabase({ provision: !isProduction && runMigrate });\n" : ""}    const appConfig = loadConfig();
     getSql();
     if (!(await pingDatabase())) throw new Error("Database is not ready.");
     if (isRlsTenancy()) {
