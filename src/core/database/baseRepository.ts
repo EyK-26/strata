@@ -514,7 +514,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
             where[column] = values[column];
           }
           const query = buildUpsertQuery(this.table, values, conflictColumns, updateColumns);
-          const doNothing = updateColumns?.length === 0;
+          const supplied = this.table.columns.filter((column) => values[column] !== undefined);
+          const updates =
+            updateColumns ?? supplied.filter((column) => !conflictColumns.includes(column));
+          const doNothing = !updates.some((column) => supplied.includes(column));
           const existing = doNothing
             ? await repository.firstOrNull(where as QueryWhere<TEntity>, {
                 withTrashed: true,

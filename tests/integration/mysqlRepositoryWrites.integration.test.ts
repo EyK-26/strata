@@ -111,6 +111,7 @@ test("MySQL upsert readback and set-write counts keep separate contracts", async
       quantity: 5,
     });
     expect(await repo.upsert({ slug: "upsert", quantity: 10 }, ["slug"], [])).toBeNull();
+    expect(await repo.upsert({ slug: "upsert" }, ["slug"])).toBeNull();
     expect(await repo.upsert({ slug: "insert-only", quantity: 3 }, ["slug"], [])).toMatchObject({
       slug: "insert-only",
       quantity: 3,
