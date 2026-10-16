@@ -5,7 +5,10 @@ import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
+import {
+  BaseRepository,
+  type SqlDatabaseConnection,
+} from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
   getBoundDatabaseConnection,
@@ -16,6 +19,8 @@ import {
   registerDefaultDatabasePool,
 } from "@getstrata/core/database/defaultConnection";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
+import { Schema } from "@getstrata/core/database/schema";
+import { defineTable } from "@getstrata/core/database/table";
 import { dispatchModelEvent, eventBus } from "@getstrata/core/events";
 import { withErrorHandling } from "@getstrata/core/http/response";
 import { appLogger } from "@getstrata/core/logging/logger";
@@ -32,6 +37,8 @@ describe.skipIf(!restrictedUrl || !adminUrl)("real HTTP post-commit boundaries",
   const event = `${table}.created`;
   let pool: SQL;
   let admin: SQL;
+  let control: SQL;
+  let createdDatabase = false;
   let previousPool: SqlDatabaseConnection;
   let previousBound: ReturnType<typeof getBoundDatabaseConnection>;
   let previousDriver: string | undefined;
@@ -40,8 +47,21 @@ describe.skipIf(!restrictedUrl || !adminUrl)("real HTTP post-commit boundaries",
   beforeAll(async () => {
     if (!restrictedUrl || !adminUrl)
       throw new Error("Dedicated restricted and admin test databases required.");
-    pool = new SQL({ url: restrictedUrl, max: 5 });
-    admin = new SQL(adminUrl);
+    previousPool = getDefaultDatabasePool();
+    previousBound = getBoundDatabaseConnection();
+    previousDriver = process.env.TENANCY_DRIVER;
+    previousMode = process.env.FRONTEND_MODE;
+    // A cold CI database must not depend on retired app migrations or old local data.
+    const maintenanceUrl = new URL(adminUrl);
+    maintenanceUrl.pathname = "/postgres";
+    control = new SQL(maintenanceUrl.href);
+    await control.unsafe(`CREATE DATABASE ${table}`);
+    createdDatabase = true;
+    const runtimeUrl = new URL(restrictedUrl),
+      migrationUrl = new URL(adminUrl);
+    runtimeUrl.pathname = migrationUrl.pathname = `/${table}`;
+    pool = new SQL({ url: runtimeUrl.href, max: 5 });
+    admin = new SQL(migrationUrl.href);
     const [role] = await pool.unsafe<{ role: string; rolsuper: boolean; rolbypassrls: boolean }[]>(
       "SELECT current_user AS role, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user",
     );
@@ -49,18 +69,31 @@ describe.skipIf(!restrictedUrl || !adminUrl)("real HTTP post-commit boundaries",
       throw new Error("Invalid fixture role.");
     expect(role.rolsuper).toBe(false);
     expect(role.rolbypassrls).toBe(false);
+    await Schema.run(admin, "pgsql", (schema) => {
+      schema.create("tenant", (columns) => {
+        columns.integer("id").primary();
+        columns.text("slug");
+      });
+    });
+    const tenants = new BaseRepository(
+      defineTable<{ id: number; slug: string }, "id">({
+        name: "tenant",
+        primaryKey: "id",
+        columns: ["id", "slug"],
+      }),
+      admin,
+    );
+    await tenants.create({ id: 1, slug: "post-commit-fixture" });
+    await admin.unsafe(`GRANT USAGE ON SCHEMA public TO "${role.role}";
+      GRANT SELECT ON tenant TO "${role.role}";`);
     await admin.unsafe(`CREATE TABLE ${table} (tenant_id INTEGER NOT NULL, value INTEGER UNIQUE DEFERRABLE INITIALLY DEFERRED);
       ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
       ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
       CREATE POLICY scope ON ${table} USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::integer);
       GRANT SELECT, INSERT ON ${table} TO "${role.role}";`);
-    previousPool = getDefaultDatabasePool();
-    previousBound = getBoundDatabaseConnection();
-    previousDriver = process.env.TENANCY_DRIVER;
-    previousMode = process.env.FRONTEND_MODE;
     process.env.TENANCY_DRIVER = "rls";
     process.env.FRONTEND_MODE = "hybrid";
-    registerDefaultDatabasePool(pool as unknown as SqlDatabaseConnection);
+    registerDefaultDatabasePool(pool);
     resetBoundDatabaseConnection();
   });
 
@@ -70,9 +103,23 @@ describe.skipIf(!restrictedUrl || !adminUrl)("real HTTP post-commit boundaries",
     else resetBoundDatabaseConnection();
     restoreEnvVar("TENANCY_DRIVER", previousDriver);
     restoreEnvVar("FRONTEND_MODE", previousMode);
-    await admin?.unsafe(`DROP TABLE IF EXISTS ${table}`);
-    await pool?.close();
-    await admin?.close();
+    try {
+      await admin?.unsafe(`DROP TABLE IF EXISTS ${table}`);
+    } finally {
+      try {
+        try {
+          await pool?.close();
+        } finally {
+          await admin?.close();
+        }
+      } finally {
+        try {
+          if (createdDatabase) await control.unsafe(`DROP DATABASE ${table} WITH (FORCE)`);
+        } finally {
+          await control?.close();
+        }
+      }
+    }
   });
 
   for (const format of ["api", "web"] as const) {

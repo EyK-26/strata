@@ -47,60 +47,6 @@ services:
       retries: 30
       start_period: 10s
 
-  app:
-    image: oven/bun:1.4.3
-    container_name: bun-testing-app
-    working_dir: /workspace
-    entrypoint: ["sh", "scripts/docker-dev-entrypoint.sh"]
-    environment:
-      # Fixture admin for bun_testing_test (STRATA_SCHEMA=fixture migrate:fresh DROP).
-      # Not HiroApp HTTP. HiroApp request traffic uses APP_DATABASE_URL (strata_app).
-      DATABASE_URL: postgresql://postgres:dev-postgres-change-me@postgres:5432/bun_testing_test
-      APP_DATABASE_URL: postgresql://strata_app:dev-strata-app-change-me@postgres:5432/hiroapp_test
-      MIGRATION_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@postgres:5432/hiroapp_test
-      REDIS_URL: redis://:dev-redis-change-me@redis:6379
-      CACHE_DRIVER: redis
-      QUEUE_DRIVER: redis
-      PORT: 3000
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:3000:3000"
-    volumes:
-      - .:/workspace
-      - bun_node_modules:/workspace/node_modules
-    command:
-      [
-        "sh",
-        "-c",
-        "bun run cli migrate && bun run cli seed && bun run start",
-      ]
-
-  worker:
-    image: oven/bun:1.4.3
-    container_name: bun-testing-worker
-    working_dir: /workspace
-    entrypoint: ["sh", "scripts/docker-dev-entrypoint.sh"]
-    environment:
-      DATABASE_URL: postgresql://postgres:dev-postgres-change-me@postgres:5432/bun_testing_test
-      APP_DATABASE_URL: postgresql://strata_app:dev-strata-app-change-me@postgres:5432/hiroapp_test
-      MIGRATION_DATABASE_URL: postgresql://postgres:dev-postgres-change-me@postgres:5432/hiroapp_test
-      REDIS_URL: redis://:dev-redis-change-me@redis:6379
-      CACHE_DRIVER: redis
-      QUEUE_DRIVER: redis
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - .:/workspace
-      - bun_node_modules:/workspace/node_modules
-    command: ["bun", "run", "cli", "queue:work"]
-
   adminer:
     image: adminer:5.4.2
     profiles:
@@ -111,6 +57,3 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8080:8080"
-
-volumes:
-  bun_node_modules:

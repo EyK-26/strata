@@ -83,7 +83,6 @@ jobs:
           bun run build:bootstrap
           scripts/with-host-env.sh sh -c "
             STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed &&
-            DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
             bun run validate:ci &&
             bun run verify:framework
           "

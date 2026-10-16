@@ -12,3 +12,6 @@ tmp
 **/.env
 **/.env.*
 !**/.env*.example
+
+# Checked-in legacy examples are never image inputs.
+apps

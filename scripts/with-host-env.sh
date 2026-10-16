@@ -18,9 +18,8 @@ export QUEUE_DRIVER="${QUEUE_DRIVER:-sync}"
 # HiroApp's preload forces MAIL_DRIVER=smtp, which needs a MAIL_HOST. Host runs
 # have no SMTP server, so log to stdout unless the caller asked for something else.
 export MAIL_DRIVER="${MAIL_DRIVER:-log}"
-export APP_KEY_PREFIX="${APP_KEY_PREFIX:-hiroapp}"
-export APP_NAME="${APP_NAME:-HiroApp}"
-export DOGFOOD_APP="${DOGFOOD_APP:-hiroapp}"
+export APP_KEY_PREFIX="${APP_KEY_PREFIX:-strata}"
+export APP_NAME="${APP_NAME:-Strata}"
 # HiroApp is a cookie app and refuses to boot without a session secret; this is the local dev value.
 export SESSION_SECRET="${SESSION_SECRET:-dev-session-secret-change-me-please-32ch}"
 

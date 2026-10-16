@@ -2,9 +2,9 @@
 preload = ["./tests/preloadEnv.ts", "./tests/globalSetup.ts"]
 coveragePath = ["src"]
 
-# Do not set coverageThreshold here. OpenAPI/CLI tests load HiroApp createApp,
-# so the same bun process can score apps/hiroapp/src. 100% gates live in
-# scripts/assert-core-coverage.ts.
+# Do not set coverageThreshold here. Per-file 100% source gates and the
+# exemption ratchet live in scripts/assert-core-coverage.ts; packed generated
+# runtime acceptance is an additional executable gate.
 # See docs/COVERAGE.md.
 coveragePathIgnorePatterns = [
   "tests/**",
@@ -43,7 +43,6 @@ coveragePathIgnorePatterns = [
   "src/bootstrap/dependencies.ts",
   "src/bootstrap/discoverListeners.ts",
   "src/bootstrap/discoverModules.ts",
-  "src/bootstrap/dogfoodApp.ts",
   "src/bootstrap/env.ts",
   "src/bootstrap/health.ts",
   "src/bootstrap/httpKernel.ts",
@@ -61,7 +60,6 @@ coveragePathIgnorePatterns = [
   "src/bootstrap/schedule.ts",
   "src/bootstrap/schemaTarget.ts",
   "src/bootstrap/secretsGuard.ts",
-  "src/bootstrap/server.ts",
 
   # Database migration/seed definitions and connection proxy
   # Keep existing baseline exclusions explicit so new migrations are instrumented.

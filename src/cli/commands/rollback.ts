@@ -1,17 +1,10 @@
-import { importHiroappModule } from "../../bootstrap/dogfoodApp.ts";
-import { isFixtureSchema } from "../../bootstrap/schemaTarget.ts";
+import { assertFixtureSchema } from "../../bootstrap/schemaTarget.ts";
 
+/** Private framework fixture command; generated apps use their own published CLI adapters. */
 async function rollbackCommand(): Promise<void> {
-  if (isFixtureSchema()) {
-    const { rollbackDatabase } = await import("../../db/migrations/runner");
-    await rollbackDatabase();
-    return;
-  }
-
-  const mod = await importHiroappModule<{ rollback?: () => Promise<void> }>("src/db/rollback.ts");
-  if (typeof mod.rollback === "function") {
-    await mod.rollback();
-  }
+  assertFixtureSchema();
+  const { rollbackDatabase } = await import("../../db/migrations/runner");
+  await rollbackDatabase();
 }
 
 export { rollbackCommand };

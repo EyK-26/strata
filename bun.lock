@@ -30,48 +30,6 @@
         "xml-crypto": "^6.1.2",
       },
     },
-    "apps/hiroapp": {
-      "name": "hiroapp",
-      "version": "0.1.0",
-      "dependencies": {
-        "@getstrata/bootstrap": "workspace:*",
-        "@getstrata/cli": "workspace:*",
-        "@getstrata/core": "workspace:*",
-        "eta": "^4.6.0",
-      },
-      "devDependencies": {
-        "@types/bun": ">=1.4.2",
-        "typescript": "^7.0.2",
-      },
-    },
-    "apps/hiroapp-hobby": {
-      "name": "hiroapp-hobby",
-      "version": "0.1.0",
-      "dependencies": {
-        "@getstrata/bootstrap": "workspace:*",
-        "@getstrata/cli": "workspace:*",
-        "@getstrata/core": "workspace:*",
-        "eta": "^4.6.0",
-      },
-      "devDependencies": {
-        "@types/bun": ">=1.4.2",
-        "typescript": "^7.0.2",
-      },
-    },
-    "apps/hiroapp-team": {
-      "name": "hiroapp-team",
-      "version": "0.1.0",
-      "dependencies": {
-        "@getstrata/bootstrap": "workspace:*",
-        "@getstrata/cli": "workspace:*",
-        "@getstrata/core": "workspace:*",
-        "eta": "^4.6.0",
-      },
-      "devDependencies": {
-        "@types/bun": ">=1.4.2",
-        "typescript": "^7.0.2",
-      },
-    },
     "packages/create-strata": {
       "name": "create-strata",
       "version": "2.2.34",
@@ -264,12 +222,6 @@
     "eta": ["eta@4.6.0", "", {}, "sha512-lW6is4T1NFOYnmqGZIfvixqj7A7sSvScF+DN8EK6K58xI5MZ5UvYe0GjopxOXQtZvUn4eDdVuZ8XSoYWTMEKwA=="],
 
     "generate-function": ["generate-function@2.3.1", "", { "dependencies": { "is-property": "^1.0.2" } }, "sha512-eeB5GfMNeevm/GRYq20ShmsaGcmI81kIX2K9XQx5miC8KdHaC6Jm0qQ8ZNeGOi7wYB8OsdxKs+Y2oVuTFuVwKQ=="],
-
-    "hiroapp": ["hiroapp@workspace:apps/hiroapp"],
-
-    "hiroapp-hobby": ["hiroapp-hobby@workspace:apps/hiroapp-hobby"],
-
-    "hiroapp-team": ["hiroapp-team@workspace:apps/hiroapp-team"],
 
     "iconv-lite": ["iconv-lite@0.7.3", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3.0.0" } }, "sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ=="],
 

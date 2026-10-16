@@ -93,9 +93,8 @@ jobs:
           name: sbom
           path: sbom.spdx.json
 
-  # npm publish must not wait on GHCR. Release v0.5.103 built the image first;
-  # bun dedupe then failed because the install stage omitted apps/hiroapp, so
-  # @getstrata/core@0.5.101 never published.
+  # npm publish must not wait on GHCR: an earlier image failure blocked publication.
+  # Keep every framework package manifest in the Docker install stage.
   # publish_package skips versions already on npm, so workflow_dispatch can
   # retry a failed or partial publish without double-publishing.
   # npm trusted publishing (GitHub OIDC). Job permissions replace workflow
@@ -171,7 +170,6 @@ jobs:
             bun run build:framework &&
             bun run build:bootstrap &&
             STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed &&
-            DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
             bun run validate:ci
           "
 

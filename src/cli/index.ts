@@ -6,7 +6,8 @@ import {
 import { runCli } from "@getstrata/cli";
 import { commands } from "./register.ts";
 
-configureModulesDirectory(join(import.meta.dir, "../../apps/hiroapp/src/modules"));
+// This entrypoint belongs to the framework fixture harness, never a product app.
+configureModulesDirectory(join(import.meta.dir, "../../tests/fixtures/empty-modules"));
 await ensureModulesLoaded();
 
 await runCli({

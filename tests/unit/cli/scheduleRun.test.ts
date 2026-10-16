@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { configureModulesManifest } from "@getstrata/bootstrap/discoverModules";
 import * as database from "../../../src/db/connection";
 import { captureConsole } from "./helpers";
 
 beforeEach(() => {
+  configureModulesManifest([]);
   spyOn(database, "closeDatabase").mockResolvedValue(undefined);
 });
 
