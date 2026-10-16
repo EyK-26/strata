@@ -9,8 +9,8 @@ describe("createWebServer", () => {
   });
 
   test("unknown routes return styled HTML 404", async () => {
-    const server = createWebServer({ port: 0 });
-    const response = await fetch(`http://localhost:${server.port}/forum/nope/nope`);
+    const server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" } });
+    const response = await fetch(`http://127.0.0.1:${server.port}/forum/nope/nope`);
     const html = await response.text();
 
     expect(response.status).toBe(404);
@@ -25,11 +25,12 @@ describe("createWebServer", () => {
   test("null handlers return styled HTML 404", async () => {
     const server = createWebServer({
       port: 0,
+      native: { hostname: "127.0.0.1" },
       routes: {
         "/gone": async () => null,
       },
     });
-    const response = await fetch(`http://localhost:${server.port}/gone`);
+    const response = await fetch(`http://127.0.0.1:${server.port}/gone`);
     const html = await response.text();
 
     expect(response.status).toBe(404);
@@ -42,6 +43,7 @@ describe("createWebServer", () => {
   test("records the socket address so throttles key on the real client", async () => {
     const server = createWebServer({
       port: 0,
+      native: { hostname: "127.0.0.1" },
       routes: {
         "/whoami": async () => new Response(currentRequestMeta().ipAddress ?? "none"),
       },

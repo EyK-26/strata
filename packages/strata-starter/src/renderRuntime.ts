@@ -850,6 +850,8 @@ configureModulesDirectory(join(import.meta.dir, "../modules"));
 function renderConfigTs(): string {
   return `export interface AppConfig {
   port: number;
+  /** Optional listen address; independent of the trusted public APP_URL. */
+  hostname?: string;
   appUrl: string;
   databaseUrl: string;
 }
@@ -862,6 +864,7 @@ export function loadConfig(): AppConfig {
 
   return {
     port: Number(process.env.PORT ?? 3000),
+    hostname: process.env.HOST?.trim() || undefined,
     appUrl: process.env.APP_URL ?? "http://localhost:3000",
     databaseUrl,
   };
@@ -1132,7 +1135,7 @@ import {
 } from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
 ${metricsImport}import { assertProductionSecrets, assertRlsLiveDatabaseRole } from "@getstrata/bootstrap/secretsGuard";
-import { createWebServer } from "@getstrata/bootstrap/web/server";
+import { createWebServer, type NativeServerOptions } from "@getstrata/bootstrap/web/server";
 import type { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
@@ -1226,11 +1229,12 @@ export async function createApp(options: BootstrapOptions = {}) {
   return bootstrapApp({ migrate: false, ...options });
 }
 
-export function createAppServer(routes: AppRouteMap, port = 0, lifecycle?: LifecycleCoordinator) {
+export function createAppServer(routes: AppRouteMap, port = 0, lifecycle?: LifecycleCoordinator, native?: NativeServerOptions) {
   return createWebServer({
     port,
     publicDir: "./public",
     lifecycle,
+    native,
     routes,
   });
 }

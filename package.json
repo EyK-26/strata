@@ -76,7 +76,8 @@
     "@opentelemetry/sdk-trace-node": "2.12.0",
     "eta": "^4.6.0",
     "mysql2": "^3.24.3",
-    "uqr": "^0.1.3"
+    "uqr": "^0.1.3",
+    "@xmldom/xmldom": "^0.8.15"
   },
   "engines": {
     "bun": ">=1.4.3"

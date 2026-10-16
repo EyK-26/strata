@@ -10,7 +10,12 @@ const { routes, config, context } = await bootstrapApp();
 const lifecycle = new LifecycleCoordinator();
 let server: ReturnType<typeof createAppServer>;
 try {
-  server = createAppServer(routes, config.port, lifecycle);
+  server = createAppServer(
+    routes,
+    config.port,
+    lifecycle,
+    config.hostname ? { hostname: config.hostname } : undefined,
+  );
 } catch (error) {
   try {
     await context.dispose();
@@ -19,7 +24,7 @@ try {
   }
   throw error;
 }
-console.log(`Listening on http://localhost:${server.port} (APP_URL ${config.appUrl})`);
+console.log(`Listening on ${server.url.origin} (APP_URL ${config.appUrl})`);
 
 lifecycle.register("providers:drain", () => context.drain(), "drain");
 lifecycle.register("providers:flush", () => context.flush(), "flush");

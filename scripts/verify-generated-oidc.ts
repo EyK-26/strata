@@ -197,7 +197,7 @@ try {
     join(fixture.app, "src/bootstrap/createApp.ts")
   );
   const { routes, context } = await bootstrapApp({ migrate: false });
-  const server = createAppServer(routes, 0);
+  const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
   stop = async () => {
     server.stop(true);
     try {
@@ -206,7 +206,7 @@ try {
       await database.closeDatabase();
     }
   };
-  origin = `http://127.0.0.1:${server.port}`;
+  origin = server.url.origin;
   process.env.OIDC_REDIRECT_URI = `${origin}/auth/oidc/callback`;
   const request = (url: string, cookie = "") =>
     fetch(url, {

@@ -94,7 +94,7 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
     closeApp = closeDatabase;
     const { User } = await import(join(app, "src/models/User.ts"));
     const boot = await bootstrapApp();
-    const server = createAppServer(boot.routes, 0),
+    const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
       origin = `http://127.0.0.1:${server.port}`;
     process.env.APP_URL = origin;
     try {

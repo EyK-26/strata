@@ -85,6 +85,7 @@ async function main(): Promise<void> {
     process.env.QUEUE_DRIVER = "sync";
     let discoveryPort = 0;
     const discovery = Bun.serve({
+      hostname: "127.0.0.1",
       port: 0,
       fetch(request) {
         const url = new URL(request.url);
@@ -122,8 +123,8 @@ async function main(): Promise<void> {
     );
     const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
     const { routes } = await bootstrapApp();
-    const server = createAppServer(routes, 0);
-    const origin = `http://127.0.0.1:${server.port}`;
+    const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+    const origin = server.url.origin;
     process.env.OIDC_REDIRECT_URI = `${origin}/auth/oidc/callback`;
 
     try {

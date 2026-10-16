@@ -99,8 +99,8 @@ async function main(): Promise<void> {
     );
     const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
     const { routes } = await bootstrapApp();
-    const server = createAppServer(routes, 0);
-    const origin = `http://127.0.0.1:${server.port}`;
+    const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+    const origin = server.url.origin;
 
     try {
       const spa = await fetch(`${origin}/app`);

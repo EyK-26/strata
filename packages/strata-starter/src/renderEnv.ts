@@ -85,6 +85,8 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     `APP_KEY_PREFIX=${projectName}`,
     "APP_ENV=local",
     "PORT=3000",
+    "# Optional TCP listen address, separate from public APP_URL / tenant hosts.",
+    "# HOST=0.0.0.0",
     "# Total graceful shutdown budget in milliseconds; keep deployment grace longer.",
     "SHUTDOWN_TIMEOUT_MS=30000",
     "APP_URL=http://localhost:3000",
@@ -459,9 +461,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.37",
-        "@getstrata/cli": "^2.2.37",
-        "@getstrata/core": "^2.2.37",
+        "@getstrata/bootstrap": "^2.2.38",
+        "@getstrata/cli": "^2.2.38",
+        "@getstrata/core": "^2.2.38",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {

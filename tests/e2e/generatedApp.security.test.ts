@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { get as httpGet } from "node:http";
 import { generateOneTimeToken } from "@getstrata/core/auth/oneTimeToken";
 import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
@@ -35,6 +36,8 @@ const previousCwd = process.cwd();
 const previousEnv = { ...process.env };
 
 let origin = "";
+let inspectHealth: (() => Promise<unknown>) | undefined;
+let verifyAddressOwnership: (() => Promise<void>) | undefined;
 let stop: (() => Promise<void>) | null = null;
 let sql: {
   unsafe: (query: string, params?: readonly unknown[]) => Promise<unknown[]>;
@@ -87,15 +90,73 @@ beforeAll(async () => {
   await migrations.migrate();
   await migrations.seed();
   const { routes, context } = await bootstrapApp({ migrate: false });
-  const server = createAppServer(routes, 0);
-  origin = `http://127.0.0.1:${server.port}`;
+  const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+  stop = async () => {
+    await server.stop(true);
+    try {
+      await context.dispose();
+    } finally {
+      await database.closeDatabase();
+    }
+  };
+  expect(server.hostname).toBe("127.0.0.1");
+  origin = server.url.origin;
+  verifyAddressOwnership = async () => {
+    const other = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => new Response("other-service", { status: 401 }),
+    });
+    let unexpected: ReturnType<typeof createAppServer> | undefined;
+    let owned: ReturnType<typeof createAppServer> | undefined;
+    try {
+      // A matching numeric port is insufficient: the generated helper must forward
+      // the exact bind address and fail rather than listen on another interface.
+      expect(() => {
+        unexpected = createAppServer(routes, other.port, undefined, { hostname: "127.0.0.1" });
+      }).toThrow();
+      owned = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+      expect(owned.hostname).toBe("127.0.0.1");
+      expect(owned.port).not.toBe(other.port);
+      const health = await fetch(new URL("/health", owned.url), { redirect: "manual" });
+      expect(health.status).toBe(200);
+      expect(await health.text()).toBe("ok");
+      const unrelated = await fetch(other.url);
+      expect(unrelated.status).toBe(401);
+      expect(await unrelated.text()).toBe("other-service");
+    } finally {
+      await owned?.stop(true);
+      await unexpected?.stop(true);
+      await other.stop(true);
+    }
+  };
+  inspectHealth = async () => {
+    const health = routes["/health"];
+    const direct =
+      typeof health === "function" ? await health(new Request(`${origin}/health`)) : null;
+    const wire = await new Promise((resolve) => {
+      const request = httpGet(
+        `${origin}/health`,
+        { signal: AbortSignal.timeout(2000) },
+        (response) => {
+          let body = "";
+          response.on("data", (chunk) => {
+            body = (body + chunk.toString()).slice(0, 1024);
+          });
+          response.on("end", () => resolve({ status: response.statusCode, body }));
+        },
+      );
+      request.on("error", (error) => resolve({ error: error.message }));
+    });
+    return { origin, serverUrl: server.url.href, directStatus: direct?.status, wire };
+  };
   const migrationUrl = process.env.MIGRATION_DATABASE_URL?.trim();
   if (!migrationUrl) {
     throw new Error("MIGRATION_DATABASE_URL is required so fixture SQL can run as the superuser");
   }
   sql = new Bun.SQL(migrationUrl);
   stop = async () => {
-    server.stop(true);
+    await server.stop(true);
     try {
       await context.dispose();
     } finally {
@@ -125,6 +186,10 @@ afterAll(async () => {
 });
 
 describe("Generated application security", () => {
+  test("generated native binding owns the exact client address despite another local 401 service", async () => {
+    expect(verifyAddressOwnership).toBeDefined();
+    await verifyAddressOwnership?.();
+  });
   afterEach(async () => {
     await sql.unsafe(
       "UPDATE users SET mfa_enabled = false, mfa_secret = NULL, mfa_recovery_codes = NULL WHERE email = $1",
@@ -133,8 +198,19 @@ describe("Generated application security", () => {
   });
 
   test("health is ok after migrate even with notes RLS", async () => {
-    const response = await fetch(`${origin}/health`);
-    expect(response.status).toBe(200);
+    const response = await fetch(`${origin}/health`, { redirect: "manual" });
+    if (response.status !== 200)
+      console.error(
+        "Generated health diagnostics",
+        JSON.stringify({
+          responseUrl: response.url,
+          contentType: response.headers.get("content-type"),
+          server: response.headers.get("server"),
+          body: await response.clone().text(),
+          probes: await inspectHealth?.(),
+        }),
+      );
+    expect(response.status, await response.clone().text()).toBe(200);
     expect(await response.text()).toBe("ok");
   });
 

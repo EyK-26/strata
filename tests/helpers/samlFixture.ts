@@ -4,6 +4,7 @@ import { SignedXml } from "xml-crypto";
 interface SamlFixtureOptions {
   audience?: string;
   destination?: string;
+  recipient?: string;
   email?: string;
   issuer?: string;
   name?: string;
@@ -112,7 +113,7 @@ async function createSignedSamlResponse(options: SamlFixtureOptions = {}): Promi
   <saml:Subject>
     <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">${nameId}</saml:NameID>
     <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
-      <saml:SubjectConfirmationData NotOnOrAfter="${notOnOrAfter}" Recipient="${destination}" />
+      <saml:SubjectConfirmationData NotOnOrAfter="${notOnOrAfter}" Recipient="${options.recipient ?? destination}" />
     </saml:SubjectConfirmation>
   </saml:Subject>
   <saml:Conditions NotBefore="${notBefore}" NotOnOrAfter="${notOnOrAfter}">

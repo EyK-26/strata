@@ -152,6 +152,7 @@ describe("trusted public tenancy", () => {
       const handler = async () => Response.json({ tenant: currentTenant()?.id });
       const server = createWebServer({
         port: 0,
+        native: { hostname: "127.0.0.1" },
         routes: {
           "/catalog": {
             GET: withMiddleware(...kernel.globalMiddleware())(
