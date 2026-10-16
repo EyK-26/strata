@@ -4,8 +4,9 @@ import { currentSqlDialect } from "../database/dialect";
 import { UnprocessableEntityError } from "../errors/http";
 import { recoveryCodeMatches } from "../security/recoveryCodes";
 import { verifyTotp } from "../security/totp";
+import { isAccountActive } from "./accountState";
 
-type PasswordLoginFailure = "mfa_required" | "mfa_invalid";
+type PasswordLoginFailure = "mfa_required" | "mfa_invalid" | "account_inactive";
 
 type PasswordLoginSuccess = {
   ok: true;
@@ -35,9 +36,10 @@ function parseRecoveryHashes(raw: string | null | undefined): string[] {
 }
 
 function completePasswordLogin(
-  user: Pick<AuthUserRecord, "mfa_enabled" | "mfa_secret" | "mfa_recovery_codes">,
+  user: Pick<AuthUserRecord, "is_active" | "mfa_enabled" | "mfa_secret" | "mfa_recovery_codes">,
   options: { mfaCode?: string | null } = {},
 ): PasswordLoginResult {
+  if (!isAccountActive(user)) return { ok: false, error: "account_inactive" };
   if (!user.mfa_enabled) {
     return { ok: true };
   }

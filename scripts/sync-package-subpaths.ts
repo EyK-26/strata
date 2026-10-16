@@ -15,6 +15,7 @@ import {
 const ROOT = join(import.meta.dir, "..");
 
 const CORE_SUBPATHS = [
+  "auth/accountState",
   "auth/accessControl",
   "auth/abilityChecker",
   "auth/authContext",

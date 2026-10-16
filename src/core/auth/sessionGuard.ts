@@ -1,6 +1,7 @@
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { resolveAbilitiesForRole } from "./abilityCatalog";
+import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
 import { isSessionInvalidated, readSession } from "./sessionCookie";
@@ -23,6 +24,9 @@ class SessionGuard implements AuthGuard {
 
     try {
       const user = await tokenService.findByIdOrThrow(session.userId);
+
+      if (!isAccountActive(user) || !matchesAuthVersion(session.authVersion, user.auth_version))
+        return null;
 
       if (isSessionInvalidated(session.issuedAt, user.session_valid_after)) {
         return null;

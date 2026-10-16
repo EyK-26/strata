@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { isAccountActive } from "@getstrata/core/auth/accountState";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { type AuthGuard, AuthManager } from "@getstrata/core/auth/guard";
 import { isSessionInvalidated } from "@getstrata/core/auth/sessionCookie";
@@ -12,6 +13,7 @@ import {
   getDefaultDatabaseQuery,
 } from "@getstrata/core/database/defaultConnection";
 import { currentSqlDialect, sqlTimestamp } from "@getstrata/core/database/dialect";
+import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { readRequestCookie } from "@getstrata/core/http/cookies";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
@@ -32,6 +34,7 @@ export interface SessionUser {
   email: string;
   learn_subscriber?: boolean;
   is_admin?: boolean;
+  is_active?: boolean;
   email_verified_at?: Date | string | null;
 }
 
@@ -44,6 +47,7 @@ interface SessionRow {
   email?: string | null;
   learn_subscriber?: boolean | null;
   is_admin?: boolean | null;
+  is_active?: boolean | number | string | null;
   email_verified_at?: Date | string | null;
   session_valid_after?: Date | string | null;
   expires_at?: Date;
@@ -132,6 +136,9 @@ function mapSessionUserRow(row: SessionRow): SessionUser {
     email,
     learn_subscriber: Boolean(row.learn_subscriber),
     is_admin: Boolean(row.is_admin),
+    ...(row.is_active !== undefined
+      ? { is_active: row.is_active === true || row.is_active === 1 || row.is_active === "1" }
+      : {}),
     ...(row.email_verified_at !== undefined ? { email_verified_at: row.email_verified_at } : {}),
   };
 }
@@ -237,6 +244,7 @@ export class CookieSessionStore {
   }
 
   async create(user: SessionUser, meta: SessionCreateMeta = {}): Promise<string> {
+    if (!isAccountActive(user)) throw new UnauthorizedError();
     const id = randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + this.maxAgeSeconds * 1000);
     await runWithMigrationBypassForIdentifier(user.id, async () => {
@@ -298,7 +306,8 @@ export class CookieSessionStore {
     const sessionId = this.sessionIdFromRequest(request);
     if (!sessionId) return null;
 
-    return this.loadSessionUser(this.sql(), sessionId);
+    const user = await this.loadSessionUser(this.sql(), sessionId);
+    return user && isAccountActive(user) ? user : null;
   }
 
   private sign(value: string): string {
