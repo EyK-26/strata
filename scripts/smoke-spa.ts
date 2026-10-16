@@ -1,6 +1,6 @@
 /**
  * Hybrid SPA smoke. Builds frontend/dist for a generated app and fetches /app.
- * HiroApp stays server-htmx. This script is not that app.
+ * A separate generated server-HTMX fixture covers the ordinary HTTP runtime.
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

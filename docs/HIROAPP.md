@@ -1,6 +1,6 @@
 # HiroApp dogfood
 
-`apps/hiroapp` is Strata dogfood for internal end-to-end testing. CI migrates, seeds, boots, generates OpenAPI, and smokes this app. It is generated from the same layer flags as `create-strata`. It is not a product. Start a product app with `bunx create-strata`.
+`apps/hiroapp` is a retained legacy compatibility fixture pending staged removal. CI now runs security, OpenAPI and HTTP smoke acceptance on disposable generated apps. Legacy CLI/migration loaders and Docker/workspace wiring still use this directory until their removal is qualified. It is generated from the same layer flags as `create-strata`, not a product starter. Start a product app with `bunx create-strata`.
 
 CI also runs **integration extras HTTP smoke** (`scripts/smoke-integrations.ts`, included in `bun run smoke`). That script scaffolds a temporary app with `--oauth-github`, `--oidc`, `--billing`, and `--webhooks`. It is not HiroApp. It checks the GitHub authorize redirect, the OIDC redirect against a loopback discovery document, and that `/auth/oidc/callback` presents the `oidc_pkce` cookie with the authorize `state` and returns 400 when token exchange fails. It also posts a signed Stripe webhook. It does not finish a GitHub or OIDC login, deliver an outbound webhook, or sync a subscription plan.
 
@@ -38,3 +38,5 @@ Wizard and flags: [STARTER.md](./STARTER.md).
 ## Transition to generated acceptance fixtures
 
 The 23-case security suite now runs against a freshly generated temporary app with packed candidate runtime packages, not this directory. CI/release validation runs it through `validate:ci`. Checked-in HiroApp still supplies boot, OpenAPI and smoke fixtures until their replacements pass. See [the staged removal gates](GENERATED-APP-ACCEPTANCE.md); the apps are deliberately retained during this first step.
+
+Generated CLI/OpenAPI/HTTP smoke acceptance has now replaced the fixed-port checked-in server in CI. The existing runtime inventory is preserved separately from the corrected API-only spec. Legacy CLI/migration loaders and Docker/workspace wiring remain until the final removal PR; see [second-stage evidence](GENERATED-APP-ACCEPTANCE.md#second-pr-generated-cliopenapi-and-http-smoke).

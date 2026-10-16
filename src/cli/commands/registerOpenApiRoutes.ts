@@ -1,41 +1,37 @@
-import { registerOpenApiRouteMap } from "@getstrata/bootstrap/buildModuleRoutes";
-import { createAppContext } from "@getstrata/bootstrap/context";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { createRoutes } from "../../bootstrap/createRoutes";
-import { importHiroappModule, isHiroappDogfood } from "../../bootstrap/dogfoodApp";
+import { registerAppOpenApiRoutes } from "@getstrata/cli/openapi";
+import { importHiroappModule } from "../../bootstrap/dogfoodApp";
 
-function withoutSpaCatchAll(routes: Record<string, unknown>): Record<string, unknown> {
-  const next = { ...routes };
-  delete next["/*"];
-  return next;
-}
-
+/** Temporary in-repo CLI adapter; the public CLI owns API-only route filtering. */
 async function registerOpenApiRoutes(): Promise<void> {
-  if (!isHiroappDogfood()) {
-    const { dependencies } = await createAppContext();
-    createRoutes(dependencies);
-    return;
-  }
-
   process.env.APP_KEY_PREFIX ??= "hiroapp";
   process.env.APP_NAME ??= "HiroApp";
   process.env.API_PREFIX ??= "/api";
   const previousFrontendMode = process.env.FRONTEND_MODE;
   process.env.FRONTEND_MODE = "api";
-
   try {
-    const { createApp } = await importHiroappModule<{
-      createApp: () => Promise<{ routes: Record<string, unknown> }>;
-    }>("src/bootstrap/createApp.ts");
-    const { routes } = await createApp();
-    routeRegistry.clear();
-    registerOpenApiRouteMap(withoutSpaCatchAll(routes), ["global", "api"]);
+    await registerAppOpenApiRoutes(async () => {
+      const { bootstrapApp } = await importHiroappModule<{
+        bootstrapApp: (options: {
+          migrate: boolean;
+        }) => Promise<{ routes: Record<string, unknown>; context: { dispose(): Promise<void> } }>;
+      }>("src/bootstrap/createApp.ts");
+      const { closeDatabase } = await importHiroappModule<{ closeDatabase(): Promise<void> }>(
+        "src/bootstrap/database.ts",
+      );
+      const app = await bootstrapApp({ migrate: false });
+      try {
+        return { routes: app.routes };
+      } finally {
+        try {
+          await app.context.dispose();
+        } finally {
+          await closeDatabase();
+        }
+      }
+    });
   } finally {
-    if (previousFrontendMode === undefined) {
-      delete process.env.FRONTEND_MODE;
-    } else {
-      process.env.FRONTEND_MODE = previousFrontendMode;
-    }
+    if (previousFrontendMode === undefined) delete process.env.FRONTEND_MODE;
+    else process.env.FRONTEND_MODE = previousFrontendMode;
   }
 }
 
