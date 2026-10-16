@@ -1,14 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { join } from "node:path";
 import { generateOneTimeToken } from "@getstrata/core/auth/oneTimeToken";
 import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
+import { createGeneratedSecurityApp } from "../helpers/generatedSecurityApp";
 import { jsonCsrfHeaders } from "../helpers/jsonCsrf";
 import { createSignedSamlResponse } from "../helpers/samlFixture";
 
-const repoRoot = join(import.meta.dir, "../..");
-const hiroappRoot = join(repoRoot, "apps/hiroapp");
+let fixture: Awaited<ReturnType<typeof createGeneratedSecurityApp>>;
+let appRoot: string;
 
 function cookieHeader(response: Response, previous = ""): string {
   const jar = new Map<string, string>();
@@ -51,7 +51,11 @@ function idpShapedHeaders(): Record<string, string> {
 }
 
 beforeAll(async () => {
-  process.chdir(hiroappRoot);
+  fixture = await createGeneratedSecurityApp();
+  appRoot = fixture.app;
+  process.env.DATABASE_URL = process.env.APP_DATABASE_URL = fixture.runtimeUrl;
+  process.env.MIGRATION_DATABASE_URL = fixture.migrationUrl;
+  process.chdir(appRoot);
   process.env.APP_ENV = "local";
   process.env.APP_DEBUG = "false";
   process.env.FRONTEND_MODE = "server-htmx";
@@ -74,11 +78,15 @@ beforeAll(async () => {
   process.env.APP_ENV_METRICS = "local";
   process.env.METRICS_TOKEN = "";
 
-  const { bootstrapApp, createAppServer } = await import(
-    `${hiroappRoot}/src/bootstrap/createApp.ts`
-  );
-  const database = await import(`${hiroappRoot}/src/bootstrap/database.ts`);
-  const { routes } = await bootstrapApp();
+  const { bootstrapApp, createAppServer } = await import(`${appRoot}/src/bootstrap/createApp.ts`);
+  const database = await import(`${appRoot}/src/bootstrap/database.ts`);
+  stop = async () => {
+    await database.closeDatabase();
+  };
+  const migrations = await import(`${appRoot}/src/db/migrate.ts`);
+  await migrations.migrate();
+  await migrations.seed();
+  const { routes, context } = await bootstrapApp({ migrate: false });
   const server = createAppServer(routes, 0);
   origin = `http://127.0.0.1:${server.port}`;
   const migrationUrl = process.env.MIGRATION_DATABASE_URL?.trim();
@@ -87,26 +95,36 @@ beforeAll(async () => {
   }
   sql = new Bun.SQL(migrationUrl);
   stop = async () => {
-    server.stop();
-    await sql.close?.();
-    await database.closeDatabase();
+    server.stop(true);
+    try {
+      await context.dispose();
+    } finally {
+      try {
+        await sql.close?.();
+      } finally {
+        await database.closeDatabase();
+      }
+    }
   };
-});
+}, 150000);
 
 afterAll(async () => {
-  if (stop) {
-    await stop();
-  }
-  process.chdir(previousCwd);
-  for (const key of Object.keys(process.env)) {
-    if (!(key in previousEnv)) {
-      delete process.env[key];
+  try {
+    await stop?.();
+  } finally {
+    process.chdir(previousCwd);
+    try {
+      await fixture?.close();
+    } finally {
+      for (const key of Object.keys(process.env)) {
+        if (!(key in previousEnv)) delete process.env[key];
+      }
+      Object.assign(process.env, previousEnv);
     }
   }
-  Object.assign(process.env, previousEnv);
 });
 
-describe("HiroApp security", () => {
+describe("Generated application security", () => {
   afterEach(async () => {
     await sql.unsafe(
       "UPDATE users SET mfa_enabled = false, mfa_secret = NULL, mfa_recovery_codes = NULL WHERE email = $1",
@@ -121,7 +139,7 @@ describe("HiroApp security", () => {
   });
 
   test("HiroApp request traffic uses the NOBYPASSRLS APP_DATABASE_URL role", async () => {
-    const { getSql } = await import(`${hiroappRoot}/src/bootstrap/database.ts`);
+    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
     const rows = (await getSql().unsafe(
       `SELECT current_user AS rolname, r.rolsuper, r.rolbypassrls
        FROM pg_roles r WHERE r.rolname = current_user`,
@@ -135,7 +153,9 @@ describe("HiroApp security", () => {
   });
 
   test("live role denylist rejects a postgres runtime URL", async () => {
-    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    const { assertRlsLiveDatabaseRole } = await import(
+      fixture.resolve("@getstrata/bootstrap/secretsGuard")
+    );
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAppUrl = process.env.APP_DATABASE_URL;
     const previousDriver = process.env.TENANCY_DRIVER;
@@ -163,7 +183,7 @@ describe("HiroApp security", () => {
       restoreEnv("TENANCY_DRIVER", previousDriver);
       restoreEnv("APP_ENV", previousAppEnv);
     }
-    const { getSql } = await import(`${hiroappRoot}/src/bootstrap/database.ts`);
+    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
     const rows = (await getSql().unsafe("SELECT current_user AS rolname")) as Array<{
       rolname: string;
     }>;
@@ -173,9 +193,11 @@ describe("HiroApp security", () => {
   test("live pg_roles inspect of the HiroApp request pool", async () => {
     expect(process.env.APP_ENV).toBe("local");
     expect(process.env.TENANCY_DRIVER).toBe("rls");
-    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    const { assertRlsLiveDatabaseRole } = await import(
+      fixture.resolve("@getstrata/bootstrap/secretsGuard")
+    );
     await expect(assertRlsLiveDatabaseRole()).resolves.toBeUndefined();
-    const { getSql } = await import(`${hiroappRoot}/src/bootstrap/database.ts`);
+    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
     const rows = (await getSql().unsafe(
       `SELECT current_user AS rolname, r.rolsuper, r.rolbypassrls
        FROM pg_roles r WHERE r.rolname = current_user`,
@@ -676,10 +698,7 @@ describe("HiroApp security", () => {
       (await fetch(`${origin}/scim/v2/Users`, { headers: { authorization: "Bearer " } })).status,
     ).toBe(401);
 
-    await sql.unsafe(
-      "INSERT INTO tenant (slug, plan, region) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-      ["other", "free", "eu"],
-    );
+    await sql.unsafe("INSERT INTO tenant (slug) VALUES ($1) ON CONFLICT DO NOTHING", ["other"]);
     const tenants = (await sql.unsafe("SELECT id FROM tenant WHERE slug = $1", [
       "other",
     ])) as Array<{
@@ -874,10 +893,9 @@ describe("HiroApp security", () => {
   });
 
   test("cookie login still works for a user in another tenant", async () => {
-    await sql.unsafe(
-      "INSERT INTO tenant (slug, plan, region) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING",
-      ["second", "free", "eu"],
-    );
+    await sql.unsafe("INSERT INTO tenant (slug) VALUES ($1) ON CONFLICT (slug) DO NOTHING", [
+      "second",
+    ]);
     const tenants = (await sql.unsafe("SELECT id FROM tenant WHERE slug = $1", [
       "second",
     ])) as Array<{ id: number }>;
@@ -928,9 +946,9 @@ describe("HiroApp security", () => {
 
   test("identifier bypass cannot SELECT every user", async () => {
     const { runWithMigrationBypassForIdentifier } = await import(
-      "@getstrata/core/tenant/databaseTenantContext"
+      fixture.resolve("@getstrata/core/tenant/databaseTenantContext")
     );
-    const { getSql } = await import(`${hiroappRoot}/src/bootstrap/database.ts`);
+    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
     const appSql = getSql();
 
     const leaked = (await runWithMigrationBypassForIdentifier("x", async () => {
@@ -967,8 +985,10 @@ describe("HiroApp security", () => {
   });
 
   test("unbounded bypass SET LOCAL does not leak onto the next pool checkout", async () => {
-    const { runWithMigrationBypass } = await import("@getstrata/core/tenant/databaseTenantContext");
-    const { getSql } = await import(`${hiroappRoot}/src/bootstrap/database.ts`);
+    const { runWithMigrationBypass } = await import(
+      fixture.resolve("@getstrata/core/tenant/databaseTenantContext")
+    );
+    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
     const appSql = getSql();
 
     const inside = await runWithMigrationBypass(async () => {
@@ -1037,10 +1057,9 @@ describe("HiroApp security", () => {
     expect(attrs[0]?.rolsuper).toBe(false);
     expect(attrs[0]?.rolbypassrls).toBe(false);
 
-    await sql.unsafe(
-      "INSERT INTO tenant (slug, plan, region) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING",
-      ["rls-probe", "free", "eu"],
-    );
+    await sql.unsafe("INSERT INTO tenant (slug) VALUES ($1) ON CONFLICT (slug) DO NOTHING", [
+      "rls-probe",
+    ]);
     const tenants = (await sql.unsafe("SELECT id FROM tenant WHERE slug = $1", [
       "rls-probe",
     ])) as Array<{ id: number }>;

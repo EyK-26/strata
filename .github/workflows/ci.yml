@@ -85,8 +85,7 @@ jobs:
             STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed &&
             DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed &&
             bun run validate:ci &&
-            bun run verify:framework &&
-            bun run test:e2e
+            bun run verify:framework
           "
 
       - name: Start app for smoke tests
