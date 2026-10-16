@@ -1,6 +1,6 @@
 # Encryption rotation foundations
 
-The framework now provides the primitives, auth configuration and explicit maintenance-mode rotation protocol for #140. Shop adoption, live backup/restore drills and independent security qualification remain separate work. By default, the generated email/MFA APIs still use the existing KMS_ENCRYPTION_KEY and enc:v1 contract. An explicit keyring now supports reader-first adoption through those official APIs. Do not replace that variable to rotate persisted auth data. The keyring/auth APIs never change schema or rewrite stored records. The explicit migration API below does so only when invoked by a trusted operator.
+The framework now provides the primitives, auth configuration and explicit maintenance-mode rotation protocol for #140. The external shop has adopted the protocol and locally rehearsed logical restore/rotation. Production/PITR, coordinated rollout and independent security qualification remain separate gates; see the [current qualification record](QUALIFICATION-STATUS.md). By default, the generated email/MFA APIs still use the existing KMS_ENCRYPTION_KEY and enc:v1 contract. An explicit keyring now supports reader-first adoption through those official APIs. Do not replace that variable to rotate persisted auth data. The keyring/auth APIs never change schema or rewrite stored records. The explicit migration API below does so only when invoked by a trusted operator.
 
 ## Explicit keyring primitive
 
