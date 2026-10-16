@@ -195,6 +195,7 @@ try {
     { audience: "https://wrong.example.test" },
     { issuer: "https://wrong.example.test" },
     { destination: `${origin}/wrong-acs` },
+    { destination: `${origin}/wrong-response-destination`, recipient: destination },
     { recipient: `${origin}/wrong-recipient` },
   ])
     await denied(

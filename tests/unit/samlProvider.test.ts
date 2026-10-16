@@ -31,6 +31,9 @@ function validConfirmation(): Confirmation {
     ],
   };
 }
+function verifiedResponse() {
+  return `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" Destination="${ACS}"/>`;
+}
 function verifiedAssertion(id: string, confirmations: Confirmation[] = [validConfirmation()]) {
   return { Assertion: { $: { ID: id }, Subject: [{ SubjectConfirmation: confirmations }] } };
 }
@@ -239,6 +242,68 @@ describe("SamlServiceProvider", () => {
     await expect(provider.consumePost(fixture.responseB64)).rejects.toThrow("bearer recipient");
   });
 
+  test("rejects a signed response destination independently of a correct bearer recipient", async () => {
+    const fixture = await createSignedSamlResponse({
+      audience: SP_ENTITY,
+      destination: `${ACS}/other`,
+      recipient: ACS,
+    });
+    const provider = new SamlServiceProvider({
+      idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
+      idpCert: fixture.cert,
+      spEntityId: SP_ENTITY,
+      acsUrl: ACS,
+    });
+    await expect(provider.consumePost(fixture.responseB64)).rejects.toThrow("response destination");
+  });
+
+  test("checks response root, namespace and destination without consuming invalid replay state", async () => {
+    let xml = "";
+    setNodeSamlLoaderForTests(async () => ({
+      SAML: class {
+        async getAuthorizeUrlAsync() {
+          return SSO;
+        }
+        async validatePostResponseAsync() {
+          return {
+            loggedOut: false,
+            profile: {
+              ID: "destination-test",
+              issuer: IDP_ISSUER,
+              email: "destination@example.test",
+              getAssertion: () => verifiedAssertion("destination-test"),
+              getSamlResponseXml: () => xml,
+            },
+          };
+        }
+      },
+    }));
+    const provider = new SamlServiceProvider({
+      idpSsoUrl: SSO,
+      idpIssuer: IDP_ISSUER,
+      idpCert: "cert",
+      spEntityId: SP_ENTITY,
+      acsUrl: ACS,
+    });
+    for (const value of [
+      "",
+      "<broken",
+      "<?xml version='1.0'?>",
+      verifiedResponse().replace("Response", "Other"),
+      verifiedResponse().replace("urn:oasis:names:tc:SAML:2.0:protocol", "urn:other"),
+      verifiedResponse().replace(` Destination="${ACS}"`, ""),
+      verifiedResponse().replace(ACS, `${ACS}/other`),
+      `<!DOCTYPE samlp:Response>${verifiedResponse()}`,
+    ]) {
+      xml = value;
+      await expect(provider.consumePost("Zg==")).rejects.toThrow("response destination");
+    }
+    xml = verifiedResponse();
+    expect((await provider.consumePost("Zg==")).email).toBe("destination@example.test");
+    await expect(provider.consumePost("Zg==")).rejects.toThrow("replay");
+  });
+
   test("requires one matching unexpired bearer confirmation before consuming replay state", async () => {
     let assertion: ReturnType<typeof verifiedAssertion> | undefined;
     setNodeSamlLoaderForTests(async () => ({
@@ -253,6 +318,7 @@ describe("SamlServiceProvider", () => {
               ID: "bearer-test",
               issuer: IDP_ISSUER,
               email: "bearer@example.test",
+              getSamlResponseXml: verifiedResponse,
               getAssertion: () => assertion ?? {},
             },
           };
@@ -351,6 +417,7 @@ describe("SamlServiceProvider", () => {
               ID: "assert-missing-email",
               nameID: "x",
               issuer: IDP_ISSUER,
+              getSamlResponseXml: verifiedResponse,
               getAssertion: () => verifiedAssertion("assert-missing-email"),
             },
             loggedOut: false,
@@ -427,6 +494,7 @@ describe("SamlServiceProvider", () => {
           return {
             profile: {
               ID: "assert-1",
+              getSamlResponseXml: verifiedResponse,
               getAssertion: () => verifiedAssertion("assert-1"),
               nameID: "nid",
               issuer: IDP_ISSUER,
@@ -495,6 +563,7 @@ describe("SamlServiceProvider", () => {
             profile: {
               email: "from-assertion@example.test",
               issuer: IDP_ISSUER,
+              getSamlResponseXml: verifiedResponse,
               getAssertion: () => verifiedAssertion("assert-from-xml"),
             },
             loggedOut: false,

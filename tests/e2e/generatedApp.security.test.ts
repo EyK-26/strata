@@ -134,7 +134,7 @@ describe("Generated application security", () => {
 
   test("health is ok after migrate even with notes RLS", async () => {
     const response = await fetch(`${origin}/health`);
-    expect(response.status).toBe(200);
+    expect(response.status, await response.clone().text()).toBe(200);
     expect(await response.text()).toBe("ok");
   });
 

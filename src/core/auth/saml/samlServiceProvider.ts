@@ -44,6 +44,7 @@ interface NodeSamlProfile {
   issuer?: string;
   sessionIndex?: string | string[];
   getAssertion?: () => VerifiedSamlAssertion;
+  getSamlResponseXml?: () => string;
   [key: string]: unknown;
 }
 
@@ -76,6 +77,45 @@ function assertBearerRecipient(profile: NodeSamlProfile, acsUrl: string): void {
       return Number.isFinite(expires) && now < expires + CLOCK_SKEW_MS;
     });
   if (!matches) throw new Error("SAML assertion bearer recipient is invalid.");
+}
+
+/** Envelope metadata is additional admission policy, never signature verification. */
+async function assertResponseDestination(profile: NodeSamlProfile, acsUrl: string): Promise<void> {
+  const xml = profile.getSamlResponseXml?.();
+  const invalid = () => new Error("SAML response destination is invalid.");
+  if (typeof xml !== "string" || !xml.trim()) throw invalid();
+  // Keep the parser's ambient browser DOM declarations out of Bun's public type graph.
+  const parserModule = "@xmldom/xmldom";
+  const { DOMParser } = (await import(parserModule)) as {
+    DOMParser: new (options: {
+      errorHandler: () => never;
+    }) => {
+      parseFromString(
+        xml: string,
+        mimeType: string,
+      ): {
+        doctype: unknown;
+        documentElement: {
+          localName: string;
+          namespaceURI: string;
+          getAttribute(name: string): string | null;
+        } | null;
+      };
+    };
+  };
+  const document = new DOMParser({
+    errorHandler: () => {
+      throw invalid();
+    },
+  }).parseFromString(xml, "application/xml");
+  const response = document.documentElement;
+  if (
+    document.doctype ||
+    response?.localName !== "Response" ||
+    response.namespaceURI !== "urn:oasis:names:tc:SAML:2.0:protocol" ||
+    response.getAttribute("Destination") !== acsUrl
+  )
+    throw invalid();
 }
 
 type NodeSamlClient = {
@@ -205,6 +245,7 @@ class SamlServiceProvider {
       throw new Error("SAML assertion did not include an ID.");
     }
     assertBearerRecipient(profile, this.options.acsUrl);
+    await assertResponseDestination(profile, this.options.acsUrl);
     await consumeSamlAssertion(assertionId);
 
     const email =
