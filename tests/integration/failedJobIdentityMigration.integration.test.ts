@@ -4,8 +4,8 @@ import type { MigrationDatabase } from "@getstrata/core/database/migrations/type
 import { Schema } from "@getstrata/core/database/schema";
 import { SQL } from "bun";
 import { createPool } from "mysql2/promise";
-import migration from "../../apps/hiroapp/src/db/migrations/0002_add_failed_job_identity";
 import fixtureMigration from "../../src/db/migrations/0038_add_failed_job_identity";
+import migration from "../fixtures/migrations/failedJobIdentity";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 async function upgrade(db: MigrationDatabase, driver: "pgsql" | "mysql" | "sqlite") {

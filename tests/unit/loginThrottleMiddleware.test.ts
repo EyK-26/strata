@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -7,6 +7,11 @@ import {
   resolveLoginEmail,
 } from "@getstrata/core/http/loginThrottleMiddleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+
+import { createGeneratedSourceApps } from "../helpers/generatedSourceApps";
+
+const generated = createGeneratedSourceApps();
+afterAll(generated.close);
 
 const repoRoot = join(import.meta.dir, "../..");
 
@@ -84,8 +89,8 @@ describe("createMemoryLoginThrottleMiddleware", () => {
 });
 
 describe("wrapLogin wiring", () => {
-  test("HiroApp JSON login and JWT mint call wrapLogin", async () => {
-    const auth = await readFile(join(repoRoot, "apps/hiroapp/src/modules/auth/index.ts"), "utf8");
+  test("generated RLS JSON login and JWT mint call wrapLogin", async () => {
+    const auth = await readFile(join(generated.rls, "src/modules/auth/index.ts"), "utf8");
     expect(auth).toMatch(/"\/api\/v1\/auth\/login":[\s\S]*?wrapLogin\(/);
     expect(auth).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
   });
