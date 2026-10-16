@@ -157,6 +157,21 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 
 Production checks: [PRODUCTION.md](./PRODUCTION.md).
 
+## Explicit account-state schema adoption
+
+The standard `users` table can adopt account state through an additive file migration:
+
+```ts
+import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
+import { resolveDatabaseDriver } from "@getstrata/core/database/schema";
+
+export default createAccountStateMigration("0006_account_state", resolveDatabaseDriver());
+```
+
+Choose an unused migration name and run it before deploying readers or writers that require account state. Existing rows and writers that omit the new fields receive `is_active = true` and `auth_version = 0`. The migration preserves existing columns, rows and tenant policies. Authentication never performs implicit schema changes. Ordinary rollback refuses to remove these security fields, even with no users: doing so could reactivate suspended accounts or revive previously issued proofs. An explicit destructive `migrate:fresh` can remove them. Downgrading a deployed application requires an administrative credential-reset and account-state preservation procedure; do not drop these columns as a routine rollback.
+
+`revokeUserSessions(sql, id, { incrementAuthVersion: true })` atomically advances the database epoch in the same UPDATE as the timestamp watermark, then removes stored sessions and (by default) API tokens. Optional missing storage is tolerated: Postgres checks relation existence before deletion so a missing table cannot abort the account transaction; concurrent DDL or real deletion errors still propagate. MySQL uses its native missing-table error code. This option requires the migration; legacy callers retain their existing schema contract. The helper does **not** open a transaction: invoke it inside the same transaction and account-row lock as the status/password change and persistent credential issuance. A failed later statement must roll back the epoch, account mutation and credential deletions together. Reactivation must advance the epoch again rather than resetting it. The migration and helper alone do not enable SCIM suspension; generated issuance and transition adoption remains required under #216.
+
 ## Optional account-state admission (foundation for #216)
 
 `AuthUserRecord.is_active?: boolean` opts a directory into live account-status checks. Omission preserves the legacy contract; explicit false or malformed non-boolean values deny. `completePasswordLogin` returns `account_inactive` before accepting TOTP/recovery proofs, and Basic, JWT and signed-session guards reject inactive records. A token/custom guard projects trusted current status as `AuthUser.isActive`; the token guards and AuthManager reject an explicitly inactive principal. Custom token directories must load/project current state on each new request; a status claim supplied by a client or stored in a token is not a live directory lookup. Existing Basic resolution reuse remains limited to one admitted native Request, not subsequent requests.

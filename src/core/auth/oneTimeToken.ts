@@ -23,6 +23,8 @@ type SqlClient = {
 };
 
 function isMissingRelation(error: unknown): boolean {
+  if (error && typeof error === "object" && "code" in error && error.code === "ER_NO_SUCH_TABLE")
+    return true;
   const message = error instanceof Error ? error.message : String(error);
   return /no such table|does not exist|unknown table|er_no_such_table/i.test(message);
 }
@@ -74,32 +76,46 @@ async function consumeOneTimeToken(
 async function revokeUserSessions(
   sql: SqlClient,
   userId: number,
-  options: { revokeApiTokens?: boolean } = {},
+  options: {
+    revokeApiTokens?: boolean;
+    /** Requires the account-state migration. Call within the account mutation transaction. */
+    incrementAuthVersion?: boolean;
+  } = {},
 ): Promise<void> {
   const dialect = currentSqlDialect();
+  const versionUpdate = options.incrementAuthVersion ? ", auth_version = auth_version + 1" : "";
   await sql.unsafe(
-    `UPDATE users SET session_valid_after = ${dialect.placeholder(1)} WHERE id = ${dialect.placeholder(2)}`,
+    `UPDATE users SET session_valid_after = ${dialect.placeholder(1)}${versionUpdate} WHERE id = ${dialect.placeholder(2)}`,
     [new Date().toISOString(), userId],
   );
 
-  try {
-    await sql.unsafe(`DELETE FROM sessions WHERE user_id = ${dialect.placeholder(1)}`, [userId]);
-  } catch (error) {
-    if (!isMissingRelation(error)) {
-      throw error;
-    }
+  await deleteOptionalCredentials(sql, "sessions", userId);
+  if (options.revokeApiTokens !== false) {
+    await deleteOptionalCredentials(sql, "api_tokens", userId);
   }
+}
 
-  if (options.revokeApiTokens === false) {
-    return;
+async function deleteOptionalCredentials(
+  sql: SqlClient,
+  table: "sessions" | "api_tokens",
+  userId: number,
+): Promise<void> {
+  const dialect = currentSqlDialect();
+  if (dialect.driver === "pgsql") {
+    // Catching undefined_table does not restore an aborted Postgres transaction.
+    // Resolve optional storage without issuing a failing statement in that transaction.
+    const [row] = await sql.unsafe<{ relation: string | null }>(
+      `SELECT to_regclass(${dialect.placeholder(1)}) AS relation`,
+      [table],
+    );
+    if (row?.relation == null) return;
   }
-
   try {
-    await sql.unsafe(`DELETE FROM api_tokens WHERE user_id = ${dialect.placeholder(1)}`, [userId]);
+    await sql.unsafe(`DELETE FROM ${table} WHERE user_id = ${dialect.placeholder(1)}`, [userId]);
   } catch (error) {
-    if (!isMissingRelation(error)) {
-      throw error;
-    }
+    // A concurrent Postgres DDL change must fail the caller's transaction, not
+    // pretend that the watermark/epoch and credential deletion committed.
+    if (dialect.driver === "pgsql" || !isMissingRelation(error)) throw error;
   }
 }
 
