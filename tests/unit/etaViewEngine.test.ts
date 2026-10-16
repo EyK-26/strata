@@ -3,7 +3,11 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { assertEtaHtmlSource } from "@getstrata/core/view/assertEtaHtmlSource";
+import { createGeneratedSourceApps } from "../helpers/generatedSourceApps";
 import { restoreEnvVar } from "../helpers/restoreEnv";
+
+const generated = createGeneratedSourceApps();
+afterAll(generated.close);
 
 async function collectEtaFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
@@ -177,13 +181,20 @@ describe("EtaViewEngine", () => {
 });
 
 describe("assertEtaHtmlSource", () => {
-  test("accepts committed HiroApp and scaffold HTML+Eta views", async () => {
+  test("accepts generated RLS/team and scaffold HTML+Eta views", async () => {
     const roots = [
-      join(process.cwd(), "apps/hiroapp/views"),
-      join(process.cwd(), "apps/hiroapp-team/views"),
+      join(generated.rls, "views"),
+      join(generated.team, "views"),
       join(process.cwd(), "templates"),
       join(process.cwd(), "packages/strata-starter/templates"),
     ];
+
+    for (const [root, minimum] of [
+      [join(generated.rls, "views"), 10],
+      [join(generated.team, "views"), 6],
+    ] as const) {
+      expect((await collectEtaFiles(root)).length, root).toBeGreaterThanOrEqual(minimum);
+    }
 
     for (const root of roots) {
       let files: string[] = [];

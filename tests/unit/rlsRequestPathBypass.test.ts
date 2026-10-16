@@ -1,6 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+
+import { createGeneratedSourceApps } from "../helpers/generatedSourceApps";
+
+const generated = createGeneratedSourceApps();
+afterAll(generated.close);
 
 const repoRoot = join(import.meta.dir, "../..");
 
@@ -25,7 +30,7 @@ const unboundedNeedle = "runWithMigrationBypass(";
 const allowedUnbounded = new Set([
   // CLI-only bootstrap administration; generated placement and HTTP isolation asserted below.
   join(repoRoot, "packages/strata-starter/src/renderInitialAdmin.ts"),
-  join(repoRoot, "apps/hiroapp/src/db/migrate.ts"),
+  join(generated.rls, "src/db/migrate.ts"),
   join(repoRoot, "src/db/migrations/runner.ts"),
   join(repoRoot, "src/db/seeders/runner.ts"),
   join(repoRoot, "src/core/audit/exportAuditLogs.ts"),
@@ -36,18 +41,18 @@ const allowedUnbounded = new Set([
 ]);
 
 const requestPathRoots = [
-  join(repoRoot, "apps/hiroapp/src/modules"),
-  join(repoRoot, "apps/hiroapp/src/bootstrap"),
-  join(repoRoot, "apps/hiroapp-team/src/modules"),
-  join(repoRoot, "apps/hiroapp-team/src/bootstrap"),
+  join(generated.rls, "src/modules"),
+  join(generated.rls, "src/bootstrap"),
+  join(generated.team, "src/modules"),
+  join(generated.team, "src/bootstrap"),
   join(repoRoot, "src/bootstrap"),
   join(repoRoot, "src/core"),
   join(repoRoot, "packages/strata-starter/src"),
 ];
 
 const requiredRequestPathFiles = [
-  join(repoRoot, "apps/hiroapp/src/bootstrap/authDirectory.ts"),
-  join(repoRoot, "apps/hiroapp-team/src/bootstrap/authDirectory.ts"),
+  join(generated.rls, "src/bootstrap/authDirectory.ts"),
+  join(generated.team, "src/bootstrap/authDirectory.ts"),
   join(repoRoot, "src/bootstrap/web/session.ts"),
   join(repoRoot, "src/core/tenant/tenantMiddleware.ts"),
   join(repoRoot, "packages/strata-starter/src/renderAuth.ts"),
@@ -60,7 +65,9 @@ describe("request-path RLS bypass fence", () => {
   test("request-path callers do not call unbounded runWithMigrationBypass(", async () => {
     const files: string[] = [];
     for (const root of requestPathRoots) {
-      files.push(...(await listTsFiles(root)));
+      const scanned = await listTsFiles(root);
+      expect(scanned.length, root).toBeGreaterThan(0);
+      files.push(...scanned);
     }
 
     for (const file of requiredRequestPathFiles) {
@@ -103,11 +110,11 @@ describe("request-path RLS bypass fence", () => {
       'writeText(join(src, "cli/initialAdmin.ts"), initialAdminCommand)',
     );
     for (const directory of [
-      "apps/hiroapp/src/modules",
-      "apps/hiroapp-team/src/modules",
-      "src/bootstrap",
+      join(generated.rls, "src/modules"),
+      join(generated.team, "src/modules"),
+      join(repoRoot, "src/bootstrap"),
     ]) {
-      for (const file of await listTsFiles(join(repoRoot, directory))) {
+      for (const file of await listTsFiles(directory)) {
         const text = await readFile(file, "utf8");
         expect(text, file).not.toContain("initialAdminCommand");
         expect(text, file).not.toContain("cli/initialAdmin");
