@@ -302,6 +302,7 @@ export { defineTable } from "../core/database/table.ts";
 export type { TransactionOptions } from "../core/database/transaction.ts";
 export {
   hasActiveTransaction,
+  isActiveTransactionConnection,
   requestTransactionRollback,
   runInTransaction,
 } from "../core/database/transaction.ts";

@@ -135,7 +135,7 @@ export {
 export { createSqliteConnection } from "./sqliteConnection.ts";
 export type { TableDefinition } from "./table.ts";
 export { defineTable } from "./table.ts";
-export { runInTransaction } from "./transaction.ts";
+export { isActiveTransactionConnection, runInTransaction } from "./transaction.ts";
 export type {
   DatabaseComparable,
   DatabaseScalar,
