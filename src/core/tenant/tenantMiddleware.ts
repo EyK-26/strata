@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
-import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { ForbiddenError, toHttpError } from "@getstrata/core/errors/http";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { BaseRepository } from "../database/baseRepository";
+import { defineTable } from "../database/table";
 import { runWithMigrationBypassForIdentifier } from "./databaseTenantContext";
 import { createPublicTenantSelector, type PublicTenancyOptions } from "./publicTenantHost";
 import { resolveTenant } from "./resolveTenant";
@@ -16,20 +17,22 @@ const DEFAULT_TENANT: TenantContext = {
   slug: "default",
 };
 
+const userTenants = new BaseRepository(
+  defineTable<{ id: number; tenant_id: number }, "id">({
+    name: "users",
+    primaryKey: "id",
+    columns: ["id", "tenant_id"],
+  }),
+);
+
 async function resolveUserTenantId(userId: number): Promise<number> {
   if (!isTenancyEnabled()) {
     return DEFAULT_TENANT.id;
   }
 
   return await runWithMigrationBypassForIdentifier(userId, async () => {
-    const rows = (await db`
-      SELECT tenant_id
-      FROM users
-      WHERE id = ${userId}
-      LIMIT 1
-    `) as Array<{ tenant_id: number }>;
-
-    return rows[0]?.tenant_id ?? DEFAULT_TENANT.id;
+    const tenantId = await userTenants.query().where({ id: userId }).value("tenant_id");
+    return tenantId ?? DEFAULT_TENANT.id;
   });
 }
 

@@ -24,6 +24,11 @@ import { appTest, installGeneratedAppDependencies, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
 const ENV_KEYS = [
+  "APP_DATABASE_URL",
+  "FEATURE_SCIM",
+  "SCIM_BEARER_TOKEN",
+  "SCIM_TENANT_TOKENS",
+  "REDIS_URL",
   "DATABASE_URL",
   "APP_URL",
   "APP_ENV",
@@ -312,7 +317,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.32");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.33");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -1332,6 +1337,440 @@ export default probeModule;
       }
     }
   });
+
+  appTest(
+    "generated SQLite column tenancy resolves repeated SCIM and authenticated requests",
+    async () => {
+      const root = await tempDir();
+      const app = generateFromArgs(root, [
+        "tenant-runtime",
+        "--frontend=api",
+        "--database=sqlite",
+        "--auth=cookie-token-jwt",
+        "--tenancy=column",
+        "--scim",
+        "--yes",
+      ]);
+      const packagePath = join(app, "package.json");
+      const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+      for (const name of ["core", "bootstrap", "cli"])
+        pkg.dependencies[`@getstrata/${name}`] =
+          `file:${join(repoRoot, `packages/strata-${name}`)}`;
+      await writeFile(packagePath, JSON.stringify(pkg));
+      installGeneratedAppDependencies(app);
+      process.chdir(app);
+      Object.assign(process.env, {
+        DATABASE_URL: "sqlite:./storage/app.sqlite",
+        APP_DATABASE_URL: "sqlite:./storage/app.sqlite",
+        APP_ENV: "local",
+        FRONTEND_MODE: "api",
+        TENANCY_DRIVER: "column",
+        AUTH_DEV_HEADERS: "false",
+        SESSION_SECRET: "dev-tenant-secret-at-least-32-characters",
+        MAIL_DRIVER: "log",
+        CACHE_DRIVER: "array",
+        QUEUE_DRIVER: "sync",
+        FEATURE_SCIM: "true",
+        SCIM_BEARER_TOKEN: "",
+        SCIM_TENANT_TOKENS: "1:fixture-first,2:fixture-second,999:fixture-missing",
+        REDIS_URL: "",
+      });
+      resetDiscoverModulesForTests();
+      const { bootstrapApp, createAppServer } = await import(
+        join(app, "src/bootstrap/createApp.ts")
+      );
+      const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      const { User } = await import(join(app, "src/models/User.ts"));
+      const { BaseRepository } = await import("@getstrata/core/database/baseRepository");
+      const { defineTable } = await import("@getstrata/core/database/table");
+      const { hashPassword } = await import("@getstrata/core/auth/password");
+      const boot = await bootstrapApp();
+      const server = createAppServer(boot.routes, 0),
+        origin = `http://127.0.0.1:${server.port}`;
+      process.env.APP_URL = origin;
+      try {
+        const tenants = new BaseRepository(
+          defineTable<{ id: number; slug: string }, "id">({
+            name: "tenant",
+            primaryKey: "id",
+            columns: ["id", "slug"],
+          }),
+        );
+        await tenants.create({ slug: "first" });
+        await tenants.create({ slug: "second" });
+        const password = await hashPassword("Initial!Password123");
+        const first = await User.create({
+          name: "First",
+          email: "tenant-first@example.test",
+          password,
+          is_admin: false,
+          tenant_id: 1,
+        });
+        const second = await User.create({
+          name: "Second",
+          email: "tenant-second@example.test",
+          password,
+          is_admin: false,
+          tenant_id: 2,
+        });
+        async function scim(token: string, path = "Users", method = "GET", payload?: object) {
+          const response = await fetch(`${origin}/scim/v2/${path}`, {
+            method,
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/scim+json" },
+            body: payload ? JSON.stringify(payload) : undefined,
+          });
+          const body: unknown = await response.json();
+          if (!body || typeof body !== "object" || Array.isArray(body))
+            throw new Error("Expected SCIM object.");
+          return { status: response.status, body: body as Record<string, unknown> };
+        }
+        function resourceIds(value: unknown) {
+          if (!Array.isArray(value)) throw new Error("Expected SCIM Resources array.");
+          return value.map((item: unknown) => {
+            if (!item || typeof item !== "object" || !("id" in item) || typeof item.id !== "string")
+              throw new Error("Expected SCIM resource identifier.");
+            return item.id;
+          });
+        }
+        // SCIM cleans up its bound connection; later calls must use the registered pool safely.
+        for (let round = 0; round < 3; round++) {
+          const own = await scim("fixture-second");
+          expect(own.status).toBe(200);
+          expect(resourceIds(own.body.Resources)).toEqual([String(second.get("id"))]);
+          expect((await scim("fixture-first", `Users/${second.get("id")}`)).status).toBe(404);
+          const other = await scim("fixture-first");
+          expect(other.status).toBe(200);
+          expect(resourceIds(other.body.Resources)).toEqual([String(first.get("id"))]);
+          expect((await scim("fixture-missing")).status).toBe(401);
+          const protectedResponse = await fetch(`${origin}/api/user`, {
+            headers: {
+              authorization: `Basic ${btoa("tenant-second@example.test:Initial!Password123")}`,
+            },
+          });
+          expect(protectedResponse.status).toBe(200);
+          expect(await protectedResponse.json()).toMatchObject({ id: second.get("id") });
+        }
+        const created = await scim("fixture-second", "Users", "POST", {
+          userName: "tenant-created@example.test",
+          displayName: "Created",
+        });
+        expect(created.status).toBe(201);
+        expect((await User.find(Number(created.body.id))).get("tenant_id")).toBe(2);
+        expect(
+          (
+            await scim("fixture-first", `Users/${created.body.id}`, "PUT", {
+              userName: "wrong@example.test",
+              displayName: "Wrong",
+            })
+          ).status,
+        ).toBe(404);
+        expect((await User.find(Number(created.body.id))).get("email")).toBe(
+          "tenant-created@example.test",
+        );
+      } finally {
+        server.stop(true);
+        await boot.context.dispose();
+        await closeDatabase();
+      }
+    },
+  );
+
+  appTest(
+    "generated SCIM mutations reject unsupported changes without partial writes",
+    async () => {
+      for (const tenancy of ["none", "column"]) {
+        const root = await tempDir();
+        const app = generateFromArgs(root, [
+          "scim-runtime",
+          "--frontend=api",
+          "--database=sqlite",
+          "--auth=cookie-token-jwt",
+          `--tenancy=${tenancy}`,
+          "--scim",
+          "--yes",
+        ]);
+        const packagePath = join(app, "package.json");
+        const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+        for (const name of ["core", "bootstrap", "cli"])
+          pkg.dependencies[`@getstrata/${name}`] =
+            `file:${join(repoRoot, `packages/strata-${name}`)}`;
+        await writeFile(packagePath, JSON.stringify(pkg));
+        installGeneratedAppDependencies(app);
+        process.chdir(app);
+        Object.assign(process.env, {
+          DATABASE_URL: "sqlite:./storage/app.sqlite",
+          APP_DATABASE_URL: "sqlite:./storage/app.sqlite",
+          APP_ENV: "local",
+          FRONTEND_MODE: "api",
+          TENANCY_DRIVER: tenancy,
+          AUTH_DEV_HEADERS: "false",
+          SESSION_SECRET: "dev-scim-secret-at-least-32-characters",
+          MAIL_DRIVER: "log",
+          CACHE_DRIVER: "array",
+          QUEUE_DRIVER: "sync",
+          FEATURE_SCIM: "true",
+          SCIM_BEARER_TOKEN: "",
+          SCIM_TENANT_TOKENS: "1:fixture-scim-one,2:fixture-scim-two",
+          REDIS_URL: "",
+        });
+        resetDiscoverModulesForTests();
+        const { bootstrapApp, createAppServer } = await import(
+          join(app, "src/bootstrap/createApp.ts")
+        );
+        const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+        const { User } = await import(join(app, "src/models/User.ts"));
+        const { BaseRepository } = await import("@getstrata/core/database/baseRepository");
+        const { defineTable } = await import("@getstrata/core/database/table");
+        const { hashPassword } = await import("@getstrata/core/auth/password");
+        const boot = await bootstrapApp();
+        const server = createAppServer(boot.routes, 0),
+          origin = `http://127.0.0.1:${server.port}`;
+        process.env.APP_URL = origin;
+        try {
+          const tenants = new BaseRepository(
+            defineTable<{ id: number; slug: string }, "id">({
+              name: "tenant",
+              primaryKey: "id",
+              columns: ["id", "slug"],
+            }),
+          );
+          if (tenancy === "column") {
+            await tenants.create({ slug: "first" });
+            await tenants.create({ slug: "second" });
+          }
+          const password = await hashPassword("Initial!Password123");
+          const target = await User.create({
+            name: "Original",
+            email: "scim-target@example.test",
+            password,
+            is_admin: false,
+            tenant_id: 2,
+          });
+          const neighbor = await User.create({
+            name: "Neighbor",
+            email: "scim-neighbor@example.test",
+            password,
+            is_admin: false,
+            tenant_id: 1,
+          });
+          const id = target.get("id");
+          let failObserver: "update" | "create" | "delete" | undefined;
+          User.observe({
+            updated(model: { get(key: string): unknown }) {
+              if (failObserver === "update" && model.get("id") === id)
+                throw new Error("injected SCIM update observer failure");
+            },
+            created(model: { get(key: string): unknown }) {
+              if (
+                failObserver === "create" &&
+                model.get("email") === "rollback-created@example.test"
+              )
+                throw new Error("injected SCIM create observer failure");
+            },
+            deleted(model: { get(key: string): unknown }) {
+              if (failObserver === "delete" && model.get("id") === id)
+                throw new Error("injected SCIM delete observer failure");
+            },
+          });
+          async function request(
+            path: string,
+            method = "GET",
+            body?: unknown,
+            token = "fixture-scim-two",
+          ) {
+            const response = await fetch(`${origin}/scim/v2/${path}`, {
+              method,
+              headers: {
+                authorization: `Bearer ${token}`,
+                "content-type": "application/scim+json",
+              },
+              body: body === undefined ? undefined : JSON.stringify(body),
+            });
+            const text = await response.text();
+            const parsed: unknown = text ? JSON.parse(text) : null;
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+              if (response.status === 204)
+                return {
+                  status: response.status,
+                  body: {} as Record<string, unknown>,
+                  contentType: response.headers.get("content-type"),
+                };
+              throw new Error("Expected SCIM object response.");
+            }
+            return {
+              status: response.status,
+              body: parsed as Record<string, unknown>,
+              contentType: response.headers.get("content-type"),
+            };
+          }
+          const patch = (Operations: unknown) => ({
+            schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            Operations,
+          });
+          expect((await request(`Users/${id}`)).status).toBe(200);
+          expect((await request(`Users/${id}`, "GET", undefined, "fixture-scim-one")).status).toBe(
+            404,
+          );
+          for (const body of [
+            patch([{ op: "replace", path: "active", value: false }]),
+            patch([
+              { op: "replace", path: "displayName", value: "Partial" },
+              { op: "replace", path: "active", value: false },
+            ]),
+            patch([{ op: "replace", value: { displayName: "Partial", active: false } }]),
+            patch([{ op: "remove", path: "displayName" }]),
+            patch([{ op: "replace", path: "unsupported", value: "ignored" }]),
+            patch([{ op: "replace", value: { unsupported: "ignored" } }]),
+            patch([{ op: "replace", path: "userName", value: { bad: true } }]),
+            patch([
+              {
+                op: "replace",
+                path: "emails",
+                value: [{ value: "valid@example.test" }, { value: "other@example.test" }],
+              },
+            ]),
+            patch([{ op: "replace", path: "name", value: { formatted: 123 } }]),
+            patch([
+              {
+                op: "replace",
+                path: "emails",
+                value: [{ value: "valid@example.test", primary: false }],
+              },
+            ]),
+            patch([
+              {
+                op: "replace",
+                path: "emails",
+                value: [{ value: "valid@example.test", type: "work" }],
+              },
+            ]),
+            patch([{ op: "replace", path: 123, value: "invalid" }]),
+            patch([{ path: "displayName", value: "missing operation" }]),
+            patch([]),
+            patch(null),
+            patch([null]),
+            null,
+            [],
+            {
+              schemas: ["wrong"],
+              Operations: [{ op: "replace", path: "displayName", value: "Partial" }],
+            },
+          ]) {
+            const rejected = await request(`Users/${id}`, "PATCH", body);
+            expect(rejected.status).toBe(400);
+            expect(rejected.contentType).toContain("application/scim+json");
+            expect(rejected.body.schemas).toEqual(["urn:ietf:params:scim:api:messages:2.0:Error"]);
+            expect(rejected.body.status).toBe("400");
+            const stored = await User.find(id);
+            expect(stored.get("name")).toBe("Original");
+            expect(stored.get("email")).toBe("scim-target@example.test");
+            expect(stored.get("password")).toBe(password);
+          }
+          for (const method of ["POST", "PUT"]) {
+            const rejected = await request(method === "POST" ? "Users" : `Users/${id}`, method, {
+              userName: "inactive@example.test",
+              displayName: "Inactive",
+              active: false,
+            });
+            expect(rejected.status).toBe(400);
+            expect(await User.where({ email: "inactive@example.test" }).count()).toBe(0);
+          }
+
+          failObserver = "update";
+          try {
+            for (const method of ["PATCH", "PUT"]) {
+              const body =
+                method === "PATCH"
+                  ? patch([{ op: "replace", path: "displayName", value: "Must roll back" }])
+                  : { userName: "rollback-updated@example.test", displayName: "Must roll back" };
+              expect((await request(`Users/${id}`, method, body)).status).toBe(500);
+              const unchanged = await User.find(id);
+              expect(unchanged.get("name")).toBe("Original");
+              expect(unchanged.get("email")).toBe("scim-target@example.test");
+            }
+          } finally {
+            failObserver = undefined;
+          }
+          failObserver = "create";
+          try {
+            expect(
+              (
+                await request("Users", "POST", {
+                  userName: "rollback-created@example.test",
+                  displayName: "Must roll back",
+                })
+              ).status,
+            ).toBe(500);
+            expect(await User.where({ email: "rollback-created@example.test" }).count()).toBe(0);
+          } finally {
+            failObserver = undefined;
+          }
+          failObserver = "delete";
+          try {
+            expect((await request(`Users/${id}`, "DELETE")).status).toBe(500);
+            expect(await User.find(id)).not.toBeNull();
+          } finally {
+            failObserver = undefined;
+          }
+          const changed = await request(
+            `Users/${id}`,
+            "PATCH",
+            patch([
+              { op: "replace", path: "displayName", value: "Changed" },
+              {
+                op: "add",
+                path: "emails",
+                value: [{ value: "UPDATED@example.test", primary: true }],
+              },
+            ]),
+          );
+          expect(changed.status).toBe(200);
+          expect(changed.body.userName).toBe("updated@example.test");
+          expect(changed.body.name).toEqual({ formatted: "Changed" });
+          const objectPatch = await request(
+            `Users/${id}`,
+            "PATCH",
+            patch([
+              {
+                op: "replace",
+                value: {
+                  name: { givenName: "New", familyName: "Name" },
+                  userName: "final@example.test",
+                  active: true,
+                },
+              },
+            ]),
+          );
+          expect(objectPatch.status).toBe(200);
+          expect(objectPatch.body.name).toEqual({ formatted: "New Name" });
+          const created = await request("Users", "POST", {
+            userName: "created@example.test",
+            name: { formatted: "Created" },
+            active: true,
+          });
+          expect(created.status).toBe(201);
+          expect((await User.find(Number(created.body.id))).get("tenant_id")).toBe(2);
+          const replaced = await request(`Users/${id}`, "PUT", {
+            userName: "replaced@example.test",
+            displayName: "Replaced",
+            active: true,
+          });
+          expect(replaced.status).toBe(200);
+          expect(replaced.body.name).toEqual({ formatted: "Replaced" });
+          const untouched = await User.find(neighbor.get("id"));
+          expect(untouched.get("name")).toBe("Neighbor");
+          expect(untouched.get("password")).toBe(password);
+          expect((await request(`Users/${id}`, "DELETE")).status).toBe(204);
+          expect((await request(`Users/${id}`)).status).toBe(404);
+        } finally {
+          server.stop(true);
+          await boot.context.dispose();
+          await closeDatabase();
+        }
+        process.chdir(repoRoot);
+      }
+    },
+  );
 
   appTest(
     "generated JSON and HTML email verification keeps links retryable across failures and applies once",
