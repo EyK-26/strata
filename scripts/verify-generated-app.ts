@@ -229,6 +229,10 @@ export async function queryContract(): Promise<void> {
       join(appDir, "src/outbox-worker.contract.ts"),
       await readFile(join(ROOT, "tests/types/outboxWorker.contract.ts"), "utf8"),
     );
+    await writeFile(
+      join(appDir, "src/default-subpath-exports.contract.ts"),
+      await readFile(join(ROOT, "tests/types/defaultSubpathExports.contract.ts"), "utf8"),
+    );
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");
@@ -268,6 +272,7 @@ export async function queryContract(): Promise<void> {
         "bun",
         "-e",
         `
+      await import("./src/default-subpath-exports.contract.ts");
       const core = await import("@getstrata/core");
       const models = await import("@getstrata/core/database/model");
       const database = await import("@getstrata/core/database");
