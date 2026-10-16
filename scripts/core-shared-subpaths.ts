@@ -52,6 +52,17 @@ export const CORE_SHARED_SUBPATHS = [
 
 export type CoreSharedSubpath = (typeof CORE_SHARED_SUBPATHS)[number];
 
+/** Existing declaration defaults must alias the canonical bundle value, never a second class. */
+export const CORE_SHARED_DEFAULT_EXPORTS: Readonly<Record<string, string>> = {
+  "database/baseRepository": "BaseRepository",
+};
+
+export function renderCoreSharedShim(subpath: string): string {
+  const importPath = `${"../".repeat(subpath.split("/").length)}index.js`;
+  const name = CORE_SHARED_DEFAULT_EXPORTS[subpath];
+  return `export * from "${importPath}";\n${name ? `export { ${name} as default } from "${importPath}";\n` : ""}`;
+}
+
 export const CORE_SHARED_SUBPATH_SET = new Set<string>(CORE_SHARED_SUBPATHS);
 
 /** CLI flags for bun build so bundled subpaths resolve package imports through npm exports. */

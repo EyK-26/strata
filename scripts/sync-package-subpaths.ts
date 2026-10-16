@@ -12,6 +12,8 @@ import {
   coreSubpathExternalFlags,
 } from "./core-shared-subpaths.ts";
 
+import { renderSubpathEntry } from "./subpath-entry.ts";
+
 const ROOT = join(import.meta.dir, "..");
 
 const CORE_SUBPATHS = [
@@ -355,7 +357,11 @@ async function writeEntryFiles(
       importPath = `./${importPath}`;
     }
 
-    await writeFile(entryPath, `export * from "${importPath}";\n`, "utf8");
+    await writeFile(
+      entryPath,
+      renderSubpathEntry(await readFile(sourceFile, "utf8"), importPath),
+      "utf8",
+    );
     entryFiles.push(entryPath);
   }
 
