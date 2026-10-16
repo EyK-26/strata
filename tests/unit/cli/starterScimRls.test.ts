@@ -155,7 +155,7 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
         Operations,
       });
       for (const body of [
-        patch([{ op: "replace", path: "active", value: false }]),
+        patch([{ op: "replace", path: "active", value: "false" }]),
         patch([
           { op: "replace", path: "displayName", value: "Partial" },
           { op: "remove", path: "active" },
@@ -172,7 +172,7 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
             await request("fixture-two", method === "POST" ? "Users" : `Users/${id}`, method, {
               userName: "inactive@example.test",
               displayName: "Inactive",
-              active: false,
+              active: "false",
             })
           ).status,
         ).toBe(400);

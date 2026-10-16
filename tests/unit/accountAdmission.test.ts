@@ -210,6 +210,7 @@ test("database-cookie stores reject disabled default/custom loaders and refuse e
   }));
   expect(await new CookieSessionGuard(custom, () => ({ id: 1 })).resolve(request)).toBeNull();
   await expect(store.create({ ...user, is_active: false })).rejects.toThrow();
+  await expect(store.create({ ...user, auth_version: -1 })).rejects.toThrow();
   expect(writes).toBe(0);
 });
 
@@ -366,4 +367,36 @@ test("malformed session cookie encoding is denied through native HTTP and shared
   } finally {
     await server.stop(true);
   }
+});
+
+test("database cookie epochs fence stale rows independently of transaction-start timestamps", async () => {
+  let sessionVersion = 3;
+  const sql = {
+    async unsafe<T>(query: string): Promise<T[]> {
+      return (
+        query.includes("FROM sessions")
+          ? [{ user_id: 1, session_created_at: new Date(1000), auth_version: sessionVersion }]
+          : [
+              {
+                id: 1,
+                name: "Fixture",
+                email: "fixture@example.test",
+                is_active: true,
+                auth_version: 3,
+                session_valid_after: new Date(2000),
+              },
+            ]
+      ) as T[];
+    },
+  };
+  const store = new CookieSessionStore(sql, secret);
+  const request = cookieRequest(
+    store.cookieHeader(
+      { id: 1, name: "Fixture", email: "fixture@example.test" },
+      "fixture-session",
+    ),
+  );
+  expect(await store.read(request)).toMatchObject({ id: 1, auth_version: 3 });
+  sessionVersion = 2;
+  expect(await store.read(request)).toBeNull();
 });

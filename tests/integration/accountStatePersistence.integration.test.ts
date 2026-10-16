@@ -24,7 +24,7 @@ async function qualify(db: MigrationDatabase, driver: DatabaseDriver) {
     }
   });
   await db.unsafe("INSERT INTO users (id,name) VALUES (1,'existing')");
-  const migration = createAccountStateMigration("account_state", driver);
+  const migration = createAccountStateMigration("account_state", driver, { sessions: true });
   expect(migration.name).toBe("account_state");
   await migration.up(db);
   await db.unsafe("INSERT INTO users (id,name) VALUES (2,'old writer')");
@@ -113,6 +113,12 @@ async function qualify(db: MigrationDatabase, driver: DatabaseDriver) {
     throw error;
   }
   expect((await read())[0]?.auth_version).toBe(4);
+  await Schema.run(db, driver, (schema) => {
+    schema.create("sessions", (table) => {
+      table.integer("id").primary();
+      table.integer("auth_version").default(0);
+    });
+  });
   await expect(migration.down(db)).rejects.toThrow("administrative");
   await migration.down(db, { operation: "fresh" });
   const rows = await db.unsafe<Record<string, unknown>>("SELECT * FROM users ORDER BY id");
@@ -173,5 +179,26 @@ test("account-state additive migration and transactional revocation on MySQL", a
   } finally {
     await connection.query(`DROP DATABASE IF EXISTS ${name}`);
     await connection.end();
+  }
+});
+
+test("account-state migration defaults do not require cookie storage", async () => {
+  const sqlite = new Database(":memory:");
+  const db: MigrationDatabase = {
+    async unsafe<T>(query: string) {
+      return sqlite.query(query).all() as T[];
+    },
+  };
+  try {
+    await db.unsafe("CREATE TABLE users (id INTEGER PRIMARY KEY)");
+    const migration = createAccountStateMigration("users_only", "sqlite");
+    await migration.up(db);
+    await db.unsafe("INSERT INTO users (id) VALUES (1)");
+    expect(await db.unsafe("SELECT is_active,auth_version FROM users")).toEqual([
+      { is_active: 1, auth_version: 0 },
+    ]);
+    await migration.down(db, { operation: "fresh" });
+  } finally {
+    sqlite.close();
   }
 });

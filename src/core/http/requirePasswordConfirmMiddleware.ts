@@ -22,7 +22,7 @@ function createRequirePasswordConfirmMiddleware(): Middleware {
 
     const userId = resolveUserId(user);
 
-    if (hasFreshPasswordConfirmation(request, userId)) {
+    if (hasFreshPasswordConfirmation(request, userId, user.authVersion)) {
       return await next();
     }
 

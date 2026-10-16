@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { isAccountActive } from "@getstrata/core/auth/accountState";
+import { isAccountActive, matchesAuthVersion } from "@getstrata/core/auth/accountState";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { type AuthGuard, AuthManager } from "@getstrata/core/auth/guard";
 import { isSessionInvalidated } from "@getstrata/core/auth/sessionCookie";
@@ -35,6 +35,7 @@ export interface SessionUser {
   learn_subscriber?: boolean;
   is_admin?: boolean;
   is_active?: boolean;
+  auth_version?: number;
   email_verified_at?: Date | string | null;
 }
 
@@ -48,6 +49,7 @@ interface SessionRow {
   learn_subscriber?: boolean | null;
   is_admin?: boolean | null;
   is_active?: boolean | number | string | null;
+  auth_version?: number;
   email_verified_at?: Date | string | null;
   session_valid_after?: Date | string | null;
   expires_at?: Date;
@@ -112,6 +114,7 @@ export type MapSessionUser = (user: SessionUser) => AuthUser;
 function defaultMapSessionUser(user: SessionUser): AuthUser {
   return {
     id: user.id,
+    ...(user.auth_version !== undefined ? { authVersion: user.auth_version } : {}),
     role: user.is_admin ? "admin" : "member",
     ...(user.email_verified_at !== undefined ? { emailVerifiedAt: user.email_verified_at } : {}),
   };
@@ -134,6 +137,7 @@ function mapSessionUserRow(row: SessionRow): SessionUser {
     id: Number(row.user_id ?? row.id),
     name: sessionDisplayName(row, email),
     email,
+    ...(row.auth_version !== undefined ? { auth_version: row.auth_version } : {}),
     learn_subscriber: Boolean(row.learn_subscriber),
     is_admin: Boolean(row.is_admin),
     ...(row.is_active !== undefined
@@ -149,7 +153,7 @@ async function defaultLoadSessionUser(
 ): Promise<SessionUser | null> {
   const sessionRows = await runWithMigrationBypassForIdentifier(sessionId, async () => {
     return (await sql.unsafe(
-      `SELECT user_id, expires_at, created_at AS session_created_at
+      `SELECT *, created_at AS session_created_at
      FROM sessions
      WHERE id = ${sqlPlaceholder(1)} AND expires_at > ${sqlNow()}`,
       [sessionId],
@@ -180,7 +184,11 @@ async function defaultLoadSessionUser(
           ? Date.parse(String(createdSource))
           : Number.NaN;
 
-    if (!Number.isFinite(createdAt) || isSessionInvalidated(createdAt, row.session_valid_after)) {
+    if (
+      row.auth_version !== undefined
+        ? !matchesAuthVersion(session.auth_version, row.auth_version)
+        : !Number.isFinite(createdAt) || isSessionInvalidated(createdAt, row.session_valid_after)
+    ) {
       return null;
     }
 
@@ -244,14 +252,22 @@ export class CookieSessionStore {
   }
 
   async create(user: SessionUser, meta: SessionCreateMeta = {}): Promise<string> {
-    if (!isAccountActive(user)) throw new UnauthorizedError();
+    if (!isAccountActive(user) || !matchesAuthVersion(user.auth_version, user.auth_version))
+      throw new UnauthorizedError();
     const id = randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + this.maxAgeSeconds * 1000);
     await runWithMigrationBypassForIdentifier(user.id, async () => {
       await this.sql().unsafe(
-        `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at, created_at)
-       VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()}, ${sqlNow()})`,
-        [id, user.id, sqlTimestamp(expires), meta.userAgent ?? null, meta.ipAddress ?? null],
+        `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at, created_at${user.auth_version !== undefined ? ", auth_version" : ""})
+       VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()}, ${sqlNow()}${user.auth_version !== undefined ? `, ${sqlPlaceholder(6)}` : ""})`,
+        [
+          id,
+          user.id,
+          sqlTimestamp(expires),
+          meta.userAgent ?? null,
+          meta.ipAddress ?? null,
+          ...(user.auth_version !== undefined ? [user.auth_version] : []),
+        ],
       );
     });
     return id;

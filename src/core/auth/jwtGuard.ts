@@ -89,11 +89,17 @@ class JwtGuard implements AuthGuard {
     if (!isAccountActive(record) || !matchesAuthVersion(payload.authVersion, record.auth_version))
       return null;
 
-    if (isSessionInvalidated(payload.iat * 1000, record.session_valid_after)) {
+    if (
+      record.auth_version === undefined &&
+      isSessionInvalidated(payload.iat * 1000, record.session_valid_after)
+    ) {
       return null;
     }
 
-    return authUserFromJwt(payload);
+    return {
+      ...authUserFromJwt(payload),
+      ...(record.auth_version !== undefined ? { authVersion: record.auth_version } : {}),
+    };
   }
 }
 

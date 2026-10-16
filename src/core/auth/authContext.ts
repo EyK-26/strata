@@ -7,6 +7,7 @@ type AuthUser = {
   role?: string;
   /** Current state from a trusted directory/guard, never an unverified client claim. */
   isActive?: boolean;
+  authVersion?: number;
   abilities?: string[];
   tokenId?: number;
   emailVerifiedAt?: Date | string | null;

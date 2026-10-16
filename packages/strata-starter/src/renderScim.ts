@@ -10,6 +10,8 @@ import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { createScimAuthMiddleware } from "@getstrata/core/auth/scimAuthMiddleware";
+import { revokeUserSessions } from "@getstrata/core/auth/oneTimeToken";
+import { getSql } from "../../bootstrap/database.ts";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { runInTransaction } from "@getstrata/core/database/transaction";
 import { BadRequestError } from "@getstrata/core/errors/http";
@@ -60,7 +62,7 @@ function scimError(detail: string, status: number): Response {
   return scimJson({ schemas: [ERROR_SCHEMA], detail, status: String(status) }, status);
 }
 
-function toScimUser(user: { get(key: "id" | "name" | "email"): unknown }) {
+function toScimUser(user: { get(key: "id" | "name" | "email" | "is_active"): unknown }) {
   const email = String(user.get("email") ?? "");
   const name = String(user.get("name") ?? "");
   return {
@@ -69,7 +71,7 @@ function toScimUser(user: { get(key: "id" | "name" | "email"): unknown }) {
     userName: email,
     name: { formatted: name },
     emails: [{ value: email, primary: true }],
-    active: true,
+    active: user.get("is_active") === true || user.get("is_active") === 1,
     meta: { resourceType: "User" },
   };
 }
@@ -109,11 +111,10 @@ function isScimObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-// This minimal adapter persists profile fields only. Never acknowledge a status
-// change (or part of a PATCH) that it cannot actually apply.
+// Validate the complete operation before changing profile or account state.
 function validateScimProfile(body: Record<string, unknown>, strict = false): Response | null {
-  if ("active" in body && body.active !== true) {
-    return scimError("Account status changes are not supported; no deactivation was performed.", 400);
+  if ("active" in body && typeof body.active !== "boolean") {
+    return scimError("active must be a boolean.", 400);
   }
   const fields = ["userName", "emails", "name", "displayName", "active"];
   if (strict && Object.keys(body).some((key) => !fields.includes(key))) {
@@ -147,6 +148,16 @@ function validateScimProfile(body: Record<string, unknown>, strict = false): Res
     }
   }
   return null;
+}
+
+async function applyAccountUpdate(user: InstanceType<typeof User>, name: string, email: string, active?: boolean) {
+  const wasActive = user.get("is_active") === true || user.get("is_active") === 1;
+  await user.update({ name, email, ...(active === undefined ? {} : { is_active: active }) });
+  // The caller owns the transaction and row lock. Both transition directions fence
+  // old proofs; repeated identical state is idempotent and does not advance the epoch.
+  if (active !== undefined && active !== wasActive) {
+    await revokeUserSessions(getSql(), Number(user.get("id")), { incrementAuthVersion: true });
+  }
 }
 
 async function readScimBody(request: Request): Promise<Record<string, unknown> | Response> {
@@ -256,7 +267,7 @@ const scimModule: AppModule = {
               return scimError("User already exists.", 409);
             }
             const hashed = await hashPassword(randomBytes(18).toString("hex"));
-            const created = await User.create({ name, email, password: hashed, is_admin: false, tenant_id: tenantId() });
+            const created = await User.create({ name, email, password: hashed, is_admin: false, is_active: body.active !== false, tenant_id: tenantId() });
             if (!created) {
               return scimError("Could not create user.", 500);
             }
@@ -295,11 +306,11 @@ const scimModule: AppModule = {
             if (!email || !name) {
               return scimError("userName and name are required.", 400);
             }
-            const user = await User.where({ id, tenant_id: tenantId() }).first();
+            const user = await User.where({ id, tenant_id: tenantId() })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
             if (!user) {
               return scimError("User not found.", 404);
             }
-            await user.update({ name, email });
+            await applyAccountUpdate(user, name, email, typeof body.active === "boolean" ? body.active : undefined);
             return scimJson(toScimUser(user));
           }),
         ),
@@ -310,7 +321,7 @@ const scimModule: AppModule = {
             if (id instanceof Response) {
               return id;
             }
-            const user = await User.where({ id, tenant_id: tenantId() }).first();
+            const user = await User.where({ id, tenant_id: tenantId() })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
             if (!user) {
               return scimError("User not found.", 404);
             }
@@ -322,6 +333,7 @@ const scimModule: AppModule = {
             if (!Array.isArray(body.Operations) || body.Operations.length === 0) {
               return scimError("A non-empty Operations array is required.", 400);
             }
+            let active: boolean | undefined;
             let name = String(user.get("name") ?? "");
             let email = String(user.get("email") ?? "");
             for (const operation of body.Operations) {
@@ -355,8 +367,9 @@ const scimModule: AppModule = {
               if (invalid) return invalid;
               email = readUserName(value) || email;
               name = readName(value, name);
+              if (typeof value.active === "boolean") active = value.active;
             }
-            await user.update({ name, email });
+            await applyAccountUpdate(user, name, email, active);
             return scimJson(toScimUser(user));
           }),
         ),
@@ -367,7 +380,7 @@ const scimModule: AppModule = {
             if (id instanceof Response) {
               return id;
             }
-            const user = await User.where({ id, tenant_id: tenantId() }).first();
+            const user = await User.where({ id, tenant_id: tenantId() })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
             if (user) {
               await user.delete();
             }

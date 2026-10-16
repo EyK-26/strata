@@ -4,7 +4,11 @@ import { Schema } from "../database/schema";
 import type { DatabaseDriver } from "../database/schema/driver";
 
 /** Explicit additive adoption for the standard users table; never runs during authentication. */
-function createAccountStateMigration(name: string, driver: DatabaseDriver): Migration {
+function createAccountStateMigration(
+  name: string,
+  driver: DatabaseDriver,
+  options: { sessions?: boolean } = {},
+): Migration {
   return {
     name,
     async up(db) {
@@ -13,6 +17,10 @@ function createAccountStateMigration(name: string, driver: DatabaseDriver): Migr
           table.boolean("is_active").default(true);
           table.integer("auth_version").default(0).check("auth_version >= 0");
         });
+        if (options.sessions)
+          schema.table("sessions", (table) => {
+            table.integer("auth_version").default(0).check("auth_version >= 0");
+          });
       });
     },
     async down(db, context) {
@@ -26,6 +34,7 @@ function createAccountStateMigration(name: string, driver: DatabaseDriver): Migr
           table.dropColumn("auth_version");
           table.dropColumn("is_active");
         });
+        if (options.sessions) schema.table("sessions", (table) => table.dropColumn("auth_version"));
       });
     },
   };

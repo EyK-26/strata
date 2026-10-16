@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { readRequestCookie } from "../http/cookies";
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
+import { matchesAuthVersion } from "./accountState";
 
 const PASSWORD_CONFIRM_COOKIE = appCookieName("password_confirmed");
 const DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS = 3 * 60 * 60;
@@ -18,8 +20,11 @@ function resolvePasswordConfirmSecret(): string {
   return requireConfiguredSecret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
 }
 
-function signPasswordConfirm(userId: number, confirmedAt: number): string {
-  const payload = `${userId}.${confirmedAt}`;
+function signPasswordConfirm(userId: number, confirmedAt: number, authVersion?: number): string {
+  const payload =
+    authVersion === undefined
+      ? `${userId}.${confirmedAt}`
+      : `v2.${userId}.${confirmedAt}.${authVersion}`;
   const signature = createHmac("sha256", resolvePasswordConfirmSecret())
     .update(payload)
     .digest("hex");
@@ -27,26 +32,12 @@ function signPasswordConfirm(userId: number, confirmedAt: number): string {
   return `${payload}.${signature}`;
 }
 
-function readCookieValue(request: Request, cookieName: string): string | null {
-  const cookieHeader = request.headers.get("cookie");
-
-  if (!cookieHeader) {
-    return null;
-  }
-
-  for (const part of cookieHeader.split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-
-    if (name === cookieName) {
-      return decodeURIComponent(rest.join("="));
-    }
-  }
-
-  return null;
-}
-
-function hasFreshPasswordConfirmation(request: Request, userId: number): boolean {
-  const cookieValue = readCookieValue(request, passwordConfirmCookieName());
+function hasFreshPasswordConfirmation(
+  request: Request,
+  userId: number,
+  authVersion?: number,
+): boolean {
+  const cookieValue = readRequestCookie(request, passwordConfirmCookieName());
 
   if (!cookieValue) {
     return false;
@@ -54,10 +45,19 @@ function hasFreshPasswordConfirmation(request: Request, userId: number): boolean
 
   const parts = cookieValue.split(".");
 
-  if (parts.length !== 3) {
-    return false;
+  let proofVersion: number | undefined;
+  if (parts.length === 5 && parts[0] === "v2") {
+    if (
+      parts
+        .slice(1, 4)
+        .some((value) => !/^(0|[1-9][0-9]*)$/.test(value) || !Number.isSafeInteger(Number(value)))
+    )
+      return false;
+    proofVersion = Number(parts[3]);
+    parts.splice(3, 1);
+    parts.shift();
   }
-
+  if (parts.length !== 3 || !matchesAuthVersion(proofVersion, authVersion)) return false;
   const [userIdRaw, confirmedAtRaw, cookieSignature] = parts;
   const cookieUserId = Number.parseInt(String(userIdRaw), 10);
   const confirmedAt = Number.parseInt(String(confirmedAtRaw), 10);
@@ -75,7 +75,9 @@ function hasFreshPasswordConfirmation(request: Request, userId: number): boolean
     return false;
   }
 
-  const expectedSignature = signPasswordConfirm(cookieUserId, confirmedAt).split(".").pop();
+  const expectedSignature = signPasswordConfirm(cookieUserId, confirmedAt, proofVersion)
+    .split(".")
+    .pop();
 
   if (!expectedSignature || !cookieSignature) {
     return false;
@@ -91,9 +93,11 @@ function hasFreshPasswordConfirmation(request: Request, userId: number): boolean
   return timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
-function createPasswordConfirmCookie(userId: number): string {
+function createPasswordConfirmCookie(userId: number, authVersion?: number): string {
+  if (authVersion !== undefined && (!Number.isSafeInteger(authVersion) || authVersion < 0))
+    throw new Error("Invalid authentication version.");
   const confirmedAt = Date.now();
-  const value = signPasswordConfirm(userId, confirmedAt);
+  const value = signPasswordConfirm(userId, confirmedAt, authVersion);
   const secure = isProductionEnv() ? "; Secure" : "";
 
   return `${passwordConfirmCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${passwordConfirmTtlSeconds()}${secure}`;

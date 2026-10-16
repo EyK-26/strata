@@ -9,55 +9,15 @@ import {
 } from "./types.ts";
 
 function renderPendingMfaTs(): string {
-  return `import { createHmac, timingSafeEqual } from "node:crypto";
+  return `import { createPendingMfaCookie, clearPendingMfaCookie, readPendingMfaCookie } from "@getstrata/core/auth/pendingMfaCookie";
 import { sessionSecret } from "./config.ts";
 
-const COOKIE = "strata_mfa_pending";
-
-function sign(userId: number, issuedAt: number): string {
-  const payload = \`\${userId}.\${issuedAt}\`;
-  const signature = createHmac("sha256", sessionSecret()).update(payload).digest("hex");
-  return \`\${payload}.\${signature}\`;
+export function pendingMfaSetCookie(userId: number, authVersion: number): string {
+  return createPendingMfaCookie(userId, authVersion, sessionSecret());
 }
-
-export function pendingMfaSetCookie(userId: number): string {
-  const issuedAt = Date.now();
-  const secure = process.env.APP_ENV === "production" || process.env.APP_ENV === "staging" ? "; Secure" : "";
-  return \`\${COOKIE}=\${sign(userId, issuedAt)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600\${secure}\`;
-}
-
-export function pendingMfaClearCookie(): string {
-  const secure = process.env.APP_ENV === "production" || process.env.APP_ENV === "staging" ? "; Secure" : "";
-  return \`\${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0\${secure}\`;
-}
-
-export function readPendingMfaUserId(request: Request): number | null {
-  const header = request.headers.get("cookie") ?? "";
-  for (const part of header.split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-    if (name !== COOKIE) {
-      continue;
-    }
-    const value = rest.join("=");
-    const pieces = value.split(".");
-    if (pieces.length !== 3) {
-      return null;
-    }
-    const userId = Number.parseInt(pieces[0] ?? "", 10);
-    const issuedAt = Number.parseInt(pieces[1] ?? "", 10);
-    const signature = pieces[2] ?? "";
-    if (!Number.isInteger(userId) || userId <= 0 || Date.now() - issuedAt > 10 * 60 * 1000) {
-      return null;
-    }
-    const expected = sign(userId, issuedAt).split(".").pop() ?? "";
-    const left = Buffer.from(signature);
-    const right = Buffer.from(expected);
-    if (left.length !== right.length || !timingSafeEqual(left, right)) {
-      return null;
-    }
-    return userId;
-  }
-  return null;
+export const pendingMfaClearCookie = clearPendingMfaCookie;
+export function readPendingMfaChallenge(request: Request) {
+  return readPendingMfaCookie(request, sessionSecret());
 }
 `;
 }
@@ -183,7 +143,9 @@ function renderAuthModule(layers: StarterLayers): string | null {
   imports.push(
     `import { runWithMigrationBypassForIdentifier } from "@getstrata/core/tenant/databaseTenantContext";`,
   );
-  imports.push(`import { starterAuthDirectory } from "../../bootstrap/authDirectory.ts";`);
+  imports.push(
+    `import { starterAuthDirectory, runWithLockedAuthUser, type StarterAuthUserRecord } from "../../bootstrap/authDirectory.ts";`,
+  );
   imports.push(`import { getSql } from "../../bootstrap/database.ts";`);
   imports.push(`import { User } from "../../models/User.ts";`);
   imports.push(`import { AuthOneTimeToken } from "../../models/AuthOneTimeToken.ts";`);
@@ -195,7 +157,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
   }
   if (mfa) {
     imports.push(
-      `import { pendingMfaClearCookie, pendingMfaSetCookie, readPendingMfaUserId } from "../../bootstrap/pendingMfa.ts";`,
+      `import { pendingMfaClearCookie, pendingMfaSetCookie, readPendingMfaChallenge } from "../../bootstrap/pendingMfa.ts";`,
     );
   }
 
@@ -233,6 +195,15 @@ function parseForgotPasswordEmail(payload: unknown) {
   return String(body.email).toLowerCase();
 }
 
+async function runWithLoginUser<T>(email: string, operation: (record: StarterAuthUserRecord | null) => Promise<T>): Promise<T> {
+  const candidate = await starterAuthDirectory.findByEmail(email);
+  if (!candidate) return operation(null);
+  return runWithLockedAuthUser(candidate.id, async (record) => {
+    // Recheck identity after locking: provisioning may have changed the email.
+    return operation(record?.email === email.trim().toLowerCase() ? record : null);
+  });
+}
+
 async function runAuthWrite<T>(identifier: string | number, callback: () => Promise<T>): Promise<T> {
   return await runWithMigrationBypassForIdentifier(identifier, callback);
 }
@@ -266,7 +237,7 @@ async function consumeSignedAuthToken(request: Request, purpose: string): Promis
 
 async function revokeUserSessions(userId: number) {
   await runAuthWrite(userId, async () => {
-    await revokeStoredUserSessions(getSql(), userId);
+    await revokeStoredUserSessions(getSql(), userId, { incrementAuthVersion: true });
   });
 }
 
@@ -295,10 +266,10 @@ async function completeSignedPasswordReset(request: Request, password: unknown):
     const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.passwordReset);
     if (!userId) return false;
     await runAuthWrite(userId, async () => {
-      const user = await User.find(userId);
+      const user = await User.where({ id: userId })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
       if (!user) throw new Error("Reset account no longer exists.");
       await user.update({ password: await hashPassword(password) });
-      await revokeStoredUserSessions(getSql(), userId);
+      await revokeStoredUserSessions(getSql(), userId, { incrementAuthVersion: true });
     });
     return true;
   });
@@ -320,12 +291,14 @@ function redirectTo(path: string, status = 302): Response {
   return new Response(null, { status, headers: { location: path } });
 }
 
-function sessionUser(user: { id: number; name?: string | null; email?: string | null; role: string }) {
+function sessionUser(user: StarterAuthUserRecord) {
   return {
     id: user.id,
     name: user.name ?? user.email ?? "",
     email: user.email ?? "",
     is_admin: user.role === "admin",
+    is_active: user.is_active,
+    auth_version: user.auth_version,
   };
 }
 
@@ -358,17 +331,20 @@ async function completeBrowserSsoLogin(
   if (!record) {
     return jsonResponse({ error: \`Could not complete \${label} login.\` }, { status: 500 });
   }
+  return runWithLockedAuthUser(record.id, async (record) => {
+    if (!record?.is_active || record.email !== email) return jsonResponse({ error: "Account unavailable." }, { status: 403 });
   ${
     mfa
       ? `if (record.mfa_enabled) {
     const pending = redirectTo("/login/mfa");
-    pending.headers.append("set-cookie", pendingMfaSetCookie(record.id));
+    pending.headers.append("set-cookie", pendingMfaSetCookie(record.id, record.auth_version));
     return pending;
   }
   `
       : ""
   }const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
   return auth.signInRedirect(sessionUser(record), "/");
+  });
 }
 `
     : ""
@@ -379,7 +355,7 @@ async function completeBrowserSsoLogin(
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(withErrorHandling(async (request) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
-            const record = await starterAuthDirectory.findByEmail?.(email);
+            return runWithLoginUser(email, async (record) => {
             if (!record?.password || !(await verifyPassword(password, record.password))) {
               return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
@@ -413,6 +389,7 @@ async function completeBrowserSsoLogin(
             `
                 : ""
             }return payload;
+            });
           }))),
         },
         "/api/v1/auth/me": {
@@ -469,7 +446,7 @@ async function completeBrowserSsoLogin(
         "/api/auth/token": {
           POST: kernel.wrap("api", kernel.wrapLogin(withErrorHandling(async (request) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
-            const record = await starterAuthDirectory.findByEmail?.(email);
+            return runWithLoginUser(email, async (record) => {
             if (!record?.password || !(await verifyPassword(password, record.password))) {
               return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
@@ -481,6 +458,7 @@ async function completeBrowserSsoLogin(
             const user = { id: record.id, role: record.role, emailVerifiedAt: record.email_verified_at ?? null };
             const token = signJwt({
               sub: user.id,
+              authVersion: record.auth_version,
               role: user.role,
               abilities: [],${
                 verify ? "\n              emailVerifiedAt: user.emailVerifiedAt ?? null," : ""
@@ -490,6 +468,7 @@ async function completeBrowserSsoLogin(
               token,
               token_type: "bearer",
               expires_in: jwtTtlSeconds(),
+            });
             });
           }))),
         },`
@@ -568,7 +547,7 @@ async function completeBrowserSsoLogin(
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(withErrorHandling(async (request) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
-            const record = await starterAuthDirectory.findByEmail?.(email);
+            return runWithLoginUser(email, async (record) => {
             if (!record?.password || !(await verifyPassword(password, record.password))) {
               return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
@@ -582,6 +561,7 @@ async function completeBrowserSsoLogin(
             const payload = jsonResponse({ ok: true });
             payload.headers.append("set-cookie", setCookie);
             return payload;
+            });
           }))),
         },
         "/api/v1/auth/me": {
@@ -763,7 +743,7 @@ async function completeBrowserSsoLogin(
                   mfa
                     ? `if (mfaResult.error === "mfa_required") {
                   const pending = redirectTo("/login/mfa");
-                  pending.headers.append("set-cookie", pendingMfaSetCookie(user.id));
+                  pending.headers.append("set-cookie", pendingMfaSetCookie(user.id, user.auth_version));
                   return pending;
                 }`
                     : ""
@@ -803,12 +783,13 @@ async function completeBrowserSsoLogin(
             async (request) => {
               const { fields } = await parseFormBody(request);
               const { email, password, mfa_code } = parseLoginCredentials(fields);
-              const user = await starterAuthDirectory.findByEmail?.(email);
+              return runWithLoginUser(email, async (user) => {
               if (!user?.password || !(await verifyPassword(password, user.password))) {
                 return views.render("login.eta", { layout: { title: "Sign in" }, errors: { email: "These credentials do not match our records." }, email, password: "" }, { request });
               }
               ${mfaLoginBranch}
               return auth.signInRedirect(sessionUser(user), "/");
+              });
             },
             async (request) =>
               views.render("login.eta", { layout: { title: "Sign in" }, errors: { email: "Too many login attempts. Try again shortly." }, email: "", password: "" }, { request, status: 429 }),
@@ -927,29 +908,35 @@ async function completeBrowserSsoLogin(
             ? `
         "/login/mfa": {
           GET: kernel.wrapWebGuest(async (request) => {
-            if (!readPendingMfaUserId(request)) {
-              return redirectTo("/login");
-            }
+            const pending = readPendingMfaChallenge(request);
+            const record = pending ? await starterAuthDirectory.findByIdOrThrow(pending.userId).catch(() => null) : null;
+            if (!record?.is_active || record.auth_version !== pending?.authVersion) return redirectTo("/login");
             return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: {}, code: "" }, { request });
           }),
           POST: wrapWebLogin(
             kernel,
             async (request) => {
-            const pendingId = readPendingMfaUserId(request);
-            if (!pendingId) {
+            const pending = readPendingMfaChallenge(request);
+            if (!pending) {
               return redirectTo("/login");
             }
             const { fields } = await parseFormBody(request);
             const submitted = (fields.code ?? "").trim();
-            const record = await starterAuthDirectory.findByIdOrThrow(pendingId);
+            return runWithLockedAuthUser(pending.userId, async (record) => {
+            if (!record?.is_active || record.auth_version !== pending.authVersion) {
+              const failed = redirectTo("/login");
+              failed.headers.append("set-cookie", pendingMfaClearCookie());
+              return failed;
+            }
             const mfaResult = completePasswordLogin(record, { mfaCode: submitted });
             if (!mfaResult.ok) {
               return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" }, { request });
             }
-            await persistAuthRecovery(pendingId, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
+            await persistAuthRecovery(pending.userId, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
             const signed = await auth.signInRedirect(sessionUser(record), "/");
             signed.headers.append("set-cookie", pendingMfaClearCookie());
             return signed;
+            });
           },
             async (request) =>
               views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "Too many login attempts. Try again shortly." }, code: "" }, { request, status: 429 }),
@@ -966,14 +953,16 @@ async function completeBrowserSsoLogin(
             }
             const { fields } = await parseFormBody(request);
             const password = fields.password ?? "";
-            const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
+            return runWithLockedAuthUser(Number(user.id), async (record) => {
+            if (!record?.is_active || record.auth_version !== user.authVersion) return redirectTo("/login");
             if (!record.password || !(await verifyPassword(password, record.password))) {
               return views.render("confirm-password.eta", { layout: { title: "Confirm password" }, errors: { password: "That password is not correct." }, password: "" }, { request });
             }
             const next = sanitizeInternalPath(new URL(request.url).searchParams.get("redirect") ?? "/account/mfa");
             const confirmed = redirectTo(next);
-            confirmed.headers.append("set-cookie", createPasswordConfirmCookie(Number(user.id)));
+            confirmed.headers.append("set-cookie", createPasswordConfirmCookie(Number(user.id), record.auth_version));
             return confirmed;
+            });
           }),
         },
         "/account/mfa": {
@@ -1008,7 +997,7 @@ async function completeBrowserSsoLogin(
             const recoveryCodes = generateRecoveryCodes();
             const stored = protectMfaSecret(secret);
             const previous = await runAuthWrite(Number(user.id), () => User.find(Number(user.id)));
-            if (!previous) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
+            if (!previous || previous.get("auth_version") !== user.authVersion || !(previous.get("is_active") === true || previous.get("is_active") === 1)) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
             await runInTransaction(async () => {
               await runAuthWrite(Number(user.id), async () => {
                 // Trusted, pre-protected security fields: atomically replace only the state we read.
@@ -1018,6 +1007,8 @@ async function completeBrowserSsoLogin(
                   mfa_recovery_codes: JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
                 }, { where: {
                   id: Number(user.id),
+                  is_active: previous.get("is_active"),
+                  auth_version: previous.get("auth_version"),
                   mfa_enabled: previous.get("mfa_enabled"),
                   mfa_secret: previous.get("mfa_secret"),
                   mfa_recovery_codes: previous.get("mfa_recovery_codes"),

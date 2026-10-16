@@ -1,5 +1,11 @@
 # @getstrata/core changelog
 
+## 2.2.34
+
+Complete opt-in persisted account-state adoption: atomic SCIM suspension/reactivation and credential revocation, serialized generated password/SSO issuance, version-bound session/MFA/confirmation proofs, safe optional credential-table handling and malformed-cookie rejection. Includes explicit schema migration and upgrade instructions; installing packages alone does not rewrite existing apps.
+
+The admission and persistence foundations from #219/#221 are included: optional live status/epoch contracts, guarded additive users/session migrations, atomic epoch advancement, optional-table revocation fixes (#220) and malformed-cookie handling (#218). Legacy directories without metadata keep their admission contract. Epoch-aware revocation requires all custom issuers and security writers to participate in the documented protocol.
+
 ## 2.2.33
 
 Fix shared tenant lookups in generated SQLite column-tenancy apps through typed repositories. Generated SCIM rejects unsupported status/profile mutations before writing and runs mutations in explicit transactions, including immediate observer rollback. Add actual SQLite and restricted Postgres HTTP regressions; full account deactivation remains unsupported and explicit.

@@ -35,6 +35,8 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
     if (!user) {
       return null;
     }
+    const record = mapUserRow(user);
+    if (!record.is_active) return null;
     let abilities: string[] = [];
     try {
       abilities = JSON.parse(String(tokenRow.get("abilities") ?? "[]")) as string[];
@@ -43,6 +45,8 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
     }
     return {
       id: user_id,
+      isActive: record.is_active,
+      authVersion: record.auth_version,
       role: mapRole(user.get("is_admin")),
       abilities,
       tokenId: Number(tokenRow.get("id")),
@@ -81,12 +85,13 @@ function asNullableString(value: unknown): string | null {
 
   return `import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
+import { runInTransaction } from "@getstrata/core/database/transaction";
 ${hashImport}import type { AuthUserDirectory, AuthUserRecord } from "@getstrata/core/contracts/authUserDirectory";
 import { runWithMigrationBypassForIdentifier } from "@getstrata/core/tenant/databaseTenantContext";
 ${apiTokenImport}import { User } from "../models/User.ts";
 
 type LoadedUser = {
-  get(key: "id" | "name" | "email" | "is_admin" | "email_verified_at" | "password" | "session_valid_after"${mfaKeys}): unknown;
+  get(key: "id" | "name" | "email" | "is_admin" | "email_verified_at" | "password" | "session_valid_after" | "is_active" | "auth_version"${mfaKeys}): unknown;
 };
 
 function mapRole(isAdmin: unknown): string {
@@ -97,8 +102,17 @@ function asTimestamp(value: unknown): Date | string | null {
   return value instanceof Date || typeof value === "string" ? value : null;
 }
 ${nullableStringHelper}
-function mapUserRow(user: LoadedUser): AuthUserRecord {
+export type StarterAuthUserRecord = AuthUserRecord & { is_active: boolean; auth_version: number };
+
+function mapUserRow(user: LoadedUser): StarterAuthUserRecord {
+  const active = user.get("is_active");
+  const version = user.get("auth_version");
+  if ((active !== true && active !== false && active !== 0 && active !== 1) || typeof version !== "number" || !Number.isSafeInteger(version) || version < 0) {
+    throw new Error("Account state missing or invalid. Apply the account-state migration before deploying auth readers.");
+  }
   return {
+    is_active: active === true || active === 1,
+    auth_version: version,
     id: Number(user.get("id")),
     name: String(user.get("name") ?? ""),
     email: String(user.get("email") ?? ""),
@@ -126,7 +140,14 @@ async function findUserByEmail(email: string) {
   });
 }
 
-export const starterAuthDirectory: AuthUserDirectory = {
+export async function runWithLockedAuthUser<T>(id: number, operation: (record: StarterAuthUserRecord | null) => Promise<T>): Promise<T> {
+  return runWithMigrationBypassForIdentifier(id, () => runInTransaction(async () => {
+    const user = await User.where({ id })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
+    return operation(user ? mapUserRow(user) : null);
+  }));
+}
+
+export const starterAuthDirectory = {
 ${tokenLookup}
 
   findByIdOrThrow: findUserById,
@@ -135,7 +156,7 @@ ${tokenLookup}
 
   async verifyCredentials(email: string, password: string): Promise<AuthUser | null> {
     const user = await findUserByEmail(email);
-    if (!user?.password || !(await verifyPassword(password, user.password))) {
+    if (!user?.is_active || !user.password || !(await verifyPassword(password, user.password))) {
       return null;
     }
     if ("mfa_enabled" in user && user.mfa_enabled) {
@@ -143,11 +164,13 @@ ${tokenLookup}
     }
     return {
       id: user.id,
+      isActive: user.is_active,
+      authVersion: user.auth_version,
       role: user.role,
       emailVerifiedAt: user.email_verified_at ?? null,
     };
   },
-};
+} satisfies AuthUserDirectory;
 `;
 }
 
@@ -209,6 +232,8 @@ export default authProvider;
       cookieName: "strata_session",
       mapUser: (user) => ({
         id: user.id,
+        authVersion: user.auth_version,
+        isActive: user.is_active,
         role: user.is_admin ? "admin" : "member",
         ...(user.email_verified_at !== undefined ? { emailVerifiedAt: user.email_verified_at } : {}),
       }),

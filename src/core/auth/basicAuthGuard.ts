@@ -72,6 +72,7 @@ class BasicAuthGuard implements AuthGuard {
       return {
         id: record.id,
         role: record.role,
+        ...(record.auth_version !== undefined ? { authVersion: record.auth_version } : {}),
         emailVerifiedAt: record.email_verified_at ?? null,
       };
     }
