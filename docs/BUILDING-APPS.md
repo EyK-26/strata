@@ -1,6 +1,6 @@
 # Building your own app
 
-HiroApp (`apps/hiroapp`) is in-repo dogfood for internal end-to-end testing. For a product app, use `bunx create-strata` and the published packages.
+For a product app, use `bunx create-strata` and the published packages. Framework acceptance generates disposable candidate-package applications; external product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop).
 
 ## Scaffold
 
@@ -17,7 +17,7 @@ bun run dev
 
 The CLI is interactive in a terminal. Move with ↑/↓ and Enter, or type a number. Toggle extras that apply to your stack (MFA, email verification, SCIM, metrics, GitHub OAuth, billing, webhooks) with Space. Header auth does not offer MFA, SCIM, or GitHub login. `--no-metrics` skips the metrics extra and does not write `GET /metrics`. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`. `--docker` with Postgres or MySQL also writes Adminer at http://localhost:8080.
 
-Layer flags: [STARTER.md](./STARTER.md). The three in-repo apps are generated from that script (`bun run generate:example-apps`). Do not treat HiroApp as the source of the wizard. Only `apps/hiroapp` is CI dogfood.
+Layer flags: [STARTER.md](./STARTER.md). The starter templates and layer renderer are the source of the wizard. CI generates temporary applications instead of maintaining checked-in copies.
 
 For typed native Bun transport options, WebSockets, request-hook coverage and streamed-body limits, see [native HTTP configuration](NATIVE-HTTP.md). Review the transport ceiling and hook changes before upgrading existing applications.
 
@@ -67,7 +67,7 @@ auth.registerGuard("jwt", new JwtGuard(container));
 auth.registerGuard("basic", new BasicAuthGuard(container));
 ```
 
-Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and `verifyCredentials`. See [AUTH.md](./AUTH.md) and HiroApp `authDirectory.ts`.
+Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and `verifyCredentials`. See [AUTH.md](./AUTH.md) and the generated `src/bootstrap/authDirectory.ts`.
 
 ## HTTP kernel
 
@@ -308,7 +308,7 @@ Shop-style split: JSON `/api/v1/products` uses `wrapAbility("products:*")` plus 
 | `API_PREFIX` | `/api/v1` |
 | `APP_SDK_CLASS` | `${APP_NAME}Client` |
 
-Generated HiroApp pins `APP_KEY_PREFIX=hiroapp`, `APP_NAME=hiroapp`, and `API_PREFIX=/api`. The HTML session cookie is still `strata_session` unless you change `cookieName`.
+Generated apps derive `APP_KEY_PREFIX` and `APP_NAME` from the project name and use `API_PREFIX=/api`. The HTML session cookie is still `strata_session` unless you change `cookieName`.
 
 ## Next
 

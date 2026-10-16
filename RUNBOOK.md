@@ -1,12 +1,12 @@
 # Operations runbook
 
-Quick reference for on-call.
+Template for application operators. Adapt service names and commands to your generated app; root Compose runs framework test infrastructure only. See [DEPLOY](DEPLOY.md) for the acceptance image boundary.
 
 ## Service overview
 
 | Component | Port | Notes |
 |-----------|------|-------|
-| App (Bun) | 3000 | HiroApp HTTP |
+| App (Bun) | 3000 | Your generated application |
 | PostgreSQL | 5432 in Compose, 54329 on host | Primary data store |
 | Redis | 6379 | Cache, queues, rate limits |
 | Prometheus | 9090 | Optional overlay |
@@ -23,35 +23,35 @@ Quick reference for on-call.
 
 ### Rate limit spikes (429)
 
-- Identify client via Redis keys prefixed `${APP_KEY_PREFIX}:` (HiroApp: `hiroapp:`)
+- Identify client via Redis keys prefixed `${APP_KEY_PREFIX}:` (for example `myapp:`)
 - Adjust `RATE_LIMIT_PER_MINUTE` or login throttle env if legitimate traffic is blocked
 
 ### Queue backlog
 
 1. Confirm a worker is running
-2. Inspect failed jobs: `bun run cli queue:failed`
-3. Retry: `bun run cli queue:retry <id>`
-4. High-priority jobs use Redis list `${APP_KEY_PREFIX}:queue:high`
+2. Inspect failed jobs: `bunx strata queue:failed`
+3. Retry: `bunx strata queue:retry <id>`
+4. Redis jobs use recoverable Streams consumer groups; inspect queue age, pending deliveries and failed jobs through the framework queue APIs. Do not pop/delete stream entries to clear a backlog.
 
 ### Migration failure
 
 Migrations use PostgreSQL advisory locks. If a migration hangs:
 
 1. Check for stale connections holding the lock
-2. Run `bun run cli migrate:status`
+2. Run `bunx strata migrate:status`
 3. Never edit applied migration files. Add a new migration instead.
 
 ### Production startup blocked (secrets guard)
 
-Rotate `ADMIN_API_TOKEN`, `MEMBER_API_TOKEN`, and `SCIM_BEARER_TOKEN` away from published test defaults before `APP_ENV=production`.
+Use the feature-gated production guard diagnostics to configure required secrets; rotate all published defaults and provision operational accounts explicitly.
 
 ## Deployment procedure
 
 1. Take a backup: `./scripts/backup-db.sh`
 2. Pull new image / rebuild: `docker compose build app`
-3. Run migrations: `docker compose exec app bun run cli migrate`
+3. Run migrations: your separate administrative migration job (`bun run db:migrate` in the app)
 4. Restart app and worker: `docker compose restart app worker`
-5. Smoke test: `BASE_URL=https://your-host bun run smoke`
+5. Smoke test: your app-owned HTTP/business smoke checks against the deployed URL
 6. Watch `/metrics` for error rate changes
 
 ## Rollback

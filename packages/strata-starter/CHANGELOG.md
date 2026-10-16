@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.35
+
+Retire checked-in HiroApp applications after preserving security, CLI/OpenAPI/HTTP, source, migration and Docker acceptance in generated candidate-package fixtures. Keep all 23 security cases, 40 runtime operations, 22 API/protocol operations, three-engine migration cases and 18 compiler combinations. Make the private root CLI fixture-only, isolate post-commit HTTP databases, and validate the generated production image with restricted runtime credentials, Redis recovery and graceful shutdown. Remove obsolete app regeneration/selectors and update contributor, generator and deployment documentation; retain compatible example preset IDs and explicit application-owned deployment boundaries. Regenerate the sample SDK from the API-only snapshot and verify it against the installed candidate package. Core coverage retains 136 enforced files at 100%; remove only the two deleted private-entrypoint exemptions (272 remaining).
+
 ## 2.2.34
 
 Complete opt-in persisted account-state adoption: atomic SCIM suspension/reactivation and credential revocation, serialized generated password/SSO issuance, version-bound session/MFA/confirmation proofs, safe optional credential-table handling and malformed-cookie rejection. Includes explicit schema migration and upgrade instructions; installing packages alone does not rewrite existing apps.

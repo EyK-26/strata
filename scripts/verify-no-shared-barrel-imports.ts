@@ -9,7 +9,7 @@ const SCAN_ROOTS = [
   join(ROOT, "src"),
   join(ROOT, "tests"),
   join(ROOT, "packages/strata-starter/templates/src"),
-  join(ROOT, "..", "getstrata", "src"),
+  join(ROOT, "packages/strata-starter/src"),
 ];
 
 const BARREL_IMPORT =

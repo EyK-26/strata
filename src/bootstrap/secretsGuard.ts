@@ -233,7 +233,7 @@ function setLivePostgresRoleInspectorForTests(inspect: LivePostgresRoleInspector
 }
 
 /**
- * HiroApp request traffic uses APP_DATABASE_URL when set, otherwise DATABASE_URL.
+ * Generated request traffic uses APP_DATABASE_URL when set, otherwise DATABASE_URL.
  * Fixture DATABASE_URL may stay a superuser for migrate:fresh DROP. That URL is
  * not the rls runtime pool. MIGRATION_DATABASE_URL may stay a superuser.
  */

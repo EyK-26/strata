@@ -77,9 +77,9 @@ interface GenerateOptions {
   overlayRoot: string;
   force?: boolean;
   workspaceDependencies?: boolean;
-  /** True when writing the in-repo apps under `apps/`. Product `create-strata` stays unset. */
+  /** Compatibility README label for generated example profiles; not a repository path. */
   inRepoExample?: boolean;
-  /** True only for `apps/hiroapp`. Product scaffolds and sibling examples stay unset. */
+  /** Compatibility README label for an internal acceptance fixture. Product scaffolds stay unset. */
   dogfood?: boolean;
 }
 

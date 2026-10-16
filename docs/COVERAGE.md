@@ -54,7 +54,7 @@ Configuration: `bunfig.toml` → `coveragePathIgnorePatterns` (what Bun reports)
 
 ## CI
 
-CI migrates the fixture schema (core RLS tests), then HiroApp, then the core coverage gate. Any enforced file below 100% lines blocks merge.
+CI migrates the framework fixture schema for core RLS tests, runs the core coverage gate, then runs isolated generated-app E2E acceptance. Any enforced file below 100% lines blocks merge.
 
 ## Adding new code
 

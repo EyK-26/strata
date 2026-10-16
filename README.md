@@ -28,7 +28,7 @@ Guides: [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDIN
 
 ## Packages
 
-Published as **2.2.34**:
+Published as **2.2.35**:
 
 | Package | What it is |
 |---------|------------|
@@ -51,7 +51,7 @@ Generated cookie apps include restyleable welcome, login, register, and password
 
 ## This repository
 
-This repository contains framework packages and their tests. Product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop), which consumes published packages. Acceptance tests generate disposable apps, install candidate tarballs and exercise their real CLI, security, HTTP, OpenAPI and Docker behavior. The legacy `apps/` directories are retained temporarily for the final removal step; they are no longer workspaces, runtime entrypoints or image inputs.
+This repository contains framework packages and their tests. Product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop), which consumes published packages. Acceptance tests generate disposable apps, install candidate tarballs and exercise their real CLI, security, HTTP, OpenAPI and Docker behavior. The legacy application directories have been removed after their assertions were transferred to generated acceptance and historical migration fixtures.
 
 Clone this repo to change Strata itself. For a product, use `create-strata` and its generated README/Dockerfile.
 
@@ -66,7 +66,6 @@ The root CLI is a private framework fixture harness. Database operations require
 ## Layout
 
 ```
-apps/                   Retained legacy examples pending final removal
 src/core/               Framework runtime
 src/bootstrap/          Kernel, providers, cookie sessions
 packages/               Published npm packages

@@ -15,11 +15,13 @@ export function createGeneratedSourceApps() {
   const root = mkdtempSync(join(parent, "strata-source-"));
   const rls = join(root, "rls");
   const team = join(root, "team");
+  const hobby = join(root, "hobby");
   const close = () => rmSync(root, { recursive: true, force: true });
   try {
     for (const [targetDir, preset] of [
       [rls, "hiroapp"],
       [team, "hiroapp-team"],
+      [hobby, "hiroapp-hobby"],
     ] as const) {
       generateProject({
         projectName: `source-${preset}`,
@@ -40,7 +42,7 @@ export function createGeneratedSourceApps() {
         }
       }
     }
-    return { rls, team, close };
+    return { rls, team, hobby, close };
   } catch (error) {
     close();
     throw error;

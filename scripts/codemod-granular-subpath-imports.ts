@@ -10,7 +10,7 @@ const TARGET_DIRS = [
   join(ROOT, "tests/unit"),
   join(ROOT, "tests/integration"),
   join(ROOT, "packages/strata-starter/templates/src"),
-  join(ROOT, "..", "getstrata", "src"),
+  join(ROOT, "packages/strata-starter/src"),
   join(ROOT, "..", "getstrata", "content"),
 ];
 

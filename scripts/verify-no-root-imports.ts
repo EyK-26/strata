@@ -7,9 +7,8 @@ import { join, relative } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const SCAN_ROOTS = [
   join(ROOT, "src"),
-  join(ROOT, "apps"),
+  join(ROOT, "packages/strata-starter/src"),
   join(ROOT, "packages/strata-starter/templates/src"),
-  join(ROOT, "..", "getstrata", "src"),
 ];
 
 const ALLOWLIST = new Set(["src/framework/public-api.ts"]);

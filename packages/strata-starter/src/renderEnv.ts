@@ -459,9 +459,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.34",
-        "@getstrata/cli": "^2.2.34",
-        "@getstrata/core": "^2.2.34",
+        "@getstrata/bootstrap": "^2.2.35",
+        "@getstrata/cli": "^2.2.35",
+        "@getstrata/core": "^2.2.35",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
@@ -774,13 +774,13 @@ function renderReadmeIntro(
   if (options.dogfood) {
     return `# ${projectName}
 
-This in-repo app is Strata dogfood for internal end-to-end testing (migrate, seed, boot, OpenAPI, smoke). It is not a product. Start a product app with \`bunx create-strata\`.
+This generated app is an internal acceptance fixture (migrate, seed, boot, OpenAPI, smoke). It is not a product. Framework CI generates disposable fixtures; product dogfood lives in the separate strata-shop repository. Start a product app with \`bunx create-strata\`.
 `;
   }
   if (options.inRepoExample) {
     return `# ${projectName}
 
-This in-repo app is a generated sibling layer map. It is not a product and it is not CI dogfood. CI dogfood is \`apps/hiroapp\`. Start a product app with \`bunx create-strata\`.
+This is a generated sibling layer map. It is not a product and it is not CI dogfood. Framework CI generates disposable acceptance fixtures; product dogfood lives in the separate strata-shop repository. Start a product app with \`bunx create-strata\`.
 `;
   }
   return `# ${projectName}

@@ -1,6 +1,6 @@
 # Framework packaging
 
-**Strata** is the framework. **HiroApp** (`apps/hiroapp`) is in-repo dogfood for internal end-to-end testing. Framework code lives in `src/core/` and `src/bootstrap/`. Generated apps live in `apps/`. Extraction to a separate repository is optional.
+Strata contains framework packages, generator templates and mechanism tests. Product dogfood lives in the separate [strata-shop](https://github.com/EyK-26/strata-shop) repository. CI generates disposable candidate-package applications instead of relying on checked-in app directories.
 
 ## Public API
 
@@ -75,7 +75,7 @@ When a tag is passed, the versions are read from **`origin/main`**, not from you
   the code that would be tagged.
 ```
 
-Nothing in `release.yml` enforces that a tag sits on `main`, so this check is the guard. Use `--ref=<ref>` to compare against a different branch, and `--no-target-check` to skip it. `bun run release:check` without a tag reads the working tree and is what `validate:ci` runs, so a branch build is unaffected. The release quality gate starts compose Postgres/Redis and uses the same URLs as CI: fixture `DATABASE_URL` is `postgres@bun_testing_test`, HiroApp `APP_DATABASE_URL` is `strata_app@hiroapp_test`. Do not point `APP_DATABASE_URL` at the `postgres` superuser. `openapi:validate` boots HiroApp (`TENANCY_DRIVER=rls`) and the runtime role denylist rejects that.
+Nothing in `release.yml` enforces that a tag sits on `main`, so this check is the guard. Use `--ref=<ref>` to compare against a different branch, and `--no-target-check` to skip it. `bun run release:check` without a tag reads the working tree and is what `validate:ci` runs, so a branch build is unaffected. The release quality gate starts Compose infrastructure and runs the same `validate:ci` chain as CI. The core fixture uses an administrative test database; generated runtime acceptance provisions owned databases and verifies the restricted live role. The legacy local database name `hiroapp_test` remains a credential-source default, not an app dependency. Never give HTTP/workers migration credentials.
 
 ### 3. Tag
 
@@ -141,19 +141,9 @@ See `packages/strata-core/CHANGELOG.md` for release notes.
 
 ## Container image
 
-The release stage installs production dependencies only (`bun prune --production`
-after the framework build), which needs `bun.lock` to agree with every
-`package.json`. `bun run bump` refreshes the lockfile for that reason; a
-hand-edited version will make the prune fail.
+The root Dockerfile builds candidate framework packages, generates an external acceptance app, and installs packed core/bootstrap/cli packages with production dependencies. Its final image contains that app only, runs as `bun`, and starts the installed app CLI explicitly. No framework source tree or legacy application directory is shipped as the server. `bun run bump` refreshes package pins and the workspace lockfile; frozen installs must remain reproducible.
 
-`CMD` runs `bun packages/strata-cli/cli.ts start` rather than `bun run start`.
-The install stage copies the workspace `package.json` files alone so the
-dependency layer caches, which means bun links bins before any source exists and
-`node_modules/.bin/strata` is never created. Going through `bun run start` fails
-with `strata: command not found`.
-
-`src/` and `apps/hiroapp` both ship: the root server is a shim that imports the
-dogfood app (`apps/hiroapp`, internal end-to-end testing) through `src/bootstrap/dogfoodApp.ts`.
+`bun run verify:docker-runtime` builds and exercises this image with owned Postgres/Redis infrastructure, explicit migration, seeding refusal in production, restricted-role HTTP, dependency loss/recovery and clean shutdown. Root production/staging Compose files are acceptance examples with separate migration credentials, not qualified product deployment manifests. Product applications use their generated Dockerfile and app-specific deployment/runbooks.
 
 If a GHCR push uploads every layer and then fails on the manifest with an
 empty-body `403`, the package storage quota is the first thing to check. Private
@@ -162,8 +152,7 @@ packages count against it; public ones do not.
 ## OpenAPI and SDK
 
 ```bash
-DOGFOOD_APP=hiroapp APP_KEY_PREFIX=hiroapp APP_NAME=HiroApp API_PREFIX=/api bun run cli openapi:generate
-bun run cli openapi:check
+scripts/with-host-env.sh bun run verify:generated-runtime
 ```
 
-CI fails if `docs/openapi.json` drifts. Commit regenerated files. The TypeScript client lives in `sdk/typescript/client.ts` (`HiroAppClient`).
+This generates an owned candidate app and invokes its installed `strata openapi:generate`, `openapi:validate` and `openapi:check`, including deliberate drift rejection. CI compares the 22-operation API/protocol snapshot in `docs/openapi.json`, excludes HTML routes, and separately checks all 40 runtime operations. The snapshot retains the historical HiroApp display title for assertion continuity; it does not load an application directory. The sample SDK in `sdk/typescript/client.ts` is regenerated from that API-only snapshot and checked by the same acceptance verifier. Applications generate specifications from their own routes; root fixture CLI output is not the generated-app snapshot.

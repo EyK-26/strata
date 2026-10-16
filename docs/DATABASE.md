@@ -4,7 +4,7 @@ Set `DATABASE_URL` (and optionally `DB_CONNECTION`) before the app queries.
 
 ## What we actually run
 
-HiroApp, CI, and the coverage gates use **PostgreSQL**. Row-level security, `jsonb`, `ILIKE`, `RETURNING`, and `tsMatch` are Postgres features. That is the supported production path in this repo.
+Framework RLS and coverage fixtures use **PostgreSQL**. Integration tests also execute SQLite and MySQL mechanisms, and the generated-app compiler matrix covers all three engines. The external shop uses Postgres RLS. RLS, `ILIKE` and `tsMatch` are Postgres-specific; consult the engine table below for portable operations. Passing this matrix is not a claim of production capacity for any engine.
 
 ## Choosing an engine
 
@@ -21,7 +21,7 @@ If `DB_CONNECTION` is unset, the URL scheme picks the dialect. If both are unset
 ## How to opt in
 
 ```bash
-# Postgres (in-repo HiroApp runtime uses strata_app on hiroapp_test)
+# Postgres local fixture credentials (legacy database name retained for compatibility)
 DATABASE_URL=postgresql://strata_app:dev-strata-app-change-me@localhost:54329/hiroapp_test
 MIGRATION_DATABASE_URL=postgresql://postgres:dev-postgres-change-me@localhost:54329/hiroapp_test
 
@@ -282,7 +282,7 @@ const lines = await CartItem.with(["product"]).get();
 
 ## Named connections
 
-Register extra engines without pointing HiroApp OLTP at them:
+Register extra engines without moving your primary application tables:
 
 ```typescript
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
@@ -344,15 +344,15 @@ Keep data transformations, unsupported DDL, RLS policy helpers, and guarded roll
 
 ## Binding the client
 
-Generated HiroApp uses Bun's `Bun.sql` (Postgres). `getSql()` calls `createBunSqlPool()`, `registerDefaultDatabasePool()`, then `bindDatabaseConnection()`. `bindBunSql()` is a shorter helper that does the last two steps. A dialect change does not invent a MySQL driver. You still provide the connection.
+Generated Postgres apps use Bun's `Bun.sql`. `getSql()` calls `createBunSqlPool()`, `registerDefaultDatabasePool()`, then `bindDatabaseConnection()`. `bindBunSql()` is a shorter helper that does the last two steps. A dialect change does not invent a MySQL driver. You still provide the connection.
 
 ## Tenancy
 
-Postgres RLS is documented in [TENANCY.md](./TENANCY.md). `TENANCY_DRIVER=none` skips `SET LOCAL` for apps without a `tenant` table (the starter template). HiroApp keeps RLS.
+Postgres RLS is documented in [TENANCY.md](./TENANCY.md). `TENANCY_DRIVER=none` skips `SET LOCAL` for applications without tenancy. Generate Postgres RLS applications with `--tenancy=rls`; other engines support column tenancy.
 
 ## Honest limits
 
-- Compiling MySQL or SQLite SQL is not the same as running HiroApp OLTP on those engines.
+- Compiler checks and focused live-engine integration cases do not establish production throughput or full application qualification.
 - Named connections are sidecars. Do not shard one product row across three engines.
 - `tsMatch` throws off Postgres on purpose.
 - MySQL has no `RETURNING`. Insert helpers that expect a returned row need another SELECT.

@@ -16,6 +16,7 @@ import {
   renderCliQueueWorkTs,
   renderCliRegisterTs,
 } from "../../../packages/strata-starter/src/renderRuntime.ts";
+import { createGeneratedSourceApps } from "../../helpers/generatedSourceApps.ts";
 import { captureConsole, repoRoot } from "./helpers";
 
 const tempDirectories: string[] = [];
@@ -207,23 +208,20 @@ describe("generated src/cli/register.ts", () => {
     expect(output.errors.join("\n")).toContain("queue:work requires REDIS_URL to be set.");
   });
 
-  test("in-repo example apps ship the same CLI registrar as the renderer", async () => {
+  test("all three generated example profiles ship the same CLI registrar as the renderer", async () => {
     const expectedQueueWork = renderCliQueueWorkTs();
-    for (const id of ["hiroapp", "hiroapp-hobby", "hiroapp-team"] as const) {
-      const { layers } = JSON.parse(
-        await readFile(join(repoRoot, `apps/${id}/strata.layers.json`), "utf8"),
-      );
-      const expectedRegister = renderCliRegisterTs(layers);
-      const actualRegister = await readFile(
-        join(repoRoot, `apps/${id}/src/cli/register.ts`),
-        "utf8",
-      );
-      const actualQueueWork = await readFile(
-        join(repoRoot, `apps/${id}/src/cli/queueWork.ts`),
-        "utf8",
-      );
-      expect(actualRegister).toBe(expectedRegister);
-      expect(actualQueueWork).toBe(expectedQueueWork);
+    const fixtures = createGeneratedSourceApps();
+    try {
+      for (const app of [fixtures.rls, fixtures.hobby, fixtures.team]) {
+        const { layers } = JSON.parse(await readFile(join(app, "strata.layers.json"), "utf8"));
+        const expectedRegister = renderCliRegisterTs(layers);
+        const actualRegister = await readFile(join(app, "src/cli/register.ts"), "utf8");
+        const actualQueueWork = await readFile(join(app, "src/cli/queueWork.ts"), "utf8");
+        expect(actualRegister).toBe(expectedRegister);
+        expect(actualQueueWork).toBe(expectedQueueWork);
+      }
+    } finally {
+      fixtures.close();
     }
   });
 });
