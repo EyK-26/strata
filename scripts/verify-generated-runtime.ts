@@ -12,6 +12,11 @@ assert.ok(
 );
 const checkOpenApi = args.length === 0 || args.includes("--openapi");
 const checkHttp = args.length === 0 || args.includes("--http");
+if (checkHttp)
+  assert.ok(
+    process.env.REDIS_URL?.trim(),
+    "HTTP runtime acceptance requires explicit Redis infrastructure.",
+  );
 const fixture = await createGeneratedSecurityApp();
 const cli = join(fixture.app, "node_modules/@getstrata/cli/cli.ts");
 const env: Record<string, string | undefined> = {
@@ -36,7 +41,7 @@ const env: Record<string, string | undefined> = {
   FEATURE_OAUTH: "false",
   FEATURE_REGISTRATION: "true",
   FEATURE_PUBLIC_READS: "false",
-  CACHE_DRIVER: process.env.CACHE_DRIVER ?? "redis",
+  CACHE_DRIVER: checkHttp ? "redis" : (process.env.CACHE_DRIVER ?? "array"),
   QUEUE_DRIVER: "sync",
   MAIL_DRIVER: "log",
   SESSION_SECRET: "generated-runtime-fixture-session-secret-32-characters",
@@ -143,7 +148,8 @@ await Bun.write('acceptance-routes.json',JSON.stringify(routes));
   if (checkHttp) {
     server = Bun.spawn([process.execPath, cli, "start"], {
       cwd: fixture.app,
-      env,
+      // Only this owned diagnostic fixture exposes dependency observations.
+      env: { ...env, APP_DEBUG: "true" },
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
@@ -164,6 +170,15 @@ await Bun.write('acceptance-routes.json',JSON.stringify(routes));
       await Bun.sleep(25);
     }
     assert.ok(origin, `Generated CLI did not start: ${diagnostic}`);
+    const readiness = await fetch(`${origin}/ready`, { signal: AbortSignal.timeout(5000) });
+    assert.equal(readiness.status, 200);
+    const readinessBody: unknown = await readiness.json();
+    assert.ok(readinessBody && typeof readinessBody === "object" && "checks" in readinessBody);
+    assert.deepEqual(
+      readinessBody.checks,
+      { database: "ok", redis: "ok" },
+      "Readiness must actually observe both dependencies, without skipped Redis.",
+    );
     const smokeEnv = { ...env, BASE_URL: origin, APP_URL: origin };
     await run([join(repoRoot, "scripts/smoke-test.ts")], { cwd: repoRoot, env: smokeEnv });
     await run([join(repoRoot, "scripts/smoke-webview.ts")], { cwd: repoRoot, env: smokeEnv });
