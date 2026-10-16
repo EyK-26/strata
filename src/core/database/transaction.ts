@@ -23,6 +23,21 @@ import {
 type TransactionFrame = { connection: UnsafeQueryable; childActive: boolean };
 const transactionFrame = createAsyncContextStore<TransactionFrame>("@getstrata/transactionFrame");
 const outerFrames = new WeakMap<UnsafeQueryable, TransactionFrame>();
+const transactionRoots = new WeakMap<UnsafeQueryable, DatabaseConnection>();
+const transactionAliases = new WeakMap<DatabaseConnection, UnsafeQueryable>();
+
+function scopedConnection(source: UnsafeQueryable): DatabaseConnection {
+  const connection = createDatabaseConnection(source);
+  transactionAliases.set(connection, source);
+  return connection;
+}
+
+/** Recognizes the callback handle without admitting an unrelated pool. */
+function isActiveTransactionConnection(connection: DatabaseConnection): boolean {
+  if (!hasActiveTransaction() || !hasActiveDatabaseConnection()) return false;
+  const active = getActiveDatabaseConnection(connection);
+  return connection === active || transactionAliases.get(connection) === active;
+}
 
 async function runInSavepoint<TValue>(
   connection: UnsafeQueryable,
@@ -48,7 +63,7 @@ async function runInSavepoint<TValue>(
         try {
           const result = await transactionFrame.run({ connection, childActive: false }, () =>
             runWithTransactionScope(async () =>
-              commitOrRollbackScope(await operation(createDatabaseConnection(connection))),
+              commitOrRollbackScope(await operation(scopedConnection(connection))),
             ),
           );
           await connection.unsafe(`RELEASE SAVEPOINT ${name}`);
@@ -76,6 +91,8 @@ function supportsTransactions(
 }
 
 interface TransactionOptions {
+  /** Explicit root pool for injected repositories; cannot switch an active transaction's owner. */
+  connection?: DatabaseConnection;
   /** Cancel admission/pool checkout only. Does not cancel SQL or an admitted business callback. */
   acquisitionSignal?: AbortSignal;
   /** Observe native checkout only; requires a reserve-capable adapter. */
@@ -91,10 +108,18 @@ async function runInTransaction<TValue>(
     signal?.throwIfAborted();
     return operation(connection);
   };
-  const pool = resolveRepositoryConnection();
+  const pool = options.connection ?? resolveRepositoryConnection();
 
   if (hasActiveDatabaseConnection()) {
-    return await runInSavepoint(getActiveDatabaseConnection(pool), admittedOperation);
+    const active = getActiveDatabaseConnection(pool);
+    if (
+      options.connection &&
+      options.connection !== active &&
+      options.connection !== transactionRoots.get(active) &&
+      transactionAliases.get(options.connection) !== active
+    )
+      throw new Error("Cannot switch database connections within an active transaction.");
+    return await runInSavepoint(active, admittedOperation);
   }
 
   if (!supportsTransactions(pool)) {
@@ -130,12 +155,11 @@ async function runInTransaction<TValue>(
         // Native drivers can invoke queued callbacks outside the caller's async resource.
         return await connection.begin(
           AsyncLocalStorage.bind(async (transaction) => {
+            transactionRoots.set(transaction, pool);
             return await runWithDatabaseConnection(transaction, () =>
               transactionFrame.run({ connection: transaction, childActive: false }, () =>
                 runWithTransactionScope(async () =>
-                  commitOrRollbackScope(
-                    await admittedOperation(createDatabaseConnection(transaction)),
-                  ),
+                  commitOrRollbackScope(await admittedOperation(scopedConnection(transaction))),
                 ),
               ),
             );
@@ -158,6 +182,11 @@ export {
   renderTransactionAcquisitionMetrics,
 } from "./acquisitionMetrics.ts";
 export type { TransactionOptions };
-export { hasActiveTransaction, requestTransactionRollback, runInTransaction };
+export {
+  hasActiveTransaction,
+  isActiveTransactionConnection,
+  requestTransactionRollback,
+  runInTransaction,
+};
 
 import { AsyncLocalStorage } from "node:async_hooks";
