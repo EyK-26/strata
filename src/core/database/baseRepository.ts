@@ -179,9 +179,15 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     query: { text: string; params: unknown[] },
     id: TEntity[PrimaryKey],
     onlyTrashed = false,
+    allowUnchanged = false,
   ): Promise<TEntity | null> {
     const [row] = await this.connection.unsafe<{ affectedRows?: number }>(query.text, query.params);
-    if (!this.mysqlAffected(row)) return null;
+    if (!this.mysqlAffected(row)) {
+      if (!allowUnchanged) return null;
+      // mysql2 can report changed rows instead of matched rows. An unchanged
+      // update still returns its live row; default scopes exclude deleted rows.
+      return this.findById(id);
+    }
     return this.mysqlRow(id, onlyTrashed);
   }
 
@@ -562,7 +568,12 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     if (currentSqlDialect().driver === "mysql")
       return this.mysqlMutation((repository) =>
         withDatabaseErrorHandling(() =>
-          repository.mysqlWriteById(buildIncrementQuery(this.table, id, column, amount, extra), id),
+          repository.mysqlWriteById(
+            buildIncrementQuery(this.table, id, column, amount, extra),
+            id,
+            false,
+            true,
+          ),
         ),
       );
     return await withDatabaseErrorHandling(async () => {
@@ -681,6 +692,8 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
           const row = await repository.mysqlWriteById(
             buildUpdateQuery(this.table, id, changes),
             id,
+            false,
+            true,
           );
           if (row) await dispatchModelEvent(modelEventName(this.table.name, "updated"), row);
           return row;
