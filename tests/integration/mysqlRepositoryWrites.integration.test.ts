@@ -19,6 +19,7 @@ async function fixture(
   run: (
     repo: BaseRepository<Row, "id">,
     connection: ReturnType<typeof createMysqlConnection>,
+    databaseUrl: string,
   ) => Promise<void>,
 ) {
   const url = process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
@@ -46,7 +47,7 @@ async function fixture(
       }),
       connection,
     );
-    await run(repo, connection);
+    await run(repo, connection, target.href);
   } finally {
     if (previous) bindDatabaseConnection(previous);
     else resetBoundDatabaseConnection();
@@ -217,4 +218,38 @@ test("MySQL string keys, database defaults, no-op upserts and zero auto IDs rehy
     const zero = await repo.create({ id: 0, slug: "zero-auto" });
     expect(zero.id).toBeGreaterThan(0);
     expect(await repo.findById(zero.id)).toEqual(zero);
+  }));
+
+test("MySQL changed-row reporting retains no-op entities without reviving scoped-out rows", async () =>
+  fixture(async (repo, _db, databaseUrl) => {
+    const url = new URL(databaseUrl);
+    url.searchParams.set("flags", "-FOUND_ROWS");
+    const changedRows = createMysqlConnection(url.href);
+    try {
+      const scoped = repo.withConnection(changedRows);
+      const row = await scoped.create({ slug: "unchanged" });
+      const [metadata] = await changedRows.unsafe<{ affectedRows: number }>(
+        "UPDATE records SET quantity = quantity WHERE id = ?",
+        [row.id],
+      );
+      expect(metadata?.affectedRows).toBe(0);
+      expect(await scoped.updateById(row.id, { quantity: 7 })).toMatchObject({
+        id: row.id,
+        quantity: 7,
+      });
+      expect(await scoped.incrementById(row.id, "quantity", 0)).toMatchObject({
+        id: row.id,
+        quantity: 7,
+      });
+      expect(await scoped.updateById(999, { quantity: 7 })).toBeNull();
+      expect(await scoped.incrementById(999, "quantity", 0)).toBeNull();
+      expect(await scoped.softDeleteById(row.id)).toBe(true);
+      expect(await scoped.softDeleteById(row.id)).toBe(false);
+      expect(await scoped.updateById(row.id, { quantity: 7 })).toBeNull();
+      expect(await scoped.incrementById(row.id, "quantity", 0)).toBeNull();
+      expect(await scoped.restoreById(row.id)).toMatchObject({ id: row.id });
+      expect(await scoped.restoreById(row.id)).toBeNull();
+    } finally {
+      await changedRows.close();
+    }
   }));
