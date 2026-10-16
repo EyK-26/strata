@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/cli",
-  "version": "2.2.36",
+  "version": "2.2.37",
   "description": "Strata CLI: framework commands for Bun apps (dev, start, migrate, run)",
   "type": "module",
   "license": "MIT",
@@ -54,8 +54,8 @@
   ],
   "scripts": {},
   "peerDependencies": {
-    "@getstrata/bootstrap": "^2.2.36",
-    "@getstrata/core": "^2.2.36"
+    "@getstrata/bootstrap": "^2.2.37",
+    "@getstrata/core": "^2.2.37"
   },
   "publishConfig": {
     "access": "public"

@@ -184,12 +184,32 @@ const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
     const specPath = join(fixture.app, "docs/openapi.json");
     const snapshot = await readFile(join(repoRoot, "docs/openapi.json"), "utf8");
     const actual = await readFile(specPath, "utf8");
+    // Production rejects localhost APP_URL. Compare every byte after changing
+    // only the independently asserted server origins in the expected fixture.
+    const expected = JSON.parse(snapshot);
+    if (mysql) {
+      const servers = [
+        { url: `${env.APP_URL}/api`, description: "HiroApp API" },
+        { url: env.APP_URL, description: "Root (health, metrics, SCIM)" },
+      ];
+      assert.deepEqual(JSON.parse(actual).servers, servers);
+      expected.servers = servers;
+    }
     assert.equal(
       actual,
-      snapshot,
+      mysql ? `${JSON.stringify(expected, null, 2)}\n` : snapshot,
       "Generated API-only OpenAPI differs from the committed snapshot.",
     );
     await run([cli, "openapi:check"]);
+    if (mysql) {
+      const listed = await run([cli, "queue:failed"]);
+      assert.match(listed.output, /No failed jobs/);
+      const flushed = await run([cli, "queue:flush-failed"]);
+      assert.match(flushed.output, /Removed 0 failed job/);
+      const retry = await run([cli, "queue:retry", "999999"], { success: false });
+      assert.equal(retry.code, 1);
+      assert.match(retry.output, /not found/i);
+    }
     await Bun.write(specPath, '{"openapi":"3.1.0"}');
     const drift = await run([cli, "openapi:check"], { success: false });
     assert.equal(drift.code, 1);
@@ -207,9 +227,17 @@ const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
     try {
       process.env.APP_NAME = env.APP_NAME;
       delete process.env.APP_SDK_CLASS;
+      const sdkSnapshot = await readFile(join(repoRoot, "sdk/typescript/client.ts"), "utf8");
+      const defaultOrigin = 'private readonly baseUrl = "http://localhost:3000/api"';
+      if (mysql) assert.equal(sdkSnapshot.split(defaultOrigin).length, 2);
       assert.equal(
         renderTypeScriptSdk(spec, "/api"),
-        await readFile(join(repoRoot, "sdk/typescript/client.ts"), "utf8"),
+        mysql
+          ? sdkSnapshot.replace(
+              defaultOrigin,
+              `private readonly baseUrl = ${JSON.stringify(`${env.APP_URL}/api`)}`,
+            )
+          : sdkSnapshot,
         "Generated API-only SDK differs from the committed snapshot.",
       );
     } finally {
@@ -265,8 +293,16 @@ const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
       { database: "ok", redis: "ok" },
       "Readiness must actually observe both dependencies, without skipped Redis.",
     );
-    await verifyGeneratedAuthHttp(origin);
-    if (columnTenancy) await verifyGeneratedScimHttp(origin);
+    // Owned loopback transport sends the configured public virtual host. This
+    // exercises production host selection; it does not qualify deployed TLS.
+    const requestHost = mysql ? new URL(env.APP_URL ?? "").host : undefined;
+    if (mysql) {
+      const unknownHost = await fetch(`${origin}/api/v1/auth/csrf`);
+      assert.equal(unknownHost.status, 403);
+      assert.deepEqual(await unknownHost.json(), { error: "Tenant host not found." });
+    }
+    await verifyGeneratedAuthHttp(origin, requestHost);
+    if (columnTenancy) await verifyGeneratedScimHttp(origin, requestHost);
     console.log(
       "Generated HTTP cookie/token/JWT admission, CSRF, provider gates and credential-specific logout passed.",
     );
@@ -275,7 +311,7 @@ const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
       console.log(
         "MySQL SCIM repeated cross-tenant CRUD/read isolation passed (DML-only production runtime).",
       );
-    const smokeEnv = { ...env, BASE_URL: origin, APP_URL: origin };
+    const smokeEnv = { ...env, BASE_URL: origin, APP_URL: origin, SMOKE_HOST: requestHost };
     await run([join(repoRoot, "scripts/smoke-test.ts")], { cwd: repoRoot, env: smokeEnv });
     await run([join(repoRoot, "scripts/smoke-webview.ts")], { cwd: repoRoot, env: smokeEnv });
     const denied = await fetch(`${origin}/metrics`, { signal: AbortSignal.timeout(5000) });

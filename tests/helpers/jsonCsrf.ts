@@ -41,8 +41,11 @@ function csrfCookieValue(cookieHeader: string): string | undefined {
 async function jsonCsrfHeaders(
   origin: string,
   previousCookie = "",
+  requestHost?: string,
 ): Promise<{ token: string; cookie: string; headers: Record<string, string> }> {
-  const response = await fetch(`${origin}/api/v1/auth/csrf`);
+  const response = await fetch(`${origin}/api/v1/auth/csrf`, {
+    headers: requestHost ? { host: requestHost } : undefined,
+  });
   const raw = await response.text();
   if (response.status !== 200) {
     throw new Error(`GET /api/v1/auth/csrf returned ${response.status}: ${raw}`);
@@ -65,7 +68,7 @@ async function jsonCsrfHeaders(
       "content-type": "application/json",
       "x-csrf-token": body.token,
       cookie,
-      origin,
+      origin: requestHost ? `${new URL(origin).protocol}//${requestHost}` : origin,
     },
   };
 }

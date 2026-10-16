@@ -6,22 +6,26 @@ function assertObject(value: unknown): asserts value is Record<string, unknown> 
 }
 
 /** Real generated routes only: fixture cookies are transported, never manufactured. */
-export async function verifyGeneratedAuthHttp(origin: string) {
+export async function verifyGeneratedAuthHttp(origin: string, requestHost?: string) {
   const credentials = { email: "demo@example.com", password: "StrataDemo!ChangeMe" };
   const request = (path: string, init: RequestInit = {}) =>
     fetch(`${origin}${path}`, {
       ...init,
+      headers: { ...init.headers, ...(requestHost ? { host: requestHost } : {}) },
       redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
   const denied = await request("/api/v1/auth/login", {
     method: "POST",
-    headers: { "content-type": "application/json", origin },
+    headers: {
+      "content-type": "application/json",
+      origin: requestHost ? `${new URL(origin).protocol}//${requestHost}` : origin,
+    },
     body: JSON.stringify(credentials),
   });
   assert.equal(denied.status, 403, "Native login must require CSRF.");
   await denied.text();
-  const csrf = await jsonCsrfHeaders(origin);
+  const csrf = await jsonCsrfHeaders(origin, "", requestHost);
   const wrong = await request("/api/v1/auth/login", {
     method: "POST",
     headers: csrf.headers,
@@ -86,7 +90,7 @@ export async function verifyGeneratedAuthHttp(origin: string) {
   }
 }
 
-export async function verifyGeneratedScimHttp(origin: string) {
+export async function verifyGeneratedScimHttp(origin: string, requestHost?: string) {
   const token = (tenant: number) => `q01-scim-tenant-${tenant}`;
   const request = (tenant: number, path: string, init: RequestInit = {}) =>
     fetch(`${origin}/scim/v2${path}`, {
@@ -97,6 +101,7 @@ export async function verifyGeneratedScimHttp(origin: string) {
         "content-type": "application/scim+json",
         authorization: `Bearer ${token(tenant)}`,
         "x-tenant-id": String(tenant === 1 ? 2 : 1),
+        ...(requestHost ? { host: requestHost } : {}),
         ...init.headers,
       },
     });

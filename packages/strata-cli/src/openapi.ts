@@ -6,6 +6,9 @@ import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/open
 import { validateOpenApiSpec } from "@getstrata/core/openapi/validate";
 import { readSpaPrefix } from "@getstrata/core/runtime/frontendMode";
 
+import { withCommandCleanup } from "./commandCleanup.ts";
+
+type AppCleanup = () => void | Promise<void>;
 type AppBootstrap = () => Promise<{ routes: Record<string, unknown> }>;
 
 function isSpaDocumentedPath(path: string, spaPrefix: string): boolean {
@@ -62,71 +65,94 @@ async function registerAppOpenApiRoutes(bootstrap: AppBootstrap): Promise<void> 
   registerOpenApiRouteMap(unregisteredKeepers, ["global", "api"]);
 }
 
-function createOpenApiGenerateCommand(bootstrap: AppBootstrap) {
-  return async function openapiGenerateCommand(): Promise<void> {
-    await registerAppOpenApiRoutes(bootstrap);
-
-    const spec = generateOpenApiSpec(routeRegistry.list());
-    const jsonPath = join(process.cwd(), "docs/openapi.json");
-    await mkdir(dirname(jsonPath), { recursive: true });
-    await writeFile(jsonPath, renderOpenApiDocument(spec), "utf8");
-
-    console.log(`OpenAPI spec written to ${jsonPath} (${routeRegistry.list().length} routes).`);
+function createOpenApiCommand(
+  bootstrap: AppBootstrap,
+  operation: () => Promise<number | undefined>,
+  close?: AppCleanup,
+) {
+  return async (): Promise<void> => {
+    const exitCode = await withCommandCleanup(async () => {
+      await registerAppOpenApiRoutes(bootstrap);
+      return operation();
+    }, close);
+    if (exitCode === 1) process.exit(1);
   };
 }
 
-function createOpenApiValidateCommand(bootstrap: AppBootstrap) {
-  return async function openapiValidateCommand(): Promise<void> {
-    await registerAppOpenApiRoutes(bootstrap);
+function createOpenApiGenerateCommand(bootstrap: AppBootstrap, close?: AppCleanup) {
+  return createOpenApiCommand(
+    bootstrap,
+    async () => {
+      const spec = generateOpenApiSpec(routeRegistry.list());
+      const jsonPath = join(process.cwd(), "docs/openapi.json");
+      await mkdir(dirname(jsonPath), { recursive: true });
+      await writeFile(jsonPath, renderOpenApiDocument(spec), "utf8");
 
-    const spec = generateOpenApiSpec(routeRegistry.list());
-    const errors = validateOpenApiSpec(spec);
+      console.log(`OpenAPI spec written to ${jsonPath} (${routeRegistry.list().length} routes).`);
+      return undefined;
+    },
+    close,
+  );
+}
 
-    if (errors.length > 0) {
-      console.error("OpenAPI validation failed:");
-      for (const error of errors) {
-        console.error(`- ${error}`);
+function createOpenApiValidateCommand(bootstrap: AppBootstrap, close?: AppCleanup) {
+  return createOpenApiCommand(
+    bootstrap,
+    async () => {
+      const spec = generateOpenApiSpec(routeRegistry.list());
+      const errors = validateOpenApiSpec(spec);
+
+      if (errors.length > 0) {
+        console.error("OpenAPI validation failed:");
+        for (const error of errors) {
+          console.error(`- ${error}`);
+        }
+        return 1;
       }
-      process.exit(1);
-    }
 
-    console.log(`OpenAPI spec valid (${routeRegistry.list().length} routes).`);
-  };
+      console.log(`OpenAPI spec valid (${routeRegistry.list().length} routes).`);
+      return undefined;
+    },
+    close,
+  );
 }
 
-function createOpenApiCheckCommand(bootstrap: AppBootstrap) {
-  return async function openapiCheckCommand(): Promise<void> {
-    await registerAppOpenApiRoutes(bootstrap);
+function createOpenApiCheckCommand(bootstrap: AppBootstrap, close?: AppCleanup) {
+  return createOpenApiCommand(
+    bootstrap,
+    async () => {
+      const spec = generateOpenApiSpec(routeRegistry.list());
+      const errors = validateOpenApiSpec(spec);
 
-    const spec = generateOpenApiSpec(routeRegistry.list());
-    const errors = validateOpenApiSpec(spec);
-
-    if (errors.length > 0) {
-      console.error("OpenAPI validation failed:");
-      for (const error of errors) {
-        console.error(`- ${error}`);
+      if (errors.length > 0) {
+        console.error("OpenAPI validation failed:");
+        for (const error of errors) {
+          console.error(`- ${error}`);
+        }
+        return 1;
       }
-      process.exit(1);
-    }
 
-    const generated = renderOpenApiDocument(spec);
-    const jsonPath = join(process.cwd(), "docs/openapi.json");
-    const committed = await readFile(jsonPath, "utf8");
+      const generated = renderOpenApiDocument(spec);
+      const jsonPath = join(process.cwd(), "docs/openapi.json");
+      const committed = await readFile(jsonPath, "utf8");
 
-    if (committed !== generated) {
-      console.error("OpenAPI spec drift detected.");
-      console.error("Run `strata openapi:generate` and commit docs/openapi.json.");
-      console.error(
-        "Add that generate step next to `strata openapi:check` in CI so new routes cannot ship undocumented.",
-      );
-      process.exit(1);
-    }
+      if (committed !== generated) {
+        console.error("OpenAPI spec drift detected.");
+        console.error("Run `strata openapi:generate` and commit docs/openapi.json.");
+        console.error(
+          "Add that generate step next to `strata openapi:check` in CI so new routes cannot ship undocumented.",
+        );
+        return 1;
+      }
 
-    console.log(`OpenAPI spec matches committed file (${routeRegistry.list().length} routes).`);
-  };
+      console.log(`OpenAPI spec matches committed file (${routeRegistry.list().length} routes).`);
+      return undefined;
+    },
+    close,
+  );
 }
 
-export type { AppBootstrap };
+export type { AppBootstrap, AppCleanup };
 export {
   createOpenApiCheckCommand,
   createOpenApiGenerateCommand,
