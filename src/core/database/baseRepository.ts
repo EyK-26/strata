@@ -6,7 +6,6 @@ import {
   type CursorPaginatedResult,
   type PaginatedResult,
 } from "../pagination/index.ts";
-import { getActiveDatabaseConnection } from "./connectionContext.ts";
 import { currentSqlDialect } from "./dialect.ts";
 import { withDatabaseErrorHandling } from "./errors.ts";
 import { KEYSET_ALIAS_PREFIX, keysetBoundary, validateKeyset } from "./keyset.ts";
@@ -50,7 +49,7 @@ import {
 import { repositoryConnection } from "./repositoryConnection";
 import { RepositoryQuery } from "./repositoryQuery.ts";
 import type { TableDefinition } from "./table.ts";
-import { runInTransaction } from "./transaction.ts";
+import { isActiveTransactionConnection, runInTransaction } from "./transaction.ts";
 import { hasActiveTransaction } from "./transactionControl.ts";
 import type {
   MutationValues,
@@ -137,8 +136,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     if (!eventBus.hasTransactionalListeners(modelEventName(this.table.name, action))) return;
     if (
       !hasActiveTransaction() ||
-      (this.connection !== repositoryConnection &&
-        this.connection !== getActiveDatabaseConnection(repositoryConnection))
+      (this.connection !== repositoryConnection && !isActiveTransactionConnection(this.connection))
     )
       throw new Error(
         "Transactional model listeners require runInTransaction and the framework-bound repository connection before writing.",
@@ -150,6 +148,47 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       return operation();
     // A caught listener/publication failure must roll back its row write as well.
     return runInTransaction(operation);
+  }
+
+  private mysqlMutation<T>(operation: (repository: this) => Promise<T>): Promise<T> {
+    return runInTransaction(
+      (db) => operation(this.withConnection(db)),
+      this.connection === repositoryConnection ? {} : { connection: this.connection },
+    );
+  }
+
+  private mysqlRow(id: unknown, onlyTrashed = false): Promise<TEntity | null> {
+    if (id === undefined || id === null)
+      throw new Error(
+        `MySQL write to ${this.table.name} did not identify its persisted primary key.`,
+      );
+    return this.firstOrNull({ [this.table.primaryKey]: id } as QueryWhere<TEntity>, {
+      withTrashed: true,
+      ...(onlyTrashed ? { onlyTrashed: true } : {}),
+    });
+  }
+
+  private mysqlAffected(row: { affectedRows?: number } | undefined): number {
+    const count = row?.affectedRows;
+    if (count === undefined || !Number.isSafeInteger(count) || count < 0)
+      throw new Error("MySQL mutations require affectedRows metadata from the framework adapter.");
+    return count;
+  }
+
+  private async mysqlWriteById(
+    query: { text: string; params: unknown[] },
+    id: TEntity[PrimaryKey],
+    onlyTrashed = false,
+    allowUnchanged = false,
+  ): Promise<TEntity | null> {
+    const [row] = await this.connection.unsafe<{ affectedRows?: number }>(query.text, query.params);
+    if (!this.mysqlAffected(row)) {
+      if (!allowUnchanged) return null;
+      // mysql2 can report changed rows instead of matched rows. An unchanged
+      // update still returns its live row; default scopes exclude deleted rows.
+      return this.findById(id);
+    }
+    return this.mysqlRow(id, onlyTrashed);
   }
 
   async count(options: ExtendedQueryOptions<TEntity> = {}): Promise<number> {
@@ -164,7 +203,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         options.lock &&
         (!hasActiveTransaction() ||
           (this.connection !== repositoryConnection &&
-            this.connection !== getActiveDatabaseConnection(repositoryConnection)))
+            !isActiveTransactionConnection(this.connection)))
       ) {
         throw new Error("Row locks require the framework active transaction connection.");
       }
@@ -465,6 +504,50 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     conflictColumns: readonly (keyof TEntity & string)[],
     updateColumns?: readonly (keyof TEntity & string)[],
   ): Promise<TEntity | null> {
+    if (currentSqlDialect().driver === "mysql")
+      return this.mysqlMutation((repository) =>
+        withDatabaseErrorHandling(async () => {
+          // MySQL uses every unique index, not a named ON CONFLICT target. Require
+          // actual conflict values for a deterministic readback when insertId is zero.
+          const where: Record<string, unknown> = {};
+          for (const column of conflictColumns) {
+            if (
+              !this.table.columns.includes(column) ||
+              values[column] === undefined ||
+              values[column] === null
+            )
+              throw new Error("MySQL upsert requires non-null supplied conflict-column values.");
+            where[column] = values[column];
+          }
+          const query = buildUpsertQuery(this.table, values, conflictColumns, updateColumns);
+          const supplied = this.table.columns.filter((column) => values[column] !== undefined);
+          const updates =
+            updateColumns ?? supplied.filter((column) => !conflictColumns.includes(column));
+          const doNothing = !updates.some((column) => supplied.includes(column));
+          const existing = doNothing
+            ? await repository.firstOrNull(where as QueryWhere<TEntity>, {
+                withTrashed: true,
+                lock: { mode: "update" },
+              })
+            : null;
+          const [result] = await repository.connection.unsafe<{
+            insertId?: number | string;
+            affectedRows?: number;
+          }>(query.text, query.params);
+          repository.mysqlAffected(result);
+          if (doNothing && existing) return null;
+          const generated = result?.insertId;
+          const row =
+            generated !== undefined && String(generated) !== "0"
+              ? await repository.mysqlRow(generated)
+              : await repository.firstOrNull(where as QueryWhere<TEntity>, { withTrashed: true });
+          if (!row)
+            throw new Error(
+              "MySQL upsert could not resolve the persisted row; transaction rolled back.",
+            );
+          return row;
+        }),
+      );
     return await withDatabaseErrorHandling(async () => {
       const { text, params } = buildUpsertQuery(this.table, values, conflictColumns, updateColumns);
       const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
@@ -482,6 +565,17 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     amount = 1,
     extra: UpdateValues<TEntity, PrimaryKey> = {} as UpdateValues<TEntity, PrimaryKey>,
   ): Promise<TEntity | null> {
+    if (currentSqlDialect().driver === "mysql")
+      return this.mysqlMutation((repository) =>
+        withDatabaseErrorHandling(() =>
+          repository.mysqlWriteById(
+            buildIncrementQuery(this.table, id, column, amount, extra),
+            id,
+            false,
+            true,
+          ),
+        ),
+      );
     return await withDatabaseErrorHandling(async () => {
       const { text, params } = buildIncrementQuery(this.table, id, column, amount, extra);
       const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
@@ -504,6 +598,25 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
 
   async create(values: MutationValues<TEntity>): Promise<TEntity> {
     this.assertTransactionalEvent("created");
+    if (currentSqlDialect().driver === "mysql")
+      return this.mysqlMutation((repository) =>
+        withDatabaseErrorHandling(async () => {
+          const query = buildInsertQuery(this.table, values);
+          const [result] = await repository.connection.unsafe<{
+            insertId?: number | string;
+            affectedRows?: number;
+          }>(query.text, query.params);
+          repository.mysqlAffected(result);
+          const key =
+            String(result?.insertId ?? "0") !== "0"
+              ? result?.insertId
+              : values[this.table.primaryKey];
+          const row = await repository.mysqlRow(key);
+          if (!row) throw new Error(`Insert into ${this.table.name} did not return a record.`);
+          await dispatchModelEvent(modelEventName(this.table.name, "created"), row);
+          return row;
+        }),
+      );
     return await this.runModelMutation("created", () =>
       withDatabaseErrorHandling(async () => {
         const { text, params } = buildInsertQuery(this.table, values);
@@ -573,6 +686,19 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     changes: UpdateValues<TEntity, PrimaryKey>,
   ): Promise<TEntity | null> {
     this.assertTransactionalEvent("updated");
+    if (currentSqlDialect().driver === "mysql")
+      return this.mysqlMutation((repository) =>
+        withDatabaseErrorHandling(async () => {
+          const row = await repository.mysqlWriteById(
+            buildUpdateQuery(this.table, id, changes),
+            id,
+            false,
+            true,
+          );
+          if (row) await dispatchModelEvent(modelEventName(this.table.name, "updated"), row);
+          return row;
+        }),
+      );
     return await this.runModelMutation("updated", () =>
       withDatabaseErrorHandling(async () => {
         const { text, params } = buildUpdateQuery(this.table, id, changes);
@@ -616,6 +742,19 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
 
   async softDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
     this.assertTransactionalEvent("deleted");
+    if (currentSqlDialect().driver === "mysql")
+      return this.mysqlMutation((repository) =>
+        withDatabaseErrorHandling(async () => {
+          const row = await repository.mysqlWriteById(
+            buildSoftDeleteByIdQuery(this.table, id, new Date()),
+            id,
+            true,
+          );
+          if (!row) return false;
+          await dispatchModelEvent(modelEventName(this.table.name, "deleted"), row);
+          return true;
+        }),
+      );
     return await this.runModelMutation("deleted", () =>
       withDatabaseErrorHandling(async () => {
         const { text, params } = buildSoftDeleteByIdQuery(this.table, id, new Date());
@@ -636,6 +775,19 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
 
   async forceDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
     this.assertTransactionalEvent("force-deleted");
+    if (currentSqlDialect().driver === "mysql")
+      return this.mysqlMutation((repository) =>
+        withDatabaseErrorHandling(async () => {
+          const query = buildDeleteByIdQuery(this.table, id);
+          const [result] = await repository.connection.unsafe<{ affectedRows?: number }>(
+            query.text,
+            query.params,
+          );
+          if (!repository.mysqlAffected(result)) return false;
+          await dispatchModelEvent(modelEventName(this.table.name, "force-deleted"), { id });
+          return true;
+        }),
+      );
     return await this.runModelMutation("force-deleted", () =>
       withDatabaseErrorHandling(async () => {
         const { text, params } = buildDeleteByIdQuery(this.table, id);
@@ -655,6 +807,14 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
 
   async restoreById(id: TEntity[PrimaryKey]): Promise<TEntity | null> {
     this.assertTransactionalEvent("restored");
+    if (currentSqlDialect().driver === "mysql")
+      return this.mysqlMutation((repository) =>
+        withDatabaseErrorHandling(async () => {
+          const row = await repository.mysqlWriteById(buildRestoreByIdQuery(this.table, id), id);
+          if (row) await dispatchModelEvent(modelEventName(this.table.name, "restored"), row);
+          return row;
+        }),
+      );
     return await this.runModelMutation("restored", () =>
       withDatabaseErrorHandling(async () => {
         const { text, params } = buildRestoreByIdQuery(this.table, id);
