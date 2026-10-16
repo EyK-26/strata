@@ -6,6 +6,7 @@ interface JwtPayload {
   role?: string;
   abilities?: string[];
   emailVerifiedAt?: Date | string | null;
+  authVersion?: number;
   iat?: number;
   exp?: number;
   [key: string]: unknown;

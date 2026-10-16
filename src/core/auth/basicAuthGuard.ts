@@ -7,6 +7,7 @@ import { getDefaultDatabasePool } from "../database/defaultConnection";
 import { UnprocessableEntityError } from "../errors/http";
 import { readBasicCredentials } from "../http/statelessAuth";
 import { runWithMigrationBypassForIdentifier } from "../tenant/databaseTenantContext";
+import { isAccountActive, isAuthUserActive } from "./accountState";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
 import { verifyPassword } from "./password";
@@ -51,6 +52,7 @@ class BasicAuthGuard implements AuthGuard {
         ? await directory.findByEmail(credentials.username)
         : null;
 
+    if (record && !isAccountActive(record)) return null;
     if (record?.password) {
       if (!(await verifyPassword(credentials.password, record.password))) {
         return null;
@@ -76,7 +78,7 @@ class BasicAuthGuard implements AuthGuard {
 
     if (typeof directory.verifyCredentials === "function") {
       const user = await directory.verifyCredentials(credentials.username, credentials.password);
-      if (!user) {
+      if (!user || !isAuthUserActive(user)) {
         return null;
       }
 

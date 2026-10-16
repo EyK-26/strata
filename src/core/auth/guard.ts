@@ -5,6 +5,7 @@ import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
 import { envFlagEnabled, isProductionEnv } from "../runtime/appEnv";
 import { timingSafeCompareString } from "../security/timingSafeCompare";
 import { abilityCatalog } from "./abilityCatalog";
+import { isAuthUserActive } from "./accountState";
 import type { AuthUser, CredentialSource } from "./authContext";
 import { currentAuthUser } from "./authContext";
 import { BasicAuthGuard } from "./basicAuthGuard";
@@ -67,7 +68,7 @@ class ApiTokenGuard implements AuthGuard {
       return null;
     }
 
-    return this.options.user;
+    return isAuthUserActive(this.options.user) ? this.options.user : null;
   }
 }
 
@@ -87,7 +88,8 @@ class DatabaseTokenGuard implements AuthGuard {
       return null;
     }
 
-    return await tokenService.resolveUserFromToken(token);
+    const user = await tokenService.resolveUserFromToken(token);
+    return user && isAuthUserActive(user) ? user : null;
   }
 }
 
@@ -98,7 +100,7 @@ class CompositeGuard implements AuthGuard {
     for (const guard of this.guards) {
       const user = await Promise.resolve(guard.resolve(request));
 
-      if (user) {
+      if (user && isAuthUserActive(user)) {
         return user;
       }
     }
@@ -163,7 +165,8 @@ class AuthManager {
     request?: Request,
   ): Promise<{ user: AuthUser | null; credentialSource: CredentialSource }> {
     if (!request) {
-      return { user: currentAuthUser(), credentialSource: null };
+      const user = currentAuthUser();
+      return { user: user && isAuthUserActive(user) ? user : null, credentialSource: null };
     }
 
     if (authorizationScheme(request) !== "basic") {
@@ -204,6 +207,11 @@ class AuthManager {
     return user;
   }
 
+  private async resolveGuard(guard: AuthGuard, request: Request): Promise<AuthUser | null> {
+    const user = await guard.resolve(request);
+    return user && isAuthUserActive(user) ? user : null;
+  }
+
   private async authenticateRequest(
     request: Request,
   ): Promise<{ user: AuthUser | null; credentialSource: CredentialSource }> {
@@ -216,7 +224,7 @@ class AuthManager {
       }
 
       if (isBearerCapableGuard(this.guard)) {
-        const fromDefault = await Promise.resolve(this.guard.resolve(request));
+        const fromDefault = await this.resolveGuard(this.guard, request);
         return { user: fromDefault, credentialSource: fromDefault ? "bearer" : null };
       }
 
@@ -230,7 +238,7 @@ class AuthManager {
       }
 
       if (this.guard instanceof BasicAuthGuard) {
-        const fromDefault = await this.guard.resolve(request);
+        const fromDefault = await this.resolveGuard(this.guard, request);
         return { user: fromDefault, credentialSource: fromDefault ? "basic" : null };
       }
 
@@ -242,7 +250,7 @@ class AuthManager {
       return { user: fromSession, credentialSource: "session" };
     }
 
-    const fromDefault = await Promise.resolve(this.guard.resolve(request));
+    const fromDefault = await this.resolveGuard(this.guard, request);
     if (!fromDefault) {
       return { user: null, credentialSource: null };
     }
@@ -265,7 +273,7 @@ class AuthManager {
       }
 
       seen.add(named);
-      const user = await Promise.resolve(named.resolve(request));
+      const user = await this.resolveGuard(named, request);
 
       if (user) {
         return user;

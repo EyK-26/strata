@@ -5,6 +5,8 @@ type CredentialSource = "session" | "bearer" | "basic" | "guest" | null;
 type AuthUser = {
   id: number | string;
   role?: string;
+  /** Current state from a trusted directory/guard, never an unverified client claim. */
+  isActive?: boolean;
   abilities?: string[];
   tokenId?: number;
   emailVerifiedAt?: Date | string | null;

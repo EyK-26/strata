@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { readRequestCookie } from "../http/cookies";
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
@@ -8,11 +9,13 @@ const SESSION_REMEMBER_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 interface CreateSessionCookieOptions {
   remember?: boolean;
+  authVersion?: number;
 }
 
 interface SignedSession {
   userId: number;
   issuedAt: number;
+  authVersion?: number;
 }
 
 function sessionCookieName(): string {
@@ -39,30 +42,21 @@ function resolveSessionSecret(): string {
   return requireConfiguredSecret(["SESSION_SECRET"], "session-secret");
 }
 
-function signSession(userId: number, issuedAt: number, ttlSeconds?: number): string {
+function signSession(
+  userId: number,
+  issuedAt: number,
+  ttlSeconds?: number,
+  authVersion?: number,
+): string {
   const payload =
-    ttlSeconds === undefined ? `${userId}.${issuedAt}` : `${userId}.${issuedAt}.${ttlSeconds}`;
+    authVersion !== undefined
+      ? `v2.${userId}.${issuedAt}.${ttlSeconds}.${authVersion}`
+      : ttlSeconds === undefined
+        ? `${userId}.${issuedAt}`
+        : `${userId}.${issuedAt}.${ttlSeconds}`;
   const signature = createHmac("sha256", resolveSessionSecret()).update(payload).digest("hex");
 
   return `${payload}.${signature}`;
-}
-
-function readCookieValue(request: Request, cookieName: string): string | null {
-  const cookieHeader = request.headers.get("cookie");
-
-  if (!cookieHeader) {
-    return null;
-  }
-
-  for (const part of cookieHeader.split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-
-    if (name === cookieName) {
-      return decodeURIComponent(rest.join("="));
-    }
-  }
-
-  return null;
 }
 
 function readSignedSession(
@@ -71,6 +65,7 @@ function readSignedSession(
   cookieSignature: string | undefined,
   ttlSeconds: number,
   remember: boolean,
+  authVersion?: number,
 ): SignedSession | null {
   const userId = Number.parseInt(userIdRaw, 10);
   const issuedAt = Number.parseInt(issuedAtRaw, 10);
@@ -88,7 +83,11 @@ function readSignedSession(
   }
 
   const expectedSignature = (
-    remember ? signSession(userId, issuedAt, ttlSeconds) : signSession(userId, issuedAt)
+    authVersion !== undefined
+      ? signSession(userId, issuedAt, ttlSeconds, authVersion)
+      : remember
+        ? signSession(userId, issuedAt, ttlSeconds)
+        : signSession(userId, issuedAt)
   )
     .split(".")
     .pop();
@@ -108,17 +107,35 @@ function readSignedSession(
     return null;
   }
 
-  return { userId, issuedAt };
+  return { userId, issuedAt, ...(authVersion !== undefined ? { authVersion } : {}) };
 }
 
 function readSession(request: Request): SignedSession | null {
-  const cookieValue = readCookieValue(request, sessionCookieName());
+  const cookieValue = readRequestCookie(request, sessionCookieName());
 
   if (!cookieValue) {
     return null;
   }
 
   const parts = cookieValue.split(".");
+
+  if (parts.length === 6 && parts[0] === "v2") {
+    const fields = parts.slice(1, 5);
+    if (
+      fields.some(
+        (value) => !/^(0|[1-9][0-9]*)$/.test(value) || !Number.isSafeInteger(Number(value)),
+      )
+    )
+      return null;
+    return readSignedSession(
+      String(parts[1]),
+      String(parts[2]),
+      parts[5],
+      Number(parts[3]),
+      true,
+      Number(parts[4]),
+    );
+  }
 
   if (parts.length === 4) {
     const [userIdRaw, issuedAtRaw, ttlRaw, cookieSignature] = parts;
@@ -168,6 +185,7 @@ function isSessionInvalidated(
 }
 
 interface SessionCookieDetails {
+  authVersion?: number;
   header: string;
   userId: number;
   issuedAt: number;
@@ -178,11 +196,19 @@ function createSessionCookieDetails(
   userId: number,
   options: CreateSessionCookieOptions = {},
 ): SessionCookieDetails {
+  if (
+    options.authVersion !== undefined &&
+    (!Number.isSafeInteger(options.authVersion) || options.authVersion < 0)
+  )
+    throw new RangeError("authVersion must be a non-negative safe integer.");
   const issuedAt = Date.now();
   const ttlSeconds = options.remember ? sessionRememberTtlSeconds() : sessionTtlSeconds();
-  const value = options.remember
-    ? signSession(userId, issuedAt, ttlSeconds)
-    : signSession(userId, issuedAt);
+  const value =
+    options.authVersion !== undefined
+      ? signSession(userId, issuedAt, ttlSeconds, options.authVersion)
+      : options.remember
+        ? signSession(userId, issuedAt, ttlSeconds)
+        : signSession(userId, issuedAt);
   const secure = isProductionEnv() ? "; Secure" : "";
 
   return {
@@ -190,6 +216,7 @@ function createSessionCookieDetails(
     userId,
     issuedAt,
     ttlSeconds,
+    ...(options.authVersion !== undefined ? { authVersion: options.authVersion } : {}),
   };
 }
 

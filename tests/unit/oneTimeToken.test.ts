@@ -124,8 +124,9 @@ describe("oneTimeToken", () => {
         return [] as T[];
       },
     };
-    await revokeUserSessions(sql, 3);
+    await runWithSqlDialect("sqlite", () => revokeUserSessions(sql, 3));
     expect(queries[0]).toContain("session_valid_after");
+    expect(queries[0]).not.toContain("auth_version");
     expect(queries[1]).toContain("DELETE FROM sessions");
     expect(queries[2]).toContain("DELETE FROM api_tokens");
   });
@@ -138,7 +139,7 @@ describe("oneTimeToken", () => {
         return [] as T[];
       },
     };
-    await revokeUserSessions(sql, 3, { revokeApiTokens: false });
+    await runWithSqlDialect("sqlite", () => revokeUserSessions(sql, 3, { revokeApiTokens: false }));
     expect(queries.some((query) => query.includes("DELETE FROM api_tokens"))).toBe(false);
   });
 
@@ -151,7 +152,9 @@ describe("oneTimeToken", () => {
         return [] as T[];
       },
     };
-    await expect(revokeUserSessions(sql, 8)).resolves.toBeUndefined();
+    await expect(
+      runWithSqlDialect("sqlite", () => revokeUserSessions(sql, 8)),
+    ).resolves.toBeUndefined();
   });
 
   test("revokeUserSessions rethrows a real delete error", async () => {
@@ -163,7 +166,9 @@ describe("oneTimeToken", () => {
         return [] as T[];
       },
     };
-    await expect(revokeUserSessions(sql, 8)).rejects.toThrow("connection reset");
+    await expect(runWithSqlDialect("sqlite", () => revokeUserSessions(sql, 8))).rejects.toThrow(
+      "connection reset",
+    );
   });
 
   test("revokeUserSessions swallows a missing api_tokens table", async () => {
@@ -175,7 +180,9 @@ describe("oneTimeToken", () => {
         return [] as T[];
       },
     };
-    await expect(revokeUserSessions(sql, 8)).resolves.toBeUndefined();
+    await expect(
+      runWithSqlDialect("sqlite", () => revokeUserSessions(sql, 8)),
+    ).resolves.toBeUndefined();
   });
 
   test("revokeUserSessions rethrows a real api token delete error", async () => {
@@ -187,6 +194,23 @@ describe("oneTimeToken", () => {
         return [] as T[];
       },
     };
-    await expect(revokeUserSessions(sql, 8)).rejects.toThrow("deadlock");
+    await expect(runWithSqlDialect("sqlite", () => revokeUserSessions(sql, 8))).rejects.toThrow(
+      "deadlock",
+    );
+  });
+  test("Postgres concurrent DDL errors after optional-table lookup fail closed", async () => {
+    const queries: string[] = [];
+    const sql = {
+      async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
+        queries.push(query);
+        if (query.includes("to_regclass")) return [{ relation: params[0] }] as T[];
+        if (query.includes("DELETE")) throw new Error("relation does not exist");
+        return [] as T[];
+      },
+    };
+    await expect(runWithSqlDialect("pgsql", () => revokeUserSessions(sql, 8))).rejects.toThrow(
+      "relation does not exist",
+    );
+    expect(queries.some((query) => query.includes("to_regclass"))).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import type { AuthUserDirectory } from "../contracts/authUserDirectory";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { readBearerToken } from "../http/statelessAuth";
+import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
 import { type JwtPayload, verifyJwt } from "./jwt";
@@ -84,6 +85,9 @@ class JwtGuard implements AuthGuard {
     } catch {
       return null;
     }
+
+    if (!isAccountActive(record) || !matchesAuthVersion(payload.authVersion, record.auth_version))
+      return null;
 
     if (isSessionInvalidated(payload.iat * 1000, record.session_valid_after)) {
       return null;

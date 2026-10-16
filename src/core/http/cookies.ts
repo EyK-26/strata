@@ -29,7 +29,11 @@ function readRequestCookie(request: Request, name: string): string | null {
     const cookieName = part.slice(0, idx).trim();
     if (cookieName !== name) continue;
 
-    return decodeURIComponent(part.slice(idx + 1).trim());
+    try {
+      return decodeURIComponent(part.slice(idx + 1).trim());
+    } catch {
+      return null;
+    }
   }
 
   return null;

@@ -156,3 +156,30 @@ These exist for generic apps, tests, or the leftover fixture. Generated HiroApp 
 | `FEATURE_SAML` | Real SP via optional peer `@node-saml/node-saml`. Routes `GET /auth/saml` and `POST /auth/saml/acs` 404 when the flag is off. Requires `SAML_IDP_ISSUER`. ACS compares assertion issuer. Signed responses default on; production boot rejects `SAML_WANT_RESPONSE_SIGNED=false`. |
 
 Production checks: [PRODUCTION.md](./PRODUCTION.md).
+
+## Explicit account-state schema adoption
+
+The standard `users` table can adopt account state through an additive file migration:
+
+```ts
+import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
+import { resolveDatabaseDriver } from "@getstrata/core/database/schema";
+
+export default createAccountStateMigration("0006_account_state", resolveDatabaseDriver());
+```
+
+Choose an unused migration name and run it before deploying readers or writers that require account state. Existing rows and writers that omit the new fields receive `is_active = true` and `auth_version = 0`. The migration preserves existing columns, rows and tenant policies. Authentication never performs implicit schema changes. Ordinary rollback refuses to remove these security fields, even with no users: doing so could reactivate suspended accounts or revive previously issued proofs. An explicit destructive `migrate:fresh` can remove them. Downgrading a deployed application requires an administrative credential-reset and account-state preservation procedure; do not drop these columns as a routine rollback.
+
+`revokeUserSessions(sql, id, { incrementAuthVersion: true })` atomically advances the database epoch in the same UPDATE as the timestamp watermark, then removes stored sessions and (by default) API tokens. Optional missing storage is tolerated: Postgres checks relation existence before deletion so a missing table cannot abort the account transaction; concurrent DDL or real deletion errors still propagate. MySQL uses its native missing-table error code. This option requires the migration; legacy callers retain their existing schema contract. The helper does **not** open a transaction: invoke it inside the same transaction and account-row lock as the status/password change and persistent credential issuance. A failed later statement must roll back the epoch, account mutation and credential deletions together. Reactivation must advance the epoch again rather than resetting it. The migration and helper alone do not enable SCIM suspension; generated issuance and transition adoption remains required under #216.
+
+## Optional account-state admission (foundation for #216)
+
+`AuthUserRecord.is_active?: boolean` opts a directory into live account-status checks. Omission preserves the legacy contract; explicit false or malformed non-boolean values deny. `completePasswordLogin` returns `account_inactive` before accepting TOTP/recovery proofs, and Basic, JWT and signed-session guards reject inactive records. A token/custom guard projects trusted current status as `AuthUser.isActive`; the token guards and AuthManager reject an explicitly inactive principal. Custom token directories must load/project current state on each new request; a status claim supplied by a client or stored in a token is not a live directory lookup. Existing Basic resolution reuse remains limited to one admitted native Request, not subsequent requests.
+
+The database-cookie loader reads the current user row and maps Postgres/SQLite boolean representations; missing status preserves legacy behavior, while explicit invalid/null status denies. Cookie stores also reject inactive custom-loader results before invoking a user mapper, and refuse session creation from an explicitly inactive SessionUser. These checks do not serialize issuance against concurrent suspension, revoke stored sessions/tokens or cancel already admitted requests.
+
+`AuthUserRecord.auth_version?: number` opts JWT and stateless signed-session guards into credential-epoch matching. A configured epoch must be a non-negative safe integer. JWTs carry `authVersion`; signed cookies use `createSessionCookie(id, { authVersion })`. The latter uses the framework-owned v2 signed payload while leaving the previous default/remember cookie formats unchanged. Missing, malformed or mismatched proof versions reject when the directory supplies an epoch. With no directory epoch, legacy admission remains unchanged. Adding an epoch therefore intentionally requires reissuing previously unversioned stateless credentials. Never reset or reuse an epoch during reactivation; future transitions must increment it atomically under the same account lock as credential issuance/revocation. Epoch matching addresses ordering independently of timestamp precision; existing expiry and timestamp revocation checks still apply.
+
+This PR is the admission foundation only. Generated users/migrations, atomic SCIM transitions, live status projection, serialized cookie/API/JWT and SSO issuance, version-bound pending MFA, revocation/reactivation and published shop adoption remain required in #216. The current generated SCIM adapter still explicitly rejects suspension. The native HTTP test qualifies guard composition with a participating directory, not complete SCIM deprovisioning, RLS migration or IdP behavior.
+
+Signed-session parsing now uses the shared request-cookie reader. Invalid percent-encoded header values are treated as absent credentials rather than propagating URIError; valid neighboring cookies and existing payload formats are preserved. Native HTTP and direct-reader regressions cover the original malformed-cookie failure. This is parser error handling, not a second application cookie implementation.
