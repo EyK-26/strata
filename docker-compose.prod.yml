@@ -1,11 +1,5 @@
-# Production-shaped local stack. Set APP_ENV explicitly: local for a bootable
-# stack, production only when the host also injects every secret secretsGuard
-# requires (SESSION_SECRET, TOKEN_HASH_PEPPER, METRICS_TOKEN, and so on).
-# This file is not booted in CI. Proof of the app role is the file test plus
-# HiroApp live-role e2e. POSTGRES_USER remains the Compose superuser for volume
-# init. Request traffic uses strata_app (NOSUPERUSER NOBYPASSRLS). CREATE ROLE
-# and GRANT run through ensurePostgresDatabaseAndAppRole on migrate/start.
-
+# Optional generated acceptance-image stack, not a product deployment manifest.
+# Run migrations explicitly as a separate service; HTTP/workers receive no admin URL.
 services:
   postgres:
     image: postgres:18.4
@@ -36,15 +30,18 @@ services:
       APP_ENV: ${APP_ENV:?Set APP_ENV to local or production}
       APP_DEBUG: "false"
       AUTH_DEV_HEADERS: "false"
-      MIGRATION_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+      APP_URL: ${APP_URL:?APP_URL is required}
+      API_TOKEN_DEFAULT_EXPIRY_DAYS: ${API_TOKEN_DEFAULT_EXPIRY_DAYS:-30}
+      MAIL_DRIVER: log
       APP_DATABASE_URL: postgresql://strata_app:${STRATA_APP_PASSWORD:?STRATA_APP_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-app}
       DATABASE_URL: postgresql://strata_app:${STRATA_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       CACHE_DRIVER: redis
       QUEUE_DRIVER: redis
-      SESSION_SECRET: ${SESSION_SECRET:-}
-      TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER:-}
-      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER:?TOKEN_HASH_PEPPER is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      METRICS_TOKEN: ${METRICS_TOKEN:?METRICS_TOKEN is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,21 +49,41 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:3000:3000"
-    command: ["sh", "-c", "bun run cli migrate && bun run start"]
+    command: ["bun", "node_modules/@getstrata/cli/cli.ts", "start"]
 
   worker:
     build: .
     environment:
       APP_ENV: ${APP_ENV:?Set APP_ENV to local or production}
       AUTH_DEV_HEADERS: "false"
-      MIGRATION_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+      APP_URL: ${APP_URL:?APP_URL is required}
+      API_TOKEN_DEFAULT_EXPIRY_DAYS: ${API_TOKEN_DEFAULT_EXPIRY_DAYS:-30}
+      MAIL_DRIVER: log
       APP_DATABASE_URL: postgresql://strata_app:${STRATA_APP_PASSWORD:?STRATA_APP_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-app}
       DATABASE_URL: postgresql://strata_app:${STRATA_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       QUEUE_DRIVER: redis
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER:?TOKEN_HASH_PEPPER is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      METRICS_TOKEN: ${METRICS_TOKEN:?METRICS_TOKEN is required}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["bun", "run", "cli", "queue:work"]
+    command: ["bun", "node_modules/@getstrata/cli/cli.ts", "queue:work"]
+
+  migrate:
+    build: .
+    profiles: [administration]
+    environment:
+      APP_ENV: ${APP_ENV:?Set APP_ENV to local or production}
+      MIGRATION_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+      APP_DATABASE_URL: postgresql://strata_app:${STRATA_APP_PASSWORD:?STRATA_APP_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-app}
+      DATABASE_URL: postgresql://strata_app:${STRATA_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+      STRATA_APP_PASSWORD: ${STRATA_APP_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["bun", "node_modules/@getstrata/cli/cli.ts", "migrate"]

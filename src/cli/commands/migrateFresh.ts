@@ -1,5 +1,4 @@
-import { importHiroappModule } from "../../bootstrap/dogfoodApp.ts";
-import { isFixtureSchema } from "../../bootstrap/schemaTarget.ts";
+import { assertFixtureSchema } from "../../bootstrap/schemaTarget.ts";
 
 async function migrateFreshCommand(...args: string[]): Promise<void> {
   const shouldSeed = args.includes("--seed");
@@ -11,22 +10,9 @@ async function migrateFreshCommand(...args: string[]): Promise<void> {
     );
   }
 
-  if (isFixtureSchema()) {
-    const { freshDatabase } = await import("../../db/migrations/runner");
-    await freshDatabase({ seed: shouldSeed });
-    return;
-  }
-
-  const fresh = await importHiroappModule<{ fresh?: () => Promise<void> }>("src/db/fresh.ts");
-  if (typeof fresh.fresh === "function") {
-    await fresh.fresh();
-  }
-  if (shouldSeed) {
-    const seeded = await importHiroappModule<{ seed?: () => Promise<void> }>("src/db/seed.ts");
-    if (typeof seeded.seed === "function") {
-      await seeded.seed();
-    }
-  }
+  assertFixtureSchema();
+  const { freshDatabase } = await import("../../db/migrations/runner");
+  await freshDatabase({ seed: shouldSeed });
 }
 
 export { migrateFreshCommand };

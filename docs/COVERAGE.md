@@ -4,7 +4,7 @@ CI requires **100% lines on enforced files** through `scripts/assert-core-covera
 
 Exemptions are per file, not per directory. A new file is enforced by default even when every one of its siblings is exempt, so adding one to the debt list is a visible diff that has to be reviewed.
 
-Do not set Bun `coverageThreshold`. OpenAPI and CLI tests load HiroApp `createApp`, so one process would score both trees and fail a naive 100% gate.
+Do not set a global Bun `coverageThreshold`: the explicit per-file gate below distinguishes enforced source from recorded exclusions. Packed-app runtime acceptance is a separate gate and does not claim source line coverage.
 
 ## What the gate checks
 

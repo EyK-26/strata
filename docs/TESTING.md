@@ -1,46 +1,28 @@
 # Testing
 
-`bun run test:e2e` runs the preserved security suite against a disposable generated app installed from candidate runtime tarballs, with an owned restricted-role Postgres database. It no longer imports `apps/hiroapp`. Generated CLI/OpenAPI/HTTP smoke acceptance now also runs on an owned temporary app; remaining legacy CLI/migration loaders and Docker/workspace wiring are retained during the staged [acceptance migration](GENERATED-APP-ACCEPTANCE.md). External product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop). Framework tests also use a **fixture** schema (`src/db`) so RLS and tenant helpers have tables; that fixture is not a product.
+`bun run test:e2e` runs the preserved security suite against a disposable generated app installed from candidate runtime tarballs, with an owned restricted-role Postgres database. It no longer imports `apps/hiroapp`. Generated CLI/OpenAPI/HTTP smoke acceptance now also runs on an owned temporary app; the private CLI now manages fixtures only, and Docker/workspace wiring no longer depends on checked-in apps during the staged [acceptance migration](GENERATED-APP-ACCEPTANCE.md). External product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop). Framework tests also use a **fixture** schema (`src/db`) so RLS and tenant helpers have tables; that fixture is not a product.
 
-## Seeded example users
-
-After `bun run hiroapp:fresh`:
-
-| Email | Password | Role |
-|-------|----------|------|
-| `demo@example.com` | `StrataDemo!ChangeMe` | member |
-| `admin@example.test` | `StrataDemo!ChangeMe` | admin |
-
-## Commands
+## Commands and infrastructure
 
 ```bash
-bun run unit
-QUEUE_DRIVER=sync bun run integration
-bun run test:coverage
+docker compose up -d postgres mysql redis --wait
 bun run validate:host
 ```
 
-Docker-shaped CI:
+`validate:host` builds packages, resets/seeds only the framework fixture schema, then runs `validate:ci`. Generated runtime cases own their migrations and databases. The root CLI refuses database operations without `STRATA_SCHEMA=fixture`, and refuses staging/production targets before database access. Local `bun test` uses `tests/globalSetup.ts` to initialize fixtures when needed; existing test-reset database/environment guards remain intact.
+
+The three legacy app directories remain pending the final removal step, but they are no longer workspaces or boot/image inputs. Contributor Compose runs infrastructure only. The root Dockerfile builds a generated app installed from candidate tarballs; `tests/e2e/generatedDocker.test.ts` executes its CLI, production HTTP runtime and graceful shutdown on an owned database. This required test is included in both main CI and release quality gates through `test:e2e`; Docker absence is a failure, not a skip.
+
+Focused commands:
 
 ```bash
-docker compose run --rm -e QUEUE_DRIVER=sync -e SKIP_FIXTURE_TEST_BOOTSTRAP=1 app bun run validate:ci
+bun run unit
+bun run test:coverage
+scripts/with-host-env.sh bun run verify:generated-runtime
+scripts/with-host-env.sh bun test tests/e2e/generatedDocker.test.ts
 ```
 
-Host-native: Postgres on `localhost:54329`, Redis on `6379`. `validate:host` builds packages, migrates the fixture (`STRATA_SCHEMA=fixture`), migrates HiroApp into `hiroapp_test`, then runs `validate:ci`.
-
-```bash
-docker compose up -d postgres redis --wait
-```
-
-## What CI migrates
-
-1. Fixture: `STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed` (database from `DATABASE_URL`, usually `bun_testing_test`)
-2. HiroApp: `DOGFOOD_APP=hiroapp bun run cli migrate:fresh --seed` (database from `APP_DATABASE_URL`, `hiroapp_test` in `scripts/with-host-env.sh`; without it HiroApp would migrate into `DATABASE_URL` and replace the fixture tables)
-3. `SKIP_FIXTURE_TEST_BOOTSTRAP=1` so the Bun preload does not reset the fixture a second time
-
-A clean checkout must `bun run build:framework` before HiroApp migrate because `apps/hiroapp` imports `@getstrata/core/*` from `packages/strata-core/dist`.
-
-Local `bun test` without a prior migrate uses `tests/globalSetup.ts` to seed the fixture once. That reset refuses `APP_ENV=production` and non-test `DATABASE_URL` values unless `STRATA_ALLOW_TEST_DB_RESET=1`.
+Docker acceptance creates its own network, Postgres and Redis containers and credentials. It never resets the contributor/shop databases or changes their Redis connections. Owned resources use unique `strata-docker-*` names and `strata-acceptance:*` image tags. After forcibly terminating a verifier, inspect those names before assuming cleanup ran.
 
 ## Tenant-scoped database access
 
@@ -73,18 +55,13 @@ const app = await createTestApp();
 const response = await fetch(`${app.baseUrl}/health`);
 ```
 
-That helper boots the **fixture** HTTP map for framework tests. The dogfood app boots with `createApp()` from `apps/hiroapp/src/bootstrap/createApp.ts`.
+That helper boots the **fixture** HTTP map for framework tests. Generated packed-app acceptance boots the generated `createApp()` in an isolated process.
 
 Set env (`DATABASE_URL`, `QUEUE_DRIVER=sync`) before importing bootstrap modules.
 
 ## Local development
 
-```bash
-bun run hiroapp:fresh
-bun run hiroapp:dev
-```
-
-See [GETTING-STARTED.md](./GETTING-STARTED.md).
+Use the infrastructure and full validation commands above. To explore product behavior, generate an external app or use strata-shop; the framework root has no `dev` or `start` product server.
 
 ## Stateful mechanism regression review
 

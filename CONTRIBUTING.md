@@ -11,26 +11,12 @@ Thanks for improving Strata. This project is Docker-first. Run commands inside t
 ## Before you open a PR
 
 ```bash
-docker compose run --rm -e QUEUE_DRIVER=sync app bun run validate:ci
+bun install
+docker compose up -d postgres mysql redis --wait
+bun run validate:host
 ```
 
-Or inside a running container:
-
-```bash
-docker compose exec app bun run validate:ci
-```
-
-Step by step:
-
-```bash
-docker compose exec app bun run check
-docker compose exec app bun run lint:ci
-docker compose exec app strata openapi:validate
-docker compose exec app strata openapi:check
-docker compose exec app bun run test:coverage
-```
-
-On the host: `bun run validate:host`.
+The complete gate includes unchanged source coverage, all generated-app compiler profiles, packed-package security/HTTP/OpenAPI checks and a native Bun Docker runtime case. Compose provides test infrastructure, not a product application service.
 
 ## Git hooks
 
@@ -41,40 +27,20 @@ After `bun install`, Lefthook installs hooks via the `prepare` script:
 
 Manual install: `bunx lefthook install`
 
-## Adding a module
+## Application modules and migrations
+
+Exercise product modules in a generated external app with the published CLI. The root repository CLI only manages deterministic framework fixtures:
 
 ```bash
-docker compose exec app strata make:module invoice
+scripts/with-host-env.sh env STRATA_SCHEMA=fixture bun run cli migrate:status
+bun run fixture:fresh
 ```
 
-Gate optional features with `isFeatureEnabled()` in `index.ts`. Put product-domain examples in a generated app, not in the leftover `src/db` fixture.
-
-## Migrations and seeds
-
-HiroApp is dogfood for internal end-to-end testing:
-
-```bash
-docker compose exec app bun run hiroapp:fresh
-```
-
-Fixture schema (framework tests only):
-
-```bash
-docker compose exec app sh -c 'STRATA_SCHEMA=fixture strata migrate:fresh --seed'
-```
-
-Never edit an applied migration. Add a new file.
+Never edit an applied migration. Keep regression coverage for upgrades from populated history, not only a fresh schema.
 
 ## OpenAPI
 
-When HiroApp (dogfood) routes change:
-
-```bash
-DOGFOOD_APP=hiroapp APP_KEY_PREFIX=hiroapp APP_NAME=HiroApp API_PREFIX=/api strata openapi:generate
-strata openapi:check
-```
-
-CI fails if `docs/openapi.json` drifts. Commit regenerated files.
+The committed document is a generated-app acceptance snapshot, checked against the real packed CLI. Run `scripts/with-host-env.sh bun scripts/verify-generated-runtime.ts --openapi`. The private fixture CLI's two-route map is only a deterministic command/SDK test fixture; do not use it to regenerate that acceptance snapshot. In an external app, run `strata openapi:generate` and `strata openapi:check` from that app's directory.
 
 ## Code style
 

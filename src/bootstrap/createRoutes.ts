@@ -2,12 +2,10 @@ import { jsonResponse } from "@getstrata/core/http/response";
 import { isSpaEnabled, isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
 import index from "../../index.html";
-import { appConfig } from "../config/app";
 import { buildModuleRoutes } from "./buildModuleRoutes";
 import type { AppDependencies, AppRouteMap } from "./contracts";
 import { mergeSpaRoutes } from "./createSpaRoutes";
 import { mergeWebRoutes } from "./createWebRoutes";
-import { isHiroappDogfood } from "./dogfoodApp";
 import { createHealthRoutes } from "./health";
 import { createMetricsRoutes } from "./metricsRoutes";
 import { routeRegistry } from "./routeRegistry";
@@ -17,7 +15,8 @@ function registerRoute(method: string, path: string, middleware: string[]): void
 }
 
 function createRoutes(dependencies: AppDependencies): AppRouteMap {
-  const apiPrefix = isHiroappDogfood() ? "" : appConfig.apiPrefix;
+  // Preserve the framework fixture route map; product prefixes belong to generated apps.
+  const apiPrefix = "";
   const wrappedModuleRoutes = buildModuleRoutes(dependencies, {
     apiPrefix,
     clearRegistry: true,

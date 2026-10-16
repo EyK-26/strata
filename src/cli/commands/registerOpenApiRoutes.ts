@@ -1,38 +1,13 @@
-import { registerAppOpenApiRoutes } from "@getstrata/cli/openapi";
-import { importHiroappModule } from "../../bootstrap/dogfoodApp";
+import { type AppBootstrap, registerAppOpenApiRoutes } from "@getstrata/cli/openapi";
 
-/** Temporary in-repo CLI adapter; the public CLI owns API-only route filtering. */
-async function registerOpenApiRoutes(): Promise<void> {
-  process.env.APP_KEY_PREFIX ??= "hiroapp";
-  process.env.APP_NAME ??= "HiroApp";
-  process.env.API_PREFIX ??= "/api";
-  const previousFrontendMode = process.env.FRONTEND_MODE;
-  process.env.FRONTEND_MODE = "api";
-  try {
-    await registerAppOpenApiRoutes(async () => {
-      const { bootstrapApp } = await importHiroappModule<{
-        bootstrapApp: (options: {
-          migrate: boolean;
-        }) => Promise<{ routes: Record<string, unknown>; context: { dispose(): Promise<void> } }>;
-      }>("src/bootstrap/createApp.ts");
-      const { closeDatabase } = await importHiroappModule<{ closeDatabase(): Promise<void> }>(
-        "src/bootstrap/database.ts",
-      );
-      const app = await bootstrapApp({ migrate: false });
-      try {
-        return { routes: app.routes };
-      } finally {
-        try {
-          await app.context.dispose();
-        } finally {
-          await closeDatabase();
-        }
-      }
-    });
-  } finally {
-    if (previousFrontendMode === undefined) delete process.env.FRONTEND_MODE;
-    else process.env.FRONTEND_MODE = previousFrontendMode;
-  }
-}
+/** Deterministic private CLI fixture. Actual generated API/HTML contracts run in packed-app E2E. */
+const bootstrapFixtureRoutes: AppBootstrap = async () => ({
+  routes: {
+    "/health": { GET: async () => Response.json({ status: "ok" }) },
+    "/api/fixture": { GET: async () => Response.json({ fixture: true }) },
+  },
+});
 
-export { registerOpenApiRoutes };
+const registerOpenApiRoutes = () => registerAppOpenApiRoutes(bootstrapFixtureRoutes);
+
+export { bootstrapFixtureRoutes, registerOpenApiRoutes };

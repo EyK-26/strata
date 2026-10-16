@@ -1,17 +1,10 @@
-import { importHiroappModule } from "../../bootstrap/dogfoodApp.ts";
-import { isFixtureSchema } from "../../bootstrap/schemaTarget.ts";
+import { assertFixtureSchema } from "../../bootstrap/schemaTarget.ts";
 
+/** Private framework fixture command; generated apps use their own published CLI adapters. */
 async function seedCommand(): Promise<void> {
-  if (isFixtureSchema()) {
-    const { seedDatabase } = await import("../../db/seeders/runner");
-    await seedDatabase();
-    return;
-  }
-
-  const mod = await importHiroappModule<{ seed?: () => Promise<void> }>("src/db/seed.ts");
-  if (typeof mod.seed === "function") {
-    await mod.seed();
-  }
+  assertFixtureSchema();
+  const { seedDatabase } = await import("../../db/seeders/runner");
+  await seedDatabase();
 }
 
 export { seedCommand };

@@ -13,7 +13,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/dependencies.ts",
   "src/bootstrap/discoverListeners.ts",
   "src/bootstrap/discoverModules.ts",
-  "src/bootstrap/dogfoodApp.ts",
   "src/bootstrap/env.ts",
   "src/bootstrap/health.ts",
   "src/bootstrap/http/securedRouteModelBinding.ts",
@@ -44,7 +43,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/schedule.ts",
   "src/bootstrap/schemaTarget.ts",
   "src/bootstrap/secretsGuard.ts",
-  "src/bootstrap/server.ts",
   "src/bootstrap/web/forms.ts",
   "src/bootstrap/web/index.ts",
   "src/bootstrap/web/routing.ts",
@@ -275,6 +273,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/testing/webViewSmoke.ts",
 ] as const;
 
-export const COVERAGE_EXEMPT_LIMIT = 274;
+export const COVERAGE_EXEMPT_LIMIT = 272;
 
 export const COVERAGE_EXEMPT_SET: ReadonlySet<string> = new Set(COVERAGE_EXEMPT_FILES);

@@ -1,4 +1,5 @@
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { configureModulesManifest } from "@getstrata/bootstrap/discoverModules";
 import type { Mailer } from "@getstrata/core/mail/mailer";
 import type { StorageManager } from "@getstrata/core/storage/storage";
 import { restoreEnvVar } from "../../helpers/restoreEnv";
@@ -9,6 +10,7 @@ afterAll(() => {
 });
 
 describe("createTinkerContext", () => {
+  beforeEach(() => configureModulesManifest([]));
   test("exposes container and facades", async () => {
     mock.restore();
     const { createTinkerContext: createContext } = await import("../../../src/cli/commands/tinker");

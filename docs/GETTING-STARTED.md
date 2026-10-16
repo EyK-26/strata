@@ -1,102 +1,31 @@
-# Getting started
+# Framework contributor setup
 
-This guide is for running **this repository** (framework source plus generated apps). `apps/hiroapp` is dogfood for internal end-to-end testing. To start a product app, use [STARTER.md](./STARTER.md): `bunx create-strata my-app`.
+For a product app, run `bunx create-strata` and follow its generated README. Product dogfood is [strata-shop](https://github.com/EyK-26/strata-shop); this checkout maintains framework packages and tests.
 
-This guide assumes you can run a terminal, Docker, and Bun.
+## Requirements
 
-## 1. Install tools
-
-- [Bun](https://bun.sh) >=1.4.3 (CI reads the tested 1.4.3 pin from `.bun-version`)
-- Docker Compose (for PostgreSQL 18 and Redis)
-
-Clone the repo and install JavaScript packages:
+Install the Bun version in `.bun-version` and Docker with Compose. The framework requires Bun >=1.4.3. Contributor infrastructure uses Postgres, MySQL and Redis; generated Docker acceptance additionally starts an owned temporary Postgres container.
 
 ```bash
 bun install
+docker compose up -d postgres mysql redis --wait
+bun run validate:host
 ```
 
-## 2. Environment files
+The host wrapper configures local published ports. Override its database/Redis variables when required; migration credentials are administrative, while generated HTTP tests inspect a restricted live role. The existing `hiroapp_test` database name is retained as a local compatibility default, not an app or schema dependency. Generated acceptance owns disposable databases.
 
-For Docker Compose (app in a container):
+## Focused validation
 
 ```bash
-cp .env.example .env
+scripts/with-host-env.sh bun run verify:generated-runtime
+scripts/with-host-env.sh bun test tests/e2e/generatedDocker.test.ts
+scripts/with-host-env.sh env STRATA_SCHEMA=fixture bun run cli migrate:status
 ```
 
-For Bun on your machine, with Postgres and Redis in Docker on published ports:
+The private root CLI operates on `src/db` framework fixtures only. Its migration/reset/seed commands require `STRATA_SCHEMA=fixture` and reject production/staging (including `NODE_ENV=production`) before database access. Test-reset database-name guards remain in test setup. Do not use it to manage an external product app.
 
-```bash
-cp .env.host.example .env.host
-```
+All runtime routes and API-only OpenAPI contracts run through generated apps using candidate packages. The CLI command/SDK unit tests use a small deterministic fixture map; it is deliberately separate from the committed 22-operation generated-app acceptance document and 40-operation runtime inventory.
 
-`bun run dev:host` and `bun run validate:host` load the host file for you.
+The root Dockerfile packages a generated candidate app, not checked-in HiroApp. Its required native Bun acceptance test exercises explicit migrations, production seeding refusal, explicit test-only seeding, restricted-role HTTP, metrics concealment and graceful shutdown. See [testing](TESTING.md) and [retirement evidence](GENERATED-APP-ACCEPTANCE.md).
 
-The in-repo dogfood app (`apps/hiroapp`) should use:
-
-```bash
-APP_NAME=hiroapp
-APP_KEY_PREFIX=hiroapp
-API_PREFIX=/api
-FRONTEND_MODE=server-htmx
-AUTH_DEV_HEADERS=false
-```
-
-`APP_KEY_PREFIX` names Redis keys (`hiroapp:queue:default`). Generated HTML apps use cookie `strata_session` unless you change `cookieName` in the auth provider. If you run two apps against one Redis, they must not share a prefix.
-
-## 3. Start Postgres and Redis
-
-```bash
-docker compose up -d postgres redis --wait
-```
-
-Default host ports: Postgres `54329`, Redis `6379`. The framework fixture uses `DATABASE_URL` (`bun_testing_test`). HiroApp uses `APP_DATABASE_URL` (`hiroapp_test` in `.env.host.example` and `scripts/with-host-env.sh`) so its generated schema does not replace the fixture tables. Generated apps outside this repo do not need `APP_DATABASE_URL`; they use the database named in `DATABASE_URL`.
-
-## 4. Build the framework packages
-
-Apps import `@getstrata/core/*` from `packages/strata-core/dist`. Build before migrate:
-
-```bash
-bun run build:framework
-bun run build:bootstrap
-```
-
-## 5. Create the dogfood database
-
-```bash
-bun run hiroapp:fresh
-```
-
-This creates the database named in `APP_DATABASE_URL` (falling back to `DATABASE_URL`) if needed, runs the generated starter schema, and seeds people you can log in as. Source `.env.host` first, or run it as `scripts/with-host-env.sh bun run hiroapp:fresh`, so it targets `hiroapp_test` and not the fixture database.
-
-## 6. Start the app
-
-```bash
-bun run hiroapp:dev
-```
-
-Visit http://localhost:3000. HTML sign-in is `/login`.
-
-| Email | Password | Role |
-|-------|----------|------|
-| `demo@example.com` | `StrataDemo!ChangeMe` | member |
-| `admin@example.test` | `StrataDemo!ChangeMe` | admin |
-
-## 7. Try the generated paths
-
-1. **HTML browser (cookie + CSRF).** Open `/login`, sign in as `demo@example.com`. HTML forms post `_token`.
-2. **Health.** `GET /health` returns `ok` when the database answers.
-3. **API token or JWT.** `POST /api/v1/auth/login` mints an opaque token. `POST /api/auth/token` mints a short-lived JWT. Call `GET /api/user` with `Authorization: Bearer <token>`. Details: [AUTH.md](./AUTH.md).
-
-Your own app should be generated with `bunx create-strata`, not copied from HiroApp. HiroApp is dogfood, not a product starter. See [STARTER.md](./STARTER.md).
-
-## 8. When something fails
-
-| Symptom | Likely cause |
-|---------|----------------|
-| HiroApp migrate cannot import `@getstrata/core/...` | Run `bun run build:framework` |
-| Cookie login loops | `SESSION_SECRET` missing, or the browser is sending a different cookie name than `strata_session` |
-| 403 on POST | Missing CSRF token (`_token` or `x-csrf-token`) |
-| 403 on Bearer POST | Token missing the ability, or you sent CSRF-protected cookie API without a token |
-| Tests reset the wrong database | `DATABASE_URL` is not a test URL. See [TESTING.md](./TESTING.md) |
-
-Next: [HIROAPP.md](./HIROAPP.md) for the dogfood app and sibling layer maps, or [BUILDING-APPS.md](./BUILDING-APPS.md) to start your own app.
+The legacy directories under `apps/` remain temporarily pending the final removal PR. They are excluded from workspaces and Docker input and have no contributor `dev`/`start` aliases. To explore a storefront or admin UI, use the external shop.

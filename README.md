@@ -51,34 +51,22 @@ Generated cookie apps include restyleable welcome, login, register, and password
 
 ## This repository
 
-This repo is the framework source and three generated apps. `apps/hiroapp` is dogfood for internal end-to-end testing (CI migrate, seed, boot, OpenAPI, smoke). The siblings are layer maps, not CI dogfood.
+This repository contains framework packages and their tests. Product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop), which consumes published packages. Acceptance tests generate disposable apps, install candidate tarballs and exercise their real CLI, security, HTTP, OpenAPI and Docker behavior. The legacy `apps/` directories are retained temporarily for the final removal step; they are no longer workspaces, runtime entrypoints or image inputs.
 
-| App | Stack | Role |
-|-----|--------|------|
-| `apps/hiroapp` | Postgres HTMX, cookies + tokens + JWT, RLS, Redis, SMTP, extras | Dogfood for internal end-to-end testing |
-| `apps/hiroapp-hobby` | SQLite JSON API | Generated sibling layer map (not CI dogfood) |
-| `apps/hiroapp-team` | Postgres HTML, Redis, Adminer | Generated sibling layer map (not CI dogfood) |
-
-Clone this repo only if you are changing Strata itself. For a product app, use `create-strata`. Contributor setup: [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md). Tests: [docs/TESTING.md](docs/TESTING.md). Production: [docs/PRODUCTION.md](docs/PRODUCTION.md).
+Clone this repo to change Strata itself. For a product, use `create-strata` and its generated README/Dockerfile.
 
 ```bash
-cp .env.example .env
-docker compose up -d postgres redis --wait
 bun install
-bun run build:framework
-bun run build:bootstrap
-bun run hiroapp:fresh
-bun run hiroapp:dev
+docker compose up -d postgres mysql redis --wait
+bun run validate:host
 ```
 
-Open http://localhost:3000. Host-native Bun against published ports: `bun run dev:host` (see `.env.host.example`).
+The root CLI is a private framework fixture harness. Database operations require `STRATA_SCHEMA=fixture` and a development/test environment; generated apps use their own published `strata` CLI. Run `bun run verify:generated-runtime` through `scripts/with-host-env.sh` for isolated HTTP/OpenAPI acceptance. `bun run test:e2e` also qualifies the generated Docker image with an owned database/container. See [testing](docs/TESTING.md) and the [retirement evidence](docs/GENERATED-APP-ACCEPTANCE.md).
 
 ## Layout
 
 ```
-apps/hiroapp/           Dogfood for internal end-to-end testing (generated)
-apps/hiroapp-hobby/     SQLite JSON API sibling layer map (generated)
-apps/hiroapp-team/      Postgres HTML + Redis sibling layer map (generated)
+apps/                   Retained legacy examples pending final removal
 src/core/               Framework runtime
 src/bootstrap/          Kernel, providers, cookie sessions
 packages/               Published npm packages
@@ -89,7 +77,7 @@ tests/                  Framework tests
 
 ## Honest limits
 
-- CI and `apps/hiroapp` use PostgreSQL. `tsMatch` (full-text search) throws on other dialects.
+- RLS acceptance uses PostgreSQL; supported mechanisms also run against SQLite and MySQL. `tsMatch` (full-text search) throws on other dialects.
 - MySQL and SQLite SQL compilation exists. Query execution against those engines is not a CI guarantee.
 - An app picks one primary database. Do not run Postgres and MySQL together as two OLTP stores for the same product.
 - `AUTH_DEV_HEADERS=true` is for tests. Only that exact string enables header auth. Production must set it to `false`.
