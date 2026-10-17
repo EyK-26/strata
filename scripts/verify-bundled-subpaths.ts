@@ -60,6 +60,20 @@ for (const subpath of MUST_EXTERNALIZE_ERRORS) {
   }
 }
 
+// This stateless entry must observe the same canonical registry as the exporter.
+if (!CORE_SHARED_SUBPATH_SET.has("http/metricsMiddleware")) {
+  const source = await readFile(join(ENTRIES_DIR, "http/metricsMiddleware.js"), "utf8");
+  if (
+    source.includes("class PrometheusRegistry") ||
+    source.includes("new PrometheusRegistry") ||
+    !source.includes('from "@getstrata/core/metrics/prometheus"')
+  ) {
+    errors.push(
+      "HTTP metrics middleware must import the canonical registry, not bundle private metric state",
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error(`Bundled subpath verification failed:\n${errors.map((e) => `- ${e}`).join("\n")}`);
   process.exit(1);

@@ -2,6 +2,10 @@
 
 HTTP observations remain bounded and available through `createMetricsRoutes()` with no runtime collectors enabled. Production/staging requires the existing `METRICS_TOKEN` bearer authentication. Responses are private operational data and use `Cache-Control: no-store`. Invalid authorization never starts collection.
 
+### Published HTTP registry identity
+
+Core's root and `metrics/prometheus` subpath share one process-local registry and class/bucket exports. HTTP middleware imports that canonical registry, so generated/packaged HTTP requests appear in the official exporter. Earlier 2.2.38 bundles accidentally retained separate registries: a scrape could return 200 and runtime collector data while omitting HTTP counter/histogram samples. The correction requires the published core update; no app registry bridge, schema migration, collector replacement or new flag is required. Existing source-linked tests alone do not verify this package boundary. Installed generated CLI profiles assert actual request counts and histogram observations on Postgres, SQLite and MySQL, plus root/subpath/middleware identity. Each process still has independent HTTP counters; shared SQL/Redis gauges retain their documented aggregation semantics.
+
 ## Generated collector ownership
 
 The metrics extra now generates a typed `BootstrapOptions.runtimeMetrics` option. Defaults remain HTTP-only. In the generated HTTP entrypoint, opt in explicitly:

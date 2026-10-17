@@ -302,6 +302,43 @@ const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
       assert.equal(unknownHost.status, 403);
       assert.deepEqual(await unknownHost.json(), { error: "Tenant host not found." });
     }
+    const login = await fetch(`${origin}/login`, {
+      headers: requestHost ? { host: requestHost } : {},
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(login.status, 200);
+    await login.text();
+    const observed = await fetch(`${origin}/metrics`, {
+      headers: { authorization: `Bearer ${env.METRICS_TOKEN}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(observed.status, 200);
+    assert.equal(observed.headers.get("cache-control"), "no-store");
+    const metrics = await observed.text();
+    assert.match(
+      metrics,
+      /^http_requests_total\{method="GET",path="\/login",status="200"\} 1$/m,
+      "Installed HTTP middleware and exporter must share the real request counter.",
+    );
+    assert.match(
+      metrics,
+      /^http_request_duration_ms_count\{method="GET",path="\/login",status="200"\} 1$/m,
+    );
+    await run([
+      "-e",
+      `
+import assert from 'node:assert/strict';
+import * as root from '@getstrata/core';
+import {prometheusRegistry,PrometheusRegistry,HTTP_DURATION_BUCKETS_MS} from '@getstrata/core/metrics/prometheus';
+import {createMetricsMiddleware} from '@getstrata/core/http/metricsMiddleware';
+assert.equal(root.prometheusRegistry,prometheusRegistry);
+assert.equal(root.PrometheusRegistry,PrometheusRegistry);
+assert.equal(root.HTTP_DURATION_BUCKETS_MS,HTTP_DURATION_BUCKETS_MS);
+prometheusRegistry.resetForTests();
+await createMetricsMiddleware()(new Request('http://localhost/fixture'),async()=>new Response('ok'));
+assert.equal(prometheusRegistry.getHttpRequestSummary().totalRequests,1);
+`,
+    ]);
     await verifyGeneratedAuthHttp(origin, requestHost);
     if (columnTenancy) await verifyGeneratedScimHttp(origin, requestHost);
     console.log(

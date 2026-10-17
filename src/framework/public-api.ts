@@ -560,7 +560,11 @@ export type { MarkdownMailableInput } from "../core/mail/markdownMailable.ts";
 export { buildMarkdownMailMessage, sendMarkdownMail } from "../core/mail/markdownMailable.ts";
 export { sanitizeMailHtml } from "../core/mail/sanitizeMailHtml.ts";
 export type { MetricLabels } from "../core/metrics/prometheus.ts";
-export { PrometheusRegistry, prometheusRegistry } from "../core/metrics/prometheus.ts";
+export {
+  HTTP_DURATION_BUCKETS_MS,
+  PrometheusRegistry,
+  prometheusRegistry,
+} from "../core/metrics/prometheus.ts";
 export type {
   DatabaseNotificationPayload,
   DatabaseNotificationStore,
