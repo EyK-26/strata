@@ -250,6 +250,60 @@ console.log('Packed error wrapper respects configured HTML, concurrent inputs, A
 `,
   );
   await run([errorViewProbe]);
+  const admissionProbe = join(fixture.app, "acceptance-admission.ts");
+  await Bun.write(
+    admissionProbe,
+    `import assert from 'node:assert/strict';
+import {runWithAuthUser,currentAuthUser} from '@getstrata/core/auth/authContext';
+import {AuthManager} from '@getstrata/core/auth/guard';
+import {PolicyGate} from '@getstrata/core/auth/policy';
+import {ForbiddenError} from '@getstrata/core/errors/http';
+import {createRequireAuthMiddleware} from '@getstrata/core/http/requireAuthMiddleware';
+import {createAuthorizeMiddleware} from '@getstrata/core/http/authorizeMiddleware';
+import {createRequireGlobalAdminMiddleware} from '@getstrata/core/http/requireGlobalAdminMiddleware';
+import {createRequireAbilityMiddleware} from '@getstrata/core/http/requireAbilityMiddleware';
+import {createRequireVerifiedMiddleware} from '@getstrata/core/http/requireVerifiedMiddleware';
+import {createRequirePasswordConfirmMiddleware} from '@getstrata/core/http/requirePasswordConfirmMiddleware';
+import {createBodySizeLimitMiddleware} from '@getstrata/core/http/bodySizeLimitMiddleware';
+import {withErrorHandling} from '@getstrata/core/http/response';
+const auth=new AuthManager({resolve:()=>null});
+const member={id:4,role:'member'};
+const json=()=>new Request('https://app.example.test/private',{headers:{accept:'application/json'}});
+async function denied(middleware,user,status,message,request=json()){
+  let nextCalls=0;
+  const response=await runWithAuthUser(user,()=>middleware(request,async()=>{nextCalls++;return new Response('must not run');}));
+  assert.equal(nextCalls,0);
+  assert.equal(response.status,status);
+  assert.deepEqual(await response.json(),{error:message});
+  assert.equal(response.headers.get('cache-control'),'no-store','Every canonical JSON admission producer must retain the safe error default.');
+}
+const ability=createRequireAbilityMiddleware({tokenCan:()=>false,requireAbility(){throw new ForbiddenError('Missing fixture ability.',{auditOnly:'fixture-private-detail'});}})('fixture');
+const previous=process.env.FEATURE_EMAIL_VERIFICATION;
+process.env.FEATURE_EMAIL_VERIFICATION='true';
+try{
+  await denied(createRequireAuthMiddleware(auth),null,401,'Unauthorized');
+  await denied(createAuthorizeMiddleware(new PolicyGate(),auth,'fixture','view'),member,403,'Forbidden');
+  await denied(createRequireGlobalAdminMiddleware(),member,403,'Platform admin access required.');
+  await denied(ability,member,403,'Missing fixture ability.');
+  await denied(createRequireVerifiedMiddleware(),member,403,'Your email address is not verified.');
+  await denied(createRequirePasswordConfirmMiddleware(),null,401,'Authentication required.');
+  await denied(createRequirePasswordConfirmMiddleware(),member,423,'Password confirmation required.');
+  await denied(createBodySizeLimitMiddleware(1),null,413,'Request body exceeds the 1 byte limit.',new Request('https://app.example.test/upload',{method:'POST',headers:{accept:'application/json','content-length':'2'},body:'xx'}));
+  const success=await runWithAuthUser({id:4,role:'admin'},()=>createRequireGlobalAdminMiddleware()(json(),async()=>new Response('admitted')));
+  assert.equal(success.status,200);
+  assert.equal(await success.text(),'admitted');
+  assert.equal(success.headers.get('cache-control'),null,'Successful admission does not inherit error cache policy.');
+  const html=new Request('https://app.example.test/private',{headers:{accept:'text/html'}});
+  const deniedHtml=await runWithAuthUser(member,()=>withErrorHandling(request=>ability(request,async()=>{throw new Error('denied next ran');}))(html));
+  assert.equal(deniedHtml.status,403);
+  assert.ok(deniedHtml.headers.get('content-type')?.includes('text/html'));
+  assert.equal(deniedHtml.headers.get('cache-control'),'no-store');
+  assert.equal(currentAuthUser(),null);
+}finally{if(previous===undefined)delete process.env.FEATURE_EMAIL_VERIFICATION;else process.env.FEATURE_EMAIL_VERIFICATION=previous;}
+console.log('Packed admission errors preserve exact contracts, no-store, denial boundaries and successful/HTML behavior.');
+`,
+  );
+  await run([admissionProbe]);
   await run(
     [cli, "migrate", "--seed"],
     mysql

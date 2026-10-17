@@ -5,6 +5,8 @@ import {
 } from "@getstrata/core/auth/emailVerification";
 import type { AuthManager } from "@getstrata/core/auth/guard";
 import { createIntendedUrlCookieFromRequest } from "@getstrata/core/auth/intendedUrlCookie";
+import { ForbiddenError } from "@getstrata/core/errors/http";
+import { errorResponse } from "@getstrata/core/http/response";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
 
@@ -24,7 +26,7 @@ function createRequireVerifiedMiddleware(auth?: AuthManager): Middleware {
     }
 
     if (requestPrefersJson(request)) {
-      return Response.json({ error: UNVERIFIED_MESSAGE }, { status: 403 });
+      return errorResponse(new ForbiddenError(UNVERIFIED_MESSAGE));
     }
 
     const headers = new Headers({ Location: VERIFY_NOTICE_PATH });

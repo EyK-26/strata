@@ -1,5 +1,6 @@
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
-import { ForbiddenError } from "@getstrata/core/errors/http";
+import { ForbiddenError, HttpError } from "@getstrata/core/errors/http";
+import { errorResponse } from "@getstrata/core/http/response";
 import type { AbilityChecker } from "../auth/abilityChecker";
 import { isViewsEnabled } from "../runtime/frontendMode";
 import { requestPrefersJson } from "./contentNegotiation";
@@ -18,7 +19,8 @@ function createRequireAbilityMiddleware(abilityChecker: AbilityChecker) {
             throw error;
           }
 
-          return Response.json({ error: error.message }, { status: error.status });
+          // Admission denials retain their message/status-only public contract.
+          return errorResponse(new HttpError(error.status, error.message));
         }
 
         throw error;

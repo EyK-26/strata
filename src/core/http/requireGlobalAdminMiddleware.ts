@@ -1,6 +1,7 @@
 import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
+import { errorResponse } from "@getstrata/core/http/response";
 import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
 import type { Middleware } from "./middleware";
 
@@ -15,7 +16,7 @@ function createRequireGlobalAdminMiddleware(): Middleware {
       });
       const error = new ForbiddenError("Platform admin access required.");
 
-      return Response.json({ error: error.message }, { status: error.status });
+      return errorResponse(error);
     }
 
     return await next();

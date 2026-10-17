@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.42
+
+Use the canonical error serializer for core JSON admission denials so authentication, policy/admin/ability, verification, password confirmation and body-limit failures retain no-store. Preserve exact status/message contracts, keep checker details private and retain HTML redirects/throws and successful response headers. Add packed producer regressions and a native detail-projection case.
+
 ## 2.2.41
 
 Make framework HTML/JSON error responses non-storeable, including configured/fallback renderers and custom-body 404 responses; retain success-response cache policy and add packed header regressions.
