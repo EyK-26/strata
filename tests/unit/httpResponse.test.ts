@@ -22,6 +22,7 @@ describe("withErrorHandling", () => {
       });
       const response = await handler(new Request("http://app.test/api/things"));
       expect(response.status).toBe(500);
+      expect(response.headers.get("cache-control")).toBe("no-store");
       expect(await response.json()).toEqual({ error: "Internal server error." });
 
       const logged = errorLog.mock.calls.map((call) => String(call[0])).join("\n");
@@ -41,6 +42,7 @@ describe("withErrorHandling", () => {
       });
       const response = await handler(new Request("http://app.test/api/things"));
       expect(response.status).toBe(409);
+      expect(response.headers.get("cache-control")).toBe("no-store");
       expect(await response.json()).toEqual({ error: "Email is already registered." });
       expect(errorLog).not.toHaveBeenCalled();
     } finally {
@@ -74,6 +76,7 @@ describe("createJsonErrorMiddleware", () => {
       },
     );
     expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({ error: "Invalid or missing CSRF token." });
   });
 });

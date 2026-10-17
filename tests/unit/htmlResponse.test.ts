@@ -13,6 +13,7 @@ describe("html response helpers", () => {
   test("htmlResponse sets the HTML content type", async () => {
     const response = htmlResponse("<p>ok</p>");
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBeNull();
     expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(await response.text()).toBe("<p>ok</p>");
   });
@@ -33,11 +34,19 @@ describe("html response helpers", () => {
   test("notFoundHtmlResponse returns HTML 404", async () => {
     const response = await notFoundHtmlResponse();
     expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-type")).toContain("text/html");
     const html = await response.text();
     expect(html).toContain("<!doctype html>");
     expect(html).toContain('href="/assets/app.css"');
     expect(html).toContain("Not Found");
+  });
+
+  test("custom not-found bodies are non-storeable without changing their content", async () => {
+    const response = await notFoundHtmlResponse("<p>Private fixture detail</p>");
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.text()).toBe("<p>Private fixture detail</p>");
   });
 
   test("textResponse and xmlResponse set content types", async () => {

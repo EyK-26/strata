@@ -208,7 +208,7 @@ console.log('Packed membership configuration, concurrent isolation, replacement,
   await Bun.write(
     errorViewProbe,
     `import assert from 'node:assert/strict';
-import {configureWebErrorView,htmlErrorResponse} from '@getstrata/core/view';
+import {configureWebErrorView,htmlErrorResponse,notFoundHtmlResponse} from '@getstrata/core/view';
 import {webErrorResponse} from '@getstrata/core/http/webErrorResponse';
 import {withErrorHandling,withJsonErrorHandling} from '@getstrata/core/http/response';
 import {ValidationError} from '@getstrata/core/errors/http';
@@ -219,21 +219,30 @@ try{
   const error=new ValidationError('first',{name:['required']});
   const direct=await htmlErrorResponse({status:422,title:'first',message:'first',request});
   assert.equal(await direct.text(),marker+':first');
+  assert.equal(direct.headers.get('cache-control'),'no-store');
   const mapped=await webErrorResponse(error,request);
   assert.equal(await mapped.text(),marker+':first');
+  assert.equal(mapped.headers.get('cache-control'),'no-store');
   const results=await Promise.all(['first','second'].map(message=>withErrorHandling(()=>{throw new ValidationError(message);})(request)));
   for(const [index,response] of results.entries()){
     assert.equal(response.status,422);
+    assert.equal(response.headers.get('cache-control'),'no-store');
     assert.ok(response.headers.get('content-type')?.includes('text/html'));
     assert.equal(await response.text(),marker+':'+['first','second'][index],'Wrapped errors must use the configured renderer and their own error input.');
   }
   const api=await withJsonErrorHandling(()=>{throw error;})(request);
   assert.equal(api.status,422);
+  assert.equal(api.headers.get('cache-control'),'no-store');
   assert.ok(api.headers.get('content-type')?.includes('application/json'));
   assert.deepEqual(await api.json(),{error:'first',details:{name:['required']}});
 }finally{configureWebErrorView({});}
 const fallback=await withErrorHandling(()=>{throw new ValidationError('fallback');})(request);
 assert.equal(fallback.status,422);
+assert.equal(fallback.headers.get('cache-control'),'no-store');
+const custom404=await notFoundHtmlResponse('private-synthetic-not-found');
+assert.equal(custom404.status,404);
+assert.equal(custom404.headers.get('cache-control'),'no-store');
+assert.equal(await custom404.text(),'private-synthetic-not-found');
 const html=await fallback.text();
 assert.ok(html.includes('fallback'));
 assert.ok(!html.includes(marker));
