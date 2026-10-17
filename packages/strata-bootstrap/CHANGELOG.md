@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.41
+
+Fix packaged membership middleware and default service ignoring the configured application lookup. Use the canonical membership context while preserving explicit service injection and request isolation. Add mandatory packed external-app coverage for concurrent users, replacement configuration and propagated lookup failures.
+
 ## 2.2.40
 
 Fix shared DNS fixture state in packaged outbound consumers. safeFetch and GitHub OAuth now use the canonical safeUrl resolver while retaining DNS pinning, private-address validation and request deadlines. Add mandatory packed external-app regressions for resolver replacement and private-target refusal; document controlled-provider qualification limits.

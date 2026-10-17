@@ -165,6 +165,45 @@ console.log('Packed outbound consumers share resolver state, address pinning and
 `,
   );
   await run([outboundProbe]);
+  const membershipProbe = join(fixture.app, "acceptance-membership.ts");
+  await Bun.write(
+    membershipProbe,
+    `import assert from 'node:assert/strict';
+import {configureMembershipLookup,resetMembershipLookupForTests,runWithMembershipContext,currentOrganizationIds} from '@getstrata/core/auth/membershipContext';
+import {runWithAuthUser} from '@getstrata/core/auth/authContext';
+import {createMembershipMiddleware} from '@getstrata/core/auth/membershipMiddleware';
+import MembershipService from '@getstrata/core/auth/membershipService';
+const row=(user,org)=>({id:user,organization_id:org,user_id:user,role:'member',created_at:new Date(0)});
+function lookup(offset=0){return {
+  async listForUser(user){await Promise.resolve();return user===4?[row(user,7+offset)]:user===5?[row(user,9+offset)]:[];},
+  async findMembership(user,org){return (await this.listForUser(user)).find(item=>item.organization_id===org)??null;},
+  async listForOrganization(){return [];},
+  async addMember(){throw new Error('not used');},async removeMember(){throw new Error('not used');},async updateMemberRole(){throw new Error('not used');}
+};}
+const original=lookup();
+const middleware=createMembershipMiddleware();
+const request=user=>runWithAuthUser({id:user,role:'member'},()=>middleware(new Request('https://app.example.test/member'),async()=>{await Promise.resolve();return Response.json(currentOrganizationIds());}));
+try{
+  configureMembershipLookup(original);
+  assert.deepEqual(await runWithAuthUser({id:4,role:'member'},()=>runWithMembershipContext(()=>currentOrganizationIds())),[7]);
+  assert.deepEqual(await (await request(4)).json(),[7],'Installed middleware must use the configured application lookup.');
+  assert.deepEqual(await new MembershipService().listOrganizationIdsForUser(4),[7],'Default installed service must use the configured application lookup.');
+  const simultaneous=await Promise.all([request(4),request(5),request(6)]);
+  assert.deepEqual(await Promise.all(simultaneous.map(response=>response.json())),[[7],[9],[]]);
+  assert.deepEqual(currentOrganizationIds(),[],'Membership context must be restored after requests.');
+  configureMembershipLookup(lookup(100));
+  assert.deepEqual(await (await request(4)).json(),[107],'Existing middleware must observe explicitly replaced lookup configuration.');
+  assert.deepEqual(await new MembershipService().listOrganizationIdsForUser(4),[107]);
+  assert.deepEqual(await new MembershipService(original).listOrganizationIdsForUser(4),[7],'Explicit constructor injection remains supported.');
+  configureMembershipLookup({...original,async listForUser(){throw new Error('lookup unavailable');}});
+  await assert.rejects(()=>request(4),/lookup unavailable/);
+  await assert.rejects(()=>new MembershipService().listOrganizationIdsForUser(4),/lookup unavailable/);
+  assert.deepEqual(currentOrganizationIds(),[]);
+}finally{resetMembershipLookupForTests();}
+console.log('Packed membership configuration, concurrent isolation, replacement, injection and errors passed.');
+`,
+  );
+  await run([membershipProbe]);
   await run(
     [cli, "migrate", "--seed"],
     mysql

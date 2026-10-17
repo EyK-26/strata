@@ -20,6 +20,13 @@ const sharedSubpathSet = new Set<string>(CORE_SHARED_SUBPATHS);
 
 /** Runtime names that must exist on the published JS entry even without a sibling checkout. */
 const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
+  "auth/membershipContext": [
+    "configureMembershipLookup",
+    "resetMembershipLookupForTests",
+    "resolveMembershipLookup",
+    "runWithMembershipContext",
+    "currentOrganizationIds",
+  ],
   "metrics/prometheus": ["PrometheusRegistry", "prometheusRegistry", "HTTP_DURATION_BUCKETS_MS"],
   "database/transaction": [
     "hasActiveTransaction",
