@@ -621,3 +621,9 @@ Default 422 HTML pages use a native same-origin return link, with `/` as the fal
 Use `integerRange(0, 2147483647, { allowNumericStrings: false })` for a JSON-number-only contract. `integerRule` and `positiveIntegerRule` accept the same option. The rules still abstain for undefined, null and the empty string; combine with `required()` for mandatory fields. Range bounds must be safe integers with minimum no greater than maximum. Existing field error messages remain unchanged.
 
 Validation is not casting: `validateObject` trims strings but keeps valid numeric strings as strings. Convert validated form data explicitly before typed writes. Do not use these integer rules for bigint identifiers beyond the JavaScript safe-integer range. Earlier releases accepted malformed numeric prefixes; callers relying on that unintended behavior must correct their inputs.
+
+### Controlled outbound transport in installed-package tests
+
+`setDnsLookupForTests` and `resetDnsLookupForTests` from `@getstrata/core/security/safeUrl` control the process-wide resolver used by the packaged `safeFetch` API and its consumers, including `GitHubOAuthProvider`. Always restore the hook in `finally` and isolate these tests in their own process. This is a test fixture seam, not an application DNS-policy configuration API.
+
+A controlled resolver does not disable URL/IP validation, address pinning, redirect policy or the whole-request deadline. Private DNS answers remain rejected before transport. Pair synthetic DNS answers with a controlled fetch transport: returning a public address alone does not create an owned HTTP server at that address. Such a fixture qualifies installed API composition and request/response contracts; it does not qualify live provider DNS, TLS, availability, credentials or account settings. Do not replace the provider or patch installed framework code to make a callback test pass.

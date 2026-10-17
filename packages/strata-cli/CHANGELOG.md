@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.40
+
+Fix shared DNS fixture state in packaged outbound consumers. safeFetch and GitHub OAuth now use the canonical safeUrl resolver while retaining DNS pinning, private-address validation and request deadlines. Add mandatory packed external-app regressions for resolver replacement and private-target refusal; document controlled-provider qualification limits.
+
 ## 2.2.39
 
 Fix published HTTP metrics registry identity: share root/subpath Prometheus state and preserve registry, class and bucket exports. Keep generated middleware/exporter observations consistent and extend installed Postgres/SQLite/MySQL HTTP regressions; no app bridge, schema change or collector-policy change.

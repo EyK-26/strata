@@ -1,4 +1,4 @@
-import { pinUrlToAddress, resolveSafeOutboundTarget } from "./safeUrl.ts";
+import { pinUrlToAddress, resolveSafeOutboundTarget } from "@getstrata/core/security/safeUrl";
 
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 

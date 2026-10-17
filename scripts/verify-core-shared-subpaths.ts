@@ -75,6 +75,10 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   ],
   "http/webErrorResponse": ["logServerError", "normalizeFieldErrors", "webErrorResponse"],
   "security/safeUrl": [
+    "pinUrlToAddress",
+    "resolveSafeOutboundTarget",
+    "setDnsLookupForTests",
+    "resetDnsLookupForTests",
     "assertSafeOutboundUrl",
     "assertSafeOutboundUrlResolved",
     "isBlockedHostname",
