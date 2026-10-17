@@ -32,6 +32,7 @@ describe("createRequireAbilityMiddleware", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBeNull();
   });
 
   test("rejects users missing the required ability", async () => {
@@ -46,7 +47,28 @@ describe("createRequireAbilityMiddleware", () => {
     );
 
     expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({ error: "Token ability required." });
+  });
+
+  test("JSON denials keep checker details private and never invoke the handler", async () => {
+    const middleware = createRequireAbilityMiddleware({
+      ...abilityChecker,
+      requireAbility() {
+        throw new ForbiddenError("Denied.", { auditOnly: "fixture-private-detail" });
+      },
+    })("fixture");
+    const response = await runWithAuthUser({ id: 1, abilities: [] }, () =>
+      middleware(
+        new Request("https://example.test/private", { headers: { accept: "application/json" } }),
+        async () => {
+          throw new Error("Denied handler must not run.");
+        },
+      ),
+    );
+    expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ error: "Denied." });
   });
 
   test("allows wildcard abilities", async () => {

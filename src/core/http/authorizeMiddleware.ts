@@ -2,6 +2,7 @@ import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import type { AuthManager } from "@getstrata/core/auth/guard";
 import type { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 import { ForbiddenError } from "@getstrata/core/errors/http";
+import { errorResponse } from "@getstrata/core/http/response";
 import type { Middleware } from "./middleware";
 
 function createAuthorizeMiddleware(
@@ -15,7 +16,7 @@ function createAuthorizeMiddleware(
 
     if (!gate.allows(resource, action, user)) {
       const error = new ForbiddenError();
-      return Response.json({ error: error.message }, { status: error.status });
+      return errorResponse(error);
     }
 
     return await next();

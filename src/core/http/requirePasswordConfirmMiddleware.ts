@@ -1,6 +1,8 @@
 import { resolveUserId } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { hasFreshPasswordConfirmation } from "@getstrata/core/auth/passwordConfirmCookie";
+import { HttpError, UnauthorizedError } from "@getstrata/core/errors/http";
+import { errorResponse } from "@getstrata/core/http/response";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
 import { sanitizeInternalPath } from "./safeInternalPath";
@@ -14,7 +16,7 @@ function createRequirePasswordConfirmMiddleware(): Middleware {
 
     if (!user) {
       if (requestPrefersJson(request)) {
-        return Response.json({ error: "Authentication required." }, { status: 401 });
+        return errorResponse(new UnauthorizedError("Authentication required."));
       }
 
       return Response.redirect("/login", 302);
@@ -27,7 +29,7 @@ function createRequirePasswordConfirmMiddleware(): Middleware {
     }
 
     if (requestPrefersJson(request)) {
-      return Response.json({ error: PASSWORD_CONFIRM_MESSAGE }, { status: 423 });
+      return errorResponse(new HttpError(423, PASSWORD_CONFIRM_MESSAGE));
     }
 
     const url = new URL(request.url);

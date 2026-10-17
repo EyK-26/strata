@@ -1,4 +1,5 @@
 import { PayloadTooLargeError } from "@getstrata/core/errors/http";
+import { errorResponse } from "@getstrata/core/http/response";
 import type { Middleware } from "./middleware";
 
 type BodyGuard = { maxBytes: number; exceeded: boolean };
@@ -87,7 +88,7 @@ function createBodySizeLimitMiddleware(maxBytes = resolveMaxBodyBytes()): Middle
   return async (request, next) => {
     const tooLarge = () => {
       const error = new PayloadTooLargeError(`Request body exceeds the ${maxBytes} byte limit.`);
-      return Response.json({ error: error.message }, { status: error.status });
+      return errorResponse(error);
     };
     const length = Number(request.headers.get("content-length"));
     if (Number.isFinite(length) && length > maxBytes) return tooLarge();
