@@ -29,7 +29,7 @@ function errorResponse(error: unknown): Response {
       error: mappedError.message,
       ...(mappedError.details === undefined ? {} : { details: mappedError.details }),
     },
-    { status: mappedError.status },
+    { status: mappedError.status, headers: { "Cache-Control": "no-store" } },
   );
 }
 

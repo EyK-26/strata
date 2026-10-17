@@ -119,12 +119,16 @@ async function renderWebErrorHtml(input: WebErrorViewInput): Promise<string> {
 }
 
 async function htmlErrorResponse(input: WebErrorViewInput & { status: number }): Promise<Response> {
-  return htmlResponse(await renderWebErrorHtml(input), { status: input.status });
+  const response = htmlResponse(await renderWebErrorHtml(input), { status: input.status });
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 }
 
 async function notFoundHtmlResponse(body?: string): Promise<Response> {
   if (body !== undefined) {
-    return htmlResponse(body, { status: 404 });
+    const response = htmlResponse(body, { status: 404 });
+    response.headers.set("Cache-Control", "no-store");
+    return response;
   }
 
   return htmlErrorResponse({
