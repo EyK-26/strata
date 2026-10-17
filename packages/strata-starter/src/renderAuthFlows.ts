@@ -119,7 +119,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
   }
   if (jsonApi || cookie) {
     imports.push(
-      `import { jsonResponse, withErrorHandling } from "@getstrata/core/http/response";`,
+      `import { privateJsonResponse, withErrorHandling } from "@getstrata/core/http/response";`,
     );
     imports.push(`import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";`);
   }
@@ -311,7 +311,7 @@ async function completeBrowserSsoLogin(
   let record = await starterAuthDirectory.findByEmail?.(email);
   if (!record) {
     if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
-      return jsonResponse({ error: \`\${label} user is not provisioned.\` }, { status: 403 });
+      return privateJsonResponse({ error: \`\${label} user is not provisioned.\` }, { status: 403 });
     }
     const hashed = await hashPassword(randomBytes(18).toString("hex"));
     try {
@@ -329,10 +329,10 @@ async function completeBrowserSsoLogin(
     record = await starterAuthDirectory.findByEmail?.(email);
   }
   if (!record) {
-    return jsonResponse({ error: \`Could not complete \${label} login.\` }, { status: 500 });
+    return privateJsonResponse({ error: \`Could not complete \${label} login.\` }, { status: 500 });
   }
   return runWithLockedAuthUser(record.id, async (record) => {
-    if (!record?.is_active || record.email !== email) return jsonResponse({ error: "Account unavailable." }, { status: 403 });
+    if (!record?.is_active || record.email !== email) return privateJsonResponse({ error: "Account unavailable." }, { status: 403 });
   ${
     mfa
       ? `if (record.mfa_enabled) {
@@ -357,11 +357,11 @@ async function completeBrowserSsoLogin(
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(email, async (record) => {
             if (!record?.password || !(await verifyPassword(password, record.password))) {
-              return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
+              return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
             const mfaResult = completePasswordLogin(record, { mfaCode: mfa_code });
             if (!mfaResult.ok) {
-              return jsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
+              return privateJsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
             }
             await persistAuthRecovery(record.id, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
             const user = { id: record.id, role: record.role };
@@ -380,7 +380,7 @@ async function completeBrowserSsoLogin(
                 expires_at: expiresAt ? sqlTimestamp(expiresAt) : null,
               });
             });
-            const payload = jsonResponse({ token: plain, expires_at: expiresAt?.toISOString() ?? null });
+            const payload = privateJsonResponse({ token: plain, expires_at: expiresAt?.toISOString() ?? null });
             ${
               cookie
                 ? `const sessionAuth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
@@ -396,7 +396,7 @@ async function completeBrowserSsoLogin(
           GET: kernel.wrapApi(async (request) => {
             const user = await dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN).requireUser(request);
             const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
-            return jsonResponse({
+            return privateJsonResponse({
               id: record.id,
               name: record.name ?? record.email,
               email: record.email,
@@ -411,13 +411,13 @@ async function completeBrowserSsoLogin(
         "/api/v1/auth/register": {
           POST: kernel.wrap("api", kernel.wrapRegister(withErrorHandling(async (request) => {
             if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
-              return jsonResponse({ error: "Not found" }, { status: 404 });
+              return privateJsonResponse({ error: "Not found" }, { status: 404 });
             }
             const { name, email, password } = await parseJsonBody(request, parseRegisterCredentials);
             const existing = await starterAuthDirectory.findByEmail?.(email);
             await hashPassword(password);
             if (existing) {
-              return jsonResponse({ ok: true }, { status: 201 });
+              return privateJsonResponse({ ok: true }, { status: 201 });
             }
             const hashed = await hashPassword(password);
             await runAuthWrite(email, async () => {
@@ -436,7 +436,7 @@ async function completeBrowserSsoLogin(
             }`
                 : ""
             }
-            return jsonResponse({ ok: true }, { status: 201 });
+            return privateJsonResponse({ ok: true }, { status: 201 });
           }))),
         },`
     : "";
@@ -448,11 +448,11 @@ async function completeBrowserSsoLogin(
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(email, async (record) => {
             if (!record?.password || !(await verifyPassword(password, record.password))) {
-              return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
+              return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
             const mfaResult = completePasswordLogin(record, { mfaCode: mfa_code });
             if (!mfaResult.ok) {
-              return jsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
+              return privateJsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
             }
             await persistAuthRecovery(record.id, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
             const user = { id: record.id, role: record.role, emailVerifiedAt: record.email_verified_at ?? null };
@@ -464,7 +464,7 @@ async function completeBrowserSsoLogin(
                 verify ? "\n              emailVerifiedAt: user.emailVerifiedAt ?? null," : ""
               }
             });
-            return jsonResponse({
+            return privateJsonResponse({
               token,
               token_type: "bearer",
               expires_in: jwtTtlSeconds(),
@@ -479,12 +479,12 @@ async function completeBrowserSsoLogin(
         "/api/user": {
           GET: kernel.wrapApi(async (request) => {
             const user = await dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN).requireUser(request);
-            return jsonResponse({ id: user.id, role: user.role ?? "member" });
+            return privateJsonResponse({ id: user.id, role: user.role ?? "member" });
           }),
         },
         "/api/v1/auth/logout": {
           POST: kernel.wrap("api", withErrorHandling(async (request) => {
-            const payload = jsonResponse({ ok: true });
+            const payload = privateJsonResponse({ ok: true });
             ${
               cookie
                 ? `const sessionAuth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
@@ -506,7 +506,7 @@ async function completeBrowserSsoLogin(
             if (user) {
               await issueSignedAuthMail(email, "Reset your password", "/api/v1/auth/reset-password", AUTH_ONE_TIME_PURPOSES.passwordReset, user.id, { email });
             }
-            return jsonResponse({ ok: true });
+            return privateJsonResponse({ ok: true });
           })),
         },
         "/api/v1/auth/reset-password": {
@@ -514,9 +514,9 @@ async function completeBrowserSsoLogin(
             const body: unknown = await request.json();
             const password = typeof body === "object" && body !== null && "password" in body ? body.password : undefined;
             if (!(await completeSignedPasswordReset(request, password))) {
-              return jsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
+              return privateJsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
             }
-            return jsonResponse({ ok: true });
+            return privateJsonResponse({ ok: true });
           }))),
         },`
     : "";
@@ -527,9 +527,9 @@ async function completeBrowserSsoLogin(
         "/api/v1/auth/verify-email": {
           POST: kernel.wrap("api", kernel.wrapSigned(withErrorHandling(async (request) => {
             if (!(await completeSignedEmailVerification(request))) {
-              return jsonResponse({ error: "Invalid or expired verification link." }, { status: 403 });
+              return privateJsonResponse({ error: "Invalid or expired verification link." }, { status: 403 });
             }
-            return jsonResponse({ ok: true });
+            return privateJsonResponse({ ok: true });
           }))),
         },`
       : "";
@@ -537,7 +537,7 @@ async function completeBrowserSsoLogin(
   const csrfRoute = `
         "/api/v1/auth/csrf": {
           GET: kernel.wrap("api", withErrorHandling(async (request) => {
-            return jsonResponse({ token: resolveCsrfTokenForRequest(request) });
+            return privateJsonResponse({ token: resolveCsrfTokenForRequest(request) });
           })),
         },`;
 
@@ -549,16 +549,16 @@ async function completeBrowserSsoLogin(
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(email, async (record) => {
             if (!record?.password || !(await verifyPassword(password, record.password))) {
-              return jsonResponse({ error: "Invalid credentials" }, { status: 422 });
+              return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
             }
             const mfaResult = completePasswordLogin(record, { mfaCode: mfa_code });
             if (!mfaResult.ok) {
-              return jsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
+              return privateJsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
             }
             await persistAuthRecovery(record.id, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
             const sessionAuth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
             const { setCookie } = await sessionAuth.signIn(sessionUser(record));
-            const payload = jsonResponse({ ok: true });
+            const payload = privateJsonResponse({ ok: true });
             payload.headers.append("set-cookie", setCookie);
             return payload;
             });
@@ -568,7 +568,7 @@ async function completeBrowserSsoLogin(
           GET: kernel.wrapApi(async (request) => {
             const user = await dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN).requireUser(request);
             const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
-            return jsonResponse({
+            return privateJsonResponse({
               id: record.id,
               name: record.name ?? record.email,
               email: record.email,
@@ -580,7 +580,7 @@ async function completeBrowserSsoLogin(
           POST: kernel.wrap("api", withErrorHandling(async (request) => {
             const sessionAuth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
             const { setCookie } = await sessionAuth.signOut(request);
-            const payload = jsonResponse({ ok: true });
+            const payload = privateJsonResponse({ ok: true });
             payload.headers.append("set-cookie", setCookie);
             return payload;
           })),
@@ -608,13 +608,13 @@ async function completeBrowserSsoLogin(
             const samlResponse = String(form.get("SAMLResponse") ?? "");
             const relayState = String(form.get("RelayState") ?? "");
             if (!verifyOAuthState(request, relayState)) {
-              return jsonResponse({ error: "Invalid SAML state." }, { status: 403 });
+              return privateJsonResponse({ error: "Invalid SAML state." }, { status: 403 });
             }
             const profile = await createSamlServiceProvider()
               .consumePost(samlResponse, relayState)
               .catch(() => null);
             if (!profile) {
-              return jsonResponse({ error: "Invalid SAML response." }, { status: 400 });
+              return privateJsonResponse({ error: "Invalid SAML response." }, { status: 400 });
             }
             return completeBrowserSsoLogin(dependencies, profile, "SAML");
           })),
@@ -653,14 +653,14 @@ async function completeBrowserSsoLogin(
             const code = url.searchParams.get("code");
             const state = url.searchParams.get("state");
             if (!code || !verifyOAuthState(request, state)) {
-              return jsonResponse({ error: "Invalid GitHub OAuth state." }, { status: 403 });
+              return privateJsonResponse({ error: "Invalid GitHub OAuth state." }, { status: 403 });
             }
             const redirectUri = process.env.GITHUB_REDIRECT_URI?.trim() || \`\${appUrl()}/auth/github/callback\`;
             const profile = await new GitHubOAuthProvider({ clientId, clientSecret, redirectUri })
               .exchangeCode(code)
               .catch(() => null);
             if (!profile) {
-              return jsonResponse({ error: "Invalid GitHub OAuth response." }, { status: 400 });
+              return privateJsonResponse({ error: "Invalid GitHub OAuth response." }, { status: 400 });
             }
             return completeBrowserSsoLogin(dependencies, profile, "GitHub");
           })),
@@ -708,7 +708,7 @@ async function completeBrowserSsoLogin(
             const state = url.searchParams.get("state");
             const pkce = readOidcPkceCookie(request, state);
             if (!code || !verifyOAuthState(request, state) || !pkce) {
-              const denied = jsonResponse({ error: "Invalid OIDC state." }, { status: 403 });
+              const denied = privateJsonResponse({ error: "Invalid OIDC state." }, { status: 403 });
               denied.headers.append("set-cookie", clearOidcPkceCookie());
               return denied;
             }
@@ -717,7 +717,7 @@ async function completeBrowserSsoLogin(
               .exchangeCode(code, redirectUri, pkce)
               .catch(() => null);
             if (!profile) {
-              const failed = jsonResponse({ error: "Invalid OIDC response." }, { status: 400 });
+              const failed = privateJsonResponse({ error: "Invalid OIDC response." }, { status: 400 });
               failed.headers.append("set-cookie", clearOidcPkceCookie());
               return failed;
             }
@@ -772,7 +772,7 @@ async function completeBrowserSsoLogin(
     ? `
     webRoutes({ kernel, dependencies }) {
       const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
-      const views = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace("auth");
+      const views = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace("auth", { headers: { "Cache-Control": "private, no-store" } });
       return {
         "/login": {
           GET: kernel.wrapWebGuest(async (request) =>

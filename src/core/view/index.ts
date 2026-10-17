@@ -12,6 +12,7 @@ export type { ViewEngine } from "./viewEngine";
 export type {
   HtmxViewResponseOptions,
   NamespacedViewRenderer,
+  ViewNamespaceOptions,
   ViewResponseOptions,
 } from "./viewRenderer";
 export { CORE_VIEW_RENDERER_TOKEN, ViewRenderer } from "./viewRenderer";

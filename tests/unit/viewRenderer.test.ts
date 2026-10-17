@@ -209,3 +209,54 @@ test("namespaces reject ambiguous template paths and never derive names from req
     await expect(orders.renderHtmx("show", {}, { fragment: invalid })).rejects.toThrow(TypeError);
   }
 });
+
+test("namespace defaults are copied, overridable and isolated across concurrent native and HTMX responses", async () => {
+  const renderer = new ViewRenderer(new EtaViewEngine(directory));
+  const defaults = new Headers({
+    "Cache-Control": "private, no-store",
+    Vary: "Accept",
+    "X-Default": "yes",
+  });
+  defaults.append("Set-Cookie", "first=1; HttpOnly");
+  defaults.append("Set-Cookie", "second=2; HttpOnly");
+  const views = renderer.namespace("orders", { headers: defaults });
+  defaults.set("Cache-Control", "public");
+  const overrides = new Headers({ "Cache-Control": "no-store", "X-Call": "one" });
+  overrides.append("Set-Cookie", "replacement=1; HttpOnly");
+  overrides.append("Set-Cookie", "another=2; HttpOnly");
+  const [plain, custom, fragment, publicResponse] = await Promise.all([
+    views.render("show", { title: "Plain" }),
+    views.render(
+      "show",
+      { title: "Custom" },
+      { headers: overrides, status: 202, statusText: "Accepted", layout: false },
+    ),
+    views.renderHtmx(
+      "show",
+      { title: "Fragment" },
+      {
+        fragment: "table",
+        request: new Request("http://test/orders", { headers: { "HX-Request": "true" } }),
+      },
+    ),
+    renderer.namespace("products").render("show", { title: "Public" }),
+  ]);
+  expect(plain.headers.get("cache-control")).toBe("private, no-store");
+  expect(plain.headers.getSetCookie()).toEqual(["first=1; HttpOnly", "second=2; HttpOnly"]);
+  expect(plain.headers.get("x-call")).toBeNull();
+  expect(custom.headers.get("cache-control")).toBe("no-store");
+  expect(custom.headers.get("x-default")).toBe("yes");
+  expect(custom.headers.get("x-call")).toBe("one");
+  expect(custom.headers.getSetCookie()).toEqual(overrides.getSetCookie());
+  expect(custom.status).toBe(202);
+  expect(custom.statusText).toBe("Accepted");
+  expect(await custom.text()).toBe("<p>orders:Custom</p>");
+  expect(fragment.headers.get("cache-control")).toBe("private, no-store");
+  expect(fragment.headers.get("vary")).toBe(
+    "Accept, HX-Request, HX-Boosted, HX-History-Restore-Request",
+  );
+  expect(await fragment.text()).toBe("<table>orders:Fragment</table>");
+  expect(publicResponse.headers.get("cache-control")).toBeNull();
+  expect(overrides.get("x-default")).toBeNull();
+  expect((await views.render("show")).headers.get("cache-control")).toBe("private, no-store");
+});

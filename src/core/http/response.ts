@@ -12,6 +12,13 @@ function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
   });
 }
 
+/** Explicit private payloads (identity, credentials and CSRF); public JSON defaults stay unchanged. */
+function privateJsonResponse(data: unknown, init: ResponseInit = {}): Response {
+  const response = jsonResponse(data, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
+
 function createdResponse(data: unknown, init: ResponseInit = {}): Response {
   return jsonResponse(data, { ...init, status: init.status ?? 201 });
 }
@@ -102,6 +109,7 @@ export {
   errorResponse,
   jsonResponse,
   noContentResponse,
+  privateJsonResponse,
   withErrorHandling,
   withJsonErrorHandling,
 };

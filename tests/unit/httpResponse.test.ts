@@ -94,3 +94,18 @@ test("API error context overrides HTML negotiation in nested legacy wrappers", a
   expect(response.headers.get("content-type")).toContain("application/json");
   expect(await response.json()).toEqual({ error: "Signature rejected." });
 });
+
+test("private JSON preserves payload, status and multiple cookies without changing public defaults", async () => {
+  const { jsonResponse, privateJsonResponse } = await import("@getstrata/core/http/response");
+  const headers = new Headers({ "Cache-Control": "public, max-age=60", "X-Custom": "retained" });
+  headers.append("Set-Cookie", "one=1; HttpOnly");
+  headers.append("Set-Cookie", "two=2; HttpOnly");
+  const response = privateJsonResponse({ identity: 7 }, { status: 201, headers });
+  expect(response.status).toBe(201);
+  expect(await response.json()).toEqual({ identity: 7 });
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  expect(response.headers.get("x-custom")).toBe("retained");
+  expect(response.headers.getSetCookie()).toEqual(headers.getSetCookie());
+  expect(headers.get("cache-control")).toBe("public, max-age=60");
+  expect(jsonResponse({ public: true }).headers.get("cache-control")).toBeNull();
+});

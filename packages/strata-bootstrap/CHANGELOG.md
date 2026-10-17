@@ -2,6 +2,8 @@
 
 ## 2.2.42
 
+Generate auth JSON and forms with explicit private, no-store cache policy. Add privateJsonResponse and typed view namespace header defaults while preserving normal public defaults, native cookies, per-response overrides and HTMX representation behavior. Cover packed APIs and actual generated cookie/token/JWT/CSRF/profile/form HTTP responses.
+
 Use the canonical error serializer for core JSON admission denials so authentication, policy/admin/ability, verification, password confirmation and body-limit failures retain no-store. Preserve exact status/message contracts, keep checker details private and retain HTML redirects/throws and successful response headers. Add packed producer regressions and a native detail-projection case.
 
 ## 2.2.41

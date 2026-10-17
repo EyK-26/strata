@@ -191,3 +191,10 @@ The generated SCIM adapter accepts boolean `active` on create, PUT and PATCH. Cr
 Native generated SQLite and restricted Postgres tests exercise cookie/token/JWT/Basic admission, owned RS256 OIDC/PKCE login, inactive creation, idempotent transitions, stale MFA/confirmation proofs, SQL and post-write observer rollback, tenant isolation and account-lock contention. MySQL migration/revocation regressions and generated compiler checks cover the corresponding supported boundaries. These tests do not qualify a live external IdP, every provider integration or production capacity.
 
 Shared request-cookie parsing treats malformed percent encoding as an absent credential rather than throwing URIError. Signed-session and password-confirmation readers reuse it. This preserves existing valid cookie payloads while removing generated pending-MFA crypto duplication.
+
+
+### Explicit cache privacy for authentication responses
+
+Generated auth routes use `privateJsonResponse` from `@getstrata/core/http/response` for identity, credentials, CSRF and handled auth JSON responses. It preserves payloads, status and supplied headers/cookies, and sets `Cache-Control: private, no-store` even if a conflicting cache header was supplied. Ordinary `jsonResponse` retains its existing defaults.
+
+Rendered auth pages explicitly select `renderer.namespace("auth", { headers: { "Cache-Control": "private, no-store" } })`. Namespace defaults are copied when the namespace is created; rendering remains explicit. Per-render headers override defaults with the same name, including replacing the complete Set-Cookie list. Other defaults survive, multiple cookies remain separate, and `renderHtmx` still adds its representation Vary fields. Applications own their public/private page policy; no controller-name inference or global successful-response policy is introduced. Explicit redirects and arbitrary native responses retain their existing contracts. Existing apps must adopt this generated shape after upgrading; installing packages alone does not rewrite auth modules.

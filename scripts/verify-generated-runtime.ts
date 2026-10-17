@@ -250,6 +250,44 @@ console.log('Packed error wrapper respects configured HTML, concurrent inputs, A
 `,
   );
   await run([errorViewProbe]);
+  const privateResponseProbe = join(fixture.app, "acceptance-private-responses.ts");
+  await Bun.write(
+    privateResponseProbe,
+    `import assert from 'node:assert/strict';
+import {privateJsonResponse,jsonResponse} from '@getstrata/core/http/response';
+import {ViewRenderer} from '@getstrata/core/view';
+const headers=new Headers({'Cache-Control':'public','X-Custom':'retained'});
+headers.append('Set-Cookie','one=1; HttpOnly');headers.append('Set-Cookie','two=2; HttpOnly');
+const json=privateJsonResponse({id:7},{status:201,headers});
+assert.equal(json.status,201);assert.deepEqual(await json.json(),{id:7});
+assert.equal(json.headers.get('cache-control'),'private, no-store');
+assert.equal(json.headers.get('x-custom'),'retained');
+assert.deepEqual(json.headers.getSetCookie(),headers.getSetCookie());
+assert.equal(headers.get('cache-control'),'public');
+assert.equal(jsonResponse({id:7}).headers.get('cache-control'),null);
+const renderer=new ViewRenderer({async render(name,data,options){return name+':'+String(options?.layout);}},'layouts/app');
+const defaults=new Headers({'Cache-Control':'private, no-store',Vary:'Accept'});
+defaults.append('Set-Cookie','first=1');defaults.append('Set-Cookie','second=2');
+const views=renderer.namespace('auth',{headers:defaults});defaults.set('Cache-Control','public');
+const overrides=new Headers({'Cache-Control':'no-store'});overrides.append('Set-Cookie','override=1');overrides.append('Set-Cookie','another=2');
+const [normal,custom,fragment,publicResponse]=await Promise.all([
+views.render('login'),views.render('login',{}, {headers:overrides,status:202,statusText:'Accepted'}),
+views.renderHtmx('login',{}, {fragment:'form',request:new Request('https://example.test/login',{headers:{'HX-Request':'true'}})}),
+renderer.namespace('catalog').render('index')]);
+assert.equal(normal.headers.get('cache-control'),'private, no-store');
+assert.deepEqual(normal.headers.getSetCookie(),['first=1','second=2']);
+assert.equal(await normal.text(),'auth/login:layouts/app');
+assert.equal(custom.status,202);assert.equal(custom.statusText,'Accepted');
+assert.equal(custom.headers.get('cache-control'),'no-store');
+assert.deepEqual(custom.headers.getSetCookie(),overrides.getSetCookie());
+assert.equal(fragment.headers.get('cache-control'),'private, no-store');
+assert.equal(fragment.headers.get('vary'),'Accept, HX-Request, HX-Boosted, HX-History-Restore-Request');
+assert.equal(await fragment.text(),'auth/form:false');
+assert.equal(publicResponse.headers.get('cache-control'),null);
+console.log('Packed explicit private JSON and namespaced HTML defaults preserve response and HTMX contracts.');
+`,
+  );
+  await run([privateResponseProbe]);
   const admissionProbe = join(fixture.app, "acceptance-admission.ts");
   await Bun.write(
     admissionProbe,
