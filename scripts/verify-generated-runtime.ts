@@ -121,6 +121,50 @@ async function capture(stream: ReadableStream<Uint8Array>) {
   }
 }
 try {
+  // Execute public APIs from the installed package outside this repo's TS path aliases.
+  const outboundProbe = join(fixture.app, "acceptance-outbound.ts");
+  await Bun.write(
+    outboundProbe,
+    `import assert from 'node:assert/strict';
+import {setDnsLookupForTests,resetDnsLookupForTests} from '@getstrata/core/security/safeUrl';
+import {safeFetch} from '@getstrata/core/security/safeFetch';
+import {GitHubOAuthProvider} from '@getstrata/core/auth/oauth/providers';
+const original=globalThis.fetch;
+let address='1.1.1.1', dnsCalls=0;
+const requests=[];
+setDnsLookupForTests(async hostname=>{dnsCalls++;return [{address,family:4}];});
+globalThis.fetch=Object.assign(async(input,init)=>{
+  const url=new URL(String(input)), headers=new Headers(init?.headers);
+  assert.equal(url.hostname,address,'Every installed consumer must use the shared resolver and pinned target.');
+  requests.push({url,headers});
+  if(url.pathname==='/login/oauth/access_token')return Response.json({access_token:'fixture-token'});
+  if(url.pathname==='/user')return Response.json({id:42,login:'fixture',email:'unverified@example.test'});
+  if(url.pathname==='/user/emails')return Response.json([{email:'verified@example.test',primary:true,verified:true}]);
+  return new Response('fixture');
+},{preconnect:original.preconnect});
+try{
+  const response=await safeFetch('https://owned-outbound.invalid/probe');
+  assert.equal(await response.text(),'fixture');
+  assert.equal(dnsCalls,1);
+  assert.equal(requests[0].headers.get('host'),'owned-outbound.invalid');
+  const provider=new GitHubOAuthProvider({clientId:'fixture',clientSecret:'fixture-secret',redirectUri:'https://app.example.test/callback'});
+  assert.deepEqual(await provider.exchangeCode('fixture-code'),{providerUserId:'42',email:'verified@example.test',name:'fixture'});
+  assert.equal(dnsCalls,4,'Provider token, profile and verified-email calls must share the same resolver.');
+  assert.deepEqual(requests.slice(1).map(row=>row.headers.get('host')),['github.com','api.github.com','api.github.com']);
+  address='2.2.2.2';
+  assert.equal(await (await safeFetch('https://owned-outbound.invalid/changed')).text(),'fixture');
+  assert.equal(dnsCalls,5);
+  assert.equal(requests[4].url.hostname,address,'A later resolver answer must replace the prior pinned address.');
+  address='127.0.0.1';
+  await assert.rejects(()=>safeFetch('https://owned-outbound.invalid/private'));
+  await assert.rejects(()=>provider.exchangeCode('private-code'));
+  assert.equal(dnsCalls,7);
+  assert.equal(requests.length,5,'Private DNS answers must be refused before HTTP transport.');
+}finally{globalThis.fetch=original;resetDnsLookupForTests();}
+console.log('Packed outbound consumers share resolver state, address pinning and private-target refusal.');
+`,
+  );
+  await run([outboundProbe]);
   await run(
     [cli, "migrate", "--seed"],
     mysql
