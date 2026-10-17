@@ -1339,7 +1339,10 @@ export default probeModule;
       if (auth === "cookie") {
         const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
         expect(authModule).toContain("views.render(");
-        expect(authModule).toContain('.namespace("auth")');
+        expect(authModule).toContain(
+          '.namespace("auth", { headers: { "Cache-Control": "private, no-store" } })',
+        );
+        expect(authModule).toContain("import { privateJsonResponse, withErrorHandling }");
         expect(authModule).not.toContain('views.render("auth/');
         expect(authModule).toContain("status: 429");
         expect(authModule).not.toContain("renderHtmx");

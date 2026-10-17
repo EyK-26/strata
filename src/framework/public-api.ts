@@ -481,6 +481,7 @@ export {
   errorResponse,
   jsonResponse,
   noContentResponse,
+  privateJsonResponse,
   withErrorHandling,
 } from "../core/http/response.ts";
 export type {
@@ -762,6 +763,7 @@ export type { ViewEngine } from "../core/view/viewEngine.ts";
 export type {
   HtmxViewResponseOptions,
   NamespacedViewRenderer,
+  ViewNamespaceOptions,
   ViewResponseOptions,
 } from "../core/view/viewRenderer.ts";
 export type {

@@ -25,6 +25,14 @@ export async function verifyGeneratedAuthHttp(origin: string, requestHost?: stri
   });
   assert.equal(denied.status, 403, "Native login must require CSRF.");
   await denied.text();
+  const loginPage = await request("/login");
+  assert.equal(loginPage.status, 200);
+  assert.equal(loginPage.headers.get("cache-control"), "private, no-store");
+  await loginPage.text();
+  const csrfResponse = await request("/api/v1/auth/csrf");
+  assert.equal(csrfResponse.status, 200);
+  assert.equal(csrfResponse.headers.get("cache-control"), "private, no-store");
+  await csrfResponse.text();
   const csrf = await jsonCsrfHeaders(origin, "", requestHost);
   const wrong = await request("/api/v1/auth/login", {
     method: "POST",
@@ -32,6 +40,7 @@ export async function verifyGeneratedAuthHttp(origin: string, requestHost?: stri
     body: JSON.stringify({ ...credentials, password: "Wrong!Password123" }),
   });
   assert.equal(wrong.status, 422);
+  assert.equal(wrong.headers.get("cache-control"), "private, no-store");
   await wrong.text();
   const login = await request("/api/v1/auth/login", {
     method: "POST",
@@ -39,6 +48,7 @@ export async function verifyGeneratedAuthHttp(origin: string, requestHost?: stri
     body: JSON.stringify(credentials),
   });
   assert.equal(login.status, 200);
+  assert.equal(login.headers.get("cache-control"), "private, no-store");
   const body = await login.json();
   assertObject(body);
   assert.ok(typeof body.token === "string");
@@ -47,6 +57,10 @@ export async function verifyGeneratedAuthHttp(origin: string, requestHost?: stri
   async function me(headers: Record<string, string>, status: number) {
     const response = await request("/api/v1/auth/me", { headers });
     assert.equal(response.status, status);
+    assert.equal(
+      response.headers.get("cache-control"),
+      status === 200 ? "private, no-store" : "no-store",
+    );
     const data = await response.json();
     assertObject(data);
     if (status === 200) {
@@ -66,6 +80,7 @@ export async function verifyGeneratedAuthHttp(origin: string, requestHost?: stri
     body: JSON.stringify(credentials),
   });
   assert.equal(minted.status, 200);
+  assert.equal(minted.headers.get("cache-control"), "private, no-store");
   const jwt = await minted.json();
   assertObject(jwt);
   assert.ok(typeof jwt.token === "string");
@@ -78,6 +93,7 @@ export async function verifyGeneratedAuthHttp(origin: string, requestHost?: stri
     body: "{}",
   });
   assert.equal(logout.status, 200);
+  assert.equal(logout.headers.get("cache-control"), "private, no-store");
   assert.deepEqual(await logout.json(), { ok: true });
   await me({ cookie: mergeCookies(logout, cookie) }, 401);
   // Session logout is not account suspension: separately issued credentials retain their contract.

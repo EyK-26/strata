@@ -13,7 +13,11 @@ function viewContract(container: ServiceContainer, renderer: ViewRenderer): void
     { fragment: "orders/table", request: new Request("http://test/orders") },
   );
   void htmx;
-  const scoped = renderer.namespace("orders");
+  const scoped = renderer.namespace("orders", {
+    headers: new Headers({ "Cache-Control": "private, no-store" }),
+  });
+  // @ts-expect-error Header defaults require native header values.
+  renderer.namespace("orders", { headers: { "X-Invalid": false } });
   const scopedResponse: Promise<Response> = scoped.render("show", {}, { status: 200 });
   const scopedHtmx: Promise<Response> = scoped.renderHtmx(
     "show",

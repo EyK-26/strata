@@ -15,6 +15,11 @@ interface HtmxViewResponseOptions extends ViewResponseOptions {
   fragment?: string;
 }
 
+interface ViewNamespaceOptions {
+  /** Copied response defaults. Per-render headers override defaults with the same name. */
+  headers?: ConstructorParameters<typeof Headers>[0];
+}
+
 interface NamespacedViewRenderer {
   render: ViewRenderer["render"];
   renderHtmx: ViewRenderer["renderHtmx"];
@@ -51,17 +56,32 @@ class ViewRenderer {
   ) {}
 
   /** Explicit template prefix; layout names and response contracts remain unchanged. */
-  namespace(prefix: string): NamespacedViewRenderer {
+  namespace(prefix: string, defaults: ViewNamespaceOptions = {}): NamespacedViewRenderer {
     validateRelativeViewName(prefix);
+    const defaultHeaders = new Headers(defaults.headers);
+    const responseHeaders = (headers?: ConstructorParameters<typeof Headers>[0]): Headers => {
+      const merged = new Headers(defaultHeaders);
+      const overrides = new Headers(headers);
+      for (const [name, value] of overrides) {
+        if (name !== "set-cookie") merged.set(name, value);
+      }
+      if (overrides.has("set-cookie")) {
+        merged.delete("set-cookie");
+        for (const cookie of overrides.getSetCookie()) merged.append("set-cookie", cookie);
+      }
+      return merged;
+    };
     const qualify = (name: string) => {
       validateRelativeViewName(name);
       return `${prefix}/${name}`;
     };
     return {
-      render: async (name, data, options) => this.render(qualify(name), data, options),
+      render: async (name, data, options = {}) =>
+        this.render(qualify(name), data, { ...options, headers: responseHeaders(options.headers) }),
       renderHtmx: async (name, data, options = {}) =>
         this.renderHtmx(qualify(name), data, {
           ...options,
+          headers: responseHeaders(options.headers),
           ...(options.fragment === undefined ? {} : { fragment: qualify(options.fragment) }),
         }),
     };
@@ -110,5 +130,10 @@ class ViewRenderer {
 
 const CORE_VIEW_RENDERER_TOKEN = createServiceToken<ViewRenderer>("core.viewRenderer");
 
-export type { HtmxViewResponseOptions, NamespacedViewRenderer, ViewResponseOptions };
+export type {
+  HtmxViewResponseOptions,
+  NamespacedViewRenderer,
+  ViewNamespaceOptions,
+  ViewResponseOptions,
+};
 export { CORE_VIEW_RENDERER_TOKEN, ViewRenderer };
