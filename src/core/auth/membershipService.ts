@@ -1,8 +1,8 @@
+import { resolveMembershipLookup } from "@getstrata/core/auth/membershipContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import type { MembershipLookup, OrganizationMemberRole } from "../contracts/membership";
 import { hasMinimumOrgRole, isGlobalAdmin, resolveUserId } from "./accessControl";
 import { type AuthUser, currentAuthUser } from "./authContext";
-import { resolveMembershipLookup } from "./membershipContext";
 
 type MembershipRepositoryLike = MembershipLookup;
 
