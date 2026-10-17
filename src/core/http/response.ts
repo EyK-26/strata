@@ -1,9 +1,9 @@
 import { toHttpError } from "@getstrata/core/errors/http";
+import { logServerError, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
 import { mapDatabaseError } from "../database/errors";
 import { requestTransactionRollback } from "../database/transactionControl";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
-import { logServerError, webErrorResponse } from "./webErrorResponse";
 
 function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
   return Response.json(data, {

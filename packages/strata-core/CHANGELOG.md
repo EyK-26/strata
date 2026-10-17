@@ -2,6 +2,8 @@
 
 ## 2.2.41
 
+Fix packaged error wrappers ignoring the configured application error renderer; preserve API JSON precedence and add packed configured/default rendering regressions.
+
 Fix packaged membership middleware and default service ignoring the configured application lookup. Use the canonical membership context while preserving explicit service injection and request isolation. Add mandatory packed external-app coverage for concurrent users, replacement configuration and propagated lookup failures.
 
 ## 2.2.40

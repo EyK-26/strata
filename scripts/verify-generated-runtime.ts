@@ -204,6 +204,43 @@ console.log('Packed membership configuration, concurrent isolation, replacement,
 `,
   );
   await run([membershipProbe]);
+  const errorViewProbe = join(fixture.app, "acceptance-error-view.ts");
+  await Bun.write(
+    errorViewProbe,
+    `import assert from 'node:assert/strict';
+import {configureWebErrorView,htmlErrorResponse} from '@getstrata/core/view';
+import {webErrorResponse} from '@getstrata/core/http/webErrorResponse';
+import {withErrorHandling,withJsonErrorHandling} from '@getstrata/core/http/response';
+import {ValidationError} from '@getstrata/core/errors/http';
+const request=new Request('https://app.example.test/profile',{headers:{accept:'text/html'}});
+const marker='configured-application-error-view';
+configureWebErrorView({render:input=>marker+':'+input.message});
+try{
+  const error=new ValidationError('first',{name:['required']});
+  const direct=await htmlErrorResponse({status:422,title:'first',message:'first',request});
+  assert.equal(await direct.text(),marker+':first');
+  const mapped=await webErrorResponse(error,request);
+  assert.equal(await mapped.text(),marker+':first');
+  const results=await Promise.all(['first','second'].map(message=>withErrorHandling(()=>{throw new ValidationError(message);})(request)));
+  for(const [index,response] of results.entries()){
+    assert.equal(response.status,422);
+    assert.ok(response.headers.get('content-type')?.includes('text/html'));
+    assert.equal(await response.text(),marker+':'+['first','second'][index],'Wrapped errors must use the configured renderer and their own error input.');
+  }
+  const api=await withJsonErrorHandling(()=>{throw error;})(request);
+  assert.equal(api.status,422);
+  assert.ok(api.headers.get('content-type')?.includes('application/json'));
+  assert.deepEqual(await api.json(),{error:'first',details:{name:['required']}});
+}finally{configureWebErrorView({});}
+const fallback=await withErrorHandling(()=>{throw new ValidationError('fallback');})(request);
+assert.equal(fallback.status,422);
+const html=await fallback.text();
+assert.ok(html.includes('fallback'));
+assert.ok(!html.includes(marker));
+console.log('Packed error wrapper respects configured HTML, concurrent inputs, API JSON precedence and default reset.');
+`,
+  );
+  await run([errorViewProbe]);
   await run(
     [cli, "migrate", "--seed"],
     mysql
