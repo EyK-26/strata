@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.39
+
+Fix published HTTP metrics registry identity: share root/subpath Prometheus state and preserve registry, class and bucket exports. Keep generated middleware/exporter observations consistent and extend installed Postgres/SQLite/MySQL HTTP regressions; no app bridge, schema change or collector-policy change.
+
 ## 2.2.38
 
 Qualify packed OIDC and SAML callbacks across Postgres, SQLite and MySQL. Fix explicitly non-migrating local bootstrap provisioning, dialect-safe transactional SAML replay, verified bearer ACS recipient binding, and independent SAML Response Destination validation through a maintained parser. Fix owned listener/client address mismatches with typed generated native options and optional CLI HOST, retaining default production binding. Preserve existing generated auth, production guards, compiler/runtime assertions and coverage gates; live provider and deployment qualification remain separate.

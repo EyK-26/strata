@@ -1,4 +1,4 @@
-import { prometheusRegistry } from "../metrics/prometheus";
+import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";
 

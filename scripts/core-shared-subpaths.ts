@@ -37,6 +37,7 @@ export const CORE_SHARED_SUBPATHS = [
   "http/requestMetaContext",
   "http/webErrorResponse",
   "lifecycle/gracefulShutdown",
+  "metrics/prometheus",
   "notifications",
   "queue/jobRegistry",
   "runtime/appKeyPrefix",
