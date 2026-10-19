@@ -412,6 +412,34 @@ export async function withMigrationDatabase<T>(
 `;
   }
 
+  if (layers.database === "mysql") {
+    return `import { join } from "node:path";
+import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
+import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
+import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
+import { runWithDatabaseConnection } from "@getstrata/core/database/connectionContext";
+import { getSql } from "../bootstrap/database.ts";
+
+const MIGRATIONS_DIRECTORY = join(import.meta.dir, "migrations");
+
+export async function loadStarterMigrations() {
+  return loadMigrationsFromDirectory(MIGRATIONS_DIRECTORY);
+}
+
+export async function withMigrationDatabase<T>(fn: (db: MigrationDatabase) => Promise<T>): Promise<T> {
+  const runtime = getSql();
+  const url = process.env.MIGRATION_DATABASE_URL?.trim();
+  if (!url) return fn(runtime);
+  const admin = createMysqlConnection(url);
+  try {
+    return await runWithDatabaseConnection(admin, () => fn(admin));
+  } finally {
+    await admin.close();
+  }
+}
+`;
+  }
+
   return `import { join } from "node:path";
 import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
@@ -1007,7 +1035,8 @@ export async function ensureAppDatabase(options: { provision?: boolean } = {}): 
   }
   const name = safeDatabaseName(url);
 
-  const admin = new URL(url);
+  // Explicit schema operations use the administrative connection when supplied.
+  const admin = new URL(process.env.MIGRATION_DATABASE_URL?.trim() || url);
   admin.pathname = "/";
   const connection = await createConnection(admin.toString());
   try {

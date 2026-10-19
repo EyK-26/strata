@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
-import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/authContext";
 import { ForbiddenError, toHttpError } from "@getstrata/core/errors/http";
 import { privateJsonResponse } from "@getstrata/core/http/response";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
@@ -60,7 +60,8 @@ async function resolveTenantForRequest(
   const parsedHeader =
     headerValue !== undefined && headerValue.length > 0 ? Number(headerValue) : Number.NaN;
 
-  if (user) {
+  // GuestGuard identities are development principals, not persisted account rows.
+  if (user && currentCredentialSource() !== "guest") {
     const userId = typeof user.id === "number" ? user.id : Number.parseInt(String(user.id), 10);
 
     if (Number.isInteger(userId) && userId > 0) {

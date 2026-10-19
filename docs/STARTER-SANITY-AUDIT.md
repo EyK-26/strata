@@ -83,3 +83,10 @@ The integrated candidate passed 2,416 unit/integration tests (the same three pla
 Postgres RLS passed. The Postgres column failure was a fixture error: the administrative model update passed an integer to a boolean column. A typed boolean works through the SQLite binding too, so the fixture now uses a boolean uniformly; the Postgres column journey passed without a framework change.
 
 Two mechanism failures remain release blockers: [#276](https://github.com/EyK-26/strata/issues/276) (MySQL provisioning ignores the separate migration credential and tries CREATE DATABASE as the limited runtime user), and [#277](https://github.com/EyK-26/strata/issues/277) (guest-source header tenancy queries a users table that header apps deliberately omit). Keep the cumulative release on hold, fix these in focused framework changes, and rerun every native case. Do not grant runtime DDL, create fake account tables, or weaken the failing assertions.
+
+
+## Candidate separate-credential MySQL acceptance
+
+Additional limited-runtime browser qualification exposed [#276](https://github.com/EyK-26/strata/issues/276). Both generated provisioning and the MySQL migration wrapper used runtime credentials despite a supplied administrative migration URL. The fix selects the explicit administrative credential for schema work, scopes it through the published connection API and closes it after success/failure; runtime privileges and production/staging no-provision defaults remain unchanged.
+
+New native cases execute real generated MySQL none/column apps with distinct schema and runtime credentials. They cover migrate, status, credential-state rollback refusal, a reversible later migration batch, fresh/reapply/seed, actual ORM reads, denied runtime DDL, and connection restoration after a failing migration callback. Status and rollback use the existing generated entrypoints; no new public CLI command is assumed. Original limited-role failures are retained before the passing candidate run.

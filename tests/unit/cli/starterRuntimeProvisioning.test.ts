@@ -88,7 +88,16 @@ for (const mode of ["production","staging"]) {
   await ensureAppDatabase({provision:true}); assert.ok(calls.length>0); calls.length=0;
 }
 process.env.APP_ENV="local"; delete process.env.APP_DATABASE_URL; process.env.DATABASE_URL=url;
-await ensureAppDatabase(); assert.ok(calls.length>0);`,
+await ensureAppDatabase(); assert.ok(calls.length>0);
+${
+  database === "mysql"
+    ? `calls.length=0;
+process.env.MIGRATION_DATABASE_URL="mysql://schema:administrative@localhost/existing";
+assert.equal(await ensureAppDatabase(),url);
+assert.equal(calls[0],"mysql://schema:administrative@localhost/");
+assert.equal(process.env.DATABASE_URL,url);`
+    : ""
+}`,
     );
     const child = Bun.spawn(["bun", join(dir, "probe.ts")], {
       cwd: dir,
