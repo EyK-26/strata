@@ -25,10 +25,25 @@ function billingMigrationName(layers: StarterLayers): string | null {
   return layers.extras.webhooks ? "0003_billing_schema" : "0002_billing_schema";
 }
 
-function renderFileMigration(name: string, upSql: string[], downSql: string[]): string {
+function renderFileMigration(
+  name: string,
+  upSql: string[],
+  downSql: string[],
+  columnCleanup?: { database: StarterLayers["database"]; table: string; column: string },
+): string {
   const upCalls = upSql.map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`).join("\n");
   const downCalls = downSql.map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`).join("\n");
-  return `import type { Migration } from "@getstrata/core/database/migrations/types";
+  const schemaImport = columnCleanup
+    ? 'import { Schema } from "@getstrata/core/database/schema";\n'
+    : "";
+  const dropColumn = columnCleanup
+    ? `\n    await Schema.run(db, "${columnCleanup.database === "postgres" ? "pgsql" : columnCleanup.database}", schema => {
+      schema.table(${JSON.stringify(columnCleanup.table)}, table => {
+        table.dropColumn(${JSON.stringify(columnCleanup.column)});
+      });
+    });`
+    : "";
+  return `${schemaImport}import type { Migration } from "@getstrata/core/database/migrations/types";
 
 const migration: Migration = {
   name: ${JSON.stringify(name)},
@@ -36,7 +51,7 @@ const migration: Migration = {
 ${upCalls}
   },
   async down(db) {
-${downCalls}
+${downCalls}${dropColumn}
   },
 };
 
@@ -113,7 +128,14 @@ function renderBillingMigration(layers: StarterLayers): string | null {
     `DROP TABLE IF EXISTS stripe_webhook_event${cascade}`,
     `DROP TABLE IF EXISTS subscription${cascade}`,
   ];
-  return renderFileMigration(name, up, down);
+  return renderFileMigration(
+    name,
+    up,
+    down,
+    tenancyOn
+      ? { database: layers.database, table: "tenant", column: "stripe_customer_id" }
+      : undefined,
+  );
 }
 
 function sqlParams(database: DatabaseLayer, count: number): string {

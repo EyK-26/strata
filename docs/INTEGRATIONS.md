@@ -28,6 +28,8 @@ Inbound Stripe POSTs have **no tenant ALS**. CSRF is skipped for `/billing/webho
 
 The Stripe Node SDK stays in your app, not `@getstrata/core`.
 
+Generated billing migrations also reverse their owned `tenant.stripe_customer_id` column through the Schema API when tenancy is enabled. A billing migration added as a later batch can be rolled back and reapplied without dropping unrelated tenant columns or rows. Runtime acceptance exercises two rollback/reapply cycles on SQLite, MySQL and Postgres, with and without tenancy/webhooks, including Postgres RLS. Ordinary protected-history migrations remain subject to their own rollback guards.
+
 ## Outbound webhooks
 
 `--webhooks` creates `webhooks` / `webhook_deliveries`, a `notes.created` listener, and `src/jobs/dispatchOutboundWebhookJob.ts` (`static jobName = "webhook.dispatch"`). The listener puts the event name on the job payload (`event`), so another table can dispatch the same job without copying it. The job signs the JSON body with `signWebhookBody()` / `webhookSignatureHeader()` and POSTs through `safeFetch`. The delivery insert uses the app dialect (`$1` on Postgres, `?` on sqlite and MySQL) and runs inside `runWithMigrationBypass()` because the worker has no tenant ALS. Do not copy that helper onto user-facing routes.
