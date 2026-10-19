@@ -4,6 +4,7 @@ function renderInitialAdminMigration(layers: StarterLayers): string | null {
   if (!authNeedsUsers(layers.auth)) return null;
   const driver = layers.database === "postgres" ? "pgsql" : layers.database;
   return `import { Schema } from "@getstrata/core/database/schema";
+import { guardMigrationRollback } from "@getstrata/core/database/migrations";
 import type { Migration } from "@getstrata/core/database/migrations/types";
 
 const migration: Migration = {
@@ -17,10 +18,11 @@ const migration: Migration = {
       });
     });
   },
-  async down(db) {
-    if ((await db.unsafe("SELECT id FROM initial_admin_provisioning")).length) {
-      throw new Error("Cannot discard a completed initial-admin provisioning claim.");
-    }
+  async down(db, context) {
+    await guardMigrationRollback(context, {
+      hasHistory: async () => (await db.unsafe("SELECT id FROM initial_admin_provisioning")).length > 0,
+      message: "Cannot discard a completed initial-admin provisioning claim.",
+    });
     await Schema.run(db, "${driver}", schema => { schema.drop("initial_admin_provisioning"); });
   },
 };
