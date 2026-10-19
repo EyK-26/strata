@@ -2503,3 +2503,24 @@ export default probeModule;
     }
   });
 });
+
+test("invalid SPA prefix cannot erase an existing forced target", async () => {
+  const root = await tempDir();
+  const target = join(root, "protected-app");
+  await mkdir(target);
+  await writeFile(join(target, "keep.txt"), "preserved");
+  expect(() =>
+    generateProject({
+      projectName: "protected-app",
+      targetDir: target,
+      force: true,
+      layers: { ...defaultLayers(), frontend: "spa-react", spaPrefix: "/api/v1" },
+      templateRoot: resolveTemplateRoot(),
+      overlayRoot: resolveOverlayRoot(),
+    }),
+  ).toThrow("SPA_PREFIX");
+  expect(await readFile(join(target, "keep.txt"), "utf8")).toBe("preserved");
+  expect(() =>
+    layersFromFlags(parseCreateStrataArgs(["app", "--spa-prefix=/api", "--yes"])),
+  ).toThrow("SPA_PREFIX");
+});

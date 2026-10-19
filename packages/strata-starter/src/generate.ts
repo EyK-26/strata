@@ -1,5 +1,6 @@
-import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
 import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
 import type { ParsedFlags } from "./parseArgs.ts";
 import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
@@ -163,6 +164,18 @@ function applyFrontendOverlays(
 function writeGeneratedFiles(options: GenerateOptions): void {
   const { targetDir, projectName, layers } = options;
   const src = join(targetDir, "src");
+  if (needsFrontendBuild(layers.frontend)) {
+    const manifestPath = join(targetDir, "frontend/package.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    // Bun's HTML/HMR bundler reads its scoped environment at process startup.
+    const publicEnv = `BUN_PUBLIC_SPA_PREFIX="\${SPA_PREFIX:-${layers.spaPrefix}}"`;
+    manifest.scripts.dev = `${publicEnv} bun --hot dev-server.ts`;
+    manifest.scripts.build = `${publicEnv} bun run build.ts`;
+    manifest.scripts.preview = `bun run build && ${publicEnv} bun dev-server.ts --preview`;
+    writeText(manifestPath, JSON.stringify(manifest, null, 2));
+  }
 
   writeText(join(targetDir, ".bun-version"), "1.4.3\n");
   writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, layers));
@@ -416,6 +429,7 @@ function printNextSteps(
 
 function generateProject(options: GenerateOptions): void {
   assertProjectName(options.projectName);
+  const layers = { ...options.layers, spaPrefix: validateSpaPrefix(options.layers.spaPrefix) };
   if (existsSync(options.targetDir)) {
     if (!options.force) {
       throw new Error(`Directory already exists: ${options.targetDir}`);
@@ -424,8 +438,8 @@ function generateProject(options: GenerateOptions): void {
   }
 
   copyTree(options.templateRoot, options.targetDir, options.projectName, new Set(["overlays"]));
-  applyFrontendOverlays(options.overlayRoot, options.targetDir, options.layers);
-  writeGeneratedFiles(options);
+  applyFrontendOverlays(options.overlayRoot, options.targetDir, layers);
+  writeGeneratedFiles({ ...options, layers });
 }
 
 async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<number> {

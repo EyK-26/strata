@@ -56,3 +56,9 @@ Each fix gets a failing regression at its real boundary, then a focused framewor
 ## Remaining qualification boundaries
 
 This audit did not mount React in a real browser, execute every extras subset, test every Docker/Local/Mix subset at runtime, or qualify every engine/auth/frontend combination in production/staging. It did not perform real external Stripe/SSO provider qualification, distributed capacity qualification, or native Bun timer acceptance. Existing focused fixtures cover parts of those contracts; none is inferred from the structural matrix. Track these boundaries explicitly as follow-up acceptance, not implicit passes.
+
+## Candidate SPA-prefix regression coverage
+
+The focused #264 fix adds a shared validated namespace and exercises both React frontends at `/app`, `/workspace` and `/team/portal`. Each scenario runs the literal generated install/build/dev/preview scripts, fetches real JS/CSS with content-type checks, checks nested history requests and API isolation, and checks that private configuration is absent from bundles. A separate nested-prefix scenario builds the generated Docker frontend stage. Candidate-only archives are copied into its build context; published acceptance uses the unmodified Dockerfile and npm dependencies.
+
+These are document/asset/server assertions, not a claim of mounted React navigation coverage. The separate #263 browser journey work supplies that missing boundary. Original 2.2.45 failures above remain the published baseline until the cumulative release is qualified.
