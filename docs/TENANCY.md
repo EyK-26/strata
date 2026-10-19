@@ -115,7 +115,7 @@ The application owns the approved-domain directory, its uniqueness, administrati
 
 The native server records the immediate socket peer separately from the forwarded/client address. Only exact literal IPs in `trustedProxyAddresses` (maximum 128) can supply `X-Forwarded-Host`; absent/unknown peers and untrusted forwarded headers cannot affect selection. A trusted proxy must overwrite that header with a single original authority, reject unexpected public hosts at ingress, and restrict backend reachability. Comma-separated/malformed forwarded authorities fail closed. The `Forwarded` header and `TRUST_FORWARDED_FOR` are not host-trust inputs. Custom transports must provide `RequestMeta.peerAddress` from their actual socket; never derive it from a header. Missing peer metadata never grants proxy trust. Unix socket transports can use a preserved direct Host without forwarded-host trust.
 
-A configured host allowlist is checked for authenticated requests too. Authenticated users retain account membership/tenant selection; the public resolver cannot move them to another tenant. Existing authenticated administrator overrides remain unchanged. SCIM retains its dedicated authenticated tenant selection. Domain selection is an anonymous scope, not account authorization or a source for signed URLs.
+A configured host allowlist is checked for authenticated requests too. Persisted authenticated users retain account membership/tenant selection; the public resolver cannot move them to another tenant. Existing authenticated administrator overrides remain unchanged. SCIM retains its dedicated authenticated tenant selection. Domain selection is an anonymous scope, not account authorization or a source for signed URLs.
 
 In production/staging, generated apps bind their configured `APP_URL` hostname to starter tenant 1 and approve no proxy by default. Multi-tenant products replace that application provider with their approved-domain mapping. This contains no commerce entitlements. Changing that mapping or its proxy topology requires a coordinated application deployment; forwarded headers are never accepted just because a public-read flag is on.
 
@@ -124,3 +124,17 @@ In production/staging, generated apps bind their configured `APP_URL` hostname t
 ### Shared tenant lookups across adapters
 
 Core tenant resolution and authenticated user-to-tenant lookup use typed repositories with bound identifiers. They support generated SQLite column-tenancy apps after SCIM releases a temporary bound connection, as well as Postgres/MySQL; they do not depend on a callable tagged-SQL pool. The disabled-tenancy synthetic context, missing-tenant result, identified-user RLS bypass and request scope policies are unchanged. A native generated SQLite HTTP regression repeatedly alternates two SCIM tokens, cross-tenant reads/writes, an unknown tenant token and ordinary Basic-authenticated requests. This does not change arbitrary raw tagged-SQL support in application adapters or add database-enforced isolation to SQLite.
+
+
+### Development identities without account tables
+
+`GuestGuard` marks an enabled local header identity with the trusted `guest` credential source. Tenant middleware applies the same approved-host/development-tenant-header policy used for an account-free principal; it does not query `users` for that identity. `TENANT_DEV_HEADERS=true` is still required for local anonymous/development `x-tenant-id` selection. Otherwise local requests use the default tenant or an approved host. In production/staging, missing or unknown host mappings fail closed; a development identity's role does not grant a tenant-header override. The ordinary `GuestGuard` production refusal remains in effect.
+
+Session, bearer, Basic and legacy persisted identities still resolve membership through the account directory/table path. An unavailable membership database is an error, never a reason to fall back to the default tenant.
+
+Column tenancy supplies application context rather than database-enforced isolation. Application resource queries must constrain their tenant column through the ORM, for example `Note.query().where({ tenant_id: currentTenantId() }).get()`. Postgres RLS also enforces the selected scope on its transaction connection. Choosing a column predicate and authorization policy for a business resource remains part of that resource's implementation.
+
+The generated header-tenancy acceptance creates two actual tenants through the published repository/model APIs on SQLite, MySQL and Postgres column mode plus restricted-role Postgres RLS. It proves account tables are absent, default/header selection follows the explicit dev flag, scoped ORM responses isolate the two datasets, and disabling header auth refuses the request. Policy regressions also retain production/staging host refusal and persisted membership lookup failures.
+
+
+The complete auth manager must preserve that `guest` source even when `GuestGuard` is registered under a named/default guard. Treating it as a session would incorrectly restore the persisted-account lookup. Account-free generated apps also exercise real protected writes through the published `requireUser` contract; the explicit local non-cookie proof follows the development-only CSRF policy in [AUTH.md](AUTH.md), without weakening production, anonymous or cookie checks.
