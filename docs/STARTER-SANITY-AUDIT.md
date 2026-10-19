@@ -62,3 +62,10 @@ This audit did not mount React in a real browser, execute every extras subset, t
 The focused #264 fix adds a shared validated namespace and exercises both React frontends at `/app`, `/workspace` and `/team/portal`. Each scenario runs the literal generated install/build/dev/preview scripts, fetches real JS/CSS with content-type checks, checks nested history requests and API isolation, and checks that private configuration is absent from bundles. A separate nested-prefix scenario builds the generated Docker frontend stage. Candidate-only archives are copied into its build context; published acceptance uses the unmodified Dockerfile and npm dependencies.
 
 These are document/asset/server assertions, not a claim of mounted React navigation coverage. The separate #263 browser journey work supplies that missing boundary. Original 2.2.45 failures above remain the published baseline until the cumulative release is qualified.
+
+
+## Candidate separate-credential MySQL acceptance
+
+Additional limited-runtime browser qualification exposed [#276](https://github.com/EyK-26/strata/issues/276). Both generated provisioning and the MySQL migration wrapper used runtime credentials despite a supplied administrative migration URL. The fix selects the explicit administrative credential for schema work, scopes it through the published connection API and closes it after success/failure; runtime privileges and production/staging no-provision defaults remain unchanged.
+
+New native cases execute real generated MySQL none/column apps with distinct schema and runtime credentials. They cover migrate, status, credential-state rollback refusal, a reversible later migration batch, fresh/reapply/seed, actual ORM reads, denied runtime DDL, and connection restoration after a failing migration callback. Status and rollback use the existing generated entrypoints; no new public CLI command is assumed. Original limited-role failures are retained before the passing candidate run.
