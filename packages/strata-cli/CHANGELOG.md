@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.45
+
+Offer optional Adminer consistently in Docker and Mix wizard modes when the selected database is in Compose. Generate debug-profile startup commands and complete database login instructions; correct noninteractive Docker documentation while preserving existing flag behavior. Add prompt/CLI regressions and real isolated MySQL/Postgres Adminer profile and login acceptance tests without removing assertions.
+
 ## 2.2.44
 
 Generate JSON registration, verification/resend, reset and password-confirmed MFA for API/SPA cookie starters; share guarded MFA persistence with HTML, reject malformed TOTP secrets, and extend installed-app SMTP, replay, revocation and compiler coverage without changing HTML contracts.

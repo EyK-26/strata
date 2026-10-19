@@ -87,6 +87,7 @@ import type { GenerateOptions, StarterLayers } from "./types.ts";
 import {
   authNeedsUsers,
   authUsesToken,
+  dockerComposeUpCommand,
   htmlAuthKit,
   neededDockerServices,
   needsFrontendBuild,
@@ -394,7 +395,7 @@ function printNextSteps(
   console.log(`  cd ${cdTarget}`);
   console.log("  cp .env.example .env");
   if (compose) {
-    console.log("  docker compose up -d");
+    console.log(`  ${dockerComposeUpCommand(layers)}`);
   }
   if (dockerOn.includes("adminer")) {
     console.log("  Adminer: http://localhost:8080");

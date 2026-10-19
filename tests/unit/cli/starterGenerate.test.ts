@@ -98,6 +98,7 @@ function scriptedPrompter(script: {
   question?: string[];
   multiSelect?: string[][];
   onMultiSelect?: (message: string, values: string[]) => void;
+  onConfirm?: (message: string) => void;
 }): Prompter {
   const select = [...(script.select ?? [])];
   const confirm = [...(script.confirm ?? [])];
@@ -111,6 +112,7 @@ function scriptedPrompter(script: {
       return question.shift() ?? defaultValue ?? "";
     },
     async confirm(message) {
+      script.onConfirm?.(message);
       if (confirm.length === 0) {
         throw new Error(`unexpected confirm: ${message}`);
       }
@@ -317,7 +319,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.44");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.45");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -949,6 +951,80 @@ describe("create-strata CLI", () => {
       billing: false,
       webhooks: false,
     });
+  });
+
+  for (const database of ["mysql", "postgres"] as const) {
+    for (const mode of ["docker", "mix"] as const) {
+      for (const adminer of [false, true]) {
+        test(`Adminer is offered once for ${database}/${mode}, accepted=${adminer}`, async () => {
+          const confirmations: string[] = [];
+          const layers = await promptLayers(
+            parseCreateStrataArgs(["adminer-choice"]),
+            scriptedPrompter({
+              select: ["server-htmx", database, "cookie", "none", "array", "sync", "smtp", mode],
+              multiSelect: [["mfa", "emailVerification"]],
+              confirm: mode === "docker" ? [adminer] : [true, false, adminer],
+              onConfirm: (message) => confirmations.push(message),
+            }),
+          );
+          expect(confirmations.filter((message) => message.includes("Adminer"))).toHaveLength(1);
+          expect(layers.docker.services[database]).toBe(true);
+          expect(layers.docker.services.mailpit).toBe(mode === "docker");
+          expect(layers.docker.services.adminer).toBe(adminer);
+          expect(layers.docker.services.redis).toBe(false);
+        });
+      }
+    }
+    test(`Adminer is not offered for a local ${database} database in mix mode`, async () => {
+      const confirmations: string[] = [];
+      const layers = await promptLayers(
+        parseCreateStrataArgs(["adminer-local"]),
+        scriptedPrompter({
+          select: ["server-htmx", database, "cookie", "none", "array", "sync", "smtp", "mix"],
+          multiSelect: [[]],
+          confirm: [false, true],
+          onConfirm: (message) => confirmations.push(message),
+        }),
+      );
+      expect(confirmations.some((message) => message.includes("Adminer"))).toBe(false);
+      expect(layers.docker.services.adminer).toBe(false);
+      expect(layers.docker.services[database]).toBe(false);
+      expect(layers.docker.services.mailpit).toBe(true);
+    });
+    test(`Adminer CLI and README start its debug profile for ${database}`, async () => {
+      const root = await tempDir();
+      const result = Bun.spawnSync({
+        cmd: [
+          "bun",
+          join(repoRoot, "packages/strata-starter/cli.ts"),
+          "adminer-guide",
+          `--database=${database}`,
+          `--docker-services=${database},adminer`,
+          "--yes",
+        ],
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toContain("docker compose --profile debug up -d");
+      const readme = await readFile(join(root, "adminer-guide/README.md"), "utf8");
+      expect(readme).toContain("docker compose --profile debug up -d");
+      expect(readme).toContain("database `adminer_guide`");
+      expect(readme).toContain("plain `docker compose up -d` does not start Adminer");
+    });
+  }
+  test("Adminer is not offered for SQLite even when SMTP uses Docker", async () => {
+    const layers = await promptLayers(
+      parseCreateStrataArgs(["adminer-sqlite"]),
+      scriptedPrompter({
+        select: ["server-htmx", "sqlite", "cookie", "none", "array", "sync", "smtp", "docker"],
+        multiSelect: [[]],
+        confirm: [],
+      }),
+    );
+    expect(layers.docker.services.adminer).toBe(false);
+    expect(layers.docker.services.mailpit).toBe(true);
   });
 
   test("wizard can choose local tools or a docker mix", async () => {

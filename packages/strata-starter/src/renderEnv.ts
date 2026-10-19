@@ -6,6 +6,7 @@ import {
   authUsesToken,
   DOCKER_SERVICE_LABELS,
   type DockerServiceName,
+  dockerComposeUpCommand,
   type GenerateOptions,
   neededDockerServices,
   needsFrontendBuild,
@@ -461,9 +462,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.44",
-        "@getstrata/cli": "^2.2.44",
-        "@getstrata/core": "^2.2.44",
+        "@getstrata/bootstrap": "^2.2.45",
+        "@getstrata/cli": "^2.2.45",
+        "@getstrata/core": "^2.2.45",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
@@ -545,7 +546,7 @@ function localEnvVars(services: DockerServiceName[]): string[] {
   return [...new Set(vars)];
 }
 
-function renderSupportingToolsReadme(layers: StarterLayers): string {
+function renderSupportingToolsReadme(projectName: string, layers: StarterLayers): string {
   const needed = neededDockerServices(layers);
   if (needed.length === 0) {
     return "";
@@ -562,7 +563,7 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
       `Docker Compose includes ${names}.`,
       "",
       "```bash",
-      "docker compose up -d",
+      dockerComposeUpCommand(layers),
       "```",
       "",
     );
@@ -575,7 +576,9 @@ function renderSupportingToolsReadme(layers: StarterLayers): string {
         ? GENERATED_MYSQL_ROOT_PASSWORD
         : GENERATED_POSTGRES_SUPERUSER_PASSWORD;
       lines.push(
-        `Adminer: http://localhost:8080 (${system}, server \`${server}\`, username \`${username}\`, password \`${password}\`).`,
+        `Adminer: http://localhost:8080 (${system}, server \`${server}\`, username \`${username}\`, password \`${password}\`, database \`${appDatabaseName(projectName)}\`).`,
+        "",
+        "Adminer is optional development tooling in the `debug` profile; plain `docker compose up -d` does not start Adminer. Use the profile command above to start it with the database.",
         "",
       );
       if (!mysql) {
@@ -829,7 +832,7 @@ function renderReadme(
   const docker = renderDockerCompose(projectName, layers);
   const next = [`cd ${projectName}`, "cp .env.example .env"];
   if (docker) {
-    next.push("docker compose up -d");
+    next.push(dockerComposeUpCommand(layers));
   }
   next.push("bun install");
   if (needsFrontendBuild(layers.frontend)) {
@@ -877,7 +880,7 @@ Open http://localhost:3000. Health check: \`GET /health\`. Discover registered c
 
 ${layers.queue === "redis" ? "Redis jobs need `bun run queue:work` in another terminal (requires `REDIS_URL`).\n\n" : "The synchronous queue handles jobs inline; no Redis queue worker is needed for it.\n\n"}For durable events, add listeners in \`src/outbox/registry.ts\`, apply \`bun run db:migrate\`, then run \`bun run outbox:work\` in another terminal. Apps that do not publish durable events do not need this worker. Durable cache invalidation also needs the outbox worker when explicitly configured. Use the same application environment, database, Redis URL and \`APP_KEY_PREFIX\` for HTTP and its workers. An idle worker is normal; startup output confirms entry into polling, not dependency health. Stop HTTP and workers before resetting the development database.
 
-${renderSupportingToolsReadme(layers)}${
+${renderSupportingToolsReadme(projectName, layers)}${
   layers.auth !== "headers"
     ? `
 For the first production admin, apply migrations and run \`bunx strata auth:provision-admin --email operator@example.test --name "Initial Operator" --password-stdin${layers.tenancy !== "none" ? " --tenant 1" : ""} < /run/secrets/initial_admin_password\` before admitting traffic. Supply your own private secret-manager-mounted file, not a demo password. Passwords require at least 16 characters and at most 72 UTF-8 bytes. Tenant-enabled applications require an existing tenant ID; this command does not create tenants. It refuses existing admins/accounts, records a transactional one-time claim, and does not mark email verified or enroll MFA. Additional admins and recovery remain explicit application administration. The command does not migrate or seed automatically.

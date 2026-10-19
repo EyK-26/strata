@@ -310,16 +310,15 @@ async function promptDockerLayer(
     return dockerLayerForNeeded(layers, false);
   }
 
-  if (mode === "docker") {
-    return dockerLayerForNeeded(layers, true);
-  }
-
-  const services = emptyDockerServices();
-  for (const name of needed) {
-    services[name] = await prompter.confirm(
-      `Docker Compose for ${DOCKER_SERVICE_LABELS[name]}?`,
-      true,
-    );
+  const services =
+    mode === "docker" ? dockerLayerForNeeded(layers, true).services : emptyDockerServices();
+  if (mode === "mix") {
+    for (const name of needed) {
+      services[name] = await prompter.confirm(
+        `Docker Compose for ${DOCKER_SERVICE_LABELS[name]}?`,
+        true,
+      );
+    }
   }
   const databaseService = dockerDatabaseService(layers.database);
   if (databaseService && services[databaseService]) {
