@@ -287,6 +287,16 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   return `${lines.join("\n")}\n`;
 }
 
+/** Real dependency readiness, bounded by the generated Compose wait command. */
+function renderServiceHealthcheck(test: string[]): string {
+  return `    healthcheck:
+      test: ${JSON.stringify(test)}
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s`;
+}
+
 function renderDockerCompose(projectName: string, layers: StarterLayers): string | null {
   const selected = selectedDockerServices(layers);
   if (selected.length === 0) {
@@ -304,6 +314,7 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${GENERATED_POSTGRES_SUPERUSER_PASSWORD}
       POSTGRES_DB: ${database}
+${renderServiceHealthcheck(["CMD-SHELL", 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -tAc "SELECT 1" >/dev/null'])}
     ports:
       # Localhost only. Do not publish this port on a production host.
       - "127.0.0.1:5432:5432"
@@ -319,6 +330,7 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
     environment:
       MYSQL_ROOT_PASSWORD: ${GENERATED_MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${database}
+${renderServiceHealthcheck(["CMD-SHELL", 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql --protocol=tcp -h 127.0.0.1 -u root -D "$$MYSQL_DATABASE" -N -e "SELECT 1" >/dev/null'])}
     ports:
       - "127.0.0.1:3306:3306"
     volumes:
@@ -334,7 +346,9 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
     environment:
       ADMINER_DEFAULT_SERVER: ${server}
     depends_on:
-      - ${server}
+      ${server}:
+        condition: service_healthy
+${renderServiceHealthcheck(["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080/') === false ? 1 : 0);"])}
     ports:
       - "127.0.0.1:8080:8080"`);
   }
@@ -342,6 +356,9 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
   if (selectedSet.has("redis")) {
     services.push(`  redis:
     image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: "\${REDIS_PASSWORD:-dev-redis-change-me}"
+${renderServiceHealthcheck(["CMD-SHELL", 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli --no-auth-warning ping | grep -qx PONG'])}
     command: ["redis-server", "--requirepass", "\${REDIS_PASSWORD:-dev-redis-change-me}"]
     ports:
       - "127.0.0.1:6379:6379"`);
@@ -350,6 +367,7 @@ function renderDockerCompose(projectName: string, layers: StarterLayers): string
   if (selectedSet.has("mailpit")) {
     services.push(`  mailpit:
     image: axllent/mailpit:latest
+${renderServiceHealthcheck(["CMD", "/mailpit", "readyz"])}
     ports:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"`);
@@ -565,6 +583,8 @@ function renderSupportingToolsReadme(projectName: string, layers: StarterLayers)
       "```bash",
       dockerComposeUpCommand(layers),
       "```",
+      "",
+      "Wait for this command to succeed before migrating. It waits up to 180 seconds for selected services to be healthy; inspect `docker compose ps` and `docker compose logs` if it fails. Increasing `--wait-timeout` can accommodate a slow first initialization. These checks do not run application migrations.",
       "",
     );
     if (dockerSet.has("adminer")) {

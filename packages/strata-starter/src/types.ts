@@ -179,8 +179,8 @@ function selectedDockerServices(layers: StarterLayers): DockerServiceName[] {
 /** Selected debug tooling must be started explicitly by generated instructions. */
 function dockerComposeUpCommand(layers: StarterLayers): string {
   return selectedDockerServices(layers).includes("adminer")
-    ? "docker compose --profile debug up -d"
-    : "docker compose up -d";
+    ? "docker compose --profile debug up -d --wait --wait-timeout 180"
+    : "docker compose up -d --wait --wait-timeout 180";
 }
 
 function reconcileDocker(layers: StarterLayers): StarterLayers {

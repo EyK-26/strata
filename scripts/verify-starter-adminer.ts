@@ -101,21 +101,19 @@ try {
     const password = database === "mysql" ? "dev-mysql-change-me" : "dev-postgres-change-me";
     const username = database === "mysql" ? "root" : "postgres";
     assert.ok(readme.includes(`username \`${username}\`, password \`${password}\``));
-    // Keep generated profiles, network, credentials and schema. Isolate host
-    // ports and wait for real authenticated SQL, not the initial temporary server.
-    const ready =
-      database === "mysql"
-        ? "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h 127.0.0.1 -u root -D $$MYSQL_DATABASE -N -e 'SELECT 1'"
-        : "PGPASSWORD=$$POSTGRES_PASSWORD psql -h 127.0.0.1 -U postgres -d $$POSTGRES_DB -tAc 'SELECT 1'";
+    // Keep the generated healthchecks. Only host ports are isolated here.
     await writeFile(
       join(app, "acceptance-ports.yml"),
-      `services:\n  ${database}:\n    ports: !override []\n    healthcheck:\n      test: ["CMD-SHELL", ${JSON.stringify(ready)}]\n      interval: 1s\n      timeout: 3s\n      retries: 120\n      start_period: 5s\n  adminer:\n    ports: !override\n      - "127.0.0.1::8080"\n`,
+      `services:\n  ${database}:\n    ports: !override []\n  adminer:\n    ports: !override\n      - "127.0.0.1::8080"\n`,
     );
     const project = { name, app };
     projects.push(project);
     const config = JSON.parse(
       await compose(project, ["--profile", "debug", "config", "--format", "json"]),
     );
+    assert.ok(config.services[database].healthcheck.test);
+    assert.ok(config.services.adminer.healthcheck.test);
+    assert.equal(config.services.adminer.depends_on[database].condition, "service_healthy");
     assert.deepEqual(config.services.adminer.profiles, ["debug"]);
     assert.equal(config.services.adminer.environment.ADMINER_DEFAULT_SERVER, database);
     assert.deepEqual(Object.keys(config.services).sort(), [database, "adminer"].sort());

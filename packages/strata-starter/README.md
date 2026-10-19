@@ -28,7 +28,7 @@ The wizard asks for each layer. In a terminal, lists use up/down and Enter, or a
 
 Layer flags: `--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`, `--spa-prefix`, plus extras (`--mfa`, `--email-verification`, `--scim`, `--metrics`) and their `--no-` forms.
 
-Pick one database engine. Docker Compose is optional (`--docker`, `--no-docker`, `--docker-services=postgres,redis`) and only includes services for the tools you selected. The wizard offers optional Adminer in both Docker and Mix modes when the database is in Compose. `--docker` alone includes required services only; add Adminer explicitly with `--docker-services=mysql,mailpit,adminer` (or `postgres`). When selected, start its debug profile with `docker compose --profile debug up -d`; open http://localhost:8080.
+Pick one database engine. Docker Compose is optional (`--docker`, `--no-docker`, `--docker-services=postgres,redis`) and only includes services for the tools you selected. The wizard offers optional Adminer in both Docker and Mix modes when the database is in Compose. `--docker` alone includes required services only; add Adminer explicitly with `--docker-services=mysql,mailpit,adminer` (or `postgres`). When selected, start its debug profile with `docker compose --profile debug up -d --wait --wait-timeout 180`; open http://localhost:8080.
 
 ## What you get
 
