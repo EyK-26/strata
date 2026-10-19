@@ -1,0 +1,150 @@
+{
+  "version": "2.2.45",
+  "installedVersionsAsserted": [
+    "@getstrata/core@2.2.45",
+    "@getstrata/bootstrap@2.2.45",
+    "@getstrata/cli@2.2.45"
+  ],
+  "generatedClient": [
+    {
+      "auth": "cookie",
+      "emptyUsersBeforeExplicitSeed": {
+        "n": 0
+      },
+      "generatedClient": {
+        "ok": true,
+        "email": "demo@example.com"
+      },
+      "customPrefix": {
+        "status": 200,
+        "assets": [
+          {
+            "path": "/app/chunk-jtmzwh8f.css",
+            "status": 404
+          },
+          {
+            "path": "/app/chunk-radsj454.js",
+            "status": 404
+          }
+        ],
+        "routerHardcoded": true
+      }
+    },
+    {
+      "auth": "token",
+      "emptyUsersBeforeExplicitSeed": {
+        "n": 0
+      },
+      "generatedClient": {
+        "ok": false,
+        "status": 401,
+        "message": "Unauthorized",
+        "loginReturnedToken": true
+      }
+    },
+    {
+      "auth": "jwt",
+      "emptyUsersBeforeExplicitSeed": {
+        "n": 0
+      },
+      "generatedClient": {
+        "ok": false,
+        "status": 404,
+        "message": "Request failed with 404",
+        "loginReturnedToken": false
+      }
+    },
+    {
+      "auth": "headers",
+      "emptyUsersBeforeExplicitSeed": null,
+      "generatedClient": {
+        "ok": false,
+        "status": 404,
+        "message": "Could not load a CSRF token.",
+        "loginReturnedToken": false
+      }
+    }
+  ],
+  "freshCompose": [
+    {
+      "database": "mysql",
+      "firstReadmeMigrationCode": 1,
+      "firstError": [
+        "error: Connection lost: The server closed the connection.",
+        "code: \"PROTOCOL_CONNECTION_LOST\"",
+        "error: script \"db:migrate\" exited with code 1"
+      ],
+      "lifecycle": [
+        {
+          "command": "db:migrate",
+          "code": 0
+        },
+        {
+          "command": "db:migrate",
+          "code": 0
+        },
+        {
+          "command": "db:fresh",
+          "code": 0
+        },
+        {
+          "command": "db:migrate --seed",
+          "code": 0
+        },
+        {
+          "command": "db:fresh --seed",
+          "code": 0
+        },
+        {
+          "command": "db:migrate",
+          "code": 0
+        }
+      ]
+    },
+    {
+      "database": "postgres",
+      "firstReadmeMigrationCode": 0,
+      "lifecycle": [
+        {
+          "command": "db:migrate",
+          "code": 0
+        },
+        {
+          "command": "db:migrate",
+          "code": 0
+        },
+        {
+          "command": "db:fresh",
+          "code": 0
+        },
+        {
+          "command": "db:migrate --seed",
+          "code": 0
+        },
+        {
+          "command": "db:fresh --seed",
+          "code": 0
+        },
+        {
+          "command": "db:migrate",
+          "code": 0
+        }
+      ]
+    }
+  ],
+  "initialAdmin": {
+    "initialAdminProvisionCode": 0,
+    "localFreshAfterProvisionCode": 1,
+    "localFreshError": [
+      "error: Cannot discard a completed initial-admin provisioning claim.",
+      "error: script \"db:fresh\" exited with code 1"
+    ],
+    "stagingFreshRejected": true
+  },
+  "billing": {
+    "separateBillingBatchApplied": true,
+    "billingRollbackCode": 0,
+    "billingReapplyCode": 1,
+    "error": ["error: script \"db:migrate\" exited with code 1"]
+  }
+}
