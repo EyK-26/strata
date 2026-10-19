@@ -45,15 +45,19 @@ You can add cache, SMTP, Redis, or another auth mode later by changing env and t
 
 ## Docker vs local tools
 
-Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is a database UI and is only offered when Postgres or MySQL is in Compose (not SQLite, and not when the database is a local install). The wizard asks after layers.
+Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is a database UI and is only offered when Postgres or MySQL is in Compose (not SQLite, and not when the database is a local install). The wizard asks after layers. Both Docker and Mix modes offer the same optional Adminer confirmation when the selected database runs in Compose; declining keeps only the required services.
 
 | Flag | Effect |
 |------|--------|
-| `--docker` | Write Compose for every selected tool that needs a service, plus Adminer when the database is in Compose |
+| `--docker` | Write Compose for required services only; add Adminer explicitly with `--docker-services` |
 | `--no-docker` | Do not write `docker-compose.yml`; point env at local installs |
 | `--docker-services=postgres,redis` | Compose only for that subset. Add `adminer` to include the UI |
 
 `--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines. Postgres Compose binds `127.0.0.1` and creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`). `.env.example` points `DATABASE_URL` at that role, including `--no-docker`. `db/ensure-postgres-app-role.sql` is repeatable on an existing volume. The `postgres` superuser is for CREATE ROLE / GRANT / migrate and Adminer.
+
+When Adminer is selected, the CLI next steps and generated README use `docker compose --profile debug up -d`. Plain `docker compose up -d` deliberately leaves this optional debug service stopped. Adminer binds only `127.0.0.1:8080`; its login server is the Compose service name (`mysql` or `postgres`), not `localhost`. The generated README includes the chosen system, development username/password and normalized application database name. These are local development credentials; the Postgres Adminer user is a superuser that bypasses RLS. Production application traffic must use the restricted app role.
+
+The required `generatedAdminer` E2E test runs both generated MySQL and Postgres Compose projects, proves default startup leaves Adminer stopped, enables the debug profile, and authenticates through the actual Adminer UI with the documented database credentials. It adds fixture-only authenticated database readiness checks, overrides host ports to avoid shared services, and removes its owned containers/networks/volumes. Docker Compose 2.24.4+ is required for the test's isolated `!override` port file. No local database or existing application is reset.
 
 ## What you get that actually runs
 

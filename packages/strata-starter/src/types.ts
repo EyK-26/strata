@@ -176,6 +176,13 @@ function selectedDockerServices(layers: StarterLayers): DockerServiceName[] {
   return selected;
 }
 
+/** Selected debug tooling must be started explicitly by generated instructions. */
+function dockerComposeUpCommand(layers: StarterLayers): string {
+  return selectedDockerServices(layers).includes("adminer")
+    ? "docker compose --profile debug up -d"
+    : "docker compose up -d";
+}
+
 function reconcileDocker(layers: StarterLayers): StarterLayers {
   const selected = selectedDockerServices(layers);
   return {
@@ -220,6 +227,7 @@ export {
   DATABASES,
   DOCKER_SERVICE_LABELS,
   DOCKER_SERVICE_NAMES,
+  dockerComposeUpCommand,
   dockerDatabaseService,
   dockerLayerForNeeded,
   EXAMPLE_APP_IDS,
