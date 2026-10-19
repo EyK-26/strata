@@ -1,0 +1,516 @@
+{
+  "version": "2.2.46",
+  "releaseCommit": "4269823977e95ca53d8581cd417322bf1c84129b",
+  "harnessCommit": "e91658f45d305c889d107fbc061d7d2074ecb4fc",
+  "releaseUrl": "https://github.com/EyK-26/strata/releases/tag/v2.2.46",
+  "releaseWorkflow": "https://github.com/EyK-26/strata/actions/runs/39289540465",
+  "completedAt": "2026-10-19T17:35:09.804341+00:00",
+  "environment": {
+    "bun": "1.4.3",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "deployment": "local disposable applications"
+  },
+  "packages": {
+    "create-strata": "2.2.46",
+    "@getstrata/starter": "2.2.46",
+    "@getstrata/core": "2.2.46",
+    "@getstrata/bootstrap": "2.2.46",
+    "@getstrata/cli": "2.2.46"
+  },
+  "installation": "Exact published create-strata generator; generated app core/bootstrap/cli pinned and verified at 2.2.46. No candidate archives or node_modules patches.",
+  "expected": 88,
+  "executed": 88,
+  "passed": 88,
+  "failed": 0,
+  "scenarioSkips": 0,
+  "groups": {
+    "accountJourneys": 15,
+    "mountedReact": 34,
+    "spaPrefixesIncludingDocker": 7,
+    "initialAdminReset": 7,
+    "billingRollback": 14,
+    "literalReadiness": 3,
+    "adminerLogin": 2,
+    "mysqlSeparateMigrationRole": 2,
+    "guestTenancyAndWrites": 4
+  },
+  "releaseQualityGate": {
+    "unitIntegrationPass": 2452,
+    "existingPlatformSkips": 2,
+    "fail": 0,
+    "e2ePass": 123,
+    "e2eFail": 0,
+    "e2eSkips": 0,
+    "coverageEnforcement": "unchanged and passed"
+  },
+  "earlierPublishedRun": {
+    "executed": 88,
+    "passed": 88,
+    "failed": 0,
+    "scenarioSkips": 0,
+    "cleanupFinding": "One earlier anonymous Redis volume remained per readiness profile after service recreation. Functional successes retained; teardown regression reproduced on all three profiles before fixing the fixture."
+  },
+  "cleanup": {
+    "containers": {
+      "added": [],
+      "removed": []
+    },
+    "volumes": {
+      "added": [],
+      "removed": []
+    },
+    "networks": {
+      "added": [],
+      "removed": []
+    },
+    "databaseAndRoleBaselineRestored": true
+  },
+  "scopeLimits": [
+    "Risk-based runtime selection, not runtime execution of every structural combination.",
+    "Acceptance durations are not throughput, capacity, deployed availability or recovery SLO evidence.",
+    "Shop adoption remains held on Bun qualification #257."
+  ],
+  "results": [
+    {
+      "name": "account-mysql-api-cookie-none",
+      "exitCode": 0,
+      "elapsedMs": 6332
+    },
+    {
+      "name": "account-sqlite-spa-cookie-column",
+      "exitCode": 0,
+      "elapsedMs": 5437
+    },
+    {
+      "name": "account-postgres-api-cookie-rls",
+      "exitCode": 0,
+      "elapsedMs": 6318
+    },
+    {
+      "name": "account-mysql-htmx-cookie-none",
+      "exitCode": 0,
+      "elapsedMs": 5493
+    },
+    {
+      "name": "account-mysql-hybrid-combined-column",
+      "exitCode": 0,
+      "elapsedMs": 5771
+    },
+    {
+      "name": "account-sqlite-htmx-cookie-none",
+      "exitCode": 0,
+      "elapsedMs": 5069
+    },
+    {
+      "name": "account-sqlite-spa-token-column",
+      "exitCode": 0,
+      "elapsedMs": 3376
+    },
+    {
+      "name": "account-postgres-hybrid-combined-rls",
+      "exitCode": 0,
+      "elapsedMs": 5901
+    },
+    {
+      "name": "account-postgres-api-jwt-none",
+      "exitCode": 0,
+      "elapsedMs": 3658
+    },
+    {
+      "name": "account-mysql-api-jwt-none",
+      "exitCode": 0,
+      "elapsedMs": 3542
+    },
+    {
+      "name": "account-mysql-spa-token-column",
+      "exitCode": 0,
+      "elapsedMs": 3668
+    },
+    {
+      "name": "account-sqlite-hybrid-cookie-token-column",
+      "exitCode": 0,
+      "elapsedMs": 5144
+    },
+    {
+      "name": "account-sqlite-api-jwt-none",
+      "exitCode": 0,
+      "elapsedMs": 3286
+    },
+    {
+      "name": "account-postgres-htmx-cookie-none",
+      "exitCode": 0,
+      "elapsedMs": 5429
+    },
+    {
+      "name": "account-postgres-spa-token-column",
+      "exitCode": 0,
+      "elapsedMs": 3647
+    },
+    {
+      "name": "browser-spa-react-headers-built",
+      "exitCode": 0,
+      "elapsedMs": 2502
+    },
+    {
+      "name": "browser-spa-react-headers-dev",
+      "exitCode": 0,
+      "elapsedMs": 2073
+    },
+    {
+      "name": "browser-spa-react-cookie-built",
+      "exitCode": 0,
+      "elapsedMs": 2971
+    },
+    {
+      "name": "browser-spa-react-cookie-dev",
+      "exitCode": 0,
+      "elapsedMs": 3086
+    },
+    {
+      "name": "browser-spa-react-token-built",
+      "exitCode": 0,
+      "elapsedMs": 3518
+    },
+    {
+      "name": "browser-spa-react-token-dev",
+      "exitCode": 0,
+      "elapsedMs": 3754
+    },
+    {
+      "name": "browser-spa-react-jwt-built",
+      "exitCode": 0,
+      "elapsedMs": 3298
+    },
+    {
+      "name": "browser-spa-react-jwt-dev",
+      "exitCode": 0,
+      "elapsedMs": 3309
+    },
+    {
+      "name": "browser-spa-react-cookie-token-built",
+      "exitCode": 0,
+      "elapsedMs": 2962
+    },
+    {
+      "name": "browser-spa-react-cookie-token-dev",
+      "exitCode": 0,
+      "elapsedMs": 3047
+    },
+    {
+      "name": "browser-spa-react-cookie-token-jwt-built",
+      "exitCode": 0,
+      "elapsedMs": 2920
+    },
+    {
+      "name": "browser-spa-react-cookie-token-jwt-dev",
+      "exitCode": 0,
+      "elapsedMs": 3096
+    },
+    {
+      "name": "browser-spa-react-jwt-expiry",
+      "exitCode": 0,
+      "elapsedMs": 5760
+    },
+    {
+      "name": "prefix-spa-react-_app",
+      "exitCode": 0,
+      "elapsedMs": 1228
+    },
+    {
+      "name": "prefix-spa-react-_workspace",
+      "exitCode": 0,
+      "elapsedMs": 1257
+    },
+    {
+      "name": "prefix-spa-react-_team_portal",
+      "exitCode": 0,
+      "elapsedMs": 1263
+    },
+    {
+      "name": "browser-hybrid-headers-built",
+      "exitCode": 0,
+      "elapsedMs": 1919
+    },
+    {
+      "name": "browser-hybrid-headers-dev",
+      "exitCode": 0,
+      "elapsedMs": 2199
+    },
+    {
+      "name": "browser-hybrid-cookie-built",
+      "exitCode": 0,
+      "elapsedMs": 2986
+    },
+    {
+      "name": "browser-hybrid-cookie-dev",
+      "exitCode": 0,
+      "elapsedMs": 3137
+    },
+    {
+      "name": "browser-hybrid-token-built",
+      "exitCode": 0,
+      "elapsedMs": 3540
+    },
+    {
+      "name": "browser-hybrid-token-dev",
+      "exitCode": 0,
+      "elapsedMs": 3783
+    },
+    {
+      "name": "browser-hybrid-jwt-built",
+      "exitCode": 0,
+      "elapsedMs": 3266
+    },
+    {
+      "name": "browser-hybrid-jwt-dev",
+      "exitCode": 0,
+      "elapsedMs": 3335
+    },
+    {
+      "name": "browser-hybrid-cookie-token-built",
+      "exitCode": 0,
+      "elapsedMs": 2973
+    },
+    {
+      "name": "browser-hybrid-cookie-token-dev",
+      "exitCode": 0,
+      "elapsedMs": 3166
+    },
+    {
+      "name": "browser-hybrid-cookie-token-jwt-built",
+      "exitCode": 0,
+      "elapsedMs": 3019
+    },
+    {
+      "name": "browser-hybrid-cookie-token-jwt-dev",
+      "exitCode": 0,
+      "elapsedMs": 3122
+    },
+    {
+      "name": "browser-hybrid-jwt-expiry",
+      "exitCode": 0,
+      "elapsedMs": 5678
+    },
+    {
+      "name": "prefix-hybrid-_app",
+      "exitCode": 0,
+      "elapsedMs": 1318
+    },
+    {
+      "name": "prefix-hybrid-_workspace",
+      "exitCode": 0,
+      "elapsedMs": 1272
+    },
+    {
+      "name": "prefix-hybrid-_team_portal",
+      "exitCode": 0,
+      "elapsedMs": 1257
+    },
+    {
+      "name": "browser-hybrid-cookie-mfa",
+      "exitCode": 0,
+      "elapsedMs": 4197
+    },
+    {
+      "name": "browser-hybrid-cookie-token-mfa",
+      "exitCode": 0,
+      "elapsedMs": 4239
+    },
+    {
+      "name": "browser-hybrid-cookie-token-jwt-mfa",
+      "exitCode": 0,
+      "elapsedMs": 4174
+    },
+    {
+      "name": "browser-engine-frontend_hybrid-auth_cookie-token-jwt-database_mysql-tenancy_column-dev-mfa",
+      "exitCode": 0,
+      "elapsedMs": 5253
+    },
+    {
+      "name": "browser-engine-frontend_spa-react-auth_token-database_mysql-tenancy_none",
+      "exitCode": 0,
+      "elapsedMs": 3974
+    },
+    {
+      "name": "browser-engine-frontend_hybrid-auth_cookie-database_postgres-tenancy_rls-dev-mfa",
+      "exitCode": 0,
+      "elapsedMs": 4819
+    },
+    {
+      "name": "browser-engine-frontend_spa-react-auth_jwt-database_postgres-tenancy_column",
+      "exitCode": 0,
+      "elapsedMs": 3577
+    },
+    {
+      "name": "browser-engine-frontend_hybrid-auth_headers-database_sqlite-tenancy_column-dev",
+      "exitCode": 0,
+      "elapsedMs": 2272
+    },
+    {
+      "name": "mysql-migration-role-none",
+      "exitCode": 0,
+      "elapsedMs": 2746
+    },
+    {
+      "name": "mysql-migration-role-column",
+      "exitCode": 0,
+      "elapsedMs": 2855
+    },
+    {
+      "name": "guest-sqlite-column",
+      "exitCode": 0,
+      "elapsedMs": 1301
+    },
+    {
+      "name": "guest-mysql-column",
+      "exitCode": 0,
+      "elapsedMs": 1829
+    },
+    {
+      "name": "guest-postgres-column",
+      "exitCode": 0,
+      "elapsedMs": 1754
+    },
+    {
+      "name": "guest-postgres-rls",
+      "exitCode": 0,
+      "elapsedMs": 1823
+    },
+    {
+      "name": "prefix-hybrid-docker",
+      "exitCode": 0,
+      "elapsedMs": 2509
+    },
+    {
+      "name": "admin-sqlite-none",
+      "exitCode": 0,
+      "elapsedMs": 1703
+    },
+    {
+      "name": "billing-sqlite-none-false",
+      "exitCode": 0,
+      "elapsedMs": 1003
+    },
+    {
+      "name": "billing-sqlite-none-true",
+      "exitCode": 0,
+      "elapsedMs": 1038
+    },
+    {
+      "name": "admin-sqlite-column",
+      "exitCode": 0,
+      "elapsedMs": 1862
+    },
+    {
+      "name": "billing-sqlite-column-false",
+      "exitCode": 0,
+      "elapsedMs": 1046
+    },
+    {
+      "name": "billing-sqlite-column-true",
+      "exitCode": 0,
+      "elapsedMs": 1057
+    },
+    {
+      "name": "readiness-sqlite",
+      "exitCode": 0,
+      "elapsedMs": 9433
+    },
+    {
+      "name": "admin-mysql-none",
+      "exitCode": 0,
+      "elapsedMs": 2534
+    },
+    {
+      "name": "billing-mysql-none-false",
+      "exitCode": 0,
+      "elapsedMs": 1455
+    },
+    {
+      "name": "billing-mysql-none-true",
+      "exitCode": 0,
+      "elapsedMs": 1464
+    },
+    {
+      "name": "admin-mysql-column",
+      "exitCode": 0,
+      "elapsedMs": 2758
+    },
+    {
+      "name": "billing-mysql-column-false",
+      "exitCode": 0,
+      "elapsedMs": 1694
+    },
+    {
+      "name": "billing-mysql-column-true",
+      "exitCode": 0,
+      "elapsedMs": 1703
+    },
+    {
+      "name": "readiness-mysql",
+      "exitCode": 0,
+      "elapsedMs": 10465
+    },
+    {
+      "name": "adminer-mysql",
+      "exitCode": 0,
+      "elapsedMs": 13104
+    },
+    {
+      "name": "admin-postgres-none",
+      "exitCode": 0,
+      "elapsedMs": 2197
+    },
+    {
+      "name": "billing-postgres-none-false",
+      "exitCode": 0,
+      "elapsedMs": 1277
+    },
+    {
+      "name": "billing-postgres-none-true",
+      "exitCode": 0,
+      "elapsedMs": 1293
+    },
+    {
+      "name": "admin-postgres-column",
+      "exitCode": 0,
+      "elapsedMs": 2277
+    },
+    {
+      "name": "billing-postgres-column-false",
+      "exitCode": 0,
+      "elapsedMs": 1420
+    },
+    {
+      "name": "billing-postgres-column-true",
+      "exitCode": 0,
+      "elapsedMs": 1438
+    },
+    {
+      "name": "admin-postgres-rls",
+      "exitCode": 0,
+      "elapsedMs": 2332
+    },
+    {
+      "name": "billing-postgres-rls-false",
+      "exitCode": 0,
+      "elapsedMs": 1488
+    },
+    {
+      "name": "billing-postgres-rls-true",
+      "exitCode": 0,
+      "elapsedMs": 1411
+    },
+    {
+      "name": "readiness-postgres",
+      "exitCode": 0,
+      "elapsedMs": 10479
+    },
+    {
+      "name": "adminer-postgres",
+      "exitCode": 0,
+      "elapsedMs": 12505
+    }
+  ]
+}
