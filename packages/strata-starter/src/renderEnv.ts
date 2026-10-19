@@ -616,7 +616,6 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
   if (authUsesToken(layers.auth)) {
     rows.push(
       "| `POST` | `/api/v1/auth/login` | `{ email, password }` returns `{ token }`. Requires `GET /api/v1/auth/csrf` then `X-CSRF-Token`. |",
-      "| `POST` | `/api/v1/auth/register` | Creates a user and returns a token. |",
       "| `GET` | `/api/v1/auth/me` | Requires `Authorization: Bearer <token>`. |",
     );
   }
@@ -625,11 +624,39 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
       "| `POST` | `/api/auth/token` | Mints a short-lived JWT. Not an HTML session. Requires CSRF like JSON login. |",
     );
   }
-  if (authNeedsUsers(layers.auth)) {
+  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth)) {
     rows.push(
+      "| `POST` | `/api/v1/auth/register` | Returns neutral `{ ok: true }` (201); sign in separately. |",
       "| `POST` | `/api/v1/auth/forgot-password` | Sends a signed reset link through the mail driver. |",
       "| `POST` | `/api/v1/auth/reset-password` | Consumes the signed link. |",
       "| `GET` | `/api/user` | Current user for the active guard. |",
+    );
+  }
+  if (authNeedsUsers(layers.auth)) {
+    rows.push(
+      "| `GET` | `/api/v1/auth/csrf` | Issues the CSRF cookie and JSON token for unauthenticated writes. |",
+    );
+  }
+  if (authUsesCookie(layers.auth)) {
+    if (!authUsesToken(layers.auth))
+      rows.push(
+        "| `POST` | `/api/v1/auth/login` | `{ email, password }` sets the session cookie and returns `{ ok: true }`. Requires CSRF. |",
+        "| `GET` | `/api/v1/auth/me` | Current user from the session cookie. |",
+      );
+    rows.push(
+      "| `GET` | `/login` | HTML sign-in form. |",
+      "| `POST` | `/login` | Creates a cookie session after CSRF validation. |",
+      "| `GET` | `/register` | HTML registration form. |",
+      "| `POST` | `/register` | Neutral redirect to sign in; does not create a session. |",
+      "| `GET` | `/forgot-password` | HTML password-reset request form. |",
+      "| `POST` | `/forgot-password` | Sends a signed reset link. |",
+      "| `GET` | `/reset-password` | Signed HTML password-reset form. |",
+      "| `POST` | `/reset-password` | Consumes the signed reset token. |",
+    );
+  }
+  if (layers.extras.emailVerification && (authUsesToken(layers.auth) || authUsesJwt(layers.auth))) {
+    rows.push(
+      "| `POST` | `/api/v1/auth/verify-email` | Consumes the signed verification token; requires CSRF. |",
     );
   }
   if (layers.extras.metrics) {
@@ -666,7 +693,9 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
       ? `Auth is \`headers\`. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`) for local work and tests. There are no login endpoints and no \`users\` table. Production must set \`AUTH_DEV_HEADERS=false\`, which turns those headers off and leaves you without a guard, so pick another auth layer before you ship.`
       : authUsesToken(layers.auth)
         ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\` (send \`X-CSRF-Token\`), then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
-        : `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
+        : authUsesCookie(layers.auth)
+          ? `Sign in with the HTML form at \`GET /login\` then \`POST /login\`; preserve the session and CSRF cookies. JSON clients can use \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\`, which sets a cookie and returns \`{ ok: true }\`.`
+          : `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
 
   return `# ${projectName} API
 

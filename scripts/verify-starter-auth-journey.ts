@@ -1,6 +1,7 @@
 /** External installed app, actual HTTP/CSRF and SMTP through an owned Mailpit.
  * Use --published=VERSION and STARTER_JOURNEY_PARENT to qualify registry output. */
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
 import { jsonCsrfHeaders, mergeCookies } from "../tests/helpers/jsonCsrf";
@@ -187,6 +188,13 @@ try {
     join(fixture.app, "src/bootstrap/createApp.ts")
   );
   const { context, routes } = await bootstrapApp({ migrate: false });
+  if (profile.frontend === "api") {
+    const apiDocs = await readFile(join(fixture.app, "docs/API.md"), "utf8");
+    for (const row of apiDocs.matchAll(/\| `(GET|POST)` \| `([^`]+)`/g)) {
+      const path = row[2];
+      assert.ok(path && path in routes, `Generated docs advertise absent route ${path}.`);
+    }
+  }
   const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
   stop = async () => {
     await server.stop(true);

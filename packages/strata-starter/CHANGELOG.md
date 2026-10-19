@@ -2,6 +2,8 @@
 
 ## 2.2.43
 
+Correct generated API documentation for cookie/JWT/token stacks, including real route availability and neutral registration responses; guard all six auth stacks and installed runtime route inventories.
+
 Add `afterCommit` for process-local effects after the outermost managed transaction, sharing savepoint rollback and tenant replay with model events. Generated auth SMTP uses this boundary even inside RLS request transactions; callback failures propagate after commit without undoing persisted accounts. Durable delivery still requires the SQL outbox.
 
 Fix MySQL verification/reset and session-revocation timestamps through the shared SQL dialect; make signup account and verification-token persistence atomic with SMTP after commit; initialize no-tenancy seed connections; add installed starter auth/SMTP/MFA/rollback journeys for every database and frontend, plus generated TypeScript profiles.
