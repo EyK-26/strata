@@ -96,6 +96,12 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     ...(layers.database === "postgres"
       ? [`MIGRATION_DATABASE_URL=${defaultMigrationDatabaseUrl(layers, projectName)}`]
       : []),
+    ...(layers.database === "mysql"
+      ? [
+          "# Optional schema-administration URL for the same database; runtime may lack DDL.",
+          "# MIGRATION_DATABASE_URL=",
+        ]
+      : []),
     ...(layers.database === "sqlite"
       ? []
       : [
@@ -1044,6 +1050,7 @@ ${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : 
 `
     : ""
 }
+${layers.database === "mysql" ? "- Keep the MySQL runtime account limited to application reads/writes. Set `MIGRATION_DATABASE_URL` for the same database only in the administrative migration process; provisioning and migration callbacks use that connection and close it afterward. If unset, explicit migration commands require DDL privileges on the configured account.\n" : ""}
 \`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` is 200 when \`notes\` is readable (including zero rows) and configured dependencies are available; it returns only \`ok\` or \`degraded\` without authentication or tenant selection, and 503 when a dependency or schema check fails. Use it for readiness, not process liveness. Redis jobs need a worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
 `;
 }
