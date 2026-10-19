@@ -580,6 +580,7 @@ try {
     const before = await readUser();
     const beforeVersion = before.get("auth_version");
     const beforeMfa = before.get("mfa_secret");
+    const beforeMfaEnabled = before.get("mfa_enabled");
     const beforeRecovery = before.get("mfa_recovery_codes");
     cookie = csrf.cookie;
     const unknownEmail = `absent-${crypto.randomUUID()}@example.test`;
@@ -639,6 +640,7 @@ try {
     assert.equal(rolledBack.get("password"), before.get("password"));
     assert.equal(rolledBack.get("auth_version"), beforeVersion);
     assert.equal(rolledBack.get("mfa_secret"), beforeMfa);
+    assert.equal(rolledBack.get("mfa_enabled"), beforeMfaEnabled);
     assert.deepEqual(rolledBack.get("mfa_recovery_codes"), beforeRecovery);
     assert.equal(await pendingResetProofs(), 1, "A rejected write must leave its proof usable.");
     const guests = await Promise.all([jsonCsrfHeaders(origin), jsonCsrfHeaders(origin)]);
@@ -694,6 +696,7 @@ try {
       "Password reset must preserve MFA enrollment.",
     );
     assert.deepEqual(persisted.get("mfa_recovery_codes"), beforeRecovery);
+    assert.equal(persisted.get("mfa_enabled"), beforeMfaEnabled);
     assert.equal(
       await runWithMigrationBypass(() =>
         AuthOneTimeToken.where({

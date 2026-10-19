@@ -65,5 +65,60 @@
     "Exactly one successful result determines persisted password, one auth-version increment, consumed proof and preserved MFA state",
     "Previously revoked credential stays rejected and subsequent proof replay stays rejected"
   ],
-  "shopAdoption": "Held independently on framework issue #257; no shop change"
+  "shopAdoption": "Held independently on framework issue #257; no shop change",
+  "finalMfaEnabledAssertions": {
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "results": [
+      {
+        "profile": "mysql-api-cookie-none",
+        "exitCode": 0,
+        "elapsedMs": 7105
+      },
+      {
+        "profile": "mysql-hybrid-combined-column",
+        "exitCode": 0,
+        "elapsedMs": 6441
+      },
+      {
+        "profile": "sqlite-spa-cookie-column",
+        "exitCode": 0,
+        "elapsedMs": 6265
+      },
+      {
+        "profile": "sqlite-htmx-cookie-none",
+        "exitCode": 0,
+        "elapsedMs": 5984
+      },
+      {
+        "profile": "postgres-api-cookie-rls",
+        "exitCode": 0,
+        "elapsedMs": 7180
+      },
+      {
+        "profile": "postgres-api-jwt-none",
+        "exitCode": 0,
+        "elapsedMs": 4353
+      },
+      {
+        "profile": "postgres-spa-token-column",
+        "exitCode": 0,
+        "elapsedMs": 4392
+      }
+    ],
+    "assertion": "Explicitly preserve mfa_enabled after both rejected and successful password writes, alongside encrypted secret and recovery hashes.",
+    "cleanup": {
+      "before": {
+        "postgres": [],
+        "mysql": [],
+        "mysqlUsers": []
+      },
+      "after": {
+        "postgres": [],
+        "mysql": [],
+        "mysqlUsers": []
+      }
+    }
+  }
 }
