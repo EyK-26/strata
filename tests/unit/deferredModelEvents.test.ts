@@ -9,7 +9,11 @@ import {
   resetDefaultDatabasePoolForTests,
 } from "@getstrata/core/database/defaultConnection";
 import { defineTable } from "@getstrata/core/database/table";
-import { runInTransaction } from "@getstrata/core/database/transaction";
+import {
+  afterCommit,
+  hasActiveTransaction,
+  runInTransaction,
+} from "@getstrata/core/database/transaction";
 import { dispatchModelEvent, eventBus, runWithDeferredModelEvents } from "@getstrata/core/events";
 import {
   currentTenant,
@@ -271,6 +275,40 @@ describe("commit-aware model events", () => {
     expect(tenants).toEqual([1]);
     expect(calls[0]).toBe("begin");
     expect(calls.some((line) => line.includes("set_config('app.tenant_id'"))).toBe(true);
+  });
+
+  test("RLS commit callbacks retain tenant identity without opening a transaction across external I/O", async () => {
+    const previous = process.env.TENANCY_DRIVER;
+    process.env.TENANCY_DRIVER = "rls";
+    const restored = currentPoolOrNull();
+    const calls: string[] = [];
+    registerDefaultDatabasePool(fakePool(calls));
+    const order: string[] = [];
+    const unsubscribe = eventBus.listen("orders.committed", () => {
+      expect(hasActiveTransaction()).toBe(true);
+      order.push("model");
+    });
+    try {
+      await runWithDeferredModelEvents(async () => {
+        await runWithTenant(defaultTestTenant, async () => {
+          await dispatchModelEvent("orders.committed", {});
+          await afterCommit(async () => {
+            expect(currentTenant()?.id).toBe(defaultTestTenant.id);
+            expect(hasActiveTransaction()).toBe(false);
+            await Promise.resolve();
+            order.push("mail");
+          });
+          await dispatchModelEvent("orders.committed", {});
+        });
+      });
+      expect(order).toEqual(["model", "mail", "model"]);
+      expect(calls.filter((call) => call === "begin")).toHaveLength(2);
+      expect(currentTenant()).toBeNull();
+    } finally {
+      unsubscribe();
+      restorePool(restored);
+      restoreEnvVar("TENANCY_DRIVER", previous);
+    }
   });
 
   test("flushes mixed-tenant events in separate tenant batches", async () => {

@@ -1,5 +1,5 @@
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
-import { currentTenant, type TenantContext } from "../tenant/tenantContext";
+import { currentTenant, runWithTenant, type TenantContext } from "../tenant/tenantContext";
 import { eventBus } from "./eventBus";
 
 type DeferredModelEvent = {
@@ -31,7 +31,12 @@ function groupQueuedModelEvents(queued: DeferredModelEvent[]): DeferredModelEven
   for (const item of queued) {
     const lastGroup = groups[groups.length - 1];
     const last = lastGroup?.[lastGroup.length - 1];
-    if (!lastGroup || !last || !sameTenant(last.tenant, item.tenant)) {
+    if (
+      !lastGroup ||
+      !last ||
+      !sameTenant(last.tenant, item.tenant) ||
+      "callback" in last !== "callback" in item
+    ) {
       groups.push([item]);
     } else {
       lastGroup.push(item);
@@ -58,7 +63,13 @@ async function dispatchQueuedModelEvents(queued: DeferredModelEvent[]): Promise<
   for (const batch of groupQueuedModelEvents(queued)) {
     const tenant = batch[0]?.tenant ?? null;
     if (tenant) {
-      await runWithTenantDatabase(tenant, () => dispatchEventBatch(batch));
+      if (batch.some((item) => "callback" in item)) {
+        // External effects retain identity, never a released handle, bypass or
+        // another pool slot held across network I/O. Database work is explicit.
+        await runWithTenant(tenant, () => dispatchEventBatch(batch));
+      } else {
+        await runWithTenantDatabase(tenant, () => dispatchEventBatch(batch));
+      }
     } else {
       await dispatchEventBatch(batch);
     }
