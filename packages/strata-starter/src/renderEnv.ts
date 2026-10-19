@@ -461,9 +461,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.43",
-        "@getstrata/cli": "^2.2.43",
-        "@getstrata/core": "^2.2.43",
+        "@getstrata/bootstrap": "^2.2.44",
+        "@getstrata/cli": "^2.2.44",
+        "@getstrata/core": "^2.2.44",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {
@@ -623,12 +623,14 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
       "| `POST` | `/api/auth/token` | Mints a short-lived JWT. Not an HTML session. Requires CSRF like JSON login. |",
     );
   }
-  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth)) {
+  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth) || authUsesCookie(layers.auth)) {
     rows.push(
       "| `POST` | `/api/v1/auth/register` | Returns neutral `{ ok: true }` (201); sign in separately. |",
       "| `POST` | `/api/v1/auth/forgot-password` | Sends a signed reset link through the mail driver. |",
       "| `POST` | `/api/v1/auth/reset-password` | Consumes the signed link. |",
-      "| `GET` | `/api/user` | Current user for the active guard. |",
+      ...(authUsesToken(layers.auth) || authUsesJwt(layers.auth)
+        ? ["| `GET` | `/api/user` | Current user for the active guard. |"]
+        : []),
     );
   }
   if (authNeedsUsers(layers.auth)) {
@@ -643,11 +645,21 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
         "| `GET` | `/api/v1/auth/me` | Current user from the session cookie. |",
       );
   }
-  if (layers.extras.emailVerification && (authUsesToken(layers.auth) || authUsesJwt(layers.auth))) {
+  if (layers.extras.emailVerification && authNeedsUsers(layers.auth)) {
     rows.push(
       "| `POST` | `/api/v1/auth/verify-email` | Consumes the signed verification token; requires CSRF. |",
     );
   }
+  if (authUsesCookie(layers.auth) && layers.extras.emailVerification)
+    rows.push(
+      "| `POST` | `/api/v1/auth/verification-notification` | Authenticated owner resend; verification is not required. Requires CSRF. |",
+    );
+  if (authUsesCookie(layers.auth) && layers.extras.mfa)
+    rows.push(
+      "| `POST` | `/api/v1/auth/confirm-password` | Verify the current password and set an epoch-bound confirmation cookie. Requires verified session and CSRF. |",
+      "| `GET` | `/api/v1/auth/mfa` | Returns a fresh proposed `{ secret, otpauth }`; requires verified session. Does not enable MFA. |",
+      "| `POST` | `/api/v1/auth/mfa` | `{ secret, code }` enables MFA and returns `{ recoveryCodes }` once. Requires verified session, password confirmation and CSRF; revokes prior credentials. Login again with `mfa_code`. |",
+    );
   if (layers.extras.metrics) {
     rows.push(
       "| `GET` | `/metrics` | Prometheus text. Production requires `Authorization: Bearer <METRICS_TOKEN>`. |",
@@ -879,7 +891,7 @@ Optional development demo accounts: run \`bun run db:seed:demo\` explicitly afte
 Header auth is on for local use. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`). Production must set \`AUTH_DEV_HEADERS=false\`.
 `
 }${
-  authUsesCookie(layers.auth)
+  authUsesCookie(layers.auth) && (layers.frontend === "server-htmx" || layers.frontend === "hybrid")
     ? `
 HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
 
@@ -890,6 +902,14 @@ HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
 - Reset password: signed \`/reset-password\` (mail log when \`MAIL_DRIVER=log\`)
 ${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}${layers.extras.oauthGithub ? "- GitHub: `/auth/github` (needs `FEATURE_OAUTH=true`). Failures on the callback are JSON, not the login page. State is the signed query value from `createOAuthState()`, not `createOAuthStateCookie()`.\n" : ""}${layers.extras.oidc ? "- OIDC: `/auth/oidc` (needs `FEATURE_OAUTH=true` plus `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`; otherwise the login link stays hidden and the route is 404). PKCE cookie `oidc_pkce`. Callback failures are JSON, not the login page.\n" : ""}
 Cookie name is \`strata_session\`. Forms send CSRF as \`_token\`.
+`
+    : ""
+}${
+  authUsesCookie(layers.auth) && (layers.frontend === "api" || layers.frontend === "spa-react")
+    ? `
+JSON cookie account flows: fetch \`GET /api/v1/auth/csrf\`, retain the cookie and send \`X-CSRF-Token\` on writes (browser clients use credentials). Register through \`POST /api/v1/auth/register\` (neutral 201), login through \`POST /api/v1/auth/login\` (session cookie), and read \`GET /api/v1/auth/me\`. Reset through \`POST /api/v1/auth/forgot-password\` then signed \`POST /api/v1/auth/reset-password\` with \`{ password }\`.
+${layers.extras.emailVerification ? "Verify through signed `POST /api/v1/auth/verify-email`; authenticated unverified owners resend through `POST /api/v1/auth/verification-notification`.\n" : ""}${layers.extras.mfa ? "MFA setup: `GET /api/v1/auth/mfa`, confirm the current password through `POST /api/v1/auth/confirm-password`, then submit `{ secret, code }` to `POST /api/v1/auth/mfa`. Store the returned recovery codes safely; enrollment revokes credentials. Login again with `{ email, password, mfa_code }` using a TOTP or one-use recovery code. Missing code returns JSON 401 `mfa_required`.\n" : ""}
+These routes return JSON, not account pages. The client owns account forms and handling the signed mail URL: submit to its unchanged path/query, with CSRF; opening the URL with GET does not consume a token. No HTML registration/reset page or automatic login is generated for these modes. All auth JSON is private/no-store. API docs list routes; the SPA scaffold is an example client, not a complete account-management UI.
 `
     : ""
 }${

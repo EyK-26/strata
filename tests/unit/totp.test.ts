@@ -34,6 +34,12 @@ describe("totp", () => {
     expect(() => generateTotp("!!!!", 1)).toThrow("Invalid base32 character in MFA secret.");
   });
 
+  test("verification rejects malformed or empty submitted secrets without throwing", () => {
+    expect(verifyTotp("!!!!", "123456")).toBe(false);
+    expect(verifyTotp("", generateTotp(""))).toBe(false);
+    expect(verifyTotp("A", generateTotp("A"))).toBe(false);
+  });
+
   test("generateTotpSecret produces a verifiable secret", () => {
     const generated = generateTotpSecret();
     expect(generated).toMatch(/^[A-Z2-7]+$/u);

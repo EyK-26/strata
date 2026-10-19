@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { ForbiddenError, toHttpError } from "@getstrata/core/errors/http";
+import { privateJsonResponse } from "@getstrata/core/http/response";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { BaseRepository } from "../database/baseRepository";
 import { defineTable } from "../database/table";
@@ -159,7 +160,7 @@ function createTenantMiddleware(options: TenantMiddlewareOptions = {}) {
       const httpError = toHttpError(error);
 
       if (httpError) {
-        return Response.json({ error: httpError.message }, { status: httpError.status });
+        return privateJsonResponse({ error: httpError.message }, { status: httpError.status });
       }
 
       throw error;

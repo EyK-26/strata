@@ -1,5 +1,13 @@
 # create-strata changelog
 
+## 2.2.44
+
+Generate JSON registration, verification/resend, reset and password-confirmed MFA for API/SPA cookie starters; share guarded MFA persistence with HTML, reject malformed TOTP secrets, and extend installed-app SMTP, replay, revocation and compiler coverage without changing HTML contracts.
+
+Preserve private/no-store headers when the tenancy boundary maps an HTTP error to JSON, without changing its status/body or transaction rollback. Rebuild the starter in standalone generated-app verification to prevent stale output from producing false green results.
+
+Honor the explicit API JSON error context during password confirmation even when a client sends HTML/HTMX headers; preserve automatic HTML behavior outside that context.
+
 ## 2.2.43
 
 Preserve neutral registration responses under concurrent duplicate signup. Share the generated registration transaction, recheck a confirmed account only after a conflict rollback, send verification only for the winning creation, and propagate unrelated persistence failures.
