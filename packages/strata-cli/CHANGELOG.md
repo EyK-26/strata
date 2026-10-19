@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.46
+
+- Align published runtime and starter dependency pins with the 2.2.46 generated-app contracts.
+
 ## 2.2.45
 
 Offer optional Adminer consistently in Docker and Mix wizard modes when the selected database is in Compose. Generate debug-profile startup commands and complete database login instructions; correct noninteractive Docker documentation while preserving existing flag behavior. Add prompt/CLI regressions and real isolated MySQL/Postgres Adminer profile and login acceptance tests without removing assertions.

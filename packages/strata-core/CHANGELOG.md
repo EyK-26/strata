@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.46
+
+- Add `validateSpaPrefix` for canonical, dedicated SPA URL namespaces; reject API, asset and platform-probe collisions while preserving existing prefix normalization.
+
 ## 2.2.45
 
 Offer optional Adminer consistently in Docker and Mix wizard modes when the selected database is in Compose. Generate debug-profile startup commands and complete database login instructions; correct noninteractive Docker documentation while preserving existing flag behavior. Add prompt/CLI regressions and real isolated MySQL/Postgres Adminer profile and login acceptance tests without removing assertions.
