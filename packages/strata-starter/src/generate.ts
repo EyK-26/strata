@@ -163,6 +163,14 @@ function applyFrontendOverlays(
 function writeGeneratedFiles(options: GenerateOptions): void {
   const { targetDir, projectName, layers } = options;
   const src = join(targetDir, "src");
+  if (needsFrontendBuild(layers.frontend)) {
+    const transport = layers.auth.startsWith("cookie") ? "cookie" : layers.auth;
+    const mfa = transport === "cookie" && layers.extras.mfa;
+    writeText(
+      join(targetDir, "frontend/src/auth/config.ts"),
+      `export type AuthTransport = "cookie" | "token" | "jwt" | "headers";\nexport const AUTH_CONFIG: { transport: AuthTransport; mfa: boolean } = ${JSON.stringify({ transport, mfa })};\n`,
+    );
+  }
 
   writeText(join(targetDir, ".bun-version"), "1.4.3\n");
   writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, layers));

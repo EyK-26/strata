@@ -1,19 +1,24 @@
 import { useAuth } from "../auth/AuthContext";
-
+import { AUTH_CONFIG } from "../auth/config";
 export default function HomePage() {
   const { user } = useAuth();
-
   return (
     <section>
-      <h1>Signed in</h1>
+      <h1>{AUTH_CONFIG.transport === "headers" ? "Development identity selected" : "Signed in"}</h1>
       <p className="hint">
-        This page reads <code>GET /api/v1/auth/me</code> with the HttpOnly session cookie. It is the
-        only resource the generated backend serves, so it is the only one this page shows.
+        {AUTH_CONFIG.transport === "headers"
+          ? "Request identity headers are enabled only for local development. There is no account profile endpoint in this mode."
+          : AUTH_CONFIG.transport === "jwt"
+            ? "This page reads GET /api/user with a memory-only JWT. Reloading requires sign-in again."
+            : `This page reads GET /api/v1/auth/me with ${AUTH_CONFIG.transport === "cookie" ? "the HttpOnly session cookie" : "a memory-only API token"}.`}
       </p>
-
       <div className="card">
         <table>
           <tbody>
+            <tr>
+              <th>ID</th>
+              <td>{user?.id ?? "—"}</td>
+            </tr>
             <tr>
               <th>Name</th>
               <td>{user?.name ?? "—"}</td>
@@ -31,41 +36,35 @@ export default function HomePage() {
           </tbody>
         </table>
       </div>
-
       <h2>Starter-only example</h2>
       <p>
-        This empty app already serves <code>GET /api/v1/auth/me</code>. It does not serve{" "}
-        <code>GET /api/v1/notes</code>. The module below is an example you add yourself. Create it
-        under <code>src/modules/</code> and the kernel picks it up on the next boot.
+        This app has no notes API yet. Add an explicit module under <code>src/modules/</code> to
+        expose your own application resources through the ORM.
       </p>
-
       <pre className="card">
         <code>{`// src/modules/notes/index.ts
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { jsonResponse } from "@getstrata/core/http/response";
-import { getSql } from "../../bootstrap/database.ts";
+import { Note } from "../../models/Note.ts";
 
-const notesModule: AppModule = {
+export default {
   name: "notes",
-  order: 2,
   routes({ kernel }) {
     return {
-      "/api/v1/notes": kernel.wrap("api", async () => {
-        const rows = await getSql().unsafe<{ id: number; body: string }>(
-          "SELECT id, body FROM notes ORDER BY id DESC",
-        );
-        return jsonResponse({ data: rows });
-      }),
+      "/api/v1/notes": {
+        GET: kernel.wrapApi(async () => {
+          const rows = await Note.query().orderBy({ column: "id", direction: "DESC" }).get();
+          return jsonResponse({ data: rows.map(row => row.toObject()) });
+        }),
+      },
     };
   },
-};
-
-export default notesModule;`}</code>
+} satisfies AppModule;`}</code>
       </pre>
-
       <p className="hint">
         Then fetch it here with <code>apiFetch("/notes")</code>. The <code>notes</code> table
-        already exists after <code>bun run db:migrate</code>.
+        already exists after <code>bun run db:migrate</code>. Application authorization and tenant
+        scope remain required for real business data.
       </p>
     </section>
   );

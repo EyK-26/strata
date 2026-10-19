@@ -928,7 +928,8 @@ Cookie name is \`strata_session\`. Forms send CSRF as \`_token\`.
 `
     : ""
 }${
-  authUsesCookie(layers.auth) && (layers.frontend === "api" || layers.frontend === "spa-react")
+  authUsesCookie(layers.auth) &&
+  (layers.frontend === "api" || layers.frontend === "spa-react" || layers.frontend === "hybrid")
     ? `
 JSON cookie account flows: fetch \`GET /api/v1/auth/csrf\`, retain the cookie and send \`X-CSRF-Token\` on writes (browser clients use credentials). Register through \`POST /api/v1/auth/register\` (neutral 201), login through \`POST /api/v1/auth/login\` (session cookie), and read \`GET /api/v1/auth/me\`. Reset through \`POST /api/v1/auth/forgot-password\` then signed \`POST /api/v1/auth/reset-password\` with \`{ password }\`.
 ${layers.extras.emailVerification ? "Verify through signed `POST /api/v1/auth/verify-email`; authenticated unverified owners resend through `POST /api/v1/auth/verification-notification`.\n" : ""}${layers.extras.mfa ? "MFA setup: `GET /api/v1/auth/mfa`, confirm the current password through `POST /api/v1/auth/confirm-password`, then submit `{ secret, code }` to `POST /api/v1/auth/mfa`. Store the returned recovery codes safely; enrollment revokes credentials. Login again with `{ email, password, mfa_code }` using a TOTP or one-use recovery code. Missing code returns JSON 401 `mfa_required`.\n" : ""}

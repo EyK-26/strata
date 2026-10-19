@@ -130,6 +130,7 @@ jobs:
       - name: Install dependencies
         run: |
           bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium
           bun dedupe
           git diff --exit-code -- bun.lock
 

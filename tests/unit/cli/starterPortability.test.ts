@@ -675,3 +675,47 @@ describe("generated deploy files", () => {
     expect(env).toContain("# TRUST_FORWARDED_FOR=true");
   });
 });
+
+test("hybrid cookie apps retain HTML and add the React JSON account contract", async () => {
+  const root = await tempDir();
+  for (const auth of ["cookie", "cookie-token", "cookie-token-jwt"]) {
+    const app = generateFromArgs(root, [
+      auth,
+      "--frontend=hybrid",
+      `--auth=${auth}`,
+      "--mfa",
+      "--email-verification",
+      "--yes",
+    ]);
+    const source = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    for (const path of [
+      "/login",
+      "/register",
+      "/account/mfa",
+      "/api/v1/auth/register",
+      "/api/v1/auth/confirm-password",
+      "/api/v1/auth/mfa",
+      "/api/v1/auth/verification-notification",
+    ])
+      expect(source).toContain(`"${path}":`);
+    const docs = await readFile(join(app, "README.md"), "utf8");
+    expect(docs).toContain("HTML auth kit");
+    expect(docs).toContain("JSON cookie account flows");
+  }
+});
+
+test("header apps register the complete published AuthManager and GuestGuard", async () => {
+  const root = await tempDir();
+  const app = generateFromArgs(root, [
+    "header-contract",
+    "--frontend=spa-react",
+    "--auth=headers",
+    "--yes",
+  ]);
+  const source = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
+  expect(source).toContain("new AuthManager(guard)");
+  expect(source).toContain("new GuestGuard()");
+  expect(source).toContain("envFlagEnabled(process.env.AUTH_DEV_HEADERS)");
+  expect(source).not.toContain("class StarterAuthManager");
+  expect(existsSync(join(app, "src/modules/auth/index.ts"))).toBe(false);
+});

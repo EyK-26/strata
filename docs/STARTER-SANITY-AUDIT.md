@@ -56,3 +56,16 @@ Each fix gets a failing regression at its real boundary, then a focused framewor
 ## Remaining qualification boundaries
 
 This audit did not mount React in a real browser, execute every extras subset, test every Docker/Local/Mix subset at runtime, or qualify every engine/auth/frontend combination in production/staging. It did not perform real external Stripe/SSO provider qualification, distributed capacity qualification, or native Bun timer acceptance. Existing focused fixtures cover parts of those contracts; none is inferred from the structural matrix. Track these boundaries explicitly as follow-up acceptance, not implicit passes.
+
+
+## Additional browser boundaries found during the fixes
+
+The original baseline did not mount React. The new browser regression initially passed all six cookie/combined-mode built journeys and failed the six pure token/JWT/header journeys across SPA and hybrid. The fixed client then reached additional real boundaries:
+
+- [#272](https://github.com/EyK-26/strata/issues/272): native dev proxy account writes returned a real 403 because the proxy discarded the browser-facing Host. Preserve Host and Origin together; retain CSRF, cross-site refusal and explicit CORS policy.
+- [#274](https://github.com/EyK-26/strata/issues/274): hybrid cookie MFA setup returned 404 because JSON cookie account management was emitted only for API/SPA frontends. Hybrid needs additive JSON endpoints alongside its preserved HTML routes, sharing existing confirmation, hashing, signing and recovery helpers.
+- [#275](https://github.com/EyK-26/strata/issues/275): all four header built/dev resource journeys returned 500 when application code used `AuthManager.requireUser`. The generated partial manager lacked the method. Register the complete published `AuthManager` and `GuestGuard`, retaining explicit dev-header gating and fail-closed server policy.
+
+The expanded browser regression has 29 registered scenarios: all six auth selections in both SPA and hybrid, built and native dev-proxy entrypoints (24), two JWT expiry scenarios, and three hybrid cookie-combination MFA/recovery scenarios. It tests actual server rejection of expired/disabled credentials, UI invalidation, authenticated ETag requests, memory-only bearer lifetime, header-disabled refusal, cross-site refusal, logout, and real execution of the ORM module example displayed in the starter. No password, token, CSRF, MFA or ORM mechanism is mocked or reimplemented. Native test orchestration and an isolated browser bridge remain test fixtures.
+
+The initial 6/6 browser baseline, dev 403, hybrid MFA 404 and expanded 25-pass/4-header-failure evidence were retained locally before the final 29-pass run. Full-suite and published-package qualification remain required; focused browser success alone does not resolve the production/externally deployed boundaries listed above.

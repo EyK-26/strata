@@ -10,7 +10,8 @@ async function proxyToApi(request: Request): Promise<Response> {
   const incoming = new URL(request.url);
   const target = new URL(`${incoming.pathname}${incoming.search}`, API_ORIGIN);
   const headers = new Headers(request.headers);
-  headers.delete("host");
+  // Preserve the browser-facing host so Request URL and Origin remain consistent.
+  // The upstream network target still comes exclusively from API_ORIGIN.
 
   return fetch(target, {
     method: request.method,

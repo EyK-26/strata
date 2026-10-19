@@ -39,7 +39,7 @@ bunx create-strata html --frontend server-htmx --database postgres --auth cookie
 | `--mail` | `log`, `smtp` |
 | `--spa-prefix` | default `/app` |
 
-Extras that apply to the stack (off until you toggle them, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`, `--oidc`, `--billing`, `--webhooks`. Header auth only offers metrics, billing, and webhooks. MFA, GitHub cookie login, and OIDC cookie login need cookie HTML. SCIM and email verification need a users table. `--no-metrics` skips the metrics extra and does not write `GET /metrics`.
+Extras that apply to the stack (off until you toggle them, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`, `--oidc`, `--billing`, `--webhooks`. Header auth only offers metrics, billing, and webhooks. MFA and GitHub/OIDC cookie handshakes require a cookie auth stack. API/SPA cookie account flows are JSON; hybrid also keeps HTML account pages. SCIM and email verification need a users table. `--no-metrics` skips the metrics extra and does not write `GET /metrics`.
 
 You can add cache, SMTP, Redis, or another auth mode later by changing env and the matching bootstrap files. The generator only installs what you asked for. Generated apps always depend on `eta` (welcome HTML). `mysql2` is added only for `--database mysql`.
 
@@ -178,3 +178,12 @@ Rendered auth pages explicitly select `renderer.namespace("auth", { headers: { "
 The [2.2.45 starter sanity audit](STARTER-SANITY-AUDIT.md) records structural and real fresh-install/client checks, reproduced defects and missing acceptance boundaries. A passing backend journey or generated-app typecheck is not proof that every selected frontend, auth stack and supporting-service combination works. Preserve existing assertions and close the reported runtime gaps with independent generated-app regressions.
 
 Generated Compose services include real readiness probes: TCP SQL queries for MySQL/Postgres, authenticated Redis PING, Mailpit readiness and Adminer's HTTP endpoint. Generated startup commands use `--wait --wait-timeout 180`; wait for success before running migrations. Failure is explicit: inspect `docker compose ps` and `docker compose logs`; a slow first initialization can use a larger wait timeout. Adminer depends on a healthy database and remains in the optional debug profile. No application migrations or runtime SQL retries are added to Compose readiness.
+
+
+## React account transport
+
+The generated React client matches the chosen authentication stack. Cookie modes (including cookie/token combinations) use the HttpOnly browser session and `/api/v1/auth/me`. Pure token mode retains the login response token in memory and authenticates subsequent API requests with Bearer. Pure JWT mode uses `/api/auth/token` and `/api/user`; its profile contains ID and role, so the UI does not invent name/email fields. Bearer credentials never enter localStorage or sessionStorage; reload requires signing in again. Signing out discards the local bearer credential; account revocation/expiry remains enforced by the server, independently of the browser.
+
+Header auth generates a clearly labelled development identity screen instead of a password form. It selects local user-ID/role request headers, does not pretend to create an account, and never calls absent account or CSRF endpoints. The backend must permit development headers in a local environment. Production/staging guards are unchanged.
+
+Account writes retain the official CSRF flow. MFA-enabled cookie apps accept authenticator/recovery codes in the login form; a rejected or expired credential clears the local identity on a 401. The native dev proxy preserves the browser-facing Host and Origin together, keeping same-origin cookie checks effective; it does not rewrite Origin or relax CSRF/CORS.

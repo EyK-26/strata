@@ -6,12 +6,13 @@
 
 ```bash
 docker compose up -d postgres mysql redis --wait
+bunx playwright install chromium
 bun run validate:host
 ```
 
 `validate:host` builds packages, resets/seeds only the framework fixture schema, then runs `validate:ci`. Generated runtime cases own their migrations and databases. The root CLI refuses database operations without `STRATA_SCHEMA=fixture`, and refuses staging/production targets before database access. Local `bun test` uses `tests/globalSetup.ts` to initialize fixtures when needed; existing test-reset database/environment guards remain intact.
 
-The three legacy app directories remain pending the final removal step, but they are no longer workspaces or boot/image inputs. Contributor Compose runs infrastructure only. The root Dockerfile builds a generated app installed from candidate tarballs; `tests/e2e/generatedDocker.test.ts` executes its CLI, production HTTP runtime and graceful shutdown on an owned database. This required test is included in both main CI and release quality gates through `test:e2e`; Docker absence is a failure, not a skip.
+The three legacy app directories were removed after migrating their assertions to generated-app acceptance. Contributor Compose runs infrastructure only. The root Dockerfile builds a generated app installed from candidate tarballs; `tests/e2e/generatedDocker.test.ts` executes its CLI, production HTTP runtime and graceful shutdown on an owned database. This required test is included in both main CI and release quality gates through `test:e2e`; Docker absence is a failure, not a skip.
 
 Focused commands:
 
@@ -93,3 +94,12 @@ Source regression tests for generated views, login throttle wiring and request-p
 ## Fresh starter account journeys
 
 The [starter journey matrix](STARTER-JOURNEYS.md) exercises fresh account creation, real SMTP verification/reset, MFA, replay, rollback and recovery across external installed apps. It complements seeded-login, OIDC/SAML, CLI/OpenAPI and Docker acceptance; it does not replace those assertions.
+
+
+## Generated React browser acceptance
+
+Install the pinned browser once with `bunx playwright install chromium`; Linux contributors may need `bunx playwright install --with-deps chromium`. Main CI and release gates install it explicitly. Missing browser binaries fail acceptance rather than skipping tests. Browser tooling remains a framework development dependency, not a generated app dependency.
+
+`tests/e2e/generatedReactAuth.test.ts` registers built and native Bun dev-proxy browser journeys for all six auth selections in SPA and hybrid apps, plus cookie MFA and JWT expiry cases. Each app installs candidate package archives, runs real migrations and explicit seed, builds/typechecks the frontend, mounts React in Chromium, and exercises the actual client and server. A fixture bridge calls the same browser client module to check authenticated resources, ETags and 401 handling. Additional app modules are acceptance resources; account routes, sessions, bearer signatures, CSRF, password hashing and ORM operations remain the shipped framework APIs.
+
+The verifier also accepts `--published=VERSION` for exact npm acceptance after release. Existing direct HTTP auth journeys, structural matrix, coverage enforcement and other E2E assertions remain required independently. Browser contexts, processes and temporary SQLite databases are owned and closed by each verifier.

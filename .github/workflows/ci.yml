@@ -78,6 +78,7 @@ jobs:
           REDIS_URL: redis://:dev-redis-change-me@localhost:6379
         run: |
           bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium
           bun dedupe
           bun run build:framework
           bun run build:bootstrap
