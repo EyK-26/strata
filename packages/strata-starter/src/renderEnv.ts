@@ -611,7 +611,6 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
     "| `GET` | `/health` | Plain text `ok` (200) when configured database/Redis checks succeed and `notes` is readable (zero rows is still 200). This infrastructure probe runs outside API auth/tenancy admission, never selects a tenant or bypasses RLS, and returns no rows. `degraded` (503) when a dependency or schema check fails. Docker HEALTHCHECK uses this path. |",
     '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
   );
-  rows.push("| `GET` | `/` | Welcome page. Restyle or replace it. |");
 
   if (authUsesToken(layers.auth)) {
     rows.push(
@@ -643,16 +642,6 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
         "| `POST` | `/api/v1/auth/login` | `{ email, password }` sets the session cookie and returns `{ ok: true }`. Requires CSRF. |",
         "| `GET` | `/api/v1/auth/me` | Current user from the session cookie. |",
       );
-    rows.push(
-      "| `GET` | `/login` | HTML sign-in form. |",
-      "| `POST` | `/login` | Creates a cookie session after CSRF validation. |",
-      "| `GET` | `/register` | HTML registration form. |",
-      "| `POST` | `/register` | Neutral redirect to sign in; does not create a session. |",
-      "| `GET` | `/forgot-password` | HTML password-reset request form. |",
-      "| `POST` | `/forgot-password` | Sends a signed reset link. |",
-      "| `GET` | `/reset-password` | Signed HTML password-reset form. |",
-      "| `POST` | `/reset-password` | Consumes the signed reset token. |",
-    );
   }
   if (layers.extras.emailVerification && (authUsesToken(layers.auth) || authUsesJwt(layers.auth))) {
     rows.push(
@@ -694,14 +683,14 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
       : authUsesToken(layers.auth)
         ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\` (send \`X-CSRF-Token\`), then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
         : authUsesCookie(layers.auth)
-          ? `Sign in with the HTML form at \`GET /login\` then \`POST /login\`; preserve the session and CSRF cookies. JSON clients can use \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\`, which sets a cookie and returns \`{ ok: true }\`.`
+          ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\`; preserve the session and CSRF cookies. The response sets a cookie and returns \`{ ok: true }\`. API mode does not serve HTML login or registration forms.`
           : `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
 
   return `# ${projectName} API
 
 \`FRONTEND_MODE=${layers.frontend}\`. ${
     layers.frontend === "api"
-      ? "No server-rendered views beyond the welcome page and no SPA assets."
+      ? "API-only: no server-rendered welcome/login pages or SPA assets. The root path is not a generated endpoint."
       : `HTML is served alongside this API. The SPA is mounted at \`${layers.spaPrefix}\`.`
   }
 

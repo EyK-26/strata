@@ -69,9 +69,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
       imports.push(`import { appUrl } from "@getstrata/core/runtime/appKeyPrefix";`);
     }
   }
-  if (mfa) {
-    imports.push(`import { ConflictError } from "@getstrata/core/errors/http";`);
-  }
+  imports.push(`import { ConflictError } from "@getstrata/core/errors/http";`);
   if (jsonApi) {
     imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
   }
@@ -227,6 +225,24 @@ async function prepareSignedAuthMail(to: string, subject: string, path: string, 
 async function issueSignedAuthMail(to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
   const message = await prepareSignedAuthMail(to, subject, path, purpose, userId, extra);
   await afterCommit(() => mailer().send(message));
+}
+
+async function createRegistration(credentials: { name: string; email: string; password: string }${verify ? ", verificationPath: string" : ""}) {
+  const { email } = credentials;
+  try {
+    return await runAuthWrite(email, () => runInTransaction(async () => {
+      ${verify ? "const created = " : ""}await User.create({
+        ...credentials,
+        is_admin: false,${tenantCreateField}
+      });
+      ${verify ? `return prepareSignedAuthMail(email, "Verify your email", verificationPath, AUTH_ONE_TIME_PURPOSES.emailVerify, Number(created.get("id")), { id: String(created.get("id")) });` : ""}
+    }));
+  } catch (error) {
+    // The failed transaction/savepoint is already rolled back before readback.
+    // Only an actual account race is neutral; unrelated persistence failures propagate.
+    if (!(error instanceof ConflictError) || !(await starterAuthDirectory.findByEmail(email))) throw error;
+    return undefined;
+  }
 }
 
 async function consumeSignedAuthToken(request: Request, purpose: string): Promise<number | null> {
@@ -422,16 +438,8 @@ async function completeBrowserSsoLogin(
               return privateJsonResponse({ ok: true }, { status: 201 });
             }
             const hashed = await hashPassword(password);
-            ${verify ? "const verificationMail = " : ""}await runAuthWrite(email, () => runInTransaction(async () => {
-              ${verify ? "const created = " : ""}await User.create({
-                name,
-                email,
-                password: hashed,
-                is_admin: false,${tenantCreateField}
-              });
-              ${verify ? `return prepareSignedAuthMail(email, "Verify your email", "/api/v1/auth/verify-email", AUTH_ONE_TIME_PURPOSES.emailVerify, Number(created.get("id")), { id: String(created.get("id")) });` : ""}
-            }));
-            ${verify ? "// Persist account and token atomically; SMTP follows the outermost commit, including request RLS.\n            await afterCommit(() => mailer().send(verificationMail));" : ""}
+            ${verify ? "const verificationMail = " : ""}await createRegistration({ name, email, password: hashed }${verify ? ', "/api/v1/auth/verify-email"' : ""});
+            ${verify ? "// SMTP follows the outermost commit, including request RLS.\n            if (verificationMail) await afterCommit(() => mailer().send(verificationMail));" : ""}
             return privateJsonResponse({ ok: true }, { status: 201 });
           }))),
         },`
@@ -806,16 +814,8 @@ async function completeBrowserSsoLogin(
                 ${registerSuccessExisting}
               }
               const hashed = await hashPassword(password);
-              ${verify ? "const verificationMail = " : ""}await runAuthWrite(email, () => runInTransaction(async () => {
-                ${verify ? "const created = " : ""}await User.create({
-                  name,
-                  email,
-                  password: hashed,
-                  is_admin: false,${tenantCreateField}
-                });
-                ${verify ? `return prepareSignedAuthMail(email, "Verify your email", "/email/verify", AUTH_ONE_TIME_PURPOSES.emailVerify, Number(created.get("id")), { id: String(created.get("id")) });` : ""}
-              }));
-              ${verify ? "// Persist account and token atomically; SMTP follows the outermost commit, including request RLS.\n              await afterCommit(() => mailer().send(verificationMail));" : ""}
+              ${verify ? "const verificationMail = " : ""}await createRegistration({ name, email, password: hashed }${verify ? ', "/email/verify"' : ""});
+              ${verify ? "// SMTP follows the outermost commit, including request RLS.\n              if (verificationMail) await afterCommit(() => mailer().send(verificationMail));" : ""}
               ${verifyRegisterBranch}
             },
             async (request) =>

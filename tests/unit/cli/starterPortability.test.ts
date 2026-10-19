@@ -455,7 +455,9 @@ describe("generated API docs", () => {
       expect(docs.includes("`POST` | `/api/v1/auth/register`")).toBe(json);
       if (json) expect(docs).toContain("neutral `{ ok: true }`");
       if (auth === "cookie") {
-        expect(docs).toContain("POST /login");
+        expect(docs).toContain("POST /api/v1/auth/login");
+        expect(docs).not.toContain("`GET` | `/`");
+        expect(docs).not.toContain("`GET` | `/login`");
         expect(docs).not.toContain("/api/auth/token");
       }
     });

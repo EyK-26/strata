@@ -435,6 +435,16 @@ try {
       "replayed recovery cannot authenticate",
     );
   }
+  cookie = csrf.cookie;
+  const raceEmail = `concurrent-${crypto.randomUUID()}@example.test`;
+  const raced = await Promise.all([
+    request(register, { name: "Concurrent Signup", email: raceEmail, password }),
+    request(register, { name: "Concurrent Signup", email: raceEmail, password }),
+  ]);
+  for (const response of raced)
+    await status(response, browser ? 302 : 201, "concurrent signup remains neutral");
+  assert.equal(await runWithMigrationBypass(() => User.where({ email: raceEmail }).count()), 1);
+  assert.equal(await deliveredTo(raceEmail), 1, "Only the winning signup sends verification.");
   // Immediate token observer failure models a failed persistence step. A signup
   // must not strand a user without its verification intent or send rolled-back mail.
   cookie = csrf.cookie;
