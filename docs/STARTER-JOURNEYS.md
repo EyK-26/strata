@@ -19,7 +19,7 @@ The first two registry reproductions were generated under an owned `~/perso/stra
 
 `tests/helpers/starterJourneyProfiles.ts` registers twelve named profiles: each database (SQLite, MySQL, Postgres) with each frontend (API, HTMX, React SPA, hybrid). Credential modes vary between cookie, opaque token, JWT, cookie+token, and cookie+token+JWT. Tenancy covers none, column and restricted-role Postgres RLS.
 
-Each profile installs candidate package tarballs outside the repository. A registry mode instead invokes the exact published generator and verifies the three installed runtime versions; it never substitutes local runtime code. Every scenario runs in its own child process and owns its database, runtime/migration credentials and digest-pinned Mailpit container. SQL is limited to fixture provisioning; account/token assertions use the generated models and public framework APIs.
+Each profile installs candidate package tarballs outside the repository. A registry mode instead invokes the exact published generator and pins and verifies the three exact published runtime versions (without local package substitutions); it never substitutes local runtime code. Every scenario runs in its own child process and owns its database, runtime/migration credentials and digest-pinned Mailpit container. SQL is limited to fixture provisioning; account/token assertions use the generated models and public framework APIs.
 
 Assertions include actual HTTP CSRF rejection, signup and neutral sequential/concurrent duplicate signup, actual SMTP delivery, signed verification and signature tampering, token consumption/replay, login, SMTP password reset, old-credential rejection, replacement password login, failed token-persistence rollback and successful signup retry. Cookie profiles also exercise password-confirmed MFA enrollment, TOTP, single-use recovery codes, logout and SMTP outage followed by verification resend. Database state is checked independently of response status through the ORM.
 
@@ -44,6 +44,8 @@ STARTER_JOURNEY_PARENT="$HOME/perso" scripts/with-host-env.sh bun scripts/verify
 Docker is required; unavailable infrastructure fails the test rather than skipping it. No shared database is reset, no local app is patched, and owned Mailpit inboxes contain disposable credentials only. Logs do not print signed links, raw passwords or tokens. On forced process termination, inspect only owned `strata-signup-mail-*` containers and `generated_security_*` databases before removing leftovers.
 
 ## Independent blockers
+
+The separately reproduced [API/SPA cookie lifecycle gap #260](https://github.com/EyK-26/strata/issues/260) remains open pending the public frontend/account API contract. In unchanged 2.2.42 API+cookie output, valid-CSRF signup and forgot-password are 404 even though JSON session login succeeds. The current matrix does not qualify that combination; correcting misleading documentation is not its functional implementation.
 
 Native Bun SQL timer qualification [#257](https://github.com/EyK-26/strata/issues/257) remains a separate expected-success gate. Passing these journeys cannot resolve or waive it. Shop adoption remains held under that gate. Deployed capacity, live-provider and independent security qualification are also separate from these local tests.
 

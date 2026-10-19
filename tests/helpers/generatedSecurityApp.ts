@@ -99,6 +99,13 @@ export async function createGeneratedSecurityApp(
         throw new Error(
           `Published generation failed: ${new TextDecoder().decode(generate.stderr)}`,
         );
+      // Registry qualification pins the requested release rather than allowing
+      // an older generator's caret ranges to install a newer runtime silently.
+      const manifestPath = join(app, "package.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      for (const part of ["core", "bootstrap", "cli"])
+        manifest.dependencies[`@getstrata/${part}`] = options.publishedVersion;
+      await writeFile(manifestPath, JSON.stringify(manifest));
       const install = Bun.spawnSync(["bun", "install"], {
         cwd: app,
         stdout: "pipe",
