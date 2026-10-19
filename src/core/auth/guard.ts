@@ -218,9 +218,9 @@ class AuthManager {
     const scheme = authorizationScheme(request);
 
     if (scheme === "bearer") {
-      const fromNamed = await this.tryNamedGuards(request, BEARER_GUARD_NAMES);
+      const fromNamed = await this.tryNamedGuards(request, BEARER_GUARD_NAMES, "bearer");
       if (fromNamed) {
-        return { user: fromNamed, credentialSource: "bearer" };
+        return fromNamed;
       }
 
       if (isBearerCapableGuard(this.guard)) {
@@ -232,9 +232,9 @@ class AuthManager {
     }
 
     if (scheme === "basic") {
-      const fromNamed = await this.tryNamedGuards(request, BASIC_GUARD_NAMES);
+      const fromNamed = await this.tryNamedGuards(request, BASIC_GUARD_NAMES, "basic");
       if (fromNamed) {
-        return { user: fromNamed, credentialSource: "basic" };
+        return fromNamed;
       }
 
       if (this.guard instanceof BasicAuthGuard) {
@@ -245,9 +245,9 @@ class AuthManager {
       return { user: null, credentialSource: null };
     }
 
-    const fromSession = await this.tryNamedGuards(request, SESSION_GUARD_NAMES);
+    const fromSession = await this.tryNamedGuards(request, SESSION_GUARD_NAMES, "session");
     if (fromSession) {
-      return { user: fromSession, credentialSource: "session" };
+      return fromSession;
     }
 
     const fromDefault = await this.resolveGuard(this.guard, request);
@@ -262,7 +262,8 @@ class AuthManager {
   private async tryNamedGuards(
     request: Request,
     names: readonly string[],
-  ): Promise<AuthUser | null> {
+    source: "session" | "bearer" | "basic",
+  ): Promise<{ user: AuthUser; credentialSource: CredentialSource } | null> {
     const seen = new Set<AuthGuard>();
 
     for (const name of names) {
@@ -276,7 +277,7 @@ class AuthManager {
       const user = await this.resolveGuard(named, request);
 
       if (user) {
-        return user;
+        return { user, credentialSource: named instanceof GuestGuard ? "guest" : source };
       }
     }
 
