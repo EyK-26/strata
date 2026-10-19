@@ -415,6 +415,9 @@ function renderDockerfile(layers: StarterLayers): string {
     lines.push(
       "FROM oven/bun:1.4.3 AS frontend",
       "WORKDIR /app/frontend",
+      "COPY --from=deps /app/node_modules /app/node_modules",
+      "ARG SPA_PREFIX",
+      "ENV SPA_PREFIX=$SPA_PREFIX",
       "COPY frontend/package.json frontend/bun.lock ./",
       "RUN bun install --frozen-lockfile",
       "COPY frontend/ ./",

@@ -1,5 +1,7 @@
 import { join } from "node:path";
+import { assertPathUnderRoot } from "@getstrata/core/security/safePath";
 import index from "./index.html";
+import { SPA_PREFIX } from "./src/config.ts";
 
 const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:3000";
 const PORT = Number(process.env.FRONTEND_PORT ?? "5173");
@@ -24,8 +26,16 @@ async function proxyToApi(request: Request): Promise<Response> {
 
 async function servePreview(request: Request): Promise<Response> {
   const pathname = new URL(request.url).pathname;
-  const relativePath = pathname.replace(/^\/app\/?/, "");
-  const asset = Bun.file(join(DIST_DIRECTORY, relativePath));
+  const relativePath =
+    pathname === SPA_PREFIX || pathname === `${SPA_PREFIX}/`
+      ? ""
+      : pathname.slice(SPA_PREFIX.length + 1);
+  let asset: ReturnType<typeof Bun.file>;
+  try {
+    asset = Bun.file(assertPathUnderRoot(DIST_DIRECTORY, relativePath || "index.html"));
+  } catch {
+    return new Response("Not found", { status: 404 });
+  }
 
   if (relativePath.length > 0 && (await asset.exists())) {
     return new Response(asset);
@@ -54,14 +64,14 @@ const server = Bun.serve({
     "/api/*": proxyToApi,
     "/health": proxyToApi,
     "/ready": proxyToApi,
-    "/app": PREVIEW ? servePreview : index,
-    "/app/": PREVIEW ? servePreview : index,
-    "/app/*": PREVIEW ? servePreview : index,
+    [SPA_PREFIX]: PREVIEW ? servePreview : index,
+    [`${SPA_PREFIX}/`]: PREVIEW ? servePreview : index,
+    [`${SPA_PREFIX}/*`]: PREVIEW ? servePreview : index,
   },
 });
 
 console.log(
   PREVIEW
-    ? `SPA preview on ${server.url}app/ (proxy ${API_ORIGIN})`
-    : `SPA dev server on ${server.url}app/ (proxy ${API_ORIGIN})`,
+    ? `SPA preview on ${new URL(`${SPA_PREFIX}/`, server.url)} (proxy ${API_ORIGIN})`
+    : `SPA dev server on ${new URL(`${SPA_PREFIX}/`, server.url)} (proxy ${API_ORIGIN})`,
 );

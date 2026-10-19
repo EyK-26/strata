@@ -187,3 +187,11 @@ The generated React client matches the chosen authentication stack. Cookie modes
 Header auth generates a clearly labelled development identity screen instead of a password form. It selects local user-ID/role request headers, does not pretend to create an account, and never calls absent account or CSRF endpoints. The backend must permit development headers in a local environment. Production/staging guards are unchanged.
 
 Account writes retain the official CSRF flow. MFA-enabled cookie apps accept authenticator/recovery codes in the login form; a rejected or expired credential clears the local identity on a 401. The native dev proxy preserves the browser-facing Host and Origin together, keeping same-origin cookie checks effective; it does not rewrite Origin or relax CSRF/CORS.
+
+## SPA namespace and native Bun frontend commands
+
+For React and hybrid apps, `--spa-prefix=/team/portal` selects the backend mount, router basename, production asset paths and native Bun dev/preview routes together. `SPA_PREFIX` is public URL configuration. Generated frontend scripts pass only `BUN_PUBLIC_SPA_PREFIX` to Bun's HTML bundler; server secrets stay out of browser bundles. Root app scripts read the app environment. Direct frontend commands fall back to the generated prefix.
+
+Use `bun run frontend:install`, then `bun run frontend:build` to serve the built SPA from the backend. `bun run frontend:dev` retains Bun's native HMR; `cd frontend && bun run preview` builds and serves a preview with the same API proxy. Keep the backend running for `/api/*`. Nested history URLs serve the document within the selected namespace, while API misses remain API misses.
+
+Changing `SPA_PREFIX` requires rebuilding the frontend. Docker builds accept `--build-arg SPA_PREFIX=/team/portal`; set the same runtime `SPA_PREFIX`. API, static assets and platform probe paths are reserved. Invalid namespaces fail before generation can replace a target directory.

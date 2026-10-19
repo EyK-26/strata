@@ -69,3 +69,9 @@ The original baseline did not mount React. The new browser regression initially 
 The expanded browser regression has 29 registered scenarios: all six auth selections in both SPA and hybrid, built and native dev-proxy entrypoints (24), two JWT expiry scenarios, and three hybrid cookie-combination MFA/recovery scenarios. It tests actual server rejection of expired/disabled credentials, UI invalidation, authenticated ETag requests, memory-only bearer lifetime, header-disabled refusal, cross-site refusal, logout, and real execution of the ORM module example displayed in the starter. No password, token, CSRF, MFA or ORM mechanism is mocked or reimplemented. Native test orchestration and an isolated browser bridge remain test fixtures.
 
 The initial 6/6 browser baseline, dev 403, hybrid MFA 404 and expanded 25-pass/4-header-failure evidence were retained locally before the final 29-pass run. Full-suite and published-package qualification remain required; focused browser success alone does not resolve the production/externally deployed boundaries listed above.
+
+## Candidate SPA-prefix regression coverage
+
+The focused #264 fix adds a shared validated namespace and exercises both React frontends at `/app`, `/workspace` and `/team/portal`. Each scenario runs the literal generated install/build/dev/preview scripts, fetches real JS/CSS with content-type checks, checks nested history requests and API isolation, and checks that private configuration is absent from bundles. A separate nested-prefix scenario builds the generated Docker frontend stage. Candidate-only archives are copied into its build context; published acceptance uses the unmodified Dockerfile and npm dependencies.
+
+These are document/asset/server assertions, not a claim of mounted React navigation coverage. The separate #263 browser journey work supplies that missing boundary. Original 2.2.45 failures above remain the published baseline until the cumulative release is qualified.

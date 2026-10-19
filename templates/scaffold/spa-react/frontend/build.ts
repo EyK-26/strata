@@ -1,9 +1,12 @@
+import { SPA_PREFIX } from "./src/config.ts";
+
 const result = await Bun.build({
   entrypoints: ["./index.html"],
   outdir: "./dist",
   target: "browser",
   minify: true,
-  publicPath: "/app/",
+  publicPath: `${SPA_PREFIX}/`,
+  env: "BUN_PUBLIC_*",
 });
 
 if (!result.success) {
