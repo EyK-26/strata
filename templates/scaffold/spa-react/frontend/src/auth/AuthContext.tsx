@@ -7,79 +7,62 @@ import {
   useMemo,
   useState,
 } from "react";
-import { apiFetch } from "../api/client";
-
-interface AuthUser {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-}
+import {
+  type AuthUser,
+  loadProfile,
+  onAuthInvalidated,
+  selectDevelopmentIdentity,
+  signIn,
+  signOut,
+} from "../api/client";
 
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, mfaCode?: string) => Promise<void>;
   logout: () => Promise<void>;
+  chooseIdentity: (id: string, role: string) => void;
 }
-
 const AuthContext = createContext<AuthContextValue | null>(null);
-
 function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const loadProfile = useCallback(async () => {
-    const profile = await apiFetch<AuthUser>("/auth/me");
-    setUser(profile);
-  }, []);
-
+  useEffect(() => onAuthInvalidated(() => setUser(null)), []);
   useEffect(() => {
+    let active = true;
     loadProfile()
+      .then((profile) => {
+        if (active) setUser(profile);
+      })
       .catch(() => {
-        setUser(null);
+        if (active) setUser(null);
       })
       .finally(() => {
-        setLoading(false);
+        if (active) setLoading(false);
       });
-  }, [loadProfile]);
-
-  const login = useCallback(
-    async (email: string, password: string) => {
-      await apiFetch("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-      await loadProfile();
-    },
-    [loadProfile],
-  );
-
+    return () => {
+      active = false;
+    };
+  }, []);
+  const login = useCallback(async (email: string, password: string, mfaCode?: string) => {
+    setUser(await signIn(email, password, mfaCode));
+  }, []);
   const logout = useCallback(async () => {
-    await apiFetch("/auth/logout", { method: "POST" }).catch(() => undefined);
+    await signOut();
     setUser(null);
   }, []);
-
+  const chooseIdentity = useCallback((id: string, role: string) => {
+    setUser(selectDevelopmentIdentity(id, role));
+  }, []);
   const value = useMemo(
-    () => ({
-      user,
-      loading,
-      login,
-      logout,
-    }),
-    [loading, login, logout, user],
+    () => ({ user, loading, login, logout, chooseIdentity }),
+    [user, loading, login, logout, chooseIdentity],
   );
-
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-
 function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 }
 

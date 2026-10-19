@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import HomePage from "./pages/HomePage";
@@ -20,6 +21,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AppShell() {
   const { user, logout } = useAuth();
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   return (
     <div className="app-shell">
@@ -29,8 +31,17 @@ function AppShell() {
           <Link to="/">Home</Link>
           {user ? (
             <>
-              <span className="hint">{user.email}</span>
-              <button type="button" className="secondary" onClick={logout}>
+              <span className="hint">{user.email ?? `User ${user.id}`}</span>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setLogoutError(null);
+                  void logout().catch(() =>
+                    setLogoutError("Sign-out could not complete. Try again."),
+                  );
+                }}
+              >
                 Sign out
               </button>
             </>
@@ -38,6 +49,7 @@ function AppShell() {
         </nav>
       </header>
 
+      {logoutError ? <p role="alert">{logoutError}</p> : null}
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route

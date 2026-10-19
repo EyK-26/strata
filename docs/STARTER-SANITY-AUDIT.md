@@ -57,11 +57,32 @@ Each fix gets a failing regression at its real boundary, then a focused framewor
 
 This audit did not mount React in a real browser, execute every extras subset, test every Docker/Local/Mix subset at runtime, or qualify every engine/auth/frontend combination in production/staging. It did not perform real external Stripe/SSO provider qualification, distributed capacity qualification, or native Bun timer acceptance. Existing focused fixtures cover parts of those contracts; none is inferred from the structural matrix. Track these boundaries explicitly as follow-up acceptance, not implicit passes.
 
+
+## Additional browser boundaries found during the fixes
+
+The original baseline did not mount React. The new browser regression initially passed all six cookie/combined-mode built journeys and failed the six pure token/JWT/header journeys across SPA and hybrid. The fixed client then reached additional real boundaries:
+
+- [#272](https://github.com/EyK-26/strata/issues/272): native dev proxy account writes returned a real 403 because the proxy discarded the browser-facing Host. Preserve Host and Origin together; retain CSRF, cross-site refusal and explicit CORS policy.
+- [#274](https://github.com/EyK-26/strata/issues/274): hybrid cookie MFA setup returned 404 because JSON cookie account management was emitted only for API/SPA frontends. Hybrid needs additive JSON endpoints alongside its preserved HTML routes, sharing existing confirmation, hashing, signing and recovery helpers.
+- [#275](https://github.com/EyK-26/strata/issues/275): all four header built/dev resource journeys returned 500 when application code used `AuthManager.requireUser`. The generated partial manager lacked the method. Register the complete published `AuthManager` and `GuestGuard`, retaining explicit dev-header gating and fail-closed server policy.
+
+The expanded browser regression has 29 registered scenarios: all six auth selections in both SPA and hybrid, built and native dev-proxy entrypoints (24), two JWT expiry scenarios, and three hybrid cookie-combination MFA/recovery scenarios. It tests actual server rejection of expired/disabled credentials, UI invalidation, authenticated ETag requests, memory-only bearer lifetime, header-disabled refusal, cross-site refusal, logout, and real execution of the ORM module example displayed in the starter. No password, token, CSRF, MFA or ORM mechanism is mocked or reimplemented. Native test orchestration and an isolated browser bridge remain test fixtures.
+
+The initial 6/6 browser baseline, dev 403, hybrid MFA 404 and expanded 25-pass/4-header-failure evidence were retained locally before the final 29-pass run. Full-suite and published-package qualification remain required; focused browser success alone does not resolve the production/externally deployed boundaries listed above.
+
 ## Candidate SPA-prefix regression coverage
 
 The focused #264 fix adds a shared validated namespace and exercises both React frontends at `/app`, `/workspace` and `/team/portal`. Each scenario runs the literal generated install/build/dev/preview scripts, fetches real JS/CSS with content-type checks, checks nested history requests and API isolation, and checks that private configuration is absent from bundles. A separate nested-prefix scenario builds the generated Docker frontend stage. Candidate-only archives are copied into its build context; published acceptance uses the unmodified Dockerfile and npm dependencies.
 
 These are document/asset/server assertions, not a claim of mounted React navigation coverage. The separate #263 browser journey work supplies that missing boundary. Original 2.2.45 failures above remain the published baseline until the cumulative release is qualified.
+
+## Cross-engine browser follow-up before release
+
+The integrated candidate passed 2,416 unit/integration tests (the same three platform-driver skips) and 112 E2E tests without E2E failures/skips. Those browser cases used SQLite without tenancy. Five additional risk-based browser profiles were then added: MySQL hybrid/combined/column/dev/MFA, MySQL SPA/token, Postgres hybrid/cookie/RLS/dev/MFA, Postgres SPA/JWT/column, and SQLite hybrid/header/column/dev.
+
+Postgres RLS passed. The Postgres column failure was a fixture error: the administrative model update passed an integer to a boolean column. A typed boolean works through the SQLite binding too, so the fixture now uses a boolean uniformly; the Postgres column journey passed without a framework change.
+
+Two mechanism failures remain release blockers: [#276](https://github.com/EyK-26/strata/issues/276) (MySQL provisioning ignores the separate migration credential and tries CREATE DATABASE as the limited runtime user), and [#277](https://github.com/EyK-26/strata/issues/277) (guest-source header tenancy queries a users table that header apps deliberately omit). Keep the cumulative release on hold, fix these in focused framework changes, and rerun every native case. Do not grant runtime DDL, create fake account tables, or weaken the failing assertions.
 
 
 ## Candidate separate-credential MySQL acceptance
@@ -69,3 +90,15 @@ These are document/asset/server assertions, not a claim of mounted React navigat
 Additional limited-runtime browser qualification exposed [#276](https://github.com/EyK-26/strata/issues/276). Both generated provisioning and the MySQL migration wrapper used runtime credentials despite a supplied administrative migration URL. The fix selects the explicit administrative credential for schema work, scopes it through the published connection API and closes it after success/failure; runtime privileges and production/staging no-provision defaults remain unchanged.
 
 New native cases execute real generated MySQL none/column apps with distinct schema and runtime credentials. They cover migrate, status, credential-state rollback refusal, a reversible later migration batch, fresh/reapply/seed, actual ORM reads, denied runtime DDL, and connection restoration after a failing migration callback. Status and rollback use the existing generated entrypoints; no new public CLI command is assumed. Original limited-role failures are retained before the passing candidate run.
+
+
+## Candidate identity and tenant-example corrections
+
+The two additional release blockers above were fixed in focused framework changes. MySQL schema work now honors the separate migration credential without widening runtime grants. Header starters register the full AuthManager; named GuestGuard proofs retain their guest credential source, do not query an absent users table, and follow the existing trusted-host/development-header tenant policy. Actual authenticated development-header writes are allowed only with strict AUTH_DEV_HEADERS=true outside staging/production. Anonymous, session-CSRF, disabled-header and untrusted-browser checks remain enforced. The unchanged full identity gate passed 2,448 unit/integration tests, the same three platform-driver skips, and 89 E2E tests without failures or E2E skips.
+
+A second-tenant browser fixture then reproduced #280: the welcome page's unscoped notes example exposed rows in column mode. The displayed example now explicitly uses the public tenant context and typed ORM predicate, with a bounded result size. The browser harness compiles and executes exactly the text displayed on the page, performs authenticated client writes, and checks visibility and tenant isolation. Column-mode context is not implicit query authorization; no framework query semantics changed.
+
+There are now 34 mounted browser scenarios: the original 29 plus the five cross-engine/tenant profiles listed above. The original failures and the intermediate passing totals are historical evidence, not substitutes for the final integrated gate. Exact published-package qualification remains pending the cumulative 2.2.46 release; the structural Cartesian matrix is not a claim that all 2,688 combinations were run in a browser. Shop adoption remains independently held on Bun qualification #257.
+
+
+The first final integrated run passed all 2,450 unit/integration tests (the same three platform-driver skips) and 122 of 123 E2E scenarios. The remaining readiness failure was traced to the fixture replacing `localhost:3306` and then matching the prefix of its own allocated `127.0.0.1:33060` result, producing invalid port `330600`. A deterministic regression retains that exact case and longer-port non-matches for MySQL/Postgres/Redis; single-pass bounded substitution fixes the fixture without changing generated configuration or readiness assertions. All three real readiness profiles are rerun before the full gate. The failed full-suite log and deterministic reproduction remain evidence; no test is removed or skipped.

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { replaceFixtureLoopbackPort } from "../tests/helpers/fixtureLoopbackPort";
 
 const repo = join(import.meta.dir, "..");
 const database = process.argv.find((arg) => arg.startsWith("--database="))?.slice(11);
@@ -124,9 +125,7 @@ try {
       assert.match(address, /^127\.0\.0\.1:\d+$/);
       const hostPort = address.split(":").at(-1);
       assert.ok(hostPort);
-      text = text
-        .replaceAll(`localhost:${port}`, `127.0.0.1:${hostPort}`)
-        .replaceAll(`127.0.0.1:${port}`, `127.0.0.1:${hostPort}`);
+      text = replaceFixtureLoopbackPort(text, port, hostPort);
       if (service === "mailpit" && port === 1025)
         text = text.replace(/^MAIL_PORT=.*$/m, `MAIL_PORT=${hostPort}`);
     }

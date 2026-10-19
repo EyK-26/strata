@@ -33,7 +33,8 @@ function renderAuthModule(layers: StarterLayers): string | null {
   const verify = Boolean(layers.extras.emailVerification);
   const bearerApi = authUsesToken(layers.auth) || authUsesJwt(layers.auth);
   const jsonCookieAccounts =
-    cookie && (layers.frontend === "api" || layers.frontend === "spa-react");
+    cookie &&
+    (layers.frontend === "api" || layers.frontend === "spa-react" || layers.frontend === "hybrid");
   const jsonAccounts = bearerApi || jsonCookieAccounts;
   const tenantInsert = usesTenantTable(layers.tenancy);
   const tenantCreateField = tenantInsert

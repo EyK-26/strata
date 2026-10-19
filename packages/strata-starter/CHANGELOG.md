@@ -1,5 +1,18 @@
 # create-strata changelog
 
+## 2.2.46
+
+- Honor separate MySQL migration credentials for provisioning and scoped administrative migrations; restore the restricted runtime connection and close administrative pools on failure.
+- Show and execute a bounded, tenant-aware ORM notes example with explicit scope predicates, preserving the framework column-tenancy contract.
+
+- Wait for authenticated supporting-service readiness before emitted migration steps; provide database, Redis, Mailpit and optional Adminer healthchecks.
+- Use the framework rollback guard for completed initial-admin claims during explicit local fresh, preserving ordinary rollback and staging/production refusal. Reverse the billing-owned tenant column on later-batch rollback so reapplication succeeds.
+- Share validated SPA prefixes across backend, router, native Bun build/dev/preview and Docker frontend builds; retain API isolation and safe preview paths.
+- Generate React auth capabilities for the selected stack: cookie sessions for cookie combinations, memory-only pure token/JWT credentials, and an explicit development identity screen for header auth.
+- Register the published AuthManager/GuestGuard instead of a partial generated header manager. Keep explicit dev-header selection and server refusal when disabled.
+- Preserve browser-facing Host in the native API proxy without rewriting Origin or relaxing CSRF. Add hybrid JSON cookie account management alongside existing HTML routes, including MFA confirmation and recovery-code handling.
+- Add mounted Chromium acceptance under the native Bun suite for built/dev flows, authenticated ORM/ETag requests, credential expiry/revocation, logout, cross-site refusal, disabled headers and MFA/recovery replay. Preserve the existing HTTP journeys, generator matrix, coverage gate and historical failure evidence.
+
 ## 2.2.45
 
 Offer optional Adminer consistently in Docker and Mix wizard modes when the selected database is in Compose. Generate debug-profile startup commands and complete database login instructions; correct noninteractive Docker documentation while preserving existing flag behavior. Add prompt/CLI regressions and real isolated MySQL/Postgres Adminer profile and login acceptance tests without removing assertions.

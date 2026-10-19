@@ -39,7 +39,7 @@ bunx create-strata html --frontend server-htmx --database postgres --auth cookie
 | `--mail` | `log`, `smtp` |
 | `--spa-prefix` | default `/app` |
 
-Extras that apply to the stack (off until you toggle them, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`, `--oidc`, `--billing`, `--webhooks`. Header auth only offers metrics, billing, and webhooks. MFA, GitHub cookie login, and OIDC cookie login need cookie HTML. SCIM and email verification need a users table. `--no-metrics` skips the metrics extra and does not write `GET /metrics`.
+Extras that apply to the stack (off until you toggle them, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`, `--oidc`, `--billing`, `--webhooks`. Header auth only offers metrics, billing, and webhooks. MFA and GitHub/OIDC cookie handshakes require a cookie auth stack. API/SPA cookie account flows are JSON; hybrid also keeps HTML account pages. SCIM and email verification need a users table. `--no-metrics` skips the metrics extra and does not write `GET /metrics`.
 
 You can add cache, SMTP, Redis, or another auth mode later by changing env and the matching bootstrap files. The generator only installs what you asked for. Generated apps always depend on `eta` (welcome HTML). `mysql2` is added only for `--database mysql`.
 
@@ -110,7 +110,7 @@ Apps scaffolded with `create-strata@1.1.0` should merge current `src/bootstrap/p
 
 ## In this repo
 
-`strata new my-app --yes` calls the same generator. `strata new --frontend=hybrid` (no project name) still overlays HTML/SPA files into the current directory.
+Generate new applications with `bunx create-strata my-app --yes`. Use the installed `bun run` scripts or `bunx strata <command>` inside the generated app for its published command set.
 
 The `exampleAppLayers` presets remain supported, including the legacy `hiroapp`, `hiroapp-hobby` and `hiroapp-team` IDs. They select layers, not repository directories. Native acceptance generates temporary source and installed-package fixtures; `generate:example-apps` is retired.
 
@@ -180,6 +180,14 @@ The [2.2.45 starter sanity audit](STARTER-SANITY-AUDIT.md) records structural an
 Generated Compose services include real readiness probes: TCP SQL queries for MySQL/Postgres, authenticated Redis PING, Mailpit readiness and Adminer's HTTP endpoint. Generated startup commands use `--wait --wait-timeout 180`; wait for success before running migrations. Failure is explicit: inspect `docker compose ps` and `docker compose logs`; a slow first initialization can use a larger wait timeout. Adminer depends on a healthy database and remains in the optional debug profile. No application migrations or runtime SQL retries are added to Compose readiness.
 
 
+## React account transport
+
+The generated React client matches the chosen authentication stack. Cookie modes (including cookie/token combinations) use the HttpOnly browser session and `/api/v1/auth/me`. Pure token mode retains the login response token in memory and authenticates subsequent API requests with Bearer. Pure JWT mode uses `/api/auth/token` and `/api/user`; its profile contains ID and role, so the UI does not invent name/email fields. Bearer credentials never enter localStorage or sessionStorage; reload requires signing in again. Signing out discards the local bearer credential; account revocation/expiry remains enforced by the server, independently of the browser.
+
+Header auth generates a clearly labelled development identity screen instead of a password form. It selects local user-ID/role request headers, does not pretend to create an account, and never calls absent account or CSRF endpoints. The backend must permit development headers in a local environment. Production/staging guards are unchanged.
+
+Account writes retain the official CSRF flow. MFA-enabled cookie apps accept authenticator/recovery codes in the login form; a rejected or expired credential clears the local identity on a 401. The native dev proxy preserves the browser-facing Host and Origin together, keeping same-origin cookie checks effective; it does not rewrite Origin or relax CSRF/CORS.
+
 ## SPA namespace and native Bun frontend commands
 
 For React and hybrid apps, `--spa-prefix=/team/portal` selects the backend mount, router basename, production asset paths and native Bun dev/preview routes together. `SPA_PREFIX` is public URL configuration. Generated frontend scripts pass only `BUN_PUBLIC_SPA_PREFIX` to Bun's HTML bundler; server secrets stay out of browser bundles. Root app scripts read the app environment. Direct frontend commands fall back to the generated prefix.
@@ -187,3 +195,5 @@ For React and hybrid apps, `--spa-prefix=/team/portal` selects the backend mount
 Use `bun run frontend:install`, then `bun run frontend:build` to serve the built SPA from the backend. `bun run frontend:dev` retains Bun's native HMR; `cd frontend && bun run preview` builds and serves a preview with the same API proxy. Keep the backend running for `/api/*`. Nested history URLs serve the document within the selected namespace, while API misses remain API misses.
 
 Changing `SPA_PREFIX` requires rebuilding the frontend. Docker builds accept `--build-arg SPA_PREFIX=/team/portal`; set the same runtime `SPA_PREFIX`. API, static assets and platform probe paths are reserved. Invalid namespaces fail before generation can replace a target directory.
+
+The React welcome page's notes-module example is generated for the selected schema. Tenant-enabled examples explicitly constrain `tenant_id` with `currentTenantId()` through the typed ORM; no-tenancy examples omit that column. Lists are bounded to 100 rows. Column-mode context does not silently add SQL predicates: application resources must apply their authorization and tenant filters. Browser acceptance compiles and executes the displayed code with a second tenant's data to verify that the example keeps those rows isolated.

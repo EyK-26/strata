@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.46
+
+- Align the core dependency with 2.2.46 for the validated SPA runtime namespace contract.
+
 ## 2.2.45
 
 Offer optional Adminer consistently in Docker and Mix wizard modes when the selected database is in Compose. Generate debug-profile startup commands and complete database login instructions; correct noninteractive Docker documentation while preserving existing flag behavior. Add prompt/CLI regressions and real isolated MySQL/Postgres Adminer profile and login acceptance tests without removing assertions.
