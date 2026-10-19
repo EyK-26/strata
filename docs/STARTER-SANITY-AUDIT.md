@@ -125,3 +125,17 @@ scripts/with-host-env.sh bun scripts/verify-starter-readiness.ts --database=mysq
 ```
 
 These are local acceptance results, not capacity measurements, production deployment qualification or a promise of zero undiscovered defects. Shop adoption remains independently held on [Bun qualification #257](https://github.com/EyK-26/strata/issues/257).
+
+## Additional published 2.2.46 reset rollback and contention journeys
+
+Seven additional fresh-app journeys challenge password-reset rollback and same-proof contention using exact published 2.2.46. All seven execute and pass without failures or skips. The [named outcomes](qualification/starter-2.2.46-reset-contention.json) cover MySQL API/cookie/no tenancy and hybrid/combined/column tenancy, SQLite SPA/cookie/column and HTMX/cookie/no tenancy, and Postgres API/cookie/RLS, API/JWT/no tenancy and SPA/token/column tenancy. These are HTTP account journeys; the existing mounted React journeys remain separately registered.
+
+Each added profile first runs the original account journey unchanged. An unknown email must receive the neutral forgot-password response without creating an account or sending mail. A new actual SMTP-delivered reset proof then reaches the real generated reset handler. A public `User.updating` observer deliberately rejects its password write after proof consumption: the password, auth version, MFA state and usable proof must all roll back. With that fault disabled, two independent guest CSRF clients concurrently submit the same proof with distinct passwords. Exactly one may succeed; its password must match the database, the losing password must not, the auth version advances once, the proof is consumed, MFA state remains intact, and later replay remains rejected. Persistence observations use the generated models and framework ORM; no application SQL, handler replacement or transaction workaround is introduced.
+
+The original 15 profiles and their assertions remain separately registered. The script outside the opt-in `--reset-race` additions is byte-identical to the prior baseline; the seven new Bun E2E cases add coverage rather than replace it. Reproduce one exact-published case with:
+
+```sh
+scripts/with-host-env.sh bun scripts/verify-starter-auth-journey.ts postgres-api-cookie-rls --reset-race --published=2.2.46
+```
+
+The earlier contention-only run also passed all seven profiles and is retained separately from the stronger rollback/contention run. Owned database and MySQL-user inventories return to their empty baselines, and no owned Mailpit containers remain. No framework blocker was reproduced by these selected boundaries; this does not establish coverage of every starter combination or clear #257. No package release or shop adoption is part of this test-only extension.
