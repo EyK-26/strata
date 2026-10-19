@@ -8,6 +8,8 @@ Preserve private/no-store headers when the tenancy boundary maps an HTTP error t
 
 Honor the explicit API JSON error context during password confirmation even when a client sends HTML/HTMX headers; preserve automatic HTML behavior outside that context.
 
+Use the shared JSON parser for signed password reset so malformed input is a controlled 400 and does not consume the reset proof.
+
 ## 2.2.43
 
 Add `afterCommit` for process-local effects after the outermost managed transaction, sharing savepoint rollback and tenant replay with model events. Generated auth SMTP uses this boundary even inside RLS request transactions; callback failures propagate after commit without undoing persisted accounts. Durable delivery still requires the SQL outbox.

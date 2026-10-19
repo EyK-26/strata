@@ -524,7 +524,7 @@ async function completeBrowserSsoLogin(
         },
         "/api/v1/auth/reset-password": {
           POST: kernel.wrap("api", kernel.wrapSigned(withErrorHandling(async (request) => {
-            const body: unknown = await request.json();
+            const body = await parseJsonBody(request, (payload) => payload);
             const password = typeof body === "object" && body !== null && "password" in body ? body.password : undefined;
             if (!(await completeSignedPasswordReset(request, password))) {
               return privateJsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });

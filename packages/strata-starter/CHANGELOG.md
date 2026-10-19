@@ -8,6 +8,8 @@ Preserve private/no-store headers when the tenancy boundary maps an HTTP error t
 
 Honor the explicit API JSON error context during password confirmation even when a client sends HTML/HTMX headers; preserve automatic HTML behavior outside that context.
 
+Use the shared JSON parser for signed password reset so malformed input is a controlled 400 and does not consume the reset proof.
+
 ## 2.2.43
 
 Preserve neutral registration responses under concurrent duplicate signup. Share the generated registration transaction, recheck a confirmed account only after a conflict rollback, send verification only for the winning creation, and propagate unrelated persistence failures.

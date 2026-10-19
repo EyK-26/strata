@@ -364,6 +364,30 @@ try {
   );
   const reset = await mailLink("Reset your password");
   if (browser) await status(await request(reset), 200, "reset form");
+  if (!browser) {
+    await status(
+      await fetch(origin + reset, {
+        method: "POST",
+        redirect: "manual",
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          cookie,
+          origin,
+          "x-csrf-token": csrf.token,
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: "{",
+      }),
+      400,
+      "malformed reset JSON is a client error without consuming proof",
+    );
+    await status(
+      await request(reset, { password: "short" }),
+      403,
+      "invalid reset password does not consume proof",
+    );
+  }
   await status(
     await request(reset, { password: replacement, email }),
     browser ? 302 : 200,
