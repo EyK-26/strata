@@ -30,6 +30,28 @@ const PACKAGE_DIRS = [
 
 /** One case per code path the generator can emit. Keep MySQL and every auth kit covered. */
 const CASES: Array<{ name: string; flags: string[] }> = [
+  {
+    name: "api-mysql-cookie-security-extras",
+    flags: [
+      "--frontend=api",
+      "--database=mysql",
+      "--auth=cookie",
+      "--tenancy=none",
+      "--mfa",
+      "--email-verification",
+    ],
+  },
+  {
+    name: "spa-sqlite-cookie-security-extras",
+    flags: [
+      "--frontend=spa-react",
+      "--database=sqlite",
+      "--auth=cookie",
+      "--tenancy=column",
+      "--mfa",
+      "--email-verification",
+    ],
+  },
   { name: "api-sqlite-headers", flags: [] },
   {
     name: "spa-react-sqlite-token",
@@ -149,6 +171,10 @@ const workspace = await mkdtemp(join(tmpdir(), "strata-verify-"));
 const failures: string[] = [];
 
 try {
+  // The generated source is bundled into dist/cli.js. A standalone invocation
+  // must validate the current generator rather than a previous successful build.
+  const built = await run(["bun", "run", "build:starter"], ROOT);
+  if (built.exitCode !== 0) throw new Error(`Starter build failed:\n${built.output}`);
   const tarballs = await packPackages(workspace);
   const starterCli = join(ROOT, "packages/strata-starter/dist/cli.js");
 

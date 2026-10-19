@@ -91,6 +91,14 @@ function verifyTotp(secret: string, token: string, window = 1): boolean {
     return false;
   }
 
+  // Enrollment receives a caller-supplied proposal. Invalid encoding is a failed
+  // proof, while generateTotp deliberately remains strict for trusted callers.
+  try {
+    if (decodeBase32(secret).length === 0) return false;
+  } catch {
+    return false;
+  }
+
   const timestep = Math.floor(Date.now() / 30_000);
   let matched = false;
 

@@ -451,7 +451,7 @@ describe("generated API docs", () => {
         if (!path?.startsWith("/api/")) continue;
         expect(source).toContain(`"${path}":`);
       }
-      const json = auth.includes("token") || auth === "jwt";
+      const json = auth !== "headers";
       expect(docs.includes("`POST` | `/api/v1/auth/register`")).toBe(json);
       if (json) expect(docs).toContain("neutral `{ ok: true }`");
       if (auth === "cookie") {
@@ -459,6 +459,41 @@ describe("generated API docs", () => {
         expect(docs).not.toContain("`GET` | `/`");
         expect(docs).not.toContain("`GET` | `/login`");
         expect(docs).not.toContain("/api/auth/token");
+      }
+    });
+  }
+
+  for (const frontend of ["api", "spa-react", "server-htmx"] as const) {
+    test(`${frontend} cookie account routes and documentation match the selected transport`, async () => {
+      const root = await tempDir();
+      const app = generateFromArgs(root, [
+        "cookie-contract",
+        `--frontend=${frontend}`,
+        "--auth=cookie",
+        "--mfa",
+        "--email-verification",
+        "--yes",
+      ]);
+      const source = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+      const readme = await readFile(join(app, "README.md"), "utf8");
+      const json = frontend !== "server-htmx";
+      for (const path of [
+        "register",
+        "forgot-password",
+        "reset-password",
+        "verify-email",
+        "verification-notification",
+        "confirm-password",
+        "mfa",
+      ]) {
+        expect(source.includes(`"/api/v1/auth/${path}":`)).toBe(json);
+      }
+      expect(readme.includes("HTML auth kit")).toBe(!json);
+      expect(readme.includes("JSON cookie account flows")).toBe(json);
+      if (json) {
+        expect(source).toContain("withMiddleware(createRequirePasswordConfirmMiddleware())");
+        expect(source).toContain("const recoveryCodes = await enrollMfa(user, secret)");
+        expect(readme).toContain("opening the URL with GET does not consume a token");
       }
     });
   }

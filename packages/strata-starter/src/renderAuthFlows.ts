@@ -31,7 +31,10 @@ function renderAuthModule(layers: StarterLayers): string | null {
   const oidc = Boolean(layers.extras.oidc && cookie);
   const mfa = Boolean(layers.extras.mfa && cookie);
   const verify = Boolean(layers.extras.emailVerification);
-  const jsonApi = authUsesToken(layers.auth) || authUsesJwt(layers.auth);
+  const bearerApi = authUsesToken(layers.auth) || authUsesJwt(layers.auth);
+  const jsonCookieAccounts =
+    cookie && (layers.frontend === "api" || layers.frontend === "spa-react");
+  const jsonAccounts = bearerApi || jsonCookieAccounts;
   const tenantInsert = usesTenantTable(layers.tenancy);
   const tenantCreateField = tenantInsert
     ? `
@@ -70,7 +73,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
     }
   }
   imports.push(`import { ConflictError } from "@getstrata/core/errors/http";`);
-  if (jsonApi) {
+  if (bearerApi) {
     imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
   }
   if (authUsesJwt(layers.auth)) {
@@ -89,6 +92,12 @@ function renderAuthModule(layers: StarterLayers): string | null {
   if (mfa) {
     imports.push(
       `import { createPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";`,
+    );
+  }
+  if (mfa && jsonCookieAccounts) {
+    imports.push(
+      `import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";`,
+      `import { withMiddleware } from "@getstrata/core/http/routeMiddleware";`,
     );
   }
   imports.push(
@@ -116,7 +125,7 @@ function renderAuthModule(layers: StarterLayers): string | null {
         : `import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";`,
     );
   }
-  if (jsonApi || cookie) {
+  if (bearerApi || cookie) {
     imports.push(
       `import { privateJsonResponse, withErrorHandling } from "@getstrata/core/http/response";`,
     );
@@ -424,7 +433,7 @@ async function completeBrowserSsoLogin(
         },`
     : "";
 
-  const jsonRegister = jsonApi
+  const jsonRegister = jsonAccounts
     ? `
         "/api/v1/auth/register": {
           POST: kernel.wrap("api", kernel.wrapRegister(withErrorHandling(async (request) => {
@@ -478,7 +487,7 @@ async function completeBrowserSsoLogin(
         },`
     : "";
 
-  const apiUser = jsonApi
+  const apiUser = bearerApi
     ? `
         "/api/user": {
           GET: kernel.wrapApi(async (request) => {
@@ -501,7 +510,7 @@ async function completeBrowserSsoLogin(
         },`
     : "";
 
-  const jsonPassword = jsonApi
+  const jsonPassword = jsonAccounts
     ? `
         "/api/v1/auth/forgot-password": {
           POST: kernel.wrap("api", withErrorHandling(async (request) => {
@@ -515,7 +524,7 @@ async function completeBrowserSsoLogin(
         },
         "/api/v1/auth/reset-password": {
           POST: kernel.wrap("api", kernel.wrapSigned(withErrorHandling(async (request) => {
-            const body: unknown = await request.json();
+            const body = await parseJsonBody(request, (payload) => payload);
             const password = typeof body === "object" && body !== null && "password" in body ? body.password : undefined;
             if (!(await completeSignedPasswordReset(request, password))) {
               return privateJsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
@@ -526,7 +535,7 @@ async function completeBrowserSsoLogin(
     : "";
 
   const jsonVerify =
-    jsonApi && verify
+    jsonAccounts && verify
       ? `
         "/api/v1/auth/verify-email": {
           POST: kernel.wrap("api", kernel.wrapSigned(withErrorHandling(async (request) => {
@@ -538,6 +547,57 @@ async function completeBrowserSsoLogin(
         },`
       : "";
 
+  const jsonAccountManagement = jsonCookieAccounts
+    ? `
+        ${
+          verify
+            ? `"/api/v1/auth/verification-notification": {
+          POST: kernel.wrapApi(async (request) => {
+            const user = await dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN).requireUser(request);
+            await runWithLockedAuthUser(Number(user.id), async (record) => {
+              if (!record?.is_active || record.auth_version !== user.authVersion) throw new ConflictError("Account changed. Sign in again.");
+              if (!record.email_verified_at) await issueSignedAuthMail(record.email ?? "", "Verify your email", "/api/v1/auth/verify-email", AUTH_ONE_TIME_PURPOSES.emailVerify, record.id, { id: String(record.id) });
+            });
+            return privateJsonResponse({ ok: true });
+          }),
+        },`
+            : ""
+        }
+        ${
+          mfa
+            ? `"/api/v1/auth/confirm-password": {
+          POST: kernel.wrap("api", kernel.wrapVerified(async (request) => {
+            const user = await dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN).requireUser(request);
+            const { password } = await parseJsonBody(request, (payload) => validateObject(payload, { password: [required(), stringRule()] }));
+            return runWithLockedAuthUser(Number(user.id), async (record) => {
+              if (!record?.is_active || record.auth_version !== user.authVersion) throw new ConflictError("Account changed. Sign in again.");
+              if (!record.password || !(await verifyPassword(String(password), record.password))) return privateJsonResponse({ error: "That password is not correct." }, { status: 422 });
+              const response = privateJsonResponse({ ok: true });
+              response.headers.append("set-cookie", createPasswordConfirmCookie(Number(user.id), record.auth_version));
+              return response;
+            });
+          })),
+        },
+        "/api/v1/auth/mfa": {
+          GET: kernel.wrap("api", kernel.wrapVerified(async (request) => {
+            const user = await dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN).requireUser(request);
+            const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
+            const secret = generateTotpSecret();
+            return privateJsonResponse({ secret, otpauth: buildOtpauthUrl({ secret, account: record.email ?? "user", issuer: process.env.APP_NAME ?? "Strata" }) });
+          })),
+          POST: kernel.wrap("api", kernel.wrapVerified(withMiddleware(createRequirePasswordConfirmMiddleware())(async (request) => {
+            const user = await dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN).requireUser(request);
+            const fields = await parseJsonBody(request, (payload) => validateObject(payload, { secret: [required(), stringRule()], code: [required(), stringRule()] }));
+            const secret = String(fields.secret).trim();
+            if (!verifyTotp(secret, String(fields.code).trim())) return privateJsonResponse({ error: "Could not confirm that code." }, { status: 422 });
+            const recoveryCodes = await enrollMfa(user, secret);
+            return privateJsonResponse({ recoveryCodes });
+          }))),
+        },`
+            : ""
+        }`
+    : "";
+
   const csrfRoute = `
         "/api/v1/auth/csrf": {
           GET: kernel.wrap("api", withErrorHandling(async (request) => {
@@ -546,7 +606,7 @@ async function completeBrowserSsoLogin(
         },`;
 
   const cookieJsonAuth =
-    cookie && !jsonApi
+    cookie && !bearerApi
       ? `
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(withErrorHandling(async (request) => {
@@ -733,10 +793,10 @@ async function completeBrowserSsoLogin(
     : "";
 
   const apiRoutes =
-    jsonApi || cookie
+    bearerApi || cookie
       ? `
     routes({ kernel, dependencies }) {
-      return {${csrfRoute}${samlRoutes}${githubRoutes}${oidcRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}
+      return {${csrfRoute}${samlRoutes}${githubRoutes}${oidcRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}${jsonAccountManagement}
       };
     },`
       : "";
@@ -980,30 +1040,7 @@ async function completeBrowserSsoLogin(
                   otpauth: buildOtpauthUrl({ secret, account: "user", issuer: process.env.APP_NAME ?? "Strata" }),
                 }, { request });
             }
-            const recoveryCodes = generateRecoveryCodes();
-            const stored = protectMfaSecret(secret);
-            const previous = await runAuthWrite(Number(user.id), () => User.find(Number(user.id)));
-            if (!previous || previous.get("auth_version") !== user.authVersion || !(previous.get("is_active") === true || previous.get("is_active") === 1)) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
-            await runInTransaction(async () => {
-              await runAuthWrite(Number(user.id), async () => {
-                // Trusted, pre-protected security fields: atomically replace only the state we read.
-                const changed = await previous.getRepository().updateWhere({
-                  mfa_secret: stored,
-                  mfa_enabled: true,
-                  mfa_recovery_codes: JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
-                }, { where: {
-                  id: Number(user.id),
-                  is_active: previous.get("is_active"),
-                  auth_version: previous.get("auth_version"),
-                  mfa_enabled: previous.get("mfa_enabled"),
-                  mfa_secret: previous.get("mfa_secret"),
-                  mfa_recovery_codes: previous.get("mfa_recovery_codes"),
-                  session_valid_after: previous.get("session_valid_after"),
-                } });
-                if (changed !== 1) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
-              });
-              await revokeUserSessions(Number(user.id));
-            });
+            const recoveryCodes = await enrollMfa(user, secret);
             return views.render("mfa-setup.eta", {
                 layout: { title: "MFA" },
                 errors: {},
@@ -1022,6 +1059,41 @@ async function completeBrowserSsoLogin(
 
   return `${imports.join("\n")}
 ${helpers}
+
+${
+  mfa
+    ? `
+async function enrollMfa(user: { id: string | number; authVersion?: number }, secret: string) {
+  const recoveryCodes = generateRecoveryCodes();
+  const stored = protectMfaSecret(secret);
+  const previous = await runAuthWrite(Number(user.id), () => User.find(Number(user.id)));
+  if (!previous || previous.get("auth_version") !== user.authVersion || !(previous.get("is_active") === true || previous.get("is_active") === 1)) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
+  await runInTransaction(async () => {
+    await runAuthWrite(Number(user.id), async () => {
+      // Trusted, pre-protected security fields: atomically replace only the state we read.
+      const changed = await previous.getRepository().updateWhere({
+        mfa_secret: stored,
+        mfa_enabled: true,
+        mfa_recovery_codes: JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
+      }, { where: {
+        id: Number(user.id),
+        is_active: previous.get("is_active"),
+        auth_version: previous.get("auth_version"),
+        mfa_enabled: previous.get("mfa_enabled"),
+        mfa_secret: previous.get("mfa_secret"),
+        mfa_recovery_codes: previous.get("mfa_recovery_codes"),
+        session_valid_after: previous.get("session_valid_after"),
+      } });
+      if (changed !== 1) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
+    });
+    await revokeUserSessions(Number(user.id));
+  });
+  return recoveryCodes;
+}
+`
+    : ""
+}
+
 const authModule: AppModule = {
   name: "auth",
   order: 2,${apiRoutes}${cookieRoutes}

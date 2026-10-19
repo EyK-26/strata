@@ -168,6 +168,7 @@ describe("createTenantMiddleware", () => {
       );
 
       expect(response.status).toBe(403);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
       expect(await response.json()).toEqual({
         error: "Tenant header does not match your account.",
       });
@@ -399,6 +400,7 @@ describe("createTenantMiddleware", () => {
       );
 
       expect(response.status).toBe(403);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
       expect(await response.json()).toEqual({
         error: "Tenant header does not match your account.",
       });

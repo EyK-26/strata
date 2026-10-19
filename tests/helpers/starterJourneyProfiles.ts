@@ -2,6 +2,27 @@
  * Not an exhaustive Cartesian matrix; failures remain individually visible. */
 export const starterJourneyProfiles = [
   {
+    name: "mysql-api-cookie-none",
+    database: "mysql",
+    frontend: "api",
+    auth: "cookie",
+    tenancy: "none",
+  },
+  {
+    name: "sqlite-spa-cookie-column",
+    database: "sqlite",
+    frontend: "spa-react",
+    auth: "cookie",
+    tenancy: "column",
+  },
+  {
+    name: "postgres-api-cookie-rls",
+    database: "postgres",
+    frontend: "api",
+    auth: "cookie",
+    tenancy: "rls",
+  },
+  {
     name: "mysql-htmx-cookie-none",
     database: "mysql",
     frontend: "server-htmx",

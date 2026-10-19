@@ -214,7 +214,9 @@ try {
   process.env.APP_URL = origin;
   const csrf = await jsonCsrfHeaders(origin);
   let cookie = csrf.cookie;
-  const browser = profile.auth.includes("cookie");
+  const cookieAuth = profile.auth.includes("cookie");
+  const browser =
+    cookieAuth && (profile.frontend === "server-htmx" || profile.frontend === "hybrid");
   const email = `journey-${crypto.randomUUID()}@example.test`;
   const password = "Original!Password123",
     replacement = "Replacement!Password456";
@@ -252,6 +254,9 @@ try {
   }
   async function status(response: Response, expected: number, label: string) {
     const body = await response.text();
+    if (response.headers.get("content-type")?.includes("application/json")) {
+      assert.match(response.headers.get("cache-control") ?? "", /(?:^|[ ,])no-store(?:$|[ ,])/);
+    }
     assert.equal(response.status, expected, `${profile.name}: ${label}: ${body.slice(0, 300)}`);
     return body;
   }
@@ -334,6 +339,7 @@ try {
   const login = await request(loginPath, { email, password });
   let token: string | undefined;
   if (browser) await status(login, 302, "browser login");
+  else if (cookieAuth) await status(login, 200, "JSON cookie login");
   else {
     assert.equal(login.status, 200);
     token = ((await login.json()) as { token: string }).token;
@@ -358,6 +364,30 @@ try {
   );
   const reset = await mailLink("Reset your password");
   if (browser) await status(await request(reset), 200, "reset form");
+  if (!browser) {
+    await status(
+      await fetch(origin + reset, {
+        method: "POST",
+        redirect: "manual",
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          cookie,
+          origin,
+          "x-csrf-token": csrf.token,
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: "{",
+      }),
+      400,
+      "malformed reset JSON is a client error without consuming proof",
+    );
+    await status(
+      await request(reset, { password: "short" }),
+      403,
+      "invalid reset password does not consume proof",
+    );
+  }
   await status(
     await request(reset, { password: replacement, email }),
     browser ? 302 : 200,
@@ -435,6 +465,114 @@ try {
       "replayed recovery cannot authenticate",
     );
   }
+  if (cookieAuth && !browser) {
+    await status(
+      await fetch(`${origin}/api/v1/auth/mfa`, {
+        method: "POST",
+        redirect: "manual",
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          cookie,
+          origin,
+          "x-csrf-token": csrf.token,
+          "HX-Request": "true",
+          accept: "text/html",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ secret: "invalid", code: "000000" }),
+      }),
+      423,
+      "explicit API confirmation stays JSON for HTMX headers",
+    );
+    await status(
+      await request("/api/v1/auth/mfa", { secret: "invalid", code: "000000" }),
+      423,
+      "MFA requires password confirmation",
+    );
+    await status(
+      await request("/api/v1/auth/confirm-password", { password: "wrong" }),
+      422,
+      "wrong confirmation password",
+    );
+    const setup = JSON.parse(
+      await status(await request("/api/v1/auth/mfa"), 200, "JSON MFA setup"),
+    ) as { secret: string; otpauth: string };
+    assert.ok(setup.secret);
+    assert.ok(setup.otpauth.startsWith("otpauth://totp/"));
+    await status(
+      await request("/api/v1/auth/confirm-password", { password: replacement }),
+      200,
+      "JSON password confirmation",
+    );
+    await status(
+      await request("/api/v1/auth/mfa", { secret: setup.secret, code: "invalid" }),
+      422,
+      "invalid TOTP rejected",
+    );
+    await status(
+      await request("/api/v1/auth/mfa", { secret: "!!!!", code: "123456" }),
+      422,
+      "malformed MFA secret rejected",
+    );
+    const beforeEnroll = cookie;
+    const enrolled = JSON.parse(
+      await status(
+        await request("/api/v1/auth/mfa", {
+          secret: setup.secret,
+          code: generateTotp(setup.secret),
+        }),
+        200,
+        "JSON MFA enrollment",
+      ),
+    ) as { recoveryCodes: string[] };
+    const recovery = enrolled.recoveryCodes[0];
+    assert.ok(recovery);
+    assert.equal((await readUser()).get("auth_version"), 2);
+    await status(
+      await request(protectedPath, undefined, false, beforeEnroll),
+      401,
+      "JSON MFA revokes session",
+    );
+    cookie = csrf.cookie;
+    const challenge = JSON.parse(
+      await status(
+        await request(loginPath, { email, password: replacement }),
+        401,
+        "JSON MFA challenge",
+      ),
+    ) as { error: string };
+    assert.equal(challenge.error, "mfa_required");
+    await status(
+      await request(loginPath, {
+        email,
+        password: replacement,
+        mfa_code: generateTotp(setup.secret),
+      }),
+      200,
+      "JSON TOTP login",
+    );
+    await status(await request(protectedPath), 200, "JSON MFA authenticated");
+    await status(
+      await request("/api/v1/auth/mfa", { secret: setup.secret, code: generateTotp(setup.secret) }),
+      423,
+      "prior epoch confirmation cannot authorize re-enrollment",
+    );
+    await status(await request("/api/v1/auth/logout", {}), 200, "JSON logout");
+    cookie = csrf.cookie;
+    await status(
+      await request(loginPath, { email, password: replacement, mfa_code: recovery }),
+      200,
+      "JSON recovery login",
+    );
+    await status(await request("/api/v1/auth/logout", {}), 200, "JSON recovery logout");
+    cookie = csrf.cookie;
+    await status(
+      await request(loginPath, { email, password: replacement, mfa_code: recovery }),
+      422,
+      "JSON recovery replay denied",
+    );
+    await status(await request(protectedPath), 401, "recovery replay has no session");
+  }
   cookie = csrf.cookie;
   const raceEmail = `concurrent-${crypto.randomUUID()}@example.test`;
   const raced = await Promise.all([
@@ -476,7 +614,7 @@ try {
     "retry after rolled-back signup",
   );
   assert.equal(await deliveredTo(faultEmail), 1);
-  if (browser) {
+  if (cookieAuth) {
     const outageEmail = `smtp-outage-${crypto.randomUUID()}@example.test`;
     cookie = csrf.cookie;
     docker(["stop", "--time", "1", container]);
@@ -504,16 +642,33 @@ try {
     }
     assert.ok(recovered);
     await status(
-      await request("/login", { email: outageEmail, password }),
-      302,
+      await request(loginPath, { email: outageEmail, password }),
+      browser ? 302 : 200,
       "unverified owner can sign in to recover mail",
     );
     await status(
-      await request("/email/verification-notification", {}),
-      302,
+      await request(
+        browser ? "/email/verification-notification" : "/api/v1/auth/verification-notification",
+        {},
+      ),
+      browser ? 302 : 200,
       "verification resend after SMTP recovery",
     );
     assert.equal(await deliveredTo(outageEmail), 1);
+    if (!browser) {
+      await status(await request("/api/v1/auth/mfa"), 403, "unverified owner cannot enroll MFA");
+      await status(
+        await request("/api/v1/auth/confirm-password", { password }),
+        403,
+        "unverified owner cannot confirm password",
+      );
+      cookie = csrf.cookie;
+      await status(
+        await request("/api/v1/auth/verification-notification", {}),
+        401,
+        "guest cannot resend verification",
+      );
+    }
   }
   console.log(
     `PASS ${profile.name}: signup / SMTP verification / tamper / replay / login / SMTP reset / revocation / replacement login / MFA where supported / atomic signup retry`,

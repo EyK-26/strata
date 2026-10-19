@@ -5,6 +5,7 @@ import { HttpError, UnauthorizedError } from "@getstrata/core/errors/http";
 import { errorResponse } from "@getstrata/core/http/response";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
+import { currentRequestMeta } from "./requestMetaContext";
 import { sanitizeInternalPath } from "./safeInternalPath";
 
 const PASSWORD_CONFIRM_MESSAGE = "Password confirmation required.";
@@ -13,9 +14,10 @@ const PASSWORD_CONFIRM_PATH = "/confirm-password";
 function createRequirePasswordConfirmMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const user = currentAuthUser();
+    const json = currentRequestMeta().errorFormat === "json" || requestPrefersJson(request);
 
     if (!user) {
-      if (requestPrefersJson(request)) {
+      if (json) {
         return errorResponse(new UnauthorizedError("Authentication required."));
       }
 
@@ -28,7 +30,7 @@ function createRequirePasswordConfirmMiddleware(): Middleware {
       return await next();
     }
 
-    if (requestPrefersJson(request)) {
+    if (json) {
       return errorResponse(new HttpError(423, PASSWORD_CONFIRM_MESSAGE));
     }
 
