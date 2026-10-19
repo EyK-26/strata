@@ -1,5 +1,6 @@
-import { currentCredentialSource } from "@getstrata/core/auth/authContext";
+import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
+import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { readSubmittedCsrfTokenFromBody, resolveCsrfToken, verifyCsrfToken } from "./csrfToken";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";
@@ -41,7 +42,12 @@ function appendSetCookie(response: Response, cookie: string): Response {
 function createCsrfMiddleware(): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const credentialSource = currentCredentialSource();
-    if (credentialSource === "bearer" || credentialSource === "basic") {
+    const developmentHeaderProof =
+      credentialSource === "guest" &&
+      currentAuthUser() !== null &&
+      envFlagEnabled(process.env.AUTH_DEV_HEADERS) &&
+      !isProductionEnv();
+    if (credentialSource === "bearer" || credentialSource === "basic" || developmentHeaderProof) {
       return await next();
     }
 

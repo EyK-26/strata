@@ -121,11 +121,15 @@ try {
   await writeFile(
     join(fixture.app, "src/modules/guest-notes/index.ts"),
     `import type {AppModule} from '@getstrata/bootstrap/contracts';
-import {currentAuthUser} from '@getstrata/core/auth/authContext';
+import {currentAuthUser,currentCredentialSource} from '@getstrata/core/auth/authContext';
+import type {AuthManager} from '@getstrata/core/auth/guard';
+import {CORE_AUTH_TOKEN} from '@getstrata/bootstrap/config';
 import {currentTenantId} from '@getstrata/core/tenant/tenantContext';
 import {jsonResponse} from '@getstrata/core/http/response';
+import {parseJsonBody} from '@getstrata/core/http/validation';
+import {required,stringRule,validateObject} from '@getstrata/core/validation/rules';
 import {Note} from '../../models/Note.ts';
-export default {name:'guest-notes',routes({kernel}){return {'/api/v1/guest-notes':{GET:kernel.wrapApi(async()=>{const tenantId=currentTenantId();const notes=await Note.query().where({tenant_id:tenantId}).get();return jsonResponse({userId:currentAuthUser()?.id,tenantId,notes:notes.map(note=>note.toObject())});})}};}} satisfies AppModule;
+export default {name:'guest-notes',routes({kernel,dependencies}){return {'/api/v1/guest-notes':{GET:kernel.wrapApi(async(request)=>{await dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN).requireUser(request);const tenantId=currentTenantId();const notes=await Note.query().where({tenant_id:tenantId}).get();return jsonResponse({userId:currentAuthUser()?.id,source:currentCredentialSource(),tenantId,notes:notes.map(note=>note.toObject())});}),POST:kernel.wrapApi(async(request)=>{const fields=await parseJsonBody(request,input=>validateObject(input,{body:[required(),stringRule()]}));const note=await Note.create({body:String(fields.body),tenant_id:currentTenantId()});return jsonResponse(note.toObject(),{status:201});})}};}} satisfies AppModule;
 `,
   );
   await run(["run", "check"]);
@@ -155,13 +159,51 @@ try{const other=await tenants.create({slug:'guest-other'});assert.equal(Number(o
   };
   const first = (await (await request(headers)).json()) as {
     userId: string;
+    source: string;
     tenantId: number;
     notes: { tenant_id: number; body: string }[];
   };
   assert.equal(String(first.userId), "42");
+  assert.equal(first.source, "guest");
   assert.equal(first.tenantId, 1);
   assert.equal(first.notes.length, 1);
   assert.ok(first.notes.every((note) => note.tenant_id === 1 && note.body !== "other-tenant-note"));
+  const created = await fetch(`${origin}/api/v1/guest-notes`, {
+    method: "POST",
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify({ body: "own-tenant-write", tenant_id: 2 }),
+  });
+  assert.equal(created.status, 201, await created.clone().text());
+  const written = (await created.json()) as { body: string; tenant_id: number };
+  assert.equal(written.body, "own-tenant-write");
+  assert.equal(
+    written.tenant_id,
+    1,
+    "Submitted tenant fields must not override the framework scope",
+  );
+  const unauthenticated = await fetch(`${origin}/api/v1/guest-notes`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-credential-source": "guest" },
+    body: JSON.stringify({ body: "forged" }),
+  });
+  assert.equal(
+    unauthenticated.status,
+    403,
+    "An arbitrary source header cannot bypass anonymous CSRF/auth",
+  );
+  const preflight = await fetch(`${origin}/api/v1/guest-notes`, {
+    method: "OPTIONS",
+    headers: {
+      origin: "https://untrusted.example.test",
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "x-authenticated-user-id,content-type",
+    },
+  });
+  assert.equal(
+    preflight.headers.get("access-control-allow-origin"),
+    null,
+    "Untrusted browser origins cannot send identity headers",
+  );
   assert.ok(server);
   server.kill("SIGTERM");
   await server.exited;
