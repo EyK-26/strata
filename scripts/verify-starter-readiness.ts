@@ -20,6 +20,17 @@ const env = Object.fromEntries(
   ),
 );
 let composeCreated = false;
+const ownedVolumes = new Set<string>();
+async function rememberOwnedVolumes() {
+  const ids = (await compose(["ps", "--all", "-q"])).split(/\s+/).filter(Boolean);
+  for (const id of ids) {
+    const [container] = JSON.parse(await command(["docker", "inspect", id]));
+    assert.equal(container.Config.Labels["com.docker.compose.project"], project);
+    for (const mount of container.Mounts) {
+      if (mount.Type === "volume") ownedVolumes.add(mount.Name);
+    }
+  }
+}
 let server: ReturnType<typeof Bun.spawn> | undefined;
 async function command(args: string[], cwd = app, expected = 0, timeout = 180000) {
   const child = Bun.spawn(args, { cwd, env, stdout: "pipe", stderr: "pipe", timeout });
@@ -57,9 +68,34 @@ function cleanup() {
       server.kill("SIGTERM");
       await server.exited;
     }
-    if (composeCreated)
+    if (composeCreated) {
+      await rememberOwnedVolumes();
       await compose(["--profile", "debug", "down", "--volumes", "--remove-orphans"]);
+    }
+    // Compose removes the current anonymous mounts, but service recreation can
+    // leave an earlier anonymous Redis volume behind. Remove only mount IDs
+    // captured from this owned project, and refuse to touch any mounted volume.
+    const present = new Set(
+      (await command(["docker", "volume", "ls", "--format", "{{.Name}}"], repo)).split(/\s+/),
+    );
+    for (const name of ownedVolumes) {
+      if (!present.has(name)) continue;
+      const users = await command(
+        ["docker", "ps", "--all", "--filter", `volume=${name}`, "--format", "{{.ID}}"],
+        repo,
+      );
+      assert.equal(users, "", "An owned fixture volume must be unused before removal");
+      await command(["docker", "volume", "rm", name], repo);
+    }
     await rm(root, { recursive: true, force: true });
+    const remaining = new Set(
+      (await command(["docker", "volume", "ls", "--format", "{{.Name}}"], repo)).split(/\s+/),
+    );
+    assert.deepEqual(
+      [...ownedVolumes].filter((name) => remaining.has(name)),
+      [],
+      "Owned fixture volumes must be removed, including volumes left by service recreation",
+    );
   })();
   return cleanupPromise;
 }
@@ -118,6 +154,7 @@ try {
       "healthy",
     );
   }
+  await rememberOwnedVolumes();
   let text = await readFile(join(app, ".env.example"), "utf8");
   for (const service of services)
     for (const port of ports[service as keyof typeof ports]) {
