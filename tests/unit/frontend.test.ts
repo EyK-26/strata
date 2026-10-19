@@ -11,6 +11,7 @@ import {
   parseFrontendMode,
   readFrontendMode,
   readSpaPrefix,
+  validateSpaPrefix,
 } from "../../src/config/frontend";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -87,4 +88,28 @@ describe("frontend mode", () => {
     process.env.SPA_PREFIX = "/portal/";
     expect(readSpaPrefix()).toBe("/portal");
   });
+});
+
+test("SPA namespaces reject API/probe collisions and noncanonical browser paths", () => {
+  for (const invalid of [
+    "/api",
+    "/api/v1",
+    "/assets",
+    "/assets/js",
+    "/health",
+    "/ready",
+    "/metrics",
+    "/a/../b",
+    "/a/./b",
+    "/a//b",
+    "/a?b",
+    "/a#b",
+    "/a%2fb",
+    "/a b",
+    "/a\\b",
+  ]) {
+    expect(() => validateSpaPrefix(invalid)).toThrow("SPA_PREFIX");
+  }
+  expect(validateSpaPrefix("team/portal/")).toBe("/team/portal");
+  expect(validateSpaPrefix("/")).toBe("/app");
 });

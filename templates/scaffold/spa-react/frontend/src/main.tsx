@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
+import { SPA_PREFIX } from "./config";
 import "./app.css";
 
 const rootElement = document.getElementById("root");
@@ -13,7 +14,7 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <BrowserRouter basename="/app">
+    <BrowserRouter basename={SPA_PREFIX}>
       <AuthProvider>
         <App />
       </AuthProvider>

@@ -11,4 +11,5 @@ export {
   parseFrontendMode,
   readFrontendMode,
   readSpaPrefix,
+  validateSpaPrefix,
 } from "../core/runtime/frontendMode";

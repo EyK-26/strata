@@ -1,3 +1,4 @@
+import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
 import { defaultLayers } from "./presets.ts";
 import {
   AUTH_STACKS,
@@ -374,6 +375,7 @@ function applyFlagOverrides(base: StarterLayers, flags: ParsedFlags): StarterLay
     );
     next.tenancy = "column";
   }
+  next.spaPrefix = validateSpaPrefix(next.spaPrefix);
   dropInapplicableExtras(next, flags);
   return reconcileDocker(applyDockerFlags(next, flags));
 }

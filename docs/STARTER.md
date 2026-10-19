@@ -178,3 +178,12 @@ Rendered auth pages explicitly select `renderer.namespace("auth", { headers: { "
 The [2.2.45 starter sanity audit](STARTER-SANITY-AUDIT.md) records structural and real fresh-install/client checks, reproduced defects and missing acceptance boundaries. A passing backend journey or generated-app typecheck is not proof that every selected frontend, auth stack and supporting-service combination works. Preserve existing assertions and close the reported runtime gaps with independent generated-app regressions.
 
 Generated Compose services include real readiness probes: TCP SQL queries for MySQL/Postgres, authenticated Redis PING, Mailpit readiness and Adminer's HTTP endpoint. Generated startup commands use `--wait --wait-timeout 180`; wait for success before running migrations. Failure is explicit: inspect `docker compose ps` and `docker compose logs`; a slow first initialization can use a larger wait timeout. Adminer depends on a healthy database and remains in the optional debug profile. No application migrations or runtime SQL retries are added to Compose readiness.
+
+
+## SPA namespace and native Bun frontend commands
+
+For React and hybrid apps, `--spa-prefix=/team/portal` selects the backend mount, router basename, production asset paths and native Bun dev/preview routes together. `SPA_PREFIX` is public URL configuration. Generated frontend scripts pass only `BUN_PUBLIC_SPA_PREFIX` to Bun's HTML bundler; server secrets stay out of browser bundles. Root app scripts read the app environment. Direct frontend commands fall back to the generated prefix.
+
+Use `bun run frontend:install`, then `bun run frontend:build` to serve the built SPA from the backend. `bun run frontend:dev` retains Bun's native HMR; `cd frontend && bun run preview` builds and serves a preview with the same API proxy. Keep the backend running for `/api/*`. Nested history URLs serve the document within the selected namespace, while API misses remain API misses.
+
+Changing `SPA_PREFIX` requires rebuilding the frontend. Docker builds accept `--build-arg SPA_PREFIX=/team/portal`; set the same runtime `SPA_PREFIX`. API, static assets and platform probe paths are reserved. Invalid namespaces fail before generation can replace a target directory.

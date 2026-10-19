@@ -43,8 +43,26 @@ function normalizeSpaPrefix(value: string | undefined): string {
   return trimmed;
 }
 
+/** A dedicated, canonical URL namespace; API and platform probes cannot serve SPA assets. */
+function validateSpaPrefix(value: string | undefined): string {
+  const prefix = normalizeSpaPrefix(value);
+  if (
+    !/^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/.test(prefix) ||
+    prefix.split("/").some((part) => part === "." || part === "..") ||
+    prefix === "/api" ||
+    prefix.startsWith("/api/") ||
+    prefix === "/assets" ||
+    prefix.startsWith("/assets/") ||
+    ["/health", "/ready", "/metrics"].includes(prefix)
+  )
+    throw new Error(
+      "SPA_PREFIX must be a dedicated URL path outside API, assets and health/metrics routes.",
+    );
+  return prefix;
+}
+
 function readSpaPrefix(): string {
-  return normalizeSpaPrefix(process.env.SPA_PREFIX);
+  return validateSpaPrefix(process.env.SPA_PREFIX);
 }
 
 export type { FrontendMode };
@@ -60,4 +78,5 @@ export {
   parseFrontendMode,
   readFrontendMode,
   readSpaPrefix,
+  validateSpaPrefix,
 };
