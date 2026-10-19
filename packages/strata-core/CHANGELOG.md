@@ -2,6 +2,8 @@
 
 ## 2.2.46
 
+- Preserve GuestGuard credential identity through named guards; resolve development tenancy without account tables and permit non-cookie writes only for actual, explicitly enabled development identities. Keep anonymous, session-CSRF and staging/production refusal intact.
+
 - Add `validateSpaPrefix` for canonical, dedicated SPA URL namespaces; reject API, asset and platform-probe collisions while preserving existing prefix normalization.
 
 ## 2.2.45

@@ -117,12 +117,24 @@ try {
   await mkdir(join(fixture.app, "src/modules/acceptance"));
   await writeFile(
     join(fixture.app, "src/modules/acceptance/index.ts"),
-    `import type {AppModule} from '@getstrata/bootstrap/contracts';\nimport {CORE_AUTH_TOKEN} from '@getstrata/bootstrap/config';\nimport type {AuthManager} from '@getstrata/core/auth/guard';\nimport {jsonResponse} from '@getstrata/core/http/response';\nexport default {name:'acceptance',routes({kernel,dependencies}){return {'/api/v1/acceptance-identity':{GET:kernel.wrapApi(async(request)=>{const user=await dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN).requireUser(request);return jsonResponse({id:user.id,role:user.role},{headers:{etag:'identity-v1'}});})}};}} satisfies AppModule;`,
+    `import type {AppModule} from '@getstrata/bootstrap/contracts';
+import {CORE_AUTH_TOKEN} from '@getstrata/bootstrap/config';
+import type {AuthManager} from '@getstrata/core/auth/guard';
+import {jsonResponse} from '@getstrata/core/http/response';
+import {parseJsonBody} from '@getstrata/core/http/validation';
+import {currentTenantId} from '@getstrata/core/tenant/tenantContext';
+import {Note} from '../../models/Note.ts';
+export default {name:'acceptance',routes({kernel,dependencies}){return {
+'/api/v1/acceptance-identity':{GET:kernel.wrapApi(async(request)=>{const user=await dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN).requireUser(request);return jsonResponse({id:user.id,role:user.role},{headers:{etag:'identity-v1'}});})},
+'/api/v1/acceptance-notes':{POST:kernel.wrapApi(async(request)=>{await dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN).requireUser(request);const input=await parseJsonBody(request,value=>value as {body:string});const note=await Note.create({body:input.body${tenancy !== "none" ? ",tenant_id:currentTenantId()" : ""}});return jsonResponse(note.toObject(),{status:201});})}
+};}} satisfies AppModule;`,
   );
   // Compile and exercise the ORM example shown to developers, rather than assuming it works.
-  const home = await readFile(join(fixture.app, "frontend/src/pages/HomePage.tsx"), "utf8");
-  const example = home.match(/<code>\{`([\s\S]*?)`}<\/code>/)?.[1];
-  assert.ok(example, "Home must include its runnable module example");
+  const { notesModuleExample } = await import(join(fixture.app, "frontend/src/examples/notes.ts"));
+  const { TENANCY_ENABLED } = await import(join(fixture.app, "frontend/src/config.ts"));
+  assert.equal(TENANCY_ENABLED, tenancy !== "none");
+  const example = notesModuleExample(TENANCY_ENABLED);
+  assert.equal(typeof example, "string");
   await mkdir(join(fixture.app, "src/modules/notes"));
   await writeFile(join(fixture.app, "src/modules/notes/index.ts"), example);
   await command(["run", "check"]);
@@ -140,6 +152,21 @@ try {
       assert.ok(spec.paths[path], `Missing JSON account operation ${path}`);
     for (const path of ["/login", "/register", "/account/mfa"])
       assert.equal(spec.paths[path], undefined, "HTML account pages stay outside OpenAPI");
+  }
+  if (tenancy !== "none") {
+    await writeFile(
+      join(fixture.app, "other-tenant.ts"),
+      `import './src/bootstrap/preload.ts';
+import {getSql,closeDatabase} from './src/bootstrap/database.ts';
+import {BaseRepository} from '@getstrata/core/database/baseRepository';
+import {defineTable} from '@getstrata/core/database/table';
+import {runWithTenantDatabase} from '@getstrata/core/tenant/tenantDatabaseScope';
+getSql();
+const {Note}=await import('./src/models/Note.ts');
+try{const tenants=new BaseRepository(defineTable<{id:number;slug:string},'id'>({name:'tenant',primaryKey:'id',columns:['id','slug']}));const other=await tenants.create({slug:'browser-other'});await runWithTenantDatabase({id:Number(other.id),slug:other.slug},()=>Note.create({body:'other-tenant-note',tenant_id:Number(other.id)}));}finally{await closeDatabase();}
+`,
+    );
+    await command(["other-tenant.ts"]);
   }
   await command(["run", "frontend:install"]);
   await command(["run", "frontend:build"]);
@@ -251,12 +278,32 @@ try {
     return w.acceptanceFetch("/acceptance-identity");
   });
   assert.ok(identity.id);
+  assert.equal(
+    await page.locator("pre code").textContent(),
+    example,
+    "Compile and execute exactly the source shown in the real browser",
+  );
   const etag = await page.evaluate(async () =>
     (globalThis as unknown as { acceptanceEtag: (p: string) => Promise<string> }).acceptanceEtag(
       "/acceptance-identity",
     ),
   );
   assert.equal(etag, "identity-v1", "ETag fetch must use the selected authenticated transport");
+  const created = await page.evaluate(async () =>
+    (
+      globalThis as unknown as {
+        acceptanceFetch: (
+          path: string,
+          options: RequestInit,
+        ) => Promise<{ id: number; body: string }>;
+      }
+    ).acceptanceFetch("/acceptance-notes", {
+      method: "POST",
+      body: JSON.stringify({ body: "browser-authenticated-write" }),
+    }),
+  );
+  assert.ok(created.id);
+  assert.equal(created.body, "browser-authenticated-write");
   const notes = await page.evaluate(async () =>
     (
       globalThis as unknown as { acceptanceFetch: (p: string) => Promise<{ data: unknown[] }> }
@@ -266,6 +313,17 @@ try {
     Array.isArray(notes.data),
     "The displayed ORM example must actually serve its resource",
   );
+  assert.ok(
+    notes.data.some((note) => (note as { id: number }).id === created.id),
+    "Authenticated client writes must be visible through the displayed ORM resource",
+  );
+  if (tenancy !== "none") {
+    assert.ok(
+      notes.data.every((note) => (note as { tenant_id: number }).tenant_id === 1),
+      "The displayed tenant resource must not expose another tenant's rows",
+    );
+  }
+
   if (auth === "headers") {
     assert.equal(String(identity.id), "42");
     assert.ok(

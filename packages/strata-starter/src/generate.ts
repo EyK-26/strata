@@ -93,6 +93,7 @@ import {
   neededDockerServices,
   needsFrontendBuild,
   selectedDockerServices,
+  usesTenantTable,
 } from "./types.ts";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]*$/i;
@@ -172,6 +173,15 @@ function writeGeneratedFiles(options: GenerateOptions): void {
       `export type AuthTransport = "cookie" | "token" | "jwt" | "headers";\nexport const AUTH_CONFIG: { transport: AuthTransport; mfa: boolean } = ${JSON.stringify({ transport, mfa })};\n`,
     );
 
+    writeText(
+      join(targetDir, "frontend/src/config.ts"),
+      `import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
+
+// Generated scripts supply only this public value before Bun starts.
+export const SPA_PREFIX = validateSpaPrefix(process.env.BUN_PUBLIC_SPA_PREFIX);
+export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
+`,
+    );
     const manifestPath = join(targetDir, "frontend/package.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       scripts: Record<string, string>;

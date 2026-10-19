@@ -2,6 +2,9 @@
 
 ## 2.2.46
 
+- Honor separate MySQL migration credentials for provisioning and scoped administrative migrations; restore the restricted runtime connection and close administrative pools on failure.
+- Show and execute a bounded, tenant-aware ORM notes example with explicit scope predicates, preserving the framework column-tenancy contract.
+
 - Wait for authenticated supporting-service readiness before emitted migration steps; provide database, Redis, Mailpit and optional Adminer healthchecks.
 - Use the framework rollback guard for completed initial-admin claims during explicit local fresh, preserving ordinary rollback and staging/production refusal. Reverse the billing-owned tenant column on later-batch rollback so reapplication succeeds.
 - Share validated SPA prefixes across backend, router, native Bun build/dev/preview and Docker frontend builds; retain API isolation and safe preview paths.

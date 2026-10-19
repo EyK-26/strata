@@ -110,7 +110,7 @@ Apps scaffolded with `create-strata@1.1.0` should merge current `src/bootstrap/p
 
 ## In this repo
 
-`strata new my-app --yes` calls the same generator. `strata new --frontend=hybrid` (no project name) still overlays HTML/SPA files into the current directory.
+Generate new applications with `bunx create-strata my-app --yes`. Use the installed `bun run` scripts or `bunx strata <command>` inside the generated app for its published command set.
 
 The `exampleAppLayers` presets remain supported, including the legacy `hiroapp`, `hiroapp-hobby` and `hiroapp-team` IDs. They select layers, not repository directories. Native acceptance generates temporary source and installed-package fixtures; `generate:example-apps` is retired.
 
@@ -195,3 +195,5 @@ For React and hybrid apps, `--spa-prefix=/team/portal` selects the backend mount
 Use `bun run frontend:install`, then `bun run frontend:build` to serve the built SPA from the backend. `bun run frontend:dev` retains Bun's native HMR; `cd frontend && bun run preview` builds and serves a preview with the same API proxy. Keep the backend running for `/api/*`. Nested history URLs serve the document within the selected namespace, while API misses remain API misses.
 
 Changing `SPA_PREFIX` requires rebuilding the frontend. Docker builds accept `--build-arg SPA_PREFIX=/team/portal`; set the same runtime `SPA_PREFIX`. API, static assets and platform probe paths are reserved. Invalid namespaces fail before generation can replace a target directory.
+
+The React welcome page's notes-module example is generated for the selected schema. Tenant-enabled examples explicitly constrain `tenant_id` with `currentTenantId()` through the typed ORM; no-tenancy examples omit that column. Lists are bounded to 100 rows. Column-mode context does not silently add SQL predicates: application resources must apply their authorization and tenant filters. Browser acceptance compiles and executes the displayed code with a second tenant's data to verify that the example keeps those rows isolated.

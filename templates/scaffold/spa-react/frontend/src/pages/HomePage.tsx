@@ -1,5 +1,7 @@
 import { useAuth } from "../auth/AuthContext";
 import { AUTH_CONFIG } from "../auth/config";
+import { TENANCY_ENABLED } from "../config";
+import { notesModuleExample } from "../examples/notes";
 export default function HomePage() {
   const { user } = useAuth();
   return (
@@ -42,24 +44,7 @@ export default function HomePage() {
         expose your own application resources through the ORM.
       </p>
       <pre className="card">
-        <code>{`// src/modules/notes/index.ts
-import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { jsonResponse } from "@getstrata/core/http/response";
-import { Note } from "../../models/Note.ts";
-
-export default {
-  name: "notes",
-  routes({ kernel }) {
-    return {
-      "/api/v1/notes": {
-        GET: kernel.wrapApi(async () => {
-          const rows = await Note.query().orderBy({ column: "id", direction: "DESC" }).get();
-          return jsonResponse({ data: rows.map(row => row.toObject()) });
-        }),
-      },
-    };
-  },
-} satisfies AppModule;`}</code>
+        <code>{notesModuleExample(TENANCY_ENABLED)}</code>
       </pre>
       <p className="hint">
         Then fetch it here with <code>apiFetch("/notes")</code>. The <code>notes</code> table
