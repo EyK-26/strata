@@ -20,6 +20,7 @@ const repoRoot = join(import.meta.dir, "../..");
 export async function createGeneratedSecurityApp(
   database: "postgres" | "sqlite" | "mysql" = "postgres",
   extraFlags: readonly string[] = [],
+  options: { publishedVersion?: string; parentDirectory?: string } = {},
 ) {
   const migrationUrl = process.env.MIGRATION_DATABASE_URL;
   const runtimeUrl = process.env.RLS_TEST_DATABASE_URL ?? process.env.APP_DATABASE_URL;
@@ -30,7 +31,7 @@ export async function createGeneratedSecurityApp(
   const mysqlUrl = process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
   if (database === "mysql" && !mysqlUrl?.trim())
     throw new Error("Generated MySQL acceptance requires MYSQL_OBSERVABILITY_ADMIN_URL.");
-  const root = await mkdtemp(join(tmpdir(), "strata-security-"));
+  const root = await mkdtemp(join(options.parentDirectory ?? tmpdir(), "strata-security-"));
   const app = join(root, "app");
   const databaseName = `generated_security_${crypto.randomUUID().replaceAll("-", "")}`;
   const controlUrl = database === "postgres" && migrationUrl ? new URL(migrationUrl) : null;
@@ -69,62 +70,104 @@ export async function createGeneratedSecurityApp(
     }
   }
   try {
-    generateProject({
-      projectName: "security-acceptance",
-      targetDir: app,
-      layers: layersFromFlags(
-        parseCreateStrataArgs([
-          "security-acceptance",
-          "--frontend=server-htmx",
-          `--database=${database}`,
-          database === "postgres" ? "--tenancy=rls" : "--tenancy=column",
-          "--auth=cookie-token-jwt",
-          "--mfa",
-          "--email-verification",
-          "--scim",
-          "--metrics",
-          ...extraFlags,
-          "--yes",
-        ]),
-      ),
-      templateRoot: resolveTemplateRoot(),
-      overlayRoot: resolveOverlayRoot(),
-    });
-    const manifestPath = join(app, "package.json");
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    const samlPeer = JSON.parse(
-      await readFile(join(repoRoot, "node_modules/@node-saml/node-saml/package.json"), "utf8"),
-    );
-    // This suite enables SAML at runtime; an external app must install its optional peer.
-    manifest.dependencies["@node-saml/node-saml"] = samlPeer.version;
-    for (const part of ["core", "bootstrap", "cli"]) {
-      const packed = Bun.spawnSync(["npm", "pack", "--silent", "--pack-destination", root], {
-        cwd: join(repoRoot, `packages/strata-${part}`),
+    const flags = [
+      "--frontend=server-htmx",
+      `--database=${database}`,
+      database === "postgres" ? "--tenancy=rls" : "--tenancy=column",
+      "--auth=cookie-token-jwt",
+      "--mfa",
+      "--email-verification",
+      "--scim",
+      "--metrics",
+      ...extraFlags,
+      "--yes",
+    ];
+    if (options.publishedVersion) {
+      if (!/^\d+\.\d+\.\d+$/.test(options.publishedVersion))
+        throw new Error("Exact published version required.");
+      const generate = Bun.spawnSync(
+        ["bun", "x", "--bun", `create-strata@${options.publishedVersion}`, "app", ...flags],
+        {
+          cwd: root,
+          stdout: "pipe",
+          stderr: "pipe",
+          timeout: 60000,
+          killSignal: "SIGKILL",
+        },
+      );
+      if (generate.exitCode !== 0)
+        throw new Error(
+          `Published generation failed: ${new TextDecoder().decode(generate.stderr)}`,
+        );
+      // Registry qualification pins the requested release rather than allowing
+      // an older generator's caret ranges to install a newer runtime silently.
+      const manifestPath = join(app, "package.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      for (const part of ["core", "bootstrap", "cli"])
+        manifest.dependencies[`@getstrata/${part}`] = options.publishedVersion;
+      await writeFile(manifestPath, JSON.stringify(manifest));
+      const install = Bun.spawnSync(["bun", "install"], {
+        cwd: app,
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 60000,
+        killSignal: "SIGKILL",
+      });
+      if (install.exitCode !== 0)
+        throw new Error(
+          `Published installation failed: ${new TextDecoder().decode(install.stderr)}`,
+        );
+      for (const part of ["core", "bootstrap", "cli"]) {
+        const manifest = JSON.parse(
+          await readFile(join(app, `node_modules/@getstrata/${part}/package.json`), "utf8"),
+        );
+        if (manifest.version !== options.publishedVersion)
+          throw new Error(`Unexpected published ${part} version: ${manifest.version}`);
+      }
+    } else {
+      generateProject({
+        projectName: "security-acceptance",
+        targetDir: app,
+        layers: layersFromFlags(parseCreateStrataArgs(["security-acceptance", ...flags])),
+        templateRoot: resolveTemplateRoot(),
+        overlayRoot: resolveOverlayRoot(),
+      });
+      const manifestPath = join(app, "package.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      const samlPeer = JSON.parse(
+        await readFile(join(repoRoot, "node_modules/@node-saml/node-saml/package.json"), "utf8"),
+      );
+      // This suite enables SAML at runtime; an external app must install its optional peer.
+      manifest.dependencies["@node-saml/node-saml"] = samlPeer.version;
+      for (const part of ["core", "bootstrap", "cli"]) {
+        const packed = Bun.spawnSync(["npm", "pack", "--silent", "--pack-destination", root], {
+          cwd: join(repoRoot, `packages/strata-${part}`),
+          stdout: "pipe",
+          stderr: "pipe",
+          timeout: 30000,
+          killSignal: "SIGKILL",
+        });
+        if (packed.exitCode !== 0)
+          throw new Error(
+            `Candidate ${part} pack failed: ${new TextDecoder().decode(packed.stderr)}`,
+          );
+        const filename = new TextDecoder().decode(packed.stdout).trim().split("\n").at(-1);
+        if (!filename) throw new Error(`Candidate ${part} pack produced no tarball.`);
+        manifest.dependencies[`@getstrata/${part}`] = `file:${join(root, filename)}`;
+      }
+      await writeFile(manifestPath, JSON.stringify(manifest));
+      const install = Bun.spawnSync(["bun", "install", "--prefer-offline"], {
+        cwd: app,
         stdout: "pipe",
         stderr: "pipe",
         timeout: 30000,
         killSignal: "SIGKILL",
       });
-      if (packed.exitCode !== 0)
+      if (install.exitCode !== 0)
         throw new Error(
-          `Candidate ${part} pack failed: ${new TextDecoder().decode(packed.stderr)}`,
+          `Generated security installation failed: ${new TextDecoder().decode(install.stderr)}`,
         );
-      const filename = new TextDecoder().decode(packed.stdout).trim().split("\n").at(-1);
-      if (!filename) throw new Error(`Candidate ${part} pack produced no tarball.`);
-      manifest.dependencies[`@getstrata/${part}`] = `file:${join(root, filename)}`;
     }
-    await writeFile(manifestPath, JSON.stringify(manifest));
-    const install = Bun.spawnSync(["bun", "install", "--prefer-offline"], {
-      cwd: app,
-      stdout: "pipe",
-      stderr: "pipe",
-      timeout: 30000,
-      killSignal: "SIGKILL",
-    });
-    if (install.exitCode !== 0)
-      throw new Error(
-        `Generated security installation failed: ${new TextDecoder().decode(install.stderr)}`,
-      );
     let adminUrl: string;
     let appUrl: string;
     if (database === "postgres") {
@@ -163,7 +206,7 @@ export async function createGeneratedSecurityApp(
       app,
       migrationUrl: adminUrl,
       runtimeUrl: appUrl,
-      resolve: createRequire(manifestPath).resolve,
+      resolve: createRequire(join(app, "package.json")).resolve,
       close,
     };
   } catch (error) {

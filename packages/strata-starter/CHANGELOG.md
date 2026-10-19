@@ -1,5 +1,15 @@
 # create-strata changelog
 
+## 2.2.43
+
+Preserve neutral registration responses under concurrent duplicate signup. Share the generated registration transaction, recheck a confirmed account only after a conflict rollback, send verification only for the winning creation, and propagate unrelated persistence failures.
+
+Correct generated API documentation for cookie/JWT/token stacks, including real route availability and neutral registration responses; guard all six auth stacks and installed runtime route inventories.
+
+Add `afterCommit` for process-local effects after the outermost managed transaction, sharing savepoint rollback and tenant replay with model events. Generated auth SMTP uses this boundary even inside RLS request transactions; callback failures propagate after commit without undoing persisted accounts. Durable delivery still requires the SQL outbox.
+
+Fix MySQL verification/reset and session-revocation timestamps through the shared SQL dialect; make signup account and verification-token persistence atomic with SMTP after commit; initialize no-tenancy seed connections; add installed starter auth/SMTP/MFA/rollback journeys for every database and frontend, plus generated TypeScript profiles.
+
 ## 2.2.42
 
 Generate auth JSON and forms with explicit private, no-store cache policy. Add privateJsonResponse and typed view namespace header defaults while preserving normal public defaults, native cookies, per-response overrides and HTMX representation behavior. Cover packed APIs and actual generated cookie/token/JWT/CSRF/profile/form HTTP responses.

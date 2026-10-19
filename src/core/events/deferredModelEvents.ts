@@ -1,12 +1,10 @@
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
-import { currentTenant, type TenantContext } from "../tenant/tenantContext";
+import { currentTenant, runWithTenant, type TenantContext } from "../tenant/tenantContext";
 import { eventBus } from "./eventBus";
 
 type DeferredModelEvent = {
-  event: string;
-  payload: unknown;
   tenant: TenantContext | null;
-};
+} & ({ event: string; payload: unknown } | { callback: () => void | Promise<void> });
 
 type DeferredModelEventState = {
   frames: DeferredModelEvent[][];
@@ -33,7 +31,12 @@ function groupQueuedModelEvents(queued: DeferredModelEvent[]): DeferredModelEven
   for (const item of queued) {
     const lastGroup = groups[groups.length - 1];
     const last = lastGroup?.[lastGroup.length - 1];
-    if (!lastGroup || !last || !sameTenant(last.tenant, item.tenant)) {
+    if (
+      !lastGroup ||
+      !last ||
+      !sameTenant(last.tenant, item.tenant) ||
+      "callback" in last !== "callback" in item
+    ) {
       groups.push([item]);
     } else {
       lastGroup.push(item);
@@ -45,7 +48,8 @@ function groupQueuedModelEvents(queued: DeferredModelEvent[]): DeferredModelEven
 
 async function dispatchEventBatch(batch: DeferredModelEvent[]): Promise<void> {
   for (const item of batch) {
-    await eventBus.dispatch(item.event, item.payload);
+    if ("callback" in item) await item.callback();
+    else await eventBus.dispatch(item.event, item.payload);
   }
 }
 
@@ -59,7 +63,13 @@ async function dispatchQueuedModelEvents(queued: DeferredModelEvent[]): Promise<
   for (const batch of groupQueuedModelEvents(queued)) {
     const tenant = batch[0]?.tenant ?? null;
     if (tenant) {
-      await runWithTenantDatabase(tenant, () => dispatchEventBatch(batch));
+      if (batch.some((item) => "callback" in item)) {
+        // External effects retain identity, never a released handle, bypass or
+        // another pool slot held across network I/O. Database work is explicit.
+        await runWithTenant(tenant, () => dispatchEventBatch(batch));
+      } else {
+        await runWithTenantDatabase(tenant, () => dispatchEventBatch(batch));
+      }
     } else {
       await dispatchEventBatch(batch);
     }
@@ -81,6 +91,17 @@ async function dispatchModelEvent(event: string, payload: unknown): Promise<void
   }
 
   await eventBus.dispatch(event, payload);
+}
+
+/** Internal queue shared with model events so savepoint rollback and tenant replay
+ * follow exactly the same transaction boundary. This is not durable delivery. */
+async function afterCommit(callback: () => void | Promise<void>): Promise<void> {
+  const frame = deferredModelEvents.getStore()?.frames.at(-1);
+  if (frame) {
+    frame.push({ callback, tenant: currentTenant() });
+    return;
+  }
+  await callback();
 }
 
 async function runWithDeferredModelEvents<T>(callback: () => T | Promise<T>): Promise<T> {
@@ -124,4 +145,4 @@ function onDeferredModelRollback(callback: () => void): void {
   deferredModelEvents.getStore()?.rollbackFrames.at(-1)?.push(callback);
 }
 
-export { dispatchModelEvent, onDeferredModelRollback, runWithDeferredModelEvents };
+export { afterCommit, dispatchModelEvent, onDeferredModelRollback, runWithDeferredModelEvents };

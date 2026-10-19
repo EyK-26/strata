@@ -89,3 +89,7 @@ After rebuilding core/bootstrap, run `scripts/with-host-env.sh bun run verify:ge
 The corrected `docs/openapi.json` contains 22 API/protocol operations. The older 40-operation snapshot accidentally included 18 HTML operations because the legacy adapter discarded middleware metadata. See [the preservation and correction evidence](GENERATED-APP-ACCEPTANCE.md#second-pr-generated-cliopenapi-and-http-smoke). No runtime endpoint was removed.
 
 Source regression tests for generated views, login throttle wiring and request-path RLS isolation use temporary RLS/team profiles through `tests/helpers/generatedSourceApps.ts`. Setup requires every path in the frozen 52-file inventory, and teardown removes its owned source fixtures. The populated failed-job identity upgrade fixture remains under `tests/fixtures/migrations`; current initial-schema generation is not a substitute for testing that historical upgrade. These checks complement, rather than replace, packed-app runtime acceptance.
+
+## Fresh starter account journeys
+
+The [starter journey matrix](STARTER-JOURNEYS.md) exercises fresh account creation, real SMTP verification/reset, MFA, replay, rollback and recovery across external installed apps. It complements seeded-login, OIDC/SAML, CLI/OpenAPI and Docker acceptance; it does not replace those assertions.

@@ -41,7 +41,7 @@ async function consumeOneTimeToken(
   }
 
   const dialect = currentSqlDialect();
-  const consumedAt = now.toISOString();
+  const consumedAt = dialect.timestampValue(now);
   const hash = hashOneTimeToken(token);
   const returning = dialect.returningClause("user_id");
   const updated = await sql.unsafe<Record<string, unknown>>(
@@ -86,7 +86,7 @@ async function revokeUserSessions(
   const versionUpdate = options.incrementAuthVersion ? ", auth_version = auth_version + 1" : "";
   await sql.unsafe(
     `UPDATE users SET session_valid_after = ${dialect.placeholder(1)}${versionUpdate} WHERE id = ${dialect.placeholder(2)}`,
-    [new Date().toISOString(), userId],
+    [dialect.timestampValue(new Date()), userId],
   );
 
   await deleteOptionalCredentials(sql, "sessions", userId);

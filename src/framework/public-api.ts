@@ -301,6 +301,7 @@ export { createSqliteConnection } from "../core/database/sqliteConnection.ts";
 export { defineTable } from "../core/database/table.ts";
 export type { TransactionOptions } from "../core/database/transaction.ts";
 export {
+  afterCommit,
   hasActiveTransaction,
   isActiveTransactionConnection,
   requestTransactionRollback,

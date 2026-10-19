@@ -142,7 +142,8 @@ describe("MySQL portability", () => {
       "--yes",
     ]);
     const mysqlAuth = await readFile(join(mysqlApp, "src/modules/auth/index.ts"), "utf8");
-    expect(mysqlAuth).toContain('.slice(0, 19).replace("T", " ")');
+    expect(mysqlAuth).toContain("expires_at: sqlTimestamp(expiresAt)");
+    expect(mysqlAuth).toContain("email_verified_at: sqlTimestamp()");
 
     const pgApp = generateFromArgs(root, [
       "pgtime",
@@ -153,7 +154,8 @@ describe("MySQL portability", () => {
       "--yes",
     ]);
     const pgAuth = await readFile(join(pgApp, "src/modules/auth/index.ts"), "utf8");
-    expect(pgAuth).toContain("new Date().toISOString()");
+    expect(pgAuth).toContain("expires_at: sqlTimestamp(expiresAt)");
+    expect(pgAuth).toContain("email_verified_at: sqlTimestamp()");
     expect(pgAuth).not.toContain('.slice(0, 19).replace("T", " ")');
   });
 
@@ -423,6 +425,43 @@ describe("generated API docs", () => {
     expect(docs).toContain("/api/v1/auth/me");
     expect(docs).not.toContain("/api/auth/token");
   });
+
+  for (const auth of [
+    "headers",
+    "cookie",
+    "token",
+    "jwt",
+    "cookie-token",
+    "cookie-token-jwt",
+  ] as const) {
+    test(`${auth} API documentation only advertises emitted auth routes and neutral registration`, async () => {
+      const root = await tempDir();
+      const app = generateFromArgs(root, [
+        "docs-stack",
+        "--frontend=api",
+        `--auth=${auth}`,
+        "--email-verification",
+        "--yes",
+      ]);
+      const docs = await readFile(join(app, "docs/API.md"), "utf8");
+      const source =
+        auth === "headers" ? "" : await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+      for (const row of docs.matchAll(/\| `(GET|POST)` \| `([^`]+)`/g)) {
+        const path = row[2];
+        if (!path?.startsWith("/api/")) continue;
+        expect(source).toContain(`"${path}":`);
+      }
+      const json = auth.includes("token") || auth === "jwt";
+      expect(docs.includes("`POST` | `/api/v1/auth/register`")).toBe(json);
+      if (json) expect(docs).toContain("neutral `{ ok: true }`");
+      if (auth === "cookie") {
+        expect(docs).toContain("POST /api/v1/auth/login");
+        expect(docs).not.toContain("`GET` | `/`");
+        expect(docs).not.toContain("`GET` | `/login`");
+        expect(docs).not.toContain("/api/auth/token");
+      }
+    });
+  }
 
   test("metrics docs appear only when the extra is on", async () => {
     const root = await tempDir();

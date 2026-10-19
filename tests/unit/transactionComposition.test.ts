@@ -10,7 +10,11 @@ import {
 } from "@getstrata/core/database/boundConnection";
 import { repositoryConnection } from "@getstrata/core/database/repositoryConnection";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
-import { runInTransaction } from "@getstrata/core/database/transaction";
+import {
+  afterCommit,
+  hasActiveTransaction,
+  runInTransaction,
+} from "@getstrata/core/database/transaction";
 import { dispatchModelEvent, eventBus } from "@getstrata/core/events";
 import { withErrorHandling, withJsonErrorHandling } from "@getstrata/core/http/response";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -45,6 +49,85 @@ describe("transaction composition", () => {
     resetBoundDatabaseConnection();
     connection.close();
     restoreEnvVar("FRONTEND_MODE", previousMode);
+  });
+
+  test("afterCommit executes outside a transaction and waits for async work", async () => {
+    let completed = false;
+    await afterCommit(async () => {
+      await Promise.resolve();
+      completed = true;
+    });
+    expect(completed).toBe(true);
+    await expect(
+      afterCommit(() => {
+        throw new Error("external failure");
+      }),
+    ).rejects.toThrow("external failure");
+  });
+
+  test("afterCommit waits for the outer commit and discards rolled-back savepoint callbacks", async () => {
+    const effects: string[] = [];
+    await runInTransaction(async () => {
+      await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
+      await afterCommit(async () => {
+        expect(hasActiveTransaction()).toBe(false);
+        // A new transaction must be possible, rather than reusing a released handle.
+        await runInTransaction(async () =>
+          repositoryConnection.unsafe("INSERT INTO effects VALUES (2)"),
+        );
+        effects.push("outer");
+      });
+      await expect(
+        runInTransaction(async () => {
+          await afterCommit(() => {
+            effects.push("rolled back");
+          });
+          throw new Error("savepoint failure");
+        }),
+      ).rejects.toThrow("savepoint failure");
+      await runInTransaction(async () => {
+        await afterCommit(() => {
+          effects.push("nested");
+        });
+      });
+      expect(effects).toEqual([]);
+    });
+    expect(effects).toEqual(["outer", "nested"]);
+    expect(await connection.unsafe("SELECT value FROM effects ORDER BY value")).toEqual([
+      { value: 1 },
+      { value: 2 },
+    ]);
+  });
+
+  test("afterCommit never executes on outer rollback or SQL failure", async () => {
+    let count = 0;
+    for (const mode of ["outer", "sql"]) {
+      await expect(
+        runInTransaction(async () => {
+          await runInTransaction(async () => {
+            await afterCommit(() => {
+              count++;
+            });
+          });
+          if (mode === "sql")
+            await repositoryConnection.unsafe("INSERT INTO missing_table VALUES (1)");
+          throw new Error(mode);
+        }),
+      ).rejects.toThrow();
+    }
+    expect(count).toBe(0);
+  });
+
+  test("afterCommit failure reports an error without reverting committed database effects", async () => {
+    await expect(
+      runInTransaction(async () => {
+        await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
+        await afterCommit(() => {
+          throw new Error("SMTP unavailable");
+        });
+      }),
+    ).rejects.toThrow("SMTP unavailable");
+    expect(await connection.unsafe("SELECT value FROM effects")).toEqual([{ value: 1 }]);
   });
 
   test("implicit repository queries use the transaction rather than the pool", async () => {
