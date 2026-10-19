@@ -3,7 +3,6 @@ import {
   authUsesJwt,
   authUsesToken,
   htmlAuthKit,
-  nowTimestampLiteral,
   type StarterLayers,
   usesTenantTable,
 } from "./types.ts";
@@ -79,7 +78,9 @@ function renderAuthModule(layers: StarterLayers): string | null {
   if (authUsesJwt(layers.auth)) {
     imports.push(`import { jwtTtlSeconds, signJwt } from "@getstrata/core/auth/jwt";`);
   }
-  imports.push(`import { runInTransaction } from "@getstrata/core/database/transaction";`);
+  imports.push(
+    `import { afterCommit, runInTransaction } from "@getstrata/core/database/transaction";`,
+  );
   imports.push(`import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";`);
   imports.push(
     `import { AUTH_ONE_TIME_PURPOSES, consumeOneTimeToken, generateOneTimeToken, hashOneTimeToken, revokeUserSessions as revokeStoredUserSessions } from "@getstrata/core/auth/oneTimeToken";`,
@@ -96,9 +97,9 @@ function renderAuthModule(layers: StarterLayers): string | null {
     `import { emailRule, minLength, required, stringRule, validateObject } from "@getstrata/core/validation/rules";`,
   );
   imports.push(`import { parseJsonBody } from "@getstrata/core/http/validation";`);
+  imports.push(`import { sqlTimestamp } from "@getstrata/core/database/dialect";`);
   if (authUsesToken(layers.auth)) {
     imports.push(`import { hashApiToken } from "@getstrata/core/auth/tokenHash";`);
-    imports.push(`import { sqlTimestamp } from "@getstrata/core/database/dialect";`);
     imports.push(
       `import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";`,
     );
@@ -208,7 +209,7 @@ async function runAuthWrite<T>(identifier: string | number, callback: () => Prom
   return await runWithMigrationBypassForIdentifier(identifier, callback);
 }
 
-async function issueSignedAuthMail(to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
+async function prepareSignedAuthMail(to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
   const issued = generateOneTimeToken();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   await runAuthWrite(userId, async () => {
@@ -216,15 +217,16 @@ async function issueSignedAuthMail(to: string, subject: string, path: string, pu
       purpose,
       user_id: userId,
       token_hash: issued.hash,
-      expires_at: expiresAt.toISOString(),
+      expires_at: sqlTimestamp(expiresAt),
     });
   });
   const link = absoluteTemporarySignedUrl(path, 3600, { ...extra, token: issued.plain });
-  await mailer().send({
-    to,
-    subject,
-    body: \`\${subject}\\n\\n\${link}\\n\`,
-  });
+  return { to, subject, body: \`\${subject}\\n\\n\${link}\\n\` };
+}
+
+async function issueSignedAuthMail(to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
+  const message = await prepareSignedAuthMail(to, subject, path, purpose, userId, extra);
+  await afterCommit(() => mailer().send(message));
 }
 
 async function consumeSignedAuthToken(request: Request, purpose: string): Promise<number | null> {
@@ -251,7 +253,7 @@ async function completeSignedEmailVerification(request: Request): Promise<boolea
     await runAuthWrite(userId, async () => {
       const user = await User.find(userId);
       if (!user) throw new Error("Verification account no longer exists.");
-      await user.update({ email_verified_at: ${nowTimestampLiteral(layers.database)} });
+      await user.update({ email_verified_at: sqlTimestamp() });
     });
     return true;
   });
@@ -420,22 +422,16 @@ async function completeBrowserSsoLogin(
               return privateJsonResponse({ ok: true }, { status: 201 });
             }
             const hashed = await hashPassword(password);
-            await runAuthWrite(email, async () => {
-              await User.create({
+            ${verify ? "const verificationMail = " : ""}await runAuthWrite(email, () => runInTransaction(async () => {
+              ${verify ? "const created = " : ""}await User.create({
                 name,
                 email,
                 password: hashed,
                 is_admin: false,${tenantCreateField}
               });
-            });
-            const created = await starterAuthDirectory.findByEmail?.(email);
-            ${
-              verify
-                ? `if (created) {
-              await issueSignedAuthMail(email, "Verify your email", "/api/v1/auth/verify-email", AUTH_ONE_TIME_PURPOSES.emailVerify, created.id, { id: String(created.id) });
-            }`
-                : ""
-            }
+              ${verify ? `return prepareSignedAuthMail(email, "Verify your email", "/api/v1/auth/verify-email", AUTH_ONE_TIME_PURPOSES.emailVerify, Number(created.get("id")), { id: String(created.get("id")) });` : ""}
+            }));
+            ${verify ? "// Persist account and token atomically; SMTP follows the outermost commit, including request RLS.\n            await afterCommit(() => mailer().send(verificationMail));" : ""}
             return privateJsonResponse({ ok: true }, { status: 201 });
           }))),
         },`
@@ -757,13 +753,7 @@ async function completeBrowserSsoLogin(
                 { level: "success", message: "If that email is available, continue from the sign-in page." },
               );`;
 
-  const verifyRegisterBranch = verify
-    ? `await issueSignedAuthMail(email, "Verify your email", "/email/verify", AUTH_ONE_TIME_PURPOSES.emailVerify, insertedId, { id: String(insertedId) });
-              return flashResponse(
-                redirectTo("/login"),
-                { level: "success", message: "If that email is available, continue from the sign-in page." },
-              );`
-    : `return flashResponse(
+  const verifyRegisterBranch = `return flashResponse(
                 redirectTo("/login"),
                 { level: "success", message: "If that email is available, continue from the sign-in page." },
               );`;
@@ -816,21 +806,17 @@ async function completeBrowserSsoLogin(
                 ${registerSuccessExisting}
               }
               const hashed = await hashPassword(password);
-              await runAuthWrite(email, async () => {
-                await User.create({
+              ${verify ? "const verificationMail = " : ""}await runAuthWrite(email, () => runInTransaction(async () => {
+                ${verify ? "const created = " : ""}await User.create({
                   name,
                   email,
                   password: hashed,
                   is_admin: false,${tenantCreateField}
                 });
-              });
-              ${
-                verify
-                  ? `const created = await starterAuthDirectory.findByEmail?.(email);
-              const insertedId = created?.id ?? 0;
-              ${verifyRegisterBranch}`
-                  : verifyRegisterBranch
-              }
+                ${verify ? `return prepareSignedAuthMail(email, "Verify your email", "/email/verify", AUTH_ONE_TIME_PURPOSES.emailVerify, Number(created.get("id")), { id: String(created.get("id")) });` : ""}
+              }));
+              ${verify ? "// Persist account and token atomically; SMTP follows the outermost commit, including request RLS.\n              await afterCommit(() => mailer().send(verificationMail));" : ""}
+              ${verifyRegisterBranch}
             },
             async (request) =>
               views.render("register.eta", { layout: { title: "Create account" }, errors: { form: "Too many registration attempts. Try again shortly." }, name: "", email: "", password: "" }, { request, status: 429 }),

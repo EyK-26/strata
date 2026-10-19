@@ -1,0 +1,82 @@
+/** Risk-based combinations: each engine, frontend, tenant mode and credential mode.
+ * Not an exhaustive Cartesian matrix; failures remain individually visible. */
+export const starterJourneyProfiles = [
+  {
+    name: "mysql-htmx-cookie-none",
+    database: "mysql",
+    frontend: "server-htmx",
+    auth: "cookie",
+    tenancy: "none",
+  },
+  {
+    name: "mysql-hybrid-combined-column",
+    database: "mysql",
+    frontend: "hybrid",
+    auth: "cookie-token-jwt",
+    tenancy: "column",
+  },
+  {
+    name: "sqlite-htmx-cookie-none",
+    database: "sqlite",
+    frontend: "server-htmx",
+    auth: "cookie",
+    tenancy: "none",
+  },
+  {
+    name: "sqlite-spa-token-column",
+    database: "sqlite",
+    frontend: "spa-react",
+    auth: "token",
+    tenancy: "column",
+  },
+  {
+    name: "postgres-hybrid-combined-rls",
+    database: "postgres",
+    frontend: "hybrid",
+    auth: "cookie-token-jwt",
+    tenancy: "rls",
+  },
+  {
+    name: "postgres-api-jwt-none",
+    database: "postgres",
+    frontend: "api",
+    auth: "jwt",
+    tenancy: "none",
+  },
+  { name: "mysql-api-jwt-none", database: "mysql", frontend: "api", auth: "jwt", tenancy: "none" },
+  {
+    name: "mysql-spa-token-column",
+    database: "mysql",
+    frontend: "spa-react",
+    auth: "token",
+    tenancy: "column",
+  },
+  {
+    name: "sqlite-hybrid-cookie-token-column",
+    database: "sqlite",
+    frontend: "hybrid",
+    auth: "cookie-token",
+    tenancy: "column",
+  },
+  {
+    name: "sqlite-api-jwt-none",
+    database: "sqlite",
+    frontend: "api",
+    auth: "jwt",
+    tenancy: "none",
+  },
+  {
+    name: "postgres-htmx-cookie-none",
+    database: "postgres",
+    frontend: "server-htmx",
+    auth: "cookie",
+    tenancy: "none",
+  },
+  {
+    name: "postgres-spa-token-column",
+    database: "postgres",
+    frontend: "spa-react",
+    auth: "token",
+    tenancy: "column",
+  },
+] as const;

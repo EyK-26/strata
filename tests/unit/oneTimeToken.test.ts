@@ -22,6 +22,33 @@ describe("oneTimeToken", () => {
     expect(AUTH_ONE_TIME_PURPOSES.emailVerify).toBe("email_verify");
   });
 
+  for (const driver of ["pgsql", "mysql", "sqlite"] as const) {
+    test(`${driver} token consumption and revocation bind dialect-compatible timestamps`, async () => {
+      const now = new Date("2026-10-19T09:25:53.338Z");
+      const calls: { query: string; params: readonly unknown[] }[] = [];
+      const sql = {
+        async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
+          calls.push({ query, params });
+          if (query.includes("to_regclass")) return [{ relation: params[0] }] as T[];
+          return [{ user_id: 7, affectedRows: 1 }] as T[];
+        },
+      };
+      await runWithSqlDialect(driver, async () => {
+        expect(await consumeOneTimeToken(sql, "email_verify", "test", now)).toBe(7);
+        await revokeUserSessions(sql, 7, { incrementAuthVersion: true });
+      });
+      const expected = driver === "mysql" ? "2026-10-19 09:25:53" : now.toISOString();
+      expect(calls[0]?.params[0]).toBe(expected);
+      expect(calls[0]?.params[3]).toBe(expected);
+      const revoked = calls.find((call) => call.query.includes("session_valid_after"));
+      expect(revoked?.query).toContain("auth_version = auth_version + 1");
+      expect(revoked?.params[1]).toBe(7);
+      expect(revoked?.params[0]).toMatch(
+        driver === "mysql" ? /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/ : /^\d{4}-.*Z$/,
+      );
+    });
+  }
+
   test("consumeOneTimeToken returns null for an empty token", async () => {
     const sql = {
       async unsafe<T>(): Promise<T[]> {

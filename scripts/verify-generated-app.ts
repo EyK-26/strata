@@ -61,6 +61,27 @@ const CASES: Array<{ name: string; flags: string[] }> = [
     flags: ["--frontend", "api", "--database", "mysql", "--auth", "token"],
   },
   {
+    name: "htmx-mysql-cookie-security-extras",
+    flags: [
+      "--frontend=server-htmx",
+      "--database=mysql",
+      "--auth=cookie",
+      "--tenancy=none",
+      "--mfa",
+      "--email-verification",
+    ],
+  },
+  {
+    name: "api-postgres-jwt-no-tenancy",
+    flags: [
+      "--frontend=api",
+      "--database=postgres",
+      "--auth=jwt",
+      "--tenancy=none",
+      "--email-verification",
+    ],
+  },
+  {
     name: "hybrid-sqlite-cookie-token",
     flags: ["--frontend", "hybrid", "--database", "sqlite", "--auth", "cookie-token"],
   },
@@ -150,10 +171,23 @@ try {
       join(appDir, "src/database-query.contract.ts"),
       `import { getSql } from "./bootstrap/database.ts";
 export async function queryContract(): Promise<void> {
-  ${testCase.flags.includes("postgres") ? "" : "// @ts-expect-error This generated adapter does not expose tagged SQL."}
+  ${testCase.flags.includes("postgres") || testCase.flags.includes("--database=postgres") ? "" : "// @ts-expect-error This generated adapter does not expose tagged SQL."}
   await getSql()\`SELECT 1 AS value WHERE 1 = \${1}\`;
   const rows: Array<{value: number}> = await getSql().unsafe<{value: number}>("SELECT 1 AS value");
   void rows;
+}
+`,
+    );
+    await writeFile(
+      join(appDir, "src/after-commit.contract.ts"),
+      `import { afterCommit } from "@getstrata/core/database/transaction";
+export async function commitContract(): Promise<void> {
+  await afterCommit(() => {});
+  await afterCommit(async () => {});
+  // @ts-expect-error Commit callbacks must not require arguments.
+  await afterCommit((request: Request) => {});
+  // @ts-expect-error Commit callbacks return void, not a deferred response.
+  await afterCommit(() => new Response());
 }
 `,
     );

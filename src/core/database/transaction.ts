@@ -1,4 +1,4 @@
-import { runWithDeferredModelEvents } from "../events/deferredModelEvents.ts";
+import { afterCommit, runWithDeferredModelEvents } from "../events/deferredModelEvents.ts";
 import { createAsyncContextStore } from "../runtime/asyncContextStore.ts";
 import {
   observeTransactionAcquisition,
@@ -182,7 +182,12 @@ export {
   renderTransactionAcquisitionMetrics,
 } from "./acquisitionMetrics.ts";
 export type { TransactionOptions };
+/** Register process-local work for the successful outermost commit. Awaiting
+ * registration does not execute it early inside an active transaction. Outside
+ * a managed transaction it runs immediately. Failure propagates after commit;
+ * committed writes cannot roll back. Use the SQL outbox for durable delivery. */
 export {
+  afterCommit,
   hasActiveTransaction,
   isActiveTransactionConnection,
   requestTransactionRollback,

@@ -29,6 +29,7 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   ],
   "metrics/prometheus": ["PrometheusRegistry", "prometheusRegistry", "HTTP_DURATION_BUCKETS_MS"],
   "database/transaction": [
+    "afterCommit",
     "hasActiveTransaction",
     "runInTransaction",
     "createTransactionAcquisitionMetrics",

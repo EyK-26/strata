@@ -142,7 +142,8 @@ describe("MySQL portability", () => {
       "--yes",
     ]);
     const mysqlAuth = await readFile(join(mysqlApp, "src/modules/auth/index.ts"), "utf8");
-    expect(mysqlAuth).toContain('.slice(0, 19).replace("T", " ")');
+    expect(mysqlAuth).toContain("expires_at: sqlTimestamp(expiresAt)");
+    expect(mysqlAuth).toContain("email_verified_at: sqlTimestamp()");
 
     const pgApp = generateFromArgs(root, [
       "pgtime",
@@ -153,7 +154,8 @@ describe("MySQL portability", () => {
       "--yes",
     ]);
     const pgAuth = await readFile(join(pgApp, "src/modules/auth/index.ts"), "utf8");
-    expect(pgAuth).toContain("new Date().toISOString()");
+    expect(pgAuth).toContain("expires_at: sqlTimestamp(expiresAt)");
+    expect(pgAuth).toContain("email_verified_at: sqlTimestamp()");
     expect(pgAuth).not.toContain('.slice(0, 19).replace("T", " ")');
   });
 

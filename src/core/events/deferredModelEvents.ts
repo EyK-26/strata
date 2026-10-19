@@ -3,10 +3,8 @@ import { currentTenant, type TenantContext } from "../tenant/tenantContext";
 import { eventBus } from "./eventBus";
 
 type DeferredModelEvent = {
-  event: string;
-  payload: unknown;
   tenant: TenantContext | null;
-};
+} & ({ event: string; payload: unknown } | { callback: () => void | Promise<void> });
 
 type DeferredModelEventState = {
   frames: DeferredModelEvent[][];
@@ -45,7 +43,8 @@ function groupQueuedModelEvents(queued: DeferredModelEvent[]): DeferredModelEven
 
 async function dispatchEventBatch(batch: DeferredModelEvent[]): Promise<void> {
   for (const item of batch) {
-    await eventBus.dispatch(item.event, item.payload);
+    if ("callback" in item) await item.callback();
+    else await eventBus.dispatch(item.event, item.payload);
   }
 }
 
@@ -81,6 +80,17 @@ async function dispatchModelEvent(event: string, payload: unknown): Promise<void
   }
 
   await eventBus.dispatch(event, payload);
+}
+
+/** Internal queue shared with model events so savepoint rollback and tenant replay
+ * follow exactly the same transaction boundary. This is not durable delivery. */
+async function afterCommit(callback: () => void | Promise<void>): Promise<void> {
+  const frame = deferredModelEvents.getStore()?.frames.at(-1);
+  if (frame) {
+    frame.push({ callback, tenant: currentTenant() });
+    return;
+  }
+  await callback();
 }
 
 async function runWithDeferredModelEvents<T>(callback: () => T | Promise<T>): Promise<T> {
@@ -124,4 +134,4 @@ function onDeferredModelRollback(callback: () => void): void {
   deferredModelEvents.getStore()?.rollbackFrames.at(-1)?.push(callback);
 }
 
-export { dispatchModelEvent, onDeferredModelRollback, runWithDeferredModelEvents };
+export { afterCommit, dispatchModelEvent, onDeferredModelRollback, runWithDeferredModelEvents };

@@ -5,7 +5,6 @@ import {
   authUsesCookie,
   authUsesToken,
   type DatabaseLayer,
-  nowTimestampLiteral,
   type StarterLayers,
   usesTenantTable,
 } from "./types.ts";
@@ -436,7 +435,7 @@ function renderMigrateTs(layers: StarterLayers): string {
   const tenancyOn = usesTenantTable(layers.tenancy);
   const ph = layers.database === "postgres";
   const verifyOn = layers.extras.emailVerification && authNeedsUsers(layers.auth);
-  const verifiedNow = nowTimestampLiteral(layers.database);
+  const verifiedNow = "sqlTimestamp()";
 
   const seedTenant = tenancyOn
     ? `
@@ -481,7 +480,7 @@ function renderMigrateTs(layers: StarterLayers): string {
   const bindSql =
     seedTenant || (layers.tenancy === "rls" && layers.database === "postgres")
       ? "  const sql = getSql();\n"
-      : "";
+      : "  getSql();\n";
   const seedOpen =
     layers.tenancy === "rls" && layers.database === "postgres"
       ? "  await runWithMigrationBypass(async () => {\n"
@@ -494,13 +493,12 @@ function renderMigrateTs(layers: StarterLayers): string {
   const userImport = authNeedsUsers(layers.auth)
     ? `import { User } from "../models/User.ts";\n`
     : "";
-  const needsSqlClient =
-    Boolean(seedTenant) || (layers.tenancy === "rls" && layers.database === "postgres");
-  const databaseImport = needsSqlClient
-    ? `import { closeDatabase, getSql } from "../bootstrap/database.ts";\n`
-    : `import { closeDatabase } from "../bootstrap/database.ts";\n`;
+  const databaseImport = `import { closeDatabase, getSql } from "../bootstrap/database.ts";\n`;
 
-  return `${hashImport}${rlsBypassImport}${ensureImport(layers)}${databaseImport}import { migrateDatabase } from "@getstrata/core/database/migrations";
+  const timestampImport = verifyOn
+    ? `import { sqlTimestamp } from "@getstrata/core/database/dialect";\n`
+    : "";
+  return `${hashImport}${timestampImport}${rlsBypassImport}${ensureImport(layers)}${databaseImport}import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { Note } from "../models/Note.ts";
 ${userImport}import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
