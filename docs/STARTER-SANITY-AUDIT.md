@@ -2,6 +2,8 @@
 
 Audit date: 2026-10-19. Framework source: merged `5d6d5b62e364628a98c8aa3c7cfe04585f3a74ee`. Runtime reproductions used exact `create-strata@2.2.45` from npm and explicitly verified installed core/bootstrap/CLI 2.2.45 in disposable applications under `~/perso`. The existing user application and the shop were not edited. This is a versioned baseline, not a claim that all supported applications are qualified.
 
+**Released resolution:** [2.2.46](https://github.com/EyK-26/strata/releases/tag/v2.2.46) passed all 88 exact-published runtime scenarios. See [the final qualification below](#published-2246-qualification) and [its machine-readable results](qualification/starter-2.2.46-runtime.json). The earlier sections retain the original failures and candidate states chronologically.
+
 ## Why the previous green gate was insufficient
 
 The existing 15 authentication journeys exercise the backend directly. Their fixture provisions owned databases, supplies configuration, chooses array cache/synchronous queues, and provides an isolated ready SMTP service. They prove meaningful auth behavior and remain required, but do not prove the generated React client's behavior or the literal first-install instructions.
@@ -102,3 +104,24 @@ There are now 34 mounted browser scenarios: the original 29 plus the five cross-
 
 
 The first final integrated run passed all 2,450 unit/integration tests (the same three platform-driver skips) and 122 of 123 E2E scenarios. The remaining readiness failure was traced to the fixture replacing `localhost:3306` and then matching the prefix of its own allocated `127.0.0.1:33060` result, producing invalid port `330600`. A deterministic regression retains that exact case and longer-port non-matches for MySQL/Postgres/Redis; single-pass bounded substitution fixes the fixture without changing generated configuration or readiness assertions. All three real readiness profiles are rerun before the full gate. The failed full-suite log and deterministic reproduction remain evidence; no test is removed or skipped.
+
+
+## Published 2.2.46 qualification
+
+All fixes were merged through focused PRs and released at `4269823977e95ca53d8581cd417322bf1c84129b`. The [release workflow](https://github.com/EyK-26/strata/actions/runs/39289540465) passed the complete quality gate: 2,452 unit/integration passes, the same two Linux platform-driver skips, zero failures, and all 123 E2E scenarios without failures/skips. The equivalent local gate had 2,451 passes and the same three macOS platform skips. No new skip or reduced coverage threshold was introduced.
+
+Fresh disposable applications then used exact published `create-strata`, starter, core, bootstrap and CLI 2.2.46. All **88 scenarios passed, zero failed and zero were skipped**: 15 account journeys, 34 mounted React journeys, seven SPA-prefix scenarios including a generated Docker build, seven initial-admin reset profiles, 14 later-batch billing rollback profiles, three literal readiness profiles, two Adminer logins, two restricted-runtime MySQL migration profiles and four guest tenancy/write profiles. The [machine-readable report](qualification/starter-2.2.46-runtime.json) preserves each named outcome. This resolves the recorded starter defects within that scope; it does not turn the 2,688 structural combinations into 2,688 runtime-qualified applications.
+
+The first published run also passed all 88 functional scenarios, but a post-run inventory found three anonymous Redis volumes. Changing the fixture's Redis healthcheck recreates the service, and Compose teardown can leave an earlier anonymous mount behind. An added ownership-based teardown assertion reproduced that leak on every readiness profile. The fixture now records mounted volume IDs from its own inspected Compose project, removes only known unused mounts after teardown, refuses to remove any mounted volume, and asserts no recorded mount remains. All existing readiness and unhealthy-service assertions are retained. This is fixture cleanup, not a framework/runtime workaround, and needs no additional package release.
+
+The complete 88-scenario published matrix was rerun with those stronger cleanup assertions. Containers, volumes, networks, disposable databases and test MySQL users all returned exactly to their pre-run baselines. Both successful functional runs, the intermediate cleanup reproduction and the original 2.2.45 failures remain distinct evidence; the old reports were not replaced.
+
+Per-scenario harnesses under `scripts/verify-starter-*.ts` accept `--published=2.2.46`; the corresponding native wrappers under `tests/e2e` define the selected profiles. With the documented host services and Chromium installed, representative reproductions are:
+
+```sh
+scripts/with-host-env.sh bun scripts/verify-starter-auth-journey.ts mysql-htmx-cookie-none --published=2.2.46
+scripts/with-host-env.sh bun scripts/verify-starter-react-auth.ts --frontend=hybrid --auth=cookie-token-jwt --database=mysql --tenancy=column --dev --mfa --published=2.2.46
+scripts/with-host-env.sh bun scripts/verify-starter-readiness.ts --database=mysql --published=2.2.46
+```
+
+These are local acceptance results, not capacity measurements, production deployment qualification or a promise of zero undiscovered defects. Shop adoption remains independently held on [Bun qualification #257](https://github.com/EyK-26/strata/issues/257).
