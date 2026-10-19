@@ -31,3 +31,9 @@ for (const frontend of ["spa-react", "hybrid"]) {
 }
 for (const auth of ["cookie", "cookie-token", "cookie-token-jwt"])
   scenario("hybrid", auth, ["--mfa"]);
+
+scenario("hybrid", "cookie-token-jwt", ["--database=mysql", "--tenancy=column", "--dev", "--mfa"]);
+scenario("spa-react", "token", ["--database=mysql", "--tenancy=none"]);
+scenario("hybrid", "cookie", ["--database=postgres", "--tenancy=rls", "--dev", "--mfa"]);
+scenario("spa-react", "jwt", ["--database=postgres", "--tenancy=column"]);
+scenario("hybrid", "headers", ["--database=sqlite", "--tenancy=column", "--dev"]);

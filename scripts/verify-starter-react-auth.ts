@@ -14,13 +14,19 @@ assert.ok(frontend === "spa-react" || frontend === "hybrid");
 const dev = process.argv.includes("--dev");
 const mfa = process.argv.includes("--mfa");
 const expiry = process.argv.includes("--expiry");
+const database = process.argv.find((a) => a.startsWith("--database="))?.slice(11) ?? "sqlite";
+const tenancy = process.argv.find((a) => a.startsWith("--tenancy="))?.slice(10) ?? "none";
+assert.ok(database === "sqlite" || database === "mysql" || database === "postgres");
+assert.ok(
+  tenancy === "none" || tenancy === "column" || (tenancy === "rls" && database === "postgres"),
+);
 const publishedVersion = process.argv.find((a) => a.startsWith("--published="))?.slice(12);
 const fixture = await createGeneratedSecurityApp(
-  "sqlite",
+  database,
   [
     `--frontend=${frontend}`,
     `--auth=${auth}`,
-    "--tenancy=none",
+    `--tenancy=${tenancy}`,
     "--cache=array",
     "--queue=sync",
     "--mail=log",
@@ -53,7 +59,7 @@ const env = {
   TOKEN_HASH_PEPPER: crypto.randomUUID(),
   AUTH_DEV_HEADERS: "true",
   JWT_TTL_SECONDS: expiry ? "2" : "3600",
-  TENANCY_DRIVER: "none",
+  TENANCY_DRIVER: tenancy,
   OTEL_SDK_DISABLED: "true",
 };
 async function command(args: string[]) {
@@ -287,7 +293,7 @@ try {
       if (auth === "token") {
         await writeFile(
           join(fixture.app, "expire-token.ts"),
-          `import './src/bootstrap/preload.ts';\nimport {getSql} from './src/bootstrap/database.ts';getSql();\nconst {ApiToken}=await import('./src/models/ApiToken.ts');\nfor(const token of await ApiToken.query().get())await token.update({expires_at:'2000-01-01 00:00:00'});\nconst {closeDatabase}=await import('./src/bootstrap/database.ts');await closeDatabase();`,
+          `import './src/bootstrap/preload.ts';\nimport {getSql} from './src/bootstrap/database.ts';getSql();\nconst {ApiToken}=await import('./src/models/ApiToken.ts');\nconst {runWithTenantDatabase}=await import('@getstrata/core/tenant/tenantDatabaseScope');await runWithTenantDatabase({id:1,slug:'default'},async()=>{for(const token of await ApiToken.query().get())await token.update({expires_at:'2000-01-01 00:00:00'});});\nconst {closeDatabase}=await import('./src/bootstrap/database.ts');await closeDatabase();`,
         );
         await command(["expire-token.ts"]);
       } else await Bun.sleep(2200);
@@ -308,7 +314,7 @@ try {
     // Administrative account state changes use only the generated model and public ORM.
     await writeFile(
       join(fixture.app, "account-state.ts"),
-      `import './src/bootstrap/preload.ts';\nimport {getSql} from './src/bootstrap/database.ts';getSql();\nconst {User}=await import('./src/models/User.ts');\nconst user=await User.query().where({email:'demo@example.com'}).first();if(!user)throw new Error('Missing fixture user');await user.update({is_active:process.argv.includes('--active') ? 1 : 0});\nconst {closeDatabase}=await import('./src/bootstrap/database.ts');await closeDatabase();`,
+      `import './src/bootstrap/preload.ts';\nimport {getSql} from './src/bootstrap/database.ts';getSql();\nconst {User}=await import('./src/models/User.ts');\nconst {runWithTenantDatabase}=await import('@getstrata/core/tenant/tenantDatabaseScope');await runWithTenantDatabase({id:1,slug:'default'},async()=>{const user=await User.query().where({email:'demo@example.com'}).first();if(!user)throw new Error('Missing fixture user');await user.update({is_active:process.argv.includes('--active')});});\nconst {closeDatabase}=await import('./src/bootstrap/database.ts');await closeDatabase();`,
     );
     await command(["account-state.ts"]);
     const revoked = await page.evaluate(async () => {
@@ -435,7 +441,7 @@ try {
   }
   assert.deepEqual(errors, [], "Mounted React must have no runtime errors");
   console.log(
-    `PASS mounted ${frontend}/${auth}${dev ? "/dev" : ""}${mfa ? "/mfa" : ""}${expiry ? "/expiry" : ""}: login, wrong password where applicable, real guard identity, reload lifetime, logout and no credential persistence`,
+    `PASS mounted ${database}/${tenancy}/${frontend}/${auth}${dev ? "/dev" : ""}${mfa ? "/mfa" : ""}${expiry ? "/expiry" : ""}: login, wrong password where applicable, real guard identity, reload lifetime, logout and no credential persistence`,
   );
 } finally {
   process.removeListener("SIGTERM", terminate);

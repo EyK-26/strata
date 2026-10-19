@@ -75,3 +75,11 @@ The initial 6/6 browser baseline, dev 403, hybrid MFA 404 and expanded 25-pass/4
 The focused #264 fix adds a shared validated namespace and exercises both React frontends at `/app`, `/workspace` and `/team/portal`. Each scenario runs the literal generated install/build/dev/preview scripts, fetches real JS/CSS with content-type checks, checks nested history requests and API isolation, and checks that private configuration is absent from bundles. A separate nested-prefix scenario builds the generated Docker frontend stage. Candidate-only archives are copied into its build context; published acceptance uses the unmodified Dockerfile and npm dependencies.
 
 These are document/asset/server assertions, not a claim of mounted React navigation coverage. The separate #263 browser journey work supplies that missing boundary. Original 2.2.45 failures above remain the published baseline until the cumulative release is qualified.
+
+## Cross-engine browser follow-up before release
+
+The integrated candidate passed 2,416 unit/integration tests (the same three platform-driver skips) and 112 E2E tests without E2E failures/skips. Those browser cases used SQLite without tenancy. Five additional risk-based browser profiles were then added: MySQL hybrid/combined/column/dev/MFA, MySQL SPA/token, Postgres hybrid/cookie/RLS/dev/MFA, Postgres SPA/JWT/column, and SQLite hybrid/header/column/dev.
+
+Postgres RLS passed. The Postgres column failure was a fixture error: the administrative model update passed an integer to a boolean column. A typed boolean works through the SQLite binding too, so the fixture now uses a boolean uniformly; the Postgres column journey passed without a framework change.
+
+Two mechanism failures remain release blockers: [#276](https://github.com/EyK-26/strata/issues/276) (MySQL provisioning ignores the separate migration credential and tries CREATE DATABASE as the limited runtime user), and [#277](https://github.com/EyK-26/strata/issues/277) (guest-source header tenancy queries a users table that header apps deliberately omit). Keep the cumulative release on hold, fix these in focused framework changes, and rerun every native case. Do not grant runtime DDL, create fake account tables, or weaken the failing assertions.
