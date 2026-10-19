@@ -101,3 +101,14 @@ export const starterJourneyProfiles = [
     tenancy: "column",
   },
 ] as const;
+
+/** Additional same-proof contention journeys; the original 15 remain separate. */
+export const starterResetRaceProfiles = [
+  "mysql-api-cookie-none",
+  "mysql-hybrid-combined-column",
+  "sqlite-spa-cookie-column",
+  "sqlite-htmx-cookie-none",
+  "postgres-api-cookie-rls",
+  "postgres-api-jwt-none",
+  "postgres-spa-token-column",
+] as const satisfies readonly (typeof starterJourneyProfiles)[number]["name"][];

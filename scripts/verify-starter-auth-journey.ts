@@ -11,6 +11,7 @@ const selectedProfile = starterJourneyProfiles.find((item) => item.name === proc
 assert.ok(selectedProfile, "Choose a registered starter journey profile.");
 const profile = selectedProfile;
 const publishedVersion = process.argv.find((arg) => arg.startsWith("--published="))?.split("=")[1];
+const resetRace = process.argv.includes("--reset-race");
 const fixture = await createGeneratedSecurityApp(
   profile.database,
   [
@@ -572,6 +573,152 @@ try {
       "JSON recovery replay denied",
     );
     await status(await request(protectedPath), 401, "recovery replay has no session");
+  }
+  if (resetRace) {
+    // Two independent guest clients submit one genuinely mailed proof. Keep
+    // the original sequential reset/replay and MFA journey above intact.
+    const before = await readUser();
+    const beforeVersion = before.get("auth_version");
+    const beforeMfa = before.get("mfa_secret");
+    const beforeMfaEnabled = before.get("mfa_enabled");
+    const beforeRecovery = before.get("mfa_recovery_codes");
+    cookie = csrf.cookie;
+    const unknownEmail = `absent-${crypto.randomUUID()}@example.test`;
+    const forgotPath = browser ? "/forgot-password" : "/api/v1/auth/forgot-password";
+    const unknownResponse = await status(
+      await request(forgotPath, { email: unknownEmail }),
+      browser ? 302 : 200,
+      "unknown account reset remains neutral",
+    );
+    assert.equal(await deliveredTo(unknownEmail), 0);
+    assert.equal(
+      await runWithMigrationBypass(() => User.where({ email: unknownEmail }).count()),
+      0,
+    );
+    const knownResponse = await status(
+      await request(forgotPath, { email }),
+      browser ? 302 : 200,
+      "new reset intent for competing clients",
+    );
+    if (!browser) assert.deepEqual(JSON.parse(unknownResponse), JSON.parse(knownResponse));
+    const competingReset = await mailLink("Reset your password");
+    assert.notEqual(competingReset, reset, "Each issuance must carry a new proof.");
+    const pendingResetProofs = () =>
+      runWithMigrationBypass(() =>
+        AuthOneTimeToken.where({
+          user_id: registered.get("id"),
+          purpose: "password_reset",
+        })
+          .whereNull("consumed_at")
+          .count(),
+      );
+    assert.equal(await pendingResetProofs(), 1);
+    // Reject the actual model write after proof consumption, rather than
+    // replacing a reset handler or transaction implementation. A retry must
+    // retain its proof when the encompassing business write rolls back.
+    let rejectPasswordWrite = true;
+    let rejectedWrites = 0;
+    User.observe({
+      updating() {
+        if (rejectPasswordWrite) {
+          rejectedWrites++;
+          throw new Error("injected reset password persistence failure");
+        }
+      },
+    });
+    try {
+      await status(
+        await request(competingReset, { password: "Rejected!Password789", email }),
+        500,
+        "reset persistence failure must roll back proof consumption",
+      );
+    } finally {
+      rejectPasswordWrite = false;
+    }
+    assert.equal(rejectedWrites, 1, "The actual reset model write must reach the fault boundary.");
+    const rolledBack = await readUser();
+    assert.equal(rolledBack.get("password"), before.get("password"));
+    assert.equal(rolledBack.get("auth_version"), beforeVersion);
+    assert.equal(rolledBack.get("mfa_secret"), beforeMfa);
+    assert.equal(rolledBack.get("mfa_enabled"), beforeMfaEnabled);
+    assert.deepEqual(rolledBack.get("mfa_recovery_codes"), beforeRecovery);
+    assert.equal(await pendingResetProofs(), 1, "A rejected write must leave its proof usable.");
+    const guests = await Promise.all([jsonCsrfHeaders(origin), jsonCsrfHeaders(origin)]);
+    const passwords = ["Competing!PasswordLeft123", "Competing!PasswordRight456"];
+    const responses = await Promise.all(
+      guests.map((guest, index) => {
+        const password = passwords[index];
+        assert.ok(password);
+        return fetch(origin + competingReset, {
+          method: "POST",
+          redirect: "manual",
+          signal: AbortSignal.timeout(10000),
+          headers: {
+            ...guest.headers,
+            accept: browser ? "text/html" : "application/json",
+            "content-type": browser ? "application/x-www-form-urlencoded" : "application/json",
+          },
+          body: browser
+            ? new URLSearchParams({ _token: guest.token, password, email })
+            : JSON.stringify({ password, email }),
+        });
+      }),
+    );
+    const successStatus = browser ? 302 : 200;
+    const rejectedStatus = browser ? 200 : 403;
+    assert.deepEqual(
+      responses.map((response) => response.status).sort(),
+      [successStatus, rejectedStatus].sort(),
+      "Exactly one client may consume a reset proof.",
+    );
+    for (const response of responses) {
+      const body = await status(response, response.status, "competing reset response");
+      if (response.status === rejectedStatus) assert.match(body, /Invalid or expired reset link/);
+      else if (browser) assert.equal(response.headers.get("location"), "/login");
+    }
+    const winner = responses.findIndex((response) => response.status === successStatus);
+    const persisted = await readUser();
+    for (const [index, password] of passwords.entries()) {
+      assert.equal(
+        await Bun.password.verify(password, persisted.get("password")),
+        index === winner,
+        "Only the successful HTTP result may determine the persisted password.",
+      );
+    }
+    assert.equal(
+      persisted.get("auth_version"),
+      beforeVersion + 1,
+      "One proof advances revocation exactly once.",
+    );
+    assert.equal(
+      persisted.get("mfa_secret"),
+      beforeMfa,
+      "Password reset must preserve MFA enrollment.",
+    );
+    assert.deepEqual(persisted.get("mfa_recovery_codes"), beforeRecovery);
+    assert.equal(persisted.get("mfa_enabled"), beforeMfaEnabled);
+    assert.equal(
+      await runWithMigrationBypass(() =>
+        AuthOneTimeToken.where({
+          user_id: registered.get("id"),
+          purpose: "password_reset",
+        })
+          .whereNull("consumed_at")
+          .count(),
+      ),
+      0,
+    );
+    await protectedStatus(401);
+    cookie = csrf.cookie;
+    await status(
+      await request(competingReset, { password: replacement, email }),
+      rejectedStatus,
+      "neither competing client leaves a reusable reset proof",
+    );
+    assert.equal((await readUser()).get("auth_version"), beforeVersion + 1);
+    console.log(
+      `PASS ${profile.name}: concurrent reset has one winner, neutral unknown account, persisted password/epoch/proof and MFA preservation`,
+    );
   }
   cookie = csrf.cookie;
   const raceEmail = `concurrent-${crypto.randomUUID()}@example.test`;
