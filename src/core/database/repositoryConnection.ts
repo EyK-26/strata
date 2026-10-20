@@ -1,6 +1,6 @@
-import type { DatabaseConnection, SqlDatabaseConnection } from "./baseRepository";
 import { getBoundDatabaseConnection } from "./boundConnection";
 import { getActiveDatabaseConnection } from "./connectionContext";
+import type { DatabaseConnection, SqlDatabaseConnection } from "./connectionContracts";
 import { getDefaultDatabaseQuery } from "./defaultConnection";
 import { currentSqlDialect } from "./dialect";
 

@@ -1,7 +1,7 @@
 import type BaseRepository from "./baseRepository.ts";
-import type { DatabaseConnection } from "./baseRepository.ts";
 import { getBoundDatabaseConnection } from "./boundConnection.ts";
 import { getActiveDatabaseConnection, hasActiveDatabaseConnection } from "./connectionContext.ts";
+import type { DatabaseConnection } from "./connectionContracts.ts";
 import { isDefaultDatabaseConnection } from "./defaultConnection.ts";
 import { currentSqlDialect } from "./dialect.ts";
 import { projectPluck } from "./pluck.ts";
