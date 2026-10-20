@@ -1,0 +1,701 @@
+{
+  "version": "2.2.47",
+  "releaseCommit": "089cbfbbe09c4562cf63eb41bb23d6449c22dc55",
+  "harnessCommit": "089cbfbbe09c4562cf63eb41bb23d6449c22dc55",
+  "releaseUrl": "https://github.com/EyK-26/strata/releases/tag/v2.2.47",
+  "releaseWorkflow": "https://github.com/EyK-26/strata/actions/runs/39413995242",
+  "completedAt": "2026-10-20T11:54:51.620Z",
+  "environment": {
+    "bun": "1.4.3",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "deployment": "local disposable applications"
+  },
+  "packages": {
+    "create-strata": "2.2.47",
+    "@getstrata/starter": "2.2.47",
+    "@getstrata/core": "2.2.47",
+    "@getstrata/bootstrap": "2.2.47",
+    "@getstrata/cli": "2.2.47"
+  },
+  "installation": "Exact published create-strata generator and starter; app core/bootstrap/cli pinned and verified at 2.2.47. No candidate archives, node_modules patches or application mechanism workarounds.",
+  "expected": 107,
+  "executed": 107,
+  "passed": 107,
+  "failed": 0,
+  "skipped": 0,
+  "groups": {
+    "accountJourneys": 15,
+    "mountedReact": 34,
+    "spaPrefixesIncludingDocker": 7,
+    "initialAdminReset": 7,
+    "billingRollback": 14,
+    "literalReadiness": 3,
+    "adminer": 2,
+    "restrictedMysqlMigration": 2,
+    "guestTenancy": 4,
+    "resetRollbackAndContention": 7,
+    "installedModule": 12
+  },
+  "cleanup": {
+    "ownedPostgresDatabasesBefore": 0,
+    "ownedPostgresDatabasesAfter": 0,
+    "ownedMysqlDatabasesBefore": 0,
+    "ownedMysqlDatabasesAfter": 0,
+    "ownedMysqlUsersBefore": 0,
+    "ownedMysqlUsersAfter": 0,
+    "containerBaselineRestored": true,
+    "volumeBaselineRestored": true,
+    "networkBaselineRestored": true,
+    "unownedResourcesRemoved": false
+  },
+  "limits": [
+    "Risk-based profiles, not exhaustive Cartesian runtime coverage.",
+    "Module conditional-write checks do not qualify versioned optimistic concurrency.",
+    "Shop adoption remains independently held for Bun qualification #257."
+  ],
+  "results": [
+    {
+      "name": "starter journey mysql-api-cookie-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 7457
+    },
+    {
+      "name": "starter journey sqlite-spa-cookie-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5361
+    },
+    {
+      "name": "starter journey postgres-api-cookie-rls: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6074
+    },
+    {
+      "name": "starter journey mysql-htmx-cookie-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5378
+    },
+    {
+      "name": "starter journey mysql-hybrid-combined-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5451
+    },
+    {
+      "name": "starter journey sqlite-htmx-cookie-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5013
+    },
+    {
+      "name": "starter journey sqlite-spa-token-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3349
+    },
+    {
+      "name": "starter journey postgres-hybrid-combined-rls: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5800
+    },
+    {
+      "name": "starter journey postgres-api-jwt-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3608
+    },
+    {
+      "name": "starter journey mysql-api-jwt-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3521
+    },
+    {
+      "name": "starter journey mysql-spa-token-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3546
+    },
+    {
+      "name": "starter journey sqlite-hybrid-cookie-token-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5068
+    },
+    {
+      "name": "starter journey sqlite-api-jwt-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3253
+    },
+    {
+      "name": "starter journey postgres-htmx-cookie-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5405
+    },
+    {
+      "name": "starter journey postgres-spa-token-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3616
+    },
+    {
+      "name": "mounted generated spa-react/headers uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2759
+    },
+    {
+      "name": "mounted generated spa-react/headers--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2206
+    },
+    {
+      "name": "mounted generated spa-react/cookie uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2940
+    },
+    {
+      "name": "mounted generated spa-react/cookie--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3071
+    },
+    {
+      "name": "mounted generated spa-react/token uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3543
+    },
+    {
+      "name": "mounted generated spa-react/token--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3767
+    },
+    {
+      "name": "mounted generated spa-react/jwt uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3252
+    },
+    {
+      "name": "mounted generated spa-react/jwt--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3388
+    },
+    {
+      "name": "mounted generated spa-react/cookie-token uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2976
+    },
+    {
+      "name": "mounted generated spa-react/cookie-token--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3111
+    },
+    {
+      "name": "mounted generated spa-react/cookie-token-jwt uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2998
+    },
+    {
+      "name": "mounted generated spa-react/cookie-token-jwt--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3067
+    },
+    {
+      "name": "mounted generated spa-react/jwt--expiry uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5771
+    },
+    {
+      "name": "mounted generated hybrid/headers uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1935
+    },
+    {
+      "name": "mounted generated hybrid/headers--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2069
+    },
+    {
+      "name": "mounted generated hybrid/cookie uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2930
+    },
+    {
+      "name": "mounted generated hybrid/cookie--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3103
+    },
+    {
+      "name": "mounted generated hybrid/token uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3627
+    },
+    {
+      "name": "mounted generated hybrid/token--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3781
+    },
+    {
+      "name": "mounted generated hybrid/jwt uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3174
+    },
+    {
+      "name": "mounted generated hybrid/jwt--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3406
+    },
+    {
+      "name": "mounted generated hybrid/cookie-token uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2947
+    },
+    {
+      "name": "mounted generated hybrid/cookie-token--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3075
+    },
+    {
+      "name": "mounted generated hybrid/cookie-token-jwt uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2960
+    },
+    {
+      "name": "mounted generated hybrid/cookie-token-jwt--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3101
+    },
+    {
+      "name": "mounted generated hybrid/jwt--expiry uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5765
+    },
+    {
+      "name": "mounted generated hybrid/cookie--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4142
+    },
+    {
+      "name": "mounted generated hybrid/cookie-token--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4140
+    },
+    {
+      "name": "mounted generated hybrid/cookie-token-jwt--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4057
+    },
+    {
+      "name": "mounted generated hybrid/cookie-token-jwt--database=mysql/--tenancy=column/--dev/--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4773
+    },
+    {
+      "name": "mounted generated spa-react/token--database=mysql/--tenancy=none uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3931
+    },
+    {
+      "name": "mounted generated hybrid/cookie--database=postgres/--tenancy=rls/--dev/--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4800
+    },
+    {
+      "name": "mounted generated spa-react/jwt--database=postgres/--tenancy=column uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3602
+    },
+    {
+      "name": "mounted generated hybrid/headers--database=sqlite/--tenancy=column/--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2124
+    },
+    {
+      "name": "generated spa-react prefix /app works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1255
+    },
+    {
+      "name": "generated spa-react prefix /workspace works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1259
+    },
+    {
+      "name": "generated spa-react prefix /team/portal works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1271
+    },
+    {
+      "name": "generated hybrid prefix /app works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1258
+    },
+    {
+      "name": "generated hybrid prefix /workspace works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1278
+    },
+    {
+      "name": "generated hybrid prefix /team/portal works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1269
+    },
+    {
+      "name": "generated hybrid Docker frontend builds with its nested SPA namespace",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 16650
+    },
+    {
+      "name": "generated admin claim lifecycle sqlite/none preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1682
+    },
+    {
+      "name": "generated admin claim lifecycle sqlite/column preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1771
+    },
+    {
+      "name": "generated admin claim lifecycle mysql/none preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2557
+    },
+    {
+      "name": "generated admin claim lifecycle mysql/column preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2698
+    },
+    {
+      "name": "generated admin claim lifecycle postgres/none preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2236
+    },
+    {
+      "name": "generated admin claim lifecycle postgres/column preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2251
+    },
+    {
+      "name": "generated admin claim lifecycle postgres/rls preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2290
+    },
+    {
+      "name": "generated later-batch billing rollback sqlite/none/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 986
+    },
+    {
+      "name": "generated later-batch billing rollback sqlite/none/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 990
+    },
+    {
+      "name": "generated later-batch billing rollback sqlite/column/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1040
+    },
+    {
+      "name": "generated later-batch billing rollback sqlite/column/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1039
+    },
+    {
+      "name": "generated later-batch billing rollback mysql/none/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1427
+    },
+    {
+      "name": "generated later-batch billing rollback mysql/none/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1433
+    },
+    {
+      "name": "generated later-batch billing rollback mysql/column/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1683
+    },
+    {
+      "name": "generated later-batch billing rollback mysql/column/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1720
+    },
+    {
+      "name": "generated later-batch billing rollback postgres/none/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1266
+    },
+    {
+      "name": "generated later-batch billing rollback postgres/none/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1267
+    },
+    {
+      "name": "generated later-batch billing rollback postgres/column/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1498
+    },
+    {
+      "name": "generated later-batch billing rollback postgres/column/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1366
+    },
+    {
+      "name": "generated later-batch billing rollback postgres/rls/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1362
+    },
+    {
+      "name": "generated later-batch billing rollback postgres/rls/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1380
+    },
+    {
+      "name": "literal generated onboarding waits for mysql/Redis/SMTP and rejects unhealthy dependencies",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 10464
+    },
+    {
+      "name": "literal generated onboarding waits for postgres/Redis/SMTP and rejects unhealthy dependencies",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 9769
+    },
+    {
+      "name": "literal generated onboarding waits for sqlite/Redis/SMTP and rejects unhealthy dependencies",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 9365
+    },
+    {
+      "name": "generated Adminer Compose profile and documented login work on mysql",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 13961
+    },
+    {
+      "name": "generated Adminer Compose profile and documented login work on postgres",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 12414
+    },
+    {
+      "name": "generated MySQL none CLI uses migration privilege without granting runtime DDL",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3220
+    },
+    {
+      "name": "generated MySQL column CLI uses migration privilege without granting runtime DDL",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3617
+    },
+    {
+      "name": "generated sqlite/column header identities respect tenant policy without account tables",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3018
+    },
+    {
+      "name": "generated mysql/column header identities respect tenant policy without account tables",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4920
+    },
+    {
+      "name": "generated postgres/column header identities respect tenant policy without account tables",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5162
+    },
+    {
+      "name": "generated postgres/rls header identities respect tenant policy without account tables",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5775
+    },
+    {
+      "name": "starter reset contention mysql-api-cookie-none: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6461
+    },
+    {
+      "name": "starter reset contention mysql-hybrid-combined-column: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6147
+    },
+    {
+      "name": "starter reset contention sqlite-spa-cookie-column: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6123
+    },
+    {
+      "name": "starter reset contention sqlite-htmx-cookie-none: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5698
+    },
+    {
+      "name": "starter reset contention postgres-api-cookie-rls: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6822
+    },
+    {
+      "name": "starter reset contention postgres-api-jwt-none: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4262
+    },
+    {
+      "name": "starter reset contention postgres-spa-token-column: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4219
+    },
+    {
+      "name": "installed make:module sqlite-headers: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1491
+    },
+    {
+      "name": "installed make:module sqlite-cookie: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1481
+    },
+    {
+      "name": "installed make:module sqlite-token: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1736
+    },
+    {
+      "name": "installed make:module sqlite-jwt: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1951
+    },
+    {
+      "name": "installed make:module sqlite-cookie-token: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1558
+    },
+    {
+      "name": "installed make:module sqlite-cookie-token-jwt: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1528
+    },
+    {
+      "name": "installed make:module mysql-cookie-redis-smtp-security-extras: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1929
+    },
+    {
+      "name": "installed make:module sqlite-token-with-web: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1625
+    },
+    {
+      "name": "installed make:module sqlite-cookie-custom-prefix-with-web: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1606
+    },
+    {
+      "name": "installed make:module mysql-cookie-redis-with-web: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1961
+    },
+    {
+      "name": "installed make:module mysql-token-with-web-scoped-crud: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5293
+    },
+    {
+      "name": "installed make:module postgres-token-with-web-scoped-crud: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1915
+    }
+  ]
+}
