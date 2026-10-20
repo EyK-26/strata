@@ -66,6 +66,15 @@ const events: unknown[] = [];
 const stop = eventBus.listen("rebinding_items.created", (item) => {
   events.push(item);
 });
+
+function assertRows(actual: readonly Item[], expected: readonly Item[]): void {
+  // Native PostgreSQL returns an Array subclass with command metadata. The public
+  // repository contract promises rows, not an identical driver-container prototype.
+  assert.ok(Array.isArray(actual));
+  assert.equal(actual.length, expected.length);
+  for (const [index, row] of expected.entries()) assert.deepEqual(actual[index], row);
+}
+
 try {
   assert.notEqual(primary, secondary);
   const legacy = new LegacyItems(primary);
@@ -96,7 +105,7 @@ try {
         const rebound = original.withConnection(transaction);
         assert.equal(rebound.getConnection(), transaction);
         const inserted = await rebound.create({ scope: "north", label: "uncommitted" });
-        assert.deepEqual(await rebound.findScoped(), [inserted]);
+        assertRows(await rebound.findScoped(), [inserted]);
         assert.deepEqual(events, [], "Events must remain deferred before rollback.");
         throw rollback;
       },
@@ -104,8 +113,8 @@ try {
     ),
     (error) => error === rollback,
   );
-  assert.deepEqual(await original.findScoped(), []);
-  assert.deepEqual(await second.findScoped(), []);
+  assertRows(await original.findScoped(), []);
+  assertRows(await second.findScoped(), []);
   assert.deepEqual(events, [], "Rolled-back writes must not publish model events.");
 
   const committed = await runInTransaction(
@@ -129,7 +138,8 @@ try {
     second.findScoped(),
     original.findScoped(),
   ]);
-  assert.deepEqual(concurrent, [[committed], [committed], [committed]]);
+  assert.equal(concurrent.length, 3);
+  for (const rows of concurrent) assertRows(rows, [committed]);
   assert.equal(original.getConnection(), primary);
   assert.equal(first.getConnection(), primary);
   assert.equal(second.getConnection(), secondary);
