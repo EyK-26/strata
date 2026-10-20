@@ -131,6 +131,29 @@ removal fails, and teardown errors still fail validation. The probes capture the
 own mount IDs so their finalizers can clean up even while reproducing a faulty
 remover. These checks supplement every existing generated Docker runtime assertion.
 
+### Repository rebinding in installed applications
+
+`tests/e2e/repositoryRebinding.test.ts` runs a generated, installed application on
+SQLite, MySQL and PostgreSQL. The consumer creates its business table through a
+normal framework migration. Runtime connections use the restricted fixture URLs;
+only the migration command receives administrative credentials. The consumer uses
+public connection factories, `BaseRepository`, transactions and model events. It
+checks native private state, legacy constructor behavior, independent bindings,
+rollback, deferred events and reads through separate native connections.
+
+After building core and bootstrap, run the three cases sequentially with:
+
+```sh
+scripts/with-host-env.sh env SKIP_FIXTURE_TEST_BOOTSTRAP=1 bun test tests/e2e/repositoryRebinding.test.ts
+```
+
+For exact published qualification, invoke the same harness with
+`--database=sqlite`, `--database=mysql` or `--database=postgres` and
+`--published=<exact-version>`. The existing generated-app fixture pins and verifies
+the generator and runtime packages, owns the disposable database/users/files and
+closes them after each case. These three cases supplement the existing journey
+inventory; they do not replace any auth, module or native-driver assertions.
+
 ### Starter rendering boundaries
 
 `packages/strata-starter/src/databaseDefaults.ts` owns the shared development database
