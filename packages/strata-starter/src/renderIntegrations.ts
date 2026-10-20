@@ -1,4 +1,4 @@
-import { dialectFragments } from "./renderRuntime.ts";
+import { dialectFragments } from "./renderMigrations.ts";
 import { type DatabaseLayer, htmlAuthKit, type StarterLayers, usesTenantTable } from "./types.ts";
 
 function activeBoolColumn(database: DatabaseLayer): string {

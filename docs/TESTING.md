@@ -108,6 +108,15 @@ Source regression tests for generated views, login throttle wiring and request-p
 
 The [starter journey matrix](STARTER-JOURNEYS.md) exercises fresh account creation, real SMTP verification/reset, MFA, replay, rollback and recovery across external installed apps. It complements seeded-login, OIDC/SAML, CLI/OpenAPI and Docker acceptance; it does not replace those assertions.
 
+The runtime renderer separates database clients/provisioning, migrations and database
+commands, model declarations, bootstrap/providers and CLI adapters. `renderRuntime.ts`
+retains its original exports as a compatibility facade; generation imports the artifact
+owners directly. The frozen eight-profile, 550-file path/hash baseline and all generated
+compiler/installed runtime checks still apply. The RLS source fence scans every new
+artifact file, permits the same single migrate/seed bypass, and independently asserts
+that bootstrap/request handlers contain no unbounded bypass. Moving a renderer does
+not authorize changing generated SQL, privilege separation or runtime behavior.
+
 
 ## Generated React browser acceptance
 

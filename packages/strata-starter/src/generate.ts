@@ -24,6 +24,28 @@ import {
   renderSiteModule,
   renderVerifyEmailView,
 } from "./renderAuth.ts";
+import {
+  renderConfigProvider,
+  renderConfigTs,
+  renderCreateAppTs,
+  renderOutboxRegistryTs,
+  renderPolicyProvider,
+  renderPreloadTs,
+  renderProvidersIndex,
+  renderQueueProvider,
+  renderRoutesTs,
+  renderScheduleTs,
+  renderViewProvider,
+} from "./renderBootstrap.ts";
+import {
+  renderCliOpenApiTs,
+  renderCliOutboxWorkTs,
+  renderCliQueueFailedTs,
+  renderCliQueueWorkTs,
+  renderCliRegisterTs,
+  renderCliScheduleRunTs,
+} from "./renderCli.ts";
+import { renderDatabaseTs, renderEnsureDatabaseTs, renderSidecarsTs } from "./renderDatabase.ts";
 import { renderDockerCompose, renderDockerfile, renderDockerignore } from "./renderDocker.ts";
 import {
   renderApiDocs,
@@ -47,40 +69,22 @@ import {
 } from "./renderIntegrations.ts";
 import {
   renderAccountStateMigration,
-  renderApiTokenModel,
-  renderAuthOneTimeTokenModel,
-  renderCliOpenApiTs,
-  renderCliOutboxWorkTs,
-  renderCliQueueFailedTs,
-  renderCliQueueWorkTs,
-  renderCliRegisterTs,
-  renderCliScheduleRunTs,
-  renderConfigProvider,
-  renderConfigTs,
-  renderCreateAppTs,
-  renderDatabaseTs,
-  renderEnsureDatabaseTs,
   renderFreshTs,
   renderMigrateTs,
   renderMigrationRuntimeTs,
-  renderModelsRegister,
-  renderNoteModel,
   renderOutboxMigration,
-  renderOutboxRegistryTs,
-  renderPolicyProvider,
-  renderPreloadTs,
-  renderProvidersIndex,
-  renderQueueProvider,
   renderRollbackTs,
-  renderRoutesTs,
-  renderScheduleTs,
   renderSeedTs,
-  renderSidecarsTs,
   renderStarterSchemaMigration,
   renderStatusTs,
+} from "./renderMigrations.ts";
+import {
+  renderApiTokenModel,
+  renderAuthOneTimeTokenModel,
+  renderModelsRegister,
+  renderNoteModel,
   renderUserModel,
-  renderViewProvider,
-} from "./renderRuntime.ts";
+} from "./renderModels.ts";
 import { renderScimModule } from "./renderScim.ts";
 import type { GenerateOptions, StarterLayers } from "./types.ts";
 import {
