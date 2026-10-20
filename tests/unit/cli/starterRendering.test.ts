@@ -13,8 +13,14 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
+import * as bootstrap from "../../../packages/strata-starter/src/renderBootstrap.ts";
+import * as cli from "../../../packages/strata-starter/src/renderCli.ts";
+import * as database from "../../../packages/strata-starter/src/renderDatabase.ts";
 import * as docker from "../../../packages/strata-starter/src/renderDocker.ts";
 import * as legacy from "../../../packages/strata-starter/src/renderEnv.ts";
+import * as migrations from "../../../packages/strata-starter/src/renderMigrations.ts";
+import * as models from "../../../packages/strata-starter/src/renderModels.ts";
+import * as runtime from "../../../packages/strata-starter/src/renderRuntime.ts";
 import baselines from "../../fixtures/scaffolds/starter-rendering.sha256.json";
 
 for (const { name, args, files: expected } of baselines) {
@@ -64,4 +70,18 @@ test("legacy rendering exports retain the extracted functions and constants", ()
   expect(legacy.renderDockerCompose).toBe(docker.renderDockerCompose);
   expect(legacy.renderDockerfile).toBe(docker.renderDockerfile);
   expect(legacy.renderDockerignore).toBe(docker.renderDockerignore);
+});
+
+test("legacy runtime imports retain every artifact function's identity", () => {
+  const artifacts: Record<string, unknown> = {
+    ...bootstrap,
+    ...cli,
+    ...database,
+    ...migrations,
+    ...models,
+  };
+  expect(Object.keys(runtime)).toHaveLength(35);
+  for (const [name, render] of Object.entries(runtime)) {
+    expect(artifacts[name], name).toBe(render);
+  }
 });
