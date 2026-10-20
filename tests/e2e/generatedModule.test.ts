@@ -7,6 +7,23 @@ const profiles = [
     flags: [`--auth=${auth}`, ...(auth === "cookie" ? ["--dev"] : [])],
   })),
   { name: "mysql-cookie-redis-smtp-security-extras", flags: ["--auth=cookie", "--mysql", "--dev"] },
+  { name: "sqlite-token-with-web", flags: ["--auth=token", "--with-web", "--crud"] },
+  {
+    name: "sqlite-cookie-custom-prefix-with-web",
+    flags: ["--auth=cookie", "--with-web", "--api-prefix=/backend/v2", "--dev"],
+  },
+  {
+    name: "mysql-cookie-redis-with-web",
+    flags: ["--auth=cookie", "--mysql", "--with-web", "--dev"],
+  },
+  {
+    name: "mysql-token-with-web-scoped-crud",
+    flags: ["--auth=token", "--mysql", "--with-web", "--crud"],
+  },
+  {
+    name: "postgres-token-with-web-scoped-crud",
+    flags: ["--auth=token", "--postgres", "--with-web", "--crud"],
+  },
 ];
 for (const profile of profiles) {
   test(`installed make:module ${profile.name}: boot, API-only OpenAPI and denied writes`, async () => {

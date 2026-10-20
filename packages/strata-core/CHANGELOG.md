@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.47
+
+- Align the package version with the starter/CLI correction batch; no core runtime behavior changes.
+
 ## 2.2.46
 
 - Preserve GuestGuard credential identity through named guards; resolve development tenancy without account tables and permit non-cookie writes only for actual, explicitly enabled development identities. Keep anonymous, session-CSRF and staging/production refusal intact.

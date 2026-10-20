@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.47
+
+- Align the package version with the starter/CLI correction batch; no bootstrap runtime behavior changes.
+
 ## 2.2.46
 
 - Align the core dependency with 2.2.46 for the validated SPA runtime namespace contract.

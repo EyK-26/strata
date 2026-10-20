@@ -1,5 +1,11 @@
 # @getstrata/cli changelog
 
+## 2.2.47
+
+- Keep companion module API routes under API_PREFIX and HTML routes separate; render through the public namespaced ViewRenderer with layout data and HTMX handling. Plain module paths remain unchanged.
+- Generate services against current ORM updateByIdOrThrow/deleteById APIs with explicit HTTP not-found mapping.
+- Exercise installed CLI scaffolding, generated-app typechecking, API-only OpenAPI, permission boundaries and real scoped CRUD across SQLite, MySQL and PostgreSQL.
+
 ## 2.2.46
 
 - Align published runtime and starter dependency pins with the 2.2.46 generated-app contracts.

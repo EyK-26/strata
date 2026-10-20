@@ -197,3 +197,14 @@ Use `bun run frontend:install`, then `bun run frontend:build` to serve the built
 Changing `SPA_PREFIX` requires rebuilding the frontend. Docker builds accept `--build-arg SPA_PREFIX=/team/portal`; set the same runtime `SPA_PREFIX`. API, static assets and platform probe paths are reserved. Invalid namespaces fail before generation can replace a target directory.
 
 The React welcome page's notes-module example is generated for the selected schema. Tenant-enabled examples explicitly constrain `tenant_id` with `currentTenantId()` through the typed ORM; no-tenancy examples omit that column. Lists are bounded to 100 rows. Column-mode context does not silently add SQL predicates: application resources must apply their authorization and tenant filters. Browser acceptance compiles and executes the displayed code with a second tenant's data to verify that the example keeps those rows isolated.
+
+
+## Generated module routes and views
+
+`strata make:module target` keeps its API collection at `/targets` and detail at `/targets/:id`. With `--with-web`, the API uses the public `apiPrefix()` value instead: `/api/v1/targets` by default, or the configured `API_PREFIX`. The companion HTML collection remains `/targets`. This keeps the web route from replacing the API method map when the starter combines routes. OpenAPI describes only the API routes.
+
+The web controller resolves `CORE_VIEW_RENDERER_TOKEN`, selects the explicit `targets` namespace, and calls `renderHtmx("index.eta", { layout: { title: "Targets" }, records, meta }, { request })`. A normal request renders the layout; an ordinary HTMX request renders the fragment, while boosted navigation and history restoration retain the full page. The app still owns its view data, schema and authorization grants. No controller-name inference or implicit response conversion is involved.
+
+Generated services use `findByIdOrThrow`, `updateByIdOrThrow` and `deleteById` with explicit HTTP not-found mapping. Create the module table with an app migration before accessing it. A generated module does not grant write abilities to accounts or tokens automatically; configure application permissions deliberately.
+
+Existing generated applications must adopt these routes, service calls and controller shapes in their source. Installing a newer CLI does not rewrite an existing module. The auth-provider registration described in [AUTH.md](AUTH.md) is also required for applications created before the all-auth ability-checker correction.
