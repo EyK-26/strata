@@ -89,6 +89,19 @@ After rebuilding core/bootstrap, run `scripts/with-host-env.sh bun run verify:ge
 
 The corrected `docs/openapi.json` contains 22 API/protocol operations. The older 40-operation snapshot accidentally included 18 HTML operations because the legacy adapter discarded middleware metadata. See [the preservation and correction evidence](GENERATED-APP-ACCEPTANCE.md#second-pr-generated-cliopenapi-and-http-smoke). No runtime endpoint was removed.
 
+The generated-module verifier also accepts `--typed-handlers`. It copies a compile-only
+contract into the real installed app, then runs its normal `check` script. Positive
+calls and negative `@ts-expect-error` cases verify required `id` parameters survive
+ability composition and handlers still return HTTP responses. The contract is never
+executed by the server. Three additional E2E profiles cover ordinary API routes,
+web/API scoped CRUD and a custom API prefix; the original profiles and runtime
+assertions remain independent. `--published=VERSION` uses exact published packages.
+
+Module-rendering hashes retain the original pre-extraction fixture. A narrow inverse
+transformation permits only the declared controller request annotations and removal
+of generated route casts/imports. Every other emitted byte and path must still match
+the historical hashes; the fixture is not regenerated to accept unrelated changes.
+
 Source regression tests for generated views, login throttle wiring and request-path RLS isolation use temporary RLS/team profiles through `tests/helpers/generatedSourceApps.ts`. Setup requires every path in the frozen 52-file inventory, and teardown removes its owned source fixtures. The populated failed-job identity upgrade fixture remains under `tests/fixtures/migrations`; current initial-schema generation is not a substitute for testing that historical upgrade. These checks complement, rather than replace, packed-app runtime acceptance.
 
 ## Fresh starter account journeys

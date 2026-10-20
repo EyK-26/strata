@@ -1,5 +1,11 @@
 # @getstrata/cli changelog
 
+## 2.2.48
+
+- Separate pure module rendering from filesystem orchestration while retaining generated file paths and behavior.
+- Preserve generated model-bound `id` request contracts through the existing generic kernel wrappers; remove four generated double casts and explicitly type show/delete requests. Existing generated application files are not rewritten by installing the new CLI.
+- Align bootstrap/core peer requirements with 2.2.48.
+
 ## 2.2.47
 
 - Keep companion module API routes under API_PREFIX and HTML routes separate; render through the public namespaced ViewRenderer with layout data and HTMX handling. Plain module paths remain unchanged.

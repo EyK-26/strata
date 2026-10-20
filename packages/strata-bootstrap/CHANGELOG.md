@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.48
+
+- Align the core peer requirement with 2.2.48 for strict environment validation, compatible repository contracts and dependency-cycle diagnostics. Existing HTTP kernel, module-context and provider contracts remain unchanged.
+
 ## 2.2.47
 
 - Align the package version with the starter/CLI correction batch; no bootstrap runtime behavior changes.
