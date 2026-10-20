@@ -1,5 +1,10 @@
 # create-strata changelog
 
+## 2.2.47
+
+- Register the public ability checker for every auth selection so new ability-protected modules boot with cookie, JWT and header auth as well as opaque tokens. Permissions remain explicit and denied writes remain denied. Existing apps must adopt the provider registration in their source.
+- Align generated dependency pins with the corrected CLI scaffolds.
+
 ## 2.2.46
 
 - Honor separate MySQL migration credentials for provisioning and scoped administrative migrations; restore the restricted runtime connection and close administrative pools on failure.

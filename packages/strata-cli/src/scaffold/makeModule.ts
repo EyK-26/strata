@@ -87,7 +87,8 @@ export default ${moduleName}Repository;
     ],
     [
       "service.ts",
-      `import ${moduleName}Repository from "./repository";
+      `import { NotFoundError } from "@getstrata/core/errors/http";
+import ${moduleName}Repository from "./repository";
 import type { ${moduleName}Record } from "./types";
 import type { PaginatedResult } from "@getstrata/core/pagination";
 
@@ -102,7 +103,7 @@ class ${moduleName}Service {
   }
 
   findByIdOrThrow(id: number): Promise<${moduleName}Record> {
-    return this.repository.findByIdOrThrow(id);
+    return this.repository.findByIdOrThrow(id, () => new NotFoundError("${moduleName} not found."));
   }
 
   create(input: { name: string }): Promise<${moduleName}Record> {
@@ -110,11 +111,13 @@ class ${moduleName}Service {
   }
 
   update(id: number, input: { name?: string }): Promise<${moduleName}Record> {
-    return this.repository.update(id, input);
+    return this.repository.updateByIdOrThrow(id, input, () => new NotFoundError("${moduleName} not found."));
   }
 
-  delete(id: number): Promise<void> {
-    return this.repository.delete(id);
+  async delete(id: number): Promise<void> {
+    if (!(await this.repository.deleteById(id))) {
+      throw new NotFoundError("${moduleName} not found.");
+    }
   }
 }
 
@@ -400,7 +403,7 @@ export default ${moduleName}Controller;
       `import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
-import ${moduleName}Controller from "./controller";
+${withWeb ? 'import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}import ${moduleName}Controller from "./controller";
 
 function create${moduleName}Routes(
   dependencies: AppDependencies,
@@ -408,16 +411,17 @@ function create${moduleName}Routes(
   kernel: HttpKernel,
 ) {
   const controller = new ${moduleName}Controller(dependencies, cachedJson);
+${withWeb ? `  const apiBase = \`\${apiPrefix()}/${pluralSlug}\`;\n` : ""}
 
   return {
-    "/${pluralSlug}": {
+    ${withWeb ? "[apiBase]" : `"/${pluralSlug}"`}: {
       GET: controller.index,
       POST: kernel.wrapAbility(
         "${pluralSlug}:create",
         controller.store as unknown as RouteHandler,
       ),
     },
-    "/${pluralSlug}/:id": {
+    ${withWeb ? `[\`\${apiBase}/:id\`]` : `"/${pluralSlug}/:id"`}: {
       GET: controller.show,
       PATCH: kernel.wrapAbility(
         "${pluralSlug}:update",
@@ -519,10 +523,8 @@ export type { ${moduleName}Record } from "./types";
       join(directory, "webController.ts"),
       `import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { CORE_VIEW_TOKEN } from "@getstrata/bootstrap/providers/view";
 import { withErrorHandling } from "@getstrata/core/http/response";
-import type { ViewEngine } from "@getstrata/core/view";
-import { htmlResponse } from "@getstrata/core/view";
+import { CORE_VIEW_RENDERER_TOKEN, type NamespacedViewRenderer } from "@getstrata/core/view";
 import { ${moduleIdentifier}ServiceToken } from "./provider";
 import { parse${moduleName}ListQuery } from "./requests";
 import type ${moduleName}Service from "./service";
@@ -534,20 +536,19 @@ class ${moduleName}WebController {
     return resolveService(this.dependencies, ${moduleIdentifier}ServiceToken);
   }
 
-  private get view(): ViewEngine {
-    return resolveService(this.dependencies, CORE_VIEW_TOKEN);
+  private get views(): NamespacedViewRenderer {
+    return resolveService(this.dependencies, CORE_VIEW_RENDERER_TOKEN).namespace("${pluralSlug}");
   }
 
   readonly index = withErrorHandling(async (request?: Request) => {
     const query = parse${moduleName}ListQuery(request);
     const result = await this.service.paginate(query);
 
-    return htmlResponse(
-      await this.view.render("${pluralSlug}/index", {
-        title: "${moduleName}s",
+    return this.views.renderHtmx("index.eta", {
+        layout: { title: "${moduleName}s" },
         records: result.data,
         meta: result.meta,
-      }),
+      }, { request },
     );
   });
 }
@@ -584,6 +585,7 @@ export { create${moduleName}WebRoutes };
       ? createdViewsDirectory.slice(process.cwd().length + 1)
       : createdViewsDirectory;
     console.log(`Created web view scaffold in: ${relativeViews}/`);
+    console.log(`API routes use API_PREFIX (default /api/v1); HTML collection: /${pluralSlug}`);
   }
   console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
   console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
