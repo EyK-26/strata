@@ -21,6 +21,13 @@ Layer flags: [STARTER.md](./STARTER.md). The starter templates and layer rendere
 
 For typed native Bun transport options, WebSockets, request-hook coverage and streamed-body limits, see [native HTTP configuration](NATIVE-HTTP.md). Review the transport ceiling and hook changes before upgrading existing applications.
 
+## Environment validation
+
+`validateEnv` validates integer rules against the complete trimmed signed decimal
+string. Fractions, exponents and trailing text are rejected rather than partially
+parsed. Signed values, leading zeros, defaults and minimum bounds remain supported;
+the result retains the original string instead of normalizing application settings.
+
 ## Frontend shapes
 
 Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMode` (`parseFrontendMode`, `FRONTEND_MODE_PATTERN`). Apps should reuse that pattern in their env schema instead of copying a regex.
