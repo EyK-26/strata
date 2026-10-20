@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:
 import { basename, join, resolve } from "node:path";
 import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
 import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
+import { usesComposePostgres } from "./databaseDefaults.ts";
 import type { ParsedFlags } from "./parseArgs.ts";
 import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
 import { resolveStarterPlan } from "./prompt.ts";
@@ -23,18 +24,15 @@ import {
   renderSiteModule,
   renderVerifyEmailView,
 } from "./renderAuth.ts";
+import { renderDockerCompose, renderDockerfile, renderDockerignore } from "./renderDocker.ts";
 import {
   renderApiDocs,
-  renderDockerCompose,
-  renderDockerfile,
-  renderDockerignore,
   renderEnvExample,
   renderGitignore,
   renderLayersManifest,
   renderPackageJson,
   renderPostgresAppRoleInitSql,
   renderReadme,
-  usesComposePostgres,
 } from "./renderEnv.ts";
 import { renderInitialAdminCommand, renderInitialAdminMigration } from "./renderInitialAdmin.ts";
 import {

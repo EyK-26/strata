@@ -1,5 +1,5 @@
 import { generatedRlsBootstrapSql } from "../../../src/core/tenant/enableTenantRls.ts";
-import { defaultDatabaseUrl, defaultMigrationDatabaseUrl } from "./renderEnv.ts";
+import { defaultDatabaseUrl, defaultMigrationDatabaseUrl } from "./databaseDefaults.ts";
 import {
   authNeedsUsers,
   authUsesCookie,
