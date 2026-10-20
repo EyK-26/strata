@@ -2,7 +2,7 @@
 
 Audit date: 2026-10-19. Framework source: merged `5d6d5b62e364628a98c8aa3c7cfe04585f3a74ee`. Runtime reproductions used exact `create-strata@2.2.45` from npm and explicitly verified installed core/bootstrap/CLI 2.2.45 in disposable applications under `~/perso`. The existing user application and the shop were not edited. This is a versioned baseline, not a claim that all supported applications are qualified.
 
-**Released resolution:** [2.2.47](https://github.com/EyK-26/strata/releases/tag/v2.2.47) passed all 107 exact-published runtime scenarios, including installed module generation and scoped CRUD. See [the final qualification below](#published-2247-module-correction-qualification) and [its machine-readable results](qualification/starter-2.2.47-runtime.json). The original 2.2.46 qualification, later reproduced module failures and intermediate candidate states remain recorded chronologically.
+**Latest published qualification:** [2.2.48](https://github.com/EyK-26/strata/releases/tag/v2.2.48) passed all 113 exact-published runtime scenarios, preserving the original 107 and adding generated handler type contracts and native repository rebinding. See [the compatibility checkpoint below](#published-2248-compatibility-checkpoint-qualification) and [its machine-readable results](qualification/starter-2.2.48-runtime.json). Earlier qualifications, reproduced failures and intermediate candidates remain recorded chronologically.
 
 ## Why the previous green gate was insufficient
 
@@ -182,3 +182,25 @@ scripts/with-host-env.sh bun scripts/verify-starter-module.ts --auth=token --pos
 ```
 
 This is selected runtime coverage rather than an exhaustive Cartesian claim. Module precondition checks do not claim versioned optimistic-concurrency coverage. Existing generated apps still need to adopt corrected provider/routes/controller/service source; installing dependencies alone does not rewrite those files. Shop adoption remains held for #257. This audit follow-up changes no runtime code, dependency version or release tag.
+
+
+## Published 2.2.48 compatibility checkpoint qualification
+
+The compatible framework checkpoint was released at `68420c141527e7907a3ec771ff327083bf290ee5` after focused PRs, all four checks on every final PR head, and successful cumulative main CI and security. The final clean source tree passed 2,492 unit/integration tests with the same three existing macOS platform-driver skips and zero failures, plus all 154 E2E tests without failures or skips. Coverage remained 138 enforced/272 exempt; package, export, packed-type, generated compiler, API-only OpenAPI, extras and SPA gates passed. The normal main integration changed no source bytes; its configured pre-push hook legitimately found no matching files. The final PR head still passed all four CI checks before merge, and the merged tree exactly matched the fully validated tree. No hook or target check was bypassed.
+
+The annotated tag followed actual-main release readiness and unused-version checks. The trusted [release workflow](https://github.com/EyK-26/strata/actions/runs/39484158612) passed publication, GitHub release and container/SBOM jobs. Qualification began only after successful registry checks for all five exact 2.2.48 packages. All **113 registered scenarios executed sequentially and passed, with zero failures or skips**, using fresh published-starter applications and exact verified core/bootstrap/CLI dependencies. The [sanitized named results](qualification/starter-2.2.48-runtime.json) preserve every outcome. The original 107 scenario names, arguments, ordering and deadlines remain unchanged apart from the source root and exact package version; the six new cases supplement them.
+
+Three new module profiles compile positive and negative request/return contracts in actual generated applications: a plain cookie API module, token-protected companion API/web scoped CRUD, and a custom companion prefix. Generated show/delete handlers now retain their required id parameters through the existing generic wrappers without the four double casts. All original admission, OpenAPI, cache invalidation, conditional-write, full HTML/HTMX, missing-resource and shutdown assertions remain. The original module-rendering hash fixture is unchanged; comparison reverses only the explicitly declared typing edits.
+
+Three native installed-consumer profiles use SQLite, MySQL and PostgreSQL through the public factories, Schema/migration CLI, repository, transaction and event APIs. A custom repository with native private state implements the explicit protected `cloneWithConnection` construction hook; the default legacy clone does not reconstruct arbitrary private fields or implicitly rerun application constructors. Assertions cover ordinary state and legacy constructor counts, independent connection bindings, original-instance usability, native rollback, deferred commit events and scoped reads after transaction settlement. They do not establish overlapping-transaction concurrency. Restricted runtime credentials remain separate from migration credentials; no application SQL, driver replacement, package patch or implicit permission grant was introduced.
+
+Every collected SQL and Docker metadata field except the capture timestamp matches exactly before and after the complete published run: eight PostgreSQL databases and 26 roles, six MySQL schemas and seven accounts, 14 container identities, 180 volume identities and nine network identities. The comparison retains database ownership/OIDs, role flags and resource identities rather than comparing counts alone. No unrelated resource was removed, and no qualification process remained. Original failed runs, intermediate fixture diagnoses and prior versioned reports remain distinct evidence. The registration-only collector initially rejected legitimate cwd-relative harness paths before launching any scenario; accepting both existing absolute and relative script forms retained the original arguments and path-escape checks. That orchestration correction changed no framework mechanism or runtime assertion.
+
+Representative exact-published reproductions are:
+
+```sh
+scripts/with-host-env.sh bun scripts/verify-starter-module.ts --auth=token --with-web --crud --typed-handlers --published=2.2.48
+scripts/with-host-env.sh bun scripts/verify-repository-rebinding.ts --database=mysql --published=2.2.48
+```
+
+This is selected runtime qualification, not exhaustive Cartesian coverage or completion of the remaining framework maintainability layers. No new framework mechanism blocker was reproduced in these 113 scenarios. Existing generated applications still own their source adoption; installing packages does not rewrite modules or providers. Shop adoption remains independently held for native Bun qualification #257. This evidence follow-up changes no runtime code, dependency version or release tag.
