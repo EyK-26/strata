@@ -89,6 +89,19 @@ After rebuilding core/bootstrap, run `scripts/with-host-env.sh bun run verify:ge
 
 The corrected `docs/openapi.json` contains 22 API/protocol operations. The older 40-operation snapshot accidentally included 18 HTML operations because the legacy adapter discarded middleware metadata. See [the preservation and correction evidence](GENERATED-APP-ACCEPTANCE.md#second-pr-generated-cliopenapi-and-http-smoke). No runtime endpoint was removed.
 
+The generated-module verifier also accepts `--typed-handlers`. It copies a compile-only
+contract into the real installed app, then runs its normal `check` script. Positive
+calls and negative `@ts-expect-error` cases verify required `id` parameters survive
+ability composition and handlers still return HTTP responses. The contract is never
+executed by the server. Three additional E2E profiles cover ordinary API routes,
+web/API scoped CRUD and a custom API prefix; the original profiles and runtime
+assertions remain independent. `--published=VERSION` uses exact published packages.
+
+Module-rendering hashes retain the original pre-extraction fixture. A narrow inverse
+transformation permits only the declared controller request annotations and removal
+of generated route casts/imports. Every other emitted byte and path must still match
+the historical hashes; the fixture is not regenerated to accept unrelated changes.
+
 Source regression tests for generated views, login throttle wiring and request-path RLS isolation use temporary RLS/team profiles through `tests/helpers/generatedSourceApps.ts`. Setup requires every path in the frozen 52-file inventory, and teardown removes its owned source fixtures. The populated failed-job identity upgrade fixture remains under `tests/fixtures/migrations`; current initial-schema generation is not a substitute for testing that historical upgrade. These checks complement, rather than replace, packed-app runtime acceptance.
 
 ## Fresh starter account journeys
@@ -127,6 +140,29 @@ removal fails, and teardown errors still fail validation. The probes capture the
 own mount IDs so their finalizers can clean up even while reproducing a faulty
 remover. These checks supplement every existing generated Docker runtime assertion.
 
+### Repository rebinding in installed applications
+
+`tests/e2e/repositoryRebinding.test.ts` runs a generated, installed application on
+SQLite, MySQL and PostgreSQL. The consumer creates its business table through a
+normal framework migration. Runtime connections use the restricted fixture URLs;
+only the migration command receives administrative credentials. The consumer uses
+public connection factories, `BaseRepository`, transactions and model events. It
+checks native private state, legacy constructor behavior, independent bindings,
+rollback, deferred events and reads through separate native connections.
+
+After building core and bootstrap, run the three cases sequentially with:
+
+```sh
+scripts/with-host-env.sh env SKIP_FIXTURE_TEST_BOOTSTRAP=1 bun test tests/e2e/repositoryRebinding.test.ts
+```
+
+For exact published qualification, invoke the same harness with
+`--database=sqlite`, `--database=mysql` or `--database=postgres` and
+`--published=<exact-version>`. The existing generated-app fixture pins and verifies
+the generator and runtime packages, owns the disposable database/users/files and
+closes them after each case. These three cases supplement the existing journey
+inventory; they do not replace any auth, module or native-driver assertions.
+
 ### Starter rendering boundaries
 
 `packages/strata-starter/src/databaseDefaults.ts` owns the shared development database
@@ -143,3 +179,20 @@ bumps out of these snapshots; existing package-version, compiler, installed runt
 2,688-shape matrix and published journey assertions continue to check consumer output.
 A deliberate generated-output change requires reviewing its corresponding baseline
 change as well as keeping the explicit behavior assertions and runtime gates passing.
+
+### Owned SMTP fixture admission
+
+Starter auth journeys keep fixed SMTP/HTTP ports across the real Mailpit stop/start
+outage. Host-side candidate ports do not atomically reserve ports in Docker's
+allocator. `tests/helpers/ownedMailpit.ts` captures the exact container ID with
+`docker create` before attempting `docker start`. It removes that owned container
+on any later setup failure and retries only a port-binding collision, at most five
+startup attempts. It never retries an application request or a journey assertion.
+Other startup errors fail immediately after cleanup.
+
+`tests/e2e/ownedMailpit.test.ts` forces actual Docker port conflicts with a separate
+owned container, checks bounded exhaustion and cleanup, verifies fixed mappings
+across restart, preserves the occupier, and checks non-port error propagation.
+Probe teardown independently records created IDs, so a cleanup regression does not
+leave its own test resources behind. All original readiness, SMTP outage, auth,
+MFA, rollback and contention assertions remain in the unchanged journey body.

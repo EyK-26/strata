@@ -1,5 +1,10 @@
 # create-strata changelog
 
+## 2.2.48
+
+- Separate shared development database defaults, Docker image/Compose rendering and supporting-tool instructions into their artifact owners. Preserve generated paths, bytes, role defaults and tool selections.
+- Generate aligned 2.2.48 package requirements. Existing application sources remain application-owned and are not rewritten by a package update.
+
 ## 2.2.47
 
 - Register the public ability checker for every auth selection so new ability-protected modules boot with cookie, JWT and header auth as well as opaque tokens. Permissions remain explicit and denied writes remain denied. Existing apps must adopt the provider registration in their source.

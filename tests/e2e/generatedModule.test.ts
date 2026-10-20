@@ -24,6 +24,15 @@ const profiles = [
     name: "postgres-token-with-web-scoped-crud",
     flags: ["--auth=token", "--postgres", "--with-web", "--crud"],
   },
+  { name: "sqlite-cookie-typed-handlers", flags: ["--auth=cookie", "--typed-handlers"] },
+  {
+    name: "sqlite-token-typed-handlers-with-web-scoped-crud",
+    flags: ["--auth=token", "--with-web", "--crud", "--typed-handlers"],
+  },
+  {
+    name: "sqlite-cookie-typed-handlers-custom-prefix",
+    flags: ["--auth=cookie", "--with-web", "--api-prefix=/backend/v2", "--typed-handlers"],
+  },
 ];
 for (const profile of profiles) {
   test(`installed make:module ${profile.name}: boot, API-only OpenAPI and denied writes`, async () => {

@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
 import { jsonCsrfHeaders, mergeCookies } from "../tests/helpers/jsonCsrf";
+import { startOwnedMailpit } from "../tests/helpers/ownedMailpit";
 import { starterJourneyProfiles } from "../tests/helpers/starterJourneyProfiles";
 
 const selectedProfile = starterJourneyProfiles.find((item) => item.name === process.argv[2]);
@@ -28,7 +29,7 @@ const fixture = await createGeneratedSecurityApp(
   { publishedVersion, parentDirectory: process.env.STARTER_JOURNEY_PARENT },
 );
 const container = `strata-signup-mail-${crypto.randomUUID()}`;
-let mailCreated = false;
+let mail: Awaited<ReturnType<typeof startOwnedMailpit>> | undefined;
 let stop: (() => Promise<void>) | undefined;
 const cwd = process.cwd();
 function docker(args: string[]) {
@@ -54,7 +55,7 @@ function cleanup(): Promise<void> {
       try {
         await fixture.close();
       } finally {
-        if (mailCreated) docker(["rm", "--force", container]);
+        await mail?.close();
       }
     }
   })();
@@ -65,40 +66,11 @@ const terminate = () => {
 };
 process.once("SIGTERM", terminate);
 try {
-  // Docker can allocate different ephemeral host ports after stop/start. Reserve
-  // two owned port numbers and publish them explicitly so outage recovery tests
-  // the same configured SMTP endpoint rather than a fixture address change.
-  const smtpReservation = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    fetch: () => new Response(),
-  });
-  const httpReservation = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    fetch: () => new Response(),
-  });
-  const smtpPort = smtpReservation.port,
-    httpPort = httpReservation.port;
-  await smtpReservation.stop(true);
-  await httpReservation.stop(true);
-  docker([
-    "run",
-    "--detach",
-    "--name",
-    container,
-    "--publish",
-    `127.0.0.1:${smtpPort}:1025`,
-    "--publish",
-    `127.0.0.1:${httpPort}:8025`,
-    "axllent/mailpit@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48",
-  ]);
-  mailCreated = true;
-  const bindings = JSON.parse(
-    docker(["inspect", "--format", "{{json .NetworkSettings.Ports}}", container]),
-  );
-  const mailApi = `http://127.0.0.1:${bindings["8025/tcp"][0].HostPort}`;
-  const mailPort = bindings["1025/tcp"][0].HostPort;
+  // Docker is authoritative about admission; created-but-unstarted containers
+  // are owned and cleaned before a narrow port-collision retry.
+  mail = await startOwnedMailpit(docker, container);
+  const mailApi = `http://127.0.0.1:${mail.httpPort}`;
+  const mailPort = String(mail.smtpPort);
   let ready = false;
   for (let n = 0; n < 100; n++) {
     try {
