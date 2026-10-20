@@ -57,6 +57,11 @@ const requiredRequestPathFiles = [
   join(repoRoot, "src/core/tenant/tenantMiddleware.ts"),
   join(repoRoot, "packages/strata-starter/src/renderAuth.ts"),
   join(repoRoot, "packages/strata-starter/src/renderAuthFlows.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderingContext.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderImports.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderWorkflows.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderApiRoutes.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderBrowserRoutes.ts"),
   join(repoRoot, "packages/strata-starter/src/renderScim.ts"),
   join(repoRoot, "packages/strata-starter/src/renderRuntime.ts"),
 ];
