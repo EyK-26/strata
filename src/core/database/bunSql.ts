@@ -1,6 +1,6 @@
 import { SQL } from "bun";
-import type { DatabaseConnection, SqlDatabaseConnection } from "./baseRepository";
 import { bindDatabaseConnection } from "./boundConnection";
+import type { DatabaseConnection, SqlDatabaseConnection } from "./connectionContracts";
 import { registerDefaultDatabasePool } from "./defaultConnection";
 
 interface CreateBunSqlPoolOptions {

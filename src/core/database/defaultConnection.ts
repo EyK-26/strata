@@ -1,4 +1,4 @@
-import type { SqlDatabaseConnection } from "./baseRepository";
+import type { SqlDatabaseConnection } from "./connectionContracts";
 import { createDatabaseQueryProxy } from "./queryProxy";
 
 const DEFAULT_CONNECTION_KEY = Symbol.for("@getstrata/defaultDatabaseConnection");

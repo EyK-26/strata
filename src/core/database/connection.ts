@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from "./baseRepository.ts";
+import type { DatabaseConnection } from "./connectionContracts.ts";
 
 type UnsafeQueryable = {
   unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;

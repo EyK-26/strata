@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from "./baseRepository";
+import type { DatabaseConnection } from "./connectionContracts";
 
 // An isolated CLI process keeps synchronous SQLite I/O off the request event loop.
 // MySQL loads only its resolved optional peer; app config/env files are not loaded.

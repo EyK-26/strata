@@ -1,4 +1,3 @@
-export type { DatabaseConnection } from "./baseRepository.ts";
 export { default as BaseRepository } from "./baseRepository.ts";
 export { createDatabaseConnection } from "./connection.ts";
 export type { ActiveDatabaseHandle } from "./connectionContext.ts";
@@ -7,6 +6,7 @@ export {
   hasActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "./connectionContext.ts";
+export type { DatabaseConnection } from "./connectionContracts.ts";
 export type { SqlDialect } from "./dialect.ts";
 export {
   currentSqlDialect,

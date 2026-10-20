@@ -1,10 +1,10 @@
 import { missingOptionalPeer } from "../runtime/optionalPeer.ts";
-import type { DatabaseConnection } from "./baseRepository.ts";
 import {
   type ActiveDatabaseHandle,
   getActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "./connectionContext.ts";
+import type { DatabaseConnection } from "./connectionContracts.ts";
 import {
   observeIsolatedReadOnly,
   type ReadOnlyObservationOptions,
