@@ -103,3 +103,17 @@ Install the pinned browser once with `bunx playwright install chromium`; Linux c
 `tests/e2e/generatedReactAuth.test.ts` registers built and native Bun dev-proxy browser journeys for all six auth selections in SPA and hybrid apps, plus cookie MFA and JWT expiry cases. Each app installs candidate package archives, runs real migrations and explicit seed, builds/typechecks the frontend, mounts React in Chromium, and exercises the actual client and server. A fixture bridge calls the same browser client module to check authenticated resources, ETags and 401 handling. Additional app modules are acceptance resources; account routes, sessions, bearer signatures, CSRF, password hashing and ORM operations remain the shipped framework APIs.
 
 The verifier also accepts `--published=VERSION` for exact npm acceptance after release. Existing direct HTTP auth journeys, structural matrix, coverage enforcement and other E2E assertions remain required independently. Browser contexts, processes and temporary SQLite databases are owned and closed by each verifier.
+
+## Owned Docker fixture cleanup
+
+The generated production-image verifier removes only its UUID-scoped containers,
+image and network. Container teardown also removes anonymous volumes and asserts
+that their captured mount names no longer exist. Explicit named volumes are
+preserved; no volume prune or age-based ownership inference is used.
+
+`tests/e2e/ownedDockerCleanup.test.ts` exercises real Docker removal after partial
+setup, repeated cleanup, named-volume/unrelated-container preservation and an
+injected removal failure. The remaining containers are attempted even when one
+removal fails, and teardown errors still fail validation. The probes capture their
+own mount IDs so their finalizers can clean up even while reproducing a faulty
+remover. These checks supplement every existing generated Docker runtime assertion.
