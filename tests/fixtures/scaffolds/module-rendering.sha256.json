@@ -1,0 +1,71 @@
+[
+  {
+    "profile": {
+      "name": "billing widget",
+      "withWeb": false,
+      "views": false
+    },
+    "files": {
+      "src/models/register.ts": "65b91cc358ef1dca2682d475a17aadf9aebc062a734b06e9e96a734e184282a2",
+      "src/modules/billing-widget/routes.ts": "2ea7972ee0af9abfd2795739554d8310e4c38523014365f4330ba8b9650be307",
+      "src/modules/billing-widget/repository.ts": "f87d6f98a2c51430b2dd76453db1938992a54eaf10fe3d97bcb0f6ca11d65934",
+      "src/modules/billing-widget/requests.ts": "ae7cffe84b8281b79ba0a18493d8b8ff51308c6770843ec51b5b1f5254c3604e",
+      "src/modules/billing-widget/table.ts": "f26fab50a0d1aca37914c92deba3e200140e12f1bbaedea204673e5f339ee7d3",
+      "src/modules/billing-widget/resources.ts": "1fb965e02ea4f5cd055fe64750ab5e1dc813118acce499b9c41b3b3c87917f09",
+      "src/modules/billing-widget/types.ts": "b56e9b52ea757c1c300f3056cf64ba149cdbfa5bf796a4dad26b7035d969124f",
+      "src/modules/billing-widget/policy.ts": "b67a82bd872dae6a96130546b36524265236161925ab04f32fb81ddf05f3e4f2",
+      "src/modules/billing-widget/index.ts": "3f3de9591907e571860291f570d163fe51d99d4c6486a59deb660af386aba2d7",
+      "src/modules/billing-widget/provider.ts": "6355ce04d8bbe975091d2f24f03dcd81ddcf9ea59f6fec05701ffb32b472ee81",
+      "src/modules/billing-widget/controller.ts": "a952061d2c70f0db81a1f99d85112ba9d361137dd949968bdd3b427c3d9af5cc",
+      "src/modules/billing-widget/service.ts": "0b4ef9d1aaf0cbf9e97e16bf8f354ef4c379298dca37626db97b62179c958e67"
+    }
+  },
+  {
+    "profile": {
+      "name": "release note",
+      "withWeb": true,
+      "views": false
+    },
+    "files": {
+      "resources/views/release-notes/index.eta": "5a7a01037bffbbd0c4e07dc51151c4a03b3b7a80649872327aa1de8ad783a05d",
+      "src/models/register.ts": "8e43d757c484357e0ca4da8ffbbdba51ec9fb7c40905ddafa9cac314d06aac19",
+      "src/modules/release-note/routes.ts": "6dc381ef2c4081c5b1e33d059bf09770de9bda2a33180af740f48cfa65202591",
+      "src/modules/release-note/repository.ts": "813b0712eb46d21aebe3c15f0724de26e6e399035a75c9b06ed277a5fd9ef286",
+      "src/modules/release-note/webRoutes.ts": "8543a153ff57a80f209370631b1604454bc758b2b2818ad20c119f1ea8e92b6e",
+      "src/modules/release-note/requests.ts": "32b551235542f60625f61b53ce6397f1cbb059368d0e05e1601aeeba032b750d",
+      "src/modules/release-note/table.ts": "e222fb78ec8dbafaf5e46a8c11acc72eed3499123e74c1c63a75cb7e6fac5290",
+      "src/modules/release-note/resources.ts": "d3e7b94d4f31ee65d7736aa05a5e7c779cf299d2184599c9687a8cad03ac7a12",
+      "src/modules/release-note/webController.ts": "60b8ebf564809c97520c3a0273a89b543293b0b1fa2b78add12862c9bd84d6fa",
+      "src/modules/release-note/types.ts": "18a1b601de78ab88d605aac5bad9760ab8eaf3a516a6f5f164fd951ddb7b49ed",
+      "src/modules/release-note/policy.ts": "1bd574c5779b45f7f2568f0c4c304982a82ec9d579f1ecdd99d384eb28c2461d",
+      "src/modules/release-note/index.ts": "9216dda88a338821d926530b368b520d1acddc39566785e6449efecadbf5a99b",
+      "src/modules/release-note/provider.ts": "3eba1ebc6011b9c0bdcf9725b402bbbeae0732f82382ffe24e235ad1e770c6e6",
+      "src/modules/release-note/controller.ts": "5478c58916cdb0c6dc2d35f4ab5a7e716f4cacacd138d81e9a41889380725515",
+      "src/modules/release-note/service.ts": "5671afb15bae2e24e38b5816f296fa70c46b620e538098b6aa1786a10fdf05fd"
+    }
+  },
+  {
+    "profile": {
+      "name": "catalog item",
+      "withWeb": true,
+      "views": true
+    },
+    "files": {
+      "views/catalog-items/index.eta": "f91cb7b59b5d8beacf9db3506a52411a554d570277af793639aabc4a3f5f267c",
+      "src/models/register.ts": "5ab6fd16179936dc493de4431556323e93dc9373e14bb6237dbba1ffdaf659c9",
+      "src/modules/catalog-item/routes.ts": "5323a4a3e0eb248af152de545df4e3e8f6c16afe104837145b5c9b20434822bd",
+      "src/modules/catalog-item/repository.ts": "d7b738a3955a68112daf7d601cf2a75df7effcf71b448178da7e28c7a5b26cdf",
+      "src/modules/catalog-item/webRoutes.ts": "e4df89e2ac44683319a9b479002cc907f0bfb2709cee7830c1ef1c6ac7795166",
+      "src/modules/catalog-item/requests.ts": "51245721e7d20433af535c68093b4abdacf6b6b05a26bd49707843ec938d2db7",
+      "src/modules/catalog-item/table.ts": "6651beb0f0c5bb13ab784de11e49b2887bc387738ac81fd140222f09d196abf2",
+      "src/modules/catalog-item/resources.ts": "3f734daa64fa1b3bddc83c1a5dd8015b69e85314d938ab252eec5f71c052e5f2",
+      "src/modules/catalog-item/webController.ts": "2c634c17306d779ae0b39c3725234591af6fe9cedd9876ac1dc5f5f38aa896de",
+      "src/modules/catalog-item/types.ts": "1f7d5c6f10f557f96b033f596642aa0e60e63c6135ff2bfbcb87f52c18f51c31",
+      "src/modules/catalog-item/policy.ts": "1f600092927ec4b7ea268657e96a72b4852c58a81db88a1e9e93e3879efd24bd",
+      "src/modules/catalog-item/index.ts": "1f6a5a2bd775df6e645a0a855ce210c610b37bf5da309d7c62a31095910189c3",
+      "src/modules/catalog-item/provider.ts": "beecf92d9003a333c65bf62ffd9dcc14efadfec0f4923cb8f77df9c10871ab7d",
+      "src/modules/catalog-item/controller.ts": "b8e4ebc7ed49a03251c8dae923b8ed5e8f1608223a480f0f4cc90447263d03a9",
+      "src/modules/catalog-item/service.ts": "fb1c4f1fe9825425ec8700dbaf269f9b9edc746a7ee4dcce84c011e4fc6b58c5"
+    }
+  }
+]
