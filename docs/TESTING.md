@@ -140,3 +140,20 @@ For exact published qualification, invoke the same harness with
 the generator and runtime packages, owns the disposable database/users/files and
 closes them after each case. These three cases supplement the existing journey
 inventory; they do not replace any auth, module or native-driver assertions.
+
+### Owned SMTP fixture admission
+
+Starter auth journeys keep fixed SMTP/HTTP ports across the real Mailpit stop/start
+outage. Host-side candidate ports do not atomically reserve ports in Docker's
+allocator. `tests/helpers/ownedMailpit.ts` captures the exact container ID with
+`docker create` before attempting `docker start`. It removes that owned container
+on any later setup failure and retries only a port-binding collision, at most five
+startup attempts. It never retries an application request or a journey assertion.
+Other startup errors fail immediately after cleanup.
+
+`tests/e2e/ownedMailpit.test.ts` forces actual Docker port conflicts with a separate
+owned container, checks bounded exhaustion and cleanup, verifies fixed mappings
+across restart, preserves the occupier, and checks non-port error propagation.
+Probe teardown independently records created IDs, so a cleanup regression does not
+leave its own test resources behind. All original readiness, SMTP outage, auth,
+MFA, rollback and contention assertions remain in the unchanged journey body.
