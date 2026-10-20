@@ -6,6 +6,8 @@ import MembershipService, {
 } from "@getstrata/core/auth/membershipService";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
+import MembershipImplementation from "../../src/core/auth/membershipServiceImplementation";
+import { resolveMembershipService as resolveDirect } from "../../src/core/auth/resolveMembershipService";
 import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const membershipRepository = {
@@ -201,4 +203,10 @@ describe("MembershipService current auth user defaults", () => {
       await expect(service.filterAccessibleOrganizationIds([5, 7])).resolves.toEqual([5]);
     });
   });
+});
+
+test("membership service façade preserves implementation and resolver identity", () => {
+  expect(MembershipService).toBe(MembershipImplementation);
+  expect(resolveMembershipService).toBe(resolveDirect);
+  expect(createService()).toBeInstanceOf(MembershipImplementation);
 });
