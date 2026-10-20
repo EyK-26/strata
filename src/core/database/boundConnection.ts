@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from "./baseRepository";
+import type { DatabaseConnection } from "./connectionContracts";
 
 const BOUND_CONNECTION_KEY = Symbol.for("@getstrata/boundDatabaseConnection");
 

@@ -114,7 +114,6 @@ export {
   createTransactionAcquisitionMetrics,
   renderTransactionAcquisitionMetrics,
 } from "../core/database/acquisitionMetrics.ts";
-export type { DatabaseConnection } from "../core/database/baseRepository.ts";
 export { default as BaseRepository } from "../core/database/baseRepository.ts";
 export {
   bindDatabaseConnection,
@@ -128,6 +127,7 @@ export {
   hasActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "../core/database/connectionContext.ts";
+export type { DatabaseConnection } from "../core/database/connectionContracts.ts";
 export {
   getDefaultDatabasePool,
   getDefaultDatabaseQuery,

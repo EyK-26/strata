@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
 import { resolve } from "node:path";
-import type { DatabaseConnection } from "./baseRepository.ts";
 import {
   type ActiveDatabaseHandle,
   getActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "./connectionContext.ts";
+import type { DatabaseConnection } from "./connectionContracts.ts";
 import {
   observeIsolatedReadOnly,
   type ReadOnlyObservationOptions,

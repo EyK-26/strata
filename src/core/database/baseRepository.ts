@@ -6,6 +6,7 @@ import {
   type CursorPaginatedResult,
   type PaginatedResult,
 } from "../pagination/index.ts";
+import type { DatabaseConnection, SqlDatabaseConnection } from "./connectionContracts";
 import { currentSqlDialect } from "./dialect.ts";
 import { withDatabaseErrorHandling } from "./errors.ts";
 import { KEYSET_ALIAS_PREFIX, keysetBoundary, validateKeyset } from "./keyset.ts";
@@ -98,26 +99,6 @@ function readOrder<TEntity extends object>(
     direction: String(order.direction).toUpperCase() === "DESC" ? "desc" : "asc",
     ...(order.nulls === undefined ? {} : { nulls: order.nulls }),
   };
-}
-
-interface DatabaseConnection {
-  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
-  begin?<T>(callback: (transaction: DatabaseConnection) => Promise<T>): Promise<T>;
-  /** Optional native cancellable pool checkout; absence must not be silently emulated. */
-  reserve?(options: {
-    signal?: AbortSignal;
-  }): Promise<DatabaseConnection & { release(): void | Promise<void> }>;
-  /** Optional independent, interruptible read-only observation; no business transaction or pool slot. */
-  observeReadOnly?<T>(
-    operation: (connection: DatabaseConnection) => Promise<T>,
-    options: { signal: AbortSignal; timeoutMs: number },
-  ): Promise<T>;
-  /** SQLite closes synchronously; pooled drivers return a promise. */
-  close?(): void | Promise<void>;
-}
-
-interface SqlDatabaseConnection extends DatabaseConnection {
-  (strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]>;
 }
 
 type CountRow = { count: number | string };
@@ -857,6 +838,11 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   withConnection(connection: DatabaseConnection): this {
+    return this.cloneWithConnection(connection);
+  }
+
+  /** Override when constructor initialization or native private fields must be preserved. */
+  protected cloneWithConnection(connection: DatabaseConnection): this {
     const clone = Object.create(Object.getPrototypeOf(this)) as this;
     Object.assign(clone, this);
     (clone as unknown as { connection: DatabaseConnection }).connection = connection;

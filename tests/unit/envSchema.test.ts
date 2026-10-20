@@ -70,3 +70,41 @@ describe("validateEnv", () => {
     ).toThrow('Environment variable "FRONTEND_MODE" has an invalid format.');
   });
 });
+
+describe("complete integer environment values", () => {
+  test.each(["12junk", "1.5", "1e3", "0x10", "1_000", "1 2", "+", "--1", "Infinity", "NaN"])(
+    "rejects a non-decimal-integer value: %s",
+    (value) => {
+      expect(() => validateEnv({ COUNT: { integer: true } }, { COUNT: value })).toThrow(
+        'Environment variable "COUNT" must be an integer.',
+      );
+    },
+  );
+
+  test.each(["12", "+12", "-12", "0012", "-0", " +0012 \n"])(
+    "preserves a complete signed integer string: %s",
+    (value) => {
+      expect(validateEnv({ COUNT: { integer: true } }, { COUNT: value })).toEqual({ COUNT: value });
+    },
+  );
+
+  test("checks minimum after complete integer validation", () => {
+    expect(validateEnv({ COUNT: { integer: true, minimum: -2 } }, { COUNT: "-2" })).toEqual({
+      COUNT: "-2",
+    });
+    for (const value of ["-3", "-2junk", "-1.5"]) {
+      expect(() =>
+        validateEnv({ COUNT: { integer: true, minimum: -2 } }, { COUNT: value }),
+      ).toThrow('Environment variable "COUNT" must be an integer >= -2.');
+    }
+  });
+
+  test("validates default integers and preserves default selection for blank input", () => {
+    const schema = { COUNT: { integer: true, minimum: 0, default: "0012" } };
+    expect(validateEnv(schema, {})).toEqual({ COUNT: "0012" });
+    expect(validateEnv(schema, { COUNT: " \n" })).toEqual({ COUNT: "0012" });
+    expect(() => validateEnv({ COUNT: { integer: true, default: "12junk" } }, {})).toThrow(
+      'Environment variable "COUNT" must be an integer.',
+    );
+  });
+});
