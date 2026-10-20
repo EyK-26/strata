@@ -22,6 +22,7 @@ class ServiceContainer implements ServiceContainerLike {
   private readonly services = new Map<string, unknown>();
   private readonly singletonFactories = new Map<string, ServiceFactory<unknown>>();
   private readonly bindings = new Map<string, ServiceFactory<unknown>>();
+  private readonly resolutionPath: string[] = [];
 
   set<T>(key: ServiceToken<T>, value: NoInfer<T>): T;
   set<T>(key: LegacyServiceKey, value: T): T;
@@ -58,7 +59,7 @@ class ServiceContainer implements ServiceContainerLike {
     const singletonFactory = this.singletonFactories.get(key);
 
     if (singletonFactory) {
-      const value = singletonFactory(this);
+      const value = this.resolveFactory(key, singletonFactory);
       this.services.set(key, value);
       return value as T;
     }
@@ -66,10 +67,24 @@ class ServiceContainer implements ServiceContainerLike {
     const binding = this.bindings.get(key);
 
     if (binding) {
-      return binding(this) as T;
+      return this.resolveFactory(key, binding) as T;
     }
 
     throw new Error(`Service "${key}" is not registered.`);
+  }
+
+  private resolveFactory<T>(key: string, factory: ServiceFactory<T>): T {
+    if (this.resolutionPath.includes(key)) {
+      throw new Error(
+        `Circular service dependency: ${[...this.resolutionPath, key].join(" -> ")}.`,
+      );
+    }
+    this.resolutionPath.push(key);
+    try {
+      return factory(this);
+    } finally {
+      this.resolutionPath.pop();
+    }
   }
 
   resolve<T>(key: ServiceToken<T>): T;

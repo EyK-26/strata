@@ -648,3 +648,10 @@ Core JSON admission denials for authentication, policies, global-admin access, a
 Generated auth routes use `privateJsonResponse` from `@getstrata/core/http/response` for identity, credentials, CSRF and handled auth JSON responses. It preserves payloads, status and supplied headers/cookies, and sets `Cache-Control: private, no-store` even if a conflicting cache header was supplied. Ordinary `jsonResponse` retains its existing defaults.
 
 Rendered auth pages explicitly select `renderer.namespace("auth", { headers: { "Cache-Control": "private, no-store" } })`. Namespace defaults are copied when the namespace is created; rendering remains explicit. Per-render headers override defaults with the same name, including replacing the complete Set-Cookie list. Other defaults survive, multiple cookies remain separate, and `renderHtmx` still adds its representation Vary fields. Applications own their public/private page policy; no controller-name inference or global successful-response policy is introduced. Explicit redirects and arbitrary native responses retain their existing contracts. Existing apps must adopt this generated shape after upgrading; installing packages alone does not rewrite auth modules.
+
+Synchronous container factories report a circular dependency with its requesting
+service path. Resolution state is cleared when a factory throws, so a repaired
+registration can be resolved again. Singleton values are cached only after a
+successful factory return; transient factories still run on every resolution.
+Factories retain their existing synchronous contract. This diagnostic does not
+add asynchronous dependency resolution or change provider boot/cleanup ownership.
