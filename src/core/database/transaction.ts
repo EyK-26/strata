@@ -4,13 +4,13 @@ import {
   observeTransactionAcquisition,
   type TransactionAcquisitionMetrics,
 } from "./acquisitionMetrics.ts";
-import type { DatabaseConnection } from "./baseRepository.ts";
 import { createDatabaseConnection, type UnsafeQueryable } from "./connection.ts";
 import {
   getActiveDatabaseConnection,
   hasActiveDatabaseConnection,
   runWithDatabaseConnection,
 } from "./connectionContext.ts";
+import type { DatabaseConnection } from "./connectionContracts.ts";
 import { resolveRepositoryConnection } from "./repositoryConnection.ts";
 import {
   commitOrRollbackScope,
