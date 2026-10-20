@@ -177,6 +177,8 @@ ${tokenLookup}
 function renderAuthProvider(layers: StarterLayers): string {
   if (layers.auth === "headers") {
     return `import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
+import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
+import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
@@ -188,6 +190,7 @@ const authProvider: ServiceProvider = {
       ? new GuestGuard()
       : { resolve: () => null };
     container.set(CORE_AUTH_TOKEN, new AuthManager(guard));
+    container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());
   },
 };
 
@@ -228,9 +231,7 @@ export default authProvider;
       ? `    auth.registerGuard("basic", new BasicAuthGuard(container));`
       : "";
 
-  const ability = authUsesToken(layers.auth)
-    ? `    container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());`
-    : "";
+  const ability = `    container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());`;
 
   const imports: string[] = [`import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";`];
   if (authUsesCookie(layers.auth)) {
@@ -251,16 +252,11 @@ export default authProvider;
   if (authUsesJwt(layers.auth)) {
     imports.push(`import { JwtGuard } from "@getstrata/core/auth/jwtGuard";`);
   }
-  if (authUsesToken(layers.auth)) {
-    imports.push(
-      `import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";`,
-    );
-  }
+  imports.push(
+    `import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";`,
+  );
   imports.push(`import type { ServiceProvider } from "@getstrata/core/contracts/di";`);
-  const tokenImports = ["CORE_AUTH_USER_DIRECTORY_TOKEN"];
-  if (authUsesToken(layers.auth)) {
-    tokenImports.unshift("CORE_ABILITY_CHECKER_TOKEN");
-  }
+  const tokenImports = ["CORE_ABILITY_CHECKER_TOKEN", "CORE_AUTH_USER_DIRECTORY_TOKEN"];
   imports.push(
     `import {\n  ${tokenImports.join(",\n  ")},\n} from "@getstrata/core/contracts/serviceTokens";`,
   );

@@ -31,7 +31,21 @@ auth.registerGuard("jwt", new JwtGuard(container));
 auth.registerGuard("basic", new BasicAuthGuard(container));
 ```
 
-Generated applications do this in the generated `src/bootstrap/providers/auth.ts`. `JwtGuard` needs a directory (or container) so it can reject tokens whose `iat` is before `session_valid_after`. A `JwtGuard` without a directory returns null. It does not call `configureAbilityCatalog`. Default token abilities for HMAC sessions and test headers stay `profile:read` plus `auth:tokens:*` unless you replace the catalog:
+Generated applications do this in the generated `src/bootstrap/providers/auth.ts`. `JwtGuard` needs a directory (or container) so it can reject tokens whose `iat` is before `session_valid_after`. A `JwtGuard` without a directory returns null. It does not call `configureAbilityCatalog`.
+
+Every generated auth provider also registers the ability checker, including cookie-only, JWT-only and development-header apps. `make:module` uses `kernel.wrapAbility` for its API writes independently of the credential selection. The existing checker reads the authenticated identity's abilities; registering it does not enable opaque-token authentication, require an API-token table, or grant new permissions. Applications still choose their own grants and resource policies.
+
+Existing generated apps must adopt the corrected registration in `src/bootstrap/providers/auth.ts`; updating packages does not rewrite application source:
+
+```typescript
+import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
+import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+
+// In the auth provider's register({ container }) method:
+container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());
+```
+
+Default token abilities for HMAC sessions and test headers stay `profile:read` plus `auth:tokens:*` unless you replace the catalog:
 
 ```typescript
 import { configureAbilityCatalog } from "@getstrata/core/auth/abilityCatalog";

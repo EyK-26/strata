@@ -1,0 +1,52 @@
+{
+  "version": "2.2.46",
+  "expected": 7,
+  "executed": 7,
+  "results": [
+    {
+      "name": "sqlite-headers",
+      "exitCode": 1,
+      "elapsedMs": 774,
+      "missingAbilityChecker": true
+    },
+    {
+      "name": "sqlite-cookie",
+      "exitCode": 1,
+      "elapsedMs": 653,
+      "missingAbilityChecker": true
+    },
+    {
+      "name": "sqlite-token",
+      "exitCode": 0,
+      "elapsedMs": 1019,
+      "missingAbilityChecker": false
+    },
+    {
+      "name": "sqlite-jwt",
+      "exitCode": 1,
+      "elapsedMs": 657,
+      "missingAbilityChecker": true
+    },
+    {
+      "name": "sqlite-cookie-token",
+      "exitCode": 0,
+      "elapsedMs": 1017,
+      "missingAbilityChecker": false
+    },
+    {
+      "name": "sqlite-cookie-token-jwt",
+      "exitCode": 0,
+      "elapsedMs": 1147,
+      "missingAbilityChecker": false
+    },
+    {
+      "name": "mysql-cookie",
+      "exitCode": 1,
+      "elapsedMs": 1239,
+      "missingAbilityChecker": true
+    }
+  ],
+  "scope": "Actual installed make:module and route bootstrap, no source patch. Four missing-checker failures are historical published 2.2.46 evidence, not expected-failure tests or skips.",
+  "reportedProfile": "server-htmx/mysql/cookie/no tenancy/Redis cache+queue/SMTP/MFA/email verification",
+  "candidate": "All seven expected-success Bun E2E profiles pass with generator registration correction; final full gate and publication remain pending."
+}
