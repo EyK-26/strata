@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { removeOwnedDockerContainers } from "../tests/helpers/ownedDockerContainers";
 
 const root = join(import.meta.dir, "..");
 const id = crypto.randomUUID().replaceAll("-", "");
@@ -420,10 +421,7 @@ try {
   edge?.stop(true);
   try {
     // Only resources named by this invocation are removed, including failed setup.
-    for (const owned of [server, migration, database, redis]) {
-      const found = await run(["docker", "container", "ls", "-aq", "--filter", `name=^/${owned}$`]);
-      if (found) await run(["docker", "rm", "-f", owned]);
-    }
+    await removeOwnedDockerContainers(run, [server, migration, database, redis]);
   } finally {
     try {
       const found = await run(["docker", "image", "ls", "-q", image]);
