@@ -1662,7 +1662,6 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   async save(): Promise<this> {
     const ModelClass = modelStatics(this.constructor);
     const timestamps = ModelClass.$timestamps ?? true;
-    const casts = ModelClass.$casts ?? {};
     const table = this.repository.getTable();
     const updating = this.$exists;
 
@@ -1682,7 +1681,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       }
       const changes = applyTimestampsOnUpdate(
         table.columns,
-        await applyCasts(dirty, casts, "dehydrate"),
+        await ModelClass.dehydrateAttributes(dirty),
         timestamps,
       ) as UpdateValues<TEntity, PrimaryKey>;
       const record = await this.repository.updateByIdOrThrow(this.id, changes);
