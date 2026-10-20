@@ -328,7 +328,7 @@ class ${moduleName}Controller {
     bindRouteModel(
       "id",
       (id) => this.service.findByIdOrThrow(id),
-      async (_request, record) => {
+      async (_request: RouteRequest<${moduleName}IdParams>, record) => {
         return jsonResponse(to${moduleName}Resource(record));
       },
     ),
@@ -358,7 +358,7 @@ class ${moduleName}Controller {
       "id",
       (id) => this.service.findByIdOrThrow(id),
       { resource: "${moduleSlug}", action: "delete" },
-      async (_request, record) => {
+      async (_request: RouteRequest<${moduleName}IdParams>, record) => {
         await this.service.delete(record.id);
         return noContentResponse();
       },
@@ -373,7 +373,6 @@ export default ${moduleName}Controller;
       "routes.ts",
       `import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
-import type { RouteHandler } from "@getstrata/core/http/middleware";
 ${withWeb ? 'import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}import ${moduleName}Controller from "./controller";
 
 function create${moduleName}Routes(
@@ -389,18 +388,18 @@ ${withWeb ? `  const apiBase = \`\${apiPrefix()}/${pluralSlug}\`;\n` : ""}
       GET: controller.index,
       POST: kernel.wrapAbility(
         "${pluralSlug}:create",
-        controller.store as unknown as RouteHandler,
+        controller.store,
       ),
     },
     ${withWeb ? `[\`\${apiBase}/:id\`]` : `"/${pluralSlug}/:id"`}: {
       GET: controller.show,
       PATCH: kernel.wrapAbility(
         "${pluralSlug}:update",
-        controller.update as unknown as RouteHandler,
+        controller.update,
       ),
       DELETE: kernel.wrapAbility(
         "${pluralSlug}:delete",
-        controller.destroy as unknown as RouteHandler,
+        controller.destroy,
       ),
     },
   };
@@ -526,7 +525,6 @@ export default ${moduleName}WebController;
       "webRoutes.ts",
       `import type { AppDependencies } from "@getstrata/core/contracts/di";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
-import type { RouteHandler } from "@getstrata/core/http/middleware";
 import ${moduleName}WebController from "./webController";
 
 function create${moduleName}WebRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
@@ -534,7 +532,7 @@ function create${moduleName}WebRoutes(dependencies: AppDependencies, kernel: Htt
 
   return {
     "/${pluralSlug}": {
-      GET: kernel.wrapWebPublicRead(controller.index as unknown as RouteHandler),
+      GET: kernel.wrapWebPublicRead(controller.index),
     },
   };
 }

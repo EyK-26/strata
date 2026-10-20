@@ -146,6 +146,15 @@ try {
     await readFile(join(fixture.app, ".env.example"), "utf8"),
   );
   await command(["make:module", "target", ...(withWeb ? ["--with-web"] : [])]);
+  if (process.argv.includes("--typed-handlers")) {
+    await writeFile(
+      join(fixture.app, "src/modules/target/qualification.contract.ts"),
+      await readFile(
+        new URL("../tests/fixtures/generated-module-handlers.ts.template", import.meta.url),
+        "utf8",
+      ),
+    );
+  }
   if (withWeb) {
     await command(["make:migration", "create_target"]);
     const directory = join(fixture.app, "src/db/migrations");

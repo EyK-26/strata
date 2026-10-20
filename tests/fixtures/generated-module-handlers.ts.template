@@ -1,0 +1,52 @@
+/** Compiled inside a real generated app against its installed public packages. */
+import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
+import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import type { RouteRequest } from "@getstrata/core/http/route";
+import TargetController from "./controller";
+import { createTargetRoutes } from "./routes";
+
+export function generatedHandlerContracts(
+  dependencies: AppDependencies,
+  cachedJson: CachedJson,
+  kernel: HttpKernel,
+  plain: Request,
+  item: RouteRequest<{ id: string }>,
+  other: RouteRequest<{ slug: string }>,
+): void {
+  const controller = new TargetController(dependencies, cachedJson);
+  controller.index();
+  controller.index(plain);
+  controller.store(plain);
+  controller.show(item);
+  controller.update(item);
+  controller.destroy(item);
+  // @ts-expect-error A model-bound read requires an id, not an unrelated parameter.
+  controller.show(other);
+  // @ts-expect-error A model-bound delete requires the actual id parameter.
+  controller.destroy(other);
+  for (const route of Object.values(createTargetRoutes(dependencies, cachedJson, kernel))) {
+    if ("POST" in route && route.POST) {
+      const response: Response | Promise<Response> = route.POST(plain);
+      void response;
+      // @ts-expect-error An admitted mutation still needs its request.
+      route.POST();
+    }
+    if ("PATCH" in route && "DELETE" in route && route.PATCH && route.DELETE) {
+      const updated: Response | Promise<Response> = route.PATCH(item);
+      const deleted: Response | Promise<Response> = route.DELETE(item);
+      void updated;
+      void deleted;
+      // @ts-expect-error Ability composition must retain required route parameters.
+      route.PATCH(plain);
+      // @ts-expect-error Ability composition must retain the actual id parameter.
+      route.PATCH(other);
+      // @ts-expect-error Ability composition must retain required route parameters.
+      route.DELETE(plain);
+      // @ts-expect-error Ability composition must retain the actual id parameter.
+      route.DELETE(other);
+      // @ts-expect-error A generated handler returns an HTTP response, never a string.
+      const invalid: ReturnType<typeof route.PATCH> = "not a response";
+      void invalid;
+    }
+  }
+}
