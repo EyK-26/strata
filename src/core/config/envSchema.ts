@@ -31,10 +31,11 @@ function validateEnv(
     }
 
     if (rule.integer) {
+      const completeInteger = /^[+-]?\d+$/.test(value.trim());
       const parsed = Number.parseInt(value, 10);
       const minimum = rule.minimum ?? Number.NEGATIVE_INFINITY;
 
-      if (!Number.isInteger(parsed) || parsed < minimum) {
+      if (!completeInteger || !Number.isInteger(parsed) || parsed < minimum) {
         const comparison =
           minimum === Number.NEGATIVE_INFINITY ? "an integer" : `an integer >= ${minimum}`;
         throw new Error(`Environment variable "${name}" must be ${comparison}.`);
