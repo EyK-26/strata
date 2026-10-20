@@ -1,5 +1,12 @@
 # @getstrata/core changelog
 
+## 2.2.48
+
+- Validate complete integer environment values instead of accepting partial numeric strings; retain documented defaults, signs and minimum checks.
+- Add the protected `BaseRepository.cloneWithConnection()` construction hook for custom repositories with native private state. Keep the default legacy rebinding behavior and avoid rerunning application constructors implicitly; concrete subclasses own their construction override.
+- Separate database connection capability contracts and membership lookup internals while retaining existing exports, constructors and service identity.
+- Report synchronous dependency-resolution cycles with their service path and clean resolution state after failure, preserving singleton and transient behavior.
+
 ## 2.2.47
 
 - Align the package version with the starter/CLI correction batch; no core runtime behavior changes.
