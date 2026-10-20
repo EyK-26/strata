@@ -857,6 +857,11 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   withConnection(connection: DatabaseConnection): this {
+    return this.cloneWithConnection(connection);
+  }
+
+  /** Override when constructor initialization or native private fields must be preserved. */
+  protected cloneWithConnection(connection: DatabaseConnection): this {
     const clone = Object.create(Object.getPrototypeOf(this)) as this;
     Object.assign(clone, this);
     (clone as unknown as { connection: DatabaseConnection }).connection = connection;

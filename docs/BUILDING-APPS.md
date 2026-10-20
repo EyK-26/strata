@@ -21,6 +21,13 @@ Layer flags: [STARTER.md](./STARTER.md). The starter templates and layer rendere
 
 For typed native Bun transport options, WebSockets, request-hook coverage and streamed-body limits, see [native HTTP configuration](NATIVE-HTTP.md). Review the transport ceiling and hook changes before upgrading existing applications.
 
+## Environment validation
+
+`validateEnv` validates integer rules against the complete trimmed signed decimal
+string. Fractions, exponents and trailing text are rejected rather than partially
+parsed. Signed values, leading zeros, defaults and minimum bounds remain supported;
+the result retains the original string instead of normalizing application settings.
+
 ## Frontend shapes
 
 Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMode` (`parseFrontendMode`, `FRONTEND_MODE_PATTERN`). Apps should reuse that pattern in their env schema instead of copying a regex.
@@ -339,6 +346,15 @@ The MySQL adapter reserves a pool connection for each awaited transaction and bi
 MySQL has no native mutation `RETURNING`. Entity-returning repository creates, upserts, ID updates/increments and restores therefore run their write and row readback in one framework transaction on one reserved session. Generated keys come from that statement's insert metadata; supplied string keys and stored defaults are preserved. No-op ID updates/increments return the live row even when the MySQL client reports changed rather than matched rows. Soft-delete and force-delete return false for absent/scoped-out rows, and observers receive rows rather than driver headers. Set-based conditional writes still use `affectedRows` metadata and bypass per-row observers. Postgres and SQLite retain their native RETURNING statements.
 
 Injected repositories can select a root pool through `runInTransaction(operation, { connection })`; default repository queries inside the callback share that active connection. Nested calls use savepoints and reject switching to an unrelated pool. The callback connection works with `repository.withConnection(db)`, including row locks. A transaction callback must not outlive its owning scope. Transactional observers still require an explicit outer framework transaction; do not use repository readback transactions as an implicit business transaction.
+
+Repositories with constructor-initialized state or JavaScript `#private` fields must override
+`protected cloneWithConnection(connection): this` to construct a valid instance using that
+state and the supplied connection. `withConnection` delegates to this hook and leaves the
+original repository unchanged. The default hook preserves the existing shallow copy and
+prototype behavior for ordinary repositories; it cannot create native private-field brands.
+An override must return the same concrete repository type, carry all required state and
+use the supplied connection. Subclasses that introduce additional private state must extend
+that contract rather than relying on an inherited constructor for a different concrete type.
 
 MySQL upsert uses the engine's native unique-index semantics, which do not target a single named conflict constraint. Supply non-null conflict-column values so zero-insert-ID results can be resolved deterministically; an unresolved row rolls back instead of returning metadata. An explicit empty update-column list returns null for an existing conflict and a row for a new insert. This path locks the conflict lookup and may deadlock under contention, like other transactional MySQL upserts; callers must handle transaction failures rather than retry external effects blindly.
 
