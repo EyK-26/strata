@@ -16,3 +16,14 @@ export async function readOnlyObservationContract(connection: DatabaseConnection
   // @ts-expect-error Observation requires an explicit interruption signal and deadline.
   sqlite.observeReadOnly(async () => 1, {});
 }
+
+// Existing root and repository subpaths must retain the same capability contract.
+export function repositoryConnectionCompatibility(
+  root: DatabaseConnection,
+  repository: import("@getstrata/core/database/baseRepository").DatabaseConnection,
+  sql: import("@getstrata/core/database/baseRepository").SqlDatabaseConnection,
+): [DatabaseConnection, import("@getstrata/core/database/baseRepository").DatabaseConnection] {
+  const tagged: Promise<unknown[]> = sql`SELECT ${1}`;
+  void tagged;
+  return [repository, root];
+}

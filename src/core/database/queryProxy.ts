@@ -1,5 +1,5 @@
-import type { DatabaseConnection, SqlDatabaseConnection } from "./baseRepository";
 import { getActiveDatabaseConnection } from "./connectionContext";
+import type { DatabaseConnection, SqlDatabaseConnection } from "./connectionContracts";
 
 const POOL_CONNECTION_METHODS = new Set(["begin", "close", "connect"]);
 

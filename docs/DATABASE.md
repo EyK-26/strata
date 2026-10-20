@@ -435,3 +435,10 @@ This opt-in infrastructure path requires the tested Bun CLI on trusted PATH (als
 ### Independent MySQL observations
 
 `createMysqlConnection(url)` exposes the same `observeReadOnly` capability using a dedicated mysql2 connection in an isolated Bun CLI process. The URL and resolved peer module travel through IPC, not command arguments or inherited environment. It uses UTC and an InnoDB read-only transaction; ordinary application queries continue using the existing pool. Adapter close stops admission and drains observations before closing the pool. `createMysqlConnectionFromPool` fails explicitly for observation because it has no public URL configuration to create an independently interruptible connection. See [runtime metrics requirements](RUNTIME-METRICS.md#mysql-collector-requirements-and-costs) for additional connection budgets, tested engine, schema guards and the distinction between client deadlines and server cleanup.
+
+Connection capabilities are defined independently of repository behavior. Existing
+`DatabaseConnection` imports from the core root, `database` and `database/baseRepository`
+remain supported. Native transaction checkout and interruptible read-only observation
+remain optional capabilities; consumers must reject unsupported operations rather than
+silently simulate them. Internal adapters depend on the type-only connection contract,
+so they do not import the repository implementation to describe their transport.
