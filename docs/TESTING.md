@@ -180,6 +180,18 @@ bumps out of these snapshots; existing package-version, compiler, installed runt
 A deliberate generated-output change requires reviewing its corresponding baseline
 change as well as keeping the explicit behavior assertions and runtime gates passing.
 
+Auth flow rendering keeps selection policy in `auth/renderingContext.ts`, imports in
+`auth/renderImports.ts`, shared account helpers in `auth/renderWorkflows.ts`, JSON/SSO
+routes in `auth/renderApiRoutes.ts` and HTML adapters in `auth/renderBrowserRoutes.ts`.
+Each fragment accepts only the selection fields it uses. `renderAuthFlows.ts` retains
+its existing exports and assembles the same generated module. The helpers already
+shared by JSON/HTML remain app-owned; this source extraction does not move generated
+operations, change policy or introduce a framework workflow/plugin abstraction.
+`authRendering.test.ts` freezes all five auth artifacts across 64 selected profiles
+captured before extraction, including independent MFA, verification, GitHub and OIDC
+selections. It supplements the original file inventories and installed auth journeys;
+it does not replace SMTP, rollback/contention, MFA or credential-revocation assertions.
+
 ### Owned SMTP fixture admission
 
 Starter auth journeys keep fixed SMTP/HTTP ports across the real Mailpit stop/start
