@@ -16,6 +16,19 @@ import {
   type ModelCasts,
   snapshotAttributes,
 } from "./modelAttributes.ts";
+import {
+  bindModelRepository,
+  findNamedModel,
+  getModelObservers,
+  type ModelObserver,
+  nameModel,
+  observeModel,
+  registerModelClass,
+  registerModelRepositoryFactory,
+  resolveModelRepository,
+  restoreModelObservers,
+  runObservers,
+} from "./modelRegistry.ts";
 import { resolveSoftDeleteColumn } from "./query.ts";
 import type { AnyRelationQuery, RelatedModelClass } from "./relationQuery.ts";
 import {
@@ -84,11 +97,7 @@ interface ModelConstructor<
   ): TModel;
 }
 
-const modelRepositories = new WeakMap<object, BaseRepository<Record<string, unknown>, "id">>();
-const modelRepositoryFactories = new WeakMap<object, () => object>();
-const namedModels = new Map<string, object>();
 const modelGlobalScopes = new WeakMap<object, GlobalScopeFn<Record<string, unknown>, "id">[]>();
-const modelObservers = new WeakMap<object, ModelObserver[]>();
 const modelBooted = new WeakSet<object>();
 
 type AnyModel = Model<Record<string, unknown>, "id">;
@@ -135,32 +144,6 @@ function flattenRelationNames(relations: ReadonlyArray<RelationNameInput>): stri
   }
 
   return names;
-}
-
-type ModelObserver = {
-  retrieved?: (model: AnyModel) => unknown;
-  creating?: (model: AnyModel) => unknown;
-  created?: (model: AnyModel) => unknown;
-  updating?: (model: AnyModel) => unknown;
-  updated?: (model: AnyModel) => unknown;
-  saving?: (model: AnyModel) => unknown;
-  saved?: (model: AnyModel) => unknown;
-  deleting?: (model: AnyModel) => unknown;
-  deleted?: (model: AnyModel) => unknown;
-};
-
-async function runObservers(model: AnyModel, hook: keyof ModelObserver): Promise<boolean> {
-  const observers = modelObservers.get(model.constructor) ?? [];
-
-  for (const observer of observers) {
-    const handler = observer[hook];
-
-    if (handler && (await handler(model)) === false) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 function accessorName(key: string): string {
@@ -272,34 +255,12 @@ async function loadNested(
   await eagerLoadOnModels([model], [path]);
 }
 
-function nameModel(model: object): void {
-  const { name, $morphClass } = model as { name?: string; $morphClass?: string };
-  if (name) namedModels.set(name, model);
-  if ($morphClass) namedModels.set($morphClass, model);
-}
-
-function resolveModelRepository(model: object): BaseRepository<Record<string, unknown>, "id"> {
-  const existing = modelRepositories.get(model);
-  if (existing) return existing;
-
-  // Inherit the definition, but cache a separate repository for each concrete class.
-  for (let current: object | null = model; current; current = Object.getPrototypeOf(current)) {
-    const factory = modelRepositoryFactories.get(current);
-    if (!factory) continue;
-    const repository = factory() as BaseRepository<Record<string, unknown>, "id">;
-    modelRepositories.set(model, repository);
-    nameModel(model);
-    return repository;
-  }
-  throw new Error(`${(model as { name: string }).name}.repository() is not implemented.`);
-}
-
 /** Typed model base with a lazily created framework repository and active connection. */
 function defineModel<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
   table: TableDefinition<TEntity, PrimaryKey>,
 ): typeof Model<TEntity, PrimaryKey> {
   class TableModel extends Model<TEntity, PrimaryKey> {}
-  modelRepositoryFactories.set(TableModel, () => new BaseRepository(table));
+  registerModelRepositoryFactory(TableModel, () => new BaseRepository(table));
   return TableModel;
 }
 
@@ -322,16 +283,11 @@ function bootModels(models: readonly object[]): void {
   }
 }
 
-/** Alias for `hasMany("Name")` when `Name` is not `constructor.name` or `$morphClass`. */
-function registerModelClass(name: string, model: object): void {
-  namedModels.set(name, model);
-}
-
 function resolveRelated<TRelated extends object, RelatedKey extends keyof TRelated & string>(
   related: RelatedRef<TRelated, RelatedKey>,
 ): RelatedModelClass<TRelated, RelatedKey> {
   if (typeof related === "string") {
-    const found = namedModels.get(related);
+    const found = findNamedModel(related);
     if (!found) {
       throw new Error(`Model [${related}] is not registered. Call registerModelClass() first.`);
     }
@@ -396,7 +352,7 @@ function ensureBooted(model: object): void {
   modelBooted.add(model);
 
   const scopes = modelGlobalScopes.get(model);
-  const observers = modelObservers.get(model);
+  const observers = getModelObservers(model);
   const boot = (model as { boot?: () => void }).boot;
 
   if (typeof boot === "function") {
@@ -406,8 +362,7 @@ function ensureBooted(model: object): void {
       modelBooted.delete(model);
       if (scopes) modelGlobalScopes.set(model, scopes);
       else modelGlobalScopes.delete(model);
-      if (observers) modelObservers.set(model, observers);
-      else modelObservers.delete(model);
+      restoreModelObservers(model, observers);
       throw error;
     }
   }
@@ -1018,8 +973,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   static boot(): void {}
 
   static observe(this: object, observer: ModelObserver): void {
-    const existing = modelObservers.get(this) ?? [];
-    modelObservers.set(this, [...existing, observer]);
+    observeModel(this, observer);
   }
 
   static addGlobalScope<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
@@ -1884,10 +1838,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
 
 /** Binds a Model class to its table/connection and names it for `hasMany("User")`. */
 function registerModelRepository<TModelClass>(model: TModelClass, repository: object): TModelClass {
-  modelRepositories.set(
-    model as object,
-    repository as BaseRepository<Record<string, unknown>, "id">,
-  );
+  bindModelRepository(model as object, repository as BaseRepository<Record<string, unknown>, "id">);
   nameModel(model as object);
   ensureBooted(model as object);
   return model;

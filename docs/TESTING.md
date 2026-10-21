@@ -288,6 +288,22 @@ profiles and assertions remain. The old published 2.2.48 fails this new contract
 on all three engines; the corrected candidate passes all three. Historical
 113-profile published acceptance remains a record of its original selected scope.
 
+Model registration and observer bookkeeping now live in an internal owner with
+type-only references to the public Model and repository classes. Boot admission and
+scope application remain in the Model facade. `model.registration.test.ts` first
+characterizes duplicate-name admission, failed-boot observer restoration, async
+observer cancellation before SQL and concrete-class ownership on the original
+implementation. The same assertions pass after extraction. Existing Model query,
+projection, protected extension and write bodies are preserved; no registry maps or
+new public package entrypoints are exposed.
+
+`verify-repository-rebinding.ts --database=sqlite --model-registry-contracts` runs
+every original installed repository/transaction/event assertion before a separate
+public Model consumer. Exact published 2.2.48 and fresh candidate packages both
+pass duplicate alias, boot retry, per-class repository identity and observer
+admission checks. This adds one installed E2E and one next-release profile; it
+does not replace the earlier attribute, protected write-hook or lifecycle profiles.
+
 Model attribute transformations now have an internal source owner independent of
 model registration, observers, repositories and queries. Existing public imports
 of cast helpers remain supported through `database/model`; the complete `Model`,
