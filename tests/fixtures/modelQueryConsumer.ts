@@ -1,12 +1,9 @@
 /** Installed consumer of the public ModelQuery/projection facade; uses the migrated app table. */
 import assert from "node:assert/strict";
 import type { InitializedAppContext } from "@getstrata/bootstrap/context";
-import { ModelQuery as DatabaseModelQuery } from "@getstrata/core/database";
 import { defineModel, ModelQuery } from "@getstrata/core/database/model";
 import { hasMany } from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
-
-assert.equal(ModelQuery, DatabaseModelQuery);
 
 type Row = { id: number; scope: string; label: string };
 const table = defineTable<Row, "id">({

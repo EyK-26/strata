@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /** Ensure shared subpath shims re-export the main @getstrata/core bundle. */
 
+import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CORE_SHARED_SUBPATHS } from "./core-shared-subpaths.ts";
@@ -39,6 +40,7 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   "tracing/tracingMiddleware": ["createTracingRuntime", "renderTracingMetrics"],
   "database/model": [
     "Model",
+    "ModelQuery",
     "defineModel",
     "bootModels",
     "registerModelRepository",
@@ -213,6 +215,12 @@ for (const subpath of CORE_SHARED_SUBPATHS) {
 const barrelPath = join(ROOT, "packages/strata-core/dist/index.js");
 try {
   const barrel = await import(barrelPath);
+  // Legacy barrel compatibility belongs in the package verifier; application
+  // consumers keep using granular imports as required by the import gate.
+  const { ModelQuery } = await import(join(ENTRIES_DIR, "database/model.js"));
+  const { ModelQuery: DatabaseModelQuery } = await import(join(ENTRIES_DIR, "database.js"));
+  assert.equal(ModelQuery, DatabaseModelQuery, "ModelQuery must retain legacy database identity.");
+  assert.equal(ModelQuery, barrel.ModelQuery, "ModelQuery must retain root bundle identity.");
   for (const exportName of REQUIRED_SHARED_RUNTIME_EXPORTS["database/boundConnection"] ?? []) {
     if (!(exportName in barrel) || barrel[exportName] === undefined) {
       errors.push(`@getstrata/core dist/index.js missing runtime export "${exportName}"`);
