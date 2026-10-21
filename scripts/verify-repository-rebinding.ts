@@ -16,6 +16,7 @@ const modelQueryContracts = process.argv.includes("--model-query-contracts");
 const relationQueryContracts = process.argv.includes("--relation-query-contracts");
 const auditExportContracts = process.argv.includes("--audit-export-contracts");
 const routeCollisionContracts = process.argv.includes("--route-collision-contracts");
+const redisProtocolContracts = process.argv.includes("--redis-protocol-contracts");
 if (auditExportContracts)
   assert.equal(database, "postgres", "Audit RLS qualification requires Postgres.");
 const fixture = await createGeneratedSecurityApp(
@@ -182,6 +183,13 @@ export default migration;
   const queryConsumer = join(fixture.app, "src/qualification/modelQuery.ts");
   const relationConsumer = join(fixture.app, "src/qualification/relationQueries.ts");
   const collisionConsumer = join(fixture.app, "src/qualification/routeCollision.ts");
+  const redisConsumer = join(fixture.app, "src/qualification/redisProtocols.ts");
+  if (redisProtocolContracts) {
+    await copyFile(
+      join(import.meta.dir, "../tests/fixtures/redisProtocolConsumer.ts"),
+      redisConsumer,
+    );
+  }
   if (routeCollisionContracts) {
     await copyFile(
       join(import.meta.dir, "../tests/fixtures/routeCollisionConsumer.ts"),
@@ -232,6 +240,18 @@ export default migration;
   if (modelQueryContracts) console.log((await run([queryConsumer])).trim());
   if (relationQueryContracts) console.log((await run([relationConsumer])).trim());
   if (routeCollisionContracts) console.log((await run([collisionConsumer])).trim());
+  if (redisProtocolContracts) {
+    const redisUrl = process.env.REDIS_URL;
+    assert.ok(redisUrl, "Provide the explicit dedicated Redis fixture URL.");
+    console.log(
+      (
+        await run([redisConsumer], {
+          REDIS_URL: redisUrl,
+          APP_KEY_PREFIX: `strata-protocol-${crypto.randomUUID()}`,
+        })
+      ).trim(),
+    );
+  }
   if (auditExportContracts) console.log((await run([auditConsumer])).trim());
 } finally {
   process.off("SIGTERM", terminate);

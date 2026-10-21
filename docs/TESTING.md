@@ -463,3 +463,15 @@ wire format, retry, cancellation or ownership policy changes.
 New script owners receive full coverage; the nine existing cache instrumentation
 exclusions are listed explicitly so new cache files do not inherit a directory
 exclusion. The exemption list and all existing assertions remain intact.
+
+`verify-repository-rebinding.ts --database=sqlite --redis-protocol-contracts`
+adds one installed public-API acceptance profile: original repository assertions
+run first, followed by real native Redis list/Streams delivery and owner-fenced
+ACK/renewal, independent cache tag/query-prefix coordination, and scheduler
+stale-owner/deduplication. No timer/client substitute or production lease change.
+Fresh UUID namespaces are captured empty before work; cleanup verifies every
+owned key is removed and an unrelated owned marker survives scoped cleanup.
+Exact published 2.2.48 and the packed candidate pass the same consumer. An initial
+new-fixture call incorrectly assumed arbitrary string-prefix cache matching; its
+failed log is retained. Inputs now exercise the existing exact/query-prefix
+contract, preserving all expected removal counts and existing assertions.
