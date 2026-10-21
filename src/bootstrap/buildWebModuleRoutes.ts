@@ -1,5 +1,6 @@
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import { registerOpenApiRouteMap } from "./buildModuleRoutes";
+import { createCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { discoverModules } from "./modules";
@@ -22,6 +23,7 @@ function buildWebModuleRoutes(
   }
 
   const kernel = createHttpKernel(dependencies);
+  const cachedJson = createCachedJson(dependencies);
   const middleware = kernel.globalMiddleware("web");
   const moduleRoutes: Record<string, unknown> = { ...seedRoutes };
 
@@ -34,7 +36,7 @@ function buildWebModuleRoutes(
       moduleRoutes,
       module.webRoutes({
         dependencies,
-        cachedJson: async () => new Response(""),
+        cachedJson,
         kernel,
       }),
     );
