@@ -126,4 +126,19 @@ describe("mergeWebRoutes", () => {
     expect(merged["/assets/*"]).toBeDefined();
     expect(merged["/health"]).toBeDefined();
   });
+  test("explicit API routes retain precedence over colliding module web routes", () => {
+    process.env.FRONTEND_MODE = "server-htmx";
+    const apiRoute = { GET: () => new Response("api") };
+    const merged = mergeWebRoutes(
+      createTestDependencies(),
+      { "/shared": apiRoute },
+      {
+        modules: [
+          { name: "web", webRoutes: () => ({ "/shared": { POST: () => new Response("web") } }) },
+        ],
+      },
+    );
+    expect(merged["/shared"]).toBe(apiRoute);
+    expect(Object.keys(merged["/shared"])).toEqual(["GET"]);
+  });
 });

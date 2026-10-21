@@ -14,6 +14,24 @@ interface BuildModuleRoutesOptions {
   clearRegistry?: boolean;
 }
 
+/** Prefix handlers and their own contracts together so normalized aliases share one winner. */
+function prefixApiModuleRoutes(
+  prefix: string,
+  routes: Record<string, unknown>,
+  metadata: OpenApiRouteMap,
+): { routes: Record<string, unknown>; metadata: OpenApiRouteMap } {
+  const entries = Object.fromEntries(
+    Object.entries(routes).map(([path, handler]) => [path, { handler, openApi: metadata[path] }]),
+  );
+  const prefixedRoutes: Record<string, unknown> = {};
+  const prefixedMetadata: OpenApiRouteMap = {};
+  for (const [path, entry] of Object.entries(prefixRouteMap(prefix, entries))) {
+    prefixedRoutes[path] = entry.handler;
+    if (entry.openApi) prefixedMetadata[path] = entry.openApi;
+  }
+  return { routes: prefixedRoutes, metadata: prefixedMetadata };
+}
+
 function buildModuleRoutes(
   dependencies: AppDependencies,
   options: BuildModuleRoutesOptions = {},
@@ -54,14 +72,10 @@ function buildModuleRoutes(
     Object.assign(moduleRoutes, routes);
   }
 
-  const prefixedModuleRoutes = prefixRouteMap(apiPrefix, moduleRoutes);
+  const prefixed = prefixApiModuleRoutes(apiPrefix, moduleRoutes, metadata);
 
   return applyModuleRouteMiddleware(
-    registerOpenApiRouteMap(
-      prefixedModuleRoutes,
-      ["global", "api"],
-      prefixRouteMap(apiPrefix, metadata) as OpenApiRouteMap,
-    ),
+    registerOpenApiRouteMap(prefixed.routes, ["global", "api"], prefixed.metadata),
     middleware,
   ) as AppRouteMap;
 }
