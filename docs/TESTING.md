@@ -222,3 +222,11 @@ Both contexts use the existing conditional JSON implementation. Module authors
 still choose cache keys/tags and pass the Request when conditional responses are
 wanted. This does not add automatic tenant/user key selection, change TTL/store
 policy or replace the existing Redis/process/native/published qualification gates.
+
+
+API and web builders share the neutral route-metadata owner, with the original
+`buildModuleRoutes` registration export preserved. `moduleRouteMetadata.test.ts`
+characterizes the original registry append behavior, mixed-case method metadata,
+plain handlers and intact static response shapes before extraction. It does not
+claim that metadata registration implements native transport dispatch. Existing
+API/web admission, cache and OpenAPI tests still exercise the real builders.

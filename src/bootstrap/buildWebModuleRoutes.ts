@@ -1,9 +1,9 @@
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
-import { registerOpenApiRouteMap } from "./buildModuleRoutes";
 import { createCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { discoverModules } from "./modules";
+import { registerOpenApiRouteMap } from "./routeMetadata";
 import { routeRegistry } from "./routeRegistry";
 
 interface BuildWebModuleRoutesOptions {
