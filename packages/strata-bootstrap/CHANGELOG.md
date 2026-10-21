@@ -1,5 +1,12 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.49
+
+- Supply the real shared conditional cache operation to API and web module contexts, preserving tags, ETags, invalidation and error recovery.
+- Keep provider phase admission inside lifecycle ownership, retaining reverse cleanup, drain/flush/close ordering and shared application identity.
+- Preserve native callback arguments and cloned Response routes, apply CSRF correctly to mixed method maps, and pair normalized route aliases with the winning handler's own metadata. Existing whole-path override precedence remains intact.
+- Align core requirements with 2.2.49. Opaque native file/directory/HTML routes remain a known adapter limitation; this patch does not bypass request admission or introduce a public-assets API.
+
 ## 2.2.48
 
 - Align the core peer requirement with 2.2.48 for strict environment validation, compatible repository contracts and dependency-cycle diagnostics. Existing HTTP kernel, module-context and provider contracts remain unchanged.
