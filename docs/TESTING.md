@@ -222,3 +222,12 @@ Both contexts use the existing conditional JSON implementation. Module authors
 still choose cache keys/tags and pass the Request when conditional responses are
 wanted. This does not add automatic tenant/user key selection, change TTL/store
 policy or replace the existing Redis/process/native/published qualification gates.
+
+
+`providerPhaseAdmission.test.ts` exercises real provider contexts with in-memory
+cache/storage dependencies. An explicitly started drain/flush must reject work
+registered from its very first callback; promise memoization alone occurs too late
+for that synchronous admission check. Later phases remain available during an
+explicit drain. Existing reverse-order, failure, drain-before-close, repeat disposal
+and startup-cleanup tests remain required; a failed drain still keeps infrastructure
+open beneath live work.
