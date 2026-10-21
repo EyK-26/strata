@@ -270,7 +270,7 @@ and web middleware. It adds one installed E2E and next-release qualification pro
 This proof covers response/function routes; it does not qualify HTML bundles,
 directory routes or every native Bun static form.
 
-### Installed model serialization hooks
+### Installed Model query contracts
 
 `model.queryContracts.test.ts` characterizes the public Model query facade with real
 SQLite queries: protected scopes, partial projection cursors, concrete subclasses,
@@ -291,6 +291,8 @@ characterization but rejects the added valid relation call at application typech
 fresh corrected packages pass that same consumer. This adds one next-release
 profile, retaining all earlier profiles and their assertions. Mechanical query
 extraction is a separate follow-up.
+
+### Installed model serialization hooks
 
 `tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
 harness for SQLite, MySQL and PostgreSQL with `--model-write-hooks`. After every
