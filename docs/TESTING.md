@@ -410,3 +410,17 @@ remain byte-identical. Existing nested, polymorphic, many-to-many, protected-sco
 custom-repository and cross-tenant negative cases remain required, together with
 the installed three-engine relation consumer and public negative type contracts.
 No public method signature, runtime fallback, new profile or exemption is added.
+
+
+API prefixing carries each handler and its own OpenAPI contract as one entry.
+Previously, relative and absolute raw paths could normalize to one endpoint while
+retaining the replaced handler's contract. Whole-path replacement, raw-path insertion
+precedence, API-over-web merge precedence and middleware order remain unchanged;
+characterization tests freeze those existing rules before the correction.
+`verify-repository-rebinding.ts --database=sqlite --route-collision-contracts`
+runs all original repository assertions first, then checks actual HTTP responses
+against the winning route's metadata using only public bootstrap APIs. The exact
+published 2.2.48 consumer reproduces stale metadata; the corrected packed consumer
+passes. This adds one separate acceptance profile; the original native-route
+consumer and every historical assertion remain intact. It does not qualify opaque
+Bun file/directory/HTML transport or add an admission bypass.

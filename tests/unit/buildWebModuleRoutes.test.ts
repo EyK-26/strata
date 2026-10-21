@@ -7,6 +7,7 @@ import {
 } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
+import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
@@ -52,5 +53,26 @@ describe("buildWebModuleRoutes", () => {
     });
 
     expect(routes["/home"]).toBeDefined();
+  });
+  test("modules replace seed paths and earlier method maps without changing unrelated paths", () => {
+    const routes = buildWebModuleRoutes(createTestDependencies(), {
+      seedRoutes: {
+        "/shared": { DELETE: () => new Response("seed") },
+        "/kept": () => new Response("kept"),
+      },
+      modules: [
+        { name: "first", webRoutes: () => ({ "/shared": { GET: () => new Response("first") } }) },
+        {
+          name: "second",
+          webRoutes: () => ({ "/shared": { POST: () => new Response("second") } }),
+        },
+      ],
+    });
+    expect(Object.keys(routes["/shared"])).toEqual(["POST"]);
+    expect(typeof routes["/kept"]).toBe("function");
+    expect(routeRegistry.list()).toEqual([
+      { method: "GET", path: "/kept", middleware: ["global", "web"] },
+      { method: "POST", path: "/shared", middleware: ["global", "web"] },
+    ]);
   });
 });
