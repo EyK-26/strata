@@ -65,7 +65,7 @@ export function renderAuthImports({
     `import { AUTH_ONE_TIME_PURPOSES, consumeOneTimeToken, generateOneTimeToken, hashOneTimeToken, revokeUserSessions as revokeStoredUserSessions } from "@getstrata/core/auth/oneTimeToken";`,
   );
   imports.push(
-    `import { completePasswordLogin, persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";`,
+    `import { completePasswordLogin, persistConsumedRecoveryHash, type PasswordLoginResult } from "@getstrata/core/auth/passwordLogin";`,
   );
   if (mfa) {
     imports.push(

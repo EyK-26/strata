@@ -5,20 +5,18 @@ export function renderBrowserAuthRoutes({
   mfa,
   verify,
 }: Pick<AuthRenderingContext, "cookie" | "mfa" | "verify">) {
-  const mfaLoginBranch = `const mfaResult = completePasswordLogin(user, { mfaCode: mfa_code });
-              if (!mfaResult.ok) {
+  const mfaLoginBranch = `if (!mfaResult.ok) {
                 ${
                   mfa
                     ? `if (mfaResult.error === "mfa_required") {
                   const pending = redirectTo("/login/mfa");
-                  pending.headers.append("set-cookie", pendingMfaSetCookie(user.id, user.auth_version));
+                  pending.headers.append("set-cookie", pendingMfaSetCookie(mfaResult.user.id, mfaResult.user.auth_version));
                   return pending;
                 }`
                     : ""
                 }
                 return views.render("login.eta", { layout: { title: "Sign in" }, errors: { email: "These credentials do not match our records." }, email, password: "" }, { request });
-              }
-              await persistAuthRecovery(user.id, user.mfa_recovery_codes, mfaResult.consumedRecoveryHash);`;
+              }`;
 
   const registerSuccessExisting = `return flashResponse(
                 redirectTo("/login"),
@@ -45,11 +43,10 @@ export function renderBrowserAuthRoutes({
             async (request) => {
               const { fields } = await parseFormBody(request);
               const { email, password, mfa_code } = parseLoginCredentials(fields);
-              return runWithLoginUser(email, async (user) => {
-              if (!user?.password || !(await verifyPassword(password, user.password))) {
-                return views.render("login.eta", { layout: { title: "Sign in" }, errors: { email: "These credentials do not match our records." }, email, password: "" }, { request });
-              }
+              return runWithLoginUser(email, async (candidate) => {
+              const mfaResult = await authenticatePasswordUser(candidate, password, mfa_code);
               ${mfaLoginBranch}
+              const user = mfaResult.user;
               return auth.signInRedirect(sessionUser(user), "/");
               });
             },
