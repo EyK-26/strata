@@ -475,3 +475,29 @@ Exact published 2.2.48 and the packed candidate pass the same consumer. An initi
 new-fixture call incorrectly assumed arbitrary string-prefix cache matching; its
 failed log is retained. Inputs now exercise the existing exact/query-prefix
 contract, preserving all expected removal counts and existing assertions.
+
+SMTP address validation and MIME assembly now have a pure internal owner; socket
+connection, protocol states, deadlines, cancellation and cleanup stay in the existing
+transport. All moved function bodies and the remaining facade/transport bodies stay
+byte-identical, and public mailer helper/type exports remain available. The message
+owner refers to MailMessage only through a type import, with no runtime facade cycle.
+Existing MIME UTF-8/header/control-character/dot-transparency tests and actual SMTP
+AUTH, fragmented replies, EOF, backpressure, cancellation, implicit TLS and DATA
+acceptance tests remain required. The old mail coverage wildcard is narrowed to its
+exact pre-existing files so the new owner is measured, with no new exemption.
+
+The compatible maintainability batch retains the existing guarded HTTP adapter.
+A separate real-SDK characterization reproduces an existing limitation: opaque
+Bun file/directory/HTML values and the false-route sentinel retain builder identity
+but are not dispatched by `createWebServer`. Native passthrough would bypass
+framework request admission. This batch explicitly defers that API/design choice
+to the separately reviewed major-version plan; it does not claim full opaque-route
+transport qualification or replace Bun's router/bundler with an application shim.
+Existing callback/Response/method-map admission and lifecycle assertions remain.
+
+The conditional lifecycle, outbox, auth, storage and migration reviews retain their
+existing cohesive ownership boundaries. Provider phase admission and audit SQL
+ownership received separately reproduced fixes; no universal worker, callback
+registry, new crypto layer or driver hierarchy was justified solely by file size.
+Simultaneous independent application contexts and a combined tenant/deferred-event
+shutdown scenario are not newly promised by these selected qualifications.

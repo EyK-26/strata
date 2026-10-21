@@ -1,5 +1,12 @@
 # @getstrata/core changelog
 
+## 2.2.49
+
+- Restore documented protected dirty-attribute write hooks and related-model forwarding types, preserving custom repositories, transactional events, scopes and serialization behavior.
+- Separate private model attribute/registration/query/projection state and relation SQL compilation. Keep existing public/protected entrypoints, driver behavior and eager-loading runtime semantics.
+- Release exporter-owned audit SQL scopes before HTTP delivery and acknowledge only the accepted snapshot; preserve caller-owned transactions, pending failures and at-least-once delivery.
+- Move Redis list/Streams/cache/scheduler Lua protocols and SMTP MIME/address assembly into private owners without changing script/wire bytes, leases, fencing, retries, socket behavior or public imports.
+
 ## 2.2.48
 
 - Validate complete integer environment values instead of accepting partial numeric strings; retain documented defaults, signs and minimum checks.

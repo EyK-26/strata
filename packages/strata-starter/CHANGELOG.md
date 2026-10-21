@@ -1,5 +1,11 @@
 # create-strata changelog
 
+## 2.2.49
+
+- Separate pure runtime, environment and auth rendering by artifact responsibility while preserving legacy rendering exports, generated file paths and declared byte contracts.
+- Share a plain-input application-owned password/MFA/recovery operation between initial JSON and browser login adapters. Keep request parsing, statuses, cookies, views, credential issuance and the outer login-user lock at their existing boundaries.
+- Generate aligned 2.2.49 dependencies. Existing applications must review and adopt relevant generated-source changes themselves; package installation does not overwrite customizations.
+
 ## 2.2.48
 
 - Separate shared development database defaults, Docker image/Compose rendering and supporting-tool instructions into their artifact owners. Preserve generated paths, bytes, role defaults and tool selections.

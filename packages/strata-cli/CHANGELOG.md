@@ -1,5 +1,10 @@
 # @getstrata/cli changelog
 
+## 2.2.49
+
+- Align core/bootstrap requirements with the 2.2.49 compatible HTTP, model and runtime correction batch. Existing module generation and permission boundaries remain unchanged.
+- Installing the CLI does not rewrite existing application-owned generated sources.
+
 ## 2.2.48
 
 - Separate pure module rendering from filesystem orchestration while retaining generated file paths and behavior.
