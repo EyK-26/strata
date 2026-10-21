@@ -8,6 +8,7 @@ import { createSqliteConnection } from "@getstrata/core/database/sqliteConnectio
 import { defineTable } from "@getstrata/core/database/table";
 import { runInTransaction } from "@getstrata/core/database/transaction";
 import { eventBus } from "@getstrata/core/events";
+import { verifyModelWriteHooks } from "./modelWriteHookConsumer.ts";
 
 type Item = { id: number; scope: string; label: string };
 const table = defineTable<Item, "id">({
@@ -144,6 +145,12 @@ try {
   assert.equal(first.getConnection(), primary);
   assert.equal(second.getConnection(), secondary);
   assert.deepEqual(await legacyCopy.findById(committed.id), committed);
+  if (process.env.STRATA_QUALIFY_MODEL_WRITE_HOOKS === "true") {
+    await verifyModelWriteHooks(new BaseRepository(table, primary));
+    console.log(
+      `PASS installed model write hooks ${driver}: sync/async dispatch, stale fields, failure and retry`,
+    );
+  }
   console.log(
     `PASS installed repository rebinding ${driver}: private state, independent bindings, rollback and commit events`,
   );
