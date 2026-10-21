@@ -223,6 +223,15 @@ still choose cache keys/tags and pass the Request when conditional responses are
 wanted. This does not add automatic tenant/user key selection, change TTL/store
 policy or replace the existing Redis/process/native/published qualification gates.
 
+
+`verify-starter-module.ts --auth=cookie --with-web --api-prefix=/backend/cache --cached-json`
+adds an installed HTTP cache contract after all original module assertions. Its own
+module uses only public module/cache APIs and the same `apiPrefix()` convention as
+`make:module`. Both API and web contexts must serve tagged/untagged JSON, preserve
+ETag/304/private response headers, invalidate and reload, serve request-less false
+JSON, and recover from an uncached loader failure. The existing generation, CLI,
+OpenAPI, typecheck, auth/denial, HTMX and shutdown assertions remain intact.
+`--published=<exact-version>` qualifies the same contract against registry packages.
 ### Installed model serialization hooks
 
 `tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
