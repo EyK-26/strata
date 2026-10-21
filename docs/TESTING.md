@@ -208,3 +208,12 @@ across restart, preserves the occupier, and checks non-port error propagation.
 Probe teardown independently records created IDs, so a cleanup regression does not
 leave its own test resources behind. All original readiness, SMTP outage, auth,
 MFA, rollback and contention assertions remain in the unchanged journey body.
+
+
+The environment renderer keeps `renderEnv.ts` as its compatible facade. Its environment/
+PostgreSQL provisioning, project metadata and documentation artifacts have separate
+source owners. `starterRendering.test.ts` keeps the existing eight generated profiles
+and every frozen file hash unchanged, and checks all 16 facade export identities.
+The official bump contract also verifies the relocated package-pin source, template
+and existing assertion pins, plus frozen install and dedupe stability. The RLS source
+fence includes all three new owners with no new bypass exception.

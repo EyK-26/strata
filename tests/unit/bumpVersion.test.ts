@@ -262,7 +262,7 @@ describe("bump workspace install contract", () => {
       await write("README.md", "Published as **1.0.0**");
       for (const file of [
         "packages/strata-starter/templates/package.json",
-        "packages/strata-starter/src/renderEnv.ts",
+        "packages/strata-starter/src/renderProjectMetadata.ts",
         "tests/unit/cli/starterGenerate.test.ts",
         "tests/unit/cli/starterTemplate.test.ts",
       ]) {
@@ -275,6 +275,18 @@ describe("bump workspace install contract", () => {
         "@getstrata/core": "^2.0.0",
         "@getstrata/bootstrap": "^2.0.0",
       });
+      // Generated package pins have their own source owner; the official bump must
+      // update that owner as well as every existing template/assertion pin.
+      for (const file of [
+        "packages/strata-starter/templates/package.json",
+        "packages/strata-starter/src/renderProjectMetadata.ts",
+        "tests/unit/cli/starterGenerate.test.ts",
+        "tests/unit/cli/starterTemplate.test.ts",
+      ]) {
+        expect(await readFile(join(root, file), "utf8"), file).toContain(
+          '"@getstrata/core": "^2.0.0"',
+        );
+      }
       const lock = await readFile(join(root, "bun.lock"), "utf8");
       expect(lock).not.toContain('"^1.0.0"');
       await run(["install", "--frozen-lockfile", "--ignore-scripts"]);
