@@ -232,3 +232,20 @@ ETag/304/private response headers, invalidate and reload, serve request-less fal
 JSON, and recover from an uncached loader failure. The existing generation, CLI,
 OpenAPI, typecheck, auth/denial, HTMX and shutdown assertions remain intact.
 `--published=<exact-version>` qualifies the same contract against registry packages.
+### Installed model serialization hooks
+
+`tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
+harness for SQLite, MySQL and PostgreSQL with `--model-write-hooks`. After every
+original private-state repository, connection, transaction and event assertion,
+the opt-in fixture checks synchronous/asynchronous protected model serialization,
+dirty-only updates, unchanged saves, stale unrelated fields, rejection before SQL
+and retry on the same instance. It uses the same migrated application table and
+restricted runtime credentials; no runtime DDL, extra grant or package patch.
+
+Run `scripts/with-host-env.sh bun scripts/verify-repository-rebinding.ts
+--database=<engine> --model-write-hooks` against packed candidates. Adding
+`--published=<exact-version>` exercises the same assertions against registry
+packages. These are three additional acceptance profiles; the original repository
+profiles and assertions remain. The old published 2.2.48 fails this new contract
+on all three engines; the corrected candidate passes all three. Historical
+113-profile published acceptance remains a record of its original selected scope.
