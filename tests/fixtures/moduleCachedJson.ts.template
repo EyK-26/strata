@@ -1,0 +1,38 @@
+import type { AppModule, AppRouteMap, ModuleRouteContext } from "@getstrata/bootstrap/contracts";
+import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";
+
+function routes({ cachedJson, dependencies }: ModuleRouteContext, mode: string): AppRouteMap {
+  const result: AppRouteMap = {};
+  const base = `${mode === "api" ? apiPrefix() : ""}/qualification-cache/${mode}`;
+  for (const tagged of [false, true]) {
+    let loads = 0;
+    const key = `qualification-json-${mode}-${tagged}`;
+    const tag = `${key}-tag`;
+    const path = `${base}/${tagged ? "tagged" : "plain"}`;
+    result[path] = {
+      GET: (request: Request) => cachedJson(key, async () => ({ loads: ++loads }), tagged ? [tag] : [], request),
+    };
+    result[`${path}/invalidate`] = {
+      GET: async () => Response.json(tagged ? await dependencies.cache.tags(tag).flush() : await dependencies.cache.forget(key)),
+    };
+  }
+  let attempts = 0;
+  result[`${base}/failure`] = {
+    GET: (request: Request) => cachedJson(`qualification-failure-${mode}`, async () => {
+      if (++attempts === 1) throw new Error("expected qualification loader failure");
+      return { attempts };
+    }, [], request),
+  };
+  result[`${base}/without-request`] = {
+    GET: () => cachedJson(`qualification-false-${mode}`, async () => false),
+  };
+  return result;
+}
+
+const module: AppModule = {
+  name: "qualification-cache",
+  routes: (context) => routes(context, "api"),
+  webRoutes: (context) => routes(context, "web"),
+};
+
+export default module;
