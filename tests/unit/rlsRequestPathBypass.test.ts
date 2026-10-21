@@ -33,7 +33,8 @@ const allowedUnbounded = new Set([
   join(generated.rls, "src/db/migrate.ts"),
   join(repoRoot, "src/db/migrations/runner.ts"),
   join(repoRoot, "src/db/seeders/runner.ts"),
-  join(repoRoot, "src/core/audit/exportAuditLogs.ts"),
+  // Worker-only SQL snapshots/acknowledgements; HTTP effects remain outside this owner.
+  join(repoRoot, "src/core/audit/exportStore.ts"),
   // Worker-only coordination; publication is fenced to the business transaction below.
   join(repoRoot, "src/core/events/outbox/index.ts"),
   // Explicit authenticated platform observation: capped, read-only, deadline-bound.
