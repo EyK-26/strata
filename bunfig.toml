@@ -163,7 +163,16 @@ coveragePathIgnorePatterns = [
   "src/core/config/**",
 
   # Infrastructure drivers and observability plumbing
-  "src/core/cache/**",
+  # Preserve the existing cache baseline; new protocol owners remain instrumented.
+  "src/core/cache/createCacheStore.ts",
+  "src/core/cache/keys.ts",
+  "src/core/cache/redisCacheStore.ts",
+  "src/core/cache/repository.ts",
+  "src/core/cache/simpleCache.ts",
+  "src/core/cache/simpleCacheStore.ts",
+  "src/core/cache/store.ts",
+  "src/core/cache/taggedCache.ts",
+  "src/core/cache/tags.ts",
   "src/core/storage/**",
   "src/core/mail/mailer.ts",
   "src/core/mail/markdownMail.ts",
