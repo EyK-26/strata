@@ -356,3 +356,14 @@ copies and typechecks an installed consumer of the public provider/context APIs.
 Every original repository/transaction/event assertion runs first in its own process;
 the additional consumer separately checks phase admission and later-phase cleanup.
 Use `--published=<exact-version>` for the same contract against registry packages.
+
+Redis list/stream queue, cache and scheduler lease scripts have private source
+owners separate from their transports and workers. Script literal and expanded
+header bytes, key expressions, KEYS/ARGV order, result decoding and the remaining
+client/worker bodies are preserved. The existing real Redis reservation, failure,
+renewal, worker-crash recovery, cache coordination/reconnection and scheduler
+contention assertions pass before and after the move. No production lease,
+wire format, retry, cancellation or ownership policy changes.
+New script owners receive full coverage; the nine existing cache instrumentation
+exclusions are listed explicitly so new cache files do not inherit a directory
+exclusion. The exemption list and all existing assertions remain intact.
