@@ -13,6 +13,7 @@ const nativeRouteContracts = process.argv.includes("--native-route-contracts");
 const modelAttributeContracts = process.argv.includes("--model-attribute-contracts");
 const modelRegistryContracts = process.argv.includes("--model-registry-contracts");
 const modelQueryContracts = process.argv.includes("--model-query-contracts");
+const relationQueryContracts = process.argv.includes("--relation-query-contracts");
 const fixture = await createGeneratedSecurityApp(
   database,
   [
@@ -109,6 +110,26 @@ const migration: Migration = {
 export default migration;
 `,
   );
+  if (relationQueryContracts) {
+    await writeFile(
+      join(fixture.app, "src/db/migrations/9998_relation_queries.ts"),
+      `import type { Migration } from "@getstrata/core/database/migrations/types";
+import { Schema, resolveDatabaseDriver } from "@getstrata/core/database/schema";
+const migration: Migration = {
+  name: "9998_relation_queries",
+  async up(db) { await Schema.run(db, resolveDatabaseDriver(), schema => {
+    schema.create("relation_bridges", table => { table.id(); table.integer("parent_id"); });
+    schema.create("relation_far", table => { table.id(); table.integer("bridge_id"); table.integer("tenant_id"); table.string("name"); table.softDeletes(); });
+    schema.create("relation_pivot", table => { table.id(); table.integer("parent_id"); table.integer("far_id"); });
+  }); },
+  async down(db) { await Schema.run(db, resolveDatabaseDriver(), schema => {
+    schema.drop("relation_pivot"); schema.drop("relation_far"); schema.drop("relation_bridges");
+  }); },
+};
+export default migration;
+`,
+    );
+  }
   await run([join(fixture.app, "node_modules/@getstrata/cli/cli.ts"), "migrate"], {
     MIGRATION_DATABASE_URL: fixture.migrationUrl,
     DATABASE_URL: fixture.migrationUrl,
@@ -134,6 +155,13 @@ export default migration;
   const attributeConsumer = join(fixture.app, "src/qualification/modelAttributes.ts");
   const registryConsumer = join(fixture.app, "src/qualification/modelRegistry.ts");
   const queryConsumer = join(fixture.app, "src/qualification/modelQuery.ts");
+  const relationConsumer = join(fixture.app, "src/qualification/relationQueries.ts");
+  if (relationQueryContracts) {
+    await copyFile(
+      join(import.meta.dir, "../tests/fixtures/relationQueryConsumer.ts"),
+      relationConsumer,
+    );
+  }
   if (modelQueryContracts) {
     await copyFile(join(import.meta.dir, "../tests/fixtures/modelQueryConsumer.ts"), queryConsumer);
   }
@@ -163,6 +191,7 @@ export default migration;
   if (modelAttributeContracts) console.log((await run([attributeConsumer])).trim());
   if (modelRegistryContracts) console.log((await run([registryConsumer])).trim());
   if (modelQueryContracts) console.log((await run([queryConsumer])).trim());
+  if (relationQueryContracts) console.log((await run([relationConsumer])).trim());
 } finally {
   process.off("SIGTERM", terminate);
   await cleanup();
