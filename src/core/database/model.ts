@@ -45,7 +45,11 @@ import type {
   BelongsToManyRelation,
   BelongsToRelation,
   HasManyRelation,
+  HasManyThroughRelation,
   HasOneRelation,
+  MorphManyRelation,
+  MorphOneRelation,
+  MorphToRelation,
 } from "./relationships.ts";
 import {
   belongsTo,
@@ -597,50 +601,155 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     return this.constrainExists(name, constrain, true);
   }
 
-  withHasMany(
-    ...args: Parameters<RepositoryQuery<Record<string, unknown>, "id">["withHasMany"]>
+  // Parameters<generic method> erases related records and turns their keys into never.
+  // Named argument tuples retain inference and preserve exact runtime forwarding.
+  withHasMany<
+    TChild extends object,
+    LocalKey extends keyof Record<string, unknown> & string,
+    ForeignKey extends keyof TChild & string,
+    Alias extends string,
+  >(
+    ...args: [
+      as: Alias,
+      relation: HasManyRelation<Record<string, unknown>, TChild, LocalKey, ForeignKey>,
+      childRepository: BaseRepository<TChild, keyof TChild & string>,
+      options?: Omit<QueryOptions<TChild>, "where">,
+    ]
   ): this {
     this.query.withHasMany(...args);
     return this;
   }
 
-  withBelongsTo(
-    ...args: Parameters<RepositoryQuery<Record<string, unknown>, "id">["withBelongsTo"]>
+  withBelongsTo<
+    TParent extends object,
+    ForeignKey extends keyof Record<string, unknown> & string,
+    OwnerKey extends keyof TParent & string,
+    Alias extends string,
+  >(
+    ...args: [
+      as: Alias,
+      relation: BelongsToRelation<Record<string, unknown>, TParent, ForeignKey, OwnerKey>,
+      parentRepository: BaseRepository<TParent, OwnerKey>,
+      options?: Omit<QueryOptions<TParent>, "where">,
+    ]
   ): this {
     this.query.withBelongsTo(...args);
     return this;
   }
 
-  withBelongsToMany(
-    ...args: Parameters<RepositoryQuery<Record<string, unknown>, "id">["withBelongsToMany"]>
+  withBelongsToMany<
+    TRelated extends object,
+    Pivot extends object,
+    ParentKey extends keyof Record<string, unknown> & string,
+    RelatedKey extends keyof TRelated & string,
+    ForeignPivotKey extends keyof Pivot & string,
+    RelatedPivotKey extends keyof Pivot & string,
+    Alias extends string,
+  >(
+    ...args: [
+      as: Alias,
+      relation: BelongsToManyRelation<
+        Record<string, unknown>,
+        TRelated,
+        Pivot,
+        ParentKey,
+        RelatedKey,
+        ForeignPivotKey,
+        RelatedPivotKey
+      >,
+      relatedRepository: BaseRepository<TRelated, RelatedKey>,
+      options?: Omit<QueryOptions<TRelated>, "where">,
+    ]
   ): this {
     this.query.withBelongsToMany(...args);
     return this;
   }
 
-  withMorphMany(
-    ...args: Parameters<RepositoryQuery<Record<string, unknown>, "id">["withMorphMany"]>
+  withMorphMany<
+    TChild extends object,
+    LocalKey extends keyof Record<string, unknown> & string,
+    MorphTypeKey extends keyof TChild & string,
+    MorphIdKey extends keyof TChild & string,
+    Alias extends string,
+  >(
+    ...args: [
+      as: Alias,
+      relation: MorphManyRelation<
+        Record<string, unknown>,
+        TChild,
+        LocalKey,
+        MorphTypeKey,
+        MorphIdKey
+      >,
+      childRepository: BaseRepository<TChild, keyof TChild & string>,
+      options?: Omit<QueryOptions<TChild>, "where">,
+    ]
   ): this {
     this.query.withMorphMany(...args);
     return this;
   }
 
-  withMorphOne(
-    ...args: Parameters<RepositoryQuery<Record<string, unknown>, "id">["withMorphOne"]>
+  withMorphOne<
+    TChild extends object,
+    LocalKey extends keyof Record<string, unknown> & string,
+    MorphTypeKey extends keyof TChild & string,
+    MorphIdKey extends keyof TChild & string,
+    Alias extends string,
+  >(
+    ...args: [
+      as: Alias,
+      relation: MorphOneRelation<
+        Record<string, unknown>,
+        TChild,
+        LocalKey,
+        MorphTypeKey,
+        MorphIdKey
+      >,
+      childRepository: BaseRepository<TChild, keyof TChild & string>,
+      options?: Omit<QueryOptions<TChild>, "where">,
+    ]
   ): this {
     this.query.withMorphOne(...args);
     return this;
   }
 
-  withMorphTo(
-    ...args: Parameters<RepositoryQuery<Record<string, unknown>, "id">["withMorphTo"]>
+  withMorphTo<
+    TParent extends object,
+    MorphTypeKey extends keyof Record<string, unknown> & string,
+    MorphIdKey extends keyof Record<string, unknown> & string,
+    Alias extends string,
+  >(
+    ...args: [
+      as: Alias,
+      relation: MorphToRelation<Record<string, unknown>, MorphTypeKey, MorphIdKey>,
+      repositoriesByType: ReadonlyMap<string, BaseRepository<TParent, keyof TParent & string>>,
+      options?: Omit<QueryOptions<TParent>, "where">,
+      optionsByType?: ReadonlyMap<string, QueryOptions<TParent>>,
+    ]
   ): this {
     this.query.withMorphTo(...args);
     return this;
   }
 
-  withHasManyThrough(
-    ...args: Parameters<RepositoryQuery<Record<string, unknown>, "id">["withHasManyThrough"]>
+  withHasManyThrough<
+    TFar extends object,
+    LocalKey extends keyof Record<string, unknown> & string,
+    SecondKey extends keyof TFar & string,
+    Alias extends string,
+  >(
+    ...args: [
+      as: Alias,
+      relation: HasManyThroughRelation<
+        Record<string, unknown>,
+        TFar,
+        LocalKey,
+        string,
+        string,
+        SecondKey
+      >,
+      farRepository: BaseRepository<TFar, keyof TFar & string>,
+      options?: Omit<QueryOptions<TFar>, "where">,
+    ]
   ): this {
     this.query.withHasManyThrough(...args);
     return this;

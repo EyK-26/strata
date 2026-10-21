@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { InitializedAppContext } from "@getstrata/bootstrap/context";
 import { ModelQuery as DatabaseModelQuery } from "@getstrata/core/database";
 import { defineModel, ModelQuery } from "@getstrata/core/database/model";
+import { hasMany } from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
 
 assert.equal(ModelQuery, DatabaseModelQuery);
@@ -41,7 +42,9 @@ try {
     .select("label")
     .keysetPaginate({ perPage: 1, orderBy });
   assert.deepEqual(projected.data, [{ label: "query first" }]);
-  assert.equal("save" in projected.data[0]!, false);
+  const projectedRow = projected.data[0];
+  assert.ok(projectedRow);
+  assert.equal("save" in projectedRow, false);
   assert.ok(projected.meta.next_cursor);
   assert.deepEqual(retrieved, []);
   const second = await QueryEntry.query().select("label").keysetPaginate({
@@ -55,6 +58,20 @@ try {
   assert.ok(page.data[0] instanceof QueryEntry);
   assert.equal(page.data[0]?.label(), "query first");
   assert.deepEqual(retrieved, [first.id]);
+
+  const grouped = await QueryEntry.where({ id: first.id })
+    .withHasMany(
+      "same_scope",
+      hasMany<Row, Row>({ name: "same_scope", localKey: "scope", foreignKey: "scope" }),
+      QueryEntry.repository<Row, "id">(),
+      { orderBy: { id: "asc" } },
+    )
+    .first();
+  assert.ok(grouped instanceof QueryEntry);
+  assert.deepEqual(Reflect.get(grouped.toObject(), "same_scope"), [
+    { id: first.id, scope: "query-visible", label: "query first" },
+    { id: last.id, scope: "query-visible", label: "query last" },
+  ]);
 
   const direct = new ModelQuery<QueryEntry>(QueryEntry, QueryEntry.query().query);
   assert.ok(direct instanceof ModelQuery);

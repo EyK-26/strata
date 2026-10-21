@@ -1,12 +1,24 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
 } from "@getstrata/core/database/boundConnection";
 import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
 import { defineModel, ModelQuery } from "@getstrata/core/database/model";
+import {
+  belongsTo,
+  belongsToMany,
+  hasMany,
+  hasManyThrough,
+  morphMany,
+  morphOne,
+  morphTo,
+} from "@getstrata/core/database/relationships";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
 import { defineTable } from "@getstrata/core/database/table";
+
+type GraphRow = Record<string, unknown>;
 
 type Row = { id: number; scope: string; label: string };
 const table = defineTable<Row, "id">({
@@ -105,5 +117,153 @@ describe("public Model query and projection contracts", () => {
     ]) {
       expect(compose).toThrow("Entry has no relation method missing().");
     }
+  });
+
+  test("native query filters, offsets and limits compose without changing model hydration", async () => {
+    await database();
+    class Entry extends defineModel(table) {}
+    expect(await Entry.query().whereNull("scope").get()).toEqual([]);
+    const rows = await Entry.query()
+      .whereIn("id", [1, 3])
+      .orderBy({ id: "asc" })
+      .offset(1)
+      .limit(1)
+      .get();
+    expect(rows.map((row) => row.toObject())).toEqual([
+      { id: 3, scope: "visible", label: "third" },
+    ]);
+    expect(rows[0]).toBeInstanceOf(Entry);
+  });
+
+  test("legacy explicit relation maps attach native SQL results and retain soft-delete selection", async () => {
+    const connection = await database();
+    await connection.unsafe(
+      "CREATE TABLE query_graph_nodes (id INTEGER PRIMARY KEY, parent_id INTEGER, owner_type TEXT, owner_id INTEGER, deleted_at TEXT)",
+    );
+    await connection.unsafe(
+      "CREATE TABLE query_graph_edges (id INTEGER PRIMARY KEY, parent_id INTEGER)",
+    );
+    await connection.unsafe("CREATE TABLE query_graph_pivot (parent_id INTEGER, node_id INTEGER)");
+    await connection.unsafe(
+      "INSERT INTO query_graph_nodes VALUES (1,3,'node',2,NULL),(2,1,'node',1,NULL),(3,20,'node',20,NULL),(4,1,'node',1,'2026-01-01')",
+    );
+    await connection.unsafe("INSERT INTO query_graph_edges VALUES (20,1)");
+    await connection.unsafe("INSERT INTO query_graph_pivot VALUES (1,3)");
+    // This legacy API accepts dynamic record/alias maps. Keep that existing public
+    // boundary explicit rather than casting concrete repositories to erased ones.
+    const graph = defineTable<Record<string, unknown>, "id">({
+      name: "query_graph_nodes",
+      primaryKey: "id",
+      columns: ["id", "parent_id", "owner_type", "owner_id", "deleted_at"],
+      softDeletes: true,
+    });
+    class Node extends defineModel(graph) {}
+    const repository = new BaseRepository(graph, connection);
+    const root = () => Node.where({ id: 1 });
+    const checks = [
+      [
+        root().withHasMany(
+          "related",
+          hasMany<GraphRow, GraphRow>({
+            name: "children",
+            localKey: "id",
+            foreignKey: "parent_id",
+          }),
+          repository,
+        ),
+        [expect.objectContaining({ id: 2 })],
+      ],
+      [
+        root().withBelongsTo(
+          "related",
+          belongsTo<GraphRow, GraphRow>({
+            name: "parent",
+            foreignKey: "parent_id",
+            ownerKey: "id",
+          }),
+          repository,
+        ),
+        expect.objectContaining({ id: 3 }),
+      ],
+      [
+        root().withBelongsToMany(
+          "related",
+          belongsToMany<GraphRow, GraphRow, GraphRow>({
+            name: "linked",
+            pivotTable: "query_graph_pivot",
+            parentKey: "id",
+            relatedKey: "id",
+            foreignPivotKey: "parent_id",
+            relatedPivotKey: "node_id",
+          }),
+          repository,
+        ),
+        [expect.objectContaining({ id: 3 })],
+      ],
+      [
+        root().withMorphMany(
+          "related",
+          morphMany<GraphRow, GraphRow>({
+            name: "owned",
+            localKey: "id",
+            morphTypeKey: "owner_type",
+            morphIdKey: "owner_id",
+            morphType: "node",
+          }),
+          repository,
+        ),
+        [expect.objectContaining({ id: 2 })],
+      ],
+      [
+        root().withMorphOne(
+          "related",
+          morphOne<GraphRow, GraphRow>({
+            name: "ownedOne",
+            localKey: "id",
+            morphTypeKey: "owner_type",
+            morphIdKey: "owner_id",
+            morphType: "node",
+          }),
+          repository,
+        ),
+        expect.objectContaining({ id: 2 }),
+      ],
+      [
+        root().withMorphTo(
+          "related",
+          morphTo<GraphRow>({ name: "owner", morphTypeKey: "owner_type", morphIdKey: "owner_id" }),
+          new Map([["node", repository]]),
+        ),
+        expect.objectContaining({ id: 2 }),
+      ],
+      [
+        root().withHasManyThrough(
+          "related",
+          hasManyThrough<GraphRow, GraphRow>({
+            name: "far",
+            throughTable: "query_graph_edges",
+            localKey: "id",
+            firstKey: "parent_id",
+            secondLocalKey: "id",
+            secondKey: "parent_id",
+          }),
+          repository,
+        ),
+        [expect.objectContaining({ id: 3 })],
+      ],
+    ] as const;
+    for (const [query, expected] of checks) {
+      const rows = await query.get();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toBeInstanceOf(Node);
+      expect(rows[0]?.get("related")).toEqual(expected);
+    }
+    expect((await Node.query().orderBy({ id: "asc" }).get()).map((row) => row.id)).toEqual([
+      1, 2, 3,
+    ]);
+    expect(
+      (await Node.query().withTrashed().orderBy({ id: "asc" }).get()).map((row) => row.id),
+    ).toEqual([1, 2, 3, 4]);
+    expect((await Node.query().onlyTrashed().get()).map((row) => row.id)).toEqual([4]);
   });
 });
