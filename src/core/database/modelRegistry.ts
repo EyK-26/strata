@@ -1,5 +1,13 @@
 import type BaseRepository from "./baseRepository.ts";
 import type { Model } from "./model.ts";
+import type { RepositoryQuery } from "./repositoryQuery.ts";
+
+type GlobalScopeFn<TEntity extends object, PrimaryKey extends keyof TEntity & string> = (
+  query: RepositoryQuery<TEntity, PrimaryKey>,
+) => RepositoryQuery<TEntity, PrimaryKey>;
+
+const modelGlobalScopes = new WeakMap<object, GlobalScopeFn<Record<string, unknown>, "id">[]>();
+const modelBooted = new WeakSet<object>();
 
 type AnyModel = Model<Record<string, unknown>, "id">;
 
@@ -103,3 +111,47 @@ export {
   restoreModelObservers,
   runObservers,
 };
+
+function ensureBooted(model: object): void {
+  if (modelBooted.has(model)) {
+    return;
+  }
+
+  nameModel(model);
+  modelBooted.add(model);
+
+  const scopes = modelGlobalScopes.get(model);
+  const observers = getModelObservers(model);
+  const boot = (model as { boot?: () => void }).boot;
+
+  if (typeof boot === "function") {
+    try {
+      boot.call(model);
+    } catch (error) {
+      modelBooted.delete(model);
+      if (scopes) modelGlobalScopes.set(model, scopes);
+      else modelGlobalScopes.delete(model);
+      restoreModelObservers(model, observers);
+      throw error;
+    }
+  }
+}
+
+function getGlobalScopes(model: object): GlobalScopeFn<Record<string, unknown>, "id">[] {
+  return modelGlobalScopes.get(model) ?? [];
+}
+
+function addModelGlobalScope<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  model: object,
+  scope: GlobalScopeFn<TEntity, PrimaryKey>,
+): void {
+  ensureBooted(model);
+  const existing = modelGlobalScopes.get(model) ?? [];
+  modelGlobalScopes.set(model, [
+    ...existing,
+    scope as unknown as GlobalScopeFn<Record<string, unknown>, "id">,
+  ]);
+}
+
+export type { GlobalScopeFn };
+export { addModelGlobalScope, ensureBooted, getGlobalScopes };
