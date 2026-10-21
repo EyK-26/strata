@@ -23,44 +23,47 @@ import { WhereBuilder, type WhereNode } from "./whereBuilder.ts";
 
 type LoadedRow = Record<string, unknown>;
 
-type StoredEagerLoad<TEntity extends object> = {
-  kind:
-    | "hasMany"
-    | "belongsTo"
-    | "belongsToMany"
-    | "hasManyThrough"
-    | "morphMany"
-    | "morphOne"
-    | "morphTo";
-  as: string;
-  relation:
-    | HasManyRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string>
-    | BelongsToRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string>
-    | BelongsToManyRelation<
-        TEntity,
-        Record<string, unknown>,
-        Record<string, unknown>,
-        keyof TEntity & string,
-        string,
-        string,
-        string
-      >
-    | HasManyThroughRelation<
-        TEntity,
-        Record<string, unknown>,
-        keyof TEntity & string,
-        string,
-        string,
-        string
-      >
-    | MorphManyRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string, string>
-    | MorphOneRelation<TEntity, Record<string, unknown>, keyof TEntity & string, string, string>
-    | MorphToRelation<TEntity, keyof TEntity & string, keyof TEntity & string>;
-  repository: BaseRepository<Record<string, unknown>, "id">;
-  options?: Omit<QueryOptions<Record<string, unknown>>, "where">;
-  morphOptions?: ReadonlyMap<string, QueryOptions<Record<string, unknown>>>;
-  morphRepositories?: ReadonlyMap<string, BaseRepository<Record<string, unknown>, "id">>;
+// Each registration retains its relation kind; only the heterogeneous related
+// record/repository types are erased at the private storage boundary.
+type StoredRelations<TEntity extends object> = {
+  hasMany: HasManyRelation<TEntity, LoadedRow, keyof TEntity & string, string>;
+  belongsTo: BelongsToRelation<TEntity, LoadedRow, keyof TEntity & string, string>;
+  belongsToMany: BelongsToManyRelation<
+    TEntity,
+    LoadedRow,
+    LoadedRow,
+    keyof TEntity & string,
+    string,
+    string,
+    string
+  >;
+  hasManyThrough: HasManyThroughRelation<
+    TEntity,
+    LoadedRow,
+    keyof TEntity & string,
+    string,
+    string,
+    string
+  >;
+  morphMany: MorphManyRelation<TEntity, LoadedRow, keyof TEntity & string, string, string>;
+  morphOne: MorphOneRelation<TEntity, LoadedRow, keyof TEntity & string, string, string>;
+  morphTo: MorphToRelation<TEntity, keyof TEntity & string, keyof TEntity & string>;
 };
+
+type StoredRepository = BaseRepository<LoadedRow, string>;
+type StoredOptions = Omit<QueryOptions<LoadedRow>, "where">;
+
+type StoredEagerLoad<TEntity extends object> = {
+  [Kind in keyof StoredRelations<TEntity>]: {
+    kind: Kind;
+    as: string;
+    relation: StoredRelations<TEntity>[Kind];
+    repository: StoredRepository;
+    options?: StoredOptions;
+    morphOptions?: ReadonlyMap<string, QueryOptions<LoadedRow>>;
+    morphRepositories?: ReadonlyMap<string, StoredRepository>;
+  };
+}[keyof StoredRelations<TEntity>];
 
 class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   private readonly eagerLoads: StoredEagerLoad<TEntity>[] = [];
@@ -221,9 +224,9 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     this.eagerLoads.push({
       kind: "hasMany",
       as,
-      relation: relation as StoredEagerLoad<TEntity>["relation"],
-      repository: childRepository as unknown as BaseRepository<Record<string, unknown>, "id">,
-      options: options as StoredEagerLoad<TEntity>["options"],
+      relation,
+      repository: childRepository as unknown as StoredRepository,
+      options: options as StoredOptions,
     });
     return this;
   }
@@ -242,9 +245,9 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     this.eagerLoads.push({
       kind: "belongsTo",
       as,
-      relation: relation as StoredEagerLoad<TEntity>["relation"],
-      repository: parentRepository as unknown as BaseRepository<Record<string, unknown>, "id">,
-      options: options as StoredEagerLoad<TEntity>["options"],
+      relation,
+      repository: parentRepository as unknown as StoredRepository,
+      options: options as StoredOptions,
     });
     return this;
   }
@@ -264,9 +267,9 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     this.eagerLoads.push({
       kind: "morphMany",
       as,
-      relation: relation as StoredEagerLoad<TEntity>["relation"],
-      repository: childRepository as unknown as BaseRepository<Record<string, unknown>, "id">,
-      options: options as StoredEagerLoad<TEntity>["options"],
+      relation,
+      repository: childRepository as unknown as StoredRepository,
+      options: options as StoredOptions,
     });
     return this;
   }
@@ -286,9 +289,9 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     this.eagerLoads.push({
       kind: "morphOne",
       as,
-      relation: relation as StoredEagerLoad<TEntity>["relation"],
-      repository: childRepository as unknown as BaseRepository<Record<string, unknown>, "id">,
-      options: options as StoredEagerLoad<TEntity>["options"],
+      relation,
+      repository: childRepository as unknown as StoredRepository,
+      options: options as StoredOptions,
     });
     return this;
   }
@@ -307,15 +310,12 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   ): this {
     this.eagerLoads.push({
       kind: "morphTo",
-      morphOptions: optionsByType as StoredEagerLoad<TEntity>["morphOptions"],
+      morphOptions: optionsByType as ReadonlyMap<string, QueryOptions<LoadedRow>> | undefined,
       as,
-      relation: relation as StoredEagerLoad<TEntity>["relation"],
-      repository: this.repository as unknown as BaseRepository<Record<string, unknown>, "id">,
-      morphRepositories: repositoriesByType as ReadonlyMap<
-        string,
-        BaseRepository<Record<string, unknown>, "id">
-      >,
-      options: options as StoredEagerLoad<TEntity>["options"],
+      relation,
+      repository: this.repository as unknown as StoredRepository,
+      morphRepositories: repositoriesByType as ReadonlyMap<string, StoredRepository>,
+      options: options as StoredOptions,
     });
     return this;
   }
@@ -345,9 +345,9 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     this.eagerLoads.push({
       kind: "belongsToMany",
       as,
-      relation: relation as StoredEagerLoad<TEntity>["relation"],
-      repository: relatedRepository as unknown as BaseRepository<Record<string, unknown>, "id">,
-      options: options as StoredEagerLoad<TEntity>["options"],
+      relation,
+      repository: relatedRepository as unknown as StoredRepository,
+      options: options as StoredOptions,
     });
     return this;
   }
@@ -366,9 +366,9 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     this.eagerLoads.push({
       kind: "hasManyThrough",
       as,
-      relation: relation as StoredEagerLoad<TEntity>["relation"],
-      repository: farRepository as unknown as BaseRepository<Record<string, unknown>, "id">,
-      options: options as StoredEagerLoad<TEntity>["options"],
+      relation,
+      repository: farRepository as unknown as StoredRepository,
+      options: options as StoredOptions,
     });
     return this;
   }
@@ -597,12 +597,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     load: StoredEagerLoad<TEntity>,
   ): Promise<void> {
     if (load.kind === "hasMany") {
-      const relation = load.relation as HasManyRelation<
-        TEntity,
-        Record<string, unknown>,
-        keyof TEntity & string,
-        string
-      >;
+      const relation = load.relation;
       const grouped = await load.repository
         .withConnection(this.repository.getConnection())
         .loadHasManyForParents(rows, relation, load.options);
@@ -613,13 +608,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     }
 
     if (load.kind === "morphMany") {
-      const relation = load.relation as MorphManyRelation<
-        TEntity,
-        Record<string, unknown>,
-        keyof TEntity & string,
-        string,
-        string
-      >;
+      const relation = load.relation;
       const grouped = await load.repository
         .withConnection(this.repository.getConnection())
         .loadMorphManyForParents(rows, relation, load.options);
@@ -630,13 +619,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     }
 
     if (load.kind === "morphOne") {
-      const relation = load.relation as MorphOneRelation<
-        TEntity,
-        Record<string, unknown>,
-        keyof TEntity & string,
-        string,
-        string
-      >;
+      const relation = load.relation;
       const grouped = await load.repository
         .withConnection(this.repository.getConnection())
         .loadMorphOneForParents(rows, relation, load.options);
@@ -647,14 +630,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     }
 
     if (load.kind === "hasManyThrough") {
-      const relation = load.relation as HasManyThroughRelation<
-        TEntity,
-        Record<string, unknown>,
-        keyof TEntity & string,
-        string,
-        string,
-        string
-      >;
+      const relation = load.relation;
       const grouped = await load.repository
         .withConnection(this.repository.getConnection())
         .loadHasManyThroughForParents(rows, relation, load.options);
@@ -665,19 +641,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     }
 
     if (load.kind === "belongsToMany") {
-      const relation = load.relation as BelongsToManyRelation<
-        TEntity,
-        Record<string, unknown>,
-        Record<string, unknown>,
-        keyof TEntity & string,
-        string,
-        string,
-        string
-      >;
+      const relation = load.relation;
       const grouped = await this.repository.loadBelongsToManyForParents(
         rows,
         relation,
-        load.repository as never,
+        load.repository,
         load.options,
       );
       for (const row of result) {
@@ -687,11 +655,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     }
 
     if (load.kind === "morphTo") {
-      const relation = load.relation as MorphToRelation<
-        TEntity,
-        keyof TEntity & string,
-        keyof TEntity & string
-      >;
+      const relation = load.relation;
       // An ID is only unique within its morph type. Partition once before
       // batching so filtered/missing targets cannot borrow another type's row.
       const repositories = load.morphRepositories ?? new Map();
@@ -729,12 +693,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       return;
     }
 
-    const relation = load.relation as BelongsToRelation<
-      TEntity,
-      Record<string, unknown>,
-      keyof TEntity & string,
-      string
-    >;
+    const relation = load.relation;
     const grouped = await this.repository.loadBelongsToForParents(
       rows,
       relation,

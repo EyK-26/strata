@@ -380,3 +380,15 @@ copies and typechecks an installed consumer of the public provider/context APIs.
 Every original repository/transaction/event assertion runs first in its own process;
 the additional consumer separately checks phase admission and later-phase cleanup.
 Use `--published=<exact-version>` for the same contract against registry packages.
+
+
+Eager-load registrations retain the correlation between their relation kind and
+relation metadata in a private discriminated union. Hydration narrows that union
+without relation assertions or a `never` repository cast. Heterogeneous related
+record/repository types are erased only where typed public registrations enter
+private storage; dynamic related keys remain strings rather than a fictional `id`.
+This is a type-only change: the complete transpiled RepositoryQuery runtime must
+remain byte-identical. Existing nested, polymorphic, many-to-many, protected-scope,
+custom-repository and cross-tenant negative cases remain required, together with
+the installed three-engine relation consumer and public negative type contracts.
+No public method signature, runtime fallback, new profile or exemption is added.
