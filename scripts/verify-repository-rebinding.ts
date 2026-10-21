@@ -12,6 +12,7 @@ const modelWriteHooks = process.argv.includes("--model-write-hooks");
 const nativeRouteContracts = process.argv.includes("--native-route-contracts");
 const modelAttributeContracts = process.argv.includes("--model-attribute-contracts");
 const modelRegistryContracts = process.argv.includes("--model-registry-contracts");
+const modelQueryContracts = process.argv.includes("--model-query-contracts");
 const fixture = await createGeneratedSecurityApp(
   database,
   [
@@ -132,6 +133,10 @@ export default migration;
   );
   const attributeConsumer = join(fixture.app, "src/qualification/modelAttributes.ts");
   const registryConsumer = join(fixture.app, "src/qualification/modelRegistry.ts");
+  const queryConsumer = join(fixture.app, "src/qualification/modelQuery.ts");
+  if (modelQueryContracts) {
+    await copyFile(join(import.meta.dir, "../tests/fixtures/modelQueryConsumer.ts"), queryConsumer);
+  }
   if (modelRegistryContracts) {
     await copyFile(
       join(import.meta.dir, "../tests/fixtures/modelRegistryConsumer.ts"),
@@ -157,6 +162,7 @@ export default migration;
   if (nativeRouteContracts) console.log((await run([nativeConsumer])).trim());
   if (modelAttributeContracts) console.log((await run([attributeConsumer])).trim());
   if (modelRegistryContracts) console.log((await run([registryConsumer])).trim());
+  if (modelQueryContracts) console.log((await run([queryConsumer])).trim());
 } finally {
   process.off("SIGTERM", terminate);
   await cleanup();

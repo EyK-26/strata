@@ -270,6 +270,28 @@ and web middleware. It adds one installed E2E and next-release qualification pro
 This proof covers response/function routes; it does not qualify HTML bundles,
 directory routes or every native Bun static form.
 
+### Installed Model query contracts
+
+`model.queryContracts.test.ts` characterizes the public Model query facade with real
+SQLite queries: protected scopes, partial projection cursors, concrete subclasses,
+retrieved hooks, thenable errors, missing records, explicit relation maps and soft
+deletes. All six runtime cases also pass on the pre-fix implementation. The defect
+is in declarations: extracting `Parameters` from generic repository methods erases
+related-record keys to `never`, rejecting valid calls to seven Model conveniences.
+Named generic argument tuples preserve inference, required repository arguments and
+exact runtime forwarding; the complete transpiled Model JavaScript is unchanged.
+Positive/negative compile contracts retain related keys, ordering and repository
+types without application casts.
+
+`verify-repository-rebinding.ts --database=sqlite --model-query-contracts` typechecks
+and executes an installed public consumer after every original repository,
+transaction and event assertion. It uses real generated providers and the existing
+migrated table. Exact published 2.2.48 passes the initial query/projection
+characterization but rejects the added valid relation call at application typecheck;
+fresh corrected packages pass that same consumer. This adds one next-release
+profile, retaining all earlier profiles and their assertions. Mechanical query
+extraction is a separate follow-up.
+
 ### Installed model serialization hooks
 
 `tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
