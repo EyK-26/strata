@@ -192,6 +192,14 @@ captured before extraction, including independent MFA, verification, GitHub and 
 selections. It supplements the original file inventories and installed auth journeys;
 it does not replace SMTP, rollback/contention, MFA or credential-revocation assertions.
 
+The environment renderer keeps `renderEnv.ts` as its compatible facade. Its environment/
+PostgreSQL provisioning, project metadata and documentation artifacts have separate
+source owners. `starterRendering.test.ts` keeps the existing eight generated profiles
+and every frozen file hash unchanged, and checks all 16 facade export identities.
+The official bump contract also verifies the relocated package-pin source, template
+and existing assertion pins, plus frozen install and dedupe stability. The RLS source
+fence includes all three new owners with no new bypass exception.
+
 ### Owned SMTP fixture admission
 
 Starter auth journeys keep fixed SMTP/HTTP ports across the real Mailpit stop/start
