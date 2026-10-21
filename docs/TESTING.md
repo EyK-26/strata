@@ -452,3 +452,26 @@ fixtures. Their original file/path hash manifests remain unchanged; every other
 file is hashed from its raw bytes, and strict CURRENT auth-file hashes plus exact
 roundtrips supplement the preserved historical checks. Headers-only projects still
 assert that no auth artifact exists. Both fixture inventories remain complete.
+
+Redis list/stream queue, cache and scheduler lease scripts have private source
+owners separate from their transports and workers. Script literal and expanded
+header bytes, key expressions, KEYS/ARGV order, result decoding and the remaining
+client/worker bodies are preserved. The existing real Redis reservation, failure,
+renewal, worker-crash recovery, cache coordination/reconnection and scheduler
+contention assertions pass before and after the move. No production lease,
+wire format, retry, cancellation or ownership policy changes.
+New script owners receive full coverage; the nine existing cache instrumentation
+exclusions are listed explicitly so new cache files do not inherit a directory
+exclusion. The exemption list and all existing assertions remain intact.
+
+`verify-repository-rebinding.ts --database=sqlite --redis-protocol-contracts`
+adds one installed public-API acceptance profile: original repository assertions
+run first, followed by real native Redis list/Streams delivery and owner-fenced
+ACK/renewal, independent cache tag/query-prefix coordination, and scheduler
+stale-owner/deduplication. No timer/client substitute or production lease change.
+Fresh UUID namespaces are captured empty before work; cleanup verifies every
+owned key is removed and an unrelated owned marker survives scoped cleanup.
+Exact published 2.2.48 and the packed candidate pass the same consumer. An initial
+new-fixture call incorrectly assumed arbitrary string-prefix cache matching; its
+failed log is retained. Inputs now exercise the existing exact/query-prefix
+contract, preserving all expected removal counts and existing assertions.
