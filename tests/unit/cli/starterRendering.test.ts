@@ -17,9 +17,12 @@ import * as bootstrap from "../../../packages/strata-starter/src/renderBootstrap
 import * as cli from "../../../packages/strata-starter/src/renderCli.ts";
 import * as database from "../../../packages/strata-starter/src/renderDatabase.ts";
 import * as docker from "../../../packages/strata-starter/src/renderDocker.ts";
+import * as documentation from "../../../packages/strata-starter/src/renderDocumentation.ts";
 import * as legacy from "../../../packages/strata-starter/src/renderEnv.ts";
+import * as environment from "../../../packages/strata-starter/src/renderEnvironment.ts";
 import * as migrations from "../../../packages/strata-starter/src/renderMigrations.ts";
 import * as models from "../../../packages/strata-starter/src/renderModels.ts";
+import * as metadata from "../../../packages/strata-starter/src/renderProjectMetadata.ts";
 import * as runtime from "../../../packages/strata-starter/src/renderRuntime.ts";
 import baselines from "../../fixtures/scaffolds/starter-rendering.sha256.json";
 
@@ -83,5 +86,19 @@ test("legacy runtime imports retain every artifact function's identity", () => {
   expect(Object.keys(runtime)).toHaveLength(35);
   for (const [name, render] of Object.entries(runtime)) {
     expect(artifacts[name], name).toBe(render);
+  }
+});
+
+test("legacy environment imports retain all artifact function and constant identities", () => {
+  const artifacts: Record<string, unknown> = {
+    ...databaseDefaults,
+    ...docker,
+    ...documentation,
+    ...environment,
+    ...metadata,
+  };
+  expect(Object.keys(legacy)).toHaveLength(16);
+  for (const [name, artifact] of Object.entries(legacy)) {
+    expect(artifacts[name], name).toBe(artifact);
   }
 });

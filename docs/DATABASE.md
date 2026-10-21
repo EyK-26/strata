@@ -205,6 +205,13 @@ Observer order is preserved: static `create` resolves casts before its pre-write
 
 Loaded instances keep a snapshot of their hydrated attributes. Existing-instance `save()` writes only changed fields, including changes from `saving`/`updating` observers and in-place JSON, date and binary mutations. This prevents a stale instance's unchanged fields from overwriting another writer's updates. Unchanged passwords do not enter the write-cast pipeline. Inserts still write their full assignable payload; repository, bulk and direct SQL operations retain their explicit write behavior.
 
+Existing-instance writes invoke the protected `dehydrateAttributes` override with
+only those changed fields, just as insertion invokes it with the assignable insert
+payload. Overrides may be synchronous or asynchronous and must accept partial
+attribute records. No-op saves skip this write hook. A serialization failure occurs
+before SQL and keeps the same instance's edits available for a later save. Custom
+serializers should preserve omitted fields rather than reconstruct a stale full row.
+
 A no-op `save()` runs `saving`, `updating` and `saved`, but skips SQL, timestamps, `updated` observers and repository update events. A real update sets `updated_at` when timestamps are enabled. Successful writes replace the snapshot with the returned database row; edits from post-write observers remain dirty for the next save. Re-query the model to reload external changes without writing.
 
 Framework transactions and savepoints restore snapshot bookkeeping on rollback, retaining intended edits so the same instance can retry. Changes pulled in by the rolled-back write's returned row are discarded. Newly inserted instances saved through `save()` return to their previous existence state on rollback. Raw `pool.begin()` callers must wrap the transaction with `runWithDeferredModelEvents()` for this bookkeeping, just as for deferred events. A listener failure after commit does not reset the snapshot. No-op saves do not check whether an unchanged row still exists.

@@ -7,6 +7,8 @@ import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityAp
 const database = process.argv.find((arg) => arg.startsWith("--database="))?.slice(11);
 assert.ok(database === "sqlite" || database === "mysql" || database === "postgres");
 const publishedVersion = process.argv.find((arg) => arg.startsWith("--published="))?.slice(12);
+const phaseAdmission = process.argv.includes("--provider-phase-admission");
+const modelWriteHooks = process.argv.includes("--model-write-hooks");
 const fixture = await createGeneratedSecurityApp(
   database,
   [
@@ -41,6 +43,7 @@ const env = {
   QUEUE_DRIVER: "sync",
   MAIL_DRIVER: "log",
   OTEL_SDK_DISABLED: "true",
+  STRATA_QUALIFY_MODEL_WRITE_HOOKS: String(modelWriteHooks),
 };
 let child: ReturnType<typeof Bun.spawn> | undefined;
 let closing: Promise<void> | undefined;
@@ -113,8 +116,20 @@ export default migration;
     join(import.meta.dir, "../tests/fixtures/repositoryRebindingConsumer.ts"),
     consumer,
   );
+  const phaseConsumer = join(fixture.app, "src/qualification/providerPhases.ts");
+  if (phaseAdmission) {
+    await copyFile(
+      join(import.meta.dir, "../tests/fixtures/providerPhaseConsumer.ts"),
+      phaseConsumer,
+    );
+  }
+  await copyFile(
+    join(import.meta.dir, "../tests/fixtures/modelWriteHookConsumer.ts"),
+    join(fixture.app, "src/qualification/modelWriteHookConsumer.ts"),
+  );
   await run(["run", "check"]);
   console.log((await run([consumer])).trim());
+  if (phaseAdmission) console.log((await run([phaseConsumer])).trim());
 } finally {
   process.off("SIGTERM", terminate);
   await cleanup();

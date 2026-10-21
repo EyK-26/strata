@@ -192,6 +192,14 @@ captured before extraction, including independent MFA, verification, GitHub and 
 selections. It supplements the original file inventories and installed auth journeys;
 it does not replace SMTP, rollback/contention, MFA or credential-revocation assertions.
 
+The environment renderer keeps `renderEnv.ts` as its compatible facade. Its environment/
+PostgreSQL provisioning, project metadata and documentation artifacts have separate
+source owners. `starterRendering.test.ts` keeps the existing eight generated profiles
+and every frozen file hash unchanged, and checks all 16 facade export identities.
+The official bump contract also verifies the relocated package-pin source, template
+and existing assertion pins, plus frozen install and dedupe stability. The RLS source
+fence includes all three new owners with no new bypass exception.
+
 ### Owned SMTP fixture admission
 
 Starter auth journeys keep fixed SMTP/HTTP ports across the real Mailpit stop/start
@@ -224,9 +232,50 @@ wanted. This does not add automatic tenant/user key selection, change TTL/store
 policy or replace the existing Redis/process/native/published qualification gates.
 
 
+`verify-starter-module.ts --auth=cookie --with-web --api-prefix=/backend/cache --cached-json`
+adds an installed HTTP cache contract after all original module assertions. Its own
+module uses only public module/cache APIs and the same `apiPrefix()` convention as
+`make:module`. Both API and web contexts must serve tagged/untagged JSON, preserve
+ETag/304/private response headers, invalidate and reload, serve request-less false
+JSON, and recover from an uncached loader failure. The existing generation, CLI,
+OpenAPI, typecheck, auth/denial, HTMX and shutdown assertions remain intact.
+`--published=<exact-version>` qualifies the same contract against registry packages.
 API and web builders share the neutral route-metadata owner, with the original
 `buildModuleRoutes` registration export preserved. `moduleRouteMetadata.test.ts`
 characterizes the original registry append behavior, mixed-case method metadata,
 plain handlers and intact static response shapes before extraction. It does not
 claim that metadata registration implements native transport dispatch. Existing
 API/web admission, cache and OpenAPI tests still exercise the real builders.
+
+### Installed model serialization hooks
+
+`tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
+harness for SQLite, MySQL and PostgreSQL with `--model-write-hooks`. After every
+original private-state repository, connection, transaction and event assertion,
+the opt-in fixture checks synchronous/asynchronous protected model serialization,
+dirty-only updates, unchanged saves, stale unrelated fields, rejection before SQL
+and retry on the same instance. It uses the same migrated application table and
+restricted runtime credentials; no runtime DDL, extra grant or package patch.
+
+Run `scripts/with-host-env.sh bun scripts/verify-repository-rebinding.ts
+--database=<engine> --model-write-hooks` against packed candidates. Adding
+`--published=<exact-version>` exercises the same assertions against registry
+packages. These are three additional acceptance profiles; the original repository
+profiles and assertions remain. The old published 2.2.48 fails this new contract
+on all three engines; the corrected candidate passes all three. Historical
+113-profile published acceptance remains a record of its original selected scope.
+
+`providerPhaseAdmission.test.ts` exercises real provider contexts with in-memory
+cache/storage dependencies. An explicitly started drain/flush must reject work
+registered from its very first callback; promise memoization alone occurs too late
+for that synchronous admission check. Later phases remain available during an
+explicit drain. Existing reverse-order, failure, drain-before-close, repeat disposal
+and startup-cleanup tests remain required; a failed drain still keeps infrastructure
+open beneath live work.
+
+
+`verify-repository-rebinding.ts --database=sqlite --provider-phase-admission` also
+copies and typechecks an installed consumer of the public provider/context APIs.
+Every original repository/transaction/event assertion runs first in its own process;
+the additional consumer separately checks phase admission and later-phase cleanup.
+Use `--published=<exact-version>` for the same contract against registry packages.
