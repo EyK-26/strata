@@ -2,15 +2,18 @@ import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
 
 type Middleware = (request: Request, next: () => Promise<Response>) => Promise<Response>;
 
-type RouteHandler<TRequest extends Request = Request> = (
+type RouteHandler<TRequest extends Request = Request, TArguments extends unknown[] = []> = (
   request: TRequest,
+  ...arguments_: TArguments
 ) => Response | Promise<Response>;
 
-function isRouteHandler(value: unknown): value is RouteHandler {
+function isRouteHandler(value: unknown): value is RouteHandler<Request, unknown[]> {
   return typeof value === "function";
 }
 
-function isMethodRouteMap(value: unknown): value is Record<string, RouteHandler> {
+function isMethodRouteMap(
+  value: unknown,
+): value is Record<string, RouteHandler<Request, unknown[]>> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -21,22 +24,22 @@ function isMethodRouteMap(value: unknown): value is Record<string, RouteHandler>
 }
 
 function composeMiddleware(...middleware: Middleware[]) {
-  return <TRequest extends Request = Request>(
-    handler: RouteHandler<TRequest>,
-  ): RouteHandler<TRequest> => {
-    return async (request: TRequest) => {
+  return <TRequest extends Request = Request, TArguments extends unknown[] = []>(
+    handler: RouteHandler<TRequest, TArguments>,
+  ): RouteHandler<TRequest, TArguments> => {
+    return async (request: TRequest, ...arguments_: TArguments) => {
       let index = 0;
 
       const dispatch = async (): Promise<Response> => {
         if (index >= middleware.length) {
-          return await handler(request);
+          return await handler(request, ...arguments_);
         }
 
         const current = middleware[index];
         index += 1;
 
         if (!current) {
-          return await handler(request);
+          return await handler(request, ...arguments_);
         }
 
         return await current(request, dispatch);
@@ -65,7 +68,7 @@ async function requestIdMiddleware(
 
 function wrapRouteHandler<T>(handler: T, middleware: Middleware[]): T {
   if (isMethodRouteMap(handler)) {
-    const wrapped: Record<string, RouteHandler> = {};
+    const wrapped: Record<string, RouteHandler<Request, unknown[]>> = {};
 
     for (const [method, routeHandler] of Object.entries(handler)) {
       wrapped[method] = composeMiddleware(...middleware)(routeHandler);

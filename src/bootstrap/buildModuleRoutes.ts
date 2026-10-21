@@ -1,8 +1,8 @@
-import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import type { OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
 import { createCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
+import { applyModuleRouteMiddleware } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
 import { prefixRouteMap } from "./prefixRouteMap";
 import { registerOpenApiRouteMap } from "./routeMetadata";
@@ -56,7 +56,7 @@ function buildModuleRoutes(
 
   const prefixedModuleRoutes = prefixRouteMap(apiPrefix, moduleRoutes);
 
-  return applyMiddlewareToRoutes(
+  return applyModuleRouteMiddleware(
     registerOpenApiRouteMap(
       prefixedModuleRoutes,
       ["global", "api"],
