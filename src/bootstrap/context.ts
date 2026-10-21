@@ -42,10 +42,14 @@ async function createAppContext(
   const container = new ServiceContainer();
   const config = new ConfigStore();
   const dependencies: MutableAppDependencies = { container };
+  // A synchronous handler runs before its memoized promise is assigned.
+  // Close phase admission explicitly before invoking any handler.
   const cleanups: Array<() => void | Promise<void>> = [];
   const drains: Array<() => void | Promise<void>> = [];
+  let drainStarted = false;
   let draining: Promise<void> | undefined;
   const drain = (): Promise<void> => {
+    drainStarted = true;
     draining ??= (async () => {
       const errors: unknown[] = [];
       for (const handler of drains.splice(0).reverse()) {
@@ -60,8 +64,10 @@ async function createAppContext(
     return draining;
   };
   const flushes: Array<() => void | Promise<void>> = [];
+  let flushStarted = false;
   let flushing: Promise<void> | undefined;
   const flush = (): Promise<void> => {
+    flushStarted = true;
     flushing ??= (async () => {
       const errors: unknown[] = [];
       for (const handler of flushes.splice(0).reverse()) {
@@ -112,7 +118,7 @@ async function createAppContext(
       if (disposed) throw new Error("Cannot register cleanup on a disposed application context.");
       if (phase !== "drain" && phase !== "flush" && phase !== "close")
         throw new TypeError("Unknown provider cleanup phase.");
-      if ((phase === "drain" && draining) || (phase === "flush" && flushing))
+      if ((phase === "drain" && drainStarted) || (phase === "flush" && flushStarted))
         throw new Error("Cannot register cleanup after its phase started.");
       (phase === "drain" ? drains : phase === "flush" ? flushes : cleanups).push(handler);
     },
