@@ -209,6 +209,37 @@ Probe teardown independently records created IDs, so a cleanup regression does n
 leave its own test resources behind. All original readiness, SMTP outage, auth,
 MFA, rollback and contention assertions remain in the unchanged journey body.
 
+### Module cache response contract
+
+`moduleCachedJson.integration.test.ts` exercises both API and web module contexts
+through a listening Bun server, their real global middleware, `CacheRepository`
+and `SimpleCacheStore`. Tagged/untagged reads, exact and tag invalidation, private
+ETags/304 responses, a false JSON payload without a Request and loader failure
+followed by a fresh successful load are asserted for both contexts. The helper
+owns each server/kernel/cache and restores its environment after failures too.
+
+Both contexts use the existing conditional JSON implementation. Module authors
+still choose cache keys/tags and pass the Request when conditional responses are
+wanted. This does not add automatic tenant/user key selection, change TTL/store
+policy or replace the existing Redis/process/native/published qualification gates.
+
+### Installed model serialization hooks
+
+`tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
+harness for SQLite, MySQL and PostgreSQL with `--model-write-hooks`. After every
+original private-state repository, connection, transaction and event assertion,
+the opt-in fixture checks synchronous/asynchronous protected model serialization,
+dirty-only updates, unchanged saves, stale unrelated fields, rejection before SQL
+and retry on the same instance. It uses the same migrated application table and
+restricted runtime credentials; no runtime DDL, extra grant or package patch.
+
+Run `scripts/with-host-env.sh bun scripts/verify-repository-rebinding.ts
+--database=<engine> --model-write-hooks` against packed candidates. Adding
+`--published=<exact-version>` exercises the same assertions against registry
+packages. These are three additional acceptance profiles; the original repository
+profiles and assertions remain. The old published 2.2.48 fails this new contract
+on all three engines; the corrected candidate passes all three. Historical
+113-profile published acceptance remains a record of its original selected scope.
 
 The environment renderer keeps `renderEnv.ts` as its compatible facade. Its environment/
 PostgreSQL provisioning, project metadata and documentation artifacts have separate
