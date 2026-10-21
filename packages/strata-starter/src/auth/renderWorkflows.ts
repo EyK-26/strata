@@ -12,6 +12,24 @@ export function renderAuthHelpers({
   "layers" | "cookie" | "mfa" | "verify" | "tenantCreateField" | "samlTenantCreateField"
 >) {
   const helpers = `
+type StarterPasswordLoginResult =
+  | { ok: false; error: "invalid_credentials" }
+  | (PasswordLoginResult & { user: StarterAuthUserRecord });
+
+async function authenticatePasswordUser(
+  user: StarterAuthUserRecord | null,
+  password: string,
+  mfaCode: string | undefined,
+): Promise<StarterPasswordLoginResult> {
+  if (!user?.password || !(await verifyPassword(password, user.password))) {
+    return { ok: false, error: "invalid_credentials" };
+  }
+  const result = completePasswordLogin(user, { mfaCode });
+  if (!result.ok) return { ...result, user };
+  await persistAuthRecovery(user.id, user.mfa_recovery_codes, result.consumedRecoveryHash);
+  return { ...result, user };
+}
+
 function parseLoginCredentials(payload: unknown) {
   const body = validateObject(payload, {
     email: [required(), stringRule(), emailRule()],

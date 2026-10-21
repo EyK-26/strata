@@ -28,15 +28,15 @@ export function renderApiAuthRoutes({
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(withErrorHandling(async (request) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
-            return runWithLoginUser(email, async (record) => {
-            if (!record?.password || !(await verifyPassword(password, record.password))) {
-              return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
-            }
-            const mfaResult = completePasswordLogin(record, { mfaCode: mfa_code });
+            return runWithLoginUser(email, async (candidate) => {
+            const mfaResult = await authenticatePasswordUser(candidate, password, mfa_code);
             if (!mfaResult.ok) {
+              if (mfaResult.error === "invalid_credentials") {
+                return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
+              }
               return privateJsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
             }
-            await persistAuthRecovery(record.id, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
+            const record = mfaResult.user;
             const user = { id: record.id, role: record.role };
             const plain = \`strp_\${randomBytes(24).toString("hex")}\`;
             // API_TOKEN_DEFAULT_EXPIRY_DAYS bounds every minted token; unset means no expiry.
@@ -105,15 +105,15 @@ export function renderApiAuthRoutes({
         "/api/auth/token": {
           POST: kernel.wrap("api", kernel.wrapLogin(withErrorHandling(async (request) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
-            return runWithLoginUser(email, async (record) => {
-            if (!record?.password || !(await verifyPassword(password, record.password))) {
-              return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
-            }
-            const mfaResult = completePasswordLogin(record, { mfaCode: mfa_code });
+            return runWithLoginUser(email, async (candidate) => {
+            const mfaResult = await authenticatePasswordUser(candidate, password, mfa_code);
             if (!mfaResult.ok) {
+              if (mfaResult.error === "invalid_credentials") {
+                return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
+              }
               return privateJsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
             }
-            await persistAuthRecovery(record.id, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
+            const record = mfaResult.user;
             const user = { id: record.id, role: record.role, emailVerifiedAt: record.email_verified_at ?? null };
             const token = signJwt({
               sub: user.id,
@@ -257,15 +257,15 @@ export function renderApiAuthRoutes({
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(withErrorHandling(async (request) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
-            return runWithLoginUser(email, async (record) => {
-            if (!record?.password || !(await verifyPassword(password, record.password))) {
-              return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
-            }
-            const mfaResult = completePasswordLogin(record, { mfaCode: mfa_code });
+            return runWithLoginUser(email, async (candidate) => {
+            const mfaResult = await authenticatePasswordUser(candidate, password, mfa_code);
             if (!mfaResult.ok) {
+              if (mfaResult.error === "invalid_credentials") {
+                return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
+              }
               return privateJsonResponse({ error: mfaResult.error }, { status: mfaResult.error === "mfa_required" ? 401 : 422 });
             }
-            await persistAuthRecovery(record.id, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
+            const record = mfaResult.user;
             const sessionAuth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
             const { setCookie } = await sessionAuth.signIn(sessionUser(record));
             const payload = privateJsonResponse({ ok: true });
