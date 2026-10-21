@@ -9,6 +9,7 @@ assert.ok(database === "sqlite" || database === "mysql" || database === "postgre
 const publishedVersion = process.argv.find((arg) => arg.startsWith("--published="))?.slice(12);
 const phaseAdmission = process.argv.includes("--provider-phase-admission");
 const modelWriteHooks = process.argv.includes("--model-write-hooks");
+const nativeRouteContracts = process.argv.includes("--native-route-contracts");
 const fixture = await createGeneratedSecurityApp(
   database,
   [
@@ -127,9 +128,17 @@ export default migration;
     join(import.meta.dir, "../tests/fixtures/modelWriteHookConsumer.ts"),
     join(fixture.app, "src/qualification/modelWriteHookConsumer.ts"),
   );
+  const nativeConsumer = join(fixture.app, "src/qualification/nativeRoutes.ts");
+  if (nativeRouteContracts) {
+    await copyFile(
+      join(import.meta.dir, "../tests/fixtures/nativeRouteConsumer.ts"),
+      nativeConsumer,
+    );
+  }
   await run(["run", "check"]);
   console.log((await run([consumer])).trim());
   if (phaseAdmission) console.log((await run([phaseConsumer])).trim());
+  if (nativeRouteContracts) console.log((await run([nativeConsumer])).trim());
 } finally {
   process.off("SIGTERM", terminate);
   await cleanup();

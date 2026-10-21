@@ -3,6 +3,7 @@ import type { OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
 import { createCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
+import { normalizeModuleResponseRoutes } from "./moduleResponseRoutes";
 import { discoverModules } from "./modules";
 import { prefixRouteMap } from "./prefixRouteMap";
 import { registerOpenApiRouteMap } from "./routeMetadata";
@@ -57,10 +58,12 @@ function buildModuleRoutes(
   const prefixedModuleRoutes = prefixRouteMap(apiPrefix, moduleRoutes);
 
   return applyMiddlewareToRoutes(
-    registerOpenApiRouteMap(
-      prefixedModuleRoutes,
-      ["global", "api"],
-      prefixRouteMap(apiPrefix, metadata) as OpenApiRouteMap,
+    normalizeModuleResponseRoutes(
+      registerOpenApiRouteMap(
+        prefixedModuleRoutes,
+        ["global", "api"],
+        prefixRouteMap(apiPrefix, metadata) as OpenApiRouteMap,
+      ),
     ),
     middleware,
   ) as AppRouteMap;

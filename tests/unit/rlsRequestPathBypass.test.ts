@@ -55,6 +55,7 @@ const requiredRequestPathFiles = [
   join(generated.team, "src/bootstrap/authDirectory.ts"),
   join(repoRoot, "src/bootstrap/web/session.ts"),
   join(repoRoot, "src/bootstrap/routeMetadata.ts"),
+  join(repoRoot, "src/bootstrap/moduleResponseRoutes.ts"),
   join(repoRoot, "src/core/tenant/tenantMiddleware.ts"),
   join(repoRoot, "packages/strata-starter/src/renderAuth.ts"),
   join(repoRoot, "packages/strata-starter/src/renderAuthFlows.ts"),
