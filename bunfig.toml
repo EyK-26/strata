@@ -165,7 +165,10 @@ coveragePathIgnorePatterns = [
   # Infrastructure drivers and observability plumbing
   "src/core/cache/**",
   "src/core/storage/**",
-  "src/core/mail/**",
+  "src/core/mail/mailer.ts",
+  "src/core/mail/markdownMail.ts",
+  "src/core/mail/markdownMailable.ts",
+  "src/core/mail/sanitizeMailHtml.ts",
   "src/core/metrics/**",
   "src/core/logging/**",
   "src/core/openapi/**",

@@ -380,3 +380,14 @@ copies and typechecks an installed consumer of the public provider/context APIs.
 Every original repository/transaction/event assertion runs first in its own process;
 the additional consumer separately checks phase admission and later-phase cleanup.
 Use `--published=<exact-version>` for the same contract against registry packages.
+
+
+SMTP address validation and MIME assembly now have a pure internal owner; socket
+connection, protocol states, deadlines, cancellation and cleanup stay in the existing
+transport. All moved function bodies and the remaining facade/transport bodies stay
+byte-identical, and public mailer helper/type exports remain available. The message
+owner refers to MailMessage only through a type import, with no runtime facade cycle.
+Existing MIME UTF-8/header/control-character/dot-transparency tests and actual SMTP
+AUTH, fragmented replies, EOF, backpressure, cancellation, implicit TLS and DATA
+acceptance tests remain required. The old mail coverage wildcard is narrowed to its
+exact pre-existing files so the new owner is measured, with no new exemption.
