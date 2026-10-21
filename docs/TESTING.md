@@ -240,6 +240,13 @@ ETag/304/private response headers, invalidate and reload, serve request-less fal
 JSON, and recover from an uncached loader failure. The existing generation, CLI,
 OpenAPI, typecheck, auth/denial, HTMX and shutdown assertions remain intact.
 `--published=<exact-version>` qualifies the same contract against registry packages.
+API and web builders share the neutral route-metadata owner, with the original
+`buildModuleRoutes` registration export preserved. `moduleRouteMetadata.test.ts`
+characterizes the original registry append behavior, mixed-case method metadata,
+plain handlers and intact static response shapes before extraction. It does not
+claim that metadata registration implements native transport dispatch. Existing
+API/web admission, cache and OpenAPI tests still exercise the real builders.
+
 ### Installed model serialization hooks
 
 `tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
