@@ -192,6 +192,14 @@ captured before extraction, including independent MFA, verification, GitHub and 
 selections. It supplements the original file inventories and installed auth journeys;
 it does not replace SMTP, rollback/contention, MFA or credential-revocation assertions.
 
+The environment renderer keeps `renderEnv.ts` as its compatible facade. Its environment/
+PostgreSQL provisioning, project metadata and documentation artifacts have separate
+source owners. `starterRendering.test.ts` keeps the existing eight generated profiles
+and every frozen file hash unchanged, and checks all 16 facade export identities.
+The official bump contract also verifies the relocated package-pin source, template
+and existing assertion pins, plus frozen install and dedupe stability. The RLS source
+fence includes all three new owners with no new bypass exception.
+
 ### Owned SMTP fixture admission
 
 Starter auth journeys keep fixed SMTP/HTTP ports across the real Mailpit stop/start
@@ -209,6 +217,29 @@ Probe teardown independently records created IDs, so a cleanup regression does n
 leave its own test resources behind. All original readiness, SMTP outage, auth,
 MFA, rollback and contention assertions remain in the unchanged journey body.
 
+### Module cache response contract
+
+`moduleCachedJson.integration.test.ts` exercises both API and web module contexts
+through a listening Bun server, their real global middleware, `CacheRepository`
+and `SimpleCacheStore`. Tagged/untagged reads, exact and tag invalidation, private
+ETags/304 responses, a false JSON payload without a Request and loader failure
+followed by a fresh successful load are asserted for both contexts. The helper
+owns each server/kernel/cache and restores its environment after failures too.
+
+Both contexts use the existing conditional JSON implementation. Module authors
+still choose cache keys/tags and pass the Request when conditional responses are
+wanted. This does not add automatic tenant/user key selection, change TTL/store
+policy or replace the existing Redis/process/native/published qualification gates.
+
+
+`verify-starter-module.ts --auth=cookie --with-web --api-prefix=/backend/cache --cached-json`
+adds an installed HTTP cache contract after all original module assertions. Its own
+module uses only public module/cache APIs and the same `apiPrefix()` convention as
+`make:module`. Both API and web contexts must serve tagged/untagged JSON, preserve
+ETag/304/private response headers, invalidate and reload, serve request-less false
+JSON, and recover from an uncached loader failure. The existing generation, CLI,
+OpenAPI, typecheck, auth/denial, HTMX and shutdown assertions remain intact.
+`--published=<exact-version>` qualifies the same contract against registry packages.
 ### Installed model serialization hooks
 
 `tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
@@ -227,7 +258,6 @@ profiles and assertions remain. The old published 2.2.48 fails this new contract
 on all three engines; the corrected candidate passes all three. Historical
 113-profile published acceptance remains a record of its original selected scope.
 
-
 Model attribute transformations now have an internal source owner independent of
 model registration, observers, repositories and queries. Existing public imports
 of cast helpers remain supported through `database/model`; the complete `Model`,
@@ -236,3 +266,18 @@ unchanged by this mechanical extraction. `model.attributeContracts.test.ts` free
 the pre-extraction public null/date/JSON/boolean/integer/pass-through/cast-map behavior.
 Existing native dirty-write, async-hash, rollback and protected-hook tests remain
 required; the extracted owner receives no coverage exemption.
+
+`providerPhaseAdmission.test.ts` exercises real provider contexts with in-memory
+cache/storage dependencies. An explicitly started drain/flush must reject work
+registered from its very first callback; promise memoization alone occurs too late
+for that synchronous admission check. Later phases remain available during an
+explicit drain. Existing reverse-order, failure, drain-before-close, repeat disposal
+and startup-cleanup tests remain required; a failed drain still keeps infrastructure
+open beneath live work.
+
+
+`verify-repository-rebinding.ts --database=sqlite --provider-phase-admission` also
+copies and typechecks an installed consumer of the public provider/context APIs.
+Every original repository/transaction/event assertion runs first in its own process;
+the additional consumer separately checks phase admission and later-phase cleanup.
+Use `--published=<exact-version>` for the same contract against registry packages.

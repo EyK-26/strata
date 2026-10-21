@@ -1,7 +1,7 @@
-import { conditionalJsonResponse } from "@getstrata/core/http/conditionalResponse";
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import type { OpenApiOperation, OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
-import type { AppDependencies, AppModule, AppRouteMap, CachedJson } from "./contracts";
+import { createCachedJson } from "./cachedJson";
+import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { discoverModules } from "./modules";
 import { prefixRouteMap } from "./prefixRouteMap";
@@ -50,22 +50,6 @@ function registerOpenApiRouteMap(
   }
 
   return registered;
-}
-
-function createCachedJson(dependencies: AppDependencies): CachedJson {
-  return async <T>(
-    cacheKey: string,
-    loader: () => Promise<T>,
-    tags: string[] = [],
-    request?: Request,
-  ): Promise<Response> => {
-    const data =
-      tags.length > 0
-        ? await dependencies.cache.tags(...tags).remember(cacheKey, loader)
-        : await dependencies.cache.remember(cacheKey, loader);
-
-    return conditionalJsonResponse(request, data);
-  };
 }
 
 function buildModuleRoutes(

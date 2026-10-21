@@ -26,7 +26,7 @@ const PIN_FILES = [
   "packages/strata-cli/package.json",
   "packages/strata-bootstrap/package.json",
   "packages/strata-starter/templates/package.json",
-  "packages/strata-starter/src/renderEnv.ts",
+  "packages/strata-starter/src/renderProjectMetadata.ts",
   "tests/unit/cli/starterGenerate.test.ts",
   "tests/unit/cli/starterTemplate.test.ts",
 ];

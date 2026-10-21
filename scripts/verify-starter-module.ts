@@ -1,6 +1,6 @@
 /** Real installed make:module, OpenAPI and HTTP admission; no scaffold/guard replacements. */
 import assert from "node:assert/strict";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
 import { jsonCsrfHeaders, mergeCookies } from "../tests/helpers/jsonCsrf";
@@ -14,6 +14,8 @@ const database = mysql ? "mysql" : postgres ? "postgres" : "sqlite";
 const publishedVersion = process.argv.find((arg) => arg.startsWith("--published="))?.slice(12);
 const dev = process.argv.includes("--dev");
 const withWeb = process.argv.includes("--with-web");
+const cachedJson = process.argv.includes("--cached-json");
+assert.ok(!cachedJson || withWeb, "Cache context qualification needs both API and web builders.");
 const apiPrefix =
   process.argv.find((arg) => arg.startsWith("--api-prefix="))?.slice(13) ?? "/api/v1";
 const apiBase = withWeb ? `${apiPrefix}/targets` : "/targets";
@@ -82,6 +84,7 @@ const env = {
   MAIL_PORT: "1025",
   MAIL_SECURE: "false",
   OTEL_SDK_DISABLED: "true",
+  ...(cachedJson ? { FEATURE_ETAG: "true" } : {}),
 };
 async function command(args: string[], migration = false) {
   const child = Bun.spawn([process.execPath, cli, ...args], {
@@ -171,6 +174,17 @@ const migration: Migration = {
 };
 export default migration;
 `,
+    );
+  }
+  if (cachedJson) {
+    const directory = join(fixture.app, "src/modules/qualification-cache");
+    await mkdir(directory);
+    await writeFile(
+      join(directory, "index.ts"),
+      await readFile(
+        new URL("../tests/fixtures/moduleCachedJson.ts.template", import.meta.url),
+        "utf8",
+      ),
     );
   }
   await command(["migrate", "--seed"], true);
@@ -448,6 +462,10 @@ try {
       );
       assert.equal(absent.status, 404, `${method} missing record: ${await absent.text()}`);
     }
+  }
+  if (cachedJson) {
+    const { assertModuleCachedJson } = await import("../tests/helpers/assertModuleCachedJson");
+    await assertModuleCachedJson(origin, apiPrefix, identity);
   }
   console.log(
     `PASS installed module ${database}/${auth}/${dev ? "dev" : "start"}: CLI discovery, API-only OpenAPI, guest 401, unscoped identity 403 and shutdown`,
