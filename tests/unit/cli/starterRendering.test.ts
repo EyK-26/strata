@@ -24,17 +24,24 @@ import * as migrations from "../../../packages/strata-starter/src/renderMigratio
 import * as models from "../../../packages/strata-starter/src/renderModels.ts";
 import * as metadata from "../../../packages/strata-starter/src/renderProjectMetadata.ts";
 import * as runtime from "../../../packages/strata-starter/src/renderRuntime.ts";
+import currentAuthModules from "../../fixtures/scaffolds/starter-password-operation-current.sha256.json";
 import baselines from "../../fixtures/scaffolds/starter-rendering.sha256.json";
+import { passwordLoginArtifactRoundTrip } from "../../helpers/authLoginArtifactDelta.ts";
+
+const currentModuleHashes: Readonly<Record<string, string | null>> = currentAuthModules;
 
 for (const { name, args, files: expected } of baselines) {
   test(`starter rendering preserves every pre-extraction file and byte: ${name}`, async () => {
+    const layers = layersFromFlags(parseCreateStrataArgs(args));
+    const currentHash = currentModuleHashes[name];
+    if (currentHash === undefined) throw new Error(`Missing current project auth hash: ${name}`);
     const root = await mkdtemp(join(tmpdir(), "strata-starter-rendering-"));
     const directory = join(root, "app");
     try {
       generateProject({
         projectName: "render-contract",
         targetDir: directory,
-        layers: layersFromFlags(parseCreateStrataArgs(args)),
+        layers,
         templateRoot: resolveTemplateRoot(),
         overlayRoot: resolveOverlayRoot(),
         // Exercise the existing workspace output mode so unrelated release bumps
@@ -47,13 +54,25 @@ for (const { name, args, files: expected } of baselines) {
         for (const item of await readdir(path, { withFileTypes: true })) {
           const full = join(path, item.name);
           if (item.isDirectory()) await visit(full);
-          else
-            actual[full.slice(directory.length + 1)] = createHash("sha256")
-              .update(await readFile(full))
-              .digest("hex");
+          else {
+            const relative = full.slice(directory.length + 1);
+            const bytes = await readFile(full);
+            if (relative === "src/modules/auth/index.ts") {
+              const source = bytes.toString("utf8");
+              const { legacy, roundTrip } = passwordLoginArtifactRoundTrip(source, layers);
+              expect(roundTrip).toBe(source);
+              if (currentHash === null || currentHash === undefined)
+                throw new Error(`Unexpected auth artifact for current project profile: ${name}`);
+              expect(createHash("sha256").update(bytes).digest("hex")).toBe(currentHash);
+              if (legacy === null)
+                throw new Error("An existing auth artifact must retain its legacy bytes.");
+              actual[relative] = createHash("sha256").update(legacy).digest("hex");
+            } else actual[relative] = createHash("sha256").update(bytes).digest("hex");
+          }
         }
       }
       await visit(directory);
+      expect(Object.hasOwn(actual, "src/modules/auth/index.ts")).toBe(currentHash !== null);
       expect(actual).toEqual(expected);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -101,4 +120,8 @@ test("legacy environment imports retain all artifact function and constant ident
   for (const [name, artifact] of Object.entries(legacy)) {
     expect(artifacts[name], name).toBe(artifact);
   }
+});
+
+test("current project auth hash inventory retains every historical scaffold profile", () => {
+  expect(Object.keys(currentAuthModules).sort()).toEqual(baselines.map(({ name }) => name).sort());
 });

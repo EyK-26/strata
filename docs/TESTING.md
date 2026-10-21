@@ -445,3 +445,10 @@ HTTP/CSRF, SMTP, public ORM, MFA where supported, recovery replay, rollback and
 credential invalidation. Generated-app types are checked in each installed journey.
 Existing applications retain ownership of their generated auth source; dependency
 installation does not overwrite those customizations.
+
+
+The same exact auth-only delta also applies to the eight complete starter-project
+fixtures. Their original file/path hash manifests remain unchanged; every other
+file is hashed from its raw bytes, and strict CURRENT auth-file hashes plus exact
+roundtrips supplement the preserved historical checks. Headers-only projects still
+assert that no auth artifact exists. Both fixture inventories remain complete.
