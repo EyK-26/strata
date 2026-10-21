@@ -57,8 +57,18 @@ const requiredRequestPathFiles = [
   join(repoRoot, "src/core/tenant/tenantMiddleware.ts"),
   join(repoRoot, "packages/strata-starter/src/renderAuth.ts"),
   join(repoRoot, "packages/strata-starter/src/renderAuthFlows.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderingContext.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderImports.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderWorkflows.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderApiRoutes.ts"),
+  join(repoRoot, "packages/strata-starter/src/auth/renderBrowserRoutes.ts"),
   join(repoRoot, "packages/strata-starter/src/renderScim.ts"),
   join(repoRoot, "packages/strata-starter/src/renderRuntime.ts"),
+  join(repoRoot, "packages/strata-starter/src/renderDatabase.ts"),
+  join(repoRoot, "packages/strata-starter/src/renderMigrations.ts"),
+  join(repoRoot, "packages/strata-starter/src/renderModels.ts"),
+  join(repoRoot, "packages/strata-starter/src/renderBootstrap.ts"),
+  join(repoRoot, "packages/strata-starter/src/renderCli.ts"),
 ];
 
 describe("request-path RLS bypass fence", () => {
@@ -79,7 +89,7 @@ describe("request-path RLS bypass fence", () => {
       if (allowedUnbounded.has(file)) {
         continue;
       }
-      if (file === join(repoRoot, "packages/strata-starter/src/renderRuntime.ts")) {
+      if (file === join(repoRoot, "packages/strata-starter/src/renderMigrations.ts")) {
         continue;
       }
       if (file === join(repoRoot, "packages/strata-starter/src/renderIntegrations.ts")) {
@@ -141,14 +151,14 @@ describe("request-path RLS bypass fence", () => {
     );
   });
 
-  test("generated renderRuntime unbounded bypass sits in migrate/seed, not request handlers", async () => {
-    const file = join(repoRoot, "packages/strata-starter/src/renderRuntime.ts");
+  test("generated runtime unbounded bypass sits in migrate/seed, not request handlers", async () => {
+    const file = join(repoRoot, "packages/strata-starter/src/renderMigrations.ts");
     const text = await readFile(file, "utf8");
     const matches = [...text.matchAll(/runWithMigrationBypass\(/g)];
     expect(matches).toHaveLength(1);
 
     const migrateStart = text.indexOf("function renderMigrateTs");
-    const migrateEnd = text.indexOf("function renderNoteModel");
+    const migrateEnd = text.indexOf("function dropTables");
     expect(migrateStart).toBeGreaterThan(-1);
     expect(migrateEnd).toBeGreaterThan(migrateStart);
     const migrateSlice = text.slice(migrateStart, migrateEnd);
@@ -156,11 +166,16 @@ describe("request-path RLS bypass fence", () => {
     expect(migrateSlice).toContain("export async function seed()");
     expect(migrateSlice).toContain(`\${seedOpen}`);
 
-    const createAppStart = text.indexOf("function renderCreateAppTs");
-    const createAppEnd = text.indexOf("function renderRoutesTs");
+    const bootstrap = await readFile(
+      join(repoRoot, "packages/strata-starter/src/renderBootstrap.ts"),
+      "utf8",
+    );
+    expect(bootstrap).not.toContain(unboundedNeedle);
+    const createAppStart = bootstrap.indexOf("function renderCreateAppTs");
+    const createAppEnd = bootstrap.indexOf("function renderRoutesTs");
     expect(createAppStart).toBeGreaterThan(-1);
     expect(createAppEnd).toBeGreaterThan(createAppStart);
-    expect(text.slice(createAppStart, createAppEnd)).not.toContain(unboundedNeedle);
+    expect(bootstrap.slice(createAppStart, createAppEnd)).not.toContain(unboundedNeedle);
   });
 
   test("generated webhook job bypass is the delivery insert, not the billing route", async () => {

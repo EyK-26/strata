@@ -108,6 +108,15 @@ Source regression tests for generated views, login throttle wiring and request-p
 
 The [starter journey matrix](STARTER-JOURNEYS.md) exercises fresh account creation, real SMTP verification/reset, MFA, replay, rollback and recovery across external installed apps. It complements seeded-login, OIDC/SAML, CLI/OpenAPI and Docker acceptance; it does not replace those assertions.
 
+The runtime renderer separates database clients/provisioning, migrations and database
+commands, model declarations, bootstrap/providers and CLI adapters. `renderRuntime.ts`
+retains its original exports as a compatibility facade; generation imports the artifact
+owners directly. The frozen eight-profile, 550-file path/hash baseline and all generated
+compiler/installed runtime checks still apply. The RLS source fence scans every new
+artifact file, permits the same single migrate/seed bypass, and independently asserts
+that bootstrap/request handlers contain no unbounded bypass. Moving a renderer does
+not authorize changing generated SQL, privilege separation or runtime behavior.
+
 
 ## Generated React browser acceptance
 
@@ -170,6 +179,18 @@ bumps out of these snapshots; existing package-version, compiler, installed runt
 2,688-shape matrix and published journey assertions continue to check consumer output.
 A deliberate generated-output change requires reviewing its corresponding baseline
 change as well as keeping the explicit behavior assertions and runtime gates passing.
+
+Auth flow rendering keeps selection policy in `auth/renderingContext.ts`, imports in
+`auth/renderImports.ts`, shared account helpers in `auth/renderWorkflows.ts`, JSON/SSO
+routes in `auth/renderApiRoutes.ts` and HTML adapters in `auth/renderBrowserRoutes.ts`.
+Each fragment accepts only the selection fields it uses. `renderAuthFlows.ts` retains
+its existing exports and assembles the same generated module. The helpers already
+shared by JSON/HTML remain app-owned; this source extraction does not move generated
+operations, change policy or introduce a framework workflow/plugin abstraction.
+`authRendering.test.ts` freezes all five auth artifacts across 64 selected profiles
+captured before extraction, including independent MFA, verification, GitHub and OIDC
+selections. It supplements the original file inventories and installed auth journeys;
+it does not replace SMTP, rollback/contention, MFA or credential-revocation assertions.
 
 ### Owned SMTP fixture admission
 

@@ -95,9 +95,9 @@ describe("wrapLogin wiring", () => {
     expect(auth).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
   });
 
-  test("generated renderAuthFlows emits wrapLogin on JSON login and JWT mint", async () => {
+  test("generated API auth fragment emits wrapLogin on JSON login and JWT mint", async () => {
     const rendered = await readFile(
-      join(repoRoot, "packages/strata-starter/src/renderAuthFlows.ts"),
+      join(repoRoot, "packages/strata-starter/src/auth/renderApiRoutes.ts"),
       "utf8",
     );
     expect(rendered).toMatch(/"\/api\/v1\/auth\/login":[\s\S]*?wrapLogin\(/);
