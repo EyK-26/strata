@@ -424,3 +424,31 @@ published 2.2.48 consumer reproduces stale metadata; the corrected packed consum
 passes. This adds one separate acceptance profile; the original native-route
 consumer and every historical assertion remain intact. It does not qualify opaque
 Bun file/directory/HTML transport or add an admission bypass.
+
+
+Generated password authentication is an app-owned plain-input operation shared by
+JSON and browser adapters. It verifies the password, applies the existing core
+account/MFA decision and persists consumed recovery proof, returning a typed domain
+result. Parsing, errors/statuses, private headers, pending-MFA cookies, views and
+credential issuance remain at the HTTP edge. The existing outer login-user lock
+still encloses both authentication and credential issuance; the second browser MFA
+challenge and all registration/reset/verification operations remain unchanged.
+
+This is an explicitly declared emitted-code refactor. The historical 64-profile
+whole-artifact hash inventory stays unchanged: exact literal substitution counts
+and a byte-for-byte forward/reverse roundtrip recover every historical artifact,
+while separate strict CURRENT module hashes freeze the new output. No whitespace
+or regex normalization is used, and all other artifacts retain their original raw
+hashes. The original runtime journey harness and profiles are byte-identical;
+all fifteen account and seven reset-contention journeys still exercise actual
+HTTP/CSRF, SMTP, public ORM, MFA where supported, recovery replay, rollback and
+credential invalidation. Generated-app types are checked in each installed journey.
+Existing applications retain ownership of their generated auth source; dependency
+installation does not overwrite those customizations.
+
+
+The same exact auth-only delta also applies to the eight complete starter-project
+fixtures. Their original file/path hash manifests remain unchanged; every other
+file is hashed from its raw bytes, and strict CURRENT auth-file hashes plus exact
+roundtrips supplement the preserved historical checks. Headers-only projects still
+assert that no auth artifact exists. Both fixture inventories remain complete.
