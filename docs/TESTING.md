@@ -326,6 +326,19 @@ pass duplicate alias, boot retry, per-class repository identity and observer
 admission checks. This adds one installed E2E and one next-release profile; it
 does not replace the earlier attribute, protected write-hook or lifecycle profiles.
 
+Relation through-join and pivot lookup SQL now have an internal compiler owner
+that reuses the existing dialect, predicate and join compilers. Repository methods
+retain empty-input admission, duplicate-through-join rejection, connection ownership,
+protected `findWhere` dispatch and result indexing. Characterization first freezes
+all three dialects' placeholder offsets, parent deduplication, aliases, scopes,
+soft deletes and custom repository rebinding on the original implementation.
+`verify-repository-rebinding.ts --relation-query-contracts --database=<engine>`
+then runs every original installed repository assertion before the new relation
+consumer. SQLite, MySQL and PostgreSQL are separate published acceptance profiles;
+the application uses public ORM operations and explicit Schema migrations throughout.
+The fixture follows generated CLI ownership by disposing providers and then calling
+the generated database cleanup function; it does not force process exit.
+
 Model attribute transformations now have an internal source owner independent of
 model registration, observers, repositories and queries. Existing public imports
 of cast helpers remain supported through `database/model`; the complete `Model`,

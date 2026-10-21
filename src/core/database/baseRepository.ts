@@ -18,18 +18,16 @@ import {
   buildGroupedSumQuery,
   buildIncrementQuery,
   buildInsertQuery,
-  buildJoinClause,
   buildProjectionQuery,
-  buildQueryWhereClause,
   buildRestoreByIdQuery,
   buildSelectQuery,
   buildSoftDeleteByIdQuery,
   buildUpdateQuery,
   buildUpsertQuery,
   qualifyColumn,
-  quoteIdentifier,
   resolveSoftDeleteColumn,
 } from "./query.ts";
+import { buildHasManyThroughQuery, buildPivotLookupQuery } from "./relationQueries.ts";
 import {
   type BelongsToManyRelation,
   type BelongsToRelation,
@@ -1066,35 +1064,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       );
     }
     const parentIds = [...new Set(parents.map((parent) => parent[relation.localKey]))];
-    const throughParentKey = relation.throughParentKey ?? "__through_parent_id";
-    const farTable = this.table.name;
-    const columns = this.table.columns
-      .map((column) => `${qualifyColumn(farTable, column)}`)
-      .join(", ");
-    const placeholders = parentIds
-      .map((_, index) => currentSqlDialect().placeholder(index + 1))
-      .join(", ");
-    const { text: extraWhere, params: extraParams } = this.buildThroughWhere(options, parentIds);
-    const sql = `SELECT ${columns}, ${qualifyColumn(relation.throughTable, relation.firstKey)} AS ${throughParentKey} FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(relation.throughTable)} ON ${qualifyColumn(relation.throughTable, relation.secondLocalKey)} = ${qualifyColumn(farTable, relation.secondKey)}${buildJoinClause(options.joins)} WHERE ${qualifyColumn(relation.throughTable, relation.firstKey)} IN (${placeholders})${extraWhere}`;
-
-    const children = await this.connection.unsafe<TEntity & Record<string, unknown>>(sql, [
-      ...parentIds,
-      ...extraParams,
-    ]);
+    const { text, params } = buildHasManyThroughQuery(this.table, relation, parentIds, options);
+    const children = await this.connection.unsafe<TEntity & Record<string, unknown>>(text, params);
 
     return indexHasManyThroughRelation(parents, children, relation);
-  }
-
-  private buildThroughWhere(
-    options: QueryOptions<TEntity>,
-    parentIds: unknown[],
-  ): { text: string; params: unknown[] } {
-    const parameters = [...parentIds];
-    const { clause } = buildQueryWhereClause(this.table, options, options.whereNodes, parameters);
-    return {
-      text: clause ? ` AND (${clause.replace(/^ WHERE /, "")})` : "",
-      params: parameters.slice(parentIds.length),
-    };
   }
 
   async loadBelongsToForParents<
@@ -1263,13 +1236,8 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
 
     const parentIds = [...new Set(parents.map((parent) => parent[relation.parentKey]))];
-    const placeholders = parentIds
-      .map((_, index) => currentSqlDialect().placeholder(index + 1))
-      .join(", ");
-    const pivotRows = await this.connection.unsafe<Pivot>(
-      `SELECT * FROM ${relation.pivotTable} WHERE ${String(relation.foreignPivotKey)} IN (${placeholders})`,
-      parentIds,
-    );
+    const { text, params } = buildPivotLookupQuery(relation, parentIds);
+    const pivotRows = await this.connection.unsafe<Pivot>(text, params);
 
     if (pivotRows.length === 0) {
       return indexBelongsToManyRelation(parents, [], [], relation);
