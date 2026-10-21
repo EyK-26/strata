@@ -254,14 +254,17 @@ and method `Response` values, native request/server identity, request-hook rejec
 configured CORS preflights, explicit OPTIONS precedence and drain before close.
 Response-valued API/web module routes pass through their existing middleware;
 the installed app additionally proves missing-CSRF rejection and valid-CSRF admission.
-Module normalization happens after metadata registration, so registry semantics and
+Module callback wrapping happens after metadata registration. Each executable method
+receives middleware even when its map also contains inert fields; those fields cannot
+disable CSRF. Opaque SDK values retain their original identity. Registry semantics and
 the legacy middleware helper's non-handler passthrough remain unchanged. Middleware
 forwards callback arguments with compile-time checks that required arguments stay
 required and legacy single-argument handlers do not gain arbitrary arguments.
 
 `verify-repository-rebinding.ts --database=sqlite --native-route-contracts` runs every
 original installed repository/transaction/event assertion before this separate HTTP
-consumer. Exact published 2.2.48 reproduces the static-response 404; corrected packed
+consumer. Exact published 2.2.48 reproduces the static-response 404 and, separately,
+missing-CSRF admission for a function method map containing an inert field. Corrected packed
 packages pass the same consumer and use the generated app's real providers for API
 and web middleware. It adds one installed E2E and next-release qualification profile.
 This proof covers response/function routes; it does not qualify HTML bundles,

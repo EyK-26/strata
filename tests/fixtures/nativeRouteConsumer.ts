@@ -15,6 +15,95 @@ const handler = (request: BunRequest<"/things/:id">, native?: Server<unknown>) =
   assert.equal(request, admitted);
   return Response.json({ id: request.params.id, port: native?.port });
 };
+// This URL resolves only after copying into the generated app. Its bootstrap is
+// typechecked there; use its real providers and the already migrated runtime URL.
+const application: {
+  createApp(options: { migrate: false }): Promise<{ context: InitializedAppContext }>;
+} = await import(new URL("../bootstrap/createApp.ts", import.meta.url).href);
+const app = await application.createApp({ migrate: false });
+try {
+  const file = Bun.file(new URL("../bootstrap/createApp.ts", import.meta.url));
+  const routes = buildModuleRoutes(app.context.dependencies, {
+    modules: [
+      {
+        name: "response-contract",
+        routes: () => ({
+          "/module": new Response("module body", { status: 201 }),
+          "/mixed": { GET: new Response("mixed body"), POST: new Response("mixed write") },
+          "/wrapped/:id": { GET: handler },
+          "/file": file,
+          "/partial": {
+            GET: () => new Response("partial read"),
+            POST: () => new Response("partial write"),
+            inert: false,
+          },
+        }),
+      },
+    ],
+  });
+  const web = buildWebModuleRoutes(app.context.dependencies, {
+    modules: [
+      {
+        name: "web-response-contract",
+        webRoutes: () => ({ "/web-static": new Response("web body"), "/web-file": file }),
+      },
+    ],
+  });
+  const moduleServer = createWebServer({
+    port: 0,
+    native: { hostname: "127.0.0.1" },
+    routes: { ...routes, ...web },
+    onRequest(request) {
+      admitted = request;
+    },
+  });
+  try {
+    assert.equal(routes["/file"], file);
+    assert.equal(web["/web-file"], file);
+    assert.equal(routes["/partial"].inert, false);
+    const partialRejection = await fetch(new URL("/partial", moduleServer.url), { method: "POST" });
+    assert.equal(partialRejection.status, 403);
+    assert.deepEqual(await partialRejection.json(), { error: "Invalid or missing CSRF token." });
+    const read = await fetch(new URL("/module", moduleServer.url));
+    assert.equal(read.status, 201);
+    assert.equal(await read.text(), "module body");
+    assert.ok(read.headers.get("x-request-id"));
+    const csrfCookie = read.headers.getSetCookie()[0]?.split(";")[0];
+    assert.ok(csrfCookie);
+    const rejected = await fetch(new URL("/module", moduleServer.url), { method: "POST" });
+    assert.equal(rejected.status, 403);
+    assert.deepEqual(await rejected.json(), { error: "Invalid or missing CSRF token." });
+    const csrfHeaders = {
+      cookie: csrfCookie,
+      "x-csrf-token": decodeURIComponent(csrfCookie.slice(csrfCookie.indexOf("=") + 1)),
+      origin: moduleServer.url.origin,
+    };
+    for (const [path, body] of [
+      ["/module", "module body"],
+      ["/mixed", "mixed write"],
+      ["/partial", "partial write"],
+    ] as const) {
+      const result = await fetch(new URL(path, moduleServer.url), {
+        method: "POST",
+        headers: csrfHeaders,
+      });
+      assert.ok(result.headers.get("x-request-id"));
+      assert.equal(await result.text(), body);
+    }
+    assert.deepEqual(await (await fetch(new URL("/wrapped/12", moduleServer.url))).json(), {
+      id: "12",
+      port: moduleServer.port,
+    });
+    const webRead = await fetch(new URL("/web-static", moduleServer.url));
+    assert.equal(await webRead.text(), "web body");
+    assert.ok(webRead.headers.get("x-request-id"));
+  } finally {
+    await moduleServer.stop(true);
+  }
+} finally {
+  await app.context.dispose();
+}
+
 const server = createWebServer({
   port: 0,
   native: { hostname: "127.0.0.1" },
@@ -73,81 +162,6 @@ try {
   assert.equal(template.bodyUsed, false);
 } finally {
   await server.stop(true);
-}
-
-// This URL resolves only after copying into the generated app. Its bootstrap is
-// typechecked there; use its real providers and the already migrated runtime URL.
-const application: {
-  createApp(options: { migrate: false }): Promise<{ context: InitializedAppContext }>;
-} = await import(new URL("../bootstrap/createApp.ts", import.meta.url).href);
-const app = await application.createApp({ migrate: false });
-try {
-  const routes = buildModuleRoutes(app.context.dependencies, {
-    modules: [
-      {
-        name: "response-contract",
-        routes: () => ({
-          "/module": new Response("module body", { status: 201 }),
-          "/mixed": { GET: new Response("mixed body"), POST: new Response("mixed write") },
-          "/wrapped/:id": { GET: handler },
-        }),
-      },
-    ],
-  });
-  const web = buildWebModuleRoutes(app.context.dependencies, {
-    modules: [
-      {
-        name: "web-response-contract",
-        webRoutes: () => ({ "/web-static": new Response("web body") }),
-      },
-    ],
-  });
-  const moduleServer = createWebServer({
-    port: 0,
-    native: { hostname: "127.0.0.1" },
-    routes: { ...routes, ...web },
-    onRequest(request) {
-      admitted = request;
-    },
-  });
-  try {
-    const read = await fetch(new URL("/module", moduleServer.url));
-    assert.equal(read.status, 201);
-    assert.equal(await read.text(), "module body");
-    assert.ok(read.headers.get("x-request-id"));
-    const csrfCookie = read.headers.getSetCookie()[0]?.split(";")[0];
-    assert.ok(csrfCookie);
-    const rejected = await fetch(new URL("/module", moduleServer.url), { method: "POST" });
-    assert.equal(rejected.status, 403);
-    assert.deepEqual(await rejected.json(), { error: "Invalid or missing CSRF token." });
-    const csrfHeaders = {
-      cookie: csrfCookie,
-      "x-csrf-token": decodeURIComponent(csrfCookie.slice(csrfCookie.indexOf("=") + 1)),
-      origin: moduleServer.url.origin,
-    };
-    for (const [path, body] of [
-      ["/module", "module body"],
-      ["/mixed", "mixed write"],
-    ] as const) {
-      const result = await fetch(new URL(path, moduleServer.url), {
-        method: "POST",
-        headers: csrfHeaders,
-      });
-      assert.ok(result.headers.get("x-request-id"));
-      assert.equal(await result.text(), body);
-    }
-    assert.deepEqual(await (await fetch(new URL("/wrapped/12", moduleServer.url))).json(), {
-      id: "12",
-      port: moduleServer.port,
-    });
-    const webRead = await fetch(new URL("/web-static", moduleServer.url));
-    assert.equal(await webRead.text(), "web body");
-    assert.ok(webRead.headers.get("x-request-id"));
-  } finally {
-    await moduleServer.stop(true);
-  }
-} finally {
-  await app.context.dispose();
 }
 
 const lifecycle = new LifecycleCoordinator({ timeoutMs: 2000 });

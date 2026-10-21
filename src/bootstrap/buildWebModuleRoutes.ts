@@ -1,8 +1,7 @@
-import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import { createCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
-import { normalizeModuleResponseRoutes } from "./moduleResponseRoutes";
+import { applyModuleRouteMiddleware } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
 import { registerOpenApiRouteMap } from "./routeMetadata";
 import { routeRegistry } from "./routeRegistry";
@@ -43,8 +42,8 @@ function buildWebModuleRoutes(
     );
   }
 
-  return applyMiddlewareToRoutes(
-    normalizeModuleResponseRoutes(registerOpenApiRouteMap(moduleRoutes, ["global", "web"])),
+  return applyModuleRouteMiddleware(
+    registerOpenApiRouteMap(moduleRoutes, ["global", "web"]),
     middleware,
   ) as AppRouteMap;
 }

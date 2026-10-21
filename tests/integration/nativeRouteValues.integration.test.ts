@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
+import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
@@ -27,6 +28,68 @@ afterEach(() => {
 });
 
 describe("native route values at the framework server boundary", () => {
+  test("module builders preserve opaque native values instead of replacing SDK objects", () => {
+    const dependencies = createMockDependencies(new ServiceContainer());
+    dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+    const file = Bun.file(new URL("../../index.html", import.meta.url));
+    const directory = { dir: "./public" };
+    const values = { "/file": file, "/directory": directory };
+    const api = buildModuleRoutes(dependencies, {
+      modules: [{ name: "native-values", routes: () => values }],
+    });
+    const web = buildWebModuleRoutes(dependencies, {
+      modules: [{ name: "native-values", webRoutes: () => values }],
+    });
+    for (const routes of [api, web]) {
+      expect(routes["/file"]).toBe(file);
+      expect(routes["/file"]).toBeInstanceOf(Blob);
+      expect(routes["/directory"]).toBe(directory);
+    }
+  });
+
+  test("inert method-map fields cannot disable middleware around executable callbacks", async () => {
+    const dependencies = createMockDependencies(new ServiceContainer());
+    dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+    const routes = buildModuleRoutes(dependencies, {
+      modules: [
+        {
+          name: "partial-method-map",
+          routes: () => ({
+            "/partial": {
+              GET: () => new Response("read"),
+              POST: () => new Response("write"),
+              inert: false,
+            },
+          }),
+        },
+      ],
+    });
+    expect(routes["/partial"].inert).toBe(false);
+    const server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" }, routes });
+    try {
+      const rejected = await fetch(new URL("/partial", server.url), { method: "POST" });
+      expect(rejected.status).toBe(403);
+      expect(await rejected.json()).toEqual({ error: "Invalid or missing CSRF token." });
+      const read = await fetch(new URL("/partial", server.url));
+      expect(await read.text()).toBe("read");
+      expect(read.headers.get("x-request-id")).toBeTruthy();
+      const cookie = read.headers.getSetCookie()[0]?.split(";")[0] ?? "";
+      const allowed = await fetch(new URL("/partial", server.url), {
+        method: "POST",
+        headers: {
+          cookie,
+          "x-csrf-token": decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1)),
+          origin: server.url.origin,
+        },
+      });
+      expect(allowed.status).toBe(200);
+      expect(await allowed.text()).toBe("write");
+      expect(allowed.headers.get("x-request-id")).toBeTruthy();
+    } finally {
+      await server.stop(true);
+    }
+  });
+
   test("static and mixed method values cannot bypass module middleware", async () => {
     const visits: string[] = [];
     const dependencies = createMockDependencies(new ServiceContainer());
