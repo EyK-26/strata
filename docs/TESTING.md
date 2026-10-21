@@ -381,6 +381,50 @@ Every original repository/transaction/event assertion runs first in its own proc
 the additional consumer separately checks phase admission and later-phase cleanup.
 Use `--published=<exact-version>` for the same contract against registry packages.
 
+Audit export uses separate worker-only snapshot and acknowledgement SQL scopes.
+The exporter releases its own RLS transaction before formatting/sending HTTP,
+then acknowledges only the accepted snapshot IDs. A caller-owned outer transaction
+remains open until that caller settles it; the exporter does not commit it. Delivery
+remains at least once: a failed acknowledgement or caller rollback can repeat an
+already accepted external effect. Rows arriving during HTTP remain pending.
+
+`exportAuditLogs.test.ts` observes a real PostgreSQL backend at the intercepted HTTP
+boundary: the original exporter left it idle in transaction, while the corrected
+exporter has no active SQL scope there. Existing format, authorization, outbound URL,
+HTTP-failure and exact-ID assertions remain required. The request-path bypass fence
+now permits only the private SQL store rather than the HTTP facade.
+`verify-repository-rebinding.ts --database=postgres --audit-export-contracts` runs
+all original installed repository assertions before the public ORM/exporter consumer.
+It uses an explicit Schema fixture migration and generated cleanup ownership, with
+no application SQL or added grants. HTTP interception qualifies the SQL/effect
+boundary, not a real remote SIEM service or its network availability.
+
+
+Eager-load registrations retain the correlation between their relation kind and
+relation metadata in a private discriminated union. Hydration narrows that union
+without relation assertions or a `never` repository cast. Heterogeneous related
+record/repository types are erased only where typed public registrations enter
+private storage; dynamic related keys remain strings rather than a fictional `id`.
+This is a type-only change: the complete transpiled RepositoryQuery runtime must
+remain byte-identical. Existing nested, polymorphic, many-to-many, protected-scope,
+custom-repository and cross-tenant negative cases remain required, together with
+the installed three-engine relation consumer and public negative type contracts.
+No public method signature, runtime fallback, new profile or exemption is added.
+
+
+API prefixing carries each handler and its own OpenAPI contract as one entry.
+Previously, relative and absolute raw paths could normalize to one endpoint while
+retaining the replaced handler's contract. Whole-path replacement, raw-path insertion
+precedence, API-over-web merge precedence and middleware order remain unchanged;
+characterization tests freeze those existing rules before the correction.
+`verify-repository-rebinding.ts --database=sqlite --route-collision-contracts`
+runs all original repository assertions first, then checks actual HTTP responses
+against the winning route's metadata using only public bootstrap APIs. The exact
+published 2.2.48 consumer reproduces stale metadata; the corrected packed consumer
+passes. This adds one separate acceptance profile; the original native-route
+consumer and every historical assertion remain intact. It does not qualify opaque
+Bun file/directory/HTML transport or add an admission bypass.
+
 
 SMTP address validation and MIME assembly now have a pure internal owner; socket
 connection, protocol states, deadlines, cancellation and cleanup stay in the existing

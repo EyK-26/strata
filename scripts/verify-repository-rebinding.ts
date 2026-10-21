@@ -14,12 +14,16 @@ const modelAttributeContracts = process.argv.includes("--model-attribute-contrac
 const modelRegistryContracts = process.argv.includes("--model-registry-contracts");
 const modelQueryContracts = process.argv.includes("--model-query-contracts");
 const relationQueryContracts = process.argv.includes("--relation-query-contracts");
+const auditExportContracts = process.argv.includes("--audit-export-contracts");
+const routeCollisionContracts = process.argv.includes("--route-collision-contracts");
+if (auditExportContracts)
+  assert.equal(database, "postgres", "Audit RLS qualification requires Postgres.");
 const fixture = await createGeneratedSecurityApp(
   database,
   [
     "--frontend=api",
     "--auth=headers",
-    "--tenancy=none",
+    auditExportContracts ? "--tenancy=rls" : "--tenancy=none",
     "--cache=array",
     "--queue=sync",
     "--mail=log",
@@ -43,7 +47,7 @@ const env = {
   APP_ENV: "local",
   APP_URL: "http://127.0.0.1:3000",
   AUTH_DEV_HEADERS: "true",
-  TENANCY_DRIVER: "none",
+  TENANCY_DRIVER: auditExportContracts ? "rls" : "none",
   CACHE_DRIVER: "array",
   QUEUE_DRIVER: "sync",
   MAIL_DRIVER: "log",
@@ -130,6 +134,27 @@ export default migration;
 `,
     );
   }
+  if (auditExportContracts) {
+    await writeFile(
+      join(fixture.app, "src/db/migrations/9998_audit_export.ts"),
+      `import type { Migration } from "@getstrata/core/database/migrations/types";
+import { Schema, resolveDatabaseDriver } from "@getstrata/core/database/schema";
+const migration: Migration = {
+  name: "9998_audit_export",
+  async up(db) { await Schema.run(db, resolveDatabaseDriver(), schema => {
+    schema.create("audit_log", table => {
+      table.id(); table.integer("user_id").nullable(); table.string("action"); table.string("subject_type");
+      table.integer("subject_id").nullable(); table.json("payload"); table.string("ip_address").nullable();
+      table.string("user_agent").nullable(); table.string("checksum").nullable(); table.integer("tenant_id").nullable();
+      table.string("trace_id").nullable(); table.timestamp("created_at"); table.timestamp("exported_at").nullable();
+    });
+  }); },
+  async down(db) { await Schema.run(db, resolveDatabaseDriver(), schema => { schema.drop("audit_log"); }); },
+};
+export default migration;
+`,
+    );
+  }
   await run([join(fixture.app, "node_modules/@getstrata/cli/cli.ts"), "migrate"], {
     MIGRATION_DATABASE_URL: fixture.migrationUrl,
     DATABASE_URL: fixture.migrationUrl,
@@ -156,10 +181,24 @@ export default migration;
   const registryConsumer = join(fixture.app, "src/qualification/modelRegistry.ts");
   const queryConsumer = join(fixture.app, "src/qualification/modelQuery.ts");
   const relationConsumer = join(fixture.app, "src/qualification/relationQueries.ts");
+  const collisionConsumer = join(fixture.app, "src/qualification/routeCollision.ts");
+  if (routeCollisionContracts) {
+    await copyFile(
+      join(import.meta.dir, "../tests/fixtures/routeCollisionConsumer.ts"),
+      collisionConsumer,
+    );
+  }
   if (relationQueryContracts) {
     await copyFile(
       join(import.meta.dir, "../tests/fixtures/relationQueryConsumer.ts"),
       relationConsumer,
+    );
+  }
+  const auditConsumer = join(fixture.app, "src/qualification/auditExport.ts");
+  if (auditExportContracts) {
+    await copyFile(
+      join(import.meta.dir, "../tests/fixtures/auditExportConsumer.ts"),
+      auditConsumer,
     );
   }
   if (modelQueryContracts) {
@@ -192,6 +231,8 @@ export default migration;
   if (modelRegistryContracts) console.log((await run([registryConsumer])).trim());
   if (modelQueryContracts) console.log((await run([queryConsumer])).trim());
   if (relationQueryContracts) console.log((await run([relationConsumer])).trim());
+  if (routeCollisionContracts) console.log((await run([collisionConsumer])).trim());
+  if (auditExportContracts) console.log((await run([auditConsumer])).trim());
 } finally {
   process.off("SIGTERM", terminate);
   await cleanup();
