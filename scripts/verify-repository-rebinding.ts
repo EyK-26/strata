@@ -10,6 +10,7 @@ const publishedVersion = process.argv.find((arg) => arg.startsWith("--published=
 const phaseAdmission = process.argv.includes("--provider-phase-admission");
 const modelWriteHooks = process.argv.includes("--model-write-hooks");
 const nativeRouteContracts = process.argv.includes("--native-route-contracts");
+const modelAttributeContracts = process.argv.includes("--model-attribute-contracts");
 const fixture = await createGeneratedSecurityApp(
   database,
   [
@@ -128,6 +129,13 @@ export default migration;
     join(import.meta.dir, "../tests/fixtures/modelWriteHookConsumer.ts"),
     join(fixture.app, "src/qualification/modelWriteHookConsumer.ts"),
   );
+  const attributeConsumer = join(fixture.app, "src/qualification/modelAttributes.ts");
+  if (modelAttributeContracts) {
+    await copyFile(
+      join(import.meta.dir, "../tests/fixtures/modelAttributeConsumer.ts"),
+      attributeConsumer,
+    );
+  }
   const nativeConsumer = join(fixture.app, "src/qualification/nativeRoutes.ts");
   if (nativeRouteContracts) {
     await copyFile(
@@ -139,6 +147,7 @@ export default migration;
   console.log((await run([consumer])).trim());
   if (phaseAdmission) console.log((await run([phaseConsumer])).trim());
   if (nativeRouteContracts) console.log((await run([nativeConsumer])).trim());
+  if (modelAttributeContracts) console.log((await run([attributeConsumer])).trim());
 } finally {
   process.off("SIGTERM", terminate);
   await cleanup();

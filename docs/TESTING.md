@@ -294,6 +294,13 @@ the pre-extraction public null/date/JSON/boolean/integer/pass-through/cast-map b
 Existing native dirty-write, async-hash, rollback and protected-hook tests remain
 required; the extracted owner receives no coverage exemption.
 
+`verify-repository-rebinding.ts --database=sqlite --model-attribute-contracts` also
+typechecks and executes an installed consumer of the retained public Model cast and
+mass-assignment exports, including asynchronous password hashes. All original ORM,
+repository, transaction and event assertions run first. Add `--published=<exact-version>`
+to qualify the same consumer against registry packages; this contract adds no schema,
+grant, internal import or application mechanism.
+
 `providerPhaseAdmission.test.ts` exercises real provider contexts with in-memory
 cache/storage dependencies. An explicitly started drain/flush must reject work
 registered from its very first callback; promise memoization alone occurs too late
