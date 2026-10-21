@@ -226,3 +226,13 @@ packages. These are three additional acceptance profiles; the original repositor
 profiles and assertions remain. The old published 2.2.48 fails this new contract
 on all three engines; the corrected candidate passes all three. Historical
 113-profile published acceptance remains a record of its original selected scope.
+
+
+Model attribute transformations now have an internal source owner independent of
+model registration, observers, repositories and queries. Existing public imports
+of cast helpers remain supported through `database/model`; the complete `Model`,
+`ModelQuery` and `ModelProjection` bodies and protected extension dispatch are
+unchanged by this mechanical extraction. `model.attributeContracts.test.ts` freezes
+the pre-extraction public null/date/JSON/boolean/integer/pass-through/cast-map behavior.
+Existing native dirty-write, async-hash, rollback and protected-hook tests remain
+required; the extracted owner receives no coverage exemption.
