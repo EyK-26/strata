@@ -208,3 +208,17 @@ across restart, preserves the occupier, and checks non-port error propagation.
 Probe teardown independently records created IDs, so a cleanup regression does not
 leave its own test resources behind. All original readiness, SMTP outage, auth,
 MFA, rollback and contention assertions remain in the unchanged journey body.
+
+### Module cache response contract
+
+`moduleCachedJson.integration.test.ts` exercises both API and web module contexts
+through a listening Bun server, their real global middleware, `CacheRepository`
+and `SimpleCacheStore`. Tagged/untagged reads, exact and tag invalidation, private
+ETags/304 responses, a false JSON payload without a Request and loader failure
+followed by a fresh successful load are asserted for both contexts. The helper
+owns each server/kernel/cache and restores its environment after failures too.
+
+Both contexts use the existing conditional JSON implementation. Module authors
+still choose cache keys/tags and pass the Request when conditional responses are
+wanted. This does not add automatic tenant/user key selection, change TTL/store
+policy or replace the existing Redis/process/native/published qualification gates.
