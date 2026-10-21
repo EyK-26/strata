@@ -312,7 +312,7 @@ on all three engines; the corrected candidate passes all three. Historical
 
 Model registration and observer bookkeeping now live in an internal owner with
 type-only references to the public Model and repository classes. Boot admission and
-scope application remain in the Model facade. `model.registration.test.ts` first
+scope application retain their public Model facade. `model.registration.test.ts` first
 characterizes duplicate-name admission, failed-boot observer restoration, async
 observer cancellation before SQL and concrete-class ownership on the original
 implementation. The same assertions pass after extraction. Existing Model query,
@@ -325,6 +325,17 @@ public Model consumer. Exact published 2.2.48 and fresh candidate packages both
 pass duplicate alias, boot retry, per-class repository identity and observer
 admission checks. This adds one installed E2E and one next-release profile; it
 does not replace the earlier attribute, protected write-hook or lifecycle profiles.
+
+Model query/projection forwarding and relation-path hydration now live in a separate
+internal owner. Boot admission and global-scope state share the existing registration
+owner; both owners refer to Model through type-only imports. Query, projection,
+boot and observer behavior is unchanged by this extraction, including every defensive
+branch and all seven typed relation-forwarding contracts. The public Model facade,
+protected extension dispatch and legacy export identities remain supported.
+The database suite checks both extracted owners at full function/line coverage,
+and the installed `--model-query-contracts` consumer still runs all original
+repository, private-state, transaction and event assertions before its Model checks.
+Moving these owners adds no public entrypoint, new scenario or coverage exemption.
 
 Relation through-join and pivot lookup SQL now have an internal compiler owner
 that reuses the existing dialect, predicate and join compilers. Repository methods
