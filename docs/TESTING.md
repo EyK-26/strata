@@ -231,3 +231,10 @@ for that synchronous admission check. Later phases remain available during an
 explicit drain. Existing reverse-order, failure, drain-before-close, repeat disposal
 and startup-cleanup tests remain required; a failed drain still keeps infrastructure
 open beneath live work.
+
+
+`verify-repository-rebinding.ts --database=sqlite --provider-phase-admission` also
+copies and typechecks an installed consumer of the public provider/context APIs.
+Every original repository/transaction/event assertion runs first in its own process;
+the additional consumer separately checks phase admission and later-phase cleanup.
+Use `--published=<exact-version>` for the same contract against registry packages.
