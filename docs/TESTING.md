@@ -312,7 +312,7 @@ on all three engines; the corrected candidate passes all three. Historical
 
 Model registration and observer bookkeeping now live in an internal owner with
 type-only references to the public Model and repository classes. Boot admission and
-scope application remain in the Model facade. `model.registration.test.ts` first
+scope application retain their public Model facade. `model.registration.test.ts` first
 characterizes duplicate-name admission, failed-boot observer restoration, async
 observer cancellation before SQL and concrete-class ownership on the original
 implementation. The same assertions pass after extraction. Existing Model query,
@@ -325,6 +325,30 @@ public Model consumer. Exact published 2.2.48 and fresh candidate packages both
 pass duplicate alias, boot retry, per-class repository identity and observer
 admission checks. This adds one installed E2E and one next-release profile; it
 does not replace the earlier attribute, protected write-hook or lifecycle profiles.
+
+Model query/projection forwarding and relation-path hydration now live in a separate
+internal owner. Boot admission and global-scope state share the existing registration
+owner; both owners refer to Model through type-only imports. Query, projection,
+boot and observer behavior is unchanged by this extraction, including every defensive
+branch and all seven typed relation-forwarding contracts. The public Model facade,
+protected extension dispatch and legacy export identities remain supported.
+The database suite checks both extracted owners at full function/line coverage,
+and the installed `--model-query-contracts` consumer still runs all original
+repository, private-state, transaction and event assertions before its Model checks.
+Moving these owners adds no public entrypoint, new scenario or coverage exemption.
+
+Relation through-join and pivot lookup SQL now have an internal compiler owner
+that reuses the existing dialect, predicate and join compilers. Repository methods
+retain empty-input admission, duplicate-through-join rejection, connection ownership,
+protected `findWhere` dispatch and result indexing. Characterization first freezes
+all three dialects' placeholder offsets, parent deduplication, aliases, scopes,
+soft deletes and custom repository rebinding on the original implementation.
+`verify-repository-rebinding.ts --relation-query-contracts --database=<engine>`
+then runs every original installed repository assertion before the new relation
+consumer. SQLite, MySQL and PostgreSQL are separate published acceptance profiles;
+the application uses public ORM operations and explicit Schema migrations throughout.
+The fixture follows generated CLI ownership by disposing providers and then calling
+the generated database cleanup function; it does not force process exit.
 
 Model attribute transformations now have an internal source owner independent of
 model registration, observers, repositories and queries. Existing public imports
@@ -356,6 +380,36 @@ copies and typechecks an installed consumer of the public provider/context APIs.
 Every original repository/transaction/event assertion runs first in its own process;
 the additional consumer separately checks phase admission and later-phase cleanup.
 Use `--published=<exact-version>` for the same contract against registry packages.
+
+Audit export uses separate worker-only snapshot and acknowledgement SQL scopes.
+The exporter releases its own RLS transaction before formatting/sending HTTP,
+then acknowledges only the accepted snapshot IDs. A caller-owned outer transaction
+remains open until that caller settles it; the exporter does not commit it. Delivery
+remains at least once: a failed acknowledgement or caller rollback can repeat an
+already accepted external effect. Rows arriving during HTTP remain pending.
+
+`exportAuditLogs.test.ts` observes a real PostgreSQL backend at the intercepted HTTP
+boundary: the original exporter left it idle in transaction, while the corrected
+exporter has no active SQL scope there. Existing format, authorization, outbound URL,
+HTTP-failure and exact-ID assertions remain required. The request-path bypass fence
+now permits only the private SQL store rather than the HTTP facade.
+`verify-repository-rebinding.ts --database=postgres --audit-export-contracts` runs
+all original installed repository assertions before the public ORM/exporter consumer.
+It uses an explicit Schema fixture migration and generated cleanup ownership, with
+no application SQL or added grants. HTTP interception qualifies the SQL/effect
+boundary, not a real remote SIEM service or its network availability.
+
+
+Eager-load registrations retain the correlation between their relation kind and
+relation metadata in a private discriminated union. Hydration narrows that union
+without relation assertions or a `never` repository cast. Heterogeneous related
+record/repository types are erased only where typed public registrations enter
+private storage; dynamic related keys remain strings rather than a fictional `id`.
+This is a type-only change: the complete transpiled RepositoryQuery runtime must
+remain byte-identical. Existing nested, polymorphic, many-to-many, protected-scope,
+custom-repository and cross-tenant negative cases remain required, together with
+the installed three-engine relation consumer and public negative type contracts.
+No public method signature, runtime fallback, new profile or exemption is added.
 
 Redis list/stream queue, cache and scheduler lease scripts have private source
 owners separate from their transports and workers. Script literal and expanded
