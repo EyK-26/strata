@@ -15,6 +15,7 @@ const modelRegistryContracts = process.argv.includes("--model-registry-contracts
 const modelQueryContracts = process.argv.includes("--model-query-contracts");
 const relationQueryContracts = process.argv.includes("--relation-query-contracts");
 const auditExportContracts = process.argv.includes("--audit-export-contracts");
+const routeCollisionContracts = process.argv.includes("--route-collision-contracts");
 if (auditExportContracts)
   assert.equal(database, "postgres", "Audit RLS qualification requires Postgres.");
 const fixture = await createGeneratedSecurityApp(
@@ -180,6 +181,13 @@ export default migration;
   const registryConsumer = join(fixture.app, "src/qualification/modelRegistry.ts");
   const queryConsumer = join(fixture.app, "src/qualification/modelQuery.ts");
   const relationConsumer = join(fixture.app, "src/qualification/relationQueries.ts");
+  const collisionConsumer = join(fixture.app, "src/qualification/routeCollision.ts");
+  if (routeCollisionContracts) {
+    await copyFile(
+      join(import.meta.dir, "../tests/fixtures/routeCollisionConsumer.ts"),
+      collisionConsumer,
+    );
+  }
   if (relationQueryContracts) {
     await copyFile(
       join(import.meta.dir, "../tests/fixtures/relationQueryConsumer.ts"),
@@ -223,6 +231,7 @@ export default migration;
   if (modelRegistryContracts) console.log((await run([registryConsumer])).trim());
   if (modelQueryContracts) console.log((await run([queryConsumer])).trim());
   if (relationQueryContracts) console.log((await run([relationConsumer])).trim());
+  if (routeCollisionContracts) console.log((await run([collisionConsumer])).trim());
   if (auditExportContracts) console.log((await run([auditConsumer])).trim());
 } finally {
   process.off("SIGTERM", terminate);
