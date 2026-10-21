@@ -59,6 +59,14 @@ describe("requestIdMiddleware", () => {
 });
 
 describe("wrapRouteHandler", () => {
+  test("legacy non-handler values keep their identity and are normalized only by module builders", () => {
+    const response = new Response("legacy");
+    const metadata = { static: "metadata" };
+    expect(wrapRouteHandler(response, [requestIdMiddleware])).toBe(response);
+    expect(wrapRouteHandler(metadata, [requestIdMiddleware])).toBe(metadata);
+    expect(wrapRouteHandler(false, [requestIdMiddleware])).toBe(false);
+  });
+
   test("wraps method-based route maps and plain handlers", async () => {
     const wrapped = wrapRouteHandler(
       {

@@ -35,6 +35,8 @@ type BunRouteHandler<T = unknown> = (
   server: Server<T>,
 ) => Response | Promise<Response>;
 
+type NativeRouteCallback<T> = (request: Request, server: Server<T>) => unknown;
+
 function socketAddress<T>(server: Server<T> | undefined, request: Request): string | null {
   const address = server?.requestIP(request)?.address;
   return address ? address.replace(/^::ffff:/i, "") : null;
@@ -45,7 +47,7 @@ async function missingHtmlResponse(): Promise<Response> {
 }
 
 function wrapRouteHandler<T>(
-  handler: (request: Request) => unknown,
+  handler: NativeRouteCallback<T>,
   path: string,
   onRequest?: WebServerOptions<T>["onRequest"],
   track: TrackRequest = (work) => work(),
@@ -65,7 +67,7 @@ function wrapRouteHandler<T>(
           async () => {
             const intercepted = await onRequest?.(request, server);
             if (intercepted instanceof Response) return intercepted;
-            const response = await handler(request);
+            const response = await handler(request, server);
             return (response as Response | null | undefined) ?? (await missingHtmlResponse());
           },
         ),
@@ -85,9 +87,19 @@ function convertAppRoutesToBunRoutes<T = unknown>(
     middleware(request, async () => new Response(null, { status: 405 }));
 
   for (const [path, handler] of Object.entries(routes)) {
+    if (handler instanceof Response) {
+      const methods: Record<string, BunRouteHandler<T>> = {};
+      for (const method of ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"]) {
+        methods[method] = wrapRouteHandler(() => handler.clone(), path, onRequest, track);
+      }
+      methods.OPTIONS = wrapRouteHandler(preflight, path, onRequest, track);
+      bunRoutes[path] = methods;
+      continue;
+    }
+
     if (typeof handler === "function") {
       bunRoutes[path] = {
-        GET: wrapRouteHandler(handler as (request: Request) => unknown, path, onRequest, track),
+        GET: wrapRouteHandler(handler as NativeRouteCallback<T>, path, onRequest, track),
         OPTIONS: wrapRouteHandler(preflight, path, onRequest, track),
       };
       continue;
@@ -97,12 +109,21 @@ function convertAppRoutesToBunRoutes<T = unknown>(
       const methods: Record<string, BunRouteHandler<T>> = {};
 
       for (const [method, methodHandler] of Object.entries(handler as Record<string, unknown>)) {
+        if (methodHandler instanceof Response) {
+          methods[method.toUpperCase()] = wrapRouteHandler(
+            () => methodHandler.clone(),
+            path,
+            onRequest,
+            track,
+          );
+          continue;
+        }
         if (typeof methodHandler !== "function") {
           continue;
         }
 
         methods[method.toUpperCase()] = wrapRouteHandler(
-          methodHandler as (request: Request) => unknown,
+          methodHandler as NativeRouteCallback<T>,
           path,
           onRequest,
           track,
