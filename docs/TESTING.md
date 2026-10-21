@@ -223,6 +223,23 @@ still choose cache keys/tags and pass the Request when conditional responses are
 wanted. This does not add automatic tenant/user key selection, change TTL/store
 policy or replace the existing Redis/process/native/published qualification gates.
 
+### Installed model serialization hooks
+
+`tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
+harness for SQLite, MySQL and PostgreSQL with `--model-write-hooks`. After every
+original private-state repository, connection, transaction and event assertion,
+the opt-in fixture checks synchronous/asynchronous protected model serialization,
+dirty-only updates, unchanged saves, stale unrelated fields, rejection before SQL
+and retry on the same instance. It uses the same migrated application table and
+restricted runtime credentials; no runtime DDL, extra grant or package patch.
+
+Run `scripts/with-host-env.sh bun scripts/verify-repository-rebinding.ts
+--database=<engine> --model-write-hooks` against packed candidates. Adding
+`--published=<exact-version>` exercises the same assertions against registry
+packages. These are three additional acceptance profiles; the original repository
+profiles and assertions remain. The old published 2.2.48 fails this new contract
+on all three engines; the corrected candidate passes all three. Historical
+113-profile published acceptance remains a record of its original selected scope.
 
 `providerPhaseAdmission.test.ts` exercises real provider contexts with in-memory
 cache/storage dependencies. An explicitly started drain/flush must reject work
