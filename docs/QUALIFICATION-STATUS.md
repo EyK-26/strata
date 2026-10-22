@@ -2,6 +2,22 @@
 
 Baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
 
+## HTTP-only reporting patch — published 2.2.50
+
+The [HTTP response-drain audit](HTTP-RESPONSE-DRAIN.md)
+records all 130 exact-published profiles passing with zero failures/skips, preserving
+the historical 128 and adding twelve HTTP/WebSocket and four tenant/ORM lifetime
+subcases in two profiles. A separate twelve-profile compatible upgrade/exact-lock
+rollback rehearsal also passed. Fresh SQL/Docker metadata and owned Redis/filesystem
+cleanup were verified; [sanitized evidence](qualification/http-drain-2.2.50.json)
+retains the actual counts and log hashes, including corrected fixture preparation.
+
+This qualifies HTTP-only abort-drain reporting. Mixed-listener reporting and native
+Bun asynchronous-pipeline truncation remain explicit unresolved limitations. M1's
+accepted public artifact origin is design work for the next major, with no breaking
+implementation. Shop adoption remains **held for #257**, independently of this
+patch; the timer stays **off**. The original 2.2.49 audit below remains intact.
+
 ## Compatible maintainability closeout — published 2.2.49
 
 The [framework maintainability audit](FRAMEWORK-MAINTAINABILITY-AUDIT.md) records
