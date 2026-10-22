@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.50
+
+- Align framework package pins with 2.2.50. CLI commands and emitted module behavior are unchanged.
+
 ## 2.2.49
 
 - Align core/bootstrap requirements with the 2.2.49 compatible HTTP, model and runtime correction batch. Existing module generation and permission boundaries remain unchanged.
