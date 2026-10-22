@@ -1,5 +1,11 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.50
+
+- Report an unsuccessful graceful drain when an admitted HTTP-only response aborts during shutdown, after waiting for outstanding application work. Preserve pre-shutdown disconnect handling and normal WebSocket shutdown.
+- Retain the documented mixed HTTP/WebSocket reporting limitation and upstream Bun asynchronous-pipelining truncation limitation; no lossless native-assets support is claimed.
+- Align the core peer requirement with 2.2.50.
+
 ## 2.2.49
 
 - Supply the real shared conditional cache operation to API and web module contexts, preserving tags, ETags, invalidation and error recovery.

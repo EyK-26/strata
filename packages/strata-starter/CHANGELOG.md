@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.50
+
+- Generate applications with the 2.2.50 framework package pins. Existing generated source, auth, database and tenancy contracts are unchanged.
+
 ## 2.2.49
 
 - Separate pure runtime, environment and auth rendering by artifact responsibility while preserving legacy rendering exports, generated file paths and declared byte contracts.

@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.50
+
+- Align the lockstep version with the bootstrap HTTP-only drain-reporting correction. Core runtime, ORM, transaction, lifecycle coordinator and public/protected APIs are unchanged.
+
 ## 2.2.49
 
 - Restore documented protected dirty-attribute write hooks and related-model forwarding types, preserving custom repositories, transactional events, scopes and serialization behavior.

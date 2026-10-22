@@ -39,9 +39,10 @@ responses on such mixed listeners still lack accurate abort-drain reporting.
 This is an explicit remaining limitation, not fixed behavior. No request-header
 heuristic, native-method patch, server proxy or implicit data envelope is used to
 guess whether an upgrade succeeded. The accepted scope is the HTTP-only
-correction, with this mixed-listener limitation retained explicitly. Published
-2.2.49 remains unchanged; this source correction requires a later release before
-registry consumers receive it.
+correction, with this mixed-listener limitation retained explicitly.
+The correction is included in the 2.2.50 source release. Published 2.2.49
+remains unchanged and does not contain this correction. Registry consumers need
+the qualified 2.2.50 packages to receive it.
 
 ## Separate upstream limitation: M1-DRAIN-1
 
