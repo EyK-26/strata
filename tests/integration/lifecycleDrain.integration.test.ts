@@ -30,6 +30,10 @@ describe.skipIf(!restricted || !migration)(
         const finished = new Promise<void>((resolve) => {
           completed = resolve;
         });
+        let disconnected!: () => void;
+        const serverObservedDisconnect = new Promise<void>((resolve) => {
+          disconnected = resolve;
+        });
         const abort = new AbortController();
         let server: ReturnType<typeof createWebServer> | undefined;
         try {
@@ -52,7 +56,8 @@ describe.skipIf(!restricted || !migration)(
             lifecycle,
             routes: {
               "/transaction": {
-                POST: async () => {
+                POST: async (request: Request) => {
+                  request.signal.addEventListener("abort", disconnected, { once: true });
                   try {
                     await pool.begin(async (transaction) => {
                       await transaction.unsafe("SELECT set_config('app.tenant_id','1',true)");
@@ -94,6 +99,9 @@ describe.skipIf(!restricted || !migration)(
           if (disconnect) {
             abort.abort();
             await response;
+            // Client cancellation can settle before the server observes the FIN.
+            // This fixture specifically characterizes a pre-shutdown disconnect.
+            await serverObservedDisconnect;
           }
           const shutdown = lifecycle.shutdown("DEPLOYMENT");
           await Bun.sleep(20);
