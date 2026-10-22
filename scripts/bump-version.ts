@@ -1,4 +1,4 @@
-const SEMVER_CORE_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
+import { parseStableVersion } from "./stable-version.ts";
 
 const STRATA_CARET_PIN_PATTERN =
   /("(?:@getstrata\/[a-z-]+|create-strata)"[^\n]{0,40}?")\^\d+\.\d+\.\d+(")/g;
@@ -11,11 +11,7 @@ const EXPECTED_BLOCK_PATTERN =
 const PACKAGE_VERSION_PATTERN = /^(\s*"version"\s*:\s*")\d+\.\d+\.\d+(",?\s*)$/m;
 
 function parseVersion(value: string): [number, number, number] | null {
-  const match = value.trim().match(SEMVER_CORE_PATTERN);
-  if (!match) {
-    return null;
-  }
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  return parseStableVersion(value.trim());
 }
 
 function compareVersions(a: string, b: string): number {

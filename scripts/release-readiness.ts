@@ -1,3 +1,5 @@
+import { parseStableVersion } from "./stable-version.ts";
+
 interface PackageVersion {
   name: string;
   version: string;
@@ -9,10 +11,11 @@ interface ReleaseReadiness {
   errors: string[];
 }
 
-const RELEASE_TAG_PATTERN = /^v(\d+\.\d+\.\d+)$/;
-
 function parseReleaseTag(tag: string): string | null {
-  return tag.trim().match(RELEASE_TAG_PATTERN)?.[1] ?? null;
+  const trimmed = tag.trim();
+  if (!trimmed.startsWith("v")) return null;
+  const version = trimmed.slice(1);
+  return parseStableVersion(version) === null ? null : version;
 }
 
 function resolveLockstepVersion(packages: readonly PackageVersion[]): ReleaseReadiness {
@@ -25,6 +28,17 @@ function resolveLockstepVersion(packages: readonly PackageVersion[]): ReleaseRea
     return {
       version: null,
       errors: [`Missing version for ${missing.map((entry) => entry.name).join(", ")}.`],
+    };
+  }
+
+  const invalid = packages.filter((entry) => parseStableVersion(entry.version) === null);
+  if (invalid.length > 0) {
+    return {
+      version: null,
+      errors: invalid.map(
+        (entry) =>
+          `${entry.name} version "${entry.version}" is not a canonical stable version with safe integer components.`,
+      ),
     };
   }
 

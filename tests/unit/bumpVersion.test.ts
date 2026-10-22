@@ -252,7 +252,11 @@ describe("bump workspace install contract", () => {
         if (name !== "create-strata")
           await write(`packages/${name}/CHANGELOG.md`, `# ${published}\n\n## 1.0.0\n`);
       }
-      for (const file of ["scripts/bump.ts", "scripts/bump-version.ts"]) {
+      for (const file of [
+        "scripts/bump.ts",
+        "scripts/bump-version.ts",
+        "scripts/stable-version.ts",
+      ]) {
         await write(file, await readFile(join(import.meta.dir, "../..", file), "utf8"));
       }
       await write(
