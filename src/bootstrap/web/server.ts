@@ -146,10 +146,13 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
   const onRequest: WebServerOptions<T>["onRequest"] = (request, server) => {
     if (options.lifecycle?.isShuttingDown)
       return new Response("Service Unavailable", { status: 503 });
-    if (options.lifecycle) {
+    if (options.lifecycle && !options.native?.websocket) {
       // A handler returning a Response does not mean its body reached the transport.
       // Bun's stop(false) also resolves when a busy connection aborts. Observe the
       // admitted request's native signal without retaining completed requests here.
+      // With WebSockets enabled, the SDK also aborts upgraded request signals on
+      // normal close and exposes no per-request upgrade/completion marker. Keep
+      // the existing mixed-server behavior rather than misreporting normal closes.
       request.signal.addEventListener(
         "abort",
         () => {

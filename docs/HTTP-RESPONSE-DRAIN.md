@@ -8,7 +8,8 @@ also resolves when a busy connection aborts. Previously Strata combined those tw
 events into a successful drain, then flushed and closed infrastructure even when
 the response had been interrupted.
 
-`createWebServer` now observes each admitted request's native abort signal. If an
+The compatible partial correction observes admitted request abort signals only
+on listeners without a configured native WebSocket handler. If an
 abort is observed after lifecycle shutdown starts, its drain handler fails after
 waiting for both transport shutdown and outstanding application work. Existing
 lifecycle policy then skips flush/close, invokes force handlers and returns an
@@ -21,6 +22,24 @@ admitted application work must still finish before infrastructure closes. Reques
 rejected by shutdown admission do not enter the response-abort observation path.
 The server does not retain a collection of completed requests or replace native
 file/stream responses with a framework transport implementation.
+
+## Mixed HTTP/WebSocket limitation and pending scope decision
+
+Bun also aborts an upgraded request's native signal when its WebSocket closes
+normally. This was reproduced for route and fallback upgrades, including handlers
+that continue asynchronous work after upgrading. Observing those signals as HTTP
+response failures would regress normal shutdown. The initial candidate was made
+draft before merge when these additional checks failed; its earlier full green
+gate is not acceptance of a corrected candidate.
+
+The native API exposes no supported per-request completion/upgrade marker to this
+adapter. The prepared compatible partial option therefore retains existing
+behavior for every listener configured with WebSocket support. Ordinary HTTP
+responses on such mixed listeners still lack accurate abort-drain reporting.
+This is an explicit remaining limitation, not fixed behavior. No request-header
+heuristic, native-method patch, server proxy or implicit data envelope is used to
+guess whether an upgrade succeeded. Finishing this narrower scope awaits the
+human's decision; no source correction has been merged or published.
 
 ## Separate upstream limitation: M1-DRAIN-1
 
@@ -64,4 +83,7 @@ abort observations before shutdown from those during shutdown.
 The initial six-case regression produced two normal-transfer passes and four
 false-success failures before the correction. The additional characterization
 does not replace the stricter, still-red upstream lossless-transfer reproduction.
+Four additional upgrade regressions preserve normal close code 1000 and wait for
+upgraded request business work, through both route and fallback dispatch. The
+HTTP-only partial option passes 33 focused tests, including all prior assertions.
 Existing lifecycle, admission, transaction and coverage assertions remain intact.

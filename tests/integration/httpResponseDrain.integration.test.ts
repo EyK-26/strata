@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
+import type { Server } from "bun";
 
 async function bounded<T>(operation: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -221,12 +222,12 @@ for (const dispatch of ["route", "fallback"] as const) {
       });
       let serverCloseCode: number | undefined;
       let infrastructureClosed = false;
-      const handler = async (request: Request, server: ReturnType<typeof createWebServer>) => {
+      const handler = async (request: Request, server: Server<undefined>) => {
         if (!server.upgrade(request)) return new Response("Upgrade required", { status: 400 });
         if (delayedHandler) await gate;
         return undefined;
       };
-      const server = createWebServer({
+      const server = createWebServer<undefined>({
         port: 0,
         lifecycle,
         native: {
