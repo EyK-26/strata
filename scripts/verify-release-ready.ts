@@ -2,6 +2,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fetchPublishedVersions } from "./published-package-versions.ts";
 import {
   checkReleaseReadiness,
   checkReleaseTarget,
@@ -34,19 +35,6 @@ for (const relativePath of PACKAGE_FILES) {
     version: parsed.version,
     peerDependencies: parsed.peerDependencies,
   });
-}
-
-async function fetchPublishedVersions(name: string): Promise<string[]> {
-  try {
-    const response = await fetch(`https://registry.npmjs.org/${name}`);
-    if (!response.ok) {
-      return [];
-    }
-    const body = (await response.json()) as { versions?: Record<string, unknown> };
-    return Object.keys(body.versions ?? {});
-  } catch {
-    return [];
-  }
 }
 
 let publishedVersions: string[] | undefined;

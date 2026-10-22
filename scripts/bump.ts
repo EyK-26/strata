@@ -45,7 +45,7 @@ const args = process.argv.slice(2);
 const check = args.includes("--check");
 const notesIndex = args.indexOf("--notes");
 const notes = notesIndex === -1 ? "" : (args[notesIndex + 1] ?? "");
-const version = args.find((arg) => !arg.startsWith("--") && arg !== notes);
+const version = args.find((arg) => !arg.startsWith("--") && arg !== notes)?.trim();
 
 if (!version || !parseVersion(version)) {
   console.error('Usage: bun run bump <major.minor.patch> [--check] [--notes "..."]');
