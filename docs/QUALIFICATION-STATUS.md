@@ -2,6 +2,21 @@
 
 Baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
 
+## Compatible maintainability closeout — published 2.2.49
+
+The [framework maintainability audit](FRAMEWORK-MAINTAINABILITY-AUDIT.md) records
+the cumulative compatible changes and their limits. All 128 exact-published 2.2.49
+scenarios executed and passed with zero failures/skips; the original 113 profiles
+and all assertions remain preserved. The release source gate passed 2,620
+unit/integration tests (the same three existing platform skips) and all 167 E2E
+tests. Complete captured SQL/Docker metadata and owned Redis/filesystem cleanup
+were verified. The [sanitized evidence](qualification/starter-2.2.49-runtime.json)
+is a dated closeout snapshot, not live task state or deployment qualification.
+
+Opaque native assets remain an explicit major-version design item, not accepted
+native transport coverage. Shop adoption remains held for #257. The implementation
+timer is deleted; this documentation authorizes no release, adoption or deployment.
+
 ## Runtime observability — #139
 
 - Implemented: bounded opt-in Redis queue, SQL outbox/failed-job, transaction-acquisition and tracing-health collectors; authenticated metrics integration; generated lifecycle ownership. SQL collector adapters cover Postgres, file-backed SQLite and URL-backed MySQL. See [runtime metrics](RUNTIME-METRICS.md) for exact contracts.
