@@ -206,3 +206,76 @@ for (const timing of ["before", "during"] as const) {
     }
   }, 10_000);
 }
+
+for (const dispatch of ["route", "fallback"] as const) {
+  for (const delayedHandler of [false, true]) {
+    test(`${dispatch}: normal WebSocket shutdown preserves upgraded request work (delayed=${delayedHandler})`, async () => {
+      const lifecycle = new LifecycleCoordinator({ timeoutMs: 3000 });
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let socketClosed!: () => void;
+      const closed = new Promise<void>((resolve) => {
+        socketClosed = resolve;
+      });
+      let serverCloseCode: number | undefined;
+      let infrastructureClosed = false;
+      const handler = async (request: Request, server: ReturnType<typeof createWebServer>) => {
+        if (!server.upgrade(request)) return new Response("Upgrade required", { status: 400 });
+        if (delayedHandler) await gate;
+        return undefined;
+      };
+      const server = createWebServer({
+        port: 0,
+        lifecycle,
+        native: {
+          hostname: "127.0.0.1",
+          websocket: {
+            message() {},
+            close(_socket, code) {
+              serverCloseCode = code;
+              socketClosed();
+            },
+          },
+        },
+        ...(dispatch === "route" ? { routes: { "/": handler } } : { handle: handler }),
+      });
+      lifecycle.register(
+        "infrastructure",
+        () => {
+          infrastructureClosed = true;
+        },
+        "close",
+      );
+      const client = new WebSocket(`ws://127.0.0.1:${server.port}`);
+      const opened = new Promise<void>((resolve, reject) => {
+        client.onopen = () => resolve();
+        client.onerror = () => reject(new Error("WebSocket fixture failed to connect"));
+      });
+      try {
+        await bounded(opened);
+        const shutdown = lifecycle.shutdown("NORMAL_WEBSOCKET_CLOSE");
+        await Bun.sleep(20);
+        expect(infrastructureClosed).toBe(false);
+        client.close(1000, "finished");
+        await bounded(closed);
+        if (delayedHandler) {
+          await Bun.sleep(20);
+          expect(infrastructureClosed).toBe(false);
+        }
+        release();
+        const result = await bounded(shutdown);
+        expect(result.successful).toBe(true);
+        expect(result.timedOut).toBe(false);
+        expect(result.errors).toEqual([]);
+        expect(serverCloseCode).toBe(1000);
+        expect(infrastructureClosed).toBe(true);
+      } finally {
+        release();
+        client.close();
+        await server.stop(true);
+      }
+    }, 10_000);
+  }
+}
