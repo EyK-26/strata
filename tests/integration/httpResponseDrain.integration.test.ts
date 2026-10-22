@@ -130,3 +130,79 @@ for (const dispatch of ["route", "fallback"] as const) {
     }, 10_000);
   }
 }
+
+for (const timing of ["before", "during"] as const) {
+  test(`disconnection ${timing} shutdown still waits for admitted business work`, async () => {
+    const lifecycle = new LifecycleCoordinator({ timeoutMs: 3000 });
+    let enter!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let aborted!: () => void;
+    const observedAbort = new Promise<void>((resolve) => {
+      aborted = resolve;
+    });
+    const order: string[] = [];
+    const server = createWebServer({
+      port: 0,
+      native: { hostname: "127.0.0.1" },
+      lifecycle,
+      handle: async (request) => {
+        request.signal.addEventListener("abort", aborted, { once: true });
+        enter();
+        await gate;
+        order.push("work");
+        return new Response("finished");
+      },
+    });
+    lifecycle.register(
+      "telemetry",
+      () => {
+        order.push("flush");
+      },
+      "flush",
+    );
+    lifecycle.register(
+      "database",
+      () => {
+        order.push("close");
+      },
+      "close",
+    );
+    const controller = new AbortController();
+    const response = fetch(server.url, { signal: controller.signal }).catch(() => undefined);
+    try {
+      await bounded(entered);
+      if (timing === "before") {
+        controller.abort();
+        await bounded(observedAbort);
+      }
+      const shutdown = lifecycle.shutdown("DISCONNECTED_BUSINESS_WORK");
+      if (timing === "during") {
+        controller.abort();
+        await bounded(observedAbort);
+      }
+      let settled = false;
+      void shutdown.then(() => {
+        settled = true;
+      });
+      await Bun.sleep(20);
+      expect(settled).toBe(false);
+      expect(order).toEqual([]);
+      release();
+      const result = await bounded(shutdown);
+      expect(result.successful).toBe(timing === "before");
+      expect(result.timedOut).toBe(false);
+      expect(order).toEqual(timing === "before" ? ["work", "flush", "close"] : ["work"]);
+    } finally {
+      release();
+      controller.abort();
+      await response;
+      await server.stop(true);
+    }
+  }, 10_000);
+}

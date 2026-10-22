@@ -142,9 +142,22 @@ function convertAppRoutesToBunRoutes<T = unknown>(
 
 export function createWebServer<T = unknown>(options: WebServerOptions<T>): Server<T> {
   if (options.lifecycle?.isShuttingDown) throw new Error("Cannot start HTTP during shutdown.");
+  let abortedDuringShutdown = 0;
   const onRequest: WebServerOptions<T>["onRequest"] = (request, server) => {
     if (options.lifecycle?.isShuttingDown)
       return new Response("Service Unavailable", { status: 503 });
+    if (options.lifecycle) {
+      // A handler returning a Response does not mean its body reached the transport.
+      // Bun's stop(false) also resolves when a busy connection aborts. Observe the
+      // admitted request's native signal without retaining completed requests here.
+      request.signal.addEventListener(
+        "abort",
+        () => {
+          if (options.lifecycle?.isShuttingDown) abortedDuringShutdown++;
+        },
+        { once: true },
+      );
+    }
     return options.onRequest?.(request, server);
   };
   // Defend ownership even when callers bypass TypeScript (JS/config spreads).
@@ -240,6 +253,11 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
         await draining;
         // A disconnected socket does not imply its async business handler finished.
         await Promise.allSettled([...active]);
+        if (abortedDuringShutdown > 0) {
+          throw new Error(
+            `${abortedDuringShutdown} admitted HTTP request(s) aborted during shutdown; response completion is unconfirmed.`,
+          );
+        }
       },
       "drain",
     );
