@@ -90,3 +90,65 @@ Four additional upgrade regressions preserve normal close code 1000 and wait for
 upgraded request business work, through both route and fallback dispatch. The
 HTTP-only partial option passes 33 focused tests, including all prior assertions.
 Existing lifecycle, admission, transaction and coverage assertions remain intact.
+
+
+## Published 2.2.50 acceptance — 22 October 2026
+
+[Release 2.2.50](https://github.com/EyK-26/strata/releases/tag/v2.2.50) is
+published from `a4e2e88515137531f85e45f9882d119e1c3d594f`, following
+[PR #327](https://github.com/EyK-26/strata/pull/327). The merged tree equals the
+validated candidate. All four exact-head checks, actual merged-main CI/security,
+actual-main release readiness and unused-version/tag guards passed. The complete
+trusted workflow, including npm, container and GitHub release jobs, succeeded;
+all five exact registry packages and their integrity receipts were verified.
+The ordinary tag push hook reported no matching push files; it was not bypassed
+and is not claimed as another full test run.
+
+All **130 registered published profiles executed and passed, zero failed/skipped**.
+The historical 128 profile commands/names/timeouts and consumer assertions remain
+intact. Two added profiles execute twelve real HTTP/WebSocket socket cases and
+four Postgres tenant/ORM/afterCommit/lifecycle cases. They qualify the bounded
+HTTP-only correction and normal upgraded work; they do not fix native truncation
+or mixed-listener reporting. Original strict failure evidence remains unchanged.
+
+The separate compatible migration rehearsal passed all **12 profiles**: three
+SQL engines across API, HTMX, SPA and hybrid, using cookie auth without tenancy.
+Each runs an exact-published 2.2.49 baseline, upgrades to exact 2.2.50, then restores
+the original package manifests/locks and installs with the native frozen-lockfile
+command before executing the 2.2.49 rollback. Custom route/model behavior, exact
+source/build hashes, durable rows and a row written on the upgraded packages are
+asserted throughout. Six frontend builds use the generated documented installation
+and build scripts. This is a compatible baseline, not major-version migration,
+custom-auth-policy, browser cached-client or deployment acceptance.
+
+Fresh captured SQL/Docker metadata matches the pre-qualification baseline in every
+field except capture time: eight Postgres databases, 26 roles, six MySQL databases,
+seven users, 14 containers, 180 volumes and nine networks. A separate read-only
+Redis audit found only the receipted namespaces and marker absent. The fresh owned
+scratch root contained two exact-version Bunx caches; its 194 entries and root were
+removed without following symlinks. No unknown resource was pruned. Earlier full
+gates recorded an unrelated container's independent creation/removal separately;
+that external activity is not misreported as global baseline equality.
+
+Incomplete preparation is retained separately: registry processing delayed one
+package; a zero-case harness preflight compared /tmp with /private/tmp spellings;
+two migration fixture attempts needed explicit SDK type arguments and the already
+documented frontend installation step. The corrected executions preserve all
+consumer assertions. No runtime package patch, application mechanism workaround,
+extra skip, weaker coverage, implicit grant or shorter production lease was added.
+
+The release candidate's full local gate passed 2,632 unit/integration tests, three
+unchanged macOS platform skips and zero failures, plus all 167 E2E with no skips
+or failures. Coverage remains 151 enforced / 272 exempt. Independent repository
+release-input corrections in [PR #328](https://github.com/EyK-26/strata/pull/328)
+subsequently passed 2,659 unit/integration tests with the same skips and all 167 E2E;
+all exact-head and merged-main checks passed. They reject invalid/rounded stable
+versions and unknown registry state, add no prerelease channel, and need no extra
+runtime package release.
+
+The [sanitized evidence](qualification/http-drain-2.2.50.json) retains package
+integrities, input/receipt hashes and every profile-log hash. Raw historical failures
+and execution logs remain available locally. M1 now targets an explicit public
+artifact origin, subject to concrete API/provider/browser/migration review; no
+breaking implementation is included. Native assets remain major-version work,
+shop adoption stays **held for #257**, and the recurring timer remains **off**.

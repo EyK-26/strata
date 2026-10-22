@@ -1,0 +1,2032 @@
+{
+  "verifiedAt": "2026-10-22T18:23:34.601841+00:00",
+  "status": "VERIFIED_COMPLETE",
+  "version": "2.2.50",
+  "releaseCommit": "a4e2e88515137531f85e45f9882d119e1c3d594f",
+  "releaseTree": "71da45c86972ff8bb50eff07ef66099d90480400",
+  "releaseUrl": "https://github.com/EyK-26/strata/releases/tag/v2.2.50",
+  "trustedWorkflow": {
+    "databaseId": 39825021380,
+    "headSha": "a4e2e88515137531f85e45f9882d119e1c3d594f",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/EyK-26/strata/actions/runs/39825021380"
+  },
+  "packages": [
+    {
+      "name": "@getstrata/core",
+      "version": "2.2.50",
+      "integrity": "sha512-+VnN2FBtYJpNJ15/jfoOgyZ52QsrWYIJDBZrnB0Gy1PY6k9sllgSqUgFQQmAlKE7oRT89LRSY4Ks5alhJrCh6Q=="
+    },
+    {
+      "name": "@getstrata/bootstrap",
+      "version": "2.2.50",
+      "integrity": "sha512-hb5HmYL4tTlFOBfHlsvM2nrPnxpEp4WlbGlrlqZcsmyuzKt7q9lyQC90/RSh5xvWywJIipEp4SxZfe2ayqgXcg=="
+    },
+    {
+      "name": "@getstrata/cli",
+      "version": "2.2.50",
+      "integrity": "sha512-JzB4qX6Z9PfsnXEBSJQAeFJLOpyHFFAEd7wZtYkj9k+GVbw8aKU9SZSiBFyTag+JkBPUeZfm4UfXyXH9ZUyhhw=="
+    },
+    {
+      "name": "@getstrata/starter",
+      "version": "2.2.50",
+      "integrity": "sha512-/UBMYi1410/9bKxsMcZyNs6VHgXKK7CHWMZE9P/C/FKiKSUPpu6ClPGQP8mpFbEBVz1HP8Wa9R52N4ogCpqa5w=="
+    },
+    {
+      "name": "create-strata",
+      "version": "2.2.50",
+      "integrity": "sha512-ppPoqtv5LqqhGGKj771JM+SDUWqof+dqIchJiIzxDznpJZikArPLSsi7QobsQ1ALqiTOenMHOPGYonS7/i7OeA=="
+    }
+  ],
+  "qualification": {
+    "expected": 130,
+    "executed": 130,
+    "passed": 130,
+    "failed": 0,
+    "skipped": 0,
+    "runnerExitCode": 0,
+    "historicalProfilesPreserved": 128,
+    "additionalRegisteredProfiles": 2,
+    "additionalHttpWebSocketSubcases": 12,
+    "additionalTenantOrmLifetimeSubcases": 4,
+    "historicalCommandsNamesTimeoutsAndConsumerAssertionsPreserved": true,
+    "historicalInventorySha256": "b62754b99cc774d14e3b8aab3e6d26d50cf9f52690d521fafe70166321efc222",
+    "inputs": {
+      "run.ts": "2aeb0d0629b0b491b1339c6a47f26b6971675b7715521a27b3a5c2b385dd5d5d",
+      "cases.json": "ebd4def31c03744dfc694cf6a24162e254ee3851919250835ca8c78d7ea3c062",
+      "original-cases.json": "b62754b99cc774d14e3b8aab3e6d26d50cf9f52690d521fafe70166321efc222",
+      "verify-installed-consumer.ts": "b9f99665d52b9558f21068eecc22e813ccf417b90c4fa3b2e055d3561db2a037",
+      "httpResponseDrain.test.ts": "c96aa36b3a4cbc1169ccec1faff945a09274ce9dfe8cb03b87201993d0fabb24",
+      "tenantLifecycleConsumer.ts": "f52bc49bb2af82e55b48afd40492b3b6305a839f27d314c84a889e4dc34ffe59"
+    }
+  },
+  "migrationRehearsal": {
+    "scope": "Compatible cookie/no-tenancy migration baseline; not major-version or full migrated-auth qualification",
+    "from": "2.2.49",
+    "to": "2.2.50",
+    "rollback": "2.2.49",
+    "expected": 12,
+    "executed": 12,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "runnerExitCode": 0,
+    "inputs": {
+      "run.ts": "2427f649f902638613f3ba98d1c532862bbe9eaa9213a218adbf2fb911f26aa0",
+      "consumer.ts": "2e9c085aed68cc57ce2728a9f30959c5cddaf9da95b8bcf0c917c558becdaa0d"
+    },
+    "results": [
+      {
+        "name": "sqlite-api",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "c491d72249a35d4871cf7cdb9433a1bec556c1011a62e98c9f770d55a5f4a141",
+          "bun.lock": "9cd98d2ae7c9b587e87896f9d2ef626a99372f0b487687122fa7b6de6802d52f"
+        },
+        "sourceSnapshotSha256": "0573595501be8b3138cec1be1e563380c4de85a52a83077cd8b78788e3abb367",
+        "phaseEvidence": [
+          {
+            "log": "sqlite-api/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "sqlite-api/2.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-api/3.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "sqlite-api/4.log",
+            "sha256": "c1562a4e9db11c3fc1b5cc83c861c15851275c1c73fc4eb3d6525c51cbfdd672"
+          },
+          {
+            "log": "sqlite-api/5.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-api/6.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "sqlite-api/7.log",
+            "sha256": "08b10a833cfc924832317287608ba483cc884f69fde6297f0e38d7df94461cb3"
+          },
+          {
+            "log": "sqlite-api/8.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-api/9.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "sqlite-server-htmx",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "c491d72249a35d4871cf7cdb9433a1bec556c1011a62e98c9f770d55a5f4a141",
+          "bun.lock": "9cd98d2ae7c9b587e87896f9d2ef626a99372f0b487687122fa7b6de6802d52f"
+        },
+        "sourceSnapshotSha256": "e7b9dbf3613462d885a3bebe21a5db02b440f59723ce326e0a12317ab5502e35",
+        "phaseEvidence": [
+          {
+            "log": "sqlite-server-htmx/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "sqlite-server-htmx/2.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-server-htmx/3.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "sqlite-server-htmx/4.log",
+            "sha256": "ec437a56c9b6f73b6923e5940e3a56af05924cce6124ce0f9b9bd093b28d91ae"
+          },
+          {
+            "log": "sqlite-server-htmx/5.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-server-htmx/6.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "sqlite-server-htmx/7.log",
+            "sha256": "08b10a833cfc924832317287608ba483cc884f69fde6297f0e38d7df94461cb3"
+          },
+          {
+            "log": "sqlite-server-htmx/8.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-server-htmx/9.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "sqlite-spa-react",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "10536fb26c4bf80d582d837cc343d1d27cab8a6b45cd61763f9393db08b9d17b",
+          "bun.lock": "9cd98d2ae7c9b587e87896f9d2ef626a99372f0b487687122fa7b6de6802d52f",
+          "frontend/package.json": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+          "frontend/bun.lock": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69"
+        },
+        "sourceSnapshotSha256": "f4f61949577d41919d86d63c7698938862e758c76fc4efd12fef356d091001a3",
+        "phaseEvidence": [
+          {
+            "log": "sqlite-spa-react/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "sqlite-spa-react/2.log",
+            "sha256": "9f6774b54986b17301815c1917b6235b2026c1cba5b5a2ef6612f370199bc3d0"
+          },
+          {
+            "log": "sqlite-spa-react/3.log",
+            "sha256": "d27da5d316fb7edfd7bcc7612ccbe3ce37e0e5da78ad71c8357036fa5b0fd272"
+          },
+          {
+            "log": "sqlite-spa-react/4.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-spa-react/5.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "sqlite-spa-react/6.log",
+            "sha256": "a6c0e0a5bf091b29cd09cc6e5a02f048c71cc3e2f1a552d8b3a7d4e5079a3ca7"
+          },
+          {
+            "log": "sqlite-spa-react/7.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-spa-react/8.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "sqlite-spa-react/9.log",
+            "sha256": "dfdf253a857cfb58aab97892b60949015dd5dff8c52c251301f6b1edbf039553"
+          },
+          {
+            "log": "sqlite-spa-react/10.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-spa-react/11.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "sqlite-hybrid",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "10536fb26c4bf80d582d837cc343d1d27cab8a6b45cd61763f9393db08b9d17b",
+          "bun.lock": "9cd98d2ae7c9b587e87896f9d2ef626a99372f0b487687122fa7b6de6802d52f",
+          "frontend/package.json": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+          "frontend/bun.lock": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69"
+        },
+        "sourceSnapshotSha256": "24f5daf055de987ea67785bc9f33c87d937a64ef59f2cdf0b254ca2afec9dd30",
+        "phaseEvidence": [
+          {
+            "log": "sqlite-hybrid/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "sqlite-hybrid/2.log",
+            "sha256": "08243f9a9da8a24fff197c8e5059e85881750d2c537b46fdc26a7641182ed3b8"
+          },
+          {
+            "log": "sqlite-hybrid/3.log",
+            "sha256": "d27da5d316fb7edfd7bcc7612ccbe3ce37e0e5da78ad71c8357036fa5b0fd272"
+          },
+          {
+            "log": "sqlite-hybrid/4.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-hybrid/5.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "sqlite-hybrid/6.log",
+            "sha256": "a6c0e0a5bf091b29cd09cc6e5a02f048c71cc3e2f1a552d8b3a7d4e5079a3ca7"
+          },
+          {
+            "log": "sqlite-hybrid/7.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-hybrid/8.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "sqlite-hybrid/9.log",
+            "sha256": "dfdf253a857cfb58aab97892b60949015dd5dff8c52c251301f6b1edbf039553"
+          },
+          {
+            "log": "sqlite-hybrid/10.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "sqlite-hybrid/11.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "mysql-api",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "027def3177d42d83183eaddba44bbc38aec42c84934a00388609bbbae69cd020",
+          "bun.lock": "e5feca6701f360759c824f3b427e2fe16824560a572167b434723e21f29f2dc9"
+        },
+        "sourceSnapshotSha256": "67b76f262307dfacced99432ea171ecb908bf8f7241f1f3c7828a30cf236770b",
+        "phaseEvidence": [
+          {
+            "log": "mysql-api/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "mysql-api/2.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-api/3.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "mysql-api/4.log",
+            "sha256": "5057523c688e9bde1ef29e13c123500df7ed739606eefe91647dcf6bffe0d52a"
+          },
+          {
+            "log": "mysql-api/5.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-api/6.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "mysql-api/7.log",
+            "sha256": "dfdf253a857cfb58aab97892b60949015dd5dff8c52c251301f6b1edbf039553"
+          },
+          {
+            "log": "mysql-api/8.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-api/9.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "mysql-server-htmx",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "027def3177d42d83183eaddba44bbc38aec42c84934a00388609bbbae69cd020",
+          "bun.lock": "e5feca6701f360759c824f3b427e2fe16824560a572167b434723e21f29f2dc9"
+        },
+        "sourceSnapshotSha256": "c9a7339ecd890cfea3b7ec6043424fe532f4be4ec1228070557d95769f8ec354",
+        "phaseEvidence": [
+          {
+            "log": "mysql-server-htmx/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "mysql-server-htmx/2.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-server-htmx/3.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "mysql-server-htmx/4.log",
+            "sha256": "93f95a1dca859babecd390b3398055f5fd9e7c60e795aaa4e085a2d237e0d324"
+          },
+          {
+            "log": "mysql-server-htmx/5.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-server-htmx/6.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "mysql-server-htmx/7.log",
+            "sha256": "8d6aa13bb132c428d2d7c8751dda3156b44ecc4286163ffbb90769543a2177ad"
+          },
+          {
+            "log": "mysql-server-htmx/8.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-server-htmx/9.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "mysql-spa-react",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "7b0801c8b0045349f8229fb3dc24b27982b803b4f0dcc3bcac747ae3525debfe",
+          "bun.lock": "e5feca6701f360759c824f3b427e2fe16824560a572167b434723e21f29f2dc9",
+          "frontend/package.json": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+          "frontend/bun.lock": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69"
+        },
+        "sourceSnapshotSha256": "62d39331252f55f753835dfb513199fce8ea80042e9d560e9669bf915a4836aa",
+        "phaseEvidence": [
+          {
+            "log": "mysql-spa-react/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "mysql-spa-react/2.log",
+            "sha256": "92a035b9c22dfe50971480d2c755f5e28603b1312ba8ab7573b8e9cd2cdc9e0d"
+          },
+          {
+            "log": "mysql-spa-react/3.log",
+            "sha256": "d27da5d316fb7edfd7bcc7612ccbe3ce37e0e5da78ad71c8357036fa5b0fd272"
+          },
+          {
+            "log": "mysql-spa-react/4.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-spa-react/5.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "mysql-spa-react/6.log",
+            "sha256": "a31aa4f40fe6eaec44b0bac5a0b5cd67265ea302f64ee64403ed38921f76f632"
+          },
+          {
+            "log": "mysql-spa-react/7.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-spa-react/8.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "mysql-spa-react/9.log",
+            "sha256": "7c3028383a4849b70b49290922171a80f82fbc66383e068b3455d7b2ebc584b5"
+          },
+          {
+            "log": "mysql-spa-react/10.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-spa-react/11.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "mysql-hybrid",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "7b0801c8b0045349f8229fb3dc24b27982b803b4f0dcc3bcac747ae3525debfe",
+          "bun.lock": "e5feca6701f360759c824f3b427e2fe16824560a572167b434723e21f29f2dc9",
+          "frontend/package.json": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+          "frontend/bun.lock": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69"
+        },
+        "sourceSnapshotSha256": "48777b3ebc2f68f306e47b175f8937a54c09c3d591c782147da77f640115e33a",
+        "phaseEvidence": [
+          {
+            "log": "mysql-hybrid/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "mysql-hybrid/2.log",
+            "sha256": "fd8e70a97b6449371135d49fafdab8c54478a2ea667704b2de52042d6e24b4f1"
+          },
+          {
+            "log": "mysql-hybrid/3.log",
+            "sha256": "d27da5d316fb7edfd7bcc7612ccbe3ce37e0e5da78ad71c8357036fa5b0fd272"
+          },
+          {
+            "log": "mysql-hybrid/4.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-hybrid/5.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "mysql-hybrid/6.log",
+            "sha256": "43dc2fbe3a3f2c7b923e93025fd6cbe548ed0a9ffbd29957bd6a39439ca2e181"
+          },
+          {
+            "log": "mysql-hybrid/7.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-hybrid/8.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "mysql-hybrid/9.log",
+            "sha256": "d7eacc175651a9d017679a536b43ab5b7f2aa62eec43aa94a91a72da68741bcc"
+          },
+          {
+            "log": "mysql-hybrid/10.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "mysql-hybrid/11.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "postgres-api",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "c491d72249a35d4871cf7cdb9433a1bec556c1011a62e98c9f770d55a5f4a141",
+          "bun.lock": "9cd98d2ae7c9b587e87896f9d2ef626a99372f0b487687122fa7b6de6802d52f"
+        },
+        "sourceSnapshotSha256": "9627d38855ab4167e7a38a362fc720a7bc3a18265da606867c9cb071a648486e",
+        "phaseEvidence": [
+          {
+            "log": "postgres-api/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "postgres-api/2.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-api/3.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "postgres-api/4.log",
+            "sha256": "53ccddde36ef1a949dda4def7ec8735a785016db47e826f5134264b1df8eea3f"
+          },
+          {
+            "log": "postgres-api/5.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-api/6.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "postgres-api/7.log",
+            "sha256": "eaa0572fe79f516c7fa6bc9de0c7154fa929d93a4cbe714e2cc4bbdd9cae24d2"
+          },
+          {
+            "log": "postgres-api/8.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-api/9.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "postgres-server-htmx",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "c491d72249a35d4871cf7cdb9433a1bec556c1011a62e98c9f770d55a5f4a141",
+          "bun.lock": "9cd98d2ae7c9b587e87896f9d2ef626a99372f0b487687122fa7b6de6802d52f"
+        },
+        "sourceSnapshotSha256": "8eb6a0a772f63c7b4177f21078db0090b24ad73a6b552c903d751f293671e599",
+        "phaseEvidence": [
+          {
+            "log": "postgres-server-htmx/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "postgres-server-htmx/2.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-server-htmx/3.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "postgres-server-htmx/4.log",
+            "sha256": "78a3fb493bc316d3b313dd8093088e9fbe721c86f2ad6c920c46b42b646bbfdb"
+          },
+          {
+            "log": "postgres-server-htmx/5.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-server-htmx/6.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "postgres-server-htmx/7.log",
+            "sha256": "30a73bf7b97ec865d34ea1f90445ed7a7c5c33bb5a451c4f300fce756723563f"
+          },
+          {
+            "log": "postgres-server-htmx/8.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-server-htmx/9.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "postgres-spa-react",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "10536fb26c4bf80d582d837cc343d1d27cab8a6b45cd61763f9393db08b9d17b",
+          "bun.lock": "9cd98d2ae7c9b587e87896f9d2ef626a99372f0b487687122fa7b6de6802d52f",
+          "frontend/package.json": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+          "frontend/bun.lock": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69"
+        },
+        "sourceSnapshotSha256": "6d06bcb5b01a1226ba76ababbffeae0c60b8af57bcbc64f45353ec607a7476e4",
+        "phaseEvidence": [
+          {
+            "log": "postgres-spa-react/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "postgres-spa-react/2.log",
+            "sha256": "4b7b68413caa66bef20804e8687f081ec5949857619f91656a5db30fe53aebbc"
+          },
+          {
+            "log": "postgres-spa-react/3.log",
+            "sha256": "d27da5d316fb7edfd7bcc7612ccbe3ce37e0e5da78ad71c8357036fa5b0fd272"
+          },
+          {
+            "log": "postgres-spa-react/4.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-spa-react/5.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "postgres-spa-react/6.log",
+            "sha256": "78a3fb493bc316d3b313dd8093088e9fbe721c86f2ad6c920c46b42b646bbfdb"
+          },
+          {
+            "log": "postgres-spa-react/7.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-spa-react/8.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "postgres-spa-react/9.log",
+            "sha256": "eaa0572fe79f516c7fa6bc9de0c7154fa929d93a4cbe714e2cc4bbdd9cae24d2"
+          },
+          {
+            "log": "postgres-spa-react/10.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-spa-react/11.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      },
+      {
+        "name": "postgres-hybrid",
+        "status": "passed",
+        "phases": ["2.2.49 baseline", "2.2.50 upgrade", "2.2.49 rollback"],
+        "sourceAndBuiltAssetsPreserved": true,
+        "committedRowsPreserved": true,
+        "postUpgradeRowReadableAfterRollback": true,
+        "exactDependencySnapshotsRestored": true,
+        "dependencySnapshotHashes": {
+          "package.json": "10536fb26c4bf80d582d837cc343d1d27cab8a6b45cd61763f9393db08b9d17b",
+          "bun.lock": "9cd98d2ae7c9b587e87896f9d2ef626a99372f0b487687122fa7b6de6802d52f",
+          "frontend/package.json": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+          "frontend/bun.lock": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69"
+        },
+        "sourceSnapshotSha256": "260017a2629f252ad264f5040c5fad6c6ad98bc500c345b0bd24c83b76c57266",
+        "phaseEvidence": [
+          {
+            "log": "postgres-hybrid/1.log",
+            "sha256": "025a77145dfb92b56c13ef745339cffbcf090408b3aaedea044524cad68cae73"
+          },
+          {
+            "log": "postgres-hybrid/2.log",
+            "sha256": "41ad8d0e1114864279c598cee55dccc41017c5bf29597f25b49227b26be90d6a"
+          },
+          {
+            "log": "postgres-hybrid/3.log",
+            "sha256": "d27da5d316fb7edfd7bcc7612ccbe3ce37e0e5da78ad71c8357036fa5b0fd272"
+          },
+          {
+            "log": "postgres-hybrid/4.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-hybrid/5.log",
+            "sha256": "ae801a0d76502310f343d2a4a2d7a80f49129b0306799e434de3db71caec99cf"
+          },
+          {
+            "log": "postgres-hybrid/6.log",
+            "sha256": "78a3fb493bc316d3b313dd8093088e9fbe721c86f2ad6c920c46b42b646bbfdb"
+          },
+          {
+            "log": "postgres-hybrid/7.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-hybrid/8.log",
+            "sha256": "e7c2da28910d6d6cd433670766347b4a5f730736d2461b6e5f936fc3022bcf11"
+          },
+          {
+            "log": "postgres-hybrid/9.log",
+            "sha256": "08b10a833cfc924832317287608ba483cc884f69fde6297f0e38d7df94461cb3"
+          },
+          {
+            "log": "postgres-hybrid/10.log",
+            "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+          },
+          {
+            "log": "postgres-hybrid/11.log",
+            "sha256": "d4434c82025c4819be6b0f7533eec4ecdf6627a162f003c4d61c3a1c2ff2da32"
+          }
+        ]
+      }
+    ]
+  },
+  "localFullValidation": {
+    "releaseCandidate": {
+      "unitIntegrationPassed": 2632,
+      "existingMacPlatformSkips": 3,
+      "failures": 0,
+      "e2ePassed": 167,
+      "e2eFailures": 0,
+      "e2eSkips": 0,
+      "coverageEnforced": 151,
+      "coverageExempt": 272,
+      "logSha256": "a7c5847cddbf3093df8107d3500b181bc595315cf0c18a2e82ea7b4dcf59eef0"
+    },
+    "subsequentRepositoryTooling": {
+      "scope": "Scripts/tests only; no runtime version or prerelease publication change",
+      "characterizedSource": "df5146a085ceed3577c5e828dac2da7fc1c8bd1f",
+      "mechanicalExtraction": "f8e30f0",
+      "fixHead": "de7deb17459288ed0dc5853421bc762199f4c9c5",
+      "red": {
+        "passed": 3,
+        "failed": 22,
+        "log": "release-input-regressions-red.log"
+      },
+      "focusedFinal": {
+        "passed": 73,
+        "failed": 0,
+        "log": "release-input-focused-final.log"
+      },
+      "mandatoryFull": {
+        "passed": 2659,
+        "existingPlatformSkips": 3,
+        "failed": 0,
+        "e2ePassed": 167,
+        "e2eFailed": 0,
+        "e2eSkipped": 0,
+        "coverageEnforced": 151,
+        "coverageExempt": 272,
+        "seconds": 765.86,
+        "log": "prepush.log"
+      },
+      "pullRequest": "https://github.com/EyK-26/strata/pull/328",
+      "mergeStatus": "VERIFIED_MERGED",
+      "mergeCommit": "5b562d14faa6006409d1ca75bedfe5ed7af7488a",
+      "mergedTree": "3e15b2a22971179607d37070f9495f901f080e33"
+    }
+  },
+  "cleanup": {
+    "allCapturedQualificationSqlDockerMetadataEqualsFreshBaseline": true,
+    "canonicalMetadataSha256": "51645e5db7dfc13e27dad5b8bc9ca5b9b0a9143303931abc194e7336283f7763",
+    "counts": {
+      "postgresDatabases": 8,
+      "postgresRoles": 26,
+      "mysqlDatabases": 6,
+      "mysqlUsers": 7,
+      "containers": 14,
+      "volumes": 180,
+      "networks": 9
+    },
+    "ownedRedisKeysAndMarkerAbsent": true,
+    "readOnlyRedisAuditSha256": "5a0f7733b709fd47543849e9dc99adfe2f9f561aa1c2146ec0f125df7da11a42",
+    "ownedScratchRemoved": true,
+    "ownedCacheEntriesRemoved": 194,
+    "unknownResourcesRemoved": false,
+    "earlierFullGateExternalActivity": "One unrelated container was created and later removed by other work; recorded separately, never removed by this run. Fresh qualification metadata equality is not a claim that every historical baseline was globally unchanged."
+  },
+  "retainedIncompletePreparation": {
+    "registryAvailability": {
+      "scope": "Before any profile executed, one exact package remained unavailable while npm explicitly reported asynchronous processing; all five later became available without publication rerun",
+      "failureLogSha256": "ddf62ecfe43f6e115ae7d19c5d092eae91c2ec1ca5899208d442b108de122b43",
+      "observationsSha256": "bbc56b724040a614a5f9f001012eea72c4de4ecd3137e0d49e94c72cb4f48067"
+    },
+    "wrapperIdentity": {
+      "scope": "Zero-profile preflight compared /tmp and /private/tmp spellings; canonicalize both owned file identities using native realpath while retaining strict equality",
+      "failureLogSha256": "d9c02d2f6857ba8acad44b7791e873d2430b55cb5713fd5c77e36d4daca96326",
+      "correctionSha256": "8455b4a09e90fd37bc809708f4b04cc3a5836c453d43f2b2cece7510b468a8f7"
+    },
+    "migrationSdkType": {
+      "scope": "Consumer fixture required explicit Bun Server generic type arguments; annotations corrected without runtime or assertion changes",
+      "failureLogSha256": "b041c22de65767ff1335a53dd7564d43ecf3f921278af78ad4a244d1692604a3",
+      "correctionSha256": "58123976cd2e5596e88528b56e9b300f86a70bf83592fbe749f6c57c1949e941"
+    },
+    "migrationFrontendSetup": {
+      "scope": "Fixture omitted the documented frontend:install step before frontend:build; invoke that existing native script, retaining all build assertions",
+      "failureLogSha256": "ab2d056ea9a319c13d6ab176efe71bfb635bf9148281de5e5bec2c03717048b7",
+      "correctionSha256": "d1921c760a30db33311afedb4da98a13b871bdcb0266a0c140eca785754ef765"
+    }
+  },
+  "limits": [
+    "HTTP-only abort-drain reporting is qualified; mixed HTTP/WebSocket abort reporting remains unresolved.",
+    "Native Bun asynchronous-pipeline truncation is not fixed; original strict length/hash failure evidence remains unchanged.",
+    "Public artifact origin is the accepted M1 design target only; exact API/provider/browser/migration policy remains under review, with no breaking implementation.",
+    "Twelve compatible cookie/no-tenancy migrations do not establish major-version, custom-auth-policy, browser cached-client, all-provider or deployment migration acceptance.",
+    "Stable release-tooling defects were fixed in repository-only PR328 after the immutable runtime tag; no prerelease channel was added and no extra runtime release is needed.",
+    "Shop adoption remains held for #257; no shop packages, source or deployment changed."
+  ],
+  "results": [
+    {
+      "number": 1,
+      "name": "starter journey mysql-api-cookie-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 7751,
+      "log": "logs/001.log",
+      "logSha256": "1cca8303dec038ef3e739634b76015a15b9d5269066362079c368945b66eb20f"
+    },
+    {
+      "number": 2,
+      "name": "starter journey sqlite-spa-cookie-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5603,
+      "log": "logs/002.log",
+      "logSha256": "e9321928e4348d4225f4072c53892d4986f85ef4a5108be4308cd064eb4be7e6"
+    },
+    {
+      "number": 3,
+      "name": "starter journey postgres-api-cookie-rls: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6334,
+      "log": "logs/003.log",
+      "logSha256": "460e2bf1c496f4b45fde56ef20f8cc3a6f4ad151d42bbc59db3b4119de7a2aa9"
+    },
+    {
+      "number": 4,
+      "name": "starter journey mysql-htmx-cookie-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5604,
+      "log": "logs/004.log",
+      "logSha256": "deaf2f25d08a635928b82217f9df47700a10450508e39b92deb091e00bf97a5a"
+    },
+    {
+      "number": 5,
+      "name": "starter journey mysql-hybrid-combined-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5670,
+      "log": "logs/005.log",
+      "logSha256": "5f9465bab8198ba29a431fa18245e8b885194658fb4221794ab03fecdf157236"
+    },
+    {
+      "number": 6,
+      "name": "starter journey sqlite-htmx-cookie-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5140,
+      "log": "logs/006.log",
+      "logSha256": "7d1f80d0948becb9c8dc4d7c0ddb6a1c32f618073999fd9ff8ce64ac24d7ead1"
+    },
+    {
+      "number": 7,
+      "name": "starter journey sqlite-spa-token-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3382,
+      "log": "logs/007.log",
+      "logSha256": "a35d5cfb3d8b26c2c1752aa96888a00e9d53342d77b3af817e9933fd2d2857d9"
+    },
+    {
+      "number": 8,
+      "name": "starter journey postgres-hybrid-combined-rls: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5897,
+      "log": "logs/008.log",
+      "logSha256": "ae0eb512dd3f34969fdcb5acbb7e2a22852ded3666fa9d50b7cde9d67b84c069"
+    },
+    {
+      "number": 9,
+      "name": "starter journey postgres-api-jwt-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3725,
+      "log": "logs/009.log",
+      "logSha256": "a98c5031e9498964f6bbbe2d263b8bef28ad9be7163dbf0edcc657fc4c2716db"
+    },
+    {
+      "number": 10,
+      "name": "starter journey mysql-api-jwt-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3687,
+      "log": "logs/010.log",
+      "logSha256": "26d3f4db1ae8b00a655098ef154c88677f3af54e3ea13915d9f6e50485cf98dd"
+    },
+    {
+      "number": 11,
+      "name": "starter journey mysql-spa-token-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3718,
+      "log": "logs/011.log",
+      "logSha256": "bd42c0f80ffc0f2bf726ac8a9c1b69826405c95fd66fae8c5b4199d761a862a1"
+    },
+    {
+      "number": 12,
+      "name": "starter journey sqlite-hybrid-cookie-token-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5224,
+      "log": "logs/012.log",
+      "logSha256": "2f548c75e546a7bb244bc023b8ea11bc758fb88dd29c09e7b26d3f15852654ab"
+    },
+    {
+      "number": 13,
+      "name": "starter journey sqlite-api-jwt-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3443,
+      "log": "logs/013.log",
+      "logSha256": "4ecb5cfc127edef60b57dbafab4cdcb9d00a44e6571a4fc4c61e0cbc0f7642b7"
+    },
+    {
+      "number": 14,
+      "name": "starter journey postgres-htmx-cookie-none: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5557,
+      "log": "logs/014.log",
+      "logSha256": "567d27d07a6e4280d830668abadd9f5084469cb4ebaa3cf53f76e57c16039795"
+    },
+    {
+      "number": 15,
+      "name": "starter journey postgres-spa-token-column: signup, SMTP verification, reset, replay and credential revocation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3746,
+      "log": "logs/015.log",
+      "logSha256": "fbbbd2a4f1f01dd38ddfed12cbb3a3e5c81e455f9e24ecfcb7ee1ff3d303a7fc"
+    },
+    {
+      "number": 16,
+      "name": "mounted generated spa-react/headers uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2726,
+      "log": "logs/016.log",
+      "logSha256": "40bf443c2b56ba23a0d7cd536c91b540dc8c39e9d01870e5a3b990f4e37bcf3c"
+    },
+    {
+      "number": 17,
+      "name": "mounted generated spa-react/headers--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2342,
+      "log": "logs/017.log",
+      "logSha256": "de3f396fb97318c60a7fde4c39108ac8b8f75d0af7ea35b49ab14f8d5ddd5e3e"
+    },
+    {
+      "number": 18,
+      "name": "mounted generated spa-react/cookie uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3136,
+      "log": "logs/018.log",
+      "logSha256": "403fc748006c4c648594ca26ec3692cde8116c76d53640b69ba4f4182ad4be3f"
+    },
+    {
+      "number": 19,
+      "name": "mounted generated spa-react/cookie--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3231,
+      "log": "logs/019.log",
+      "logSha256": "8a3907b03c7210c5b634b6fc3c1076d2fb133e5a0c8c872ef6c9e4cc6e881d18"
+    },
+    {
+      "number": 20,
+      "name": "mounted generated spa-react/token uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3741,
+      "log": "logs/020.log",
+      "logSha256": "f1716570684217603cf839bb52c60c6ba9cc8c124ea6820b42849c5b06fe44e1"
+    },
+    {
+      "number": 21,
+      "name": "mounted generated spa-react/token--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3849,
+      "log": "logs/021.log",
+      "logSha256": "52ba94a15ddc750819325bb4c293ad3a5d632916406a1cf4e35ea37c5ccda72b"
+    },
+    {
+      "number": 22,
+      "name": "mounted generated spa-react/jwt uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3411,
+      "log": "logs/022.log",
+      "logSha256": "5f7b8a7b58b74e8e6c22fddbfd3f131872c2bb87ea20075cee5c88b68f357f88"
+    },
+    {
+      "number": 23,
+      "name": "mounted generated spa-react/jwt--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3500,
+      "log": "logs/023.log",
+      "logSha256": "bc6f02dd801da880d7b6342e7862a2298112beab2921a55f6f97432e772deda9"
+    },
+    {
+      "number": 24,
+      "name": "mounted generated spa-react/cookie-token uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3131,
+      "log": "logs/024.log",
+      "logSha256": "58421c3dd1bb96e17a3c2c06515ed42fb0e3ed28b2a8aa4cddaf891dc0ee24ce"
+    },
+    {
+      "number": 25,
+      "name": "mounted generated spa-react/cookie-token--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3229,
+      "log": "logs/025.log",
+      "logSha256": "3142aacb6f99afb9c0c0d389ed0e36b9f7c172f48e3f2fdc51ba312945da89a9"
+    },
+    {
+      "number": 26,
+      "name": "mounted generated spa-react/cookie-token-jwt uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3201,
+      "log": "logs/026.log",
+      "logSha256": "8aa80ea34a92f2a5dec092c5c67c41acd7fb02cde425bd60193e3b446790ccb6"
+    },
+    {
+      "number": 27,
+      "name": "mounted generated spa-react/cookie-token-jwt--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3872,
+      "log": "logs/027.log",
+      "logSha256": "fef3d41fee3d9f58aec0ea1b632e353e6368f27368d670f07adc94672255315b"
+    },
+    {
+      "number": 28,
+      "name": "mounted generated spa-react/jwt--expiry uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6416,
+      "log": "logs/028.log",
+      "logSha256": "942e3711f5a95072efe19c34ce307686c0ca0ed5ff8889971357d7669a326ca8"
+    },
+    {
+      "number": 29,
+      "name": "mounted generated hybrid/headers uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3164,
+      "log": "logs/029.log",
+      "logSha256": "6d2556e53950ca3797de974184a71539aec6bb548b888639b76c15888b3897d4"
+    },
+    {
+      "number": 30,
+      "name": "mounted generated hybrid/headers--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2339,
+      "log": "logs/030.log",
+      "logSha256": "7b2c567e5302a4c37f90017e59aa79b15d99b9b696b663d89563e6f44193a5ee"
+    },
+    {
+      "number": 31,
+      "name": "mounted generated hybrid/cookie uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3093,
+      "log": "logs/031.log",
+      "logSha256": "43045f0aacb237baf8d564aacd526cb6efce79199e7ed5385ee0d949cb3a6ae7"
+    },
+    {
+      "number": 32,
+      "name": "mounted generated hybrid/cookie--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3258,
+      "log": "logs/032.log",
+      "logSha256": "312b153244e7179af94e3b315f79f3286b703a347c79e6c51918c1c25d8ceabd"
+    },
+    {
+      "number": 33,
+      "name": "mounted generated hybrid/token uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3678,
+      "log": "logs/033.log",
+      "logSha256": "59d63de9e9b1c18ba4de9ba32329b49a387784a2b9c5cb051ae1271e7afd1f31"
+    },
+    {
+      "number": 34,
+      "name": "mounted generated hybrid/token--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3907,
+      "log": "logs/034.log",
+      "logSha256": "a2e7c5da57e48ca9c6e59225cc8aeaf19b8fa2eee11bb833caf64f26cb70143d"
+    },
+    {
+      "number": 35,
+      "name": "mounted generated hybrid/jwt uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3352,
+      "log": "logs/035.log",
+      "logSha256": "2789c0be9488188625757df9d833b9e32b2b1a52abf3249928905341d8986bc3"
+    },
+    {
+      "number": 36,
+      "name": "mounted generated hybrid/jwt--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3470,
+      "log": "logs/036.log",
+      "logSha256": "1eb0667ee9ef1c6baf0757c73636ad88f30a742cf30452c2ccecd77d0f1a36d2"
+    },
+    {
+      "number": 37,
+      "name": "mounted generated hybrid/cookie-token uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3081,
+      "log": "logs/037.log",
+      "logSha256": "433b99f589b1179ac0810ec57a53030b89ab541d08abde11c55ef5e7bd9f2691"
+    },
+    {
+      "number": 38,
+      "name": "mounted generated hybrid/cookie-token--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3160,
+      "log": "logs/038.log",
+      "logSha256": "f9a5c40216d85f0aa6931a1eaab164c1bb845b238ba90529258c04517e0d5c8e"
+    },
+    {
+      "number": 39,
+      "name": "mounted generated hybrid/cookie-token-jwt uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3050,
+      "log": "logs/039.log",
+      "logSha256": "a48079ed8e75304a9c4dc99292a4c41d21ba942a55502c5cb003c347bbc5ea97"
+    },
+    {
+      "number": 40,
+      "name": "mounted generated hybrid/cookie-token-jwt--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3234,
+      "log": "logs/040.log",
+      "logSha256": "5559824021b8ef5ce617b86477765b369bc703ffdc15bb4234b13749f3c1932b"
+    },
+    {
+      "number": 41,
+      "name": "mounted generated hybrid/jwt--expiry uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5908,
+      "log": "logs/041.log",
+      "logSha256": "d7cb72dd30fe85ea4778d441245e4c8860bdd6e0dd7c1e4459fa749868ea01c4"
+    },
+    {
+      "number": 42,
+      "name": "mounted generated hybrid/cookie--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4438,
+      "log": "logs/042.log",
+      "logSha256": "d5972e37fc1a8b9f6a92d441f041a2c616eac5a3066e3f7df5ab5b4c7ac43f27"
+    },
+    {
+      "number": 43,
+      "name": "mounted generated hybrid/cookie-token--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4313,
+      "log": "logs/043.log",
+      "logSha256": "5dbc428dfb4d2b074018b71c86ef40c6376068428a987594926b33b3ecb9c190"
+    },
+    {
+      "number": 44,
+      "name": "mounted generated hybrid/cookie-token-jwt--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4285,
+      "log": "logs/044.log",
+      "logSha256": "8120c0f5dba6a130166976bae6afa78159fd1160a3787934487a69ec25f015be"
+    },
+    {
+      "number": 45,
+      "name": "mounted generated hybrid/cookie-token-jwt--database=mysql/--tenancy=column/--dev/--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4903,
+      "log": "logs/045.log",
+      "logSha256": "7b163b28d11ca9e178af66c9d656297c6b465dcae8d5b32e53703683f09d7094"
+    },
+    {
+      "number": 46,
+      "name": "mounted generated spa-react/token--database=mysql/--tenancy=none uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4032,
+      "log": "logs/046.log",
+      "logSha256": "5fba4acdd237774eb17c1fe1dc0ebacd18694e773756872710dcbbdb693ae3a3"
+    },
+    {
+      "number": 47,
+      "name": "mounted generated hybrid/cookie--database=postgres/--tenancy=rls/--dev/--mfa uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4999,
+      "log": "logs/047.log",
+      "logSha256": "0448b8783c9b2235fa562681dc70e59a85c204bd95acda80055df2c7435aecd5"
+    },
+    {
+      "number": 48,
+      "name": "mounted generated spa-react/jwt--database=postgres/--tenancy=column uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3627,
+      "log": "logs/048.log",
+      "logSha256": "6fc49796e78acfacfb48de124847d193523d8814493575d919e28c588910d91d"
+    },
+    {
+      "number": 49,
+      "name": "mounted generated hybrid/headers--database=sqlite/--tenancy=column/--dev uses its selected authentication transport",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2259,
+      "log": "logs/049.log",
+      "logSha256": "f06a642435b5b76ae70df79f5b981cbc822e8c1042c8d39713296e0f7360b3fe"
+    },
+    {
+      "number": 50,
+      "name": "generated spa-react prefix /app works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1283,
+      "log": "logs/050.log",
+      "logSha256": "d6d749ce779ee9c152b72f9f81c6c9d285ff517a29fa6aaae324df4e295dce03"
+    },
+    {
+      "number": 51,
+      "name": "generated spa-react prefix /workspace works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1307,
+      "log": "logs/051.log",
+      "logSha256": "eb441a44388f7805f071a6b4215f6704d1144621ce4dc6188972304db0318341"
+    },
+    {
+      "number": 52,
+      "name": "generated spa-react prefix /team/portal works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1283,
+      "log": "logs/052.log",
+      "logSha256": "192ef1563e2963dc03453eb6290a0650f3a4e2dbad08d3d724395880b66cd706"
+    },
+    {
+      "number": 53,
+      "name": "generated hybrid prefix /app works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1303,
+      "log": "logs/053.log",
+      "logSha256": "7b55a2f1facc1b3407be24a16626412d9fed5c1cb298f881ea2511064ee3be41"
+    },
+    {
+      "number": 54,
+      "name": "generated hybrid prefix /workspace works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1308,
+      "log": "logs/054.log",
+      "logSha256": "089f3b0750d0a48016a87b70a2283075369bb937987d8fd707b227c993c212bb"
+    },
+    {
+      "number": 55,
+      "name": "generated hybrid prefix /team/portal works in build/dev/preview without API fallback or private config",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1301,
+      "log": "logs/055.log",
+      "logSha256": "65e63dc90174d5dda8dad0b0e034924c7af8e6374afeb20a4c9c791811f5ee51"
+    },
+    {
+      "number": 56,
+      "name": "generated hybrid Docker frontend builds with its nested SPA namespace",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 16988,
+      "log": "logs/056.log",
+      "logSha256": "65e63dc90174d5dda8dad0b0e034924c7af8e6374afeb20a4c9c791811f5ee51"
+    },
+    {
+      "number": 57,
+      "name": "generated admin claim lifecycle sqlite/none preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1744,
+      "log": "logs/057.log",
+      "logSha256": "02c1dab802fe79e9f03d99976139553bf682e25d2991bc6bf6dc703189de58ea"
+    },
+    {
+      "number": 58,
+      "name": "generated admin claim lifecycle sqlite/column preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1889,
+      "log": "logs/058.log",
+      "logSha256": "906c57be4d4bd80b28c6c879017d0621377e290e9fe40563c42a02e77befabae"
+    },
+    {
+      "number": 59,
+      "name": "generated admin claim lifecycle mysql/none preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2683,
+      "log": "logs/059.log",
+      "logSha256": "cf2c0778344f80563bcacea0d56bdd042ea29475c3b189085d5a57828013d6ec"
+    },
+    {
+      "number": 60,
+      "name": "generated admin claim lifecycle mysql/column preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2877,
+      "log": "logs/060.log",
+      "logSha256": "52bdd5f9f2f165c3c0bd3a91eefe94d5b4bd925e6c0188a7c605cf47905fb9d2"
+    },
+    {
+      "number": 61,
+      "name": "generated admin claim lifecycle postgres/none preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2281,
+      "log": "logs/061.log",
+      "logSha256": "b1d421d0ff33ad35668dd58c898d7a1b6f3fb48e38f9468b40dc829680c8e0b0"
+    },
+    {
+      "number": 62,
+      "name": "generated admin claim lifecycle postgres/column preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2407,
+      "log": "logs/062.log",
+      "logSha256": "83722d116863183df64e27984cf1c444b66a559a3fd20c96d62e64eb96616652"
+    },
+    {
+      "number": 63,
+      "name": "generated admin claim lifecycle postgres/rls preserves rollback and production protections",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2495,
+      "log": "logs/063.log",
+      "logSha256": "1e2b0986363665da44c0ce740049cf22f2cacbc943cf0af5f91b3faadb1cd554"
+    },
+    {
+      "number": 64,
+      "name": "generated later-batch billing rollback sqlite/none/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1057,
+      "log": "logs/064.log",
+      "logSha256": "f18e394998eb1ab9af7e755ecd82b8b99a888a65ad26a21e023cd04173572ea6"
+    },
+    {
+      "number": 65,
+      "name": "generated later-batch billing rollback sqlite/none/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1070,
+      "log": "logs/065.log",
+      "logSha256": "addcbf345ba02969a3ab3d17e67d0fed5d9442fd7ab9985bd540100634e770bc"
+    },
+    {
+      "number": 66,
+      "name": "generated later-batch billing rollback sqlite/column/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1099,
+      "log": "logs/066.log",
+      "logSha256": "60b7b56b65e9b5f325d2b2b62695d801f3300780f3b39e3e9dba633888391386"
+    },
+    {
+      "number": 67,
+      "name": "generated later-batch billing rollback sqlite/column/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1114,
+      "log": "logs/067.log",
+      "logSha256": "1ef40cec19c897d36a1f2f49fd6769c953ec0a00e717bf2a7461aed26689b9e8"
+    },
+    {
+      "number": 68,
+      "name": "generated later-batch billing rollback mysql/none/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1493,
+      "log": "logs/068.log",
+      "logSha256": "b2593fa6e77610f9a448acf2c9b50451d6e399ec37aa2ed446071df020e3775e"
+    },
+    {
+      "number": 69,
+      "name": "generated later-batch billing rollback mysql/none/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1511,
+      "log": "logs/069.log",
+      "logSha256": "83b236a55998ce38bd50c03425b25182f30b563ce0fbc80609870e817ddab857"
+    },
+    {
+      "number": 70,
+      "name": "generated later-batch billing rollback mysql/column/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1789,
+      "log": "logs/070.log",
+      "logSha256": "0f419ce8ffd733186b244963838fc63be2871bcd1df1b822d03039cad0bd7255"
+    },
+    {
+      "number": 71,
+      "name": "generated later-batch billing rollback mysql/column/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1816,
+      "log": "logs/071.log",
+      "logSha256": "1042241d91adb8697b805ca9c62a22efca317915b74130e0345b9a55fb977cde"
+    },
+    {
+      "number": 72,
+      "name": "generated later-batch billing rollback postgres/none/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1376,
+      "log": "logs/072.log",
+      "logSha256": "0f01e746cd6f1bb1d9c9063c424f738eff061c915345231b98d6f80dfe389be2"
+    },
+    {
+      "number": 73,
+      "name": "generated later-batch billing rollback postgres/none/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1465,
+      "log": "logs/073.log",
+      "logSha256": "6c94471d544d197f77b6032cd0195622c92ebb18adf53441d44759bb495191d8"
+    },
+    {
+      "number": 74,
+      "name": "generated later-batch billing rollback postgres/column/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1576,
+      "log": "logs/074.log",
+      "logSha256": "5448d066585153e2cdfec64af36b4acd91081d31bde24f36074e2b94df916bb4"
+    },
+    {
+      "number": 75,
+      "name": "generated later-batch billing rollback postgres/column/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1608,
+      "log": "logs/075.log",
+      "logSha256": "4f80d247df0a589ef9133b64b80cc8d2f48d28f296c469c0146194eb4d41685f"
+    },
+    {
+      "number": 76,
+      "name": "generated later-batch billing rollback postgres/rls/webhooks=false preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1552,
+      "log": "logs/076.log",
+      "logSha256": "1cb5a5167bab86d4d4a25291069732395e4dd854ad912e6f52e4225b690d6e08"
+    },
+    {
+      "number": 77,
+      "name": "generated later-batch billing rollback postgres/rls/webhooks=true preserves unrelated data",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1522,
+      "log": "logs/077.log",
+      "logSha256": "09f4ba1a28adc47795481ad01cd85b9f70e501d68ca645a8b5a75a3f2d339193"
+    },
+    {
+      "number": 78,
+      "name": "literal generated onboarding waits for mysql/Redis/SMTP and rejects unhealthy dependencies",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 11576,
+      "log": "logs/078.log",
+      "logSha256": "be17581fb495b0b7dec4eac279b763ab787d34dc2e46eb16966ef98acb505354"
+    },
+    {
+      "number": 79,
+      "name": "literal generated onboarding waits for postgres/Redis/SMTP and rejects unhealthy dependencies",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 9947,
+      "log": "logs/079.log",
+      "logSha256": "6aaaef56b7ee2910229a412eb626d860fbad09adf8295c1e9ec87a7d6594d6e3"
+    },
+    {
+      "number": 80,
+      "name": "literal generated onboarding waits for sqlite/Redis/SMTP and rejects unhealthy dependencies",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 9500,
+      "log": "logs/080.log",
+      "logSha256": "f1026511d2a25b7d90d4213fd23fcee7fdc52758fdb27f3697136d07673401f1"
+    },
+    {
+      "number": 81,
+      "name": "generated Adminer Compose profile and documented login work on mysql",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 13976,
+      "log": "logs/081.log",
+      "logSha256": "96dc74c7fefd67b399fc2e725047b561b6df0a6b364f1e6a62c475ec678e1321"
+    },
+    {
+      "number": 82,
+      "name": "generated Adminer Compose profile and documented login work on postgres",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 12469,
+      "log": "logs/082.log",
+      "logSha256": "51140a75ab1690db42387c777e04f9edcf5bd27a254222a00838d584be365ed8"
+    },
+    {
+      "number": 83,
+      "name": "generated MySQL none CLI uses migration privilege without granting runtime DDL",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3423,
+      "log": "logs/083.log",
+      "logSha256": "21fcd0aa377b777c884e37762c576355e40789a4abca61f2de2da1b32af0d6c1"
+    },
+    {
+      "number": 84,
+      "name": "generated MySQL column CLI uses migration privilege without granting runtime DDL",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3165,
+      "log": "logs/084.log",
+      "logSha256": "fad6fea675981bcfb68d4c23269e79ac2f9ef929e3d33a17121a12eb18c6620d"
+    },
+    {
+      "number": 85,
+      "name": "generated sqlite/column header identities respect tenant policy without account tables",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1733,
+      "log": "logs/085.log",
+      "logSha256": "52fac9c81e092a49d4dab60bb0473de903d9100a15462dee72f482000355c940"
+    },
+    {
+      "number": 86,
+      "name": "generated mysql/column header identities respect tenant policy without account tables",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1991,
+      "log": "logs/086.log",
+      "logSha256": "22e3f0621a33fb36de191bc78f82532e71949e3c20783042f391395c68de9aee"
+    },
+    {
+      "number": 87,
+      "name": "generated postgres/column header identities respect tenant policy without account tables",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2149,
+      "log": "logs/087.log",
+      "logSha256": "1272dce6d6d5752d8fd2e0f338388b5837ca615bab2ab00642050a611425316b"
+    },
+    {
+      "number": 88,
+      "name": "generated postgres/rls header identities respect tenant policy without account tables",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1929,
+      "log": "logs/088.log",
+      "logSha256": "0023da63f0ba9974f13ad4728ca637ad46e5cec5f94bbe1a0c2058c286e3df42"
+    },
+    {
+      "number": 89,
+      "name": "starter reset contention mysql-api-cookie-none: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6765,
+      "log": "logs/089.log",
+      "logSha256": "0b633a56751b3a61b1e85554264cc10add7b2f26a40c522b6928eeccdb55ab07"
+    },
+    {
+      "number": 90,
+      "name": "starter reset contention mysql-hybrid-combined-column: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6380,
+      "log": "logs/090.log",
+      "logSha256": "e026659ae3b9f4c84a674252f8dda5d5bdd810b41fc037da6fe4636574f49ff0"
+    },
+    {
+      "number": 91,
+      "name": "starter reset contention sqlite-spa-cookie-column: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 6241,
+      "log": "logs/091.log",
+      "logSha256": "27d8191b57c00dd61062a50e213e9db4f0111389a4906fd01be3c1ad054297e5"
+    },
+    {
+      "number": 92,
+      "name": "starter reset contention sqlite-htmx-cookie-none: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5899,
+      "log": "logs/092.log",
+      "logSha256": "ca3d800d30df809d455194523d90149f3dde827176aa49f33367fd111a10b71e"
+    },
+    {
+      "number": 93,
+      "name": "starter reset contention postgres-api-cookie-rls: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 7083,
+      "log": "logs/093.log",
+      "logSha256": "91b1b6515acab24552ba9246d140c973fe4ba4330810ec54df07cb9e6ae14ded"
+    },
+    {
+      "number": 94,
+      "name": "starter reset contention postgres-api-jwt-none: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4563,
+      "log": "logs/094.log",
+      "logSha256": "9ca862775d262c05fdee53492e4df5556cd413c118f2b3defe12e08f04eff561"
+    },
+    {
+      "number": 95,
+      "name": "starter reset contention postgres-spa-token-column: one proof, two guest clients, one committed password",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4520,
+      "log": "logs/095.log",
+      "logSha256": "5ad5f02cf436ae265104b344fdee833fa266f49b41e0aed3bcb97beef383801d"
+    },
+    {
+      "number": 96,
+      "name": "installed make:module sqlite-headers: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1440,
+      "log": "logs/096.log",
+      "logSha256": "4856242bd70c79019bb29e2a701c49f45290b684808078072502b18833df149b"
+    },
+    {
+      "number": 97,
+      "name": "installed make:module sqlite-cookie: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1818,
+      "log": "logs/097.log",
+      "logSha256": "91487c7ec98fbb450d7ea9110209e29223cbbaf4e7463740637df6ecd71995eb"
+    },
+    {
+      "number": 98,
+      "name": "installed make:module sqlite-token: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1821,
+      "log": "logs/098.log",
+      "logSha256": "0d09f23e5154f7e770bf5202c1c75e1bee36ae2a873287538632deaf54a9054c"
+    },
+    {
+      "number": 99,
+      "name": "installed make:module sqlite-jwt: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1794,
+      "log": "logs/099.log",
+      "logSha256": "93e1274d5546dc4bf1a1eba9c4f0fecb60a86e49fd426b1b7c89ecfbfa68fb26"
+    },
+    {
+      "number": 100,
+      "name": "installed make:module sqlite-cookie-token: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1881,
+      "log": "logs/100.log",
+      "logSha256": "2709146611215366dd71e62466c3189f8ef3e511b825f3dcaccd9a0eaa275ff6"
+    },
+    {
+      "number": 101,
+      "name": "installed make:module sqlite-cookie-token-jwt: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1826,
+      "log": "logs/101.log",
+      "logSha256": "6367642af645fc77ccdf491aee2a76aa07fee349bbaebb9d1052b3e90e220b01"
+    },
+    {
+      "number": 102,
+      "name": "installed make:module mysql-cookie-redis-smtp-security-extras: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2041,
+      "log": "logs/102.log",
+      "logSha256": "819094d1f3b6f94d77730e3238fe6583440ca393b21a73712e1e6006de162d68"
+    },
+    {
+      "number": 103,
+      "name": "installed make:module sqlite-token-with-web: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1919,
+      "log": "logs/103.log",
+      "logSha256": "0d09f23e5154f7e770bf5202c1c75e1bee36ae2a873287538632deaf54a9054c"
+    },
+    {
+      "number": 104,
+      "name": "installed make:module sqlite-cookie-custom-prefix-with-web: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1853,
+      "log": "logs/104.log",
+      "logSha256": "91487c7ec98fbb450d7ea9110209e29223cbbaf4e7463740637df6ecd71995eb"
+    },
+    {
+      "number": 105,
+      "name": "installed make:module mysql-cookie-redis-with-web: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2166,
+      "log": "logs/105.log",
+      "logSha256": "819094d1f3b6f94d77730e3238fe6583440ca393b21a73712e1e6006de162d68"
+    },
+    {
+      "number": 106,
+      "name": "installed make:module mysql-token-with-web-scoped-crud: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5407,
+      "log": "logs/106.log",
+      "logSha256": "af54f38d9e261d8261a04d25e15961382877c9802e8b63ecd280da96f4eaebd7"
+    },
+    {
+      "number": 107,
+      "name": "installed make:module postgres-token-with-web-scoped-crud: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2155,
+      "log": "logs/107.log",
+      "logSha256": "6f79d6b4428a9320499cf04e70426331ec8d96524e5dd67d9cba6dedc8ed89ae"
+    },
+    {
+      "number": 108,
+      "name": "installed make:module sqlite-cookie-typed-handlers: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1777,
+      "log": "logs/108.log",
+      "logSha256": "2fc1e36b31367478641ba3c61329f4e88f06c56573914584e70921966fc854cf"
+    },
+    {
+      "number": 109,
+      "name": "installed make:module sqlite-token-typed-handlers-with-web-scoped-crud: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1950,
+      "log": "logs/109.log",
+      "logSha256": "0d09f23e5154f7e770bf5202c1c75e1bee36ae2a873287538632deaf54a9054c"
+    },
+    {
+      "number": 110,
+      "name": "installed make:module sqlite-cookie-typed-handlers-custom-prefix: boot, API-only OpenAPI and denied writes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1885,
+      "log": "logs/110.log",
+      "logSha256": "2fc1e36b31367478641ba3c61329f4e88f06c56573914584e70921966fc854cf"
+    },
+    {
+      "number": 111,
+      "name": "installed private-state repository sqlite: binding and native transactions",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1219,
+      "log": "logs/111.log",
+      "logSha256": "3290b8796f97f5b7dec517c11b39fe381e980675932ed8d4a2df939a6c11591d"
+    },
+    {
+      "number": 112,
+      "name": "installed private-state repository mysql: binding and native transactions",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1389,
+      "log": "logs/112.log",
+      "logSha256": "a9f00677ce713c8d00dd0ba1b8a9ad9bba7122a19b285ef49a428986b1bf2c55"
+    },
+    {
+      "number": 113,
+      "name": "installed private-state repository postgres: binding and native transactions",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1201,
+      "log": "logs/113.log",
+      "logSha256": "421d1fea71a8900fbb87bc52482b139571748a3e05dac6d8973bc0e55d2cac0d"
+    },
+    {
+      "number": 114,
+      "name": "model-write-hooks-sqlite",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1114,
+      "log": "logs/114.log",
+      "logSha256": "b947fc96f65c239bd3f5a5e1dd94bd25bfc814e7faaced3af01e03d24678046f"
+    },
+    {
+      "number": 115,
+      "name": "model-write-hooks-mysql",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1209,
+      "log": "logs/115.log",
+      "logSha256": "c3f939b9efd256a6a15339f93344c19b88f2cb5f6d38c087cbbe205a01664c05"
+    },
+    {
+      "number": 116,
+      "name": "model-write-hooks-postgres",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1174,
+      "log": "logs/116.log",
+      "logSha256": "9cdc9b1e5ae21ff22e031d89e8d3ebab376e16cfa999133f5d4c5050b13a224b"
+    },
+    {
+      "number": 117,
+      "name": "http-cache-composition",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1874,
+      "log": "logs/117.log",
+      "logSha256": "2fc1e36b31367478641ba3c61329f4e88f06c56573914584e70921966fc854cf"
+    },
+    {
+      "number": 118,
+      "name": "provider-phase-admission",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1093,
+      "log": "logs/118.log",
+      "logSha256": "d571b4aa2662887ec49f20ad958ae89715e41fdb8c151426206f6dfb938f27a4"
+    },
+    {
+      "number": 119,
+      "name": "model-attribute-boundaries",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1767,
+      "log": "logs/119.log",
+      "logSha256": "9480c545ed24e4e4c55809da80b025cae1f688487d2febe07b16a0a772c45b46"
+    },
+    {
+      "number": 120,
+      "name": "model-registration-observers",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1098,
+      "log": "logs/120.log",
+      "logSha256": "24a8ebb4610ea7e3627ba2d1626fc0128d5aa728bec299171dcaad43d71a4cc3"
+    },
+    {
+      "number": 121,
+      "name": "native-http-callback-response",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1124,
+      "log": "logs/121.log",
+      "logSha256": "13da9c30abdeb649ad684b6786686c4a4fd498e9dd67dd12557383b953548e43"
+    },
+    {
+      "number": 122,
+      "name": "model-query-contracts",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1127,
+      "log": "logs/122.log",
+      "logSha256": "2d757f1c19028f194e43bc761dd568d855b91b0534fcfc3bff6ee2303ef453a0"
+    },
+    {
+      "number": 123,
+      "name": "relation-queries-sqlite",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1122,
+      "log": "logs/123.log",
+      "logSha256": "261fd51ef5dae1133b85fe6e2c11e80b1da884ba46be301e80a597ec6413db31"
+    },
+    {
+      "number": 124,
+      "name": "relation-queries-mysql",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1385,
+      "log": "logs/124.log",
+      "logSha256": "faff889c6105afacacb44245d78bcbf5eb7c57ac01ebf88b0359c55a70d0b233"
+    },
+    {
+      "number": 125,
+      "name": "relation-queries-postgres",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1243,
+      "log": "logs/125.log",
+      "logSha256": "ebb9b58a8cecec5fe33f5c99a36e72d99046130ba30b4a3f588f32a8a303d810"
+    },
+    {
+      "number": 126,
+      "name": "audit-export-owned-sql-scope",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1382,
+      "log": "logs/126.log",
+      "logSha256": "6ac602545714f692505b5ec373dbf37e6b8068578ca7119cc5169f3d3aac67f6"
+    },
+    {
+      "number": 127,
+      "name": "http-winning-route-metadata",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1125,
+      "log": "logs/127.log",
+      "logSha256": "8fa4f10f9c32f749f0bcb3cff96a40de045c812331f24f6a3b5f3709a27ac278"
+    },
+    {
+      "number": 128,
+      "name": "redis-native-protocols",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1149,
+      "log": "logs/128.log",
+      "logSha256": "481c9c2c5f4d6bd9effb63a19b21e8887754701302e9e8ddc93ec40d34c0e294"
+    },
+    {
+      "number": 129,
+      "name": "HTTP-only response drain and normal WebSocket lifetime: twelve real socket cases",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1153,
+      "log": "logs/129.log",
+      "logSha256": "f4bbbab6c17e562b7bdb05bcb9aca672ea313b825c9982a9be00954aea9db7e2"
+    },
+    {
+      "number": 130,
+      "name": "Tenant ORM afterCommit and disconnected lifecycle: four real Postgres cases",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 826,
+      "log": "logs/130.log",
+      "logSha256": "3f803c0c5a5f715feb3e5a3f630f90c876b36c65518723f3dd7fc56db13c2667"
+    }
+  ]
+}
