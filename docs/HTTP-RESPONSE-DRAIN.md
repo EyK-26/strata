@@ -23,7 +23,7 @@ rejected by shutdown admission do not enter the response-abort observation path.
 The server does not retain a collection of completed requests or replace native
 file/stream responses with a framework transport implementation.
 
-## Mixed HTTP/WebSocket limitation and pending scope decision
+## Mixed HTTP/WebSocket limitation
 
 Bun also aborts an upgraded request's native signal when its WebSocket closes
 normally. This was reproduced for route and fallback upgrades, including handlers
@@ -33,13 +33,15 @@ draft before merge when these additional checks failed; its earlier full green
 gate is not acceptance of a corrected candidate.
 
 The native API exposes no supported per-request completion/upgrade marker to this
-adapter. The prepared compatible partial option therefore retains existing
+adapter. The accepted compatible partial correction therefore retains existing
 behavior for every listener configured with WebSocket support. Ordinary HTTP
 responses on such mixed listeners still lack accurate abort-drain reporting.
 This is an explicit remaining limitation, not fixed behavior. No request-header
 heuristic, native-method patch, server proxy or implicit data envelope is used to
-guess whether an upgrade succeeded. Finishing this narrower scope awaits the
-human's decision; no source correction has been merged or published.
+guess whether an upgrade succeeded. The accepted scope is the HTTP-only
+correction, with this mixed-listener limitation retained explicitly. Published
+2.2.49 remains unchanged; this source correction requires a later release before
+registry consumers receive it.
 
 ## Separate upstream limitation: M1-DRAIN-1
 
