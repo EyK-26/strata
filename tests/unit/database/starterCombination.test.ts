@@ -130,7 +130,7 @@ test("trusted forced attributes retain priority over observer edits", async () =
   });
 });
 
-test("static create observers edit logical input before the single asynchronous hash cast", async () => {
+test("static create observers retain resolved initial hashes and their replacement is hashed before SQL", async () => {
   await fixture(async ({ Order }) => {
     class HashedOrder extends Order {
       static override $casts = { status: "hashed" as const };
@@ -145,7 +145,8 @@ test("static create observers edit logical input before the single asynchronous 
       },
     });
     const created = await HashedOrder.create({ reference: "hashed", status: "input-secret" });
-    expect(seen).toEqual(["input-secret"]);
+    expect(seen).toHaveLength(1);
+    expect(await verifyPassword("input-secret", String(seen[0]))).toBe(true);
     const stored = (await Order.repository<OrderRow, "id">().findByIdOrThrow(created.id)).status;
     expect(await verifyPassword("observer-secret", stored)).toBe(true);
     expect(await verifyPassword("input-secret", stored)).toBe(false);
@@ -153,7 +154,7 @@ test("static create observers edit logical input before the single asynchronous 
 });
 
 for (const event of ["saving", "creating"] as const)
-  test(`cancelled ${event} prevents casts and inserts`, async () => {
+  test(`cancelled ${event} prevents changed-field casts and inserts`, async () => {
     await fixture(async ({ Order }) => {
       let casts = 0;
       class Cancelled extends Order {
@@ -167,7 +168,7 @@ for (const event of ["saving", "creating"] as const)
       await expect(Cancelled.create({ reference: "cancelled", status: "draft" })).rejects.toThrow(
         "cancelled by an observer",
       );
-      expect(casts).toBe(0);
+      expect(casts).toBe(1);
       expect(await Order.repository<OrderRow, "id">().count()).toBe(0);
     });
   });

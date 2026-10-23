@@ -169,7 +169,9 @@ try {
   class ObservedOrder extends Order {
     protected static override async dehydrateAttributes(attributes: Record<string, unknown>) {
       casts++;
-      return { ...attributes, reference: `stored:${attributes.reference}` };
+      return "reference" in attributes
+        ? { ...attributes, reference: `stored:${attributes.reference}` }
+        : { ...attributes };
     }
   }
   registerModelRepository(ObservedOrder, orders);
@@ -185,14 +187,14 @@ try {
   });
   const observed = await ObservedOrder.create({ id: 101, reference: "observer", status: "draft" });
   assert.equal(observed.get("status"), "created");
-  assert.equal(casts, 1);
+  assert.equal(casts, 2);
   assert.equal((await orders.findByIdOrThrow(observed.id)).reference, "stored:observer");
   const forced = await ObservedOrder.create(
     { id: 102, reference: "forced" },
     { status: "trusted" },
   );
   assert.equal(forced.get("status"), "trusted");
-  assert.equal(casts, 2);
+  assert.equal(casts, 3);
   const failures = new FailedJobService(new FailedJobRepository());
   const payload = { accented: "Préparation", nested: { count: 2 } };
   const failure = await failures.recordFailure({

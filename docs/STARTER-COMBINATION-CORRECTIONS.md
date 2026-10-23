@@ -18,10 +18,11 @@ a guarantee for every combination of optional features.
   also fail explicitly. No unbounded JavaScript slicing or per-parent query loop
   substitutes for database bounds.
 - Static create inserted its original payload after observers edited a separate
-  pending model. Saving/creating observers now edit logical input before one
-  protected write transformation. Cancellation prevents casts and insertion;
-  trusted forced attributes retain priority. Unchanged raw write inputs remain
-  available to non-idempotent custom transformations.
+  pending model. Initial write casts still resolve before saving/creating
+  observers, preserving the existing password-hash contract. Only observer-edited
+  fields receive a subsequent write transformation before insertion; unchanged
+  fields are not cast twice. Cancellation prevents insertion and any subsequent
+  edit transformation; trusted forced attributes retain priority.
 - Invalidating array-cache keys, prefixes, tags or the whole store did not revoke
   pending loaders. Retired callers may receive their own result, but cannot
   republish it or remove the ownership of a replacement fill.
@@ -61,6 +62,12 @@ profiles across SQLite, MySQL and Postgres. The matrix and full mandatory gate
 must pass on the final release tree. Exact-published 2.2.52 qualification and
 resource restoration are pending; no publication acceptance is claimed here.
 Historical assertions, skips, coverage boundaries and failed logs are retained.
+The historical generator hash manifests are unchanged. Eleven reviewed literal
+text changes have exact before/after hashes, occurrence checks and a complete
+forward/reverse byte roundtrip for twenty corrected artifacts; all other bytes
+still compare directly with their historical baseline. An early candidate that
+ran observers before initial hashes failed three existing contracts and was
+corrected before publication, without changing those assertions.
 
 The OIDC journey validates real state/PKCE/nonce/JWKS exchanges, registration,
 enrollment, rejected factors, CSRF rejection and final authentication. This is

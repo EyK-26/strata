@@ -193,8 +193,7 @@ export function renderBrowserAuthRoutes({
         }${
           mfa
             ? `
-${renderMfaChallengeRoutes()}
-        "/confirm-password": {
+${renderMfaChallengeRoutes()}        "/confirm-password": {
           GET: kernel.wrapWebAuthenticated(async (request) =>
             views.render("confirm-password.eta", { layout: { title: "Confirm password" }, errors: {}, password: "" }, { request }),
           ),

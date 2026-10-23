@@ -3,7 +3,7 @@
 ## 2.2.52
 
 - Attach eager relations to offset pages; apply to-many limits/offsets per owner with bounded window queries while retaining scopes and repository dispatch.
-- Persist static-create observer edits before the single protected write transformation; preserve forced attributes and cancellation.
+- Persist static-create observer edits while retaining resolved initial casts before observers; transform only changed fields again, preserving unchanged values, forced attributes and cancellation.
 - Fence invalidated array-cache fills and share one request correlation ID between context, logs and response middleware.
 - Expose optional one-based job attempts and encode/hydrate failed-job JSON/timestamps at the repository storage boundary for durable cross-driver recovery.
 

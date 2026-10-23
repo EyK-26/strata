@@ -454,7 +454,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       ...forced,
     };
     const withTimestamps = applyTimestampsOnCreate(table.columns, assignable, timestamps);
-    const pending = statics.newFromRecord({ ...withTimestamps }, false) as AnyModel;
+    const payload = await statics.dehydrateAttributes(withTimestamps);
+    const pending = statics.newFromRecord({ ...payload }, false) as AnyModel;
     const beforeObservers = snapshotAttributes(pending.attributes);
 
     if ((await runObservers(pending, "saving")) === false) {
@@ -465,14 +466,16 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       throw new Error(`${(this as { name: string }).name}.create() was cancelled by an observer.`);
     }
 
-    // Preserve the caller's raw write inputs for unchanged fields. Observers edit
-    // the hydrated model; only their edits replace those inputs before the one
-    // protected write transformation (which need not be idempotent).
-    const payload = await statics.dehydrateAttributes({
-      ...withTimestamps,
-      ...changedAttributes(pending.attributes, beforeObservers),
-      ...Object.fromEntries(Object.keys(forced).map((key) => [key, withTimestamps[key]])),
-    });
+    // Keep the established resolved-casts-before-observers contract. Only edits
+    // need another write transformation; unchanged values must never be cast
+    // twice. Trusted relationship/tenant keys retain their original priority.
+    const edits = changedAttributes(pending.attributes, beforeObservers);
+    for (const key of Object.keys(forced)) delete edits[key];
+    if (Object.keys(edits).length > 0) {
+      const changed = await statics.dehydrateAttributes(edits);
+      for (const key of Object.keys(forced)) delete changed[key];
+      Object.assign(payload, changed);
+    }
     const record = await repository.create(payload as MutationValues<object>);
     const created = statics.fromRecord(record, repository, true) as AnyModel;
     await runObservers(created, "created");
