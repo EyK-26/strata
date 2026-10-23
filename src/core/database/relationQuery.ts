@@ -1022,8 +1022,15 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
     );
   }
 
-  hydrateEager(row: Record<string, unknown>, alias: string): unknown {
-    return row[alias];
+  hydrateEager(row: Record<string, unknown>, alias: string, forNestedLoading = false): unknown {
+    const value = row[alias];
+    // Flat morph-to eager results retain their existing plain-record shape.
+    // Explicit nested paths need the concrete model's relation methods instead.
+    if (!forNestedLoading || !value) return value;
+    const type = row[this.relation.morphTypeKey];
+    const related =
+      type === undefined || type === null ? undefined : this.relatedByType[String(type)];
+    return related ? related.newFromRecord(value as Record<string, unknown>) : value;
   }
 
   toExistsClause(parentTable: string): ExistsClause {
@@ -1211,7 +1218,7 @@ class HasManyThroughRelationQuery<
 type AnyRelationQuery = {
   kind: RelationKind;
   applyEagerLoad(query: unknown, alias: string): void;
-  hydrateEager(row: Record<string, unknown>, alias: string): unknown;
+  hydrateEager(row: Record<string, unknown>, alias: string, forNestedLoading?: boolean): unknown;
   get(): Promise<unknown>;
   toExistsClause(parentTable: string): ExistsClause;
   where?(where: Record<string, unknown>): unknown;

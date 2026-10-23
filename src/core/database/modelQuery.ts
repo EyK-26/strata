@@ -89,8 +89,24 @@ async function eagerLoadOnModels(
     load: (...names: string[]) => Promise<unknown>;
   }>,
   paths: string[],
+  hydratedRoots: ReadonlySet<string> = new Set(),
 ): Promise<void> {
   if (models.length === 0 || paths.length === 0) {
+    return;
+  }
+
+  // A polymorphic edge can contain different concrete model types. Their next
+  // relation methods and hydration owners cannot be borrowed from the first row.
+  const byModel = new Map<object, typeof models>();
+  for (const model of models) {
+    const group = byModel.get(model.constructor) ?? [];
+    group.push(model);
+    byModel.set(model.constructor, group);
+  }
+  if (byModel.size > 1) {
+    await Promise.all(
+      [...byModel.values()].map((group) => eagerLoadOnModels(group, paths, hydratedRoots)),
+    );
     return;
   }
 
@@ -111,7 +127,11 @@ async function eagerLoadOnModels(
 
   await Promise.all(
     [...grouped.entries()].map(async ([head, nested]) => {
-      const unloaded = models.filter((model) => model.loaded(head) === undefined);
+      // A scoped-out eager result is already loaded even though its value is
+      // undefined. Do not query that root again during nested traversal.
+      const unloaded = hydratedRoots.has(head)
+        ? []
+        : models.filter((model) => model.loaded(head) === undefined);
 
       if (unloaded.length > 0) {
         const first = unloaded[0];
@@ -135,7 +155,10 @@ async function eagerLoadOnModels(
 
         for (const [index, model] of unloaded.entries()) {
           const row = attached[index] ?? model.toObject();
-          model.setLoaded(head, relationQuery.hydrateEager(row as Record<string, unknown>, head));
+          model.setLoaded(
+            head,
+            relationQuery.hydrateEager(row as Record<string, unknown>, head, nested.length > 0),
+          );
         }
       }
 
@@ -569,12 +592,16 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
   ): Promise<ModelQueryResult<TModel, TCounts>[]> {
     const statics = modelStatics(this.modelClass);
     const models: AnyModel[] = [];
+    const nested = this.eager.filter((item) => item.path.includes(".")).map((item) => item.path);
+    const nestedRoots = new Set(
+      this.eager.filter((item) => item.path.includes(".")).map((item) => item.name),
+    );
 
     for (const row of rows) {
       const model = statics.newFromRecord(row, true) as AnyModel;
 
       for (const { name, relationQuery } of this.eager) {
-        model.setLoaded(name, relationQuery.hydrateEager(row, name));
+        model.setLoaded(name, relationQuery.hydrateEager(row, name, nestedRoots.has(name)));
       }
 
       models.push(model);
@@ -582,8 +609,11 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
 
     await Promise.all(models.map((model) => runObservers(model as AnyModel, "retrieved")));
 
-    const nested = this.eager.filter((item) => item.path.includes(".")).map((item) => item.path);
-    await eagerLoadOnModels(models.filter(isLoadableModel), nested);
+    await eagerLoadOnModels(
+      models.filter(isLoadableModel),
+      nested,
+      new Set(this.eager.map((item) => item.name)),
+    );
     return models as unknown as ModelQueryResult<TModel, TCounts>[];
   }
 
