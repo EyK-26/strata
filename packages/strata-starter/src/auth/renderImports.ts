@@ -24,6 +24,10 @@ export function renderAuthImports({
   | "tenantInsert"
 >) {
   const imports: string[] = [];
+  if (cookie && mfa && (layers.frontend === "api" || layers.frontend === "spa-react")) {
+    imports.push(`import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";`);
+  }
+
   if (authUsesToken(layers.auth) || cookie) {
     imports.push(`import { randomBytes } from "node:crypto";`);
   }

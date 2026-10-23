@@ -1,5 +1,13 @@
 # create-strata changelog
 
+## 2.2.52
+
+- Generate the existing CSRF-protected, throttled MFA continuation for cookie-auth API/SPA applications without enabling general browser login routes.
+- Wrap built SPA/hybrid documents, assets and missing-build responses in shared security/correlation/observation policies.
+- Filter webhook subscriptions by literal event name or explicit wildcard; throw non-2xx/transport failures, record actual attempt numbers and release unread response bodies.
+- Preserve original and recording failures together for queue recovery. All non-2xx responses use the selected queue bounded retry policy; delivery remains at least once.
+- Align generated package requirements with 2.2.52; customized applications must deliberately adopt the generated source changes.
+
 ## 2.2.51
 
 - Align generated framework pins with 2.2.51; no generated source or frontend shape changes. The new public artifact API remains a design proposal.

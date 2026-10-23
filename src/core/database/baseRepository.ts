@@ -18,12 +18,14 @@ import {
   buildGroupedSumQuery,
   buildIncrementQuery,
   buildInsertQuery,
+  buildLimitedHasManyQuery,
   buildProjectionQuery,
   buildRestoreByIdQuery,
   buildSelectQuery,
   buildSoftDeleteByIdQuery,
   buildUpdateQuery,
   buildUpsertQuery,
+  EAGER_ROW_NUMBER,
   qualifyColumn,
   resolveSoftDeleteColumn,
 } from "./query.ts";
@@ -104,6 +106,13 @@ type ValueCountRow<TValue> = { value: TValue | null; count: number | string };
 type DeletedRow = { deleted_id: string | number };
 
 type ErrorFactory<TValue> = (value: TValue) => Error;
+
+// Enumerable symbol metadata survives ordinary subclass option spreading while
+// keeping this execution detail out of the public QueryOptions contract.
+const RELATION_WINDOW = Symbol("relationWindow");
+type RelationWindowOptions<TEntity extends object> = ExtendedQueryOptions<TEntity> & {
+  [RELATION_WINDOW]?: { table: string; column: string; ownerAlias?: string };
+};
 
 class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   constructor(
@@ -186,12 +195,17 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       ) {
         throw new Error("Row locks require the framework active transaction connection.");
       }
-      const { whereNodes, ...queryOptions } = options;
-      const { text, params } = buildSelectQuery(this.table, queryOptions, whereNodes ?? []);
-      return (await this.connection.unsafe<TEntity & Record<string, unknown>>(
-        text,
-        params,
-      )) as TEntity[];
+      const {
+        whereNodes,
+        [RELATION_WINDOW]: window,
+        ...queryOptions
+      } = options as RelationWindowOptions<TEntity>;
+      const { text, params } = window
+        ? buildLimitedHasManyQuery(this.table, { ...queryOptions, whereNodes }, window)
+        : buildSelectQuery(this.table, queryOptions, whereNodes ?? []);
+      const rows = await this.connection.unsafe<TEntity & Record<string, unknown>>(text, params);
+      if (window) for (const row of rows) delete row[EAGER_ROW_NUMBER];
+      return rows;
     });
   }
 
@@ -1000,12 +1014,8 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
 
     const parentIds = [...new Set(parents.map((parent) => parent[relation.localKey]))];
-    const children = await this.findWhere(
-      {
-        [relation.foreignKey]: parentIds,
-      } as unknown as QueryWhere<TEntity>,
-      options,
-    );
+    const where = { [relation.foreignKey]: parentIds } as unknown as QueryWhere<TEntity>;
+    const children = await this.findRelationRows(where, options, relation.foreignKey);
 
     return indexHasManyRelation(parents, children, relation);
   }
@@ -1066,6 +1076,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     const parentIds = [...new Set(parents.map((parent) => parent[relation.localKey]))];
     const { text, params } = buildHasManyThroughQuery(this.table, relation, parentIds, options);
     const children = await this.connection.unsafe<TEntity & Record<string, unknown>>(text, params);
+    for (const child of children) delete child[EAGER_ROW_NUMBER];
 
     return indexHasManyThroughRelation(parents, children, relation);
   }
@@ -1111,15 +1122,31 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     }
 
     const parentIds = [...new Set(parents.map((parent) => parent[relation.localKey]))];
-    const children = await this.findWhere(
+    const children = await this.findRelationRows(
       {
         [relation.morphTypeKey]: relation.morphType,
         [relation.morphIdKey]: parentIds,
       } as unknown as QueryWhere<TEntity>,
       options,
+      relation.morphIdKey,
     );
 
     return indexMorphManyRelation(parents, children, relation);
+  }
+
+  private async findRelationRows(
+    where: QueryWhere<TEntity>,
+    options: Omit<QueryOptions<TEntity>, "where">,
+    foreignKey: string,
+  ): Promise<TEntity[]> {
+    if (options.limit === undefined && options.offset === undefined)
+      return this.findWhere(where, options);
+    const bounded: RelationWindowOptions<TEntity> = {
+      ...options,
+      [RELATION_WINDOW]: { table: this.table.name, column: foreignKey },
+    };
+    // Keep protected findWhere/findAll overrides in the dispatch path.
+    return this.findWhere(where, bounded);
   }
 
   async loadMorphOneForParents<
@@ -1248,12 +1275,63 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         pivotRows.map((row) => row[relation.relatedPivotKey] as unknown as TRelated[RelatedKey]),
       ),
     ];
+    const limited = options.limit !== undefined || options.offset !== undefined;
+    const ownerAlias = "__strata_pivot_parent_id";
+    const bounded: RelationWindowOptions<TRelated> = limited
+      ? {
+          ...options,
+          joins: [
+            ...(options.joins ?? []),
+            {
+              type: "inner",
+              table: relation.pivotTable,
+              on: [
+                {
+                  left: { table: relatedRepository.table.name, column: relation.relatedKey },
+                  right: { table: relation.pivotTable, column: relation.relatedPivotKey },
+                },
+              ],
+            },
+          ],
+          whereNodes: [
+            ...(options.whereNodes ?? []),
+            {
+              kind: "and",
+              where: {
+                [`${relation.pivotTable}.${relation.foreignPivotKey}`]: parentIds,
+              } as unknown as QueryWhere<TRelated>,
+            },
+          ],
+          [RELATION_WINDOW]: {
+            table: relation.pivotTable,
+            column: relation.foreignPivotKey,
+            ownerAlias,
+          },
+        }
+      : options;
     const relatedRows = await relatedRepository.withConnection(this.connection).findWhere(
       {
         [relation.relatedKey]: relatedIds,
       } as unknown as QueryWhere<TRelated>,
-      options,
+      bounded,
     );
+
+    if (limited) {
+      return indexHasManyThroughRelation(
+        parents,
+        relatedRows as Array<TRelated & Record<string, unknown>>,
+        {
+          type: "hasManyThrough",
+          name: relation.name,
+          localKey: relation.parentKey,
+          throughTable: relation.pivotTable,
+          firstKey: relation.foreignPivotKey,
+          secondLocalKey: relation.relatedPivotKey,
+          secondKey: relation.relatedKey,
+          throughParentKey: ownerAlias,
+        },
+      );
+    }
 
     return indexBelongsToManyRelation(parents, pivotRows, relatedRows, relation);
   }

@@ -4,6 +4,8 @@ type QueuePriority = "high" | "default" | "low";
 
 /** Logical identity is stable across automatic recovery and supported manual replay. */
 interface JobContext {
+  /** One-based execution attempt supplied by the framework retry owner. */
+  readonly attempt?: number;
   readonly jobId: string;
   readonly signal: AbortSignal;
   readonly deadlineAtMs?: number;

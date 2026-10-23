@@ -1,6 +1,6 @@
 import { defaultDatabaseUrl, defaultMigrationDatabaseUrl } from "./databaseDefaults.ts";
 import { needsEnsure } from "./renderDatabase.ts";
-import type { StarterLayers } from "./types.ts";
+import { htmlAuthKit, type StarterLayers } from "./types.ts";
 
 function renderPreloadTs(layers: StarterLayers, projectName: string): string {
   const fallback = defaultDatabaseUrl(layers, projectName);
@@ -203,6 +203,7 @@ import "./preload.ts";
 import { createAppContext as createProviderAppContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
 import type { AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
+import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import {
   configureModulesDirectory,
   discoverModules,
@@ -274,6 +275,7 @@ ${layers.extras.metrics ? "    metricsRuntime = createMetricsRuntime(options.run
       await migrate();
     }
 
+    const documentKernel = createHttpKernel(context.dependencies);
     const routes = mergeSpaRoutes(context.dependencies, {
       ...createHealthRoutes(context.dependencies, {
         pingOnHealth: true,
@@ -287,6 +289,7 @@ ${layers.extras.metrics ? "    metricsRuntime = createMetricsRuntime(options.run
       ...buildRoutes(context.dependencies),${metricsSpread}
     }, {
       distDirectory: join(import.meta.dir, "../../frontend/dist"),
+      wrap: (handler) => documentKernel.wrapPublicDocument(handler),
     });
 
     return { context, routes, config: appConfig };
@@ -355,7 +358,7 @@ function renderViewProvider(layers: StarterLayers): string {
   return `import { join } from "node:path";
 import { createViewProvider } from "@getstrata/bootstrap/providers/view";
 
-export default createViewProvider({
+export default createViewProvider({${layers.extras.mfa && htmlAuthKit(layers.auth) && (layers.frontend === "api" || layers.frontend === "spa-react") ? "\n  enabled: true," : ""}
   directory: join(import.meta.dir, "../../../views"),
   data: {
     userKey: "currentUser",${

@@ -1,4 +1,4 @@
-import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
+import { currentRequestMeta, resolveRequestId, runWithRequestMeta } from "./requestMetaContext";
 
 type Middleware = (request: Request, next: () => Promise<Response>) => Promise<Response>;
 
@@ -54,8 +54,8 @@ async function requestIdMiddleware(
   request: Request,
   next: () => Promise<Response>,
 ): Promise<Response> {
-  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
-  const response = await next();
+  const requestId = resolveRequestId(request);
+  const response = await runWithRequestMeta({ ...currentRequestMeta(), request, requestId }, next);
   const headers = new Headers(response.headers);
   headers.set("x-request-id", requestId);
 

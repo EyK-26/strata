@@ -1,5 +1,11 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.52
+
+- Share response policy and observation middleware for explicitly public application documents without adding auth/tenant requirements.
+- Allow an explicit view capability for browser SSO continuation in API/SPA applications; default view-provider behavior remains unchanged.
+- Require aligned core 2.2.52. Native Bun asset admission/delivery and mixed HTTP/WebSocket reporting limitations remain unchanged.
+
 ## 2.2.51
 
 - Resolve encoded static paths consistently across guarded server fallback, web routes and SPA assets, including HEAD and request-hook checks.

@@ -464,6 +464,7 @@ export type { RequestMeta } from "../core/http/requestMetaContext.ts";
 export {
   currentRequestMeta,
   requestMetaContext,
+  resolveRequestId,
   runWithRequestMeta,
 } from "../core/http/requestMetaContext.ts";
 export { createRequireAbilityMiddleware } from "../core/http/requireAbilityMiddleware.ts";

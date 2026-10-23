@@ -1,0 +1,441 @@
+{
+  "provenance": {
+    "beforeCommit": "f6896a7ffb7c9af2f5b7456dedd944af80ec4c2d",
+    "purpose": "Exact intentional generated corrections; all historical manifests and assertions retained. No whitespace/regex normalization or fixture regeneration in tests.",
+    "issues": [339, 340, 343, 344]
+  },
+  "hunks": {
+    "h001": {
+      "before": [
+        "import { randomBytes } from \"node:crypto\";",
+        "import { CORE_AUTH_TOKEN } from \"@getstrata/bootstrap/config\";",
+        "import type { AppModule } from \"@getstrata/bootstrap/contracts\";",
+        ""
+      ],
+      "after": [
+        "import { applyMiddlewareToRoutes } from \"@getstrata/core/http/middleware\";",
+        "import { randomBytes } from \"node:crypto\";",
+        "import { CORE_AUTH_TOKEN } from \"@getstrata/bootstrap/config\";",
+        "import type { AppModule } from \"@getstrata/bootstrap/contracts\";",
+        ""
+      ]
+    },
+    "h002": {
+      "before": [
+        "  name: \"auth\",",
+        "  order: 2,",
+        "    routes({ kernel, dependencies }) {",
+        "      return {",
+        "        \"/api/v1/auth/csrf\": {",
+        "          GET: kernel.wrap(\"api\", withErrorHandling(async (request) => {",
+        "            return privateJsonResponse({ token: resolveCsrfTokenForRequest(request) });",
+        ""
+      ],
+      "after": [
+        "  name: \"auth\",",
+        "  order: 2,",
+        "    routes({ kernel, dependencies }) {",
+        "      // Browser SSO requires only its continuation view, not general web routes.",
+        "      const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);",
+        "      const views = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace(\"auth\", { headers: { \"Cache-Control\": \"private, no-store\" } });",
+        "      return {",
+        "        ...applyMiddlewareToRoutes({",
+        "        \"/login/mfa\": {",
+        "          GET: kernel.wrapWebGuest(async (request) => {",
+        "            const pending = readPendingMfaChallenge(request);",
+        "            const record = pending ? await starterAuthDirectory.findByIdOrThrow(pending.userId).catch(() => null) : null;",
+        "            if (!record?.is_active || record.auth_version !== pending?.authVersion) return redirectTo(\"/login\");",
+        "            return views.render(\"mfa-challenge.eta\", { layout: { title: \"MFA\" }, errors: {}, code: \"\" }, { request });",
+        "          }),",
+        "          POST: wrapWebLogin(",
+        "            kernel,",
+        "            async (request) => {",
+        "            const pending = readPendingMfaChallenge(request);",
+        "            if (!pending) {",
+        "              return redirectTo(\"/login\");",
+        "            }",
+        "            const { fields } = await parseFormBody(request);",
+        "            const submitted = (fields.code ?? \"\").trim();",
+        "            return runWithLockedAuthUser(pending.userId, async (record) => {",
+        "            if (!record?.is_active || record.auth_version !== pending.authVersion) {",
+        "              const failed = redirectTo(\"/login\");",
+        "              failed.headers.append(\"set-cookie\", pendingMfaClearCookie());",
+        "              return failed;",
+        "            }",
+        "            const mfaResult = completePasswordLogin(record, { mfaCode: submitted });",
+        "            if (!mfaResult.ok) {",
+        "              return views.render(\"mfa-challenge.eta\", { layout: { title: \"MFA\" }, errors: { code: \"That code is not valid.\" }, code: \"\" }, { request });",
+        "            }",
+        "            await persistAuthRecovery(pending.userId, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);",
+        "            const signed = await auth.signInRedirect(sessionUser(record), \"/\");",
+        "            signed.headers.append(\"set-cookie\", pendingMfaClearCookie());",
+        "            return signed;",
+        "            });",
+        "          },",
+        "            async (request) =>",
+        "              views.render(\"mfa-challenge.eta\", { layout: { title: \"MFA\" }, errors: { code: \"Too many login attempts. Try again shortly.\" }, code: \"\" }, { request, status: 429 }),",
+        "          ),",
+        "        },",
+        "",
+        "        }, kernel.group(\"api\")),",
+        "        \"/api/v1/auth/csrf\": {",
+        "          GET: kernel.wrap(\"api\", withErrorHandling(async (request) => {",
+        "            return privateJsonResponse({ token: resolveCsrfTokenForRequest(request) });",
+        ""
+      ]
+    },
+    "h003": {
+      "before": [
+        "import { createAppContext as createProviderAppContext, type InitializedAppContext } from \"@getstrata/bootstrap/context\";",
+        "import type { AppRouteMap } from \"@getstrata/bootstrap/contracts\";",
+        "import { mergeSpaRoutes } from \"@getstrata/bootstrap/createSpaRoutes\";",
+        "import {",
+        "  configureModulesDirectory,",
+        "  discoverModules,",
+        ""
+      ],
+      "after": [
+        "import { createAppContext as createProviderAppContext, type InitializedAppContext } from \"@getstrata/bootstrap/context\";",
+        "import type { AppRouteMap } from \"@getstrata/bootstrap/contracts\";",
+        "import { mergeSpaRoutes } from \"@getstrata/bootstrap/createSpaRoutes\";",
+        "import { createHttpKernel } from \"@getstrata/bootstrap/httpKernel\";",
+        "import {",
+        "  configureModulesDirectory,",
+        "  discoverModules,",
+        ""
+      ]
+    },
+    "h004": {
+      "before": [
+        "      await migrate();",
+        "    }",
+        "",
+        "    const routes = mergeSpaRoutes(context.dependencies, {",
+        "      ...createHealthRoutes(context.dependencies, {",
+        "        pingOnHealth: true,",
+        ""
+      ],
+      "after": [
+        "      await migrate();",
+        "    }",
+        "",
+        "    const documentKernel = createHttpKernel(context.dependencies);",
+        "    const routes = mergeSpaRoutes(context.dependencies, {",
+        "      ...createHealthRoutes(context.dependencies, {",
+        "        pingOnHealth: true,",
+        ""
+      ]
+    },
+    "h005": {
+      "before": [
+        "      ...buildRoutes(context.dependencies),",
+        "    }, {",
+        "      distDirectory: join(import.meta.dir, \"../../frontend/dist\"),",
+        "    });",
+        "",
+        "    return { context, routes, config: appConfig };",
+        ""
+      ],
+      "after": [
+        "      ...buildRoutes(context.dependencies),",
+        "    }, {",
+        "      distDirectory: join(import.meta.dir, \"../../frontend/dist\"),",
+        "      wrap: (handler) => documentKernel.wrapPublicDocument(handler),",
+        "    });",
+        "",
+        "    return { context, routes, config: appConfig };",
+        ""
+      ]
+    },
+    "h006": {
+      "before": [
+        "    ...createMetricsRoutes(metricsRuntime?.options),",
+        "    }, {",
+        "      distDirectory: join(import.meta.dir, \"../../frontend/dist\"),",
+        "    });",
+        "",
+        "    return { context, routes, config: appConfig };",
+        ""
+      ],
+      "after": [
+        "    ...createMetricsRoutes(metricsRuntime?.options),",
+        "    }, {",
+        "      distDirectory: join(import.meta.dir, \"../../frontend/dist\"),",
+        "      wrap: (handler) => documentKernel.wrapPublicDocument(handler),",
+        "    });",
+        "",
+        "    return { context, routes, config: appConfig };",
+        ""
+      ]
+    },
+    "h007": {
+      "before": [
+        "import { Job } from \"@getstrata/core/queue\";",
+        "import { isProductionEnv } from \"@getstrata/core/runtime/appEnv\";",
+        "import { webhookSignatureHeader } from \"@getstrata/core/runtime/appKeyPrefix\";",
+        "import { safeFetch } from \"@getstrata/core/security/safeFetch\";",
+        ""
+      ],
+      "after": [
+        "import { Job, type JobContext } from \"@getstrata/core/queue\";",
+        "import { isProductionEnv } from \"@getstrata/core/runtime/appEnv\";",
+        "import { webhookSignatureHeader } from \"@getstrata/core/runtime/appKeyPrefix\";",
+        "import { safeFetch } from \"@getstrata/core/security/safeFetch\";",
+        ""
+      ]
+    },
+    "h008": {
+      "before": [
+        "class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {",
+        "  static readonly jobName = \"webhook.dispatch\";",
+        "",
+        "  override async handle(payload: DispatchOutboundWebhookPayload): Promise<void> {",
+        "    const allowPrivate = !isProductionEnv() && process.env.WEBHOOK_ALLOW_PRIVATE === \"true\";",
+        "    let responseStatus: number | null = null;",
+        "    let error: string | null = null;",
+        "    try {",
+        "      const response = await safeFetch(",
+        "        payload.url,",
+        ""
+      ],
+      "after": [
+        "class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {",
+        "  static readonly jobName = \"webhook.dispatch\";",
+        "",
+        "  override async handle(payload: DispatchOutboundWebhookPayload, context?: JobContext): Promise<void> {",
+        "    const allowPrivate = !isProductionEnv() && process.env.WEBHOOK_ALLOW_PRIVATE === \"true\";",
+        "    let responseStatus: number | null = null;",
+        "    let error: string | null = null;",
+        "    let failure: Error | undefined;",
+        "    try {",
+        "      const response = await safeFetch(",
+        "        payload.url,",
+        ""
+      ]
+    },
+    "h009": {
+      "before": [
+        "            [webhookSignatureHeader()]: signWebhookBody(payload.secret, payload.body),",
+        "          },",
+        "          body: payload.body,",
+        "        },",
+        "        { timeoutMs: 10_000, maxRedirects: 0, allowPrivate, allowHttp: allowPrivate },",
+        "      );",
+        "      responseStatus = response.status;",
+        "      if (!response.ok) {",
+        "        error = `HTTP ${response.status}`;",
+        "      }",
+        "    } catch (caught) {",
+        "      error = caught instanceof Error ? caught.message : \"webhook dispatch failed\";",
+        "    }",
+        "",
+        "    await runWithMigrationBypass(async () => {",
+        "      await getSql().unsafe(",
+        "        \"INSERT INTO webhook_deliveries (webhook_id, event, payload, response_status, attempt, error) VALUES ($1, $2, $3, $4, $5, $6)\",",
+        "        [payload.webhookId, payload.event, payload.body, responseStatus, 1, error],",
+        "      );",
+        "    });",
+        "  }",
+        "}",
+        "",
+        ""
+      ],
+      "after": [
+        "            [webhookSignatureHeader()]: signWebhookBody(payload.secret, payload.body),",
+        "          },",
+        "          body: payload.body,",
+        "          signal: context?.signal,",
+        "        },",
+        "        { timeoutMs: 10_000, maxRedirects: 0, allowPrivate, allowHttp: allowPrivate },",
+        "      );",
+        "      responseStatus = response.status;",
+        "      if (!response.ok) {",
+        "        error = `HTTP ${response.status}`;",
+        "        failure = new Error(error);",
+        "      }",
+        "      // Only the status is needed. Explicit cancellation releases safeFetch's",
+        "      // transport/body deadline even when the receiver sends an unread body.",
+        "      await response.body?.cancel();",
+        "    } catch (caught) {",
+        "      error = caught instanceof Error ? caught.message : \"webhook dispatch failed\";",
+        "      failure = caught instanceof Error ? caught : new Error(error, { cause: caught });",
+        "    }",
+        "",
+        "    try { await runWithMigrationBypass(async () => {",
+        "      await getSql().unsafe(",
+        "        \"INSERT INTO webhook_deliveries (webhook_id, event, payload, response_status, attempt, error) VALUES ($1, $2, $3, $4, $5, $6)\",",
+        "        [payload.webhookId, payload.event, payload.body, responseStatus, context?.attempt ?? 1, error],",
+        "      );",
+        "    }); } catch (recordingFailure) {",
+        "      if (failure) throw new AggregateError([failure, recordingFailure], `Webhook delivery failed: ${failure.message}; recording also failed.`, { cause: failure });",
+        "      throw recordingFailure;",
+        "    }",
+        "    // Every transport/non-2xx failure uses the selected queue's bounded retry",
+        "    // and terminal recovery policy. Delivery remains at-least-once.",
+        "    if (failure) throw failure;",
+        "  }",
+        "}",
+        "",
+        ""
+      ]
+    },
+    "h010": {
+      "before": [
+        "      url: string;",
+        "      secret: string;",
+        "      active: number | boolean;",
+        "    }>(\"SELECT id, url, secret, active FROM webhooks\");",
+        "    const queue = resolveApplicationQueue();",
+        "    const event = \"notes.created\";",
+        "    const body = JSON.stringify({ event, data: payload });",
+        "    for (const hook of rows) {",
+        "      if (!hook.active) {",
+        "        continue;",
+        "      }",
+        "      await queue.dispatch(new DispatchOutboundWebhookJob(), {",
+        ""
+      ],
+      "after": [
+        "      url: string;",
+        "      secret: string;",
+        "      active: number | boolean;",
+        "      events: string;",
+        "    }>(\"SELECT id, url, secret, active, events FROM webhooks\");",
+        "    const queue = resolveApplicationQueue();",
+        "    const event = \"notes.created\";",
+        "    const body = JSON.stringify({ event, data: payload });",
+        "    for (const hook of rows) {",
+        "      // The generated schema supports a literal event name or the explicit",
+        "      // wildcard. Other values do not implicitly subscribe to every event.",
+        "      if (!hook.active || (hook.events !== \"*\" && hook.events !== event)) {",
+        "        continue;",
+        "      }",
+        "      await queue.dispatch(new DispatchOutboundWebhookJob(), {",
+        ""
+      ]
+    },
+    "h011": {
+      "before": [
+        "import { createViewProvider } from \"@getstrata/bootstrap/providers/view\";",
+        "",
+        "export default createViewProvider({",
+        "  directory: join(import.meta.dir, \"../../../views\"),",
+        "  data: {",
+        "    userKey: \"currentUser\",",
+        ""
+      ],
+      "after": [
+        "import { createViewProvider } from \"@getstrata/bootstrap/providers/view\";",
+        "",
+        "export default createViewProvider({",
+        "  enabled: true,",
+        "  directory: join(import.meta.dir, \"../../../views\"),",
+        "  data: {",
+        "    userKey: \"currentUser\",",
+        ""
+      ]
+    }
+  },
+  "artifacts": {
+    "auth/api-cookie-all/src/modules/auth/index.ts": {
+      "beforeSha256": "feac387482a4a771702364a5d6e7571fa215cc2e2d0373438c1e03a94428e13d",
+      "afterSha256": "de16635117c21dd24b750d48a5b865f3574e7e8b2732da03ee50d72c47ff5e63",
+      "hunks": ["h001", "h002"]
+    },
+    "auth/api-cookie-mfa/src/modules/auth/index.ts": {
+      "beforeSha256": "b926abae973bec1da01e25a291ad41d537ab2e424ddff0f5065a3b64871f0eae",
+      "afterSha256": "74feca783ccfe03a8ddb3a25e8b81130f34ed288b00114fdc73fd6458297db0a",
+      "hunks": ["h001", "h002"]
+    },
+    "auth/api-cookie-token-all/src/modules/auth/index.ts": {
+      "beforeSha256": "6a9fd50fd386ec3816ffd736e0bc9bcc7fa1001c51b28c012089530ea9456c2d",
+      "afterSha256": "78b5acc74dd018056762d6009ac50f9ff38dccd8b7737b22e4e6affee59d5989",
+      "hunks": ["h001", "h002"]
+    },
+    "auth/api-cookie-token-jwt-all/src/modules/auth/index.ts": {
+      "beforeSha256": "dbb102a72ac74f017955e1dc93e9a322a1928528502de76ca9fa0f641843a143",
+      "afterSha256": "ded5fd9cc86587ca8db5852241d17ab4c894dd535392c577fe035e793f8b1fcf",
+      "hunks": ["h001", "h002"]
+    },
+    "auth/spa-react-cookie-all/src/modules/auth/index.ts": {
+      "beforeSha256": "e36788bfbfd18aedac05f7f76e5aacae474d6914cd009b22ab30edcf2d4f076a",
+      "afterSha256": "7dc72bb760982035bdf685931a396f37ea3402c1b71e3be48d0620ba8b7b144e",
+      "hunks": ["h001", "h002"]
+    },
+    "auth/spa-react-cookie-mfa/src/modules/auth/index.ts": {
+      "beforeSha256": "5b5c895898cc395bb5be309e7dcae830eb0f2066f66c4a1af8349b58b0c41e44",
+      "afterSha256": "15e0d11c0d1513bae220356ec6d9c9ae4f6c06bbd8237271fbaa10e2e29a2921",
+      "hunks": ["h001", "h002"]
+    },
+    "auth/spa-react-cookie-token-all/src/modules/auth/index.ts": {
+      "beforeSha256": "5d45b7b708789624532babbc5e197bee1d52ef0c915a7c10a59fe9924e13f1c2",
+      "afterSha256": "bd7f393aa60e93188c2e8ca652ef72596b93566e9932f2d558676b887a9abbd4",
+      "hunks": ["h001", "h002"]
+    },
+    "auth/spa-react-cookie-token-jwt-all/src/modules/auth/index.ts": {
+      "beforeSha256": "e031c8e125e7ceddb2b59e35fc7e9ba5a4f5d900dad222475cd5a9e0cbfb86bd",
+      "afterSha256": "08eaaefa1bebf55fa76499323c4ae665e998e77d1ec9cb0fba0a87a8502fe0bd",
+      "hunks": ["h001", "h002"]
+    },
+    "starter/sqlite-api-headers-local/src/bootstrap/createApp.ts": {
+      "beforeSha256": "390947cfd45b751b89a790f0f8956f4e884b08d894a0317009e639b28cfb6ad8",
+      "afterSha256": "10c4936d641cfa5575236b4b48b358e59a72a39e703c66cdb9f9396fd7a667e4",
+      "hunks": ["h003", "h004", "h005"]
+    },
+    "starter/mysql-htmx-cookie-tools/src/bootstrap/createApp.ts": {
+      "beforeSha256": "19fd7603ec36b37486b807a8d0f5f8db77953136bbe29a7e50087e9d71a38931",
+      "afterSha256": "1f5c343fa3e0bc986a9220485a1a674dae13fe4b3e8c11e7e9d64edf4008eb11",
+      "hunks": ["h003", "h004", "h005"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/bootstrap/createApp.ts": {
+      "beforeSha256": "4ec57df1e717b81e1815e188a2ee5a9d9117d5672e00da38bf318e9504555fcf",
+      "afterSha256": "cdf76f151c3e3553c740b19274a9c848108fab2211f2207b815e4e3393b324d7",
+      "hunks": ["h003", "h004", "h006"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/jobs/dispatchOutboundWebhookJob.ts": {
+      "beforeSha256": "9af49701089553c4fba4e978eac7e586a976418594ccc73506ae025e1c8515ec",
+      "afterSha256": "6c369b46471a43dc256928e846a97a6a319a84b7845f7e83f9c250a7ff51d9bd",
+      "hunks": ["h007", "h008", "h009"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/listeners/noteCreatedWebhookListener.ts": {
+      "beforeSha256": "f146e4d13f9d24ddf15661fa94d3a15d5fefcc1af71ef0ec95cf1f8e4a2055a7",
+      "afterSha256": "a8e78adf8fdcd9f8301463ca5985640af2b91382602b398595e4ef28e4799ac4",
+      "hunks": ["h010"]
+    },
+    "starter/sqlite-spa-jwt-local/src/bootstrap/createApp.ts": {
+      "beforeSha256": "390947cfd45b751b89a790f0f8956f4e884b08d894a0317009e639b28cfb6ad8",
+      "afterSha256": "10c4936d641cfa5575236b4b48b358e59a72a39e703c66cdb9f9396fd7a667e4",
+      "hunks": ["h003", "h004", "h005"]
+    },
+    "starter/mysql-api-token-column-partial-tools/src/bootstrap/createApp.ts": {
+      "beforeSha256": "19fd7603ec36b37486b807a8d0f5f8db77953136bbe29a7e50087e9d71a38931",
+      "afterSha256": "1f5c343fa3e0bc986a9220485a1a674dae13fe4b3e8c11e7e9d64edf4008eb11",
+      "hunks": ["h003", "h004", "h005"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/bootstrap/providers/view.ts": {
+      "beforeSha256": "0fb3a7bb49e16fbdd5367e8ead1c0b8dcb1dbda0a6f9339be6ce5599ce95831a",
+      "afterSha256": "6a660c3580bb78cfffadb57d2613d0bf627211b396f1365079174a625b8f97a4",
+      "hunks": ["h011"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/bootstrap/createApp.ts": {
+      "beforeSha256": "4ec57df1e717b81e1815e188a2ee5a9d9117d5672e00da38bf318e9504555fcf",
+      "afterSha256": "cdf76f151c3e3553c740b19274a9c848108fab2211f2207b815e4e3393b324d7",
+      "hunks": ["h003", "h004", "h006"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/modules/auth/index.ts": {
+      "beforeSha256": "89dd2bb32a47a86523fffdab2f49db27d2371bc9c0031c1f784bbf7b38c3f721",
+      "afterSha256": "fbacc150daadcbc48a1cfc8826495d64e2b1ba511e1a53227e137bcb497a5c1a",
+      "hunks": ["h001", "h002"]
+    },
+    "starter/postgres-htmx-cookie-local/src/bootstrap/createApp.ts": {
+      "beforeSha256": "19fd7603ec36b37486b807a8d0f5f8db77953136bbe29a7e50087e9d71a38931",
+      "afterSha256": "1f5c343fa3e0bc986a9220485a1a674dae13fe4b3e8c11e7e9d64edf4008eb11",
+      "hunks": ["h003", "h004", "h005"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/src/bootstrap/createApp.ts": {
+      "beforeSha256": "19fd7603ec36b37486b807a8d0f5f8db77953136bbe29a7e50087e9d71a38931",
+      "afterSha256": "1f5c343fa3e0bc986a9220485a1a674dae13fe4b3e8c11e7e9d64edf4008eb11",
+      "hunks": ["h003", "h004", "h005"]
+    }
+  }
+}

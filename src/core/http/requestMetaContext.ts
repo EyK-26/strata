@@ -6,6 +6,8 @@ type RequestMeta = {
   peerAddress?: string | null;
   userAgent: string | null;
   request?: Request;
+  /** Canonical correlation identity shared by response policies and logging. */
+  requestId?: string;
   /** Registered route template; never a URL supplied by the client. */
   routeTemplate?: string;
   /** API error contracts take precedence over client content negotiation. */
@@ -30,5 +32,14 @@ function currentRequestMeta(): RequestMeta {
   );
 }
 
+function resolveRequestId(request: Request): string {
+  const meta = currentRequestMeta();
+  return (
+    (meta.request === request ? meta.requestId : undefined) ??
+    request.headers.get("x-request-id") ??
+    crypto.randomUUID()
+  );
+}
+
 export type { RequestMeta };
-export { currentRequestMeta, requestMetaContext, runWithRequestMeta };
+export { currentRequestMeta, requestMetaContext, resolveRequestId, runWithRequestMeta };

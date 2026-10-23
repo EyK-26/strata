@@ -489,11 +489,12 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   }
 
   async paginate(options: { page: number; perPage: number }): Promise<PaginatedResult<TEntity>> {
-    return await this.repository.paginate({
+    const page = await this.repository.paginate({
       ...this.buildOptions(),
       page: options.page,
       perPage: options.perPage,
     });
+    return { ...page, data: await this.attach(page.data) };
   }
 
   async chunk(

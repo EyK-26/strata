@@ -614,6 +614,68 @@ function buildSelectQuery<TEntity extends object>(
   };
 }
 
+const EAGER_ROW_NUMBER = "__strata_eager_row_number";
+
+/** Database-side per-owner bounds; never fetch an unbounded batch to slice in JS. */
+function buildLimitedRelationQuery<TEntity extends object>(
+  table: TableDefinition<TEntity>,
+  options: QueryOptions<TEntity>,
+  partition: { table: string; column: string },
+  source: (columns: string, rank: string, params: unknown[]) => string,
+): { text: string; params: unknown[] } {
+  if (options.lock || options.groupBy?.length || options.having) {
+    throw new Error("Limited eager relations do not support row locks, grouping or HAVING.");
+  }
+  if (
+    table.columns.includes(EAGER_ROW_NUMBER as keyof TEntity & string) ||
+    options.select?.some((item) => "as" in item && item.as === EAGER_ROW_NUMBER)
+  ) {
+    throw new Error(`Reserved eager relation column: ${EAGER_ROW_NUMBER}`);
+  }
+  buildLimitClause(options.limit);
+  buildOffsetClause(options.offset);
+  if (!Number.isSafeInteger((options.offset ?? 0) + (options.limit ?? 0))) {
+    throw new Error("Limited eager relation bounds must fit a safe integer.");
+  }
+  const order = [...normalizeOrderBy(options.orderBy ?? table.defaultOrderBy)];
+  if (
+    !order.some(
+      (item) =>
+        item.column === table.primaryKey || item.column === `${table.name}.${table.primaryKey}`,
+    )
+  ) {
+    order.push({ column: table.primaryKey, direction: "ASC" });
+  }
+  const ordering = buildOrderByClause(table.name, order);
+  const params: unknown[] = [];
+  const columns = buildSelectList(table, options.select, params);
+  const rank = `ROW_NUMBER() OVER (PARTITION BY ${qualifyColumn(partition.table, partition.column)}${ordering}) AS ${quoteIdentifier(EAGER_ROW_NUMBER)}`;
+  const sql = source(columns, rank, params);
+  const offset = options.offset ?? 0;
+  const upper =
+    options.limit === undefined
+      ? ""
+      : ` AND ${quoteIdentifier(EAGER_ROW_NUMBER)} <= ${offset + options.limit}`;
+  return {
+    text: `SELECT * FROM (${sql}) AS ${quoteIdentifier("__strata_eager")} WHERE ${quoteIdentifier(EAGER_ROW_NUMBER)} > ${offset}${upper} ORDER BY ${quoteIdentifier(EAGER_ROW_NUMBER)}`,
+    params,
+  };
+}
+
+function buildLimitedHasManyQuery<TEntity extends object>(
+  table: TableDefinition<TEntity>,
+  options: QueryOptions<TEntity>,
+  partition: { table: string; column: string; ownerAlias?: string },
+): { text: string; params: unknown[] } {
+  return buildLimitedRelationQuery(table, options, partition, (columns, rank, params) => {
+    const { clause } = buildQueryWhereClause(table, options, options.whereNodes, params);
+    const owner = partition.ownerAlias
+      ? `, ${qualifyColumn(partition.table, partition.column)} AS ${quoteIdentifier(partition.ownerAlias)}`
+      : "";
+    return `SELECT ${columns}${owner}, ${rank} FROM ${quoteIdentifier(table.name)}${buildJoinClause(options.joins)}${clause}`;
+  });
+}
+
 function buildCountQuery<TEntity extends object>(
   table: TableDefinition<TEntity>,
   where: QueryWhere<TEntity> = {},
@@ -974,6 +1036,8 @@ export {
   buildIncrementQuery,
   buildInsertQuery,
   buildJoinClause,
+  buildLimitedHasManyQuery,
+  buildLimitedRelationQuery,
   buildOrderByClause,
   buildProjectionQuery,
   buildQueryWhereClause,
@@ -983,6 +1047,7 @@ export {
   buildUpdateQuery,
   buildUpsertQuery,
   buildWhereClause,
+  EAGER_ROW_NUMBER,
   parseQualifiedColumn,
   qualifyColumn,
   quoteIdentifier,

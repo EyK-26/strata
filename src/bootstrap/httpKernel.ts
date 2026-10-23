@@ -95,15 +95,7 @@ class HttpKernel {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
     return [
-      createCorsMiddleware(),
-      createSecurityHeadersMiddleware(),
-      createBodySizeLimitMiddleware(),
-      createTracingMiddleware(),
-      createMetricsMiddleware(),
-      createRequestLoggingMiddleware(),
-      requestIdMiddleware,
-      // Commit and deferred listeners finish inside this boundary, before telemetry records the result.
-      errorFormat === "json" ? createJsonErrorMiddleware() : createWebErrorMiddleware(),
+      ...this.responseMiddleware(errorFormat),
       createAuthMiddleware(auth),
       createMembershipMiddleware(),
       createTenantMiddleware({
@@ -115,6 +107,27 @@ class HttpKernel {
           : undefined,
       }),
     ];
+  }
+
+  private responseMiddleware(errorFormat: "json" | "web"): Middleware[] {
+    return [
+      createCorsMiddleware(),
+      createSecurityHeadersMiddleware(),
+      createBodySizeLimitMiddleware(),
+      createTracingMiddleware(),
+      createMetricsMiddleware(),
+      createRequestLoggingMiddleware(),
+      requestIdMiddleware,
+      // Commit and deferred listeners finish inside this boundary, before telemetry records the result.
+      errorFormat === "json" ? createJsonErrorMiddleware() : createWebErrorMiddleware(),
+    ];
+  }
+
+  /** Public application documents still own response policy and observation. */
+  wrapPublicDocument<TRequest extends Request = Request>(
+    handler: RouteHandler<TRequest>,
+  ): RouteHandler<TRequest> {
+    return withMiddleware(...this.responseMiddleware("web"))(handler);
   }
 
   group(name: MiddlewareGroupName): Middleware[] {

@@ -9,6 +9,7 @@ import * as flows from "../../../packages/strata-starter/src/renderAuthFlows.ts"
 import currentModules from "../../fixtures/scaffolds/auth-password-operation-current.sha256.json";
 import baselines from "../../fixtures/scaffolds/auth-rendering.sha256.json";
 import { passwordLoginArtifactRoundTrip } from "../../helpers/authLoginArtifactDelta.ts";
+import { starterCombinationArtifactRoundTrip } from "../../helpers/starterCombinationArtifactDelta.ts";
 
 const currentModuleHashes: Readonly<Record<string, string | null>> = currentModules;
 
@@ -20,7 +21,15 @@ const currentModuleHashes: Readonly<Record<string, string | null>> = currentModu
 for (const { name, args, hashes } of baselines) {
   test(`auth rendering preserves the pre-extraction artifacts: ${name}`, () => {
     const layers = layersFromFlags(parseCreateStrataArgs(args));
-    const module = auth.renderAuthModule(layers);
+    const current = auth.renderAuthModule(layers);
+    const correction = starterCombinationArtifactRoundTrip(
+      "auth",
+      name,
+      "src/modules/auth/index.ts",
+      current,
+    );
+    expect(correction.roundTrip).toBe(current);
+    const module = correction.previous;
     const { legacy, roundTrip } = passwordLoginArtifactRoundTrip(module, layers);
     expect(roundTrip).toBe(module);
     const currentHash = currentModuleHashes[name];

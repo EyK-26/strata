@@ -17,6 +17,15 @@ class SimpleCacheStore implements CacheStore {
     return this.cache.getOrSet(key, loader, ttlMs);
   }
 
+  getOrSetTagged<T>(
+    key: string,
+    loader: () => Promise<T>,
+    tags: string[],
+    ttlMs?: number,
+  ): Promise<T> {
+    return this.cache.getOrSetTagged(key, loader, tags, ttlMs);
+  }
+
   attachTags(key: string, tags: string[]): Promise<void> {
     this.cache.attachTags(key, tags);
     return Promise.resolve();

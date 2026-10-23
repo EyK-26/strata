@@ -146,7 +146,7 @@ function sqlParams(database: DatabaseLayer, count: number): string {
 
 function renderDispatchOutboundWebhookJob(layers: StarterLayers): string {
   const values = sqlParams(layers.database, 6);
-  return `import { Job } from "@getstrata/core/queue";
+  return `import { Job, type JobContext } from "@getstrata/core/queue";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { webhookSignatureHeader } from "@getstrata/core/runtime/appKeyPrefix";
 import { safeFetch } from "@getstrata/core/security/safeFetch";
@@ -165,10 +165,11 @@ interface DispatchOutboundWebhookPayload {
 class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
   static readonly jobName = "webhook.dispatch";
 
-  override async handle(payload: DispatchOutboundWebhookPayload): Promise<void> {
+  override async handle(payload: DispatchOutboundWebhookPayload, context?: JobContext): Promise<void> {
     const allowPrivate = !isProductionEnv() && process.env.WEBHOOK_ALLOW_PRIVATE === "true";
     let responseStatus: number | null = null;
     let error: string | null = null;
+    let failure: Error | undefined;
     try {
       const response = await safeFetch(
         payload.url,
@@ -179,23 +180,35 @@ class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
             [webhookSignatureHeader()]: signWebhookBody(payload.secret, payload.body),
           },
           body: payload.body,
+          signal: context?.signal,
         },
         { timeoutMs: 10_000, maxRedirects: 0, allowPrivate, allowHttp: allowPrivate },
       );
       responseStatus = response.status;
       if (!response.ok) {
         error = \`HTTP \${response.status}\`;
+        failure = new Error(error);
       }
+      // Only the status is needed. Explicit cancellation releases safeFetch's
+      // transport/body deadline even when the receiver sends an unread body.
+      await response.body?.cancel();
     } catch (caught) {
       error = caught instanceof Error ? caught.message : "webhook dispatch failed";
+      failure = caught instanceof Error ? caught : new Error(error, { cause: caught });
     }
 
-    await runWithMigrationBypass(async () => {
+    try { await runWithMigrationBypass(async () => {
       await getSql().unsafe(
         "INSERT INTO webhook_deliveries (webhook_id, event, payload, response_status, attempt, error) VALUES (${values})",
-        [payload.webhookId, payload.event, payload.body, responseStatus, 1, error],
+        [payload.webhookId, payload.event, payload.body, responseStatus, context?.attempt ?? 1, error],
       );
-    });
+    }); } catch (recordingFailure) {
+      if (failure) throw new AggregateError([failure, recordingFailure], \`Webhook delivery failed: \${failure.message}; recording also failed.\`, { cause: failure });
+      throw recordingFailure;
+    }
+    // Every transport/non-2xx failure uses the selected queue's bounded retry
+    // and terminal recovery policy. Delivery remains at-least-once.
+    if (failure) throw failure;
   }
 }
 
@@ -217,12 +230,15 @@ function registerNoteCreatedWebhookListener(): void {
       url: string;
       secret: string;
       active: number | boolean;
-    }>("SELECT id, url, secret, active FROM webhooks");
+      events: string;
+    }>("SELECT id, url, secret, active, events FROM webhooks");
     const queue = resolveApplicationQueue();
     const event = "notes.created";
     const body = JSON.stringify({ event, data: payload });
     for (const hook of rows) {
-      if (!hook.active) {
+      // The generated schema supports a literal event name or the explicit
+      // wildcard. Other values do not implicitly subscribe to every event.
+      if (!hook.active || (hook.events !== "*" && hook.events !== event)) {
         continue;
       }
       await queue.dispatch(new DispatchOutboundWebhookJob(), {

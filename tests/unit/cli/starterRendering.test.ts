@@ -27,6 +27,7 @@ import * as runtime from "../../../packages/strata-starter/src/renderRuntime.ts"
 import currentAuthModules from "../../fixtures/scaffolds/starter-password-operation-current.sha256.json";
 import baselines from "../../fixtures/scaffolds/starter-rendering.sha256.json";
 import { passwordLoginArtifactRoundTrip } from "../../helpers/authLoginArtifactDelta.ts";
+import { starterCombinationArtifactRoundTrip } from "../../helpers/starterCombinationArtifactDelta.ts";
 
 const currentModuleHashes: Readonly<Record<string, string | null>> = currentAuthModules;
 
@@ -56,7 +57,18 @@ for (const { name, args, files: expected } of baselines) {
           if (item.isDirectory()) await visit(full);
           else {
             const relative = full.slice(directory.length + 1);
-            const bytes = await readFile(full);
+            const currentBytes = await readFile(full);
+            const correction = starterCombinationArtifactRoundTrip(
+              "starter",
+              name,
+              relative,
+              currentBytes.toString("utf8"),
+            );
+            expect(correction.roundTrip).toBe(currentBytes.toString("utf8"));
+            const bytes =
+              correction.previous === currentBytes.toString("utf8")
+                ? currentBytes
+                : Buffer.from(correction.previous);
             if (relative === "src/modules/auth/index.ts") {
               const source = bytes.toString("utf8");
               const { legacy, roundTrip } = passwordLoginArtifactRoundTrip(source, layers);
