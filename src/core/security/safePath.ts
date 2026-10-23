@@ -23,9 +23,9 @@ function assertPathUnderRoot(rootDirectory: string, userPath: string): string {
   return resolvePathUnderRoot(rootDirectory, userPath.trim());
 }
 
-/** Map a URL pathname onto a document root. Leading slashes are not filesystem-absolute. */
+/** Decode a URL pathname once; leading slashes are not filesystem-absolute. */
 function assertUrlPathUnderRoot(rootDirectory: string, urlPathname: string): string {
-  return assertPathUnderRoot(rootDirectory, urlPathname.replace(/^\/+/u, ""));
+  return resolvePathUnderRoot(rootDirectory, decodeURIComponent(urlPathname).replace(/^\/+/u, ""));
 }
 
 export { assertPathUnderRoot, assertUrlPathUnderRoot };

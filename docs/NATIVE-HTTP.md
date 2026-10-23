@@ -40,6 +40,21 @@ const server = createWebServer<{ userId: number }>({
 
 `onRequest` now covers native registered routes as well as fallback/asset requests, with socket metadata already installed and route templates available for native dispatch. Explicit OPTIONS and synthesized CORS preflights also run the hook once. Bun transport rejection before dispatch cannot execute this hook. This corrects the previous native-route omission; audit existing hooks for unintended duplicated business work. A hook is not a substitute for authentication, tenant resolution or CORS policy.
 
+## Static file URL paths
+
+Static `/assets/*` handlers and SPA file routes decode URL pathnames exactly once
+before checking lexical containment in their document root. Encode filename
+segments when constructing URLs: spaces, accents, `#`, `?` and literal `%` are
+filename data. For example, the file `literal%20.txt` uses `literal%2520.txt` in a
+URL. Encoded leading/trailing filename spaces are preserved. Malformed encoding,
+null bytes and decoded parent traversal are refused; request admission still runs
+before file lookup. SPA client-side routes retain the existing document fallback.
+
+`assertUrlPathUnderRoot` consumes an encoded URL pathname. Do not decode it first.
+`assertPathUnderRoot` and local storage retain their non-URL behavior: literal
+percent signs and the existing outer-whitespace normalization. This change does
+not add a new realpath/symlink policy or a native-asset passthrough.
+
 ## Actual body limits
 
 The default transport ceiling is `MAX_REQUEST_BODY_BYTES`, or 1 MiB when unset/invalid, matching the framework middleware default. Explicit `native.maxRequestBodySize` overrides that transport ceiling and must be a positive safe integer. Unlike the previous server default, this ceiling applies to native routes, fallback and uploads, including streamed/chunked bodies without Content-Length. Configure a larger ceiling deliberately for large uploads, and set the applicable middleware/environment limit consistently. The smallest applicable limit wins.
