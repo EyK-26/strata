@@ -79,6 +79,16 @@ function isLoadableModel(value: unknown): value is {
   );
 }
 
+function resolveModelRelation(model: object, name: string): AnyRelationQuery {
+  const method = (model as Record<string, unknown>)[name];
+  if (typeof method !== "function") {
+    throw new Error(
+      `${(model.constructor as { name: string }).name} has no relation method ${name}().`,
+    );
+  }
+  return method.call(model) as AnyRelationQuery;
+}
+
 async function eagerLoadOnModels(
   models: Array<{
     loaded: (name: string) => unknown;
@@ -138,15 +148,7 @@ async function eagerLoadOnModels(
         if (!first) {
           return;
         }
-        const method = (first as unknown as Record<string, unknown>)[head];
-
-        if (typeof method !== "function") {
-          throw new Error(
-            `${(first.constructor as { name: string }).name} has no relation method ${head}().`,
-          );
-        }
-
-        const relationQuery = method.call(first) as AnyRelationQuery;
+        const relationQuery = resolveModelRelation(first, head);
         const query = first.getRepository().query();
         relationQuery.applyEagerLoad(query, head);
         const attached = await query.attachToRows(
