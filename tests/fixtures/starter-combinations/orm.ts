@@ -223,19 +223,25 @@ try {
     Math.abs(failure.failed_at.getTime() - Date.now()) < 5000,
     "Failure timestamps must retain the current UTC instant",
   );
+  // Bun PostgreSQL attaches statement metadata to its result array. Compare the
+  // complete selected rows without treating SDK result metadata as row fields.
   assert.deepEqual(
-    await failureRepository.findAll({
-      select: [{ kind: "column", table: "failed_job", column: "id" }],
-    }),
+    Array.from(
+      await failureRepository.findAll({
+        select: [{ kind: "column", table: "failed_job", column: "id" }],
+      }),
+    ),
     [{ id: failure.id }],
   );
   assert.deepEqual(
-    await failureRepository.findAll({
-      select: [
-        { kind: "literalText", value: "not JSON", as: "payload" },
-        { kind: "literalText", value: "not a date", as: "failed_at" },
-      ],
-    }),
+    Array.from(
+      await failureRepository.findAll({
+        select: [
+          { kind: "literalText", value: "not JSON", as: "payload" },
+          { kind: "literalText", value: "not a date", as: "failed_at" },
+        ],
+      }),
+    ),
     [{ payload: "not JSON", failed_at: "not a date" }],
   );
   await failures.retry(failure.id, async (record) => {
