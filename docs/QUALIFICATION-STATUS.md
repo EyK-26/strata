@@ -2,6 +2,23 @@
 
 Baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
 
+## Compatible quality batch — published 2.2.51
+
+The [quality-batch audit](QUALITY-BATCH-2.2.51.md) records **134 exact-published
+profiles passing with zero failures/skips**, preserving all established 130 and
+adding static URL and three native SQL nested-ownership profiles. A separate
+**twelve-profile 2.2.50→2.2.51→2.2.50 exact-lock upgrade/rollback rehearsal** passes.
+Fresh captured SQL/Docker metadata and owned Redis/filesystem restoration are
+verified. [Sanitized evidence](qualification/quality-batch-2.2.51.json) records actual
+counts, validated PR/merge/tree identities, package integrities and log hashes.
+
+Static-engine and native browser probes remain separately counted bounded M1
+feasibility evidence. Native assets still target an explicit public origin for a
+future major version; exact API/provider/browser/migration acceptance remains.
+Native Bun pipeline and mixed HTTP/WebSocket reporting limits are not fixed.
+Shop adoption stays **manually held for #257** despite issue closure; the timer
+stays **off**. Earlier release audits below remain intact.
+
 ## HTTP-only reporting patch — published 2.2.50
 
 The [HTTP response-drain audit](HTTP-RESPONSE-DRAIN.md)
