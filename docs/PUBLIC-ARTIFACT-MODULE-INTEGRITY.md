@@ -11,7 +11,7 @@ it does not implement a Strata manifest, view adapter or public-assets API.
 The probe used Bun 1.4.3 revision
 `c6da4a4d3010e5553438c60f6bd76d981976867c` and Chromium 156.0.8078.4.
 All ten browser cases passed: the original seven controls, with all 29 original
-assertions retained, plus three import-map cases and seven new assertions.
+assertion call sites retained, plus three import-map cases and seven new call sites.
 
 The new cases use the same unchanged native Bun split-module output: one entry
 and one dynamically imported JavaScript chunk. A separately authored app-origin
