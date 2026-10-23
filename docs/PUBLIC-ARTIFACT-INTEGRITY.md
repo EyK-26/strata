@@ -94,6 +94,12 @@ artifacts nor changes framework runtime code, packages, databases, Redis or the 
 This is an opt-in characterization, outside the ordinary unit/E2E counts. Repeat it
 for the exact runtime/browser selected for an eventual implementation.
 
+The script now retains these original seven controls and adds three native
+[import-map integrity controls](PUBLIC-ARTIFACT-MODULE-INTEGRITY.md). The historical
+seven-case receipt remains unchanged; the separate ten-case receipt records the
+additional pinned-browser evidence without accepting a framework API or a general
+module-graph guarantee.
+
 Fixture preparation errors were retained separately: the initial TypeScript probe
 used browser globals absent from the server project; the first string-expression
 revision returned a function instead of invoking it. Only the fixture expression

@@ -1,0 +1,415 @@
+{
+  "status": "BOUNDED_NATIVE_IMPORT_MAP_CONTROLS_PASSED",
+  "scope": "Pinned Chromium loopback native dynamic-import integrity only; no framework API, provider, TLS or all-browser/module-graph acceptance.",
+  "bun": "1.4.3",
+  "revision": "c6da4a4d3010e5553438c60f6bd76d981976867c",
+  "chromium": "156.0.8078.4",
+  "cases": [
+    {
+      "name": "native-plain",
+      "state": {
+        "executed": "tampered",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(12, 34, 56)",
+        "images": [
+          {
+            "width": 7,
+            "height": 5
+          }
+        ],
+        "scripts": [
+          {
+            "integrity": "",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "errors": [],
+      "assetRequests": [
+        {
+          "path": "/native-tamper/plain/chunk-j7b34jnv.css",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/native-tamper/plain/chunk-pjpv8wby.js",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/native-tamper/plain/mark-kx6ax46p.svg",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "native-source-integrity",
+      "state": {
+        "executed": "tampered",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(12, 34, 56)",
+        "images": [
+          {
+            "width": 7,
+            "height": 5
+          }
+        ],
+        "scripts": [
+          {
+            "integrity": "",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "errors": [],
+      "assetRequests": [
+        {
+          "path": "/native-tamper/source-integrity/chunk-wpjfm4w2.css",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/native-tamper/source-integrity/chunk-gmdqawgn.js",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/native-tamper/source-integrity/mark-kx6ax46p.svg",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "valid",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(12, 34, 56)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-HEfkmHtDuHuoK9QoZTtpynzTryn1Ffa7J+ZqmDyAPok=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "sha256-/r9UjtjF5Z30+gno36LiM4zRyM6CkWTX98vShEpzTLg=",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "errors": [],
+      "assetRequests": [
+        {
+          "path": "/valid/style.css",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/valid/entry.js",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "script-tamper",
+      "state": {
+        "executed": null,
+        "api": null,
+        "chunk": null,
+        "color": "rgb(12, 34, 56)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-HEfkmHtDuHuoK9QoZTtpynzTryn1Ffa7J+ZqmDyAPok=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "sha256-/r9UjtjF5Z30+gno36LiM4zRyM6CkWTX98vShEpzTLg=",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "errors": [
+        "Failed to find a valid digest in the 'integrity' attribute for resource 'http://127.0.0.1:53053/script-tamper/entry.js' with computed SHA-256 integrity 'z90d0FYMTOxFyO6vjVtvBe2DyTJD7VO4TDHYs/Ep7tM='. The resource has been blocked."
+      ],
+      "assetRequests": [
+        {
+          "path": "/script-tamper/style.css",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/script-tamper/entry.js",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "style-tamper",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-HEfkmHtDuHuoK9QoZTtpynzTryn1Ffa7J+ZqmDyAPok=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "sha256-/r9UjtjF5Z30+gno36LiM4zRyM6CkWTX98vShEpzTLg=",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "errors": [
+        "Failed to find a valid digest in the 'integrity' attribute for resource 'http://127.0.0.1:53053/style-tamper/style.css' with computed SHA-256 integrity 'YTkHCDw8cBdU4SdJoO4VrorGYxZCGBA+8/Udi7nqsVA='. The resource has been blocked."
+      ],
+      "assetRequests": [
+        {
+          "path": "/style-tamper/style.css",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/style-tamper/entry.js",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "no-cors",
+      "state": {
+        "executed": null,
+        "api": null,
+        "chunk": null,
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-HEfkmHtDuHuoK9QoZTtpynzTryn1Ffa7J+ZqmDyAPok=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "sha256-/r9UjtjF5Z30+gno36LiM4zRyM6CkWTX98vShEpzTLg=",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "errors": [
+        "Access to CSS stylesheet at 'http://127.0.0.1:53053/no-cors/style.css' from origin 'http://localhost:53054' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+        "Failed to load resource: net::ERR_FAILED",
+        "Access to script at 'http://127.0.0.1:53053/no-cors/entry.js' from origin 'http://localhost:53054' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "assetRequests": [
+        {
+          "path": "/no-cors/style.css",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/no-cors/entry.js",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "split-module",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": "tampered",
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-TjCFSI4bbfosjCvrts0Kv0ibZwNGXrgtfjlGwdHkTik=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": []
+      },
+      "errors": [],
+      "assetRequests": [
+        {
+          "path": "/chunk-tamper/entry-t43cc0rq.js",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/chunk-tamper/lazy-c72vw92h.js",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "map-original",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": "original",
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "",
+            "crossOrigin": null
+          },
+          {
+            "integrity": "sha256-TjCFSI4bbfosjCvrts0Kv0ibZwNGXrgtfjlGwdHkTik=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": []
+      },
+      "errors": [],
+      "assetRequests": [
+        {
+          "path": "/chunk-tamper/entry-t43cc0rq.js",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/chunk-tamper/lazy-c72vw92h.js",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "map-tamper",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "",
+            "crossOrigin": null
+          },
+          {
+            "integrity": "sha256-TjCFSI4bbfosjCvrts0Kv0ibZwNGXrgtfjlGwdHkTik=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": []
+      },
+      "errors": [
+        "Failed to find a valid digest in the 'integrity' attribute for resource 'http://127.0.0.1:53053/chunk-tamper/lazy-c72vw92h.js' with computed SHA-256 integrity 'CqQiFhz6N+CxXgHGGJRIl02GtSJM2SaRw5eUZ4kuyxw='. The resource has been blocked.",
+        "Failed to fetch dynamically imported module: http://127.0.0.1:53053/chunk-tamper/lazy-c72vw92h.js"
+      ],
+      "assetRequests": [
+        {
+          "path": "/chunk-tamper/entry-t43cc0rq.js",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/chunk-tamper/lazy-c72vw92h.js",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    },
+    {
+      "name": "map-missing-chunk-integrity",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": "tampered",
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "",
+            "crossOrigin": null
+          },
+          {
+            "integrity": "sha256-TjCFSI4bbfosjCvrts0Kv0ibZwNGXrgtfjlGwdHkTik=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": []
+      },
+      "errors": [],
+      "assetRequests": [
+        {
+          "path": "/chunk-tamper/entry-t43cc0rq.js",
+          "cookie": false,
+          "authorization": false
+        },
+        {
+          "path": "/chunk-tamper/lazy-c72vw92h.js",
+          "cookie": false,
+          "authorization": false
+        }
+      ]
+    }
+  ],
+  "apiRequests": [
+    {
+      "cookie": true
+    },
+    {
+      "cookie": true
+    },
+    {
+      "cookie": true
+    },
+    {
+      "cookie": true
+    },
+    {
+      "cookie": true
+    },
+    {
+      "cookie": true
+    },
+    {
+      "cookie": true
+    },
+    {
+      "cookie": true
+    }
+  ],
+  "executedSourceSha256": "a74b8391cb128f5f3a62ab8c69e15bd5aa7a8021517689e078956b7929d29033",
+  "rawReceiptSha256": "bb0ac570ed25d4d9d5314d83001da14f812ccb0b6ec39b6c9974832f4b4002d1",
+  "originalAssertionCount": 29,
+  "allOriginalCallMultiplicityPreserved": true,
+  "allCapturedSqlDockerMetadataRestored": true,
+  "ownedBrowserAndListenersClosed": true
+}

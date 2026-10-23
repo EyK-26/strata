@@ -35,6 +35,8 @@ type BrowserState = {
 };
 const artifacts = new Map<string, Asset>();
 const alteredChunks = new Set<string>();
+// Sequential wire-negative controls, never a production manifest/publisher pointer.
+let tamperChunks = true;
 const assetRequests: { path: string; cookie: boolean; authorization: boolean }[] = [];
 const assets = Bun.serve({
   hostname: "127.0.0.1",
@@ -60,7 +62,7 @@ const assets = Bun.serve({
     if (cssTamper && asset.type === "text/css") {
       body = new TextEncoder().encode("body { color: rgb(98, 76, 54); }");
     }
-    if (alteredChunks.has(path)) {
+    if (tamperChunks && alteredChunks.has(path)) {
       body = new TextEncoder().encode(
         `${new TextDecoder().decode(body)}\ndocument.body.dataset.chunk = "tampered";`,
       );
@@ -76,6 +78,7 @@ const assets = Bun.serve({
 });
 const assetOrigin = `http://127.0.0.1:${assets.port}`;
 const documents = new Map<string, string>();
+const importMapNonces = new Map<string, string>();
 const apiRequests: { cookie: boolean }[] = [];
 const app = Bun.serve({
   hostname: "127.0.0.1",
@@ -90,11 +93,12 @@ const app = Bun.serve({
     }
     const document = documents.get(path);
     if (!document) return new Response("missing", { status: 404 });
+    const importMapNonce = importMapNonces.get(path);
     return new Response(document, {
       headers: {
         "Content-Type": "text/html;charset=utf-8",
         "Cache-Control": "no-store",
-        "Content-Security-Policy": `default-src 'none'; script-src ${assetOrigin}; style-src ${assetOrigin}; img-src ${assetOrigin}; connect-src 'self'; base-uri 'none'`,
+        "Content-Security-Policy": `default-src 'none'; script-src ${assetOrigin}${importMapNonce ? ` 'nonce-${importMapNonce}'` : ""}; style-src ${assetOrigin}; img-src ${assetOrigin}; connect-src 'self'; base-uri 'none'`,
       },
     });
   },
@@ -179,10 +183,12 @@ try {
   assert.ok(graphEntry);
   assert.ok(graphChunks.length > 0, "A real native split-module output is required.");
   const graphOutputs = [];
+  const graphIntegrity: Record<string, string> = {};
   for (const output of graph.outputs) {
     const body = new Uint8Array(await output.arrayBuffer());
     const path = `/chunk-tamper/${basename(output.path)}`;
     artifacts.set(path, { body, type: "text/javascript" });
+    graphIntegrity[`${assetOrigin}${path}`] = digest(body);
     if (output.kind === "chunk") alteredChunks.add(path);
     graphOutputs.push({
       path: relative(root, output.path),
@@ -194,12 +200,33 @@ try {
     "/split-module",
     `<!doctype html><html><body><script type="module" src="${assetOrigin}/chunk-tamper/${basename(graphEntry.path)}" integrity="${digest(new Uint8Array(await graphEntry.arrayBuffer()))}" crossorigin="anonymous"></script></body></html>`,
   );
+  const mapCases = ["map-original", "map-tamper", "map-missing-chunk-integrity"];
+  const entryUrl = `${assetOrigin}/chunk-tamper/${basename(graphEntry.path)}`;
+  const entryIntegrity = graphIntegrity[entryUrl];
+  assert.ok(entryIntegrity, "Native entry integrity is required before browser controls.");
+  for (const name of mapCases) {
+    const nonce = crypto.randomUUID().replaceAll("-", "");
+    const integrity =
+      name === "map-missing-chunk-integrity" ? { [entryUrl]: entryIntegrity } : graphIntegrity;
+    importMapNonces.set(`/${name}`, nonce);
+    documents.set(
+      `/${name}`,
+      `<!doctype html><html><body><script type="importmap" nonce="${nonce}">${JSON.stringify({ integrity })}</script><script type="module" src="${entryUrl}" integrity="${entryIntegrity}" crossorigin="anonymous"></script></body></html>`,
+    );
+  }
   browser = await chromium.launch();
   const context = await browser.newContext();
   await context.addCookies([
     { name: "m1-fixture", value: "owned", url: appOrigin, httpOnly: true },
   ]);
-  for (const name of ["native-plain", "native-source-integrity", ...cases, "split-module"]) {
+  for (const name of [
+    "native-plain",
+    "native-source-integrity",
+    ...cases,
+    "split-module",
+    ...mapCases,
+  ]) {
+    tamperChunks = name !== "map-original";
     const page = await context.newPage();
     const errors: string[] = [];
     page.on("console", (message) => {
@@ -247,6 +274,21 @@ try {
       assert.ok(requests.some((request) => alteredChunks.has(request.path)));
       // Record whether an altered dynamic import executes. An entry digest is
       // not presented as proof that the module graph has integrity protection.
+    } else if (mapCases.includes(name)) {
+      assert.equal(state.executed, "original", "The native entry stays unchanged.");
+      assert.equal(state.api, "application-origin");
+      assert.ok(requests.some((request) => alteredChunks.has(request.path)));
+      if (name === "map-original") {
+        assert.equal(state.chunk, "original", "Correct native bytes must execute with the map.");
+      } else if (name === "map-tamper") {
+        assert.equal(
+          state.chunk,
+          null,
+          "Native import-map integrity must block the altered chunk.",
+        );
+        assert.ok(errors.some((message) => /integrity|digest/i.test(message)));
+      }
+      // Missing chunk metadata is observed, not described as graph protection.
     } else {
       // Record native behavior rather than making missing integrity a permanent
       // compatibility assertion that would reject a future upstream correction.
@@ -272,6 +314,7 @@ try {
         chromium: browser.version(),
         nativeBuilds,
         graphOutputs,
+        importMapIntegrity: graphIntegrity,
         observations,
         apiRequests,
         scope:
@@ -283,10 +326,34 @@ try {
     { flag: "wx" },
   );
   console.log(
-    `PASS seven browser cases; review native integrity observations in ${join(root, "receipt.json")}`,
+    `PASS ten browser cases; review native integrity observations in ${join(root, "receipt.json")}`,
   );
+} catch (error) {
+  await writeFile(
+    join(root, "failure.json"),
+    `${JSON.stringify(
+      {
+        status: "FAILED_OR_INCOMPLETE",
+        bun: Bun.version,
+        revision: Bun.revision,
+        observations,
+        apiRequests,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      null,
+      2,
+    )}\n`,
+    { flag: "wx" },
+  );
+  throw error;
 } finally {
-  await browser?.close();
-  await app.stop(true);
-  await assets.stop(true);
+  try {
+    await browser?.close();
+  } finally {
+    try {
+      await app.stop(true);
+    } finally {
+      await assets.stop(true);
+    }
+  }
 }
