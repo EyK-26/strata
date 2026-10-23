@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.53
+
+- Align the lockstep version with the bootstrap native-route parameter correction; core runtime, ORM and public/protected contracts are unchanged.
+
 ## 2.2.52
 
 - Attach eager relations to offset pages; apply to-many limits/offsets per owner with bounded window queries while retaining scopes and repository dispatch.

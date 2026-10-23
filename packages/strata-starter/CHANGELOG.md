@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.53
+
+- Generate aligned 2.2.53 framework dependencies. Generated auth, database, tenancy and frontend source shapes are unchanged; the public artifact-origin API remains a major-version design proposal.
+
 ## 2.2.52
 
 - Generate the existing CSRF-protected, throttled MFA continuation for cookie-auth API/SPA applications without enabling general browser login routes.
