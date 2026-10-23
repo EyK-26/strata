@@ -642,9 +642,9 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
 
     await Promise.all(
       models.map((model) => {
-        // Retrieved hooks can invalidate or materialize relations, including an
-        // absent target. Keep their existing reload semantics instead of caching absence.
-        if (getModelObservers(model.constructor)?.some((observer) => observer.retrieved)) {
+        // Observer objects may expose callback getters. Inspect only the owned
+        // list, leaving user callbacks to runObservers and preserving reloads.
+        if (getModelObservers(model.constructor)?.length) {
           knownAbsentMorphRoots.delete(model);
         }
         return runObservers(model as AnyModel, "retrieved");

@@ -237,8 +237,10 @@ Requesting `load("subject.owner")` after a flat eager load upgrades that cached
 record for traversal without refreshing its attributes from the database.
 Retrieved observers can still invalidate a previously present relation with
 `setLoaded(name, undefined)` before nested traversal; that relation is reloaded.
-Absence caching is disabled for models with retrieved observers, so a hook can
-also materialize a missing target through the ORM before nested traversal.
+Absence caching is disabled for models with registered observers, so a retrieved
+hook can also materialize a missing target through the ORM before traversal.
+Cache bookkeeping does not evaluate observer callback getters; normal hydration
+retains one accessor read per dispatched hook.
 
 String related models (`belongsTo("Category")`, `hasMany("Product")`) use the class name or `$morphClass` registered at startup. Generated apps await framework model discovery before handling requests. `registerModelClass("catalog-category", Category)` remains available for a distinct alias; keep alternate aliases in startup code before any boot hook that uses them.
 
