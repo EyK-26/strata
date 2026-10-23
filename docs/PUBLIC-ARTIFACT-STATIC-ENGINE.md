@@ -21,10 +21,14 @@ length/hash reproduction's size and bytes.
 
 All five registered cases passed:
 
-- One protocol/control group: exact GET bytes, JavaScript MIME, credentialless CORS
-  headers, no Set-Cookie, nosniff, immutable cache headers, ETag/304, HEAD byte count,
+- One protocol/control group: exact GET bytes, JavaScript MIME, public CORS
+  headers without credentials permission, no Set-Cookie, nosniff, immutable cache
+  headers, ETag/304, HEAD byte count,
   range/206, unsatisfiable range/416, missing paths/404, UTF-8 filenames/content,
   symlink denial without target bytes, and retained old/new build paths.
+  Seven filename controls preserve UTF-8, percent literals, encoded-looking
+  separators/dots, hash/query characters, plus and outer spaces. A request for the
+  actual mounted `/fixture.conf` returns 404 without serving configuration bytes.
 - Two independent single-response transfers and two pipelined transfers. Each
   paused its client after headers, initiated native `QUIT` while the body was
   incomplete, verified the engine remained alive, resumed the client and required
@@ -69,6 +73,9 @@ HTMX/SPA/hybrid clients, parent-domain cookies, cached browser upgrades, a manif
 or view API, or an operational retention/rollback policy. The fixture's one-year
 immutable header and retained A/B files are controls, not an accepted production
 retention window. A public origin cannot replace guarded private downloads.
+The provider filename controls also do not silently change the proposed manifest
+input restrictions. Whether a future resolver accepts those raw names or limits
+native output naming remains a concrete API/policy review decision.
 
 The [native browser/integrity findings](PUBLIC-ARTIFACT-INTEGRITY.md) remain:
 native HTML omitted integrity, and entry SRI did not protect an altered dynamic

@@ -9,13 +9,34 @@
   "engineVersion": "nginx version: nginx/1.30.6",
   "dockerVersion": "29.5.3",
   "nativeEntryHashes": {
-    "A": "011accb87684c9fc50cd963e54dd9b64009d7bb7d25f98edc7f70a71a903d6b4",
-    "B": "40abd43ffaf1137abc4fbade369dda459988234c85946bc2939459e6bc14f491"
+    "A": "7cb83035ca88fe0267def3d3b4599e09e4d8b4017cd4b5fdfec5a23b009bff31",
+    "B": "2c7ed8efe4d602a833e2b6e81f9b22485307171647f4488c575eb1f533152978"
   },
   "results": [
     {
       "case": "static-protocol-and-retained-builds",
-      "passed": true
+      "passed": true,
+      "getStatus": 200,
+      "headStatus": 200,
+      "headDeclaredBytes": 67108864,
+      "etagStatus": 304,
+      "rangeStatus": 206,
+      "unsatisfiableRangeStatus": 416,
+      "symlinkDenialStatus": 404,
+      "contentType": "application/javascript",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "publicCorsOrigin": "*",
+      "credentialsPermission": null,
+      "encodedFilenames": [
+        "p\u0159\u00edloha +.txt",
+        "100% ready.txt",
+        "literal%2Fname.txt",
+        "literal%2ename.txt",
+        "hash#query?.txt",
+        " padded .txt",
+        "plus+name.txt"
+      ],
+      "unservableExistingConfig": "/fixture.conf"
     },
     {
       "case": "native-64MiB-graceful-drain",
@@ -76,8 +97,8 @@
   ],
   "ownedContainersAndScratchRemoved": true,
   "allCapturedSqlDockerMetadataRestored": true,
-  "probeSha256": "2f49a61f62a95a66d4b1f1256b56ded39c417d8570a1cb63d6e9befda20b42dd",
-  "rawReceiptSha256": "bcc43da7188ff68f5b3947252fc878701bae0985541d660827ade915f44712d2",
+  "probeSha256": "3358b903dbaad6675a7c86ac43865761913b184e262a3de26f0e036db62ec650",
+  "rawReceiptSha256": "148f043b17c5bbe81bda67af4fe5d0d856da6455c9cd09c745816dc1391cbd3f",
   "historicalFrozenEvidenceByteIdentical": 26,
   "preparationFailuresRetained": ["Noncanonical /tmp Docker bind path; no test case executed."]
 }

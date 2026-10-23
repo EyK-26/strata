@@ -21,6 +21,15 @@ const names: string[] = [];
 const commands: Array<{ args: string[]; exitCode: number }> = [];
 const results: Array<Record<string, unknown>> = [];
 const scripts = new Map<string, string>();
+const encodedFiles = new Map([
+  ["příloha +.txt", "Příliš žluťoučký kůň\n"],
+  ["100% ready.txt", "literal percent and space\n"],
+  ["literal%2Fname.txt", "encoded-looking separator remains a filename\n"],
+  ["literal%2ename.txt", "encoded-looking dot remains a filename\n"],
+  ["hash#query?.txt", "hash and question mark remain filename bytes\n"],
+  [" padded .txt", "outer filename spaces are significant\n"],
+  ["plus+name.txt", "plus is not form encoding\n"],
+]);
 const digest = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const large = Buffer.alloc(64 * 1024 * 1024, 90);
 const expectedHash = digest(large);
@@ -173,11 +182,16 @@ async function protocolCases() {
   });
   assert.equal(invalid.status, 416);
   await invalid.arrayBuffer();
-  for (const missing of ["/private.txt", "/app.js", "/releases/build-A/missing.js"]) {
+  for (const missing of [
+    "/private.txt",
+    "/fixture.conf",
+    "/app.js",
+    "/releases/build-A/missing.js",
+  ]) {
     const missingResponse = await request(`${server.origin}${missing}`);
     assert.equal(missingResponse.status, 404);
     assert.doesNotMatch(missingResponse.headers.get("cache-control") ?? "", /immutable/);
-    await missingResponse.arrayBuffer();
+    assert.doesNotMatch(await missingResponse.text(), /worker_processes/);
   }
   const linked = await request(`${server.origin}/releases/build-A/linked.js`);
   assert.ok(
@@ -189,12 +203,33 @@ async function protocolCases() {
     `${server.origin}/releases/build-A/${encodeURIComponent("příloha +.txt")}`,
   );
   assert.equal(await accent.text(), "Příliš žluťoučký kůň\n");
+  for (const [name, contents] of encodedFiles) {
+    const encoded = await request(`${server.origin}/releases/build-A/${encodeURIComponent(name)}`);
+    assert.equal(encoded.status, 200, name);
+    assert.equal(await encoded.text(), contents, name);
+  }
   for (const build of ["B", "A"]) {
     const oldOrNew = await request(`${server.origin}/releases/build-${build}/app.js`);
     assert.equal(oldOrNew.status, 200);
     assert.equal(await oldOrNew.text(), scripts.get(build));
   }
-  results.push({ case: "static-protocol-and-retained-builds", passed: true });
+  results.push({
+    case: "static-protocol-and-retained-builds",
+    passed: true,
+    getStatus: response.status,
+    headStatus: head.status,
+    headDeclaredBytes: Number(head.headers.get("content-length")),
+    etagStatus: cached.status,
+    rangeStatus: ranged.status,
+    unsatisfiableRangeStatus: invalid.status,
+    symlinkDenialStatus: linked.status,
+    contentType: response.headers.get("content-type"),
+    cacheControl: response.headers.get("cache-control"),
+    publicCorsOrigin: response.headers.get("access-control-allow-origin"),
+    credentialsPermission: response.headers.get("access-control-allow-credentials"),
+    encodedFilenames: [...encodedFiles.keys()],
+    unservableExistingConfig: "/fixture.conf",
+  });
   await quit(server.id);
   await stopped(server.id);
 }
@@ -306,10 +341,9 @@ try {
     assert.ok(entry);
     scripts.set(build, await entry.text());
   }
-  await writeFile(
-    join(publicRoot, "releases", "build-A", "příloha +.txt"),
-    "Příliš žluťoučký kůň\n",
-  );
+  for (const [name, contents] of encodedFiles) {
+    await writeFile(join(publicRoot, "releases", "build-A", name), contents);
+  }
   await symlink("app.js", join(publicRoot, "releases", "build-A", "linked.js"));
   await writeFile(
     join(scratch, "nginx.conf"),
