@@ -81,7 +81,7 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
 
 async function runQueueJob(
   envelope: QueueJobEnvelope,
-  failedJobs: FailedJobService,
+  failedJobs: Pick<FailedJobService, "recordFailure">,
   options: {
     onFailureRecorded?: () => void;
     context?: import("./index").JobContext;
@@ -96,9 +96,13 @@ async function runQueueJob(
   }
 
   const attempts = envelope.attempts ?? 0;
+  const context = options.context ?? {
+    jobId: envelope.jobId ?? crypto.randomUUID(),
+    signal: new AbortController().signal,
+  };
 
   try {
-    await job.handle(envelope.payload, options.context);
+    await job.handle(envelope.payload, { ...context, attempt: attempts + 1 });
   } catch (error) {
     options.context?.signal.throwIfAborted();
     const nextAttempt = attempts + 1;
@@ -107,7 +111,10 @@ async function runQueueJob(
     if (nextAttempt < maxAttempts) {
       const backoffMs = job.backoffMs ?? queueConfig.backoffMs;
       if (options.deferRetry) {
-        await options.deferRetry({ ...envelope, attempts: nextAttempt }, backoffMs * nextAttempt);
+        await options.deferRetry(
+          { ...envelope, jobId: context.jobId, attempts: nextAttempt },
+          backoffMs * nextAttempt,
+        );
         return;
       }
       await delay(backoffMs * nextAttempt, undefined, { signal: options.context?.signal });
@@ -117,14 +124,14 @@ async function runQueueJob(
           attempts: nextAttempt,
         },
         failedJobs,
-        options,
+        { ...options, context },
       );
       return;
     }
 
     await failedJobs.recordFailure({
       jobName: envelope.name,
-      jobId: options.context?.jobId ?? envelope.jobId,
+      jobId: context.jobId,
       payload: envelope.payload,
       exception: error instanceof Error ? (error.stack ?? error.message) : String(error),
     });

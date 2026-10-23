@@ -454,8 +454,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       ...forced,
     };
     const withTimestamps = applyTimestampsOnCreate(table.columns, assignable, timestamps);
-    const payload = await statics.dehydrateAttributes(withTimestamps);
-    const pending = statics.newFromRecord({ ...payload }, false) as AnyModel;
+    const pending = statics.newFromRecord({ ...withTimestamps }, false) as AnyModel;
+    const beforeObservers = snapshotAttributes(pending.attributes);
 
     if ((await runObservers(pending, "saving")) === false) {
       throw new Error(`${(this as { name: string }).name}.create() was cancelled by an observer.`);
@@ -465,6 +465,14 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       throw new Error(`${(this as { name: string }).name}.create() was cancelled by an observer.`);
     }
 
+    // Preserve the caller's raw write inputs for unchanged fields. Observers edit
+    // the hydrated model; only their edits replace those inputs before the one
+    // protected write transformation (which need not be idempotent).
+    const payload = await statics.dehydrateAttributes({
+      ...withTimestamps,
+      ...changedAttributes(pending.attributes, beforeObservers),
+      ...Object.fromEntries(Object.keys(forced).map((key) => [key, withTimestamps[key]])),
+    });
     const record = await repository.create(payload as MutationValues<object>);
     const created = statics.fromRecord(record, repository, true) as AnyModel;
     await runObservers(created, "created");

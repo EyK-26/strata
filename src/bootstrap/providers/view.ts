@@ -19,6 +19,8 @@ const CORE_VIEW_TOKEN = "core.view";
 const VIEW_DIRECTORY_CONFIG_KEY = "view.directory";
 
 interface ViewProviderOptions {
+  /** Explicit document capability, for example a browser SSO continuation in an API app. */
+  enabled?: boolean;
   directory?: string;
   layout?: string | false;
   data?: WebLayoutDataOptions;
@@ -32,7 +34,7 @@ function createViewProvider(options: ViewProviderOptions = {}): ServiceProvider 
   return {
     name: "view",
     register({ container, config }) {
-      if (!isViewsEnabled()) return;
+      if (!(options.enabled ?? isViewsEnabled())) return;
       const viewsDirectory =
         directory ?? (process.env.VIEW_DIRECTORY?.trim() || DEFAULT_VIEWS_DIRECTORY);
       config.set(VIEW_DIRECTORY_CONFIG_KEY, viewsDirectory);

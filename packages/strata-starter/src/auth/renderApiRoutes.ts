@@ -1,4 +1,5 @@
 import { authUsesJwt, authUsesToken } from "../types.ts";
+import { renderMfaChallengeRoutes } from "./renderBrowserRoutes.ts";
 import type { AuthRenderingContext } from "./renderingContext.ts";
 
 export function renderApiAuthRoutes({
@@ -23,6 +24,14 @@ export function renderApiAuthRoutes({
   | "jsonCookieAccounts"
   | "jsonAccounts"
 >) {
+  const browserMfa =
+    cookie && mfa && (layers.frontend === "api" || layers.frontend === "spa-react");
+  const mfaContinuation = browserMfa
+    ? `
+        ...applyMiddlewareToRoutes({
+${renderMfaChallengeRoutes()}
+        }, kernel.group("api")),`
+    : "";
   const tokenLogin = authUsesToken(layers.auth)
     ? `
         "/api/v1/auth/login": {
@@ -441,8 +450,15 @@ export function renderApiAuthRoutes({
   const apiRoutes =
     bearerApi || cookie
       ? `
-    routes({ kernel, dependencies }) {
-      return {${csrfRoute}${samlRoutes}${githubRoutes}${oidcRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}${jsonAccountManagement}
+    routes({ kernel, dependencies }) {${
+      browserMfa
+        ? `
+      // Browser SSO requires only its continuation view, not general web routes.
+      const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+      const views = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace("auth", { headers: { "Cache-Control": "private, no-store" } });`
+        : ""
+    }
+      return {${mfaContinuation}${csrfRoute}${samlRoutes}${githubRoutes}${oidcRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}${jsonAccountManagement}
       };
     },`
       : "";

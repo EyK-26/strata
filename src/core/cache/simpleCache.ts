@@ -41,28 +41,44 @@ class SimpleCache {
   }
 
   async getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T> {
+    return this.getOrSetTagged(key, loader, [], ttlMs);
+  }
+
+  async getOrSetTagged<T>(
+    key: string,
+    loader: () => Promise<T>,
+    tags: string[],
+    ttlMs?: number,
+  ): Promise<T> {
     this.pruneExpired();
 
     const cachedEntry = this.getFreshEntry<T>(key);
     if (cachedEntry) {
+      this.attachTags(key, tags);
       return cachedEntry.value;
     }
 
     const inflightRequest = this.inflight.get(key) as Promise<T> | undefined;
     if (inflightRequest) {
+      this.attachTags(key, tags);
       return inflightRequest;
     }
 
-    const pendingRequest = loader()
+    const pendingRequest = Promise.resolve()
+      .then(loader)
       .then((value) => {
-        this.set(key, value, ttlMs);
+        if (this.inflight.get(key) === pendingRequest) this.set(key, value, ttlMs);
         return value;
       })
       .finally(() => {
-        this.inflight.delete(key);
+        if (this.inflight.get(key) === pendingRequest) {
+          this.inflight.delete(key);
+          if (!this.cache.has(key)) this.detachKeyFromTags(key);
+        }
       });
 
     this.inflight.set(key, pendingRequest);
+    this.attachTags(key, tags);
     return pendingRequest;
   }
 
@@ -124,10 +140,8 @@ class SimpleCache {
 
   invalidate(key: string): boolean {
     const removed = this.cache.delete(key);
-
-    if (removed) {
-      this.detachKeyFromTags(key);
-    }
+    this.inflight.delete(key);
+    this.detachKeyFromTags(key);
 
     return removed;
   }
@@ -135,7 +149,7 @@ class SimpleCache {
   invalidateByPrefix(prefix: string): number {
     let removed = 0;
 
-    for (const key of [...this.cache.keys()]) {
+    for (const key of new Set([...this.cache.keys(), ...this.inflight.keys()])) {
       if (key === prefix || key.startsWith(`${prefix}?`)) {
         if (this.invalidate(key)) {
           removed += 1;

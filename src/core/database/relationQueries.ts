@@ -1,5 +1,11 @@
 import { currentSqlDialect } from "./dialect.ts";
-import { buildJoinClause, buildQueryWhereClause, qualifyColumn, quoteIdentifier } from "./query.ts";
+import {
+  buildJoinClause,
+  buildLimitedRelationQuery,
+  buildQueryWhereClause,
+  qualifyColumn,
+  quoteIdentifier,
+} from "./query.ts";
 import type { TableDefinition } from "./table.ts";
 import type { QueryOptions } from "./types.ts";
 
@@ -30,6 +36,24 @@ function buildHasManyThroughQuery<TEntity extends object>(
 ): { text: string; params: unknown[] } {
   const throughParentKey = relation.throughParentKey ?? "__through_parent_id";
   const farTable = table.name;
+  if (options.limit !== undefined || options.offset !== undefined) {
+    return buildLimitedRelationQuery(
+      table,
+      options,
+      { table: relation.throughTable, column: relation.firstKey },
+      (columns, rank, params) => {
+        const placeholders = parentIds
+          .map((id) => {
+            params.push(id);
+            return currentSqlDialect().placeholder(params.length);
+          })
+          .join(", ");
+        const { clause } = buildQueryWhereClause(table, options, options.whereNodes, params);
+        const extra = clause ? ` AND (${clause.replace(/^ WHERE /, "")})` : "";
+        return `SELECT ${columns}, ${qualifyColumn(relation.throughTable, relation.firstKey)} AS ${quoteIdentifier(throughParentKey)}, ${rank} FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(relation.throughTable)} ON ${qualifyColumn(relation.throughTable, relation.secondLocalKey)} = ${qualifyColumn(farTable, relation.secondKey)}${buildJoinClause(options.joins)} WHERE ${qualifyColumn(relation.throughTable, relation.firstKey)} IN (${placeholders})${extra}`;
+      },
+    );
+  }
   const columns = table.columns.map((column) => `${qualifyColumn(farTable, column)}`).join(", ");
   const placeholders = parentIds
     .map((_, index) => currentSqlDialect().placeholder(index + 1))

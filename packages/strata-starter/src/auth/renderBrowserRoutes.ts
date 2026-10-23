@@ -1,5 +1,45 @@
 import type { AuthRenderingContext } from "./renderingContext.ts";
 
+export function renderMfaChallengeRoutes(): string {
+  return `        "/login/mfa": {
+          GET: kernel.wrapWebGuest(async (request) => {
+            const pending = readPendingMfaChallenge(request);
+            const record = pending ? await starterAuthDirectory.findByIdOrThrow(pending.userId).catch(() => null) : null;
+            if (!record?.is_active || record.auth_version !== pending?.authVersion) return redirectTo("/login");
+            return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: {}, code: "" }, { request });
+          }),
+          POST: wrapWebLogin(
+            kernel,
+            async (request) => {
+            const pending = readPendingMfaChallenge(request);
+            if (!pending) {
+              return redirectTo("/login");
+            }
+            const { fields } = await parseFormBody(request);
+            const submitted = (fields.code ?? "").trim();
+            return runWithLockedAuthUser(pending.userId, async (record) => {
+            if (!record?.is_active || record.auth_version !== pending.authVersion) {
+              const failed = redirectTo("/login");
+              failed.headers.append("set-cookie", pendingMfaClearCookie());
+              return failed;
+            }
+            const mfaResult = completePasswordLogin(record, { mfaCode: submitted });
+            if (!mfaResult.ok) {
+              return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" }, { request });
+            }
+            await persistAuthRecovery(pending.userId, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
+            const signed = await auth.signInRedirect(sessionUser(record), "/");
+            signed.headers.append("set-cookie", pendingMfaClearCookie());
+            return signed;
+            });
+          },
+            async (request) =>
+              views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "Too many login attempts. Try again shortly." }, code: "" }, { request, status: 429 }),
+          ),
+        },
+`;
+}
+
 export function renderBrowserAuthRoutes({
   cookie,
   mfa,
@@ -153,42 +193,7 @@ export function renderBrowserAuthRoutes({
         }${
           mfa
             ? `
-        "/login/mfa": {
-          GET: kernel.wrapWebGuest(async (request) => {
-            const pending = readPendingMfaChallenge(request);
-            const record = pending ? await starterAuthDirectory.findByIdOrThrow(pending.userId).catch(() => null) : null;
-            if (!record?.is_active || record.auth_version !== pending?.authVersion) return redirectTo("/login");
-            return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: {}, code: "" }, { request });
-          }),
-          POST: wrapWebLogin(
-            kernel,
-            async (request) => {
-            const pending = readPendingMfaChallenge(request);
-            if (!pending) {
-              return redirectTo("/login");
-            }
-            const { fields } = await parseFormBody(request);
-            const submitted = (fields.code ?? "").trim();
-            return runWithLockedAuthUser(pending.userId, async (record) => {
-            if (!record?.is_active || record.auth_version !== pending.authVersion) {
-              const failed = redirectTo("/login");
-              failed.headers.append("set-cookie", pendingMfaClearCookie());
-              return failed;
-            }
-            const mfaResult = completePasswordLogin(record, { mfaCode: submitted });
-            if (!mfaResult.ok) {
-              return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" }, { request });
-            }
-            await persistAuthRecovery(pending.userId, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
-            const signed = await auth.signInRedirect(sessionUser(record), "/");
-            signed.headers.append("set-cookie", pendingMfaClearCookie());
-            return signed;
-            });
-          },
-            async (request) =>
-              views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "Too many login attempts. Try again shortly." }, code: "" }, { request, status: 429 }),
-          ),
-        },
+${renderMfaChallengeRoutes()}
         "/confirm-password": {
           GET: kernel.wrapWebAuthenticated(async (request) =>
             views.render("confirm-password.eta", { layout: { title: "Confirm password" }, errors: {}, password: "" }, { request }),
