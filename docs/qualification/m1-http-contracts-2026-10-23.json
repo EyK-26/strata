@@ -1,0 +1,350 @@
+{
+  "evidenceKind": "Isolated M1 compiler feasibility, not runtime or public API acceptance",
+  "status": "PASS",
+  "runtime": "1.4.3",
+  "typescript": "7.0.2",
+  "bunTypes": "1.4.3",
+  "sourceHeadAtExecution": "47ec748aadf46a95ce4eacbc00710ef1cfc01a0f",
+  "inputs": {
+    "proposalSha256": "55d52dd3460a83060f0f51d3c29b55c84aeac23488b3278b56f76b95ba70d893",
+    "casesSha256": "3a19899525c3b26079421f8a54a096777431ee0f881839e10d1a4d0014e7a09a",
+    "probeSha256": "de6aefae2dbc5da20ee38e30e635335a4a278217a8f11cc52e533c377d010f8b",
+    "nativeServerDeclarationSha256": "902c11d8c36e16a0e7db09db0c2112731055595800977c9370042cdf646a0e7b",
+    "baseConfigurationSha256": "21535249c0d57dd36c407479740d7540da7229385f1923be3f420677dae398e1"
+  },
+  "inheritedStrictness": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "executed": 43,
+  "passed": 43,
+  "failed": 0,
+  "skipped": 0,
+  "classificationCounts": {
+    "proposed-positive": 13,
+    "proposed-rejection": 23,
+    "known-type-limit": 6,
+    "current-compatibility": 1
+  },
+  "negativeHarnessControl": {
+    "expectedNonzeroExit": 1,
+    "failedCase": "BunFile",
+    "allOriginalCaseBytesRestored": true,
+    "casesSha256": "3a19899525c3b26079421f8a54a096777431ee0f881839e10d1a4d0014e7a09a"
+  },
+  "cases": [
+    {
+      "name": "response value",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "native literal parameter and server inference",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "native method callback inference",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "plain Request callback remains assignable",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "no argument callback remains assignable",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "async Response callback",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "all seven SDK methods",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "readonly method value",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "BunFile",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "native HTML bundle",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "native directory",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2353],
+      "observedCodes": [2353],
+      "passed": true
+    },
+    {
+      "name": "native false fallback",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "array",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "string",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "empty method map",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "lowercase method",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2353],
+      "observedCodes": [2353],
+      "passed": true
+    },
+    {
+      "name": "unsupported CONNECT method",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2353],
+      "observedCodes": [2353],
+      "passed": true
+    },
+    {
+      "name": "string callback result",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "nullable callback result",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "void async callback",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "artifact metadata callback result",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "missing native route parameter",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2339],
+      "observedCodes": [2339],
+      "passed": true
+    },
+    {
+      "name": "native parameter remains string",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "SDK server data stays parameterized",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "relative route alias needs major migration",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2353],
+      "observedCodes": [2353],
+      "passed": true
+    },
+    {
+      "name": "named mixed method object requires runtime key validation",
+      "classification": "known-type-limit",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "query-bearing route needs runtime canonical validation",
+      "classification": "known-type-limit",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "API cache and explicit MFA document narrowing",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "web cache remains available",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "web documents reuse existing renderer contract",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "API documents are not always available",
+      "classification": "proposed-rejection",
+      "expectedCodes": [18048],
+      "observedCodes": [18048],
+      "passed": true
+    },
+    {
+      "name": "web requires a real document capability",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "cache loader remains asynchronous",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "renderer response contract remains real",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2322],
+      "observedCodes": [2322],
+      "passed": true
+    },
+    {
+      "name": "unknown manifest crosses a runtime validation boundary",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "origin and manifest validity require runtime validation",
+      "classification": "known-type-limit",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "readonly manifest output",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2542],
+      "observedCodes": [2542],
+      "passed": true
+    },
+    {
+      "name": "readonly resolver metadata",
+      "classification": "proposed-rejection",
+      "expectedCodes": [2540],
+      "observedCodes": [2540],
+      "passed": true
+    },
+    {
+      "name": "current broad 2.x route map is an inventory observation",
+      "classification": "known-type-limit",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "current explicit WebSocket upgrade fallback is retained",
+      "classification": "current-compatibility",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "guarded file Response stays supported",
+      "classification": "proposed-positive",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "pre-collected object spread loses collision evidence",
+      "classification": "known-type-limit",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    },
+    {
+      "name": "present optional method undefined needs runtime validation",
+      "classification": "known-type-limit",
+      "expectedCodes": [],
+      "observedCodes": [],
+      "passed": true
+    }
+  ],
+  "interpretation": "Positive/rejection controls establish type feasibility only. Known-type-limit acceptances are dated observations, not guarantees. All new functions remain isolated unimplemented declarations. No framework runtime, exports, dependency or version changed in this proposal.",
+  "retainedFailures": [
+    "Legacy compiler API unavailable in installed TypeScript7",
+    "Three excess-property diagnostic-code assumptions and native CLI exit convention corrected; rejection requirements unchanged"
+  ],
+  "rawReceiptLocation": "/tmp/strata-m1-http-contracts-20261023/compiler-accepted/results.json",
+  "shopHold": "manual #257 hold",
+  "timer": "off"
+}
