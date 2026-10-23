@@ -1,0 +1,83 @@
+{
+  "status": "VERIFIED_COMPLETE",
+  "scope": "Local digest-pinned static-engine feasibility; no public framework API or production-provider acceptance.",
+  "runtime": {
+    "bun": "1.4.3",
+    "revision": "c6da4a4d3010e5553438c60f6bd76d981976867c"
+  },
+  "image": "nginx@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951",
+  "engineVersion": "nginx version: nginx/1.30.6",
+  "dockerVersion": "29.5.3",
+  "nativeEntryHashes": {
+    "A": "011accb87684c9fc50cd963e54dd9b64009d7bb7d25f98edc7f70a71a903d6b4",
+    "B": "40abd43ffaf1137abc4fbade369dda459988234c85946bc2939459e6bc14f491"
+  },
+  "results": [
+    {
+      "case": "static-protocol-and-retained-builds",
+      "passed": true
+    },
+    {
+      "case": "native-64MiB-graceful-drain",
+      "pipeline": false,
+      "repetition": 1,
+      "declaredLength": 67108864,
+      "receivedBytes": 67108864,
+      "receivedBeforeQuit": 0,
+      "expectedBytes": 67108864,
+      "sha256": "103f23a15401a701b73587902f16e3b5b3bf38a039d5c94b675a9a8e84dbd5b5",
+      "expectedSha256": "103f23a15401a701b73587902f16e3b5b3bf38a039d5c94b675a9a8e84dbd5b5",
+      "socketError": null,
+      "laterResponseObserved": false,
+      "fullBodyMatches": true
+    },
+    {
+      "case": "native-64MiB-graceful-drain",
+      "pipeline": false,
+      "repetition": 2,
+      "declaredLength": 67108864,
+      "receivedBytes": 67108864,
+      "receivedBeforeQuit": 0,
+      "expectedBytes": 67108864,
+      "sha256": "103f23a15401a701b73587902f16e3b5b3bf38a039d5c94b675a9a8e84dbd5b5",
+      "expectedSha256": "103f23a15401a701b73587902f16e3b5b3bf38a039d5c94b675a9a8e84dbd5b5",
+      "socketError": null,
+      "laterResponseObserved": false,
+      "fullBodyMatches": true
+    },
+    {
+      "case": "native-64MiB-graceful-drain",
+      "pipeline": true,
+      "repetition": 1,
+      "declaredLength": 67108864,
+      "receivedBytes": 67108864,
+      "receivedBeforeQuit": 0,
+      "expectedBytes": 67108864,
+      "sha256": "103f23a15401a701b73587902f16e3b5b3bf38a039d5c94b675a9a8e84dbd5b5",
+      "expectedSha256": "103f23a15401a701b73587902f16e3b5b3bf38a039d5c94b675a9a8e84dbd5b5",
+      "socketError": null,
+      "laterResponseObserved": false,
+      "fullBodyMatches": true
+    },
+    {
+      "case": "native-64MiB-graceful-drain",
+      "pipeline": true,
+      "repetition": 2,
+      "declaredLength": 67108864,
+      "receivedBytes": 67108864,
+      "receivedBeforeQuit": 0,
+      "expectedBytes": 67108864,
+      "sha256": "103f23a15401a701b73587902f16e3b5b3bf38a039d5c94b675a9a8e84dbd5b5",
+      "expectedSha256": "103f23a15401a701b73587902f16e3b5b3bf38a039d5c94b675a9a8e84dbd5b5",
+      "socketError": null,
+      "laterResponseObserved": false,
+      "fullBodyMatches": true
+    }
+  ],
+  "ownedContainersAndScratchRemoved": true,
+  "allCapturedSqlDockerMetadataRestored": true,
+  "probeSha256": "2f49a61f62a95a66d4b1f1256b56ded39c417d8570a1cb63d6e9befda20b42dd",
+  "rawReceiptSha256": "bcc43da7188ff68f5b3947252fc878701bae0985541d660827ade915f44712d2",
+  "historicalFrozenEvidenceByteIdentical": 26,
+  "preparationFailuresRetained": ["Noncanonical /tmp Docker bind path; no test case executed."]
+}
