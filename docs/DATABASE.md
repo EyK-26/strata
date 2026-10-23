@@ -225,6 +225,21 @@ Changed-field writes are not optimistic locking: competing changes to the same f
 
 Hydrated relations live on `loaded("category")`. There is no magic `product.category` property.
 
+Nested polymorphic paths such as `Comment.with("subject.owner")` hydrate each
+concrete `subject` model so its own `owner()` method and target scopes participate.
+Targets are batched by concrete class identity, including when class names or IDs
+overlap. A missing nested method reports the concrete target class. Scoped-out
+targets remain absent and are not queried again during the same eager traversal.
+Flat eager `with("subject")` keeps its existing plain-record result; flat lazy
+`load("subject")` keeps its existing concrete model result. Registering both a flat
+and nested path uses nested hydration regardless of registration order.
+Requesting `load("subject.owner")` after a flat eager load upgrades that cached
+record for traversal without refreshing its attributes from the database.
+Retrieved observers can still invalidate a previously present relation with
+`setLoaded(name, undefined)` before nested traversal; that relation is reloaded.
+Absence caching is disabled for models with retrieved observers, so a hook can
+also materialize a missing target through the ORM before nested traversal.
+
 String related models (`belongsTo("Category")`, `hasMany("Product")`) use the class name or `$morphClass` registered at startup. Generated apps await framework model discovery before handling requests. `registerModelClass("catalog-category", Category)` remains available for a distinct alias; keep alternate aliases in startup code before any boot hook that uses them.
 
 ### Declarative model binding
