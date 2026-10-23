@@ -48,3 +48,20 @@ this defect or add another decoding layer.
 
 See [Bun's native routing contract](https://bun.sh/docs/runtime/http/routing).
 Shop adoption remains manually held for #257 and the timer remains off.
+
+## Published 2.2.53 acceptance
+
+The compatible correction is published in all five aligned 2.2.53 packages after
+actual merged-main CI/security and the full trusted release workflow succeeded.
+All 159 established published profiles executed and passed, with no failures/skips;
+the native-route profile executes all seven percent/encoding controls after every
+original assertion. Twelve 2.2.52→2.2.53→2.2.52 upgrade/exact-lock rollback profiles
+also pass, retaining source/build/dependency snapshots and committed data.
+
+The source gate passes 2,716 tests with three unchanged exclusions and 191 E2E
+without failures/skips; actual Linux release CI passes 2,717 with two existing
+exclusions and 191 E2E. Complete captured SQL/Docker metadata and exact owned Redis
+and UUID scratch baselines are restored. The [sanitized receipt](qualification/native-route-2.2.53.json)
+keeps identities and input/log hashes; all older failed evidence remains unchanged.
+This is pinned native Bun 1.4.3 evidence, not qualification of 1.4.4 or a waiver of
+the manual #257 shop hold. The timer stays off.
