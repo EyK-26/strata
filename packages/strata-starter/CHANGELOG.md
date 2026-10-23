@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.51
+
+- Align generated framework pins with 2.2.51; no generated source or frontend shape changes. The new public artifact API remains a design proposal.
+
 ## 2.2.50
 
 - Generate applications with the 2.2.50 framework package pins. Existing generated source, auth, database and tenancy contracts are unchanged.
