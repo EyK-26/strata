@@ -501,3 +501,23 @@ ownership received separately reproduced fixes; no universal worker, callback
 registry, new crypto layer or driver hierarchy was justified solely by file size.
 Simultaneous independent application contexts and a combined tenant/deferred-event
 shutdown scenario are not newly promised by these selected qualifications.
+
+For installed nested polymorphic-loading contracts, run
+`scripts/with-host-env.sh bun scripts/verify-nested-morph-ownership.ts --database=sqlite --evidence=/tmp/strata-nested-new-run`
+after the normal package builds. Repeat sequentially for `mysql` and `postgres`
+with new evidence directories. Add `--published=<exact-version>` to use published
+packages. This uses the existing generated-app fixture, application DML role and
+generated migration owner for schema and its existing privilege contract; it does
+not introduce a grant policy or application SQL.
+
+The consumer copies the real unit regression tests. Non-SQLite fixtures replace
+only connection/schema setup and await native close; every model declaration and
+assertion is checked byte-for-byte before execution. The query-counting fixture
+delegates native transaction capability, including MySQL atomic insert/readback.
+Logs and module-resolution proof are retained before the owned app/database/user
+is removed. Tests cover both row/path orders, overlapping IDs and class names,
+private state, missing methods, separate visibility scopes and cached flat-to-nested
+loading without refreshing the cached target. Flat eager and lazy compatibility
+controls and retrieved-observer invalidation/materialization remain in the same run.
+Fixture-preparation failures must be retained
+separately from product defects and complete acceptance.
