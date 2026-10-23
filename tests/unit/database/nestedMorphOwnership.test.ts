@@ -65,6 +65,9 @@ async function fixture(restrictVisibility = false) {
     });
   });
   class ArticleOwner extends defineModel(articleOwners) {
+    children() {
+      return this.hasMany<Subject, "id">(Article, "owner_id");
+    }
     static override boot() {
       if (restrictVisibility) {
         ArticleOwner.addGlobalScope<Owner, "id">("visible", (query) => query.where({ id: 1 }));
@@ -319,6 +322,80 @@ test("an already eager flat morph record can load a nested owner without refresh
     expect(owner?.kind()).toBe("article");
     expect(owner?.get("name")).toBe("article-1");
     expect(f.queries).toHaveLength(1);
+  } finally {
+    f.database.close();
+    resetSqlDialect();
+  }
+});
+
+test("retrieved observers can invalidate a present eager relation before ordinary nested traversal", async () => {
+  const f = await fixture();
+  try {
+    f.Article.observe({
+      retrieved(model) {
+        model.setLoaded("owner", undefined);
+      },
+    });
+    const rows = await f.Article.query().with("owner.children").orderBy({ column: "id" }).get();
+    expect(
+      rows.map((row) =>
+        row
+          .loaded<InstanceType<typeof f.ArticleOwner>>("owner")
+          ?.loaded<Array<InstanceType<typeof f.Article>>>("children")
+          ?.map((child) => child.id),
+      ),
+    ).toEqual([[1], [2]]);
+    expect(f.queries).toHaveLength(4);
+  } finally {
+    f.database.close();
+    resetSqlDialect();
+  }
+});
+
+test("retrieved observers can invalidate a present morph target before nested traversal", async () => {
+  const f = await fixture();
+  try {
+    f.CommentModel.observe({
+      retrieved(model) {
+        model.setLoaded("subject", undefined);
+      },
+    });
+    const rows = await f.CommentModel.query().with("subject.owner").orderBy({ column: "id" }).get();
+    const names = rows.map((row) =>
+      row
+        .loaded<InstanceType<typeof f.Article> | InstanceType<typeof f.Video>>("subject")
+        ?.loaded<InstanceType<typeof f.ArticleOwner> | InstanceType<typeof f.VideoOwner>>("owner")
+        ?.get("name"),
+    );
+    expect(names).toEqual(["article-1", "video-1", "article-2", "video-2"]);
+    expect(f.queries).toHaveLength(7);
+  } finally {
+    f.database.close();
+    resetSqlDialect();
+  }
+});
+
+test("retrieved observers can materialize an initially absent morph target", async () => {
+  const f = await fixture();
+  try {
+    await f.Article.repository<Subject, "id">().deleteById(2);
+    f.CommentModel.observe({
+      async retrieved(model) {
+        if (Number(model.id) === 3) {
+          await f.Article.repository<Subject, "id">().create({ id: 2, owner_id: 2 });
+          model.setLoaded("subject", undefined);
+        }
+      },
+    });
+    const rows = await f.CommentModel.query().with("subject.owner").orderBy({ column: "id" }).get();
+    expect(
+      rows.map((row) =>
+        row
+          .loaded<InstanceType<typeof f.Article> | InstanceType<typeof f.Video>>("subject")
+          ?.loaded<InstanceType<typeof f.ArticleOwner> | InstanceType<typeof f.VideoOwner>>("owner")
+          ?.get("name"),
+      ),
+    ).toEqual(["article-1", "video-1", "article-2", "video-2"]);
   } finally {
     f.database.close();
     resetSqlDialect();

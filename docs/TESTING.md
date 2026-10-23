@@ -518,5 +518,6 @@ Logs and module-resolution proof are retained before the owned app/database/user
 is removed. Tests cover both row/path orders, overlapping IDs and class names,
 private state, missing methods, separate visibility scopes and cached flat-to-nested
 loading without refreshing the cached target. Flat eager and lazy compatibility
-controls remain in the same run. Fixture-preparation failures must be retained
+controls and retrieved-observer invalidation/materialization remain in the same run.
+Fixture-preparation failures must be retained
 separately from product defects and complete acceptance.

@@ -235,6 +235,10 @@ Flat eager `with("subject")` keeps its existing plain-record result; flat lazy
 and nested path uses nested hydration regardless of registration order.
 Requesting `load("subject.owner")` after a flat eager load upgrades that cached
 record for traversal without refreshing its attributes from the database.
+Retrieved observers can still invalidate a previously present relation with
+`setLoaded(name, undefined)` before nested traversal; that relation is reloaded.
+Absence caching is disabled for models with retrieved observers, so a hook can
+also materialize a missing target through the ORM before nested traversal.
 
 String related models (`belongsTo("Category")`, `hasMany("Product")`) use the class name or `$morphClass` registered at startup. Generated apps await framework model discovery before handling requests. `registerModelClass("catalog-category", Category)` remains available for a distinct alias; keep alternate aliases in startup code before any boot hook that uses them.
 

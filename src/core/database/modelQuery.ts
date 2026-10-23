@@ -3,7 +3,12 @@ import type { CursorPaginatedResult, KeysetCursor, KeysetOptions } from "../pagi
 import type BaseRepository from "./baseRepository.ts";
 import type { Model } from "./model.ts";
 import { applyCasts, hydrateValue } from "./modelAttributes.ts";
-import { ensureBooted, resolveModelRepository, runObservers } from "./modelRegistry.ts";
+import {
+  ensureBooted,
+  getModelObservers,
+  resolveModelRepository,
+  runObservers,
+} from "./modelRegistry.ts";
 import type { AnyRelationQuery } from "./relationQuery.ts";
 import type {
   BelongsToManyRelation,
@@ -99,7 +104,7 @@ async function eagerLoadOnModels(
     load: (...names: string[]) => Promise<unknown>;
   }>,
   paths: string[],
-  hydratedRoots: ReadonlySet<string> = new Set(),
+  knownAbsentMorphRoots: ReadonlyMap<object, ReadonlySet<string>> = new Map(),
 ): Promise<void> {
   if (models.length === 0 || paths.length === 0) {
     return;
@@ -115,7 +120,7 @@ async function eagerLoadOnModels(
   }
   if (byModel.size > 1) {
     await Promise.all(
-      [...byModel.values()].map((group) => eagerLoadOnModels(group, paths, hydratedRoots)),
+      [...byModel.values()].map((group) => eagerLoadOnModels(group, paths, knownAbsentMorphRoots)),
     );
     return;
   }
@@ -137,11 +142,11 @@ async function eagerLoadOnModels(
 
   await Promise.all(
     [...grouped.entries()].map(async ([head, nested]) => {
-      // A scoped-out eager result is already loaded even though its value is
-      // undefined. Do not query that root again during nested traversal.
-      const unloaded = hydratedRoots.has(head)
-        ? []
-        : models.filter((model) => model.loaded(head) === undefined);
+      // Skip only targets known absent for this model before retrieved observers.
+      // An observer may explicitly invalidate a previously present relation.
+      const unloaded = models.filter(
+        (model) => model.loaded(head) === undefined && !knownAbsentMorphRoots.get(model)?.has(head),
+      );
 
       if (unloaded.length > 0) {
         const first = unloaded[0];
@@ -614,6 +619,7 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
   ): Promise<ModelQueryResult<TModel, TCounts>[]> {
     const statics = modelStatics(this.modelClass);
     const models: AnyModel[] = [];
+    const knownAbsentMorphRoots = new Map<object, Set<string>>();
     const nested = this.eager.filter((item) => item.path.includes(".")).map((item) => item.path);
     const nestedRoots = new Set(
       this.eager.filter((item) => item.path.includes(".")).map((item) => item.name),
@@ -621,21 +627,31 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
 
     for (const row of rows) {
       const model = statics.newFromRecord(row, true) as AnyModel;
+      const absentMorphRoots = new Set<string>();
 
       for (const { name, relationQuery } of this.eager) {
-        model.setLoaded(name, relationQuery.hydrateEager(row, name, nestedRoots.has(name)));
+        const value = relationQuery.hydrateEager(row, name, nestedRoots.has(name));
+        model.setLoaded(name, value);
+        if (relationQuery.kind === "morphTo" && value === undefined) absentMorphRoots.add(name);
+        else absentMorphRoots.delete(name);
       }
 
+      if (absentMorphRoots.size > 0) knownAbsentMorphRoots.set(model, absentMorphRoots);
       models.push(model);
     }
 
-    await Promise.all(models.map((model) => runObservers(model as AnyModel, "retrieved")));
-
-    await eagerLoadOnModels(
-      models.filter(isLoadableModel),
-      nested,
-      new Set(this.eager.map((item) => item.name)),
+    await Promise.all(
+      models.map((model) => {
+        // Retrieved hooks can invalidate or materialize relations, including an
+        // absent target. Keep their existing reload semantics instead of caching absence.
+        if (getModelObservers(model.constructor)?.some((observer) => observer.retrieved)) {
+          knownAbsentMorphRoots.delete(model);
+        }
+        return runObservers(model as AnyModel, "retrieved");
+      }),
     );
+
+    await eagerLoadOnModels(models.filter(isLoadableModel), nested, knownAbsentMorphRoots);
     return models as unknown as ModelQueryResult<TModel, TCounts>[];
   }
 
