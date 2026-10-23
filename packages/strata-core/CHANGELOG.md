@@ -7,6 +7,7 @@
 - Preserve immutable protected write-hook outputs by merging observer changes into framework-owned values rather than mutating extension-owned results.
 - Fence invalidated array-cache fills and share one request correlation ID between context, logs and response middleware.
 - Expose optional one-based job attempts and encode/hydrate failed-job JSON/timestamps at the repository storage boundary for durable cross-driver recovery.
+- Hydrate only selected recovery columns so projection results retain their exact field shape.
 
 ## 2.2.51
 

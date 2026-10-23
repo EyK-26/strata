@@ -208,7 +208,8 @@ try {
   });
   const frozen = await FrozenOrder.create({ id: 103, reference: "frozen", status: "initial" });
   assert.equal((await orders.findByIdOrThrow(frozen.id)).status, "frozen-observer");
-  const failures = new FailedJobService(new FailedJobRepository());
+  const failureRepository = new FailedJobRepository();
+  const failures = new FailedJobService(failureRepository);
   const payload = { accented: "Préparation", nested: { count: 2 } };
   const failure = await failures.recordFailure({
     jobName: "owned-replay",
@@ -221,6 +222,21 @@ try {
   assert.ok(
     Math.abs(failure.failed_at.getTime() - Date.now()) < 5000,
     "Failure timestamps must retain the current UTC instant",
+  );
+  assert.deepEqual(
+    await failureRepository.findAll({
+      select: [{ kind: "column", table: "failed_job", column: "id" }],
+    }),
+    [{ id: failure.id }],
+  );
+  assert.deepEqual(
+    await failureRepository.findAll({
+      select: [
+        { kind: "literalText", value: "not JSON", as: "payload" },
+        { kind: "literalText", value: "not a date", as: "failed_at" },
+      ],
+    }),
+    [{ payload: "not JSON", failed_at: "not a date" }],
   );
   await failures.retry(failure.id, async (record) => {
     assert.deepEqual(record.payload, payload);
@@ -235,6 +251,7 @@ try {
       boundedRelations: 4,
       observerCasts: casts,
       immutableWriteOutputs: true,
+      recoveryProjections: true,
       durableReplay: true,
     }),
   );

@@ -21,16 +21,22 @@ class FailedJobRepository extends BaseRepository<FailedJobRecord, "id"> {
   }
 
   override async findAll(options: QueryOptions<FailedJobRecord> = {}): Promise<FailedJobRecord[]> {
-    return (await super.findAll(options)).map(hydrateFailure);
+    const rows = await super.findAll(options);
+    // Selections are driver projections. An alias named payload/failed_at need
+    // not represent stored JSON/a timestamp and must not be coerced as one.
+    return options.select?.length ? rows : rows.map(hydrateFailure);
   }
 }
 
 function hydrateFailure(row: FailedJobRecord): FailedJobRecord {
-  return {
-    ...row,
-    payload: typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload,
-    failed_at: row.failed_at instanceof Date ? row.failed_at : new Date(row.failed_at),
-  };
+  const result = { ...row };
+  if (typeof row.payload === "string") result.payload = JSON.parse(row.payload);
+  // A projection must retain exactly its selected fields; absent timestamps
+  // must not become fabricated Invalid Dates (or extra JSON null properties).
+  if ("failed_at" in row && !(row.failed_at instanceof Date)) {
+    result.failed_at = new Date(row.failed_at);
+  }
+  return result;
 }
 
 export { FailedJobRepository };

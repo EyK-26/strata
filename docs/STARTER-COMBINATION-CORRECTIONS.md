@@ -50,8 +50,9 @@ The retry acceptance also exposed a separate persistence defect: the failed-job
 repository passed logical JSON objects and Date values straight to SQLite. The
 repository now owns JSON/timestamp storage mapping and restores logical payloads
 and Dates for list/replay callbacks across supported SQL drivers. Admission still
-precedes deletion of the recovery record. Queue leases, wire envelopes and the
-at-least-once delivery contract are unchanged.
+precedes deletion of the recovery record. Hydration preserves selected-column
+projections without adding absent payload/timestamp fields. Queue leases, wire
+envelopes and the at-least-once delivery contract are unchanged.
 
 ## Validation and limits
 

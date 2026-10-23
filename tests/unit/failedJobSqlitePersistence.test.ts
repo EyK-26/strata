@@ -12,7 +12,8 @@ test("native SQLite stores and replays the declared JSON payload and failure tim
       await sql.unsafe(
         "CREATE TABLE failed_job(id INTEGER PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload TEXT NOT NULL,exception TEXT NOT NULL,failed_at DATETIME NOT NULL)",
       );
-      const service = new FailedJobService(new FailedJobRepository().withConnection(sql));
+      const repository = new FailedJobRepository().withConnection(sql);
+      const service = new FailedJobService(repository);
       const payload = { event: "orders.created", nested: { message: "Préparation", count: 3 } };
       const record = await service.recordFailure({
         jobName: "owned-fixture",
@@ -25,6 +26,21 @@ test("native SQLite stores and replays the declared JSON payload and failure tim
       const listed = await service.listRecent();
       expect(listed).toHaveLength(1);
       expect(listed[0]?.payload).toEqual(payload);
+      const projected = await repository.findAll({
+        select: [{ kind: "column", table: "failed_job", column: "id" }],
+      });
+      expect(projected.map((row) => ({ keys: Object.keys(row).sort(), id: row.id }))).toEqual([
+        { keys: ["id"], id: record.id },
+      ]);
+      const aliases = await repository.findAll({
+        select: [
+          { kind: "literalText", value: "not JSON", as: "payload" },
+          { kind: "literalText", value: "not a date", as: "failed_at" },
+        ],
+      });
+      expect(JSON.stringify(aliases)).toBe(
+        JSON.stringify([{ payload: "not JSON", failed_at: "not a date" }]),
+      );
       await service.retry(record.id, async (recovered) => {
         expect(recovered.job_id).toBe("stable-logical-id");
         expect(recovered.payload).toEqual(payload);
