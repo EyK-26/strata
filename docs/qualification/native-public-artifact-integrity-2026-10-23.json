@@ -1,0 +1,206 @@
+{
+  "status": "BOUNDED_BROWSER_CONTROLS_PASSED",
+  "date": "2026-10-23",
+  "bun": "1.4.3",
+  "revision": "c6da4a4d3010e5553438c60f6bd76d981976867c",
+  "chromium": "156.0.8078.4",
+  "casesExecuted": 7,
+  "exitCode": 0,
+  "cases": [
+    {
+      "name": "native-plain",
+      "state": {
+        "executed": "tampered",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(12, 34, 56)",
+        "images": [
+          {
+            "width": 7,
+            "height": 5
+          }
+        ],
+        "scripts": [
+          {
+            "integrity": "",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "browserErrorCount": 0,
+      "assetRequests": 3,
+      "assetCredentialsObserved": false
+    },
+    {
+      "name": "native-source-integrity",
+      "state": {
+        "executed": "tampered",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(12, 34, 56)",
+        "images": [
+          {
+            "width": 7,
+            "height": 5
+          }
+        ],
+        "scripts": [
+          {
+            "integrity": "",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "browserErrorCount": 0,
+      "assetRequests": 3,
+      "assetCredentialsObserved": false
+    },
+    {
+      "name": "valid",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(12, 34, 56)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-DWK+Mr0Z7APGIF5TMQ5w/GODlNsO24GRZBpaCZF0lug=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "sha256-wx19qlSr3ADvgVHCoOg+0Kw2u3o+IcwkNrVBfYB6z7Y=",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "browserErrorCount": 0,
+      "assetRequests": 2,
+      "assetCredentialsObserved": false
+    },
+    {
+      "name": "script-tamper",
+      "state": {
+        "executed": null,
+        "api": null,
+        "chunk": null,
+        "color": "rgb(12, 34, 56)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-DWK+Mr0Z7APGIF5TMQ5w/GODlNsO24GRZBpaCZF0lug=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "sha256-wx19qlSr3ADvgVHCoOg+0Kw2u3o+IcwkNrVBfYB6z7Y=",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "browserErrorCount": 1,
+      "assetRequests": 2,
+      "assetCredentialsObserved": false
+    },
+    {
+      "name": "style-tamper",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": null,
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-DWK+Mr0Z7APGIF5TMQ5w/GODlNsO24GRZBpaCZF0lug=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "sha256-wx19qlSr3ADvgVHCoOg+0Kw2u3o+IcwkNrVBfYB6z7Y=",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "browserErrorCount": 1,
+      "assetRequests": 2,
+      "assetCredentialsObserved": false
+    },
+    {
+      "name": "no-cors",
+      "state": {
+        "executed": null,
+        "api": null,
+        "chunk": null,
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-DWK+Mr0Z7APGIF5TMQ5w/GODlNsO24GRZBpaCZF0lug=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": [
+          {
+            "integrity": "sha256-wx19qlSr3ADvgVHCoOg+0Kw2u3o+IcwkNrVBfYB6z7Y=",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "browserErrorCount": 4,
+      "assetRequests": 2,
+      "assetCredentialsObserved": false
+    },
+    {
+      "name": "split-module",
+      "state": {
+        "executed": "original",
+        "api": "application-origin",
+        "chunk": "tampered",
+        "color": "rgb(0, 0, 0)",
+        "images": [],
+        "scripts": [
+          {
+            "integrity": "sha256-+snlRmqIcO3aXkqnGrk0QTQHE6XMpC4eDrbiJa4JU2U=",
+            "crossOrigin": "anonymous"
+          }
+        ],
+        "styles": []
+      },
+      "browserErrorCount": 0,
+      "assetRequests": 2,
+      "assetCredentialsObserved": false
+    }
+  ],
+  "applicationApiRequests": 5,
+  "allApplicationApiRequestsHadFixtureCookie": true,
+  "probeSha256": "3bf7e729638ec801da0f771e521ec4b4da345c956cdcb12220e6cbfea4df83a7",
+  "rawReceiptSha256": "a153f83bb8ae7642b17254029e2980489fbe5f95a93652f552ad39bdd2258028",
+  "frameworkRuntimeChanged": false,
+  "publishedFrameworkProfilesAdded": 0,
+  "limitations": [
+    "Native HTML omitted supplied integrity; altered native entry executed.",
+    "Valid entry integrity did not protect altered dynamic import.",
+    "Loopback SDK/browser characterization only; no provider, TLS, broad cookie, cached-client or lossless-delivery acceptance."
+  ],
+  "fixtureCorrections": [
+    "Browser-only DOM expression isolated from server TypeScript globals.",
+    "Browser expression explicitly invoked; failed attempt retained."
+  ]
+}
