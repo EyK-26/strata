@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
 import type { InitializedAppContext } from "@getstrata/bootstrap/context";
+import { routeParams, toRouteRequest } from "@getstrata/bootstrap/web/routing";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
@@ -115,6 +116,17 @@ const server = createWebServer({
     },
     "/things/:id": handler,
     "/posted/:id": { POST: handler },
+    "/encoded/:id": (request: BunRequest<"/encoded/:id">) => {
+      const nativeParams = request.params;
+      const native = { ...request.params };
+      const copied = routeParams(request);
+      assert.equal(request.params, nativeParams);
+      assert.deepEqual({ ...request.params }, native);
+      assert.equal(toRouteRequest(request), request);
+      const first = { ...request.params };
+      assert.equal(toRouteRequest(request), request);
+      return Response.json({ native, copied, first, second: request.params });
+    },
   },
   onRequest(request) {
     admitted = request;
@@ -157,6 +169,24 @@ try {
     assert.deepEqual(await (await fetch(new URL(path, server.url), { method })).json(), {
       id: "12",
       port: server.port,
+    });
+  }
+  for (const [encoded, id] of [
+    ["42", "42"],
+    ["caf%C3%A9", "café"],
+    ["100%25", "100%"],
+    ["%252F", "%2F"],
+    ["a%2Fb", "a/b"],
+    ["%2525", "%25"],
+    ["%25E0%25A4%25A", "%E0%A4%A"],
+  ]) {
+    const response = await fetch(new URL(`/encoded/${encoded}`, server.url));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      native: { id },
+      copied: { id },
+      first: { id },
+      second: { id },
     });
   }
   assert.equal(template.bodyUsed, false);

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { toRouteRequest, wrapSecuredRouteModelByKey } from "@getstrata/bootstrap/web/routing";
+import {
+  routeParams,
+  toRouteRequest,
+  wrapSecuredRouteModelByKey,
+} from "@getstrata/bootstrap/web/routing";
 import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -66,11 +70,28 @@ describe("bootstrap web routing", () => {
       },
     });
 
-    const response = await fetch(`http://localhost:${server.port}/forum/general/welcome`);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ category: "general", slug: "welcome" });
+    try {
+      const response = await fetch(`http://localhost:${server.port}/forum/general/welcome`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ category: "general", slug: "welcome" });
 
-    server.stop(true);
+      for (const [encoded, slug] of [
+        ["caf%C3%A9", "café"],
+        ["100%25", "100%"],
+        ["%252F", "%2F"],
+        ["a%2Fb", "a/b"],
+        ["%2525", "%25"],
+        ["%25E0%25A4%25A", "%E0%A4%A"],
+      ]) {
+        const encodedResponse = await fetch(
+          `http://localhost:${server.port}/forum/general/${encoded}`,
+        );
+        expect(encodedResponse.status).toBe(200);
+        expect(await encodedResponse.json()).toEqual({ category: "general", slug });
+      }
+    } finally {
+      await server.stop(true);
+    }
   });
 
   test("wrapSecuredRouteModelByKey returns a styled HTML 404 for a missing slug", async () => {
@@ -143,5 +164,47 @@ describe("bootstrap web routing", () => {
     expect(await response.json()).toEqual({ id: "42" });
 
     server.stop(true);
+  });
+
+  test("route adaptation preserves Bun's decoded values and is safe to repeat", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      routes: {
+        "/items/:id": (request) => {
+          const native = { ...request.params };
+          const copied = routeParams(request);
+          expect(request.params).toEqual(native);
+          const first = toRouteRequest<{ id: string }>(request);
+          expect(first).toBe(request);
+          const firstParams = { ...first.params };
+          const second = toRouteRequest<{ id: string }>(request);
+          expect(second).toBe(request);
+          return Response.json({ native, copied, first: firstParams, second: second.params });
+        },
+      },
+    });
+    try {
+      for (const [encoded, id] of [
+        ["42", "42"],
+        ["caf%C3%A9", "café"],
+        ["100%25", "100%"],
+        ["%252F", "%2F"],
+        ["a%2Fb", "a/b"],
+        ["%2525", "%25"],
+        ["%25E0%25A4%25A", "%E0%A4%A"],
+      ]) {
+        const response = await fetch(new URL(`/items/${encoded}`, server.url));
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          native: { id },
+          copied: { id },
+          first: { id },
+          second: { id },
+        });
+      }
+    } finally {
+      await server.stop(true);
+    }
   });
 });

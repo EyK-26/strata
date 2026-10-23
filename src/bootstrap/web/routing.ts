@@ -14,7 +14,9 @@ export function routeParams(request: Request): Record<string, string> {
 
   if (raw && typeof raw === "object") {
     for (const [key, value] of Object.entries(raw)) {
-      normalized[key] = decodeURIComponent(String(value));
+      // Bun owns URL decoding; a second pass changes literal percent sequences
+      // and throws on valid parameters such as the decoded value `100%`.
+      normalized[key] = String(value);
     }
   }
 
@@ -22,7 +24,7 @@ export function routeParams(request: Request): Record<string, string> {
 }
 
 /**
- * Attach decoded route params to Bun's native Request for RouteRequest handlers.
+ * Copy Bun's already decoded route params onto its native Request for RouteRequest handlers.
  * Mutates the request in place so instanceof Request and Bun internals stay valid.
  */
 export function toRouteRequest<TParams extends Record<string, string>>(
