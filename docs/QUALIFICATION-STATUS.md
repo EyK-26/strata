@@ -2,6 +2,30 @@
 
 Baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
 
+## Native route ownership — published 2.2.53
+
+The [native parameter audit](NATIVE-ROUTE-PARAMETERS.md) records the compatible
+correction from #350: Bun already decodes route parameters, so bootstrap preserves
+literal percent and encoded-looking identifiers before lookup/authorization.
+**All 159 established exact-published profiles pass with zero failures/skips**,
+including the seven added native parameter controls after all original assertions.
+The separate **twelve-profile 2.2.52→2.2.53→2.2.52 exact-lock rollback** passes;
+source/build hashes and committed rows, including post-upgrade rows, survive.
+
+The release full gate passes 2,716 unit/integration tests with three unchanged
+exclusions and zero failures; all 191 E2E pass without failures/skips. Actual
+merged-main CI/security passes 2,717 tests with two existing Linux exclusions,
+all 191 E2E and a clean 91-package audit. Coverage remains 151 enforced/272 exempt.
+Trusted publication and all five exact packages are verified. [Sanitized evidence](qualification/native-route-2.2.53.json)
+retains actual identities, counts, input/log hashes and cleanup receipts.
+
+Every fresh SQL/Docker metadata field and owned Redis/filesystem baseline is
+restored. The [M1 startup/ownership proposal](M1-STARTUP-VALIDATION-PROPOSAL.md)
+continues design only, with explicit guarantees/defects/uncertainties; it introduces
+no breaking implementation or new runtime API. Native asset/provider/browser/major
+migration gates remain. Shop adoption stays manually held for #257; timer stays off.
+Earlier audits remain intact.
+
 ## Starter combinations — published 2.2.52
 
 The [starter-combination audit](STARTER-COMBINATION-CORRECTIONS.md) records all
