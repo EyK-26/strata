@@ -1,0 +1,260 @@
+[
+  {
+    "name": "response value",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes = defineApplicationRoutes()({\"/health\":new Response(\"ok\")});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "native literal parameter and server inference",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes = defineApplicationRoutes()({\"/items/:id\":(request,server)=>{const id:string=request.params.id; const ip=server.requestIP(request); return Response.json({id,ip});}});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "native method callback inference",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes = defineApplicationRoutes()({\"/items/:id\":{GET:request=>Response.json({id:request.params.id}),POST:async(request,server)=>Response.json({id:request.params.id,port:server.port})}});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "plain Request callback remains assignable",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes = defineApplicationRoutes()({\"/plain\":(request:Request)=>new Response(request.method)});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "no argument callback remains assignable",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes = defineApplicationRoutes()({\"/plain\":()=>new Response(\"ok\")});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "async Response callback",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes = defineApplicationRoutes()({\"/async\":async()=>new Response(\"ok\")});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "all seven SDK methods",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes = defineApplicationRoutes()({\"/methods\":{GET:new Response(),POST:new Response(),PUT:new Response(),DELETE:new Response(),PATCH:new Response(),HEAD:new Response(),OPTIONS:new Response()}});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "readonly method value",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nconst method={GET:new Response()} as const; export const routes=defineApplicationRoutes()({\"/readonly\":method});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "BunFile",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":Bun.file(\"private.txt\")});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "native HTML bundle",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nimport type { HTMLBundle } from \"bun\"; declare const bundle:HTMLBundle;\nexport const routes=defineApplicationRoutes()({\"/invalid\":bundle});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "native directory",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":{dir:\"private\"}});\n",
+    "expectedCodes": [2353]
+  },
+  {
+    "name": "native false fallback",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":false});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "array",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":[]});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "string",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":\"not a response\"});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "empty method map",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":{}});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "lowercase method",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":{get:()=>new Response()}});\n",
+    "expectedCodes": [2353]
+  },
+  {
+    "name": "unsupported CONNECT method",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":{CONNECT:()=>new Response()}});\n",
+    "expectedCodes": [2353]
+  },
+  {
+    "name": "string callback result",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":()=>\"not a response\"});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "nullable callback result",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":()=>null});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "void async callback",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":async()=>{}});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "artifact metadata callback result",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/invalid\":()=>({url:\"https://public.example/entry.js\"})});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "missing native route parameter",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/items/:id\":request=>new Response(request.params.missing)});\n",
+    "expectedCodes": [2339]
+  },
+  {
+    "name": "native parameter remains string",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/items/:id\":request=>{const id:number=request.params.id;return Response.json({id});}});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "SDK server data stays parameterized",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes<{session:string}>()({\"/items/:id\":(request,server)=>{server.upgrade(request,{data:{session:42}});return new Response();}});\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "relative route alias needs major migration",
+    "classification": "proposed-rejection",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"items\":new Response()});\n",
+    "expectedCodes": [2353]
+  },
+  {
+    "name": "named mixed method object requires runtime key validation",
+    "classification": "known-type-limit",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nconst value={GET:()=>new Response(),dir:\"private\"}; export const routes=defineApplicationRoutes()({\"/mixed\":value});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "query-bearing route needs runtime canonical validation",
+    "classification": "known-type-limit",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/items?admin=1\":new Response()});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "API cache and explicit MFA document narrowing",
+    "classification": "proposed-positive",
+    "source": "import type { ApiRouteContext } from \"./proposal\";\nexport function route(context:ApiRouteContext,request:Request){if(context.documents)return context.documents.render(\"auth/mfa-challenge\",{}, {request}); return context.cachedJson(\"key\",async()=>({ok:true}),[],request);}\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "web cache remains available",
+    "classification": "proposed-positive",
+    "source": "import type { WebRouteContext } from \"./proposal\";\nexport function route(context:WebRouteContext,request:Request){return context.cachedJson(\"key\",async()=>({ok:true}),[],request);}\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "web documents reuse existing renderer contract",
+    "classification": "proposed-positive",
+    "source": "import type { WebRouteContext } from \"./proposal\";\nexport function route(context:WebRouteContext,request:Request){return context.documents.renderHtmx(\"index\",{}, {request,fragment:\"fragment\",layout:false});}\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "API documents are not always available",
+    "classification": "proposed-rejection",
+    "source": "import type { ApiRouteContext } from \"./proposal\";\nexport function route(context:ApiRouteContext){return context.documents.render(\"auth/mfa-challenge\");}\n",
+    "expectedCodes": [18048]
+  },
+  {
+    "name": "web requires a real document capability",
+    "classification": "proposed-rejection",
+    "source": "import type { ApiRouteContext,WebRouteContext } from \"./proposal\";\ndeclare const api:ApiRouteContext; export const web:WebRouteContext=api;\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "cache loader remains asynchronous",
+    "classification": "proposed-rejection",
+    "source": "import type { WebRouteContext } from \"./proposal\";\nexport function route(context:WebRouteContext){return context.cachedJson(\"key\",()=>\"not a Promise\");}\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "renderer response contract remains real",
+    "classification": "proposed-rejection",
+    "source": "import type {DocumentRenderer} from \"./proposal\";\nexport const documents:DocumentRenderer={render:async()=>\"not a Response\",renderHtmx:async()=>new Response()};\n",
+    "expectedCodes": [2322]
+  },
+  {
+    "name": "unknown manifest crosses a runtime validation boundary",
+    "classification": "proposed-positive",
+    "source": "import { createPublicArtifactResolver } from \"./proposal\";\ndeclare const manifest:unknown; export const resolver=createPublicArtifactResolver(manifest,{origin:\"https://public.example\",releasePrefix:\"releases/build\"}); export const entry=resolver.resolve(\"app.js\");\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "origin and manifest validity require runtime validation",
+    "classification": "known-type-limit",
+    "source": "import { createPublicArtifactResolver } from \"./proposal\";\nexport const resolver=createPublicArtifactResolver({invalid:true},{origin:\"http://user:pass@invalid.example/path?query\",releasePrefix:\"../escape\"});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "readonly manifest output",
+    "classification": "proposed-rejection",
+    "source": "import type {PublicArtifactManifest} from \"./proposal\";\ndeclare const manifest:PublicArtifactManifest; manifest.artifacts[\"app\"]={relativePath:\"app.js\",mediaType:\"text/javascript\",bytes:1,integrity:\"sha256-x\"};\n",
+    "expectedCodes": [2542]
+  },
+  {
+    "name": "readonly resolver metadata",
+    "classification": "proposed-rejection",
+    "source": "import { createPublicArtifactResolver } from \"./proposal\";\ndeclare const manifest:unknown; const entry=createPublicArtifactResolver(manifest,{origin:\"https://public.example\",releasePrefix:\"releases/build\"}).resolve(\"app.js\"); entry.url=\"https://other.example/app.js\";\n",
+    "expectedCodes": [2540]
+  },
+  {
+    "name": "current broad 2.x route map is an inventory observation",
+    "classification": "known-type-limit",
+    "source": "import type {AppRouteMap} from \"@getstrata/bootstrap/contracts\";\nexport const routes:AppRouteMap={\"relative\":Bun.file(\"private\"),\"/bad\":{get:false,dir:\"private\"}};\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "current explicit WebSocket upgrade fallback is retained",
+    "classification": "current-compatibility",
+    "source": "import type {WebServerOptions} from \"@getstrata/bootstrap/web/server\";\nexport const options:WebServerOptions<{session:string}>={port:0,handle(request,server){server.upgrade(request,{data:{session:\"example\"}});return undefined;}};\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "guarded file Response stays supported",
+    "classification": "proposed-positive",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/private\":()=>new Response(Bun.file(\"private.txt\"))});\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "pre-collected object spread loses collision evidence",
+    "classification": "known-type-limit",
+    "source": "import { defineApplicationRoutes } from \"./proposal\";\nconst first=defineApplicationRoutes()({\"/same\":new Response(\"first\")}); const second=defineApplicationRoutes()({\"/same\":new Response(\"second\")}); export const routes={...first,...second};\n",
+    "expectedCodes": []
+  },
+  {
+    "name": "present optional method undefined needs runtime validation",
+    "classification": "known-type-limit",
+    "source": "import {defineApplicationRoutes} from \"./proposal\";\nexport const routes=defineApplicationRoutes()({\"/methods\":{GET:undefined,POST:()=>new Response()}});\n",
+    "expectedCodes": []
+  }
+]
