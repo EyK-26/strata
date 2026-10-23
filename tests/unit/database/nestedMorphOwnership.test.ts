@@ -301,3 +301,26 @@ test("lazy nested loads keep the existing typed relation methods and private sta
     resetSqlDialect();
   }
 });
+
+test("an already eager flat morph record can load a nested owner without refreshing the cached target", async () => {
+  const f = await fixture();
+  try {
+    const rows = await f.CommentModel.query().with("subject").orderBy({ column: "id" }).get();
+    const row = rows[0];
+    if (!row) throw new Error("Expected the first comment.");
+    expect(row.loaded("subject")).toEqual({ id: 1, owner_id: 1 });
+    await f.Article.repository<Subject, "id">().updateById(1, { owner_id: 2 });
+    f.queries.length = 0;
+    await row.load("subject.owner");
+    const subject = row.loaded<InstanceType<typeof f.Article>>("subject");
+    expect(subject).toBeInstanceOf(f.Article);
+    expect(subject?.toObject()).toEqual({ id: 1, owner_id: 1 });
+    const owner = subject?.loaded<InstanceType<typeof f.ArticleOwner>>("owner");
+    expect(owner?.kind()).toBe("article");
+    expect(owner?.get("name")).toBe("article-1");
+    expect(f.queries).toHaveLength(1);
+  } finally {
+    f.database.close();
+    resetSqlDialect();
+  }
+});

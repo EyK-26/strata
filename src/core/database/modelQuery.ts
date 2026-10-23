@@ -168,6 +168,26 @@ async function eagerLoadOnModels(
         return;
       }
 
+      for (const model of models) {
+        const value = model.loaded(head);
+        if (
+          value &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          !isLoadableModel(value)
+        ) {
+          const relationQuery = resolveModelRelation(model, head);
+          if (relationQuery.kind === "morphTo") {
+            // A prior flat eager load caches records. Upgrade only when the
+            // caller requests traversal, using those bytes without a refresh.
+            model.setLoaded(
+              head,
+              relationQuery.hydrateEager({ ...model.toObject(), [head]: value }, head, true),
+            );
+          }
+        }
+      }
+
       const children = models.flatMap((model) => {
         const loaded = model.loaded(head);
         return Array.isArray(loaded) ? loaded : loaded ? [loaded] : [];

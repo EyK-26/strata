@@ -233,6 +233,8 @@ targets remain absent and are not queried again during the same eager traversal.
 Flat eager `with("subject")` keeps its existing plain-record result; flat lazy
 `load("subject")` keeps its existing concrete model result. Registering both a flat
 and nested path uses nested hydration regardless of registration order.
+Requesting `load("subject.owner")` after a flat eager load upgrades that cached
+record for traversal without refreshing its attributes from the database.
 
 String related models (`belongsTo("Category")`, `hasMany("Product")`) use the class name or `$morphClass` registered at startup. Generated apps await framework model discovery before handling requests. `registerModelClass("catalog-category", Category)` remains available for a distinct alias; keep alternate aliases in startup code before any boot hook that uses them.
 
