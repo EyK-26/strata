@@ -23,6 +23,7 @@ a guarantee for every combination of optional features.
   fields receive a subsequent write transformation before insertion; unchanged
   fields are not cast twice. Cancellation prevents insertion and any subsequent
   edit transformation; trusted forced attributes retain priority.
+  Framework-owned merges preserve immutable results returned by custom write hooks.
 - Invalidating array-cache keys, prefixes, tags or the whole store did not revoke
   pending loaders. Retired callers may receive their own result, but cannot
   republish it or remove the ownership of a replacement fill.
@@ -49,8 +50,9 @@ The retry acceptance also exposed a separate persistence defect: the failed-job
 repository passed logical JSON objects and Date values straight to SQLite. The
 repository now owns JSON/timestamp storage mapping and restores logical payloads
 and Dates for list/replay callbacks across supported SQL drivers. Admission still
-precedes deletion of the recovery record. Queue leases, wire envelopes and the
-at-least-once delivery contract are unchanged.
+precedes deletion of the recovery record. Hydration preserves selected-column
+projections without adding absent payload/timestamp fields. Queue leases, wire
+envelopes and the at-least-once delivery contract are unchanged.
 
 ## Validation and limits
 

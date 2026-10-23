@@ -195,7 +195,21 @@ try {
   );
   assert.equal(forced.get("status"), "trusted");
   assert.equal(casts, 3);
-  const failures = new FailedJobService(new FailedJobRepository());
+  class FrozenOrder extends Order {
+    protected static override async dehydrateAttributes(attributes: Record<string, unknown>) {
+      return Object.freeze({ ...attributes });
+    }
+  }
+  registerModelRepository(FrozenOrder, orders);
+  FrozenOrder.observe({
+    creating(model) {
+      model.mergeAttributes({ status: "frozen-observer" });
+    },
+  });
+  const frozen = await FrozenOrder.create({ id: 103, reference: "frozen", status: "initial" });
+  assert.equal((await orders.findByIdOrThrow(frozen.id)).status, "frozen-observer");
+  const failureRepository = new FailedJobRepository();
+  const failures = new FailedJobService(failureRepository);
   const payload = { accented: "Préparation", nested: { count: 2 } };
   const failure = await failures.recordFailure({
     jobName: "owned-replay",
@@ -209,6 +223,27 @@ try {
     Math.abs(failure.failed_at.getTime() - Date.now()) < 5000,
     "Failure timestamps must retain the current UTC instant",
   );
+  // Bun PostgreSQL attaches statement metadata to its result array. Compare the
+  // complete selected rows without treating SDK result metadata as row fields.
+  assert.deepEqual(
+    Array.from(
+      await failureRepository.findAll({
+        select: [{ kind: "column", table: "failed_job", column: "id" }],
+      }),
+    ),
+    [{ id: failure.id }],
+  );
+  assert.deepEqual(
+    Array.from(
+      await failureRepository.findAll({
+        select: [
+          { kind: "literalText", value: "not JSON", as: "payload" },
+          { kind: "literalText", value: "not a date", as: "failed_at" },
+        ],
+      }),
+    ),
+    [{ payload: "not JSON", failed_at: "not a date" }],
+  );
   await failures.retry(failure.id, async (record) => {
     assert.deepEqual(record.payload, payload);
     assert.equal(record.job_id, "same-id");
@@ -221,6 +256,8 @@ try {
       offsetPages: "attached",
       boundedRelations: 4,
       observerCasts: casts,
+      immutableWriteOutputs: true,
+      recoveryProjections: true,
       durableReplay: true,
     }),
   );
