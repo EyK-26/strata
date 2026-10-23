@@ -401,3 +401,26 @@ test("retrieved observers can materialize an initially absent morph target", asy
     resetSqlDialect();
   }
 });
+
+test("retrieved observer accessors are evaluated once for each normal model hydration", async () => {
+  const f = await fixture();
+  try {
+    let reads = 0;
+    let calls = 0;
+    f.CommentModel.observe({
+      get retrieved() {
+        reads++;
+        return () => {
+          calls++;
+        };
+      },
+    });
+    const rows = await f.CommentModel.query().orderBy({ column: "id" }).get();
+    expect(rows).toHaveLength(4);
+    expect(calls).toBe(4);
+    expect(reads).toBe(4);
+  } finally {
+    f.database.close();
+    resetSqlDialect();
+  }
+});
