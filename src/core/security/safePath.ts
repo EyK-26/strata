@@ -1,20 +1,16 @@
 import { isAbsolute, resolve, sep } from "node:path";
 
-function assertPathUnderRoot(rootDirectory: string, userPath: string): string {
-  const trimmed = userPath.trim();
-
-  if (trimmed.length === 0) {
+function resolvePathUnderRoot(rootDirectory: string, path: string): string {
+  if (path.length === 0) {
     throw new Error("Path must not be empty.");
   }
 
-  if (trimmed.includes("\0")) {
+  if (path.includes("\0")) {
     throw new Error("Path must not contain a null byte.");
   }
 
   const root = resolve(rootDirectory);
-  const candidate = isAbsolute(trimmed)
-    ? resolve(trimmed)
-    : resolve(root, trimmed.replace(/^\/+/u, ""));
+  const candidate = isAbsolute(path) ? resolve(path) : resolve(root, path.replace(/^\/+/u, ""));
 
   if (candidate === root || candidate.startsWith(`${root}${sep}`)) {
     return candidate;
@@ -23,9 +19,13 @@ function assertPathUnderRoot(rootDirectory: string, userPath: string): string {
   throw new Error("Path escapes the storage root.");
 }
 
-/** Map a URL pathname onto a document root. Leading slashes are not filesystem-absolute. */
+function assertPathUnderRoot(rootDirectory: string, userPath: string): string {
+  return resolvePathUnderRoot(rootDirectory, userPath.trim());
+}
+
+/** Decode a URL pathname once; leading slashes are not filesystem-absolute. */
 function assertUrlPathUnderRoot(rootDirectory: string, urlPathname: string): string {
-  return assertPathUnderRoot(rootDirectory, urlPathname.replace(/^\/+/u, ""));
+  return resolvePathUnderRoot(rootDirectory, decodeURIComponent(urlPathname).replace(/^\/+/u, ""));
 }
 
 export { assertPathUnderRoot, assertUrlPathUnderRoot };
