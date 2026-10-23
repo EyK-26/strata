@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.53
+
+- Preserve Bun-native decoded route parameters without decoding them a second time. Literal percent identifiers remain valid, and encoded-looking identifiers retain the key Bun supplies before binding and authorization.
+- Align the core requirement with 2.2.53. Native asset admission/delivery and mixed HTTP/WebSocket reporting limitations remain unchanged.
+
 ## 2.2.52
 
 - Share response policy and observation middleware for explicitly public application documents without adding auth/tenant requirements.
