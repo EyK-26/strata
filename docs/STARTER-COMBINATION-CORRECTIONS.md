@@ -60,9 +60,22 @@ Committed regressions cover native SQLite, observer/cast ordering, cancellation,
 forced fields, cache fill ownership, correlation and bounded relation scopes and
 query counts. The installed-consumer matrix contains 24 profiles: three ORM,
 nine signed OIDC/MFA, six built frontend/HTTP and six synchronous/Redis webhook
-profiles across SQLite, MySQL and Postgres. The matrix and full mandatory gate
-must pass on the final release tree. Exact-published 2.2.52 qualification and
-resource restoration are pending; no publication acceptance is claimed here.
+profiles across SQLite, MySQL and Postgres. The complete release source gate
+passed **2,715 unit/integration tests**, with
+three unchanged exclusions (two MySQL/RLS exclusions and Linux reusePort on macOS),
+zero failures, and **191 E2E tests** with zero failures/skips. Coverage remains
+151 enforced/272 exempt. All package/export/type/generator/API-only OpenAPI, extras
+and SPA checks pass. The exact merged main tree equals the validated tree.
+
+Published **2.2.52** is verified through the full trusted release workflow and all
+five exact registry package identities. **159 published profiles executed and
+passed**, zero failures/skips: all 134 historical profiles, the 24 installed
+compositions and one five-case public cache profile. A separate **twelve-profile
+2.2.51→2.2.52→2.2.51 upgrade/exact-lock rollback rehearsal** passes. All captured
+SQL/Docker metadata is restored; exact owned Redis namespaces and the receipted
+UUID scratch root are cleaned, with unknown resources untouched. The timer stays
+off and shop adoption remains held. [Sanitized evidence](qualification/starter-combinations-2.2.52.json)
+records actual counts, identities, input/log hashes and the retained failures.
 Historical assertions, skips, coverage boundaries and failed logs are retained.
 The historical generator hash manifests are unchanged. Eleven reviewed literal
 text changes have exact before/after hashes, occurrence checks and a complete

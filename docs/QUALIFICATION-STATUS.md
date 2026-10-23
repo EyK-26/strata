@@ -2,6 +2,26 @@
 
 Baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
 
+## Starter combinations — published 2.2.52
+
+The [starter-combination audit](STARTER-COMBINATION-CORRECTIONS.md) records all
+nine independently reproduced reports #337–#345 and the failed-job persistence
+defect exposed by terminal recovery. **159 exact-published profiles pass**, zero
+failures/skips, retaining all 134 established profiles and adding 24 native
+compositions plus a five-case cache profile. The separate **twelve-profile
+2.2.51→2.2.52→2.2.51 upgrade/exact-lock rollback rehearsal** passes. The source gate
+passes **2,715 unit/integration tests**, three unchanged exclusions, zero failures,
+and all **191 E2E** with no failures/skips. Coverage remains 151 enforced/272 exempt.
+[Sanitized evidence](qualification/starter-combinations-2.2.52.json) retains actual
+counts, package/PR/merge/tree identities, input/log hashes and earlier failures.
+
+All captured SQL/Docker metadata and owned Redis/filesystem resources returned to
+baseline. Native opaque assets remain the selected explicit-public-origin major
+design; native pipeline and mixed HTTP/WebSocket limits are unchanged. Existing
+customized apps need deliberate generated-source adoption. Shop adoption remains
+**manually held for #257** and the timer remains **off**. Earlier audits remain
+intact; this documentation authorizes no deployment or breaking implementation.
+
 ## Compatible quality batch — published 2.2.51
 
 The [quality-batch audit](QUALITY-BATCH-2.2.51.md) records **134 exact-published
