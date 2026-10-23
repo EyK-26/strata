@@ -195,6 +195,19 @@ try {
   );
   assert.equal(forced.get("status"), "trusted");
   assert.equal(casts, 3);
+  class FrozenOrder extends Order {
+    protected static override async dehydrateAttributes(attributes: Record<string, unknown>) {
+      return Object.freeze({ ...attributes });
+    }
+  }
+  registerModelRepository(FrozenOrder, orders);
+  FrozenOrder.observe({
+    creating(model) {
+      model.mergeAttributes({ status: "frozen-observer" });
+    },
+  });
+  const frozen = await FrozenOrder.create({ id: 103, reference: "frozen", status: "initial" });
+  assert.equal((await orders.findByIdOrThrow(frozen.id)).status, "frozen-observer");
   const failures = new FailedJobService(new FailedJobRepository());
   const payload = { accented: "Préparation", nested: { count: 2 } };
   const failure = await failures.recordFailure({
@@ -221,6 +234,7 @@ try {
       offsetPages: "attached",
       boundedRelations: 4,
       observerCasts: casts,
+      immutableWriteOutputs: true,
       durableReplay: true,
     }),
   );

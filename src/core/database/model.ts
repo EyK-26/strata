@@ -470,13 +470,19 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     // need another write transformation; unchanged values must never be cast
     // twice. Trusted relationship/tenant keys retain their original priority.
     const edits = changedAttributes(pending.attributes, beforeObservers);
-    for (const key of Object.keys(forced)) delete edits[key];
+    const forcedKeys = new Set(Object.keys(forced));
+    for (const key of forcedKeys) delete edits[key];
+    let finalPayload = payload;
     if (Object.keys(edits).length > 0) {
       const changed = await statics.dehydrateAttributes(edits);
-      for (const key of Object.keys(forced)) delete changed[key];
-      Object.assign(payload, changed);
+      // Hook results belong to the extension and may be immutable. Filter and
+      // combine into our own payload instead of deleting/assigning its fields.
+      const writeEdits = Object.fromEntries(
+        Object.entries(changed).filter(([key]) => !forcedKeys.has(key)),
+      );
+      finalPayload = { ...payload, ...writeEdits };
     }
-    const record = await repository.create(payload as MutationValues<object>);
+    const record = await repository.create(finalPayload as MutationValues<object>);
     const created = statics.fromRecord(record, repository, true) as AnyModel;
     await runObservers(created, "created");
     await runObservers(created, "saved");

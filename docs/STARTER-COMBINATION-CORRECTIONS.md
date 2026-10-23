@@ -23,6 +23,7 @@ a guarantee for every combination of optional features.
   fields receive a subsequent write transformation before insertion; unchanged
   fields are not cast twice. Cancellation prevents insertion and any subsequent
   edit transformation; trusted forced attributes retain priority.
+  Framework-owned merges preserve immutable results returned by custom write hooks.
 - Invalidating array-cache keys, prefixes, tags or the whole store did not revoke
   pending loaders. Retired callers may receive their own result, but cannot
   republish it or remove the ownership of a replacement fill.
