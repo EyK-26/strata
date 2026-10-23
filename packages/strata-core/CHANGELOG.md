@@ -1,5 +1,11 @@
 # @getstrata/core changelog
 
+## 2.2.51
+
+- Decode static URL pathnames exactly once while preserving generic filesystem path semantics, malformed/traversal rejection and literal percent/space names.
+- Load explicit nested polymorphic paths using their concrete model and nested relation owners, batching by constructor identity while preserving flat eager records, flat lazy models, private state and visibility scopes.
+- Preserve retrieved-observer invalidation/materialization and once-per-hydration callback getter dispatch; cache bookkeeping inspects only the existing observer list.
+
 ## 2.2.50
 
 - Align the lockstep version with the bootstrap HTTP-only drain-reporting correction. Core runtime, ORM, transaction, lifecycle coordinator and public/protected APIs are unchanged.

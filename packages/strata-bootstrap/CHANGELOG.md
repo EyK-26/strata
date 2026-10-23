@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.51
+
+- Resolve encoded static paths consistently across guarded server fallback, web routes and SPA assets, including HEAD and request-hook checks.
+- Align core requirements with 2.2.51; retain native asset admission, Bun delivery and mixed HTTP/WebSocket abort-reporting limitations.
+
 ## 2.2.50
 
 - Report an unsuccessful graceful drain when an admitted HTTP-only response aborts during shutdown, after waiting for outstanding application work. Preserve pre-shutdown disconnect handling and normal WebSocket shutdown.

@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.51
+
+- Align core/bootstrap pins with 2.2.51; command and generated module behavior unchanged. Existing generated sources are not rewritten.
+
 ## 2.2.50
 
 - Align framework package pins with 2.2.50. CLI commands and emitted module behavior are unchanged.
