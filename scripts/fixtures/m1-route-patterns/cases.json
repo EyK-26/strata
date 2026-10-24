@@ -911,6 +911,39 @@
     ]
   },
   {
+    "name": "head-fallback-unrelated-head-control",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/read",
+        "owner": "get",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "get"
+          }
+        ]
+      },
+      {
+        "path": "/other",
+        "owner": "head",
+        "methods": [
+          {
+            "method": "HEAD",
+            "owner": "head"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/read",
+        "method": "HEAD"
+      }
+    ]
+  },
+  {
     "name": "head-literal-parameter-specificity",
     "classification": "feasibility-observation",
     "family": "transport",
@@ -1003,7 +1036,7 @@
   },
   {
     "name": "parameter-key-__proto__",
-    "classification": "feasibility-observation",
+    "classification": "confirmed-defect-reproduction",
     "family": "transport",
     "declarations": [
       {

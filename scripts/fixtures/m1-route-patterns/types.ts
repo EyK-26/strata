@@ -16,7 +16,7 @@ export interface ProbeRequest {
 }
 export interface ProbeCase {
   name: string;
-  classification: "contract-control" | "feasibility-observation";
+  classification: "contract-control" | "feasibility-observation" | "confirmed-defect-reproduction";
   family: "transport" | "collector";
   declarations: Declaration[];
   requests: ProbeRequest[];

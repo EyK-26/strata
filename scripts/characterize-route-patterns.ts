@@ -23,7 +23,9 @@ assert.equal(new Set(cases.map((item) => item.name)).size, cases.length);
 for (const item of cases) {
   assert.ok(item.family === "transport" || item.family === "collector");
   assert.ok(
-    item.classification === "contract-control" || item.classification === "feasibility-observation",
+    item.classification === "contract-control" ||
+      item.classification === "feasibility-observation" ||
+      item.classification === "confirmed-defect-reproduction",
   );
   assert.ok(Array.isArray(item.declarations) && Array.isArray(item.requests));
 }
@@ -80,7 +82,7 @@ const packages: { name: string; version: string }[] = [];
 async function save(status: "RUNNING" | "FAILED" | "COMPLETE", error?: unknown) {
   await writeFile(
     join(output, "results.json"),
-    `${JSON.stringify({ status, runtime: Bun.version, publishedVersion: "2.2.53", baselineTag, packages, inputHashes, baselineResults, executed: results.length, contractControls: results.filter((r) => r.classification === "contract-control").length, observations: results.filter((r) => r.classification === "feasibility-observation").length, failed: results.filter((r) => r.exitCode !== 0).length, skipped: 0, results, error: error instanceof Error ? error.stack : error ? String(error) : undefined, limits: "Observations are not major API acceptance, a startup validator, browser/provider/asset qualification or a promise to preserve defects." }, null, 2)}\n`,
+    `${JSON.stringify({ status, runtime: Bun.version, revision: Bun.revision, publishedVersion: "2.2.53", baselineTag, packages, inputHashes, baselineResults, executed: results.length, contractControls: results.filter((r) => r.classification === "contract-control").length, observations: results.filter((r) => r.classification === "feasibility-observation").length, defectReproductions: results.filter((r) => r.classification === "confirmed-defect-reproduction").length, failed: results.filter((r) => r.exitCode !== 0).length, skipped: 0, results, error: error instanceof Error ? error.stack : error ? String(error) : undefined, limits: "Observations are not major API acceptance, a startup validator, browser/provider/asset qualification or a promise to preserve defects." }, null, 2)}\n`,
   );
 }
 let fixture: Awaited<ReturnType<typeof createGeneratedSecurityApp>> | undefined;

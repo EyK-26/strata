@@ -29,6 +29,7 @@ function callback(owner: string, status = 200): Callback {
     const event = {
       owner,
       method: request.method,
+      requestUrl: request.url,
       pathname: new URL(request.url).pathname,
       params: { ...request.params },
       copiedParams: routeParams(request),
@@ -61,6 +62,7 @@ function exchange(port: number, spec: ProbeRequest, headers: Record<string, stri
     csrfCookie?: string;
     requestId: boolean;
     allow?: string;
+    sentTarget: string;
   }>((resolve, reject) => {
     const request = httpRequest(
       {
@@ -88,6 +90,7 @@ function exchange(port: number, spec: ProbeRequest, headers: Record<string, stri
         response.on("end", () =>
           resolve({
             status: response.statusCode ?? 0,
+            sentTarget: request.path,
             owner:
               typeof response.headers["x-probe-owner"] === "string"
                 ? response.headers["x-probe-owner"]
@@ -234,8 +237,6 @@ try {
         callbacksBeforeListen: calls.length,
         admissionsBeforeListen: admissions.length,
       };
-      assert.equal(calls.length, 0, "Startup must not execute fixture business handlers.");
-      assert.equal(admissions.length, 0);
     } catch (error) {
       if (probe.classification === "contract-control") throw error;
       report.startup = {
@@ -244,6 +245,9 @@ try {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+    // These invariants must fail the harness, not become accepted constructor rejections.
+    assert.equal(calls.length, 0, "Startup must not execute fixture business handlers.");
+    assert.equal(admissions.length, 0);
     if (server) {
       const activeServer = server;
       const exchanges: Record<string, unknown>[] = [];
@@ -281,8 +285,8 @@ try {
         }
       }
       for (const request of probe.requests) {
-        const beforeCalls = calls.length;
-        const beforeAdmissions = admissions.length;
+        const beforeCalls: number = calls.length;
+        const beforeAdmissions: number = admissions.length;
         assert.ok(activeServer.port);
         const observed = await exchange(activeServer.port, request, csrfHeaders);
         const { csrfCookie: _cookie, ...safe } = observed;
@@ -302,6 +306,15 @@ try {
           );
         const expectedStatus = mode === "framework" && request.deny ? 403 : request.expectedStatus;
         if (expectedStatus !== undefined) assert.equal(observed.status, expectedStatus);
+        if (probe.classification === "confirmed-defect-reproduction") {
+          // This is a dated defect on exact 2.2.53, never a future compatibility promise.
+          assert.equal(probe.name, "parameter-key-__proto__");
+          assert.equal(observed.status, 200);
+          const body = JSON.parse(observed.body);
+          assert.equal(Object.hasOwn(body.params, "__proto__"), true);
+          assert.equal(Reflect.get(body.params, "__proto__"), "value");
+          assert.equal(Object.hasOwn(body.copiedParams, "__proto__"), false);
+        }
         if (request.expectedEmptyBody) assert.equal(observed.body, "");
         if ((request.method ?? "GET") === "HEAD") assert.equal(observed.body, "");
         if (mode === "framework")
