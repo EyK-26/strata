@@ -208,3 +208,53 @@ describe("bootstrap web routing", () => {
     }
   });
 });
+
+test("native __proto__ parameter survives copying and repeated adaptation as an own data property", async () => {
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    routes: {
+      "/keys/:__proto__": (request) => {
+        const nativeOwn = Object.hasOwn(request.params, "__proto__");
+        const nativeValue = request.params.__proto__;
+        const copied = routeParams(request);
+        const first = toRouteRequest<{ __proto__: string }>(request);
+        const firstOwn = Object.hasOwn(first.params, "__proto__");
+        const firstValue = Object.getOwnPropertyDescriptor(first.params, "__proto__")?.value;
+        const second = toRouteRequest<{ __proto__: string }>(request);
+        return Response.json({
+          nativeOwn,
+          nativeValue,
+          copiedOwn: Object.hasOwn(copied, "__proto__"),
+          copiedValue: Object.getOwnPropertyDescriptor(copied, "__proto__")?.value,
+          copiedPrototypeUnchanged: Object.getPrototypeOf(copied) === Object.prototype,
+          firstOwn,
+          firstValue,
+          secondOwn: Object.hasOwn(second.params, "__proto__"),
+          secondValue: Object.getOwnPropertyDescriptor(second.params, "__proto__")?.value,
+          requestIdentityPreserved: first === request && second === request,
+          adaptedPrototypeUnchanged: Object.getPrototypeOf(second.params) === Object.prototype,
+        });
+      },
+    },
+  });
+  try {
+    const response = await fetch(new URL("/keys/100%25", server.url));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      nativeOwn: true,
+      nativeValue: "100%",
+      copiedOwn: true,
+      copiedValue: "100%",
+      copiedPrototypeUnchanged: true,
+      firstOwn: true,
+      firstValue: "100%",
+      secondOwn: true,
+      secondValue: "100%",
+      requestIdentityPreserved: true,
+      adaptedPrototypeUnchanged: true,
+    });
+  } finally {
+    await server.stop(true);
+  }
+});

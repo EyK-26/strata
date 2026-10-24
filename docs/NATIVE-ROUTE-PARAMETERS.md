@@ -65,3 +65,28 @@ and UUID scratch baselines are restored. The [sanitized receipt](qualification/n
 keeps identities and input/log hashes; all older failed evidence remains unchanged.
 This is pinned native Bun 1.4.3 evidence, not qualification of 1.4.4 or a waiver of
 the manual #257 shop hold. The timer stays off.
+
+## Own-property copy defect found during M1 feasibility
+
+The native parameter-name probe confirmed another defect on published 2.2.53.
+For `/keys/:__proto__`, Bun supplies an own string value, but assigning it onto an
+ordinary `{}` invokes the legacy `Object.prototype.__proto__` setter and drops the
+key. Repeated route adaptation therefore loses a value present in the native map.
+The `constructor` control remains an own value. The observed failure is parameter
+loss; these string-value probes do not establish prototype pollution.
+
+The compatible source correction creates own data properties with
+`Object.fromEntries` while retaining the ordinary object prototype, string coercion,
+Bun-owned decoding and native request identity. It introduces no null-prototype map,
+new API, reserved-name ban or route parser. Original unit and installed-consumer
+bodies remain byte-identical prefixes; appended real-native assertions fail first
+on original source and exact published 2.2.53, then pass on the correction and a
+freshly built installed candidate.
+
+**This own-property correction is source-only until a later qualified patch release.**
+The earlier 159-profile 2.2.53 acceptance remains immutable bounded evidence; it
+does not assert every parameter name was tested. The M1 proposal records this as a
+confirmed defect, separately from compatibility guarantees and native feasibility
+observations. Raw red/green and fixture setup logs are retained under
+`/tmp/strata-m1-path-method-feasibility-20261024`. No new version/tag is prepared
+for this design continuation. Shop adoption stays held for #257; timer stays off.
