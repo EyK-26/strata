@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConfigStore } from "@getstrata/bootstrap/contracts";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
 import { resetDefaultDatabasePoolForTests } from "@getstrata/core/database/defaultConnection";
@@ -1248,6 +1248,10 @@ export default probeModule;
       );
       const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
 
+      // Compare identities within the installed consumer, not against the source checkout.
+      const { ConfigStore } = await import(
+        createRequire(join(app, "package.json")).resolve("@getstrata/bootstrap/contracts")
+      );
       const { context } = await bootstrapApp({ migrate: false });
       expect(context.container.resolve(PROBE_REGISTER_TOKEN)).toBe("module-provider-register");
       expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");

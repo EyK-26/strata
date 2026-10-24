@@ -17,8 +17,8 @@
     "bun144RuntimeAlignment": {
       "beforeCommit": "3d77bc1",
       "purpose": "Raise active runtime/type minimums and exact tested pins to 1.4.4, allow future 1.4 patches, retain all historical manifests and assertions through exact reversible literal changes.",
-      "artifacts": 32,
-      "hunks": 8
+      "artifacts": 38,
+      "hunks": 12
     }
   },
   "hunks": {
@@ -420,6 +420,30 @@
     "bun-1-4-4-8": {
       "before": ["FROM oven/bun:1.4.3 AS frontend"],
       "after": ["FROM oven/bun:1.4.4 AS frontend"]
+    },
+    "bun-1-4-4-9": {
+      "before": ["        \"@types/bun\": \">=1.4.2\","],
+      "after": ["        \"@types/bun\": \">=1.4.4\","]
+    },
+    "bun-1-4-4-10": {
+      "before": ["    \"bun-types\": \">=1.4.3\","],
+      "after": ["    \"bun-types\": \">=1.4.4\","]
+    },
+    "bun-1-4-4-11": {
+      "before": [
+        "    \"@types/bun\": [\"@types/bun@1.4.2\", \"\", { \"dependencies\": { \"bun-types\": \"1.4.2\" } }, \"sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ==\"],"
+      ],
+      "after": [
+        "    \"@types/bun\": [\"@types/bun@1.4.4\", \"\", { \"dependencies\": { \"bun-types\": \"1.4.4\" } }, \"sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ==\"],"
+      ]
+    },
+    "bun-1-4-4-12": {
+      "before": [
+        "    \"bun-types\": [\"bun-types@1.4.3\", \"\", { \"dependencies\": { \"@types/node\": \"*\", \"undici-types\": \"*\" } }, \"sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg==\"],"
+      ],
+      "after": [
+        "    \"bun-types\": [\"bun-types@1.4.4\", \"\", { \"dependencies\": { \"@types/node\": \"*\", \"undici-types\": \"*\" } }, \"sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ==\"],"
+      ]
     }
   },
   "artifacts": {
@@ -742,6 +766,36 @@
       "beforeSha256": "5234e2475223b5a054f8cde8e13f48186c4e998b04cc8fc8b26cd2598cb0fb9a",
       "afterSha256": "aafbb3536ac35caec7467f917d921fdb4ebe26f5d0676ccadc4e1bff5f97f494",
       "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/postgres-hybrid-combined-rls/frontend/bun.lock": {
+      "beforeSha256": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69",
+      "afterSha256": "8ff726fbb471b7a98cc8d6a7678ecbd189633c6bc48d9084cdca5a232f48ed1b",
+      "hunks": ["bun-1-4-4-9", "bun-1-4-4-10", "bun-1-4-4-11", "bun-1-4-4-12"]
+    },
+    "starter/postgres-hybrid-combined-rls/frontend/package.json": {
+      "beforeSha256": "3a8bcbaa7bce9886d8ef534f219fcfa99fd915be6020621a32dcf0b7d2f81c73",
+      "afterSha256": "ca32ed0ea4eb9c8d3f576857a6f3f0e7df22df5757e5066d879ddda9e9321cdc",
+      "hunks": ["bun-1-4-4-6", "bun-1-4-4-4", "bun-1-4-4-5"]
+    },
+    "starter/sqlite-spa-jwt-local/frontend/bun.lock": {
+      "beforeSha256": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69",
+      "afterSha256": "8ff726fbb471b7a98cc8d6a7678ecbd189633c6bc48d9084cdca5a232f48ed1b",
+      "hunks": ["bun-1-4-4-9", "bun-1-4-4-10", "bun-1-4-4-11", "bun-1-4-4-12"]
+    },
+    "starter/sqlite-spa-jwt-local/frontend/package.json": {
+      "beforeSha256": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+      "afterSha256": "ebca9371d5756fe758920fb0c7488915ef645d9eac37700d13096ac410c4fb27",
+      "hunks": ["bun-1-4-4-6", "bun-1-4-4-4", "bun-1-4-4-5"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/frontend/bun.lock": {
+      "beforeSha256": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69",
+      "afterSha256": "8ff726fbb471b7a98cc8d6a7678ecbd189633c6bc48d9084cdca5a232f48ed1b",
+      "hunks": ["bun-1-4-4-9", "bun-1-4-4-10", "bun-1-4-4-11", "bun-1-4-4-12"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/frontend/package.json": {
+      "beforeSha256": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+      "afterSha256": "ebca9371d5756fe758920fb0c7488915ef645d9eac37700d13096ac410c4fb27",
+      "hunks": ["bun-1-4-4-6", "bun-1-4-4-4", "bun-1-4-4-5"]
     }
   }
 }

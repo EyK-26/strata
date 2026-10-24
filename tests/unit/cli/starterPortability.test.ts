@@ -654,6 +654,15 @@ describe("generated deploy files", () => {
     expect(dockerfile).toContain("COPY --from=frontend /app/frontend/dist ./frontend/dist");
     expect(dockerfile).not.toContain("VOLUME");
 
+    const frontend = JSON.parse(await readFile(join(app, "frontend/package.json"), "utf8"));
+    expect(frontend.engines.bun).toBe(">=1.4.4");
+    expect(frontend.devDependencies["@types/bun"]).toBe(">=1.4.4");
+    expect(frontend.overrides["bun-types"]).toBe(">=1.4.4");
+    const lock = await readFile(join(app, "frontend/bun.lock"), "utf8");
+    const lockedTypes = lock.match(/"bun-types@([^"]+)"/);
+    expect(lockedTypes).not.toBeNull();
+    expect(Bun.semver.satisfies(lockedTypes?.[1] ?? "0.0.0", ">=1.4.4")).toBe(true);
+
     const ignore = await readFile(join(app, ".dockerignore"), "utf8");
     expect(ignore).toContain("frontend/node_modules");
     expect(ignore).toContain("frontend/dist");
