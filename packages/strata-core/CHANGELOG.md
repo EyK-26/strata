@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 2.2.56
+
+- Stop adding schema CREATE to PostgreSQL runtime roles; keep USAGE, existing object/default grants and both catalog/ACL concurrency protocols. Existing grants, PUBLIC privileges, memberships and ownership are not revoked automatically; restricted deployments can use the documented public schema-only migration runner.
+- Require Bun >=1.4.4 and retain the native SQL timer regression matrix. Preserve ORM/transaction behavior while removing two redundant private guards; strengthen error, empty-data and adapter-metadata coverage without changing public or protected APIs.
+
 ## 2.2.55
 
 - Align the lockstep version with the starter startup-cleanup correction. Core runtime, ORM, lifecycle policy and public/protected APIs are unchanged.

@@ -1,5 +1,10 @@
 # create-strata changelog
 
+## 2.2.56
+
+- Generate Bun 1.4.4 runtime/Docker pins and >=1.4.4 engine/type requirements, accepting future 1.4.x patches. Update frontend manifest/lock artifacts and aligned 2.2.56 framework dependencies.
+- Generate PostgreSQL runtime-role SQL with schema USAGE rather than adding CREATE. Existing apps must explicitly review generated SQL and live effective ACLs; older grants and PostgreSQL PUBLIC/ownership/membership permissions are retained. Role provisioning still requires the existing catalog-administration privileges. Preserve every historical scaffold assertion with reviewed reversible artifact deltas.
+
 ## 2.2.55
 
 - Preserve the original native server startup error as the AggregateError cause when generated server cleanup also rejects, retaining every cleanup failure and the existing cleanup order. Ordinary errors are rethrown unchanged when cleanup succeeds.

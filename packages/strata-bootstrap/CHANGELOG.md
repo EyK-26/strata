@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.56
+
+- Require Bun >=1.4.4 and align the core requirement with 2.2.56. Preserve bootstrap, HTTP/auth, lifecycle and extension-point contracts; the native-assets major-version proposal and mixed HTTP/WebSocket limitation are unchanged.
+
 ## 2.2.55
 
 - Align the core requirement with 2.2.55. Existing startup aggregation, provider drain/flush/close policy and server APIs are unchanged; native asset and mixed HTTP/WebSocket limitations remain.
