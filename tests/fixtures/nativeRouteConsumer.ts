@@ -247,7 +247,7 @@ const ownKeyServer = createWebServer({
   routes: {
     "/keys/:__proto__": (request: BunRequest<"/keys/:__proto__">) => {
       const nativeOwn = Object.hasOwn(request.params, "__proto__");
-      const nativeValue = request.params.__proto__;
+      const nativeValue = Reflect.get(request.params, "__proto__");
       const copied = routeParams(request);
       const first = toRouteRequest<{ __proto__: string }>(request);
       const firstOwn = Object.hasOwn(first.params, "__proto__");
