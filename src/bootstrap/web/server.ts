@@ -146,6 +146,13 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
   const onRequest: WebServerOptions<T>["onRequest"] = (request, server) => {
     if (options.lifecycle?.isShuttingDown)
       return new Response("Service Unavailable", { status: 503 });
+    // Bun can expose a relative URL for a malformed wire Host. Reject it before
+    // application callbacks or middleware can interpret invalid transport metadata.
+    if (!URL.canParse(request.url))
+      return new Response("Bad Request", {
+        status: 400,
+        headers: { "Cache-Control": "no-store" },
+      });
     if (options.lifecycle && !options.native?.websocket) {
       // A handler returning a Response does not mean its body reached the transport.
       // Bun's stop(false) also resolves when a busy connection aborts. Observe the

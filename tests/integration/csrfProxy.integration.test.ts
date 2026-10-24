@@ -641,11 +641,16 @@ for (const kernel of [false, true]) {
   test(`${kernel ? "kernel" : "target"} rejects malformed wire Host values without issuing cookies`, async () => {
     const f = await fixture({ targetOrigin: true, kernel });
     try {
-      for (const host of ["forms.example.test,evil.example.test", "user@forms.example.test"]) {
+      // A parseable conflicting authority reaches policy; invalid native URL
+      // metadata is rejected at transport admission before application middleware.
+      for (const [host, status] of [
+        ["forms.example.test,evil.example.test", 403],
+        ["user@forms.example.test", 400],
+      ] as const) {
         const response = await fetch(new URL("/etf", f.backend.url), {
           headers: { Host: host },
         });
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(status);
         expect(response.headers.getSetCookie()).toHaveLength(0);
       }
     } finally {

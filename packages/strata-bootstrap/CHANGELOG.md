@@ -2,7 +2,7 @@
 
 ## 2.2.57
 
-Expose CSRF_TARGET_ORIGIN_CONFIG_KEY and capture an explicitly configured CSRF target policy when constructing HttpKernel for web and cookie API groups. Root provider binds the optional environment value; existing default behavior and tenancy/proxy boundaries stay intact.
+Expose CSRF_TARGET_ORIGIN_CONFIG_KEY and capture an explicitly configured CSRF target policy when constructing HttpKernel for web and cookie API groups. Root provider binds the optional environment value; existing default behavior and tenancy/proxy boundaries stay intact. Reject unparseable native HTTP request URL metadata with 400 before application callbacks and middleware.
 
 ## 2.2.56
 

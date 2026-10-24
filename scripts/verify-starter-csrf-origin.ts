@@ -226,6 +226,16 @@ try{
   });
   assert.equal(direct.status, 403);
 
+  // Comma authorities have a parseable URL and fail the explicit Host policy.
+  // Bun exposes a relative URL for userinfo-style wire Host; native admission must reject it.
+  const malformedWireStatuses: number[] = [];
+  for (const host of ["forms.example.test,evil.example.test", "user@forms.example.test"]) {
+    const rejected = await fetch(endpoints.backend + formPath, { headers: { Host: host } });
+    malformedWireStatuses.push(rejected.status);
+    assert.equal(rejected.headers.getSetCookie().length, 0);
+  }
+  assert.deepEqual(malformedWireStatuses, [403, 400]);
+
   browser = await chromium.launch({
     headless: true,
     args: ["--host-resolver-rules=MAP forms.example.test 127.0.0.1", "--no-proxy-server"],
@@ -277,6 +287,7 @@ try{
       securityControls: true,
       nativeParams: true,
       invalidStartupRefused: true,
+      malformedHostControls: true,
     }),
   );
 } finally {

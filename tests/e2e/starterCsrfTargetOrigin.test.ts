@@ -22,4 +22,5 @@ test("installed generated app admits HTTPS proxy forms with explicit target and 
   expect(stdout).toContain('"adapter":false');
   expect(stdout).toContain('"browser":422');
   expect(stdout).toContain('"securityControls":true');
+  expect(stdout).toContain('"malformedHostControls":true');
 }, 125000);
