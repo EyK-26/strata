@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.54
+
+- Generate aligned 2.2.54 framework dependencies. Generated auth, database, tenancy and frontend source shapes remain unchanged; public artifact origin and startup-validation APIs remain major-version design proposals.
+
 ## 2.2.53
 
 - Generate aligned 2.2.53 framework dependencies. Generated auth, database, tenancy and frontend source shapes are unchanged; the public artifact-origin API remains a major-version design proposal.

@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.54
+
+- Preserve own native route parameter keys such as __proto__ as data properties instead of losing them through an inherited setter. Keep the ordinary object prototype, string coercion, Bun-owned decoding and native request identity.
+- Align the core requirement with 2.2.54. No new route API or native asset admission/delivery or mixed HTTP/WebSocket behavior is introduced.
+
 ## 2.2.53
 
 - Preserve Bun-native decoded route parameters without decoding them a second time. Literal percent identifiers remain valid, and encoded-looking identifiers retain the key Bun supplies before binding and authorization.
