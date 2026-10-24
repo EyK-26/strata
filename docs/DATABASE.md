@@ -40,6 +40,8 @@ When `TENANCY_DRIVER=rls`, production `DATABASE_URL` must not be a superuser or 
 
 Explicit Postgres provisioning and `grantPostgresAppRolePrivileges` serialize cooperative ACL writers with one database-scoped transaction advisory lock. Full provisioning takes this lock before its existing role-catalog lock; standalone grants do not create/alter roles or require role-catalog rights. They send one atomic privilege batch, so a late SQL failure rolls back earlier grants and releases the lock (or the caller rolls back its enclosing transaction). Use the target application database connection; generated init SQL wraps the same renderer in `BEGIN`/`COMMIT`. Mixed old/uncoordinated grant writers are outside this lock protocol. Production/staging HTTP and workers remain runtime-only and never provision roles or apply grants on boot.
 
+See [PostgreSQL provisioning and migration identities](POSTGRES-PROVISIONING.md) for externally provisioned databases, catalog-administration requirements, schema CREATE provenance and explicit adoption of the runtime grant correction.
+
 ## Query builder
 
 `@getstrata/core/database/query` compiles SQL through `currentSqlDialect()`. Tests can wrap a block:

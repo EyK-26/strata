@@ -473,32 +473,62 @@ describe("durable SQL outbox on SQLite", () => {
     await expect(outbox.processNext()).rejects.toThrow("deadlock");
     expect(attempts).toBe(5);
   });
-  test("stalled lease renewal expires cooperatively and work remains recoverable", async () => {
+  test("non-error coordination failures propagate once without executing listener effects", async () => {
+    let effects = 0;
+    let attempts = 0;
+    const failure = "unclassified transport failure";
     const outbox = new SqlOutbox({
-      leaseMs: 90,
-      maxAttempts: 1,
       listeners: [
-        listener(async (_, { signal }) => {
-          await new Promise<void>((resolve) =>
-            signal.addEventListener("abort", () => resolve(), { once: true }),
-          );
-          expect(signal.reason.message).toBe("Outbox lease expired.");
+        listener(async () => {
+          effects++;
         }),
       ],
     });
-    await publish(outbox);
-    const begin = connection.begin.bind(connection);
-    let roots = 0;
-    connection.begin = async (callback) =>
-      begin(async (tx) => {
-        if (++roots === 2) await Bun.sleep(130);
-        return callback(tx);
-      });
-    await outbox.processNext();
-    expect((await delivery())[0]?.status).toBe("processing");
-    await outbox.processNext();
-    expect((await delivery())[0]?.error_code).toBe("attempts_exhausted");
+    const begin = connection.begin;
+    connection.begin = async () => {
+      attempts++;
+      throw failure;
+    };
+    try {
+      await expect(outbox.processNext()).rejects.toBe(failure);
+      expect(attempts).toBe(1);
+      expect(effects).toBe(0);
+    } finally {
+      connection.begin = begin;
+    }
   });
+  for (const stalledRoot of [2, 3])
+    test(
+      stalledRoot === 2
+        ? "stalled lease renewal expires cooperatively and work remains recoverable"
+        : "a stalled renewal after a successful heartbeat still expires and remains recoverable",
+      async () => {
+        const outbox = new SqlOutbox({
+          leaseMs: 90,
+          maxAttempts: 1,
+          listeners: [
+            listener(async (_, { signal }) => {
+              await new Promise<void>((resolve) =>
+                signal.addEventListener("abort", () => resolve(), { once: true }),
+              );
+              expect(signal.reason.message).toBe("Outbox lease expired.");
+            }),
+          ],
+        });
+        await publish(outbox);
+        const begin = connection.begin.bind(connection);
+        let roots = 0;
+        connection.begin = async (callback) =>
+          begin(async (tx) => {
+            if (++roots === stalledRoot) await Bun.sleep(130);
+            return callback(tx);
+          });
+        await outbox.processNext();
+        expect((await delivery())[0]?.status).toBe("processing");
+        await outbox.processNext();
+        expect((await delivery())[0]?.error_code).toBe("attempts_exhausted");
+      },
+    );
   test("validates the contract before writes", async () => {
     const outbox = new SqlOutbox({ listeners: [listener(async () => {})], maxPayloadBytes: 10 });
     await expect(outbox.publish("orders.created", 1)).rejects.toThrow(

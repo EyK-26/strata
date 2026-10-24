@@ -611,11 +611,11 @@ describe("generated deploy files", () => {
       "--yes",
     ]);
     const dockerfile = await readFile(join(app, "Dockerfile"), "utf8");
-    expect(dockerfile).toContain("FROM oven/bun:1.4.3 AS deps");
-    expect(await readFile(join(app, ".bun-version"), "utf8")).toBe("1.4.3\n");
+    expect(dockerfile).toContain("FROM oven/bun:1.4.4 AS deps");
+    expect(await readFile(join(app, ".bun-version"), "utf8")).toBe("1.4.4\n");
     const manifest = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
-    expect(manifest.engines.bun).toBe(">=1.4.3");
-    expect(manifest.overrides["bun-types"]).toBe(">=1.4.3");
+    expect(manifest.engines.bun).toBe(">=1.4.4");
+    expect(manifest.overrides["bun-types"]).toBe(">=1.4.4");
     expect(dockerfile).toContain("bun install --frozen-lockfile --production");
     expect(dockerfile).toContain("ENV APP_ENV=production");
     expect(dockerfile).toContain("ENV AUTH_DEV_HEADERS=false");
@@ -650,9 +650,18 @@ describe("generated deploy files", () => {
       "--yes",
     ]);
     const dockerfile = await readFile(join(app, "Dockerfile"), "utf8");
-    expect(dockerfile).toContain("FROM oven/bun:1.4.3 AS frontend");
+    expect(dockerfile).toContain("FROM oven/bun:1.4.4 AS frontend");
     expect(dockerfile).toContain("COPY --from=frontend /app/frontend/dist ./frontend/dist");
     expect(dockerfile).not.toContain("VOLUME");
+
+    const frontend = JSON.parse(await readFile(join(app, "frontend/package.json"), "utf8"));
+    expect(frontend.engines.bun).toBe(">=1.4.4");
+    expect(frontend.devDependencies["@types/bun"]).toBe(">=1.4.4");
+    expect(frontend.overrides["bun-types"]).toBe(">=1.4.4");
+    const lock = await readFile(join(app, "frontend/bun.lock"), "utf8");
+    const lockedTypes = lock.match(/"bun-types@([^"]+)"/);
+    expect(lockedTypes).not.toBeNull();
+    expect(Bun.semver.satisfies(lockedTypes?.[1] ?? "0.0.0", ">=1.4.4")).toBe(true);
 
     const ignore = await readFile(join(app, ".dockerignore"), "utf8");
     expect(ignore).toContain("frontend/node_modules");

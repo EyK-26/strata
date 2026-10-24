@@ -5,8 +5,13 @@ import {
   resetBoundDatabaseConnection,
 } from "@getstrata/core/database/boundConnection";
 import type { UnsafeQueryable } from "@getstrata/core/database/connection";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
+import {
+  currentSqlDialect,
+  resetSqlDialect,
+  useSqlDialect,
+} from "@getstrata/core/database/dialect";
 import { createOutboxMetricsCollector, renderOutboxMetrics } from "@getstrata/core/events/outbox";
+import { createReadOnlyCollector } from "../../src/core/database/readOnlyCollector";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const states = [
@@ -104,4 +109,59 @@ test("renderer validates fixed state vocabulary and numeric observations", async
     renderOutboxMetrics({ ...snapshot, states: snapshot.states.map(() => first) }),
   ).toThrow();
   await collector.close();
+});
+
+test("portable observation refuses invalid adapter clocks and row timestamps", async () => {
+  useSqlDialect("mysql");
+  for (const broken of ["clock", "timestamp"]) {
+    const unsafe = async <T>(query: string, params: readonly unknown[] = []): Promise<T[]> => {
+      const result = query.includes("information_schema.TABLES")
+        ? [{ valid: 1 }]
+        : query.includes("information_schema.STATISTICS")
+          ? [
+              "status",
+              params[0] === "strata_outbox_due" ? "available_at" : "lease_until",
+              "event_id",
+              "listener_name",
+            ].map((name, seqno) => ({ name, seqno }))
+          : query.includes("AS now_ms")
+            ? [{ now_ms: broken === "clock" ? -1 : 1000 }]
+            : query.includes("AS timestamp_ms")
+              ? [{ timestamp_ms: -1 }]
+              : [];
+      return result as T[];
+    };
+    bindDatabaseConnection({
+      unsafe,
+      async observeReadOnly<T>(work: (connection: UnsafeQueryable) => Promise<T>) {
+        return work({ unsafe });
+      },
+    });
+    const collector = createOutboxMetricsCollector();
+    try {
+      await expect(collector.collect()).rejects.toThrow(
+        broken === "clock" ? "Invalid outbox clock" : "Invalid outbox timestamp",
+      );
+    } finally {
+      await collector.close();
+    }
+  }
+});
+
+test("an unsupported runtime dialect descriptor is rejected before observation effects", async () => {
+  const dialect = currentSqlDialect();
+  const previousDriver = dialect.driver;
+  let effects = 0;
+  const collector = createReadOnlyCollector("Qualification", 100, async () => {
+    effects++;
+    return 0;
+  });
+  try {
+    Reflect.set(dialect, "driver", "unsupported");
+    await expect(collector.collect()).rejects.toThrow("require Postgres or an interruptible");
+    expect(effects).toBe(0);
+  } finally {
+    Reflect.set(dialect, "driver", previousDriver);
+    await collector.close();
+  }
 });

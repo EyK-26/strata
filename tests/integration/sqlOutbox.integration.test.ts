@@ -447,15 +447,17 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
         throw new Error("rollback");
       }),
     ).rejects.toThrow("rollback");
-    expect(await admin.unsafe<unknown[]>("SELECT * FROM strata_outbox_event")).toEqual([]);
+    expect(Array.from(await admin.unsafe<unknown[]>("SELECT * FROM strata_outbox_event"))).toEqual(
+      [],
+    );
     await runWithTenantDatabase(tenant, () => outbox.publish("order", 1, { id: "committed" }));
-    expect(await admin.unsafe<unknown[]>("SELECT * FROM effects")).toEqual([]);
+    expect(Array.from(await admin.unsafe<unknown[]>("SELECT * FROM effects"))).toEqual([]);
     // Anonymous/current-tenant RLS cannot inspect another tenant's delivery.
     expect(await runInTransaction(() => db.unsafe("SELECT * FROM strata_outbox_event"))).toEqual(
       [],
     );
     await outbox.processNext();
-    expect(await admin.unsafe<unknown[]>("SELECT * FROM effects")).toEqual([
+    expect(Array.from(await admin.unsafe<unknown[]>("SELECT * FROM effects"))).toEqual([
       { event_id: "committed", tenant_id: 101 },
     ]);
   });
@@ -502,9 +504,9 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
     expect((await admin.unsafe<unknown[]>("SELECT * FROM effects ORDER BY event_id")).length).toBe(
       3,
     );
-    expect(await admin.unsafe<unknown[]>("SELECT * FROM effects WHERE event_id='retry'")).toEqual(
-      [],
-    );
+    expect(
+      Array.from(await admin.unsafe<unknown[]>("SELECT * FROM effects WHERE event_id='retry'")),
+    ).toEqual([]);
     await admin.unsafe(
       "UPDATE strata_outbox_delivery SET status='completed' WHERE event_id='retry'",
     );

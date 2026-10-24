@@ -1,5 +1,5 @@
 # Framework acceptance image. Product applications own their deployment images.
-FROM oven/bun:1.4.3 AS base
+FROM oven/bun:1.4.4 AS base
 WORKDIR /workspace
 
 FROM base AS install
@@ -17,7 +17,7 @@ COPY . .
 RUN bun run build:framework && bun run build:bootstrap
 RUN bun scripts/build-docker-acceptance.ts /opt/strata-acceptance
 
-FROM oven/bun:1.4.3 AS release
+FROM oven/bun:1.4.4 AS release
 WORKDIR /app
 COPY --from=build --chown=bun:bun /opt/strata-acceptance/ ./
 ENV NODE_ENV=production

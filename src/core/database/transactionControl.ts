@@ -39,12 +39,7 @@ function requestTransactionRollback(): void {
   if (!state || index < 0) {
     return;
   }
-  const flags = state.rollback;
-  const current = flags[index];
-  if (current === undefined) {
-    return;
-  }
-  flags[index] = true;
+  state.rollback[index] = true;
 }
 
 function scopeRequestsRollback(): boolean {

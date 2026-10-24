@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import { signJwt } from "@getstrata/core/auth/jwt";
-import { oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
+import { loadOidcDiscovery, oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
 import {
   createOidcHandshake,
   OidcProvider,
@@ -493,4 +493,54 @@ describe("OidcProvider", () => {
       name: "Pair User",
     });
   });
+});
+
+test("OIDC discovery rejects missing endpoint configuration before exchanging a code", async () => {
+  mockPublicDns();
+  globalThis.fetch = Object.assign(
+    mock(() => Promise.resolve(Response.json({ issuer: "https://issuer.example.com" }))),
+    { preconnect: originalFetch.preconnect },
+  );
+  const provider = new OidcProvider({
+    name: "missing-endpoint",
+    issuer: "https://issuer.example.com",
+    clientId: "client",
+    clientSecret: "secret",
+    redirectUri: "https://app.example.com/callback",
+  });
+  await expect(provider.createAuthorization("state")).rejects.toThrow(
+    "discovery document did not include",
+  );
+});
+
+test("OIDC token exchange rejects a response with no access token", async () => {
+  mockPublicDns();
+  mockOidcNetwork(undefined, {});
+  const provider = new OidcProvider({
+    name: "missing-token",
+    issuer: "https://issuer.example.com",
+    clientId: "client",
+    clientSecret: "secret",
+    redirectUri: "https://app.example.com/callback",
+  });
+  await expect(provider.exchangeCode("code", undefined, createOidcHandshake())).rejects.toThrow(
+    "token exchange failed",
+  );
+});
+
+test("an invalidated cached discovery endpoint cannot construct an authorization URL", async () => {
+  mockPublicDns();
+  mockOidcNetwork();
+  const discovery = await loadOidcDiscovery("https://issuer.example.com");
+  discovery.authorization_endpoint = "";
+  const provider = new OidcProvider({
+    name: "invalidated",
+    issuer: "https://issuer.example.com",
+    clientId: "client",
+    clientSecret: "secret",
+    redirectUri: "https://app.example.com/callback",
+  });
+  await expect(provider.createAuthorization("state")).rejects.toThrow(
+    "did not include authorization_endpoint",
+  );
 });

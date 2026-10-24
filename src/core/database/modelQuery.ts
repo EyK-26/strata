@@ -148,11 +148,8 @@ async function eagerLoadOnModels(
         (model) => model.loaded(head) === undefined && !knownAbsentMorphRoots.get(model)?.has(head),
       );
 
-      if (unloaded.length > 0) {
-        const first = unloaded[0];
-        if (!first) {
-          return;
-        }
+      const first = unloaded[0];
+      if (first) {
         const relationQuery = resolveModelRelation(first, head);
         const query = first.getRepository().query();
         relationQuery.applyEagerLoad(query, head);

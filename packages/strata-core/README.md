@@ -1,6 +1,6 @@
 # @getstrata/core
 
-Runtime library for [Strata](https://github.com/EyK-26/strata) apps: HTTP, auth, database, queue, mail, and security. Requires Bun >=1.4.3 (tested on 1.4.3).
+Runtime library for [Strata](https://github.com/EyK-26/strata) apps: HTTP, auth, database, queue, mail, and security. Requires Bun >=1.4.4 (tested on 1.4.4).
 
 Generate an app rather than wiring this by hand:
 

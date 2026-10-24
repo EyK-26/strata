@@ -108,7 +108,7 @@ function renderDockerfile(layers: StarterLayers): string {
   const frontend = needsFrontendBuild(layers.frontend);
   const lines = [
     '# Production image. Build once, run with env from your platform; see README "Deploy".',
-    "FROM oven/bun:1.4.3 AS deps",
+    "FROM oven/bun:1.4.4 AS deps",
     "WORKDIR /app",
     "COPY package.json bun.lock ./",
     "RUN bun install --frozen-lockfile --production",
@@ -116,7 +116,7 @@ function renderDockerfile(layers: StarterLayers): string {
   ];
   if (frontend) {
     lines.push(
-      "FROM oven/bun:1.4.3 AS frontend",
+      "FROM oven/bun:1.4.4 AS frontend",
       "WORKDIR /app/frontend",
       "COPY --from=deps /app/node_modules /app/node_modules",
       "ARG SPA_PREFIX",
@@ -129,7 +129,7 @@ function renderDockerfile(layers: StarterLayers): string {
     );
   }
   lines.push(
-    "FROM oven/bun:1.4.3-slim AS runtime",
+    "FROM oven/bun:1.4.4-slim AS runtime",
     "WORKDIR /app",
     "ENV APP_ENV=production",
     "ENV AUTH_DEV_HEADERS=false",

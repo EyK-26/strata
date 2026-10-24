@@ -397,7 +397,7 @@ The app uses the database named in \`DATABASE_URL\` and creates it on first migr
 ${renderOpenApiReadme()}
 ## Deploy
 
-Bun >=1.4.3 is required. \`.bun-version\` and Docker stages pin the tested 1.4.3 runtime; upgrade pins deliberately and rerun checks before deployment. The official @types/bun shim currently lags the runtime release, so package.json overrides bun-types to >=1.4.3. Refresh and commit root/frontend lockfiles when upgrading. Updating framework packages does not rewrite an existing app Dockerfile, runtime pin or manifest.
+Bun >=1.4.4 is required. \`.bun-version\` and Docker stages pin the tested 1.4.4 runtime; upgrade pins deliberately and rerun checks before deployment. Runtime and TypeScript requirements use >=1.4.4, accepting future 1.4.x patches; the bun-types override keeps transitive shims above the same minimum. Refresh and commit root/frontend lockfiles when upgrading. Updating framework packages does not rewrite an existing app Dockerfile, runtime pin or manifest.
 
 \`Dockerfile\` builds a production image from the committed \`bun.lock\` (run \`bun install\` once and commit the lockfile).${
     needsFrontendBuild(layers.frontend) ? " The React frontend is built inside the image." : ""

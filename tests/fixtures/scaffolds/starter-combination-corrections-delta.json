@@ -8,6 +8,17 @@
       "fixCommit": "341a65f",
       "hunk": "startup-cleanup-cause",
       "purpose": "Preserve the original native startup error when generated entrypoint cleanup also fails. Historical scaffold hashes and all previous deltas remain unchanged."
+    },
+    "postgresRuntimeSchemaGrantCorrection": {
+      "beforeCommit": "2a3067f84a26fa78eeb9528743809dae568a4343",
+      "hunk": "runtime-schema-usage-only",
+      "purpose": "Stop granting runtime schema CREATE. Preserve all historical hashes and assertions; reverse and reapply only this exact SQL line."
+    },
+    "bun144RuntimeAlignment": {
+      "beforeCommit": "3d77bc1",
+      "purpose": "Raise active runtime/type minimums and exact tested pins to 1.4.4, allow future 1.4 patches, retain all historical manifests and assertions through exact reversible literal changes.",
+      "artifacts": 38,
+      "hunks": 12
     }
   },
   "hunks": {
@@ -369,6 +380,70 @@
         "    userKey: \"currentUser\",",
         ""
       ]
+    },
+    "runtime-schema-usage-only": {
+      "before": ["GRANT USAGE, CREATE ON SCHEMA public TO strata_app;"],
+      "after": ["GRANT USAGE ON SCHEMA public TO strata_app;"]
+    },
+    "bun-1-4-4-1": {
+      "before": ["1.4.3"],
+      "after": ["1.4.4"]
+    },
+    "bun-1-4-4-2": {
+      "before": ["FROM oven/bun:1.4.3 AS deps"],
+      "after": ["FROM oven/bun:1.4.4 AS deps"]
+    },
+    "bun-1-4-4-3": {
+      "before": ["FROM oven/bun:1.4.3-slim AS runtime"],
+      "after": ["FROM oven/bun:1.4.4-slim AS runtime"]
+    },
+    "bun-1-4-4-4": {
+      "before": ["    \"bun\": \">=1.4.3\""],
+      "after": ["    \"bun\": \">=1.4.4\""]
+    },
+    "bun-1-4-4-5": {
+      "before": ["    \"bun-types\": \">=1.4.3\""],
+      "after": ["    \"bun-types\": \">=1.4.4\""]
+    },
+    "bun-1-4-4-6": {
+      "before": ["    \"@types/bun\": \">=1.4.2\","],
+      "after": ["    \"@types/bun\": \">=1.4.4\","]
+    },
+    "bun-1-4-4-7": {
+      "before": [
+        "Bun >=1.4.3 is required. `.bun-version` and Docker stages pin the tested 1.4.3 runtime; upgrade pins deliberately and rerun checks before deployment. The official @types/bun shim currently lags the runtime release, so package.json overrides bun-types to >=1.4.3. Refresh and commit root/frontend lockfiles when upgrading. Updating framework packages does not rewrite an existing app Dockerfile, runtime pin or manifest."
+      ],
+      "after": [
+        "Bun >=1.4.4 is required. `.bun-version` and Docker stages pin the tested 1.4.4 runtime; upgrade pins deliberately and rerun checks before deployment. Runtime and TypeScript requirements use >=1.4.4, accepting future 1.4.x patches; the bun-types override keeps transitive shims above the same minimum. Refresh and commit root/frontend lockfiles when upgrading. Updating framework packages does not rewrite an existing app Dockerfile, runtime pin or manifest."
+      ]
+    },
+    "bun-1-4-4-8": {
+      "before": ["FROM oven/bun:1.4.3 AS frontend"],
+      "after": ["FROM oven/bun:1.4.4 AS frontend"]
+    },
+    "bun-1-4-4-9": {
+      "before": ["        \"@types/bun\": \">=1.4.2\","],
+      "after": ["        \"@types/bun\": \">=1.4.4\","]
+    },
+    "bun-1-4-4-10": {
+      "before": ["    \"bun-types\": \">=1.4.3\","],
+      "after": ["    \"bun-types\": \">=1.4.4\","]
+    },
+    "bun-1-4-4-11": {
+      "before": [
+        "    \"@types/bun\": [\"@types/bun@1.4.2\", \"\", { \"dependencies\": { \"bun-types\": \"1.4.2\" } }, \"sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ==\"],"
+      ],
+      "after": [
+        "    \"@types/bun\": [\"@types/bun@1.4.4\", \"\", { \"dependencies\": { \"bun-types\": \"1.4.4\" } }, \"sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ==\"],"
+      ]
+    },
+    "bun-1-4-4-12": {
+      "before": [
+        "    \"bun-types\": [\"bun-types@1.4.3\", \"\", { \"dependencies\": { \"@types/node\": \"*\", \"undici-types\": \"*\" } }, \"sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg==\"],"
+      ],
+      "after": [
+        "    \"bun-types\": [\"bun-types@1.4.4\", \"\", { \"dependencies\": { \"@types/node\": \"*\", \"undici-types\": \"*\" } }, \"sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ==\"],"
+      ]
     }
   },
   "artifacts": {
@@ -511,6 +586,216 @@
       "beforeSha256": "19fd7603ec36b37486b807a8d0f5f8db77953136bbe29a7e50087e9d71a38931",
       "afterSha256": "1f5c343fa3e0bc986a9220485a1a674dae13fe4b3e8c11e7e9d64edf4008eb11",
       "hunks": ["h003", "h004", "h005"]
+    },
+    "starter/postgres-hybrid-combined-rls/db/ensure-postgres-app-role.sql": {
+      "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
+      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
+      "hunks": ["runtime-schema-usage-only"]
+    },
+    "starter/postgres-hybrid-combined-rls/docker/postgres-init/01-strata-app-role.sql": {
+      "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
+      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
+      "hunks": ["runtime-schema-usage-only"]
+    },
+    "starter/postgres-api-cookie-token-column-local/db/ensure-postgres-app-role.sql": {
+      "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
+      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
+      "hunks": ["runtime-schema-usage-only"]
+    },
+    "starter/postgres-htmx-cookie-local/db/ensure-postgres-app-role.sql": {
+      "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
+      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
+      "hunks": ["runtime-schema-usage-only"]
+    },
+    "starter/sqlite-api-headers-local/.bun-version": {
+      "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
+      "afterSha256": "d03d8b268b4171328ac2458ce8ca82d69a1fde38469d4e4faae4f8fa8d8a5e35",
+      "hunks": ["bun-1-4-4-1"]
+    },
+    "starter/sqlite-api-headers-local/Dockerfile": {
+      "beforeSha256": "3fba5b654ccbac219d4bbf918f90b61abff5574ee2dbff193eeb6e383fe45b20",
+      "afterSha256": "940cd19f0de10770439b7a92f6b5580e8c0e85e014c7684d5b5947b487390623",
+      "hunks": ["bun-1-4-4-2", "bun-1-4-4-3"]
+    },
+    "starter/sqlite-api-headers-local/package.json": {
+      "beforeSha256": "5f5473ffe2788af2e3c5ffaa1c4be864cd5cf792267d5eaeb41110aeb50b43ec",
+      "afterSha256": "f211963ae6b0e6176680c764b2f1a5c0f98fd2bf01af3de564e6e573fd1f4c71",
+      "hunks": ["bun-1-4-4-4", "bun-1-4-4-5", "bun-1-4-4-6"]
+    },
+    "starter/sqlite-api-headers-local/README.md": {
+      "beforeSha256": "0546b6e7c22dbc6e27e0d3853f7ca9c242a8d889a2a45f23ec624c8715f2f3c0",
+      "afterSha256": "5d52eae461e626c411590d14407be204650514cdf67e6ba29bea0a971269a7d5",
+      "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/mysql-htmx-cookie-tools/.bun-version": {
+      "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
+      "afterSha256": "d03d8b268b4171328ac2458ce8ca82d69a1fde38469d4e4faae4f8fa8d8a5e35",
+      "hunks": ["bun-1-4-4-1"]
+    },
+    "starter/mysql-htmx-cookie-tools/Dockerfile": {
+      "beforeSha256": "02f3714bf4187d5b27baf2c9d6ae3439c03a54d672b47e73c2acc85501c841d0",
+      "afterSha256": "7b8401037b6644189ee2b85850dc7dff5b85c68f0613fe1f724446ea6edab929",
+      "hunks": ["bun-1-4-4-2", "bun-1-4-4-3"]
+    },
+    "starter/mysql-htmx-cookie-tools/package.json": {
+      "beforeSha256": "2c3f63a0acf87388a1effaac6498e69ba3dca91443b808bda11d8f1d7c8a94d8",
+      "afterSha256": "f814a23564e752daa557b3b72829483de9f8e88e5b007b92365d87c77052144a",
+      "hunks": ["bun-1-4-4-4", "bun-1-4-4-5", "bun-1-4-4-6"]
+    },
+    "starter/mysql-htmx-cookie-tools/README.md": {
+      "beforeSha256": "cae73e4975fdf2d5ba70d6ebbb84814014c82bfa4adc6d7b8dc493ade46a9b1e",
+      "afterSha256": "90a6433309c2024b3f2fd6c7e2497d857c2e5aabd62e8b46f87dae64c0b2ba0a",
+      "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/postgres-hybrid-combined-rls/.bun-version": {
+      "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
+      "afterSha256": "d03d8b268b4171328ac2458ce8ca82d69a1fde38469d4e4faae4f8fa8d8a5e35",
+      "hunks": ["bun-1-4-4-1"]
+    },
+    "starter/postgres-hybrid-combined-rls/Dockerfile": {
+      "beforeSha256": "4fba0b52aa121d407423fac9f65f8025afcb68b1f71dd03c46e49cd25c412d27",
+      "afterSha256": "de06ac14c248658174b38bd217805e9666bc2d1c1d2688b2619314cf0e3e753c",
+      "hunks": ["bun-1-4-4-2", "bun-1-4-4-8", "bun-1-4-4-3"]
+    },
+    "starter/postgres-hybrid-combined-rls/package.json": {
+      "beforeSha256": "b6f68862979c4d0fedf2f1934eba2ffd641804eb7df148f647e00709406250d6",
+      "afterSha256": "703f09543ed50b99bd05a0a60e071ff23c982d31faddfd962a85187cf953f779",
+      "hunks": ["bun-1-4-4-4", "bun-1-4-4-5", "bun-1-4-4-6"]
+    },
+    "starter/postgres-hybrid-combined-rls/README.md": {
+      "beforeSha256": "45151351582f2d4be713bfb6e243b16b37e90b66b42e61a19e416e3bbb5e56c6",
+      "afterSha256": "b480c08864b4ce8c98090ecc7d998f19350eba02395cc3cad20217991839d283",
+      "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/sqlite-spa-jwt-local/.bun-version": {
+      "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
+      "afterSha256": "d03d8b268b4171328ac2458ce8ca82d69a1fde38469d4e4faae4f8fa8d8a5e35",
+      "hunks": ["bun-1-4-4-1"]
+    },
+    "starter/sqlite-spa-jwt-local/Dockerfile": {
+      "beforeSha256": "2cd954dd4e5b7c1a1287fc46439232c4c508717a9946f7206b04c624667c31c7",
+      "afterSha256": "89f26f46b5bbcb9dd2071c4c66438a0762259537accf6ffc11849cc1c4650da4",
+      "hunks": ["bun-1-4-4-2", "bun-1-4-4-8", "bun-1-4-4-3"]
+    },
+    "starter/sqlite-spa-jwt-local/package.json": {
+      "beforeSha256": "b6f68862979c4d0fedf2f1934eba2ffd641804eb7df148f647e00709406250d6",
+      "afterSha256": "703f09543ed50b99bd05a0a60e071ff23c982d31faddfd962a85187cf953f779",
+      "hunks": ["bun-1-4-4-4", "bun-1-4-4-5", "bun-1-4-4-6"]
+    },
+    "starter/sqlite-spa-jwt-local/README.md": {
+      "beforeSha256": "9087af860362958768aee5c78e665d61f2369ae28cf71860c17fb2bc65e469a3",
+      "afterSha256": "192dc677fb27099ddcbafa0f2736e5239bca17d354d06cae9560cc13fbfaff45",
+      "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/mysql-api-token-column-partial-tools/.bun-version": {
+      "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
+      "afterSha256": "d03d8b268b4171328ac2458ce8ca82d69a1fde38469d4e4faae4f8fa8d8a5e35",
+      "hunks": ["bun-1-4-4-1"]
+    },
+    "starter/mysql-api-token-column-partial-tools/Dockerfile": {
+      "beforeSha256": "02f3714bf4187d5b27baf2c9d6ae3439c03a54d672b47e73c2acc85501c841d0",
+      "afterSha256": "7b8401037b6644189ee2b85850dc7dff5b85c68f0613fe1f724446ea6edab929",
+      "hunks": ["bun-1-4-4-2", "bun-1-4-4-3"]
+    },
+    "starter/mysql-api-token-column-partial-tools/package.json": {
+      "beforeSha256": "2c3f63a0acf87388a1effaac6498e69ba3dca91443b808bda11d8f1d7c8a94d8",
+      "afterSha256": "f814a23564e752daa557b3b72829483de9f8e88e5b007b92365d87c77052144a",
+      "hunks": ["bun-1-4-4-4", "bun-1-4-4-5", "bun-1-4-4-6"]
+    },
+    "starter/mysql-api-token-column-partial-tools/README.md": {
+      "beforeSha256": "55d8675eb002819c3c2ddca0dcb6318f83bce52a7dca0474848509098cd8baeb",
+      "afterSha256": "802cacdf1947fc1c0b2d95b02527041158407548fc657bb40050ae9dd30553c7",
+      "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/postgres-api-cookie-token-column-local/.bun-version": {
+      "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
+      "afterSha256": "d03d8b268b4171328ac2458ce8ca82d69a1fde38469d4e4faae4f8fa8d8a5e35",
+      "hunks": ["bun-1-4-4-1"]
+    },
+    "starter/postgres-api-cookie-token-column-local/Dockerfile": {
+      "beforeSha256": "02f3714bf4187d5b27baf2c9d6ae3439c03a54d672b47e73c2acc85501c841d0",
+      "afterSha256": "7b8401037b6644189ee2b85850dc7dff5b85c68f0613fe1f724446ea6edab929",
+      "hunks": ["bun-1-4-4-2", "bun-1-4-4-3"]
+    },
+    "starter/postgres-api-cookie-token-column-local/package.json": {
+      "beforeSha256": "5f5473ffe2788af2e3c5ffaa1c4be864cd5cf792267d5eaeb41110aeb50b43ec",
+      "afterSha256": "f211963ae6b0e6176680c764b2f1a5c0f98fd2bf01af3de564e6e573fd1f4c71",
+      "hunks": ["bun-1-4-4-4", "bun-1-4-4-5", "bun-1-4-4-6"]
+    },
+    "starter/postgres-api-cookie-token-column-local/README.md": {
+      "beforeSha256": "aeb96c15ec72b2bfbff81ec3198ee686f514b383e2688b4e41c8c8faa52a680d",
+      "afterSha256": "7cec1dc6f8dc416b6b2acc5d7d0ed047653b8fc6d4e4683fc6bf2b907cc5e910",
+      "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/postgres-htmx-cookie-local/.bun-version": {
+      "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
+      "afterSha256": "d03d8b268b4171328ac2458ce8ca82d69a1fde38469d4e4faae4f8fa8d8a5e35",
+      "hunks": ["bun-1-4-4-1"]
+    },
+    "starter/postgres-htmx-cookie-local/Dockerfile": {
+      "beforeSha256": "02f3714bf4187d5b27baf2c9d6ae3439c03a54d672b47e73c2acc85501c841d0",
+      "afterSha256": "7b8401037b6644189ee2b85850dc7dff5b85c68f0613fe1f724446ea6edab929",
+      "hunks": ["bun-1-4-4-2", "bun-1-4-4-3"]
+    },
+    "starter/postgres-htmx-cookie-local/package.json": {
+      "beforeSha256": "5f5473ffe2788af2e3c5ffaa1c4be864cd5cf792267d5eaeb41110aeb50b43ec",
+      "afterSha256": "f211963ae6b0e6176680c764b2f1a5c0f98fd2bf01af3de564e6e573fd1f4c71",
+      "hunks": ["bun-1-4-4-4", "bun-1-4-4-5", "bun-1-4-4-6"]
+    },
+    "starter/postgres-htmx-cookie-local/README.md": {
+      "beforeSha256": "cab16cc37498bb701c7470cf143b1e3fe53d8a536e0fd42466354843a116d9a1",
+      "afterSha256": "3b8ae0ecac499492c4c7ea3526001a4444f6cbcc60b12d6aba0bff751c636685",
+      "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/.bun-version": {
+      "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
+      "afterSha256": "d03d8b268b4171328ac2458ce8ca82d69a1fde38469d4e4faae4f8fa8d8a5e35",
+      "hunks": ["bun-1-4-4-1"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/Dockerfile": {
+      "beforeSha256": "4fba0b52aa121d407423fac9f65f8025afcb68b1f71dd03c46e49cd25c412d27",
+      "afterSha256": "de06ac14c248658174b38bd217805e9666bc2d1c1d2688b2619314cf0e3e753c",
+      "hunks": ["bun-1-4-4-2", "bun-1-4-4-8", "bun-1-4-4-3"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/package.json": {
+      "beforeSha256": "2446bfa0912356d70a8dd674084762e2b021df85e3a65a6302102c093a86168b",
+      "afterSha256": "badf1392b47598fe205e630029cd27b62c5958875401e91062e045fc4123de57",
+      "hunks": ["bun-1-4-4-4", "bun-1-4-4-5", "bun-1-4-4-6"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/README.md": {
+      "beforeSha256": "5234e2475223b5a054f8cde8e13f48186c4e998b04cc8fc8b26cd2598cb0fb9a",
+      "afterSha256": "aafbb3536ac35caec7467f917d921fdb4ebe26f5d0676ccadc4e1bff5f97f494",
+      "hunks": ["bun-1-4-4-7"]
+    },
+    "starter/postgres-hybrid-combined-rls/frontend/bun.lock": {
+      "beforeSha256": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69",
+      "afterSha256": "8ff726fbb471b7a98cc8d6a7678ecbd189633c6bc48d9084cdca5a232f48ed1b",
+      "hunks": ["bun-1-4-4-9", "bun-1-4-4-10", "bun-1-4-4-11", "bun-1-4-4-12"]
+    },
+    "starter/postgres-hybrid-combined-rls/frontend/package.json": {
+      "beforeSha256": "3a8bcbaa7bce9886d8ef534f219fcfa99fd915be6020621a32dcf0b7d2f81c73",
+      "afterSha256": "ca32ed0ea4eb9c8d3f576857a6f3f0e7df22df5757e5066d879ddda9e9321cdc",
+      "hunks": ["bun-1-4-4-6", "bun-1-4-4-4", "bun-1-4-4-5"]
+    },
+    "starter/sqlite-spa-jwt-local/frontend/bun.lock": {
+      "beforeSha256": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69",
+      "afterSha256": "8ff726fbb471b7a98cc8d6a7678ecbd189633c6bc48d9084cdca5a232f48ed1b",
+      "hunks": ["bun-1-4-4-9", "bun-1-4-4-10", "bun-1-4-4-11", "bun-1-4-4-12"]
+    },
+    "starter/sqlite-spa-jwt-local/frontend/package.json": {
+      "beforeSha256": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+      "afterSha256": "ebca9371d5756fe758920fb0c7488915ef645d9eac37700d13096ac410c4fb27",
+      "hunks": ["bun-1-4-4-6", "bun-1-4-4-4", "bun-1-4-4-5"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/frontend/bun.lock": {
+      "beforeSha256": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69",
+      "afterSha256": "8ff726fbb471b7a98cc8d6a7678ecbd189633c6bc48d9084cdca5a232f48ed1b",
+      "hunks": ["bun-1-4-4-9", "bun-1-4-4-10", "bun-1-4-4-11", "bun-1-4-4-12"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/frontend/package.json": {
+      "beforeSha256": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
+      "afterSha256": "ebca9371d5756fe758920fb0c7488915ef645d9eac37700d13096ac410c4fb27",
+      "hunks": ["bun-1-4-4-6", "bun-1-4-4-4", "bun-1-4-4-5"]
     }
   }
 }

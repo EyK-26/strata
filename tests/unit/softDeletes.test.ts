@@ -136,3 +136,10 @@ describe("soft delete repository", () => {
     expect(events).toEqual(["created"]);
   });
 });
+
+test("missing soft-delete and restore targets do not emit an entity", async () => {
+  const connection = new FakeConnection();
+  const repository = new SoftRepository(connection);
+  expect(await repository.softDeleteById(404)).toBe(false);
+  expect(await repository.restoreById(404)).toBeNull();
+});

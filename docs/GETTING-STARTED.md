@@ -4,7 +4,7 @@ For a product app, run `bunx create-strata` and follow its generated README. Pro
 
 ## Requirements
 
-Install the Bun version in `.bun-version` and Docker with Compose. The framework requires Bun >=1.4.3. Contributor infrastructure uses Postgres, MySQL and Redis; generated Docker acceptance additionally starts an owned temporary Postgres container.
+Install the Bun version in `.bun-version` and Docker with Compose. The framework requires Bun >=1.4.4, including future 1.4.x patches. Repository/CI and Docker pins select the qualified 1.4.4 release; see [runtime qualification](BUN-RUNTIME.md). Contributor infrastructure uses Postgres, MySQL and Redis; generated Docker acceptance additionally starts an owned temporary Postgres container.
 
 ```bash
 bun install

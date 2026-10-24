@@ -298,3 +298,17 @@ describe("MockOAuthProvider", () => {
     await expect(provider.exchangeCode("invalid")).rejects.toThrow("Invalid OAuth code.");
   });
 });
+
+test("a malformed GitHub email response cannot supply a verified identity", async () => {
+  mockPublicDns();
+  mockGitHub({
+    profile: { id: 17, login: "one", email: null },
+    emails: { email: "spoof@example.test", verified: true },
+  });
+  const provider = new GitHubOAuthProvider({
+    clientId: "client",
+    clientSecret: "secret",
+    redirectUri: "https://app.example.com/callback",
+  });
+  await expect(provider.exchangeCode("code")).rejects.toThrow("verified email");
+});

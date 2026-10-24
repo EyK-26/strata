@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHmac } from "node:crypto";
 import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import { AuthManager, DatabaseTokenGuard } from "@getstrata/core/auth/guard";
 import { signJwt, verifyJwt } from "@getstrata/core/auth/jwt";
@@ -544,4 +545,66 @@ describe("HTTP Basic guard", () => {
       ),
     ).toBeNull();
   });
+});
+
+test("legacy basic directories deny missing, inactive and deleted principals", async () => {
+  const request = new Request("http://example.test", {
+    headers: { authorization: `Basic ${Buffer.from("user:secret").toString("base64")}` },
+  });
+  for (const user of [
+    null,
+    { id: 1, role: "member", isActive: false },
+    { id: 1, role: "member" },
+  ]) {
+    let lookups = 0;
+    const directory: AuthUserDirectory = {
+      async resolveUserFromToken() {
+        return null;
+      },
+      async verifyCredentials() {
+        return user;
+      },
+      async findByIdOrThrow() {
+        lookups++;
+        throw new Error("deleted");
+      },
+    };
+    expect(await new BasicAuthGuard(directoryContainer(directory)).resolve(request)).toBeNull();
+    expect(lookups).toBe(user && user.isActive !== false ? 1 : 0);
+  }
+});
+
+test("signed JWTs still require finite issuance, a usable subject and a current directory record", async () => {
+  const secret = "qualification-jwt-secret-with-sufficient-length";
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const token = (payload: Record<string, unknown>) => {
+    const unsigned = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ exp: Math.floor(Date.now() / 1000) + 3600, ...payload })}`;
+    return `${unsigned}.${createHmac("sha256", secret).update(unsigned).digest("base64url")}`;
+  };
+  let lookups = 0;
+  const guard = new JwtGuard({
+    secret,
+    directory: jwtDirectory(() => {
+      lookups++;
+      throw new Error("deleted");
+    }),
+  });
+  const now = Math.floor(Date.now() / 1000);
+  for (const payload of [
+    { sub: 1 },
+    { sub: 1, iat: "now" },
+    { sub: 1, iat: null },
+    { sub: "invalid", iat: now },
+    { sub: 0, iat: now },
+    { sub: 1, iat: now },
+  ]) {
+    expect(
+      await guard.resolve(
+        new Request("http://example.test", {
+          headers: { authorization: `Bearer ${token(payload)}` },
+        }),
+      ),
+    ).toBeNull();
+  }
+  expect(lookups).toBe(1);
 });

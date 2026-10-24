@@ -1,6 +1,6 @@
 # @getstrata/cli
 
-The `strata` binary for [Strata](https://github.com/EyK-26/strata) apps. Bun stays the runtime, installer, and test runner; `strata` owns the app lifecycle. Requires Bun >=1.4.3 (tested on 1.4.3).
+The `strata` binary for [Strata](https://github.com/EyK-26/strata) apps. Bun stays the runtime, installer, and test runner; `strata` owns the app lifecycle. Requires Bun >=1.4.4 (tested on 1.4.4).
 
 ## Commands
 

@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { hasMany, hasManyThrough } from "@getstrata/core/database/relationships";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import {
+  belongsTo,
+  hasMany,
+  hasManyThrough,
+  indexHasManyRelation,
+} from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
+import { runInTransaction } from "@getstrata/core/database/transaction";
 import { NotFoundError } from "@getstrata/core/errors/http";
 
 type CrewMember = {
@@ -454,4 +461,144 @@ describe("base repository", () => {
       { id: 1, name: "Arthur", squad_id: 1, is_active: true },
     ]);
   });
+});
+
+test("empty parent loads and invalid chunk/page bounds never query the database", async () => {
+  const connection = new FakeConnection();
+  const repository = new CrewRepository(connection);
+  expect(await repository.loadBySquads([])).toEqual(new Map());
+  for (const count of [0, -1, 1.5]) {
+    await expect(repository.chunk(count, async () => undefined)).rejects.toThrow("Chunk size");
+    await expect(repository.chunkById(count, async () => undefined)).rejects.toThrow("Chunk size");
+    await expect(repository.cursorPaginate({ perPage: count })).rejects.toThrow("Cursor page size");
+  }
+  expect(connection.calls).toEqual([]);
+});
+
+test("missing writes and lookups preserve their documented absence results", async () => {
+  const connection = new FakeConnection();
+  const repository = new CrewRepository(connection);
+  await expect(
+    repository.create({ name: "missing", squad_id: 1, is_active: true }),
+  ).rejects.toThrow("Internal server error.");
+  await expect(repository.findByIdOrThrow(404, () => new Error("custom missing"))).rejects.toThrow(
+    "custom missing",
+  );
+  await expect(
+    repository.updateByIdOrThrow(
+      404,
+      { name: "missing" },
+      () => new Error("custom update missing"),
+    ),
+  ).rejects.toThrow("custom update missing");
+  expect(await repository.deleteById(404)).toBe(false);
+  expect(await repository.updateById(404, { name: "absent" })).toBeNull();
+});
+
+test("unmatched children cannot attach to an unrelated supplied parent", () => {
+  const result = indexHasManyRelation(
+    [{ id: 1, label: "one" }],
+    [{ id: 8, name: "outside", squad_id: 2, is_active: true }],
+    squadHasManyCrewMembers,
+  );
+  expect(result).toEqual(new Map([[1, []]]));
+});
+
+test("empty belongs-to loads do not resolve or query parent repositories", async () => {
+  const connection = new FakeConnection();
+  const repository = new CrewRepository(connection);
+  const parent = new BaseRepository(
+    defineTable<Squad, "id">({ name: "squad", primaryKey: "id", columns: ["id", "label"] }),
+    connection,
+  );
+  const relation = belongsTo<CrewMember, Squad, "squad_id", "id">({
+    name: "squad",
+    foreignKey: "squad_id",
+    ownerKey: "id",
+  });
+  expect(await repository.loadBelongsToForParents([], relation, parent)).toEqual(new Map());
+  expect(connection.calls).toEqual([]);
+});
+
+class TransactionalAdapterFixture extends FakeConnection {
+  commits = 0;
+  rollbacks = 0;
+  async begin<T>(work: (connection: this) => Promise<T>): Promise<T> {
+    try {
+      const result = await work(this);
+      this.commits++;
+      return result;
+    } catch (error) {
+      this.rollbacks++;
+      throw error;
+    }
+  }
+}
+
+test("MySQL adapter failures cannot report an unidentified write as a persisted entity", async () => {
+  await runWithSqlDialect("mysql", async () => {
+    const missingId = new TransactionalAdapterFixture();
+    missingId.queue([{ affectedRows: 1 }]);
+    await expect(
+      new CrewRepository(missingId).create({ name: "one", squad_id: 1, is_active: true }),
+    ).rejects.toThrow("Internal server error.");
+    expect(missingId.calls).toHaveLength(1);
+    expect(missingId.commits).toBe(0);
+    expect(missingId.rollbacks).toBe(1);
+    for (const affectedRows of [undefined, -1, 1.5]) {
+      const invalidMetadata = new TransactionalAdapterFixture();
+      invalidMetadata.queue([{ affectedRows }]);
+      await expect(
+        new CrewRepository(invalidMetadata).updateById(1, { name: "one" }),
+      ).rejects.toThrow("Internal server error.");
+      expect(invalidMetadata.calls).toHaveLength(1);
+      expect(invalidMetadata.commits).toBe(0);
+      expect(invalidMetadata.rollbacks).toBe(1);
+      const invalidCount = new FakeConnection();
+      invalidCount.queue([{ affectedRows }]);
+      await expect(
+        new CrewRepository(invalidCount).deleteWhere({ where: { id: 1 } }),
+      ).rejects.toThrow("Internal server error.");
+      expect(invalidCount.calls).toHaveLength(1);
+    }
+  });
+});
+
+test("MySQL upsert rejects absent conflict identities and rolls back an unresolved readback", async () => {
+  await runWithSqlDialect("mysql", async () => {
+    const absentConflict = new TransactionalAdapterFixture();
+    await expect(
+      new CrewRepository(absentConflict).upsert({ name: "one" }, ["squad_id"]),
+    ).rejects.toThrow("Internal server error.");
+    expect(absentConflict.calls).toEqual([]);
+    expect(absentConflict.rollbacks).toBe(1);
+    const noReadback = new TransactionalAdapterFixture();
+    noReadback.queue([{ insertId: 0, affectedRows: 1 }]);
+    await expect(
+      new CrewRepository(noReadback).upsert({ id: 1, name: "one" }, ["id"]),
+    ).rejects.toThrow("Internal server error.");
+    expect(noReadback.calls).toHaveLength(2);
+    expect(noReadback.commits).toBe(0);
+    expect(noReadback.rollbacks).toBe(1);
+  });
+});
+
+test("row-locked chunk scans retain their query contract when there are no matching rows", async () => {
+  const connection = new TransactionalAdapterFixture();
+  const repository = new CrewRepository(connection);
+  let visited = false;
+  await runInTransaction(
+    () =>
+      repository.chunk(
+        2,
+        async () => {
+          visited = true;
+        },
+        { lock: { mode: "update" } },
+      ),
+    { connection },
+  );
+  expect(visited).toBe(false);
+  expect(connection.calls).toHaveLength(1);
+  expect(connection.calls[0]?.query).toContain("FOR UPDATE");
 });
