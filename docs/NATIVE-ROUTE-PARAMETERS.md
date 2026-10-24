@@ -83,10 +83,21 @@ bodies remain byte-identical prefixes; appended real-native assertions fail firs
 on original source and exact published 2.2.53, then pass on the correction and a
 freshly built installed candidate.
 
-**This own-property correction is source-only until a later qualified patch release.**
-The earlier 159-profile 2.2.53 acceptance remains immutable bounded evidence; it
-does not assert every parameter name was tested. The M1 proposal records this as a
-confirmed defect, separately from compatibility guarantees and native feasibility
-observations. Raw red/green and fixture setup logs are retained under
-`/tmp/strata-m1-path-method-feasibility-20261024`. No new version/tag is prepared
-for this design continuation. Shop adoption stays held for #257; timer stays off.
+At discovery this correction was source-only. It is now published in all five
+aligned 2.2.54 packages after the actual merged-main CI/security and full trusted
+release workflow passed. All 159 retained published profiles pass with zero
+failures/skips, including the positive own-key regression after every original
+native assertion. Twelve 2.2.53→2.2.54→2.2.53 exact-lock rollback profiles preserve
+customized source/build/dependencies and committed data, including post-upgrade rows.
+Restoring 2.2.53 also restores its known own-key defect: the rollback profiles prove
+their existing app contracts and data preservation, not persistence of the new fix
+inside the older binary.
+
+The earlier 2.2.53 acceptance and M1 dated defect receipt remain immutable bounded
+evidence; neither claimed every possible parameter name was tested. The
+[sanitized 2.2.54 receipt](qualification/native-route-2.2.54.json) records actual
+publication/main/local gates, all profile identities and complete owned cleanup.
+Raw source/published red and fixture setup logs remain under
+`/tmp/strata-m1-path-method-feasibility-20261024`. This compatible release does not
+implement a major route API or fix native asset/pipeline/mixed-listener limits.
+Shop adoption stays held for #257; timer stays off.

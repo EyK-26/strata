@@ -2,6 +2,32 @@
 
 Baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
 
+## Native parameter own keys — published 2.2.54
+
+The [parameter audit](NATIVE-ROUTE-PARAMETERS.md) records the compatible correction
+from #354: native own string keys such as `__proto__` survive copying and repeated
+request adaptation. Bun-owned decoding, plain-object prototypes, coercion, native
+request identity and every original assertion remain. This fixes parameter loss;
+the reproduction did not establish prototype pollution.
+
+**All 159 retained exact-published profiles executed and passed, zero failures/skips**;
+the native-route profile executes the appended own-key regression after all previous
+native/percent/security assertions. **Twelve 2.2.53→2.2.54→2.2.53 exact-lock rollback
+profiles pass**, preserving customized source, built assets, exact dependencies and
+committed rows, including rows written after upgrading.
+
+The source gate passes 2,717 unit/integration tests with three unchanged exclusions
+and all 191 E2E with no failures/skips. Actual merged-main CI/security passes 2,718
+with two existing Linux exclusions, all 191 E2E and a clean 91-package audit.
+Coverage remains 151 enforced/272 exempt. Full trusted publication and all five
+exact packages are verified. [Sanitized evidence](qualification/native-route-2.2.54.json)
+retains actual identities, counts, log/input hashes and owned-resource restoration.
+
+M1 continues with proposed diagnostic fields and staged-startup/cleanup acceptance
+cases, retaining its 82 transport observations and 43 compiler cases unchanged.
+No breaking API, validator, registry redesign or provider is implemented. Shop
+adoption stays manually held for #257; timer stays off. Earlier audits remain intact.
+
 ## Native route ownership — published 2.2.53
 
 The [native parameter audit](NATIVE-ROUTE-PARAMETERS.md) records the compatible
