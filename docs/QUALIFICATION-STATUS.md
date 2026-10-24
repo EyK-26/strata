@@ -1,6 +1,32 @@
 # Qualification status
 
-Baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
+Historical baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
+
+## Generated startup cleanup — published 2.2.55
+
+The [startup cleanup audit](STARTUP-CLEANUP-ERRORS.md) records the compatible #358
+correction: generated server cleanup retains the original native startup cause and
+all cleanup failures, preserving cleanup order and failed-drain/retry policy.
+**All 159 retained published profiles pass, zero failures/skips**, and all twelve
+2.2.54→2.2.55→2.2.54 exact-lock rollback profiles pass with source/build/data preserved.
+Separate sixteen-case published startup checks retain all earlier controls and
+prove the corrected original-cause contract. A bounded customized-source rehearsal
+qualifies deliberate published-template adoption and dependency rollback in five
+phases; package installation itself never rewrites the application source.
+
+The release full gate passes 2,717 unit/integration tests with three unchanged
+platform exclusions, zero failures; all 192 E2E pass without failures/skips. Actual
+merged-main CI/security passes 2,718 with two existing Linux exclusions, all 192 E2E
+and a clean 91-package audit. Coverage remains 151 enforced/272 exempt. The full
+trusted workflow and all five exact npm versions are verified. [Sanitized evidence](qualification/startup-cleanup-2.2.55.json)
+records actual identities, counts, preserved assertions and resource restoration.
+An unrelated concurrent resource addition during the earlier source gate is recorded
+separately; no foreign resources were removed or exact global equality invented.
+
+M1 continues with separate primary-failure, cleanup-outcome and owned-resource
+observations. No generic retry certificate or breaking implementation is accepted.
+Native-assets public origin/provider/browser/major-migration gates remain open;
+shop stays manually held for #257 and the timer stays off. Earlier audits remain intact.
 
 ## Native parameter own keys — published 2.2.54
 

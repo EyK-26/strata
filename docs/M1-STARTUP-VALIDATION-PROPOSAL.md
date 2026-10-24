@@ -616,3 +616,101 @@ graphs, supported browsers, provider TLS/cookie/CSP/CORS/publication/retention a
 major migration/deprecation/cached-client rollback remain independent gates. Native
 pipeline truncation and mixed HTTP/WebSocket completion ambiguity remain unresolved.
 Shop adoption stays manually held for #257; timer stays off.
+
+## Separate qualified 2.2.55 publication
+
+The error-retention correction above was source-only at the dated feasibility
+checkpoint. A separate authorized 2.2.55 release now publishes it after actual-main
+CI/security, actual-main npm readiness and the full trusted workflow pass. All 159
+retained published profiles and twelve 2.2.54→2.2.55→2.2.54 rollback profiles pass; sixteen
+published startup executions retain the controls and assert the corrected cause.
+The original published 2.2.54 defect receipt remains immutable historical evidence.
+See the [startup audit](STARTUP-CLEANUP-ERRORS.md) for actual gates and limits.
+
+A fresh customized-app rehearsal separates dependency installation from deliberate
+generated-source adoption. Adopting the published 2.2.55 catch preserves the original
+cause with 2.2.54/2.2.55 dependencies and exact 2.2.54 dependency rollback; reversing the source
+patch deliberately restores the known 2.2.54 defect. Existing apps require their own
+reviewed adoption and validation; no package install may overwrite their source.
+This compatible evidence accepts no major route/asset API or migration guarantee.
+
+## Follow-on M1 review: cleanup results are not retry authorization
+
+This is a design continuation after the compatible patch qualification. It adds no
+validator, exported diagnostic, registry transaction, public artifact provider or
+breaking runtime behavior. The exact field names, exports and ownership boundary still
+require acceptance before implementation.
+
+### Keep three independent observations
+
+The measured lifecycle cases need three facts rather than a single `retryable`
+flag or a success/failure label:
+
+- **Primary failure:** retain the original declaration/provider/native failure at
+  its existing owner. A later cleanup rejection must not replace it. An unclassified
+  SDK exception remains an original cause, not a fabricated invalid-declaration
+  diagnostic. Preserve cause identity internally; do not serialize arbitrary errors.
+- **Cleanup outcome:** record whether cleanup reported failures and which lifecycle
+  phase blocked progress. A callback can release its socket and then throw; its
+  reported failure remains significant even when that particular resource is gone.
+- **Owned-resource disposition:** distinguish observed release, explicitly retained
+  ownership and unresolved ownership. State the scope of the owner's evidence;
+  this cannot certify rollback of arbitrary module/import effects or all resources
+  reachable from application code.
+
+The earlier complete/failed/drain-blocked vocabulary describes cleanup outcomes.
+It must not collapse resource disposition into the same state field. Proposed
+cleanup details can extend the existing diagnostic record, with observable
+phase/owner and bounded failure counts. Exact names are review targets; there is
+no new exception hierarchy or serializable native-error contract. Safe diagnostics
+must not expose private paths, credentials, payloads or automatic error stacks.
+
+### Apply the observations to the measured boundaries
+
+A normal startup rejection with completed owned cleanup supports a separately
+corrected attempt after its caller resolves configuration. The generated entrypoint
+owns its context cleanup after a native bind rejection; the raw server factory's
+caller owns the context it supplied. Error code, missing active context and absence
+of a published listener are insufficient evidence that resource ownership ended.
+
+A close callback that throws after closing its owned listener must retain both the
+original startup cause and the cleanup rejection. The fixture can independently
+observe released sockets; a general API cannot infer that disposition from the
+exception alone. Conversely, failed drain deliberately retains infrastructure.
+It blocks flush/close even if no ready context was published. Do not turn that
+result into a forced close, shortened lease or automatic restart. Repeating a
+memoized disposal call is not a recovery policy.
+
+A late handler failure belongs to the request boundary after successful startup.
+It does not authorize recollection, listener replacement, another asset route or
+WebSocket-success fallback. Keep that case separate from startup diagnostics.
+
+### Candidate state and lifecycle ownership still need an accepted boundary
+
+Static declaration/capability validation, factory evaluation, native construction,
+metadata publication and listener ownership are distinct phases. Factories can
+require ready providers, and current 2.x publishes its active context before route
+collection. Descriptor checks do not make arbitrary Proxy traps or module effects
+pure. The proposed collector can stage local metadata, but it cannot manufacture an
+unpublished context or atomic application replacement through the existing API.
+
+Before implementation, select the M2-compatible lifecycle owner and the point at
+which a candidate becomes accepted. Characterize invalid-candidate failure before
+registry mutation, later native construction failure, reverse cleanup failure and
+corrected retry under that policy. Include a previously accepted registry baseline
+without promising simultaneous running applications or zero-downtime replacement.
+Do not bind a second listener or call factories twice just to validate a candidate.
+
+### Next evidence and migration gates
+
+Qualify real admitted SQL/work during failed drain, actual database-close failures,
+worker/import effects and platform-specific bind/release behavior. Record reported
+cleanup errors separately from observed resource release, preserving the existing
+leave-infrastructure-open assertions. No automatic retry certificate is accepted.
+
+The explicit public artifact origin remains the selected major design target.
+Exact route/method/owner/diagnostic/export acceptance, whole asset graphs, supported
+browser/provider TLS/cookie/CSP/CORS/publication/retention, major per-app migration,
+deprecation/support windows and old/new cached-client rollback remain open. Native
+pipeline truncation and mixed HTTP/WebSocket completion ambiguity remain unresolved.
+Shop adoption stays manually held for #257; timer stays off.
