@@ -58,6 +58,8 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     "# Total graceful shutdown budget in milliseconds; keep deployment grace longer.",
     "SHUTDOWN_TIMEOUT_MS=30000",
     "APP_URL=http://localhost:3000",
+    "# Opt-in for HTTPS termination with a preserved public Host; does not trust forwarding headers.",
+    "# CSRF_TARGET_ORIGIN=https://app.example.com",
     `DATABASE_URL=${defaultDatabaseUrl(layers, projectName)}`,
     ...postgresAppRoleEnvNotes(layers),
     ...(layers.database === "postgres"

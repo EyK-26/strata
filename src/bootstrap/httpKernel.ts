@@ -47,6 +47,7 @@ import {
   CORE_PUBLIC_TENANCY_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,
+  CSRF_TARGET_ORIGIN_CONFIG_KEY,
   REDIS_URL_CONFIG_KEY,
 } from "./config";
 import type { AppDependencies, ConfigStore } from "./contracts";
@@ -58,7 +59,14 @@ type WebGuestHome = string | ((user: AuthUser) => string | Promise<string>);
 class HttpKernel {
   private readonly ownedThrottles = new Set<Middleware & { dispose(): void }>();
   private disposed = false;
+  private readonly configuredCsrfMiddleware: Middleware;
   constructor(private readonly dependencies: AppDependencies) {
+    const targetOrigin = dependencies.container.has(CORE_CONFIG_TOKEN)
+      ? dependencies.container
+          .resolve<ConfigStore>(CORE_CONFIG_TOKEN)
+          .get<string>(CSRF_TARGET_ORIGIN_CONFIG_KEY)
+      : undefined;
+    this.configuredCsrfMiddleware = createCsrfMiddleware({ targetOrigin });
     if (dependencies.container.has(CORE_HTTP_CLEANUP_TOKEN)) {
       dependencies.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => this.dispose());
     }
@@ -137,9 +145,9 @@ class HttpKernel {
       case "authenticated":
         return [createRequireAuthMiddleware(auth)];
       case "web":
-        return isViewsEnabled() ? [createFlashMiddleware(), createCsrfMiddleware()] : [];
+        return isViewsEnabled() ? [createFlashMiddleware(), this.configuredCsrfMiddleware] : [];
       case "api": {
-        const csrf = createCsrfMiddleware();
+        const csrf = this.configuredCsrfMiddleware;
 
         if (!this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
           return [csrf];

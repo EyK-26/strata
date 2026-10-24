@@ -444,6 +444,26 @@
       "after": [
         "    \"bun-types\": [\"bun-types@1.4.4\", \"\", { \"dependencies\": { \"@types/node\": \"*\", \"undici-types\": \"*\" } }, \"sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ==\"],"
       ]
+    },
+    "csrf-target-env-example": {
+      "before": ["APP_URL=http://localhost:3000"],
+      "after": [
+        "APP_URL=http://localhost:3000",
+        "# Opt-in for HTTPS termination with a preserved public Host; does not trust forwarding headers.",
+        "# CSRF_TARGET_ORIGIN=https://app.example.com"
+      ]
+    },
+    "csrf-target-provider-import": {
+      "before": ["  CORE_PUBLIC_TENANCY_TOKEN,"],
+      "after": ["  CORE_PUBLIC_TENANCY_TOKEN,", "  CSRF_TARGET_ORIGIN_CONFIG_KEY,"]
+    },
+    "csrf-target-provider-binding": {
+      "before": ["    container.set(CORE_CONFIG_TOKEN, config);"],
+      "after": [
+        "    container.set(CORE_CONFIG_TOKEN, config);",
+        "    if (process.env.CSRF_TARGET_ORIGIN !== undefined)",
+        "      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);"
+      ]
     }
   },
   "artifacts": {
@@ -796,6 +816,86 @@
       "beforeSha256": "435aa1f58e1503cdd3989cb9fc855af7677f4b68c04fd7d99d05281d753c73bd",
       "afterSha256": "ebca9371d5756fe758920fb0c7488915ef645d9eac37700d13096ac410c4fb27",
       "hunks": ["bun-1-4-4-6", "bun-1-4-4-4", "bun-1-4-4-5"]
+    },
+    "starter/sqlite-api-headers-local/.env.example": {
+      "beforeSha256": "cec42f5a859baa9e07c3304f66cf813481fb4e3b9958a6fd255d44af84d4dfd0",
+      "afterSha256": "02fc17c7380331dde9eebca98368674f7f7cb851548c0e5289ec666b519d7133",
+      "hunks": ["csrf-target-env-example"]
+    },
+    "starter/sqlite-api-headers-local/src/bootstrap/providers/config.ts": {
+      "beforeSha256": "53de715e4c547be318f789d1a798c4d1cca656795cf954622379ca588e8419dc",
+      "afterSha256": "a77b5bb9ba4b5e8165acf13f75f8851f8d4ad74a7b80dea546e1f5005f1762ba",
+      "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
+    },
+    "starter/mysql-htmx-cookie-tools/.env.example": {
+      "beforeSha256": "a68b60cc0df552b500ec2e3e71303a55c4e1fcc69280ba8b619dcd77f0909422",
+      "afterSha256": "de9475f77da83aecc1265271a0d7f729206dc65ba78a011eafe56fc05de57b32",
+      "hunks": ["csrf-target-env-example"]
+    },
+    "starter/mysql-htmx-cookie-tools/src/bootstrap/providers/config.ts": {
+      "beforeSha256": "4be27ee92ac7dba50b2b391f2bfc12a605de8e29dfd51376dc33f31a3afe61a6",
+      "afterSha256": "e08ec24fac3a9c3840f3bdb1ca61ccd498d830f7faf50bcf9e6f10699d99bd21",
+      "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
+    },
+    "starter/postgres-hybrid-combined-rls/.env.example": {
+      "beforeSha256": "c6c512f2640f543602bf34ae9104e2a33e25be12cd48b55a38cf18cbc8367739",
+      "afterSha256": "4a5f182787d7744b7133e9709a357b383c85618b4ba7f73bf73c95ac3a652d5e",
+      "hunks": ["csrf-target-env-example"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/bootstrap/providers/config.ts": {
+      "beforeSha256": "4be27ee92ac7dba50b2b391f2bfc12a605de8e29dfd51376dc33f31a3afe61a6",
+      "afterSha256": "e08ec24fac3a9c3840f3bdb1ca61ccd498d830f7faf50bcf9e6f10699d99bd21",
+      "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
+    },
+    "starter/sqlite-spa-jwt-local/.env.example": {
+      "beforeSha256": "aea265cc9817a63f377180fe0ee21dfcdbb967c188430f53680533c6fd61f6ba",
+      "afterSha256": "74d9b0ed85c0e6bc609be8fd6e7ecdfe0d0d81dcb1c072b3d4e7efe53d31c393",
+      "hunks": ["csrf-target-env-example"]
+    },
+    "starter/sqlite-spa-jwt-local/src/bootstrap/providers/config.ts": {
+      "beforeSha256": "53de715e4c547be318f789d1a798c4d1cca656795cf954622379ca588e8419dc",
+      "afterSha256": "a77b5bb9ba4b5e8165acf13f75f8851f8d4ad74a7b80dea546e1f5005f1762ba",
+      "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
+    },
+    "starter/mysql-api-token-column-partial-tools/.env.example": {
+      "beforeSha256": "e3b1d64aea79a4633f4b037529a907100440138af80477e420356507b8649833",
+      "afterSha256": "b3248465c6d57c309b10aced3b6a63ba3c5d42ef69b7fa3e5f8830256fd51d45",
+      "hunks": ["csrf-target-env-example"]
+    },
+    "starter/mysql-api-token-column-partial-tools/src/bootstrap/providers/config.ts": {
+      "beforeSha256": "4be27ee92ac7dba50b2b391f2bfc12a605de8e29dfd51376dc33f31a3afe61a6",
+      "afterSha256": "e08ec24fac3a9c3840f3bdb1ca61ccd498d830f7faf50bcf9e6f10699d99bd21",
+      "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
+    },
+    "starter/postgres-api-cookie-token-column-local/.env.example": {
+      "beforeSha256": "bfa7411fec89f1036919ac5a0c67ba354fa3e8688b085c4fa791e3fc7a3749ee",
+      "afterSha256": "3d6cc50a81cb2f0bf15a3c374124cc420d2b3d6eaa734832d7eec0c4a7edc367",
+      "hunks": ["csrf-target-env-example"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/bootstrap/providers/config.ts": {
+      "beforeSha256": "53de715e4c547be318f789d1a798c4d1cca656795cf954622379ca588e8419dc",
+      "afterSha256": "a77b5bb9ba4b5e8165acf13f75f8851f8d4ad74a7b80dea546e1f5005f1762ba",
+      "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
+    },
+    "starter/postgres-htmx-cookie-local/.env.example": {
+      "beforeSha256": "a85d8c7daf4dad8399298136fc7b12269a0cd0f84edd747eb078ea96a0ad9641",
+      "afterSha256": "12298c37fc0ae9c9f66b8fe812d978ff0e1ef2a166370e86b4687df4938b5bc8",
+      "hunks": ["csrf-target-env-example"]
+    },
+    "starter/postgres-htmx-cookie-local/src/bootstrap/providers/config.ts": {
+      "beforeSha256": "53de715e4c547be318f789d1a798c4d1cca656795cf954622379ca588e8419dc",
+      "afterSha256": "a77b5bb9ba4b5e8165acf13f75f8851f8d4ad74a7b80dea546e1f5005f1762ba",
+      "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/.env.example": {
+      "beforeSha256": "f5c5e5cef0bdb8b645841045cbcc0a339c445059d302e84bea39e11c39c4933c",
+      "afterSha256": "5d460ad71e1e9555a30a4d948d55351855ae8b61ad29c7260e785eccdacd3ec6",
+      "hunks": ["csrf-target-env-example"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/src/bootstrap/providers/config.ts": {
+      "beforeSha256": "50788c82874988ec6668ddb07e2f0641624eceb4dc67338eef64a6eae1796b89",
+      "afterSha256": "60c1e807917597e2bc9c5b3db2bdf26408cde04da10f9c408271d09ff57477ab",
+      "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
     }
   }
 }

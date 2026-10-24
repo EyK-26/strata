@@ -34,6 +34,44 @@ Provision the first operator through the explicit [initial-admin command](INITIA
 
 A production HTML app needs `DATABASE_URL`, `SESSION_SECRET`, and `AUTH_DEV_HEADERS=false`. It does not need API tokens, SCIM, OAuth, or CORS when those features are off.
 
+## HTTPS termination and cookie forms
+
+Without an explicit target policy, CSRF retains its 2.x behavior: validate the submitted token against its signed cookie, then compare browser `Origin` with `new URL(request.url).origin`. HTTPS termination followed by an HTTP upstream can therefore reject a legitimate form POST with `403 Cross-site cookie requests are not allowed.` even with the correct public HTTPS `APP_URL` and valid token.
+
+For a single public origin whose Host is preserved by ingress, opt in explicitly:
+
+```dotenv
+APP_URL=https://app.example.com
+CSRF_TARGET_ORIGIN=https://app.example.com
+HOST=0.0.0.0
+```
+
+The root and newly generated config providers register an explicitly supplied `CSRF_TARGET_ORIGIN` under exported `CSRF_TARGET_ORIGIN_CONFIG_KEY` (`http.csrf.targetOrigin`). `HttpKernel` validates and captures it during construction for its web/cookie-API middleware. Invalid or empty explicit values refuse construction. It is never inferred from `APP_URL`, CORS or forwarding headers. For direct middleware composition, use `createCsrfMiddleware({ targetOrigin: "https://app.example.com" })`; `CsrfOptions` is exported from that subpath and core's public API.
+
+The opt-in policy requires both the request URL authority and an actual Host header to match the configured authority, including its port. DNS casing and equivalent default ports are normalized; credentials, wildcards, malformed authorities and conflicting/missing Host fail closed. HTTP or HTTPS backend transport is allowed. Host admission applies on safe methods too, before CSRF cookie issuance, and before existing bearer/basic or CSRF-path exemptions. It covers handlers using this middleware, not a server-wide virtual-host firewall for health, static files or synthesized preflights. Custom transports must preserve their actual Host authority; forwarded headers are not a substitute.
+
+Mutating cookie/anonymous requests still require the signed matching cookie/token and a single valid source Origin equal to the configured target. Missing, null, hostile or URL-shaped non-origin values (userinfo, paths, queries or fragments) are rejected. Existing CSRF exemptions remain otherwise unchanged. The policy does not rewrite Request URLs, bodies, browser Origin, route params, signals or request metadata. A malformed native request URL receives a safe JSON error fallback instead of crashing HTML error negotiation.
+
+This is **target-origin policy, not proxy authentication**. A direct client with the approved Host/Origin and valid cookie/token can satisfy it. Restrict backend reachability and approve ingress hosts; verify every public/internal ingress path and custom domain. The proxy must preserve the configured public authority. No header can select another trusted origin. Multi-origin/host-rewriting deployments need a separately reviewed contract; do not expand the target using wildcards or a CORS list.
+
+`APP_URL` still selects public links. `HOST` selects the listen address. `CORS_ALLOWED_ORIGINS` controls CORS response policy; `TRUST_FORWARDED_FOR` controls client-IP attribution; tenant `trustedProxyAddresses` controls forwarded tenant-host selection only. None replaces this opt-in setting. Do not disable CSRF, change the public URL to HTTP, rewrite the browser Origin, or assume that enabling a forwarding flag establishes proxy trust.
+
+### Existing generated applications and rollback
+
+Installing a package does not update app-owned providers. After installing a release containing this API, add the exported key to the config provider imports and, before constructing kernels/routes, deliberately adopt:
+
+```ts
+if (process.env.CSRF_TARGET_ORIGIN !== undefined) {
+  config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);
+}
+```
+
+Then configure the exact HTTPS public origin and prove the form GET, cookie/token exchange and POST over the real proxy, including invalid/missing tokens, hostile/malformed origins, unknown/conflicting hosts and direct backend traffic. Preserve existing assertion coverage. Only then remove the old URL-normalization wrapper/helper, retaining equivalent host admission at every affected handler. A package upgrade or environment variable alone is insufficient when the existing provider does not bind the key. Release-specific installed-package verification and private hosted verification remain separate.
+
+Rollback source and lockfile together. Older packages do not export the new key or enforce the policy; restore the old provider/wrapper when rolling back to them. Merely unsetting the option restores the old HTTPS/HTTP mismatch. No schema migration, wider grant or weakened CSRF policy is part of adoption or rollback.
+
+See the [initial investigation and subsequent contract evidence](CSRF-PROXY-INVESTIGATION.md) and executable [generated consumer verifier](../scripts/verify-starter-csrf-origin.ts).
+
 ## When a feature is on
 
 See [INTEGRATIONS.md](./INTEGRATIONS.md).
