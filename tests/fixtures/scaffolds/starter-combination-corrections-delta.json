@@ -2,9 +2,44 @@
   "provenance": {
     "beforeCommit": "f6896a7ffb7c9af2f5b7456dedd944af80ec4c2d",
     "purpose": "Exact intentional generated corrections; all historical manifests and assertions retained. No whitespace/regex normalization or fixture regeneration in tests.",
-    "issues": [339, 340, 343, 344]
+    "issues": [339, 340, 343, 344],
+    "startupCleanupCorrection": {
+      "beforeCommit": "31dd09841c69aa42aec719f4e8f387b1358dcc2b",
+      "fixCommit": "341a65f",
+      "hunk": "startup-cleanup-cause",
+      "purpose": "Preserve the original native startup error when generated entrypoint cleanup also fails. Historical scaffold hashes and all previous deltas remain unchanged."
+    }
   },
   "hunks": {
+    "startup-cleanup-cause": {
+      "before": [
+        "} catch (error) {",
+        "  try {",
+        "    await context.dispose();",
+        "  } finally {",
+        "    await closeDatabase();",
+        "  }",
+        "  throw error;",
+        "}"
+      ],
+      "after": [
+        "} catch (error) {",
+        "  const failures: unknown[] = [];",
+        "  for (const cleanup of [() => context.dispose(), closeDatabase]) {",
+        "    try {",
+        "      await cleanup();",
+        "    } catch (failure) {",
+        "      failures.push(failure);",
+        "    }",
+        "  }",
+        "  if (failures.length)",
+        "    throw new AggregateError([error, ...failures], \"Application startup and cleanup failed.\", {",
+        "      cause: error,",
+        "    });",
+        "  throw error;",
+        "}"
+      ]
+    },
     "h001": {
       "before": [
         "import { randomBytes } from \"node:crypto\";",
@@ -337,6 +372,46 @@
     }
   },
   "artifacts": {
+    "starter/sqlite-api-headers-local/src/bootstrap/server.ts": {
+      "beforeSha256": "d5af3185d905f41d7295591e7c7e44bf4be8224127380cd3f7e6ca3d9334d807",
+      "afterSha256": "cff0517f187f203d1f4865ec770dd1cb0db03372f1f4128693473d1a98121fa9",
+      "hunks": ["startup-cleanup-cause"]
+    },
+    "starter/mysql-htmx-cookie-tools/src/bootstrap/server.ts": {
+      "beforeSha256": "d5af3185d905f41d7295591e7c7e44bf4be8224127380cd3f7e6ca3d9334d807",
+      "afterSha256": "cff0517f187f203d1f4865ec770dd1cb0db03372f1f4128693473d1a98121fa9",
+      "hunks": ["startup-cleanup-cause"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/bootstrap/server.ts": {
+      "beforeSha256": "d5af3185d905f41d7295591e7c7e44bf4be8224127380cd3f7e6ca3d9334d807",
+      "afterSha256": "cff0517f187f203d1f4865ec770dd1cb0db03372f1f4128693473d1a98121fa9",
+      "hunks": ["startup-cleanup-cause"]
+    },
+    "starter/sqlite-spa-jwt-local/src/bootstrap/server.ts": {
+      "beforeSha256": "d5af3185d905f41d7295591e7c7e44bf4be8224127380cd3f7e6ca3d9334d807",
+      "afterSha256": "cff0517f187f203d1f4865ec770dd1cb0db03372f1f4128693473d1a98121fa9",
+      "hunks": ["startup-cleanup-cause"]
+    },
+    "starter/mysql-api-token-column-partial-tools/src/bootstrap/server.ts": {
+      "beforeSha256": "d5af3185d905f41d7295591e7c7e44bf4be8224127380cd3f7e6ca3d9334d807",
+      "afterSha256": "cff0517f187f203d1f4865ec770dd1cb0db03372f1f4128693473d1a98121fa9",
+      "hunks": ["startup-cleanup-cause"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/bootstrap/server.ts": {
+      "beforeSha256": "d5af3185d905f41d7295591e7c7e44bf4be8224127380cd3f7e6ca3d9334d807",
+      "afterSha256": "cff0517f187f203d1f4865ec770dd1cb0db03372f1f4128693473d1a98121fa9",
+      "hunks": ["startup-cleanup-cause"]
+    },
+    "starter/postgres-htmx-cookie-local/src/bootstrap/server.ts": {
+      "beforeSha256": "d5af3185d905f41d7295591e7c7e44bf4be8224127380cd3f7e6ca3d9334d807",
+      "afterSha256": "cff0517f187f203d1f4865ec770dd1cb0db03372f1f4128693473d1a98121fa9",
+      "hunks": ["startup-cleanup-cause"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/src/bootstrap/server.ts": {
+      "beforeSha256": "d5af3185d905f41d7295591e7c7e44bf4be8224127380cd3f7e6ca3d9334d807",
+      "afterSha256": "cff0517f187f203d1f4865ec770dd1cb0db03372f1f4128693473d1a98121fa9",
+      "hunks": ["startup-cleanup-cause"]
+    },
     "auth/api-cookie-all/src/modules/auth/index.ts": {
       "beforeSha256": "feac387482a4a771702364a5d6e7571fa215cc2e2d0373438c1e03a94428e13d",
       "afterSha256": "de16635117c21dd24b750d48a5b865f3574e7e8b2732da03ee50d72c47ff5e63",

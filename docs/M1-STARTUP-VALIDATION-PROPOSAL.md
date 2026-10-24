@@ -585,6 +585,13 @@ and a corrected retry. Original lifecycle tests and their failed-drain guard rem
 byte-identical. The correction is **source-only**; no new version/tag or publication
 is prepared in this design continuation. Published 2.2.54 remains immutable.
 
+The historical rendering manifests and their assertions remain unchanged. The
+existing reviewed-delta gate records only this literal server cleanup correction,
+checks the exact corrected hash, reverses it to the historical bytes and verifies
+the forward round trip for all eight scaffold profiles. The initial full gate
+correctly rejected those eight changed artifacts before this delta was declared;
+that failed run is retained separately from the subsequent validation.
+
 ### Refined API review gates
 
 Keep the proposed diagnostic record under the existing bootstrap boundary, with
