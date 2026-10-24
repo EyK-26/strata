@@ -1,0 +1,1219 @@
+[
+  {
+    "name": "specificity-forward",
+    "classification": "contract-control",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/things/new",
+        "owner": "exact"
+      },
+      {
+        "path": "/things/:id",
+        "owner": "parameter"
+      },
+      {
+        "path": "/things/*",
+        "owner": "wildcard"
+      },
+      {
+        "path": "/*",
+        "owner": "global"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/things/new",
+        "method": "GET",
+        "expectedOwner": "exact"
+      },
+      {
+        "target": "/things/42",
+        "method": "GET",
+        "expectedOwner": "parameter"
+      },
+      {
+        "target": "/things/a/b",
+        "method": "GET",
+        "expectedOwner": "wildcard"
+      },
+      {
+        "target": "/other",
+        "method": "GET",
+        "expectedOwner": "global"
+      }
+    ]
+  },
+  {
+    "name": "specificity-reverse",
+    "classification": "contract-control",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/*",
+        "owner": "global"
+      },
+      {
+        "path": "/things/*",
+        "owner": "wildcard"
+      },
+      {
+        "path": "/things/:id",
+        "owner": "parameter"
+      },
+      {
+        "path": "/things/new",
+        "owner": "exact"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/things/new",
+        "method": "GET",
+        "expectedOwner": "exact"
+      },
+      {
+        "target": "/things/42",
+        "method": "GET",
+        "expectedOwner": "parameter"
+      },
+      {
+        "target": "/things/a/b",
+        "method": "GET",
+        "expectedOwner": "wildcard"
+      },
+      {
+        "target": "/other",
+        "method": "GET",
+        "expectedOwner": "global"
+      }
+    ]
+  },
+  {
+    "name": "case-sensitive-literals",
+    "classification": "contract-control",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/Case",
+        "owner": "upper"
+      },
+      {
+        "path": "/case",
+        "owner": "lower"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/Case",
+        "method": "GET",
+        "expectedOwner": "upper"
+      },
+      {
+        "target": "/case",
+        "method": "GET",
+        "expectedOwner": "lower"
+      }
+    ]
+  },
+  {
+    "name": "explicit-head",
+    "classification": "contract-control",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/methods",
+        "owner": "read",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "get"
+          },
+          {
+            "method": "HEAD",
+            "owner": "head",
+            "status": 202
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/methods",
+        "method": "GET",
+        "expectedOwner": "get",
+        "expectedStatus": 200
+      },
+      {
+        "target": "/methods",
+        "method": "HEAD",
+        "expectedOwner": "head",
+        "expectedStatus": 202,
+        "expectedEmptyBody": true
+      }
+    ]
+  },
+  {
+    "name": "bare-callback-methods",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/read",
+        "owner": "read"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/read",
+        "method": "GET"
+      },
+      {
+        "target": "/read",
+        "method": "HEAD"
+      },
+      {
+        "target": "/read",
+        "method": "POST"
+      },
+      {
+        "target": "/read",
+        "method": "PUT"
+      },
+      {
+        "target": "/read",
+        "method": "PATCH"
+      },
+      {
+        "target": "/read",
+        "method": "DELETE"
+      },
+      {
+        "target": "/read",
+        "method": "OPTIONS"
+      }
+    ]
+  },
+  {
+    "name": "static-response-methods",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/response",
+        "owner": "static",
+        "kind": "response"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/response",
+        "method": "GET"
+      },
+      {
+        "target": "/response",
+        "method": "HEAD"
+      },
+      {
+        "target": "/response",
+        "method": "POST"
+      },
+      {
+        "target": "/response",
+        "method": "PUT"
+      },
+      {
+        "target": "/response",
+        "method": "PATCH"
+      },
+      {
+        "target": "/response",
+        "method": "DELETE"
+      },
+      {
+        "target": "/response",
+        "method": "OPTIONS"
+      }
+    ]
+  },
+  {
+    "name": "get-map-head-options",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/read",
+        "owner": "map",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "get"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/read",
+        "method": "GET"
+      },
+      {
+        "target": "/read",
+        "method": "HEAD"
+      },
+      {
+        "target": "/read",
+        "method": "POST"
+      },
+      {
+        "target": "/read",
+        "method": "OPTIONS"
+      }
+    ]
+  },
+  {
+    "name": "post-only-methods",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/write",
+        "owner": "map",
+        "methods": [
+          {
+            "method": "POST",
+            "owner": "post"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/write",
+        "method": "GET"
+      },
+      {
+        "target": "/write",
+        "method": "HEAD"
+      },
+      {
+        "target": "/write",
+        "method": "POST"
+      },
+      {
+        "target": "/write",
+        "method": "OPTIONS"
+      }
+    ]
+  },
+  {
+    "name": "explicit-options",
+    "classification": "contract-control",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/options",
+        "owner": "map",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "get"
+          },
+          {
+            "method": "OPTIONS",
+            "owner": "explicit-options",
+            "status": 203
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/options",
+        "method": "OPTIONS",
+        "expectedOwner": "explicit-options",
+        "expectedStatus": 203
+      }
+    ]
+  },
+  {
+    "name": "admission-denies-dispatch",
+    "classification": "contract-control",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/guarded",
+        "owner": "guarded"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/guarded",
+        "method": "GET",
+        "deny": true,
+        "expectedOwner": "guarded"
+      }
+    ]
+  },
+  {
+    "name": "lowercase-method",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/alias",
+        "owner": "map",
+        "methods": [
+          {
+            "method": "get",
+            "owner": "lower"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/alias",
+        "method": "GET"
+      },
+      {
+        "target": "/alias",
+        "method": "OPTIONS"
+      }
+    ]
+  },
+  {
+    "name": "method-alias-upper-first",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/alias",
+        "owner": "map",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "upper"
+          },
+          {
+            "method": "get",
+            "owner": "lower"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/alias",
+        "method": "GET"
+      },
+      {
+        "target": "/alias",
+        "method": "OPTIONS"
+      }
+    ]
+  },
+  {
+    "name": "method-alias-lower-first",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/alias",
+        "owner": "map",
+        "methods": [
+          {
+            "method": "get",
+            "owner": "lower"
+          },
+          {
+            "method": "GET",
+            "owner": "upper"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/alias",
+        "method": "GET"
+      },
+      {
+        "target": "/alias",
+        "method": "OPTIONS"
+      }
+    ]
+  },
+  {
+    "name": "same-parameter-shape-false",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/dupe/:id",
+        "owner": "id"
+      },
+      {
+        "path": "/dupe/:slug",
+        "owner": "slug"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/dupe/value",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "same-parameter-shape-true",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/dupe/:slug",
+        "owner": "slug"
+      },
+      {
+        "path": "/dupe/:id",
+        "owner": "id"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/dupe/value",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "parameter-shape-disjoint-methods",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/dupe/:id",
+        "owner": "id",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "id-get"
+          }
+        ]
+      },
+      {
+        "path": "/dupe/:slug",
+        "owner": "slug",
+        "methods": [
+          {
+            "method": "POST",
+            "owner": "slug-post"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/dupe/value",
+        "method": "GET"
+      },
+      {
+        "target": "/dupe/value",
+        "method": "POST"
+      },
+      {
+        "target": "/dupe/value",
+        "method": "HEAD"
+      },
+      {
+        "target": "/dupe/value",
+        "method": "OPTIONS"
+      }
+    ]
+  },
+  {
+    "name": "duplicate-parameter-name",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/pair/:id/:id",
+        "owner": "repeat"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/pair/one/two",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "trailing-slash-distinct",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/trail",
+        "owner": "plain"
+      },
+      {
+        "path": "/trail/",
+        "owner": "slash"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/trail",
+        "method": "GET"
+      },
+      {
+        "target": "/trail/",
+        "method": "GET"
+      },
+      {
+        "target": "/trail//",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "trailing-slash-single",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/trail",
+        "owner": "plain"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/trail",
+        "method": "GET"
+      },
+      {
+        "target": "/trail/",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "repeated-slash",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/a//b",
+        "owner": "double"
+      },
+      {
+        "path": "/a/b",
+        "owner": "single"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/a//b",
+        "method": "GET"
+      },
+      {
+        "target": "/a/b",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "dot-segments",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/a/../b",
+        "owner": "dot"
+      },
+      {
+        "path": "/b",
+        "owner": "plain"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/a/../b",
+        "method": "GET"
+      },
+      {
+        "target": "/b",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "encoded-dot-segments",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/a/%2e%2e/b",
+        "owner": "encoded"
+      },
+      {
+        "path": "/b",
+        "owner": "plain"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/a/%2e%2e/b",
+        "method": "GET"
+      },
+      {
+        "target": "/b",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "backslash-path",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/a\\b",
+        "owner": "backslash"
+      },
+      {
+        "path": "/a/b",
+        "owner": "slash"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/a\\b",
+        "method": "GET"
+      },
+      {
+        "target": "/a/b",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "query-declaration",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/query?mode=one",
+        "owner": "query"
+      },
+      {
+        "path": "/query",
+        "owner": "plain"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/query?mode=one",
+        "method": "GET"
+      },
+      {
+        "target": "/query?mode=two",
+        "method": "GET"
+      },
+      {
+        "target": "/query",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "fragment-declaration",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/fragment#part",
+        "owner": "fragment"
+      },
+      {
+        "path": "/fragment",
+        "owner": "plain"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/fragment#part",
+        "method": "GET"
+      },
+      {
+        "target": "/fragment",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "literal-percent-path",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/literal/%25",
+        "owner": "percent"
+      },
+      {
+        "path": "/literal/%2525",
+        "owner": "encoded-percent"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/literal/%25",
+        "method": "GET"
+      },
+      {
+        "target": "/literal/%2525",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "unicode-declaration",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/café",
+        "owner": "unicode"
+      },
+      {
+        "path": "/caf%C3%A9",
+        "owner": "encoded"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/caf%C3%A9",
+        "method": "GET"
+      },
+      {
+        "target": "/caf%c3%a9",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "relative-declaration",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "relative",
+        "owner": "relative"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/relative",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "empty-declaration",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "",
+        "owner": "empty"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "middle-wildcard",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/a/*/b",
+        "owner": "middle"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/a/one/b",
+        "method": "GET"
+      },
+      {
+        "target": "/a/one/two/b",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "wildcard-empty-tail",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/files/*",
+        "owner": "wildcard"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/files",
+        "method": "GET"
+      },
+      {
+        "target": "/files/",
+        "method": "GET"
+      },
+      {
+        "target": "/files/a",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "native-decoded-percent-values",
+    "classification": "contract-control",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/value/:id",
+        "owner": "parameter"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/value/100%25",
+        "method": "GET",
+        "expectedOwner": "parameter"
+      },
+      {
+        "target": "/value/%252F",
+        "method": "GET",
+        "expectedOwner": "parameter"
+      },
+      {
+        "target": "/value/%2F",
+        "method": "GET",
+        "expectedOwner": "parameter"
+      }
+    ]
+  },
+  {
+    "name": "head-fallback-unrelated-head-control",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/read",
+        "owner": "get",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "get"
+          }
+        ]
+      },
+      {
+        "path": "/other",
+        "owner": "head",
+        "methods": [
+          {
+            "method": "HEAD",
+            "owner": "head"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/read",
+        "method": "HEAD"
+      }
+    ]
+  },
+  {
+    "name": "head-literal-parameter-specificity",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/head/new",
+        "owner": "literal-get",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "literal-get"
+          }
+        ]
+      },
+      {
+        "path": "/head/:id",
+        "owner": "parameter-head",
+        "methods": [
+          {
+            "method": "HEAD",
+            "owner": "parameter-head"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/head/new",
+        "method": "HEAD"
+      },
+      {
+        "target": "/head/value",
+        "method": "HEAD"
+      }
+    ]
+  },
+  {
+    "name": "head-shape-disjoint-methods",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/head/:id",
+        "owner": "id-get",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "id-get"
+          }
+        ]
+      },
+      {
+        "path": "/head/:slug",
+        "owner": "slug-head",
+        "methods": [
+          {
+            "method": "HEAD",
+            "owner": "slug-head"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/head/value",
+        "method": "GET"
+      },
+      {
+        "target": "/head/value",
+        "method": "HEAD"
+      }
+    ]
+  },
+  {
+    "name": "parameter-key-constructor",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/key/:constructor",
+        "owner": "key"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/key/value",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "parameter-key-__proto__",
+    "classification": "confirmed-defect-reproduction",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/key/:__proto__",
+        "owner": "key"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/key/value",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "encoded-unicode-only",
+    "classification": "feasibility-observation",
+    "family": "transport",
+    "declarations": [
+      {
+        "path": "/caf%C3%A9",
+        "owner": "encoded"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/caf%C3%A9",
+        "method": "GET"
+      },
+      {
+        "target": "/caf%c3%a9",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "collector-replace",
+    "classification": "contract-control",
+    "family": "collector",
+    "collector": "replace",
+    "declarations": [
+      {
+        "path": "/shared",
+        "owner": "first",
+        "methods": [
+          {
+            "method": "GET",
+            "owner": "first"
+          }
+        ]
+      },
+      {
+        "path": "/shared",
+        "owner": "second",
+        "methods": [
+          {
+            "method": "POST",
+            "owner": "second"
+          }
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "target": "/contracts/shared",
+        "method": "POST",
+        "expectedOwner": "second"
+      },
+      {
+        "target": "/contracts/shared",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "collector-alias",
+    "classification": "contract-control",
+    "family": "collector",
+    "collector": "alias",
+    "declarations": [
+      {
+        "path": "shared",
+        "owner": "old"
+      },
+      {
+        "path": "/shared",
+        "owner": "current"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/contracts/shared",
+        "method": "GET",
+        "expectedOwner": "current"
+      }
+    ]
+  },
+  {
+    "name": "collector-insertion",
+    "classification": "contract-control",
+    "family": "collector",
+    "collector": "insertion",
+    "declarations": [
+      {
+        "path": "/shared",
+        "owner": "first"
+      },
+      {
+        "path": "shared",
+        "owner": "second"
+      },
+      {
+        "path": "/shared",
+        "owner": "third"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/contracts/shared",
+        "method": "GET",
+        "expectedOwner": "second"
+      }
+    ]
+  },
+  {
+    "name": "collector-spread",
+    "classification": "contract-control",
+    "family": "collector",
+    "collector": "spread",
+    "declarations": [
+      {
+        "path": "/shared",
+        "owner": "erased"
+      },
+      {
+        "path": "/shared",
+        "owner": "survivor"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/contracts/shared",
+        "method": "GET",
+        "expectedOwner": "survivor"
+      }
+    ]
+  },
+  {
+    "name": "collector-orphan",
+    "classification": "feasibility-observation",
+    "family": "collector",
+    "collector": "orphan",
+    "declarations": [
+      {
+        "path": "/valid",
+        "owner": "valid"
+      }
+    ],
+    "requests": []
+  },
+  {
+    "name": "collector-repeat",
+    "classification": "feasibility-observation",
+    "family": "collector",
+    "collector": "repeat",
+    "declarations": [
+      {
+        "path": "/shared",
+        "owner": "repeat"
+      }
+    ],
+    "requests": [
+      {
+        "target": "/contracts/shared",
+        "method": "GET",
+        "expectedOwner": "repeat"
+      }
+    ]
+  }
+]

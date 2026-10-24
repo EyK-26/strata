@@ -1,0 +1,5928 @@
+{
+  "date": "2026-10-24",
+  "status": "COMPLETE",
+  "scope": "Bounded design feasibility; observations and dated defects are not guarantees or breaking API acceptance.",
+  "runtime": {
+    "name": "Bun",
+    "version": "1.4.3",
+    "revision": "c6da4a4d3010e5553438c60f6bd76d981976867c"
+  },
+  "publishedVersion": "2.2.53",
+  "packages": [
+    {
+      "name": "@getstrata/core",
+      "version": "2.2.53"
+    },
+    {
+      "name": "@getstrata/bootstrap",
+      "version": "2.2.53"
+    },
+    {
+      "name": "@getstrata/cli",
+      "version": "2.2.53"
+    }
+  ],
+  "baselineTag": "v2.2.53",
+  "baselineCommit": "5f5434c3b7ae5b159f131c90c0b9c68a02a61a81",
+  "inputSha256": {
+    "runner": "6bb3153ebf59b12d4ef61179034733eaeb1efec011c9cd2d8d637df66b450c1d",
+    "consumer": "68fdd753da9bee7f7e9ddb8b3f86c7bafe523da5e27526daf4239d406112feb8",
+    "types": "916b4c679c4286f8427fb887189126a3eca63add4104f3ec676b5fc374f9dd77",
+    "cases": "d440e791bab6595ef09cddca84faf2261877313b6ebb2d5731f928e01dc63651",
+    "originalNativeConsumer": "a80dd7abdd6aef9615c50c2a12faa57aa9acb962c8ec1e54836f679ec48c83d4",
+    "originalCollisionConsumer": "db3a43d4416dddef98190fe0e671d98c94e0e93b5d9ee8d2a01357bfab487591"
+  },
+  "originalBaselineSteps": [
+    {
+      "name": "typecheck",
+      "exitCode": 0
+    },
+    {
+      "name": "migrate",
+      "exitCode": 0
+    },
+    {
+      "name": "original-native",
+      "exitCode": 0
+    },
+    {
+      "name": "original-collision",
+      "exitCode": 0
+    }
+  ],
+  "scenarioDefinitions": 44,
+  "executed": 82,
+  "contractControls": 18,
+  "feasibilityObservations": 62,
+  "confirmedDefectReproductions": 2,
+  "failed": 0,
+  "skipped": 0,
+  "rawResultSha256": "f4b03f3909476263122af2962d046fd82bac4674a6caa3292360131f69cfdd2a",
+  "negativeHarnessControl": {
+    "status": "EXPECTED_FAILURE",
+    "executed": 1,
+    "failed": 1,
+    "normalSourceInputsUnchanged": true,
+    "onlySeparateExpectedOwnerInputChanged": true,
+    "expectedOwner": "wrong-expected-owner",
+    "actualOwner": "exact",
+    "assertion": "Owner equality failed after all four original baseline steps passed.",
+    "ownedListenerStopped": true,
+    "ownedScratchRemoved": true,
+    "rawResultSha256": "cbb43ce6b417478a0ff10386eb491d4962dce222ce12655e39080acc1f15072e",
+    "normal82CompletedAgainAfterFailure": true
+  },
+  "confirmedCompatibleDefect": {
+    "name": "Own __proto__ parameter lost by assignment to ordinary object",
+    "published2_2_53": "REPRODUCED",
+    "sourceRed": "4 passes / 1 failure with proper host environment",
+    "sourceGreen": "5 passes / 0 failures / 57 assertions",
+    "freshInstalledCandidate": "All original assertions plus own-key regression pass",
+    "sourceFixPr": "https://github.com/EyK-26/strata/pull/354",
+    "sourceFixMerge": "c07cd2faa474bd15471e8b547bd9e68693ba296e",
+    "publication": "UNPUBLISHED; no new version or tag prepared",
+    "oldUnitAndInstalledConsumerBodies": "Preserved byte-identical prefixes",
+    "limits": "String-value observations prove parameter loss, not prototype pollution."
+  },
+  "cleanup": {
+    "allCapturedSqlDockerMetadataEqualsBefore": true,
+    "allProbeListenersAndContextsClosed": true,
+    "ownedScratchRemoved": true,
+    "unknownResourcesRemoved": false
+  },
+  "retainedNonAcceptanceAttempts": [
+    "Missing host environment failed before source red; retained separately.",
+    "Stale built distribution failed first candidate setup; fresh official rebuild passed.",
+    "Strict fixture type narrowing failure prevented first negative control before any scenario; retained, corrected without compiler downgrade or assertion removal.",
+    "Git merge-tree initially lacked sandbox object-write permission; same check passed with scoped access."
+  ],
+  "headObservation": "All recorded wire HEAD callback executions and framework admissions report HEAD, with empty response bodies, including GET fallback, unrelated explicit HEAD and literal/parameter controls. An earlier provisional handoff inference of GET is not supported by the raw receipts and is corrected here.",
+  "limits": [
+    "One pinned Bun SDK and one generated SQLite/API profile, not all versions/frontends/providers.",
+    "Accepted constructor shapes are not necessarily useful, safe or supported grammar.",
+    "Prior JavaScript overwrites cannot be reconstructed from the surviving map.",
+    "Constructor rejection does not measure transient native binds or roll back arbitrary module side effects.",
+    "No new startup validator, route API, registry snapshot, public artifact provider or major implementation.",
+    "Earlier 43 compiler cases and 159 published plus 12 rollback profiles remain separate unchanged records."
+  ],
+  "results": [
+    {
+      "name": "specificity-forward",
+      "mode": "native",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/things/new",
+            "method": "GET",
+            "expectedOwner": "exact"
+          },
+          "sentTarget": "/things/new",
+          "status": 200,
+          "owner": "exact",
+          "bodyEmpty": false,
+          "bodySha256": "abc4489f132283a6c86f5850ba923f838ac1a624d5b7c1c6c41ca356370681d0",
+          "callbacks": [
+            {
+              "owner": "exact",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/new",
+              "pathname": "/things/new",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/things/42",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/things/42",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "222a17d69b8f1ed590c6bf6fbbd077bc8a434b456725fdd657bfbc0faed1f1f6",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/42",
+              "pathname": "/things/42",
+              "params": {
+                "id": "42"
+              },
+              "copiedParams": {
+                "id": "42"
+              }
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/things/a/b",
+            "method": "GET",
+            "expectedOwner": "wildcard"
+          },
+          "sentTarget": "/things/a/b",
+          "status": 200,
+          "owner": "wildcard",
+          "bodyEmpty": false,
+          "bodySha256": "c3d51a4834449c92efe4981eec2977160d96993b56ccf9bed192fdb521edbd53",
+          "callbacks": [
+            {
+              "owner": "wildcard",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/a/b",
+              "pathname": "/things/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/other",
+            "method": "GET",
+            "expectedOwner": "global"
+          },
+          "sentTarget": "/other",
+          "status": 200,
+          "owner": "global",
+          "bodyEmpty": false,
+          "bodySha256": "ed7fd9c6014314c8a3044cb9e064cdc5e5dffa36ab534db504863d9403c00cd1",
+          "callbacks": [
+            {
+              "owner": "global",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/other",
+              "pathname": "/other",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "specificity-forward",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/things/new",
+            "method": "GET",
+            "expectedOwner": "exact"
+          },
+          "sentTarget": "/things/new",
+          "status": 200,
+          "owner": "exact",
+          "bodyEmpty": false,
+          "bodySha256": "e1f38222bdcfa0bd2eb6c331bde1757a5002dcf89f388ff05a1ee5e6726fe30c",
+          "callbacks": [
+            {
+              "owner": "exact",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/new",
+              "pathname": "/things/new",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/things/new"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/things/42",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/things/42",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "8aec2e75d1bb458ebff77220b4e8e9d0d9c027cf157a7e82499fd8a607603b4d",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/42",
+              "pathname": "/things/42",
+              "params": {
+                "id": "42"
+              },
+              "copiedParams": {
+                "id": "42"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/things/:id"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/things/a/b",
+            "method": "GET",
+            "expectedOwner": "wildcard"
+          },
+          "sentTarget": "/things/a/b",
+          "status": 200,
+          "owner": "wildcard",
+          "bodyEmpty": false,
+          "bodySha256": "5e9a0b0898833f6689cdd24d63259d8b965863028696b9026c7ffc62d2674318",
+          "callbacks": [
+            {
+              "owner": "wildcard",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/a/b",
+              "pathname": "/things/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/things/*"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/other",
+            "method": "GET",
+            "expectedOwner": "global"
+          },
+          "sentTarget": "/other",
+          "status": 200,
+          "owner": "global",
+          "bodyEmpty": false,
+          "bodySha256": "4a43af317e947ec28ad3312c8704dd011a03e669ab825db52391e1cfc5e0d089",
+          "callbacks": [
+            {
+              "owner": "global",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/other",
+              "pathname": "/other",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/*"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "specificity-reverse",
+      "mode": "native",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/things/new",
+            "method": "GET",
+            "expectedOwner": "exact"
+          },
+          "sentTarget": "/things/new",
+          "status": 200,
+          "owner": "exact",
+          "bodyEmpty": false,
+          "bodySha256": "4cd02d958c9d9b5b909dc47e6b3018830482ed3c42c4ae2ebb49b7dde9a2439e",
+          "callbacks": [
+            {
+              "owner": "exact",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/new",
+              "pathname": "/things/new",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/things/42",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/things/42",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "778847fa8103bd7270a74e206f1471c234dbcc33568466117e8d29b884e2d62a",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/42",
+              "pathname": "/things/42",
+              "params": {
+                "id": "42"
+              },
+              "copiedParams": {
+                "id": "42"
+              }
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/things/a/b",
+            "method": "GET",
+            "expectedOwner": "wildcard"
+          },
+          "sentTarget": "/things/a/b",
+          "status": 200,
+          "owner": "wildcard",
+          "bodyEmpty": false,
+          "bodySha256": "5765768080224fd2a325765671159ff6695f26a9a6c3819b42cdbd02f65beade",
+          "callbacks": [
+            {
+              "owner": "wildcard",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/a/b",
+              "pathname": "/things/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/other",
+            "method": "GET",
+            "expectedOwner": "global"
+          },
+          "sentTarget": "/other",
+          "status": 200,
+          "owner": "global",
+          "bodyEmpty": false,
+          "bodySha256": "4a59045aefce00cd78c1534139bdba44cf56b3b8b73cd9b9f57dd36a556b6356",
+          "callbacks": [
+            {
+              "owner": "global",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/other",
+              "pathname": "/other",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "specificity-reverse",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/things/new",
+            "method": "GET",
+            "expectedOwner": "exact"
+          },
+          "sentTarget": "/things/new",
+          "status": 200,
+          "owner": "exact",
+          "bodyEmpty": false,
+          "bodySha256": "c95db511b6bc68439a28f585b4f8c40bc9cb0e889ce0fa5369b97870689de905",
+          "callbacks": [
+            {
+              "owner": "exact",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/new",
+              "pathname": "/things/new",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/things/new"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/things/42",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/things/42",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "eef32d9595c8f3113c975f934e9358eb2bbe443f675f50b042146c6d0da978c1",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/42",
+              "pathname": "/things/42",
+              "params": {
+                "id": "42"
+              },
+              "copiedParams": {
+                "id": "42"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/things/:id"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/things/a/b",
+            "method": "GET",
+            "expectedOwner": "wildcard"
+          },
+          "sentTarget": "/things/a/b",
+          "status": 200,
+          "owner": "wildcard",
+          "bodyEmpty": false,
+          "bodySha256": "452018d9b9f07ed235dcfb6cb5f0e31fc5a492f1b2c7e6709941b490336f7d7e",
+          "callbacks": [
+            {
+              "owner": "wildcard",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/things/a/b",
+              "pathname": "/things/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/things/*"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/other",
+            "method": "GET",
+            "expectedOwner": "global"
+          },
+          "sentTarget": "/other",
+          "status": 200,
+          "owner": "global",
+          "bodyEmpty": false,
+          "bodySha256": "f847961c94a3380c983f1551f8f78bbf8d727f89764236a7c95d681819216f05",
+          "callbacks": [
+            {
+              "owner": "global",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/other",
+              "pathname": "/other",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/*"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "case-sensitive-literals",
+      "mode": "native",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/Case",
+            "method": "GET",
+            "expectedOwner": "upper"
+          },
+          "sentTarget": "/Case",
+          "status": 200,
+          "owner": "upper",
+          "bodyEmpty": false,
+          "bodySha256": "be2f696223bd3ef9789a838cbe5c4decbe008aee568dc78e65079f83981cc09f",
+          "callbacks": [
+            {
+              "owner": "upper",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/Case",
+              "pathname": "/Case",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/case",
+            "method": "GET",
+            "expectedOwner": "lower"
+          },
+          "sentTarget": "/case",
+          "status": 200,
+          "owner": "lower",
+          "bodyEmpty": false,
+          "bodySha256": "a84c66c3ea1067c85383f6cf43af120126ffb6e5c869e2ca3900a97b86255ca2",
+          "callbacks": [
+            {
+              "owner": "lower",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/case",
+              "pathname": "/case",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "case-sensitive-literals",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/Case",
+            "method": "GET",
+            "expectedOwner": "upper"
+          },
+          "sentTarget": "/Case",
+          "status": 200,
+          "owner": "upper",
+          "bodyEmpty": false,
+          "bodySha256": "d509e1e12d8993494192fd76a31fa390bd857a81020e4d536f0a3b3d3c7537df",
+          "callbacks": [
+            {
+              "owner": "upper",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/Case",
+              "pathname": "/Case",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/Case"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/case",
+            "method": "GET",
+            "expectedOwner": "lower"
+          },
+          "sentTarget": "/case",
+          "status": 200,
+          "owner": "lower",
+          "bodyEmpty": false,
+          "bodySha256": "b9c013b4b34daeed7d52c0f5d45a013379696f2994a7c204af910bab0fd2061e",
+          "callbacks": [
+            {
+              "owner": "lower",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/case",
+              "pathname": "/case",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/case"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "explicit-head",
+      "mode": "native",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/methods",
+            "method": "GET",
+            "expectedOwner": "get",
+            "expectedStatus": 200
+          },
+          "sentTarget": "/methods",
+          "status": 200,
+          "owner": "get",
+          "bodyEmpty": false,
+          "bodySha256": "f7ae384eb4e1b67ce1267e87935992b8db229c2dda307ac7332f13fd668479b2",
+          "callbacks": [
+            {
+              "owner": "get",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/methods",
+              "pathname": "/methods",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/methods",
+            "method": "HEAD",
+            "expectedOwner": "head",
+            "expectedStatus": 202,
+            "expectedEmptyBody": true
+          },
+          "sentTarget": "/methods",
+          "status": 202,
+          "owner": "head",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "head",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/methods",
+              "pathname": "/methods",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "explicit-head",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/methods",
+            "method": "GET",
+            "expectedOwner": "get",
+            "expectedStatus": 200
+          },
+          "sentTarget": "/methods",
+          "status": 200,
+          "owner": "get",
+          "bodyEmpty": false,
+          "bodySha256": "52839d6789cbce8457cd45c0674e7f2f3da2bdcc766e9b95114d71a2a2ec4c4c",
+          "callbacks": [
+            {
+              "owner": "get",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/methods",
+              "pathname": "/methods",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/methods"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/methods",
+            "method": "HEAD",
+            "expectedOwner": "head",
+            "expectedStatus": 202,
+            "expectedEmptyBody": true
+          },
+          "sentTarget": "/methods",
+          "status": 202,
+          "owner": "head",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "head",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/methods",
+              "pathname": "/methods",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/methods"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "bare-callback-methods",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/read",
+            "method": "GET"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": false,
+          "bodySha256": "e5cee03b4af1044850d14cbf1ae6bcdf74dc2421d912019cb3c6f12f15f45a96",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "HEAD"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "POST"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": false,
+          "bodySha256": "68457c2825103d5d9471e8681f258350860319054314e56af63cb4db0780a1a2",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "POST",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "PUT"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": false,
+          "bodySha256": "411030fec4b7995f97f5af777772d42773fb2b93837a5569bf8e94538b886f66",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "PUT",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "PATCH"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": false,
+          "bodySha256": "b30cb82d670feb4bd6fdeb16c76796f8f5fd1a1bfbee8a0a36068028bafec2e4",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "PATCH",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "DELETE"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": false,
+          "bodySha256": "15c3fac3c168e7cfc98c8d6e3e01580e43b40067f11160102916909ab564e79e",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "DELETE",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": false,
+          "bodySha256": "b72c6023e55610177caf7e8d6a77d751cfed8da794ed7053625f2ae8e1ab9ebb",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "OPTIONS",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "bare-callback-methods",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/read",
+            "method": "GET"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": false,
+          "bodySha256": "21c0554bfba4f23042da18992deaaeedeee1776b1fe3c96b0e35060801983028",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/read"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "HEAD"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "read",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "read",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/read"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "POST"
+          },
+          "sentTarget": "/read",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "POST"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "PUT"
+          },
+          "sentTarget": "/read",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "PUT"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "PATCH"
+          },
+          "sentTarget": "/read",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "PATCH"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "DELETE"
+          },
+          "sentTarget": "/read",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "DELETE"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/read",
+          "status": 204,
+          "owner": null,
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/read"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "static-response-methods",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/response",
+            "method": "GET"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "HEAD"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "POST"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "PUT"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "PATCH"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "DELETE"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "static-response-methods",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/response",
+            "method": "GET"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/response"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "HEAD"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/response"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "POST"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "POST",
+              "routeTemplate": "/response"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "PUT"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "PUT",
+              "routeTemplate": "/response"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "PATCH"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "PATCH",
+              "routeTemplate": "/response"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "DELETE"
+          },
+          "sentTarget": "/response",
+          "status": 201,
+          "owner": "static",
+          "bodyEmpty": false,
+          "bodySha256": "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "DELETE",
+              "routeTemplate": "/response"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/response",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/response",
+          "status": 204,
+          "owner": null,
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/response"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "get-map-head-options",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/read",
+            "method": "GET"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "get",
+          "bodyEmpty": false,
+          "bodySha256": "098ffefda678163396edfe22136a2abdfff24850250e6d847993c9d3e6236686",
+          "callbacks": [
+            {
+              "owner": "get",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "HEAD"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "get",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "get",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "POST"
+          },
+          "sentTarget": "/read",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/read",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "get-map-head-options",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/read",
+            "method": "GET"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "get",
+          "bodyEmpty": false,
+          "bodySha256": "7e42bab89ee906e29a815c82d9712aaef3b1eeb778159225668da084003e0a35",
+          "callbacks": [
+            {
+              "owner": "get",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/read"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "HEAD"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "get",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "get",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/read"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "POST"
+          },
+          "sentTarget": "/read",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "POST"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/read",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/read",
+          "status": 204,
+          "owner": null,
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/read"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "post-only-methods",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/write",
+            "method": "GET"
+          },
+          "sentTarget": "/write",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/write",
+            "method": "HEAD"
+          },
+          "sentTarget": "/write",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/write",
+            "method": "POST"
+          },
+          "sentTarget": "/write",
+          "status": 200,
+          "owner": "post",
+          "bodyEmpty": false,
+          "bodySha256": "2d381be96326d01ab359627ace98d7c92a54980444b183ce05511be2c959d87f",
+          "callbacks": [
+            {
+              "owner": "post",
+              "method": "POST",
+              "requestUrl": "<loopback-origin>/write",
+              "pathname": "/write",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/write",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/write",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "post-only-methods",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/write",
+            "method": "GET"
+          },
+          "sentTarget": "/write",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/write",
+            "method": "HEAD"
+          },
+          "sentTarget": "/write",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "HEAD"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/write",
+            "method": "POST"
+          },
+          "sentTarget": "/write",
+          "status": 200,
+          "owner": "post",
+          "bodyEmpty": false,
+          "bodySha256": "3e82f1cbd1538b25b29cf95e2236805014473adcc432f4c3e41d506b9a35f03d",
+          "callbacks": [
+            {
+              "owner": "post",
+              "method": "POST",
+              "requestUrl": "<loopback-origin>/write",
+              "pathname": "/write",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "POST",
+              "routeTemplate": "/write"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/write",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/write",
+          "status": 204,
+          "owner": null,
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/write"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "explicit-options",
+      "mode": "native",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/options",
+            "method": "OPTIONS",
+            "expectedOwner": "explicit-options",
+            "expectedStatus": 203
+          },
+          "sentTarget": "/options",
+          "status": 203,
+          "owner": "explicit-options",
+          "bodyEmpty": false,
+          "bodySha256": "e574c581c19f66b7c6702473035b8e657248db280414a229a5471e6e2b0ade80",
+          "callbacks": [
+            {
+              "owner": "explicit-options",
+              "method": "OPTIONS",
+              "requestUrl": "<loopback-origin>/options",
+              "pathname": "/options",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "explicit-options",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/options",
+            "method": "OPTIONS",
+            "expectedOwner": "explicit-options",
+            "expectedStatus": 203
+          },
+          "sentTarget": "/options",
+          "status": 203,
+          "owner": "explicit-options",
+          "bodyEmpty": false,
+          "bodySha256": "0564e8b6ddd344e62a9148a9b48f6709d68a6ceb35685088578f2b92dc336bc7",
+          "callbacks": [
+            {
+              "owner": "explicit-options",
+              "method": "OPTIONS",
+              "requestUrl": "<loopback-origin>/options",
+              "pathname": "/options",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/options"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "admission-denies-dispatch",
+      "mode": "native",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/guarded",
+            "method": "GET",
+            "deny": true,
+            "expectedOwner": "guarded"
+          },
+          "sentTarget": "/guarded",
+          "status": 200,
+          "owner": "guarded",
+          "bodyEmpty": false,
+          "bodySha256": "f306f00960c961601d0ab11cfa4feee9f9909be9f46c3c5f1ea5e76b61b56c0c",
+          "callbacks": [
+            {
+              "owner": "guarded",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/guarded",
+              "pathname": "/guarded",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "admission-denies-dispatch",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/guarded",
+            "method": "GET",
+            "deny": true,
+            "expectedOwner": "guarded"
+          },
+          "sentTarget": "/guarded",
+          "status": 403,
+          "owner": "admission",
+          "bodyEmpty": false,
+          "bodySha256": "62d6c2330036f64bcf71b95791743d6c77c38e0d7c8cbedcbc525c77c57cf0ee",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/guarded"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "lowercase-method",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "transport-startup-rejected",
+        "factory": "Bun.serve",
+        "errorFirstLine": "'routes' expects a Record<string, Response | HTMLBundle | {[method: string]: (req: BunRequest) => Response|Promise<Response>}>",
+        "fullErrorSha256": "9c6d611b82a6d98326193b1fadcd393a670377d14cdecf437fca01e03dd6e899"
+      },
+      "requests": [],
+      "cleanup": {
+        "listenerCreated": false,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "lowercase-method",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/alias",
+            "method": "GET"
+          },
+          "sentTarget": "/alias",
+          "status": 200,
+          "owner": "lower",
+          "bodyEmpty": false,
+          "bodySha256": "47ede6eb07418df8dc8569a67c1adecd53685cbe9c8427021c1c7d63f6eae5b5",
+          "callbacks": [
+            {
+              "owner": "lower",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/alias",
+              "pathname": "/alias",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/alias"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/alias",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/alias",
+          "status": 204,
+          "owner": null,
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/alias"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "method-alias-upper-first",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/alias",
+            "method": "GET"
+          },
+          "sentTarget": "/alias",
+          "status": 200,
+          "owner": "upper",
+          "bodyEmpty": false,
+          "bodySha256": "6a641b557246397344dc003a10af25bf2e525c1e51506f324b9bd854258389a0",
+          "callbacks": [
+            {
+              "owner": "upper",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/alias",
+              "pathname": "/alias",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/alias",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/alias",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "method-alias-upper-first",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/alias",
+            "method": "GET"
+          },
+          "sentTarget": "/alias",
+          "status": 200,
+          "owner": "lower",
+          "bodyEmpty": false,
+          "bodySha256": "fb54334e6368cda2aba23fae2e9160e8e44078971f2183652f7fc026073ee149",
+          "callbacks": [
+            {
+              "owner": "lower",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/alias",
+              "pathname": "/alias",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/alias"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/alias",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/alias",
+          "status": 204,
+          "owner": null,
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/alias"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "method-alias-lower-first",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/alias",
+            "method": "GET"
+          },
+          "sentTarget": "/alias",
+          "status": 200,
+          "owner": "upper",
+          "bodyEmpty": false,
+          "bodySha256": "f52c0125f4993aa26ee05bd45ab784f065691d3d2edde5f0805728629169317e",
+          "callbacks": [
+            {
+              "owner": "upper",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/alias",
+              "pathname": "/alias",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/alias",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/alias",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "method-alias-lower-first",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/alias",
+            "method": "GET"
+          },
+          "sentTarget": "/alias",
+          "status": 200,
+          "owner": "upper",
+          "bodyEmpty": false,
+          "bodySha256": "5439d8eedb93c4ac63d4540e7aa87427d8dc282283545d4518651a49fd76514b",
+          "callbacks": [
+            {
+              "owner": "upper",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/alias",
+              "pathname": "/alias",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/alias"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/alias",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/alias",
+          "status": 204,
+          "owner": null,
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/alias"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "same-parameter-shape-false",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "GET"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "slug",
+          "bodyEmpty": false,
+          "bodySha256": "43f32ebe849e073acda11e7d92935930e7be0d1f3f2b47ce5bc0887967ff1434",
+          "callbacks": [
+            {
+              "owner": "slug",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "slug": "value"
+              },
+              "copiedParams": {
+                "slug": "value"
+              }
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "same-parameter-shape-false",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "GET"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "slug",
+          "bodyEmpty": false,
+          "bodySha256": "f429a9213178a68e6bd6efd64b28dd484172923a5d0354ba75462b8cb5938df2",
+          "callbacks": [
+            {
+              "owner": "slug",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "slug": "value"
+              },
+              "copiedParams": {
+                "slug": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/dupe/:slug"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "same-parameter-shape-true",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "GET"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "id",
+          "bodyEmpty": false,
+          "bodySha256": "9dcb73b60f171b8d9619636bc79c3912da0b069bcfdcf305d414d9cd41b43b25",
+          "callbacks": [
+            {
+              "owner": "id",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "same-parameter-shape-true",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "GET"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "id",
+          "bodyEmpty": false,
+          "bodySha256": "130b143df27679dcdd923d1b915e4784b4a332157aa60b9a398ee472a9aab337",
+          "callbacks": [
+            {
+              "owner": "id",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/dupe/:id"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "parameter-shape-disjoint-methods",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "GET"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "id-get",
+          "bodyEmpty": false,
+          "bodySha256": "521ee345549959d09420ec8e360d40cf44053e28297e7ade8a712c233ea5da53",
+          "callbacks": [
+            {
+              "owner": "id-get",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "POST"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "slug-post",
+          "bodyEmpty": false,
+          "bodySha256": "fdfb9fc86e768d0910b70080c9ed0abfefcdb3d14174e3ecfec4bc9c83bb890c",
+          "callbacks": [
+            {
+              "owner": "slug-post",
+              "method": "POST",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "slug": "value"
+              },
+              "copiedParams": {
+                "slug": "value"
+              }
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "HEAD"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "id-get",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "id-get",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "parameter-shape-disjoint-methods",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "GET"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "id-get",
+          "bodyEmpty": false,
+          "bodySha256": "9b9140ded4dca75d675b81d17bf1ac01d5b13844def43e943273cf19d09f09ce",
+          "callbacks": [
+            {
+              "owner": "id-get",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/dupe/:id"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "POST"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "slug-post",
+          "bodyEmpty": false,
+          "bodySha256": "26c492c0312cb2bf9d284e0101326cc6bd9027956cf09096813fcde307945ab7",
+          "callbacks": [
+            {
+              "owner": "slug-post",
+              "method": "POST",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "slug": "value"
+              },
+              "copiedParams": {
+                "slug": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "POST",
+              "routeTemplate": "/dupe/:slug"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "HEAD"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 200,
+          "owner": "id-get",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "id-get",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/dupe/value",
+              "pathname": "/dupe/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/dupe/:id"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/dupe/value",
+            "method": "OPTIONS"
+          },
+          "sentTarget": "/dupe/value",
+          "status": 204,
+          "owner": null,
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "OPTIONS",
+              "routeTemplate": "/dupe/:slug"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "duplicate-parameter-name",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "transport-startup-rejected",
+        "factory": "Bun.serve",
+        "errorFirstLine": "Support for duplicate route parameter names is not yet implemented.",
+        "fullErrorSha256": "15ff8966d522eaf3d1f512f2ba1b807a63ed467b66f6fb4272ce7c9837db9001"
+      },
+      "requests": [],
+      "cleanup": {
+        "listenerCreated": false,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "duplicate-parameter-name",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "transport-startup-rejected",
+        "factory": "createWebServer",
+        "errorFirstLine": "Support for duplicate route parameter names is not yet implemented.",
+        "fullErrorSha256": "15ff8966d522eaf3d1f512f2ba1b807a63ed467b66f6fb4272ce7c9837db9001"
+      },
+      "requests": [],
+      "cleanup": {
+        "listenerCreated": false,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "trailing-slash-distinct",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/trail",
+            "method": "GET"
+          },
+          "sentTarget": "/trail",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "acd0385c9e68d0d4ba393f292c769882c258cc7cc29f9a6c136373cd232be61e",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/trail",
+              "pathname": "/trail",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/trail/",
+            "method": "GET"
+          },
+          "sentTarget": "/trail/",
+          "status": 200,
+          "owner": "slash",
+          "bodyEmpty": false,
+          "bodySha256": "8a228043e6f9d28f72becf38ae0b1d54b34953cde407dbccefc8a0c6faf6ec3f",
+          "callbacks": [
+            {
+              "owner": "slash",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/trail/",
+              "pathname": "/trail/",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/trail//",
+            "method": "GET"
+          },
+          "sentTarget": "/trail//",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "trailing-slash-distinct",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/trail",
+            "method": "GET"
+          },
+          "sentTarget": "/trail",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "b3de972d71b399261859105aa482ad6bb90d1442128b2eedac4868d5a599e520",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/trail",
+              "pathname": "/trail",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/trail"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/trail/",
+            "method": "GET"
+          },
+          "sentTarget": "/trail/",
+          "status": 200,
+          "owner": "slash",
+          "bodyEmpty": false,
+          "bodySha256": "8f4085ec33bc9e1bbd30994da56f53e7da11561d64f9ec307d0ccba2cd0a1ca0",
+          "callbacks": [
+            {
+              "owner": "slash",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/trail/",
+              "pathname": "/trail/",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/trail/"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/trail//",
+            "method": "GET"
+          },
+          "sentTarget": "/trail//",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "trailing-slash-single",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/trail",
+            "method": "GET"
+          },
+          "sentTarget": "/trail",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "e3fdd132b1714b5cee345566dea6c6e87ae96c5c2a586942efaf3cf07f13f71c",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/trail",
+              "pathname": "/trail",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/trail/",
+            "method": "GET"
+          },
+          "sentTarget": "/trail/",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "trailing-slash-single",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/trail",
+            "method": "GET"
+          },
+          "sentTarget": "/trail",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "ebc09d90ec56c2ea8816be45be6f264d3ece5f0e66f6c216a2d200bfcafd061b",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/trail",
+              "pathname": "/trail",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/trail"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/trail/",
+            "method": "GET"
+          },
+          "sentTarget": "/trail/",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "repeated-slash",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a//b",
+            "method": "GET"
+          },
+          "sentTarget": "/a//b",
+          "status": 200,
+          "owner": "double",
+          "bodyEmpty": false,
+          "bodySha256": "40603aed100f750ddfbf470f5cff764244e05a342b4d893a57d5f4f4d0f6cc5d",
+          "callbacks": [
+            {
+              "owner": "double",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/a//b",
+              "pathname": "/a//b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/a/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/b",
+          "status": 200,
+          "owner": "single",
+          "bodyEmpty": false,
+          "bodySha256": "43cf7c9e3e14f8c245bc22ec2d0d6c703c76dde6e263d009b51074639d935089",
+          "callbacks": [
+            {
+              "owner": "single",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/a/b",
+              "pathname": "/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "repeated-slash",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a//b",
+            "method": "GET"
+          },
+          "sentTarget": "/a//b",
+          "status": 200,
+          "owner": "double",
+          "bodyEmpty": false,
+          "bodySha256": "7bdbf7438379df6085ea7fbe1983bb8b902c47e9807557189987b569d571f67c",
+          "callbacks": [
+            {
+              "owner": "double",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/a//b",
+              "pathname": "/a//b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/a//b"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/a/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/b",
+          "status": 200,
+          "owner": "single",
+          "bodyEmpty": false,
+          "bodySha256": "b62c234c6fcffa08de566b09b488430b1c8d3b4aeb9d9f270483fa36de57eb0f",
+          "callbacks": [
+            {
+              "owner": "single",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/a/b",
+              "pathname": "/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/a/b"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "dot-segments",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a/../b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/../b",
+          "status": 200,
+          "owner": "dot",
+          "bodyEmpty": false,
+          "bodySha256": "7cff1a14dfb0e46e9047c9f36e84c8c6e322fe269e77047bd29fd4fb8374c09f",
+          "callbacks": [
+            {
+              "owner": "dot",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/b",
+              "pathname": "/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/b",
+            "method": "GET"
+          },
+          "sentTarget": "/b",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "62636a2a85942178e4ff7b77ca898edddb9fd33f49390655fd2451d00a7c4592",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/b",
+              "pathname": "/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "dot-segments",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a/../b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/../b",
+          "status": 200,
+          "owner": "dot",
+          "bodyEmpty": false,
+          "bodySha256": "9883416854643a65a67b97b317cb9223410f75f2b0f34754e601b78d6b89b3f5",
+          "callbacks": [
+            {
+              "owner": "dot",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/b",
+              "pathname": "/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/a/../b"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/b",
+            "method": "GET"
+          },
+          "sentTarget": "/b",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "416f77d99576c3e6f19b069f0d8ef8920f452d56e33205d3307ebc6eb83e9132",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/b",
+              "pathname": "/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/b"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "encoded-dot-segments",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a/%2e%2e/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/%2e%2e/b",
+          "status": 200,
+          "owner": "encoded",
+          "bodyEmpty": false,
+          "bodySha256": "e7dea6a8bf53dba90fab872d04f19d8cf2f9062fe742988a985fc215ad59e395",
+          "callbacks": [
+            {
+              "owner": "encoded",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/b",
+              "pathname": "/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/b",
+            "method": "GET"
+          },
+          "sentTarget": "/b",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "5aa9d11f51286a710198886c69c7f39fa1247f97b9381c00511cd361d5950ea0",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/b",
+              "pathname": "/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "encoded-dot-segments",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a/%2e%2e/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/%2e%2e/b",
+          "status": 200,
+          "owner": "encoded",
+          "bodyEmpty": false,
+          "bodySha256": "3ea89b6c8ddaa53786ef746031b3849c2c0e277853b3608a761ec02f648b4d69",
+          "callbacks": [
+            {
+              "owner": "encoded",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/b",
+              "pathname": "/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/a/%2e%2e/b"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/b",
+            "method": "GET"
+          },
+          "sentTarget": "/b",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "c0171c21c848ae801107265154bcdde7f6fb7a65e85135a5da459f3c794f575d",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/b",
+              "pathname": "/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/b"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "backslash-path",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a\\b",
+            "method": "GET"
+          },
+          "sentTarget": "/a\\b",
+          "status": 200,
+          "owner": "backslash",
+          "bodyEmpty": false,
+          "bodySha256": "eb73cd1a152ec3a3e4c944fc03894d5760a5f091a058b3f5286a840e87be5205",
+          "callbacks": [
+            {
+              "owner": "backslash",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/a/b",
+              "pathname": "/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/a/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/b",
+          "status": 200,
+          "owner": "slash",
+          "bodyEmpty": false,
+          "bodySha256": "660226ddc753e5e5593301ea7c3a338277df0764ad0413b3810154d7e8ccccc3",
+          "callbacks": [
+            {
+              "owner": "slash",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/a/b",
+              "pathname": "/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "backslash-path",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a\\b",
+            "method": "GET"
+          },
+          "sentTarget": "/a\\b",
+          "status": 200,
+          "owner": "backslash",
+          "bodyEmpty": false,
+          "bodySha256": "7042875b8174617d1cd105ae4b65a1a0cf66e1ff92c6d986457ca26443b6dd27",
+          "callbacks": [
+            {
+              "owner": "backslash",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/a/b",
+              "pathname": "/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/a\\b"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/a/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/b",
+          "status": 200,
+          "owner": "slash",
+          "bodyEmpty": false,
+          "bodySha256": "696d45da458b70c3abfd1850db8ff2ec8401fafd71ddeae86c9a60286cebb3d6",
+          "callbacks": [
+            {
+              "owner": "slash",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/a/b",
+              "pathname": "/a/b",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/a/b"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "query-declaration",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/query?mode=one",
+            "method": "GET"
+          },
+          "sentTarget": "/query?mode=one",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "4fbcaa618ce24947995eb41f82414d6c8102663b468ca9c4307c2d92f85567ba",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/query?mode=one",
+              "pathname": "/query",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/query?mode=two",
+            "method": "GET"
+          },
+          "sentTarget": "/query?mode=two",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "1da8561eff127b1d3cc985b01f3a134ed49d2dd710d9d3765371ef42b507a484",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/query?mode=two",
+              "pathname": "/query",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/query",
+            "method": "GET"
+          },
+          "sentTarget": "/query",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "72cfb206ba8d91d9a6c68ad4a169dfb1c0f2f748d514bf93524295cdda98aa3d",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/query",
+              "pathname": "/query",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "query-declaration",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/query?mode=one",
+            "method": "GET"
+          },
+          "sentTarget": "/query?mode=one",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "c32cfa24f1180aec6de1576a32865f3812b36989d781623799df76c2034042f6",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/query?mode=one",
+              "pathname": "/query",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/query"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/query?mode=two",
+            "method": "GET"
+          },
+          "sentTarget": "/query?mode=two",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "b0f22441c6577e976b57b1a00fd221a16b3a7889376833087d3d215fbc957ca5",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/query?mode=two",
+              "pathname": "/query",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/query"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/query",
+            "method": "GET"
+          },
+          "sentTarget": "/query",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "3eb0867c58f56b45e7d2ccfdabd4032c0009808c9651ff4ef90e38c5e4d4f033",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/query",
+              "pathname": "/query",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/query"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "fragment-declaration",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/fragment#part",
+            "method": "GET"
+          },
+          "sentTarget": "/fragment#part",
+          "status": 200,
+          "owner": "fragment",
+          "bodyEmpty": false,
+          "bodySha256": "f08906e7c1b61de9ca6979ee80483ef9dd2a50cb8ee43be51fb15f427bb8ca33",
+          "callbacks": [
+            {
+              "owner": "fragment",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/fragment#part",
+              "pathname": "/fragment",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/fragment",
+            "method": "GET"
+          },
+          "sentTarget": "/fragment",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "19b06ee312b7456189ab0b7a6bdf303e8d9671053acb55461f393f5f9402fdac",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/fragment",
+              "pathname": "/fragment",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "fragment-declaration",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/fragment#part",
+            "method": "GET"
+          },
+          "sentTarget": "/fragment#part",
+          "status": 200,
+          "owner": "fragment",
+          "bodyEmpty": false,
+          "bodySha256": "5f6579f11fe26e456bd5a5bb9460b22b5545f54c9d05b792b9b2dc30bf4169ed",
+          "callbacks": [
+            {
+              "owner": "fragment",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/fragment#part",
+              "pathname": "/fragment",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/fragment#part"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/fragment",
+            "method": "GET"
+          },
+          "sentTarget": "/fragment",
+          "status": 200,
+          "owner": "plain",
+          "bodyEmpty": false,
+          "bodySha256": "b820ebf9156594db40f61bd9c9075fce8951a49b8ec489ca2af9905905739ede",
+          "callbacks": [
+            {
+              "owner": "plain",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/fragment",
+              "pathname": "/fragment",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/fragment"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "literal-percent-path",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/literal/%25",
+            "method": "GET"
+          },
+          "sentTarget": "/literal/%25",
+          "status": 200,
+          "owner": "percent",
+          "bodyEmpty": false,
+          "bodySha256": "ef0ded15dad6782e5f8ec5f389a5b479bd35b1dadce6680c5776c3e09fa73e02",
+          "callbacks": [
+            {
+              "owner": "percent",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/literal/%25",
+              "pathname": "/literal/%25",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/literal/%2525",
+            "method": "GET"
+          },
+          "sentTarget": "/literal/%2525",
+          "status": 200,
+          "owner": "encoded-percent",
+          "bodyEmpty": false,
+          "bodySha256": "4380a0cae8bf67dd03e4a8de592fdf933cecc6b0147f955fbfbb5d74a9346ee9",
+          "callbacks": [
+            {
+              "owner": "encoded-percent",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/literal/%2525",
+              "pathname": "/literal/%2525",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "literal-percent-path",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/literal/%25",
+            "method": "GET"
+          },
+          "sentTarget": "/literal/%25",
+          "status": 200,
+          "owner": "percent",
+          "bodyEmpty": false,
+          "bodySha256": "42cd012209ae75775fab692feee978cd97ef583af26fbe856abaef8204614a83",
+          "callbacks": [
+            {
+              "owner": "percent",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/literal/%25",
+              "pathname": "/literal/%25",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/literal/%25"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/literal/%2525",
+            "method": "GET"
+          },
+          "sentTarget": "/literal/%2525",
+          "status": 200,
+          "owner": "encoded-percent",
+          "bodyEmpty": false,
+          "bodySha256": "0fa2bf3587df2acbec65fc09b12b09b3967cb05e20a80b679438ef7c7cca6fbe",
+          "callbacks": [
+            {
+              "owner": "encoded-percent",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/literal/%2525",
+              "pathname": "/literal/%2525",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/literal/%2525"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "unicode-declaration",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "transport-startup-rejected",
+        "factory": "Bun.serve",
+        "errorFirstLine": "Invalid route \"/café\". Please encode all non-ASCII characters in the path.",
+        "fullErrorSha256": "51b56d4a3ada706ec894cc2a103e5b8e708f939bee75f02f0f805712de85e577"
+      },
+      "requests": [],
+      "cleanup": {
+        "listenerCreated": false,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "unicode-declaration",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "transport-startup-rejected",
+        "factory": "createWebServer",
+        "errorFirstLine": "Invalid route \"/café\". Please encode all non-ASCII characters in the path.",
+        "fullErrorSha256": "51b56d4a3ada706ec894cc2a103e5b8e708f939bee75f02f0f805712de85e577"
+      },
+      "requests": [],
+      "cleanup": {
+        "listenerCreated": false,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "relative-declaration",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "transport-startup-rejected",
+        "factory": "Bun.serve",
+        "errorFirstLine": "Invalid route \"relative\". Path must start with '/'",
+        "fullErrorSha256": "22b74214ccc6f9d220d23dbde600c0a0b6149448f9b0409f6bf67bbbfc33182a"
+      },
+      "requests": [],
+      "cleanup": {
+        "listenerCreated": false,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "relative-declaration",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "transport-startup-rejected",
+        "factory": "createWebServer",
+        "errorFirstLine": "Invalid route \"relative\". Path must start with '/'",
+        "fullErrorSha256": "22b74214ccc6f9d220d23dbde600c0a0b6149448f9b0409f6bf67bbbfc33182a"
+      },
+      "requests": [],
+      "cleanup": {
+        "listenerCreated": false,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "empty-declaration",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/",
+            "method": "GET"
+          },
+          "sentTarget": "/",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "empty-declaration",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/",
+            "method": "GET"
+          },
+          "sentTarget": "/",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "middle-wildcard",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a/one/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/one/b",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/a/one/two/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/one/two/b",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "middle-wildcard",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/a/one/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/one/b",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/a/one/two/b",
+            "method": "GET"
+          },
+          "sentTarget": "/a/one/two/b",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "wildcard-empty-tail",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/files",
+            "method": "GET"
+          },
+          "sentTarget": "/files",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/files/",
+            "method": "GET"
+          },
+          "sentTarget": "/files/",
+          "status": 200,
+          "owner": "wildcard",
+          "bodyEmpty": false,
+          "bodySha256": "82924e796d6910681772cba6023aaaca20ad4ba4a0360d7c0d6ef893e9bbed82",
+          "callbacks": [
+            {
+              "owner": "wildcard",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/files/",
+              "pathname": "/files/",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/files/a",
+            "method": "GET"
+          },
+          "sentTarget": "/files/a",
+          "status": 200,
+          "owner": "wildcard",
+          "bodyEmpty": false,
+          "bodySha256": "7107562bf8227fe08f1358fe8f76b90f518b743018647698f6a69de8bdeef9a2",
+          "callbacks": [
+            {
+              "owner": "wildcard",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/files/a",
+              "pathname": "/files/a",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "wildcard-empty-tail",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/files",
+            "method": "GET"
+          },
+          "sentTarget": "/files",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/files/",
+            "method": "GET"
+          },
+          "sentTarget": "/files/",
+          "status": 200,
+          "owner": "wildcard",
+          "bodyEmpty": false,
+          "bodySha256": "838db41995f6c1f08065f6287911c9bfbf5cf29115e63b070cb97d0a7bc4ef7a",
+          "callbacks": [
+            {
+              "owner": "wildcard",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/files/",
+              "pathname": "/files/",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/files/*"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/files/a",
+            "method": "GET"
+          },
+          "sentTarget": "/files/a",
+          "status": 200,
+          "owner": "wildcard",
+          "bodyEmpty": false,
+          "bodySha256": "5af346917e0c9ea8f6f3fb90bb90d25d12a6ab90a52c7fc229de607aacc9e852",
+          "callbacks": [
+            {
+              "owner": "wildcard",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/files/a",
+              "pathname": "/files/a",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/files/*"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "native-decoded-percent-values",
+      "mode": "native",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/value/100%25",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/value/100%25",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "8c42ab5b70f25c2e3ba5080de37d312213f70c0bacbdd2b91932d29904729f28",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/value/100%25",
+              "pathname": "/value/100%25",
+              "params": {
+                "id": "100%"
+              },
+              "copiedParams": {
+                "id": "100%"
+              }
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/value/%252F",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/value/%252F",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "ce7aa5ad7b22fe888b4987e674a5aa0979350f65a453823bb3a433e4b91cd42f",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/value/%252F",
+              "pathname": "/value/%252F",
+              "params": {
+                "id": "%2F"
+              },
+              "copiedParams": {
+                "id": "%2F"
+              }
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/value/%2F",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/value/%2F",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "16a0bcb794eebee8e399fb7cdc4dea3befc3953e7c3f1f73a21365a3b1e679df",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/value/%2F",
+              "pathname": "/value/%2F",
+              "params": {
+                "id": "/"
+              },
+              "copiedParams": {
+                "id": "/"
+              }
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "native-decoded-percent-values",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/value/100%25",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/value/100%25",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "811f2a262b02cb433c4e6619439522e86dc78d8b268efd80093b46af0bbfdb2f",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/value/100%25",
+              "pathname": "/value/100%25",
+              "params": {
+                "id": "100%"
+              },
+              "copiedParams": {
+                "id": "100%"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/value/:id"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/value/%252F",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/value/%252F",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "4c249c7c3503d5ef89321fd6f2d086f17e1f9502b844120a9ee3ba3c1b553f24",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/value/%252F",
+              "pathname": "/value/%252F",
+              "params": {
+                "id": "%2F"
+              },
+              "copiedParams": {
+                "id": "%2F"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/value/:id"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/value/%2F",
+            "method": "GET",
+            "expectedOwner": "parameter"
+          },
+          "sentTarget": "/value/%2F",
+          "status": 200,
+          "owner": "parameter",
+          "bodyEmpty": false,
+          "bodySha256": "bcb067452473e2fdb143251baa6ce275c804687c1fbc7bd0705109de796cf555",
+          "callbacks": [
+            {
+              "owner": "parameter",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/value/%2F",
+              "pathname": "/value/%2F",
+              "params": {
+                "id": "/"
+              },
+              "copiedParams": {
+                "id": "/"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/value/:id"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "head-fallback-unrelated-head-control",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/read",
+            "method": "HEAD"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "get",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "get",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "head-fallback-unrelated-head-control",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/read",
+            "method": "HEAD"
+          },
+          "sentTarget": "/read",
+          "status": 200,
+          "owner": "get",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "get",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/read",
+              "pathname": "/read",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/read"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "head-literal-parameter-specificity",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/head/new",
+            "method": "HEAD"
+          },
+          "sentTarget": "/head/new",
+          "status": 200,
+          "owner": "literal-get",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "literal-get",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/head/new",
+              "pathname": "/head/new",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/head/value",
+            "method": "HEAD"
+          },
+          "sentTarget": "/head/value",
+          "status": 200,
+          "owner": "parameter-head",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "parameter-head",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/head/value",
+              "pathname": "/head/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "head-literal-parameter-specificity",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/head/new",
+            "method": "HEAD"
+          },
+          "sentTarget": "/head/new",
+          "status": 200,
+          "owner": "literal-get",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "literal-get",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/head/new",
+              "pathname": "/head/new",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/head/new"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/head/value",
+            "method": "HEAD"
+          },
+          "sentTarget": "/head/value",
+          "status": 200,
+          "owner": "parameter-head",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "parameter-head",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/head/value",
+              "pathname": "/head/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/head/:id"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "head-shape-disjoint-methods",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/head/value",
+            "method": "GET"
+          },
+          "sentTarget": "/head/value",
+          "status": 200,
+          "owner": "id-get",
+          "bodyEmpty": false,
+          "bodySha256": "7d72c7a1b366d7c76ef84d615eebce03d13e2274ca48cf782fa67d5c0b9b376c",
+          "callbacks": [
+            {
+              "owner": "id-get",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/head/value",
+              "pathname": "/head/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/head/value",
+            "method": "HEAD"
+          },
+          "sentTarget": "/head/value",
+          "status": 200,
+          "owner": "slug-head",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "slug-head",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/head/value",
+              "pathname": "/head/value",
+              "params": {
+                "slug": "value"
+              },
+              "copiedParams": {
+                "slug": "value"
+              }
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "head-shape-disjoint-methods",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/head/value",
+            "method": "GET"
+          },
+          "sentTarget": "/head/value",
+          "status": 200,
+          "owner": "id-get",
+          "bodyEmpty": false,
+          "bodySha256": "6eef7199acb7934a2addcfae580d04a7ae745ddd8c231f6da57bd38a19a37478",
+          "callbacks": [
+            {
+              "owner": "id-get",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/head/value",
+              "pathname": "/head/value",
+              "params": {
+                "id": "value"
+              },
+              "copiedParams": {
+                "id": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/head/:id"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/head/value",
+            "method": "HEAD"
+          },
+          "sentTarget": "/head/value",
+          "status": 200,
+          "owner": "slug-head",
+          "bodyEmpty": true,
+          "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "callbacks": [
+            {
+              "owner": "slug-head",
+              "method": "HEAD",
+              "requestUrl": "<loopback-origin>/head/value",
+              "pathname": "/head/value",
+              "params": {
+                "slug": "value"
+              },
+              "copiedParams": {
+                "slug": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "HEAD",
+              "routeTemplate": "/head/:slug"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "parameter-key-constructor",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/key/value",
+            "method": "GET"
+          },
+          "sentTarget": "/key/value",
+          "status": 200,
+          "owner": "key",
+          "bodyEmpty": false,
+          "bodySha256": "10ab303cba7f7082e9ad4161896ee841967ffae1847d42a058e7946d341c0445",
+          "callbacks": [
+            {
+              "owner": "key",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/key/value",
+              "pathname": "/key/value",
+              "params": {
+                "constructor": "value"
+              },
+              "copiedParams": {
+                "constructor": "value"
+              }
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "parameter-key-constructor",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/key/value",
+            "method": "GET"
+          },
+          "sentTarget": "/key/value",
+          "status": 200,
+          "owner": "key",
+          "bodyEmpty": false,
+          "bodySha256": "f8a71f145f3201d82b2837086208dfb65bedb34c4b381870c944636c690ca9ed",
+          "callbacks": [
+            {
+              "owner": "key",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/key/value",
+              "pathname": "/key/value",
+              "params": {
+                "constructor": "value"
+              },
+              "copiedParams": {
+                "constructor": "value"
+              }
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/key/:constructor"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "parameter-key-__proto__",
+      "mode": "native",
+      "classification": "confirmed-defect-reproduction",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/key/value",
+            "method": "GET"
+          },
+          "sentTarget": "/key/value",
+          "status": 200,
+          "owner": "key",
+          "bodyEmpty": false,
+          "bodySha256": "a1ac9b59f2d1a01bdc2ab4e783d80abb23e41ac8a340c7bff891eed66181ad5d",
+          "callbacks": [
+            {
+              "owner": "key",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/key/value",
+              "pathname": "/key/value",
+              "params": {
+                "__proto__": "value"
+              },
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "parameter-key-__proto__",
+      "mode": "framework",
+      "classification": "confirmed-defect-reproduction",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/key/value",
+            "method": "GET"
+          },
+          "sentTarget": "/key/value",
+          "status": 200,
+          "owner": "key",
+          "bodyEmpty": false,
+          "bodySha256": "3076ce478daa5df8cf8d3054874dac4c91d4c9ac19e8acc0280c8a7c3667f91e",
+          "callbacks": [
+            {
+              "owner": "key",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/key/value",
+              "pathname": "/key/value",
+              "params": {
+                "__proto__": "value"
+              },
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/key/:__proto__"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "encoded-unicode-only",
+      "mode": "native",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/caf%C3%A9",
+            "method": "GET"
+          },
+          "sentTarget": "/caf%C3%A9",
+          "status": 200,
+          "owner": "encoded",
+          "bodyEmpty": false,
+          "bodySha256": "bbcbcc5b2ad3224a3b203521e0920f1b4a2cb7ec459027586563be29fc93aa78",
+          "callbacks": [
+            {
+              "owner": "encoded",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/caf%C3%A9",
+              "pathname": "/caf%C3%A9",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": []
+        },
+        {
+          "input": {
+            "target": "/caf%c3%a9",
+            "method": "GET"
+          },
+          "sentTarget": "/caf%c3%a9",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": []
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "encoded-unicode-only",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/caf%C3%A9",
+            "method": "GET"
+          },
+          "sentTarget": "/caf%C3%A9",
+          "status": 200,
+          "owner": "encoded",
+          "bodyEmpty": false,
+          "bodySha256": "171c3e953d0dc6ecc05335075f8d7f5f58f5c9b7475a0384a06a2d1dd6100b03",
+          "callbacks": [
+            {
+              "owner": "encoded",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/caf%C3%A9",
+              "pathname": "/caf%C3%A9",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/caf%C3%A9"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/caf%c3%a9",
+            "method": "GET"
+          },
+          "sentTarget": "/caf%c3%a9",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": false,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "collector-replace",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/contracts/shared",
+            "method": "POST",
+            "expectedOwner": "second"
+          },
+          "sentTarget": "/contracts/shared",
+          "status": 200,
+          "owner": "second",
+          "bodyEmpty": false,
+          "bodySha256": "13f81a16a6ae1f39597f437b1578d1ddfce6c7cbbe21247e146937a9d3073e2d",
+          "callbacks": [
+            {
+              "owner": "second",
+              "method": "POST",
+              "requestUrl": "<loopback-origin>/contracts/shared",
+              "pathname": "/contracts/shared",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "POST",
+              "routeTemplate": "/contracts/shared"
+            }
+          ]
+        },
+        {
+          "input": {
+            "target": "/contracts/shared",
+            "method": "GET"
+          },
+          "sentTarget": "/contracts/shared",
+          "status": 404,
+          "owner": "fallback",
+          "bodyEmpty": false,
+          "bodySha256": "5c7ee2074b65853f71fc5a01ce194ff26deedf6daacdb715c6beefdfd3f31b35",
+          "callbacks": [],
+          "admissions": [
+            {
+              "method": "GET"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": true,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      },
+      "collectedPaths": ["/contracts/shared"],
+      "collectedMethods": {
+        "/contracts/shared": ["POST"]
+      },
+      "registry": [
+        {
+          "method": "POST",
+          "path": "/contracts/shared",
+          "middleware": ["global", "api"],
+          "openApi": {
+            "summary": "second"
+          }
+        }
+      ]
+    },
+    {
+      "name": "collector-alias",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/contracts/shared",
+            "method": "GET",
+            "expectedOwner": "current"
+          },
+          "sentTarget": "/contracts/shared",
+          "status": 200,
+          "owner": "current",
+          "bodyEmpty": false,
+          "bodySha256": "34240a853facd01c693fb09cae6d29c84d2f0478845695117db22c0cc010b6d1",
+          "callbacks": [
+            {
+              "owner": "current",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/contracts/shared",
+              "pathname": "/contracts/shared",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/contracts/shared"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": true,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      },
+      "collectedPaths": ["/contracts/shared"],
+      "collectedMethods": {
+        "/contracts/shared": ["GET"]
+      },
+      "registry": [
+        {
+          "method": "GET",
+          "path": "/contracts/shared",
+          "middleware": ["global", "api"],
+          "openApi": {
+            "summary": "current"
+          }
+        }
+      ]
+    },
+    {
+      "name": "collector-insertion",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/contracts/shared",
+            "method": "GET",
+            "expectedOwner": "second"
+          },
+          "sentTarget": "/contracts/shared",
+          "status": 200,
+          "owner": "second",
+          "bodyEmpty": false,
+          "bodySha256": "7f1259d95e46c1cdf9c775719ec94c442052fcf7cbd8c7e4dc0c7acbe00ef67d",
+          "callbacks": [
+            {
+              "owner": "second",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/contracts/shared",
+              "pathname": "/contracts/shared",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/contracts/shared"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": true,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      },
+      "collectedPaths": ["/contracts/shared"],
+      "collectedMethods": {
+        "/contracts/shared": ["GET"]
+      },
+      "registry": [
+        {
+          "method": "GET",
+          "path": "/contracts/shared",
+          "middleware": ["global", "api"],
+          "openApi": {
+            "summary": "second"
+          }
+        }
+      ]
+    },
+    {
+      "name": "collector-spread",
+      "mode": "framework",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/contracts/shared",
+            "method": "GET",
+            "expectedOwner": "survivor"
+          },
+          "sentTarget": "/contracts/shared",
+          "status": 200,
+          "owner": "survivor",
+          "bodyEmpty": false,
+          "bodySha256": "92534299dd71202d7a7111c8af245babc98a513a77b3a27925ca6682529e3bc9",
+          "callbacks": [
+            {
+              "owner": "survivor",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/contracts/shared",
+              "pathname": "/contracts/shared",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/contracts/shared"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": true,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      },
+      "collectedPaths": ["/contracts/shared"],
+      "collectedMethods": {
+        "/contracts/shared": ["GET"]
+      },
+      "registry": [
+        {
+          "method": "GET",
+          "path": "/contracts/shared",
+          "middleware": ["global", "api"]
+        }
+      ]
+    },
+    {
+      "name": "collector-orphan",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "collector-rejected",
+        "errorFirstLine": "OpenAPI metadata has no API route: orphan /missing",
+        "fullErrorSha256": "ed12332dfe26d7def25f88bb6e6d8a458e599133f1c4e3c83667d95936103f26"
+      },
+      "requests": [],
+      "cleanup": {
+        "listenerCreated": false,
+        "contextCreated": true,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      },
+      "registryBeforeFailure": [
+        {
+          "method": "GET",
+          "path": "/previous",
+          "middleware": ["global", "api"]
+        }
+      ],
+      "registryAfterFailure": []
+    },
+    {
+      "name": "collector-repeat",
+      "mode": "framework",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "startup": {
+        "outcome": "started",
+        "callbacksBeforeListen": 0,
+        "admissionsBeforeListen": 0
+      },
+      "requests": [
+        {
+          "input": {
+            "target": "/contracts/shared",
+            "method": "GET",
+            "expectedOwner": "repeat"
+          },
+          "sentTarget": "/contracts/shared",
+          "status": 200,
+          "owner": "repeat",
+          "bodyEmpty": false,
+          "bodySha256": "dc3f6e030461bd0f75753270a8e6b27352aaf611e502f6357e75d32759e2587b",
+          "callbacks": [
+            {
+              "owner": "repeat",
+              "method": "GET",
+              "requestUrl": "<loopback-origin>/contracts/shared",
+              "pathname": "/contracts/shared",
+              "params": {},
+              "copiedParams": {}
+            }
+          ],
+          "admissions": [
+            {
+              "method": "GET",
+              "routeTemplate": "/contracts/shared"
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "listenerCreated": true,
+        "contextCreated": true,
+        "listenerStopped": true,
+        "contextDisposed": true,
+        "databaseClosed": true,
+        "errors": []
+      },
+      "collectedPaths": ["/contracts/shared"],
+      "collectedMethods": {
+        "/contracts/shared": ["GET"]
+      },
+      "registry": [
+        {
+          "method": "GET",
+          "path": "/contracts/shared",
+          "middleware": ["global", "api"],
+          "openApi": {
+            "summary": "repeat"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/contracts/shared",
+          "middleware": ["global", "api"],
+          "openApi": {
+            "summary": "repeat"
+          }
+        }
+      ]
+    }
+  ]
+}

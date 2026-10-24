@@ -51,17 +51,17 @@ that the framework never received.
    contract. Reject unsupported/undefined methods, extra map keys, arrays and opaque
    native asset values before dispatch. A guarded Response may still contain a file.
 4. Apply the reviewed prefix/path policy once, then expand each declaration to the
-   actual methods the adapter will register. Compare canonical method/path keys
-   while retaining each original owner. Static Response, callback shorthand,
+   actual methods the adapter will register. Compare the reviewed matching-shape
+   and effective-method identities while retaining each original owner. Static Response, callback shorthand,
    explicit HEAD/OPTIONS and synthesized preflight occupy different semantic slots;
    do not infer equivalence merely because their TypeScript values are assignable.
-5. Reject an exact canonical method/path key claimed by two intact declarations
+5. Reject a recognized matching shape claimed by two intact declarations
    before any route-registry mutation or listener opens. Return both owners,
-   original paths, method and canonical key. Disjoint methods from different owners
-   at the same path need a separate decision too: silently combining them would
+   original paths, effective methods and matching shape. Disjoint methods from
+   different owners at the same path need a separate decision too: combining them would
    introduce method merging where 2.x replaces the whole path. The proposed
-   default is one declaration owner per canonical path; diagnose multiple owners
-   even when methods are disjoint, until an explicit composition policy is accepted.
+   default is one declaration owner per recognized matching shape; diagnose multiple
+   owners even when methods are disjoint, until a composition policy is accepted.
    An app can deliberately supply one cohesive method map with its own complete
    metadata. No automatic merge, replacement or override flag is selected here.
 6. Install one reviewed route/metadata snapshot and open the existing server only
@@ -69,26 +69,22 @@ that the framework never received.
    use the existing reverse cleanup/lifecycle owner on rejection. Do not create a
    second router/container or leave partial global registry state.
 
-This ordering needs a characterization of actual initialization/registry effects
-before implementation. It does not claim a transaction around arbitrary user module
-side effects. Capture rollback responsibilities explicitly rather than calling
+The new failed/repeated collection observations below expose current registry effects.
+Staged snapshot installation and rollback still need lifecycle characterization
+before implementation. This proposal does not claim a transaction around arbitrary
+user module side effects. Capture rollback responsibilities explicitly rather than calling
 module callbacks twice to simulate validation.
 
 ## Canonicalization and overlap limits
 
-Absolute declaration keys, exact seven native HTTP methods and explicit prefix
-ownership are proposed for the new API. The compatibility line retains current
-aliases/lowercase normalization. Query, fragment, dot-segment, backslash, repeated
-slash and percent-bearing declaration policy needs a precise accepted grammar and
-native controls. URL normalization is not automatically the grammar for Bun route
-patterns; do not run route templates through a URL parser and assume equivalence.
-
-Reject observable exact method/path collisions. Dynamic names with the same route
-shape, wildcard intersections, static-versus-parameter precedence and trailing slash
-behavior must first be characterized against the selected Bun SDK. Do not implement
-a second complete pattern parser or claim all overlap is an exact collision.
-A deliberate literal route beside a parameter route can be meaningful; an
-unreviewed collision must not silently inherit a security policy from another owner.
+The pinned native/framework path and method observations below now bound the proposal.
+Use absolute keys, exact seven native HTTP method names and explicit prefix ownership
+for review; keep current aliases/lowercase normalization on the 2.x bridge. A finite
+proposed grammar and matching-shape comparison replace an assumed URL-parser
+canonicalization. Neither this proposal nor the probes implement that validator.
+Meaningful literal/parameter/wildcard specificity can coexist and is not automatically
+a collision. Pattern forms outside the qualified subset require an explicit decision,
+not a second universal router or an untested overlap claim.
 
 There are two distinct acceptance levels: collisions among the intact declarations
 the collector received, and all composition including prior JavaScript overwrites.
@@ -148,8 +144,9 @@ authentication, private downloads, ORM and CSRF on the guarded application origi
 ## Acceptance before breaking implementation
 
 Retain all current positive/negative/compiler and published consumer assertions.
-Add tests for each proposed startup failure with no listener, no partially registered
-routes, no handler execution and complete owned cleanup. Assert actual source-owner
+Add tests for each proposed startup failure with no published listener or partially registered
+routes, no handler execution and complete owned cleanup. These are required future
+validator tests; the present constructor observations alone do not prove them. Assert actual source-owner
 messages and unchanged original causes. Add late request failures without an asset
 fallback, and real HTTP/native HEAD/OPTIONS controls before choosing method expansion.
 
@@ -194,8 +191,173 @@ Shop adoption stays manually held for #257; the timer stays off.
 ## References and evidence interpretation
 
 [Bun routing](https://bun.sh/docs/runtime/http/routing) documents native
-static/parameter/wildcard precedence; the selected pinned SDK still needs the
-proposed overlap/diagnostic controls. The [HTML import-map standard](https://html.spec.whatwg.org/multipage/webappapis.html#import-maps)
+static/parameter/wildcard precedence and automatic parameter decoding. The dated
+pinned-SDK receipts below establish only their specific executions. The
+[HTML import-map standard](https://html.spec.whatwg.org/multipage/webappapis.html#import-maps)
 does not replace browser qualification. Existing repository receipts document the
-actual bounded 43 compiler, ten browser and static-engine results. This proposal
-adds no new runtime/browser acceptance count.
+separate bounded 43 compiler, ten browser and static-engine results. No new browser,
+provider or breaking-implementation acceptance is claimed here.
+
+## Pinned path, method and collision feasibility
+
+This continuation uses official native Bun 1.4.3 and an independently generated
+application with exact published 2.2.53 packages. It does not implement a proposed
+factory, validator, registry snapshot or breaking API. Native and framework
+requests use real loopback sockets, isolated child processes and the Node HTTP
+client's explicit request-target string. The receipt records that sent target,
+the native request URL and its separately parsed URL pathname; these are different
+observations, not interchangeable routing identities.
+
+The dated [receipt](qualification/m1-route-patterns-2026-10-24.json) records
+**44 definitions and 82 isolated executions: 18 contract controls, 62 feasibility observations and two dated confirmed-defect reproductions; zero failures or skips**. Contract controls, open feasibility observations and confirmed
+defect reproductions are separate categories. A completed observation does not
+make the observed behavior desirable or a guarantee to preserve. The original
+2.2.53 native-route and collision consumers run unchanged first, using their exact
+versioned Git blobs and hashes. The earlier 43 compiler cases and 159/12 published
+qualification records remain separate, unchanged evidence.
+
+### Declaration identity is not URL normalization
+
+The known specificity controls select exact, parameter, wildcard and catch-all
+handlers in the same order even when declaration insertion order reverses.
+Literal routes differing only in letter case remain distinct. `/trail` and
+`/trail/` are distinct in this SDK; a wildcard `/files/*` matches `/files/` and a
+nonempty tail, while `/files` follows the fixture fallback. Do not trim a trailing
+slash, merge a wildcard root or redirect implicitly as a validation shortcut.
+
+Raw `/a/../b`, `/a/%2e%2e/b` and backslash request targets can select their literal
+declarations while a parsed URL pathname looks like another route's path. The
+native control exhibits the same result. Query-bearing declaration keys can start
+but ordinary query requests dispatch to the query-free route. The fragment probe
+uses an adversarial raw target; it does not qualify browser navigation or valid
+HTTP fragment semantics. Empty and middle-wildcard keys can start without matching
+the tested requests. Accepted construction is not proof of a useful route grammar.
+
+Unescaped non-ASCII declarations are rejected at native startup. A separately
+registered `/caf%C3%A9` works, while the lower-case escape spelling in the bounded
+request takes the fallback. Percent-bearing literals remain byte-distinct. Neither
+case folding percent escapes nor decoding a declaration is a proven safe way to
+merge native routing identities. Native parameter values are already decoded; the
+2.2.53 percent-value controls remain intact and no validator should decode them again.
+
+For review, the first finite declaration grammar should require an absolute,
+nonempty ASCII declaration, named parameters with unique names, and at most one
+terminal wildcard. Reject query/fragment syntax, backslash, empty interior segments
+and dot segments with a useful declaration diagnostic. Keep a terminal slash
+significant. This is a proposed stricter major grammar, not a 2.x patch or proof
+that every other SDK pattern is unsupported. Encoded literal paths need a clearly
+bounded, SDK-qualified spelling policy; do not silently normalize them or promise
+arbitrary Unicode/escape equivalence. Migrate an affected legacy declaration with
+an explicit per-app diff, retaining the 2.x bridge until reviewed.
+
+### Effective methods must include fallback and synthesis
+
+The raw native bare callback handles all tested HTTP methods. The 2.x framework
+bare callback registers GET, inherits native HEAD behavior and synthesizes OPTIONS;
+other tested writes follow the fixture fallback. A direct Response covers the six
+existing non-OPTIONS methods in the framework, with a synthesized 204 OPTIONS;
+the native static Response instead answers OPTIONS with its own response.
+An explicit method-map HEAD or OPTIONS wins over the corresponding implicit case.
+POST-only maps do not acquire GET or HEAD handlers.
+
+All recorded wire HEAD callback executions and framework admission observations
+report HEAD and empty response bodies, including GET fallback, the controlled
+unrelated explicit-HEAD case and literal/parameter specificity. An early provisional
+handoff inference that these receipts showed GET was incorrect; no such method
+change is supported by the raw results. Do not invent a transport defect from that
+inference. This remains a bounded SDK observation rather than a cross-version
+completion or wire-protocol guarantee. Explicit HEAD handlers are separately
+qualified; adding them automatically needs its own policy and consumer proof.
+
+Native lower-case-only method maps reject startup. With an upper-case GET present,
+the extra lower-case spelling is ignored by the native control. The framework
+normalizes both and the last normalized entry wins. The proposed new contract
+therefore rejects any non-SDK own method key instead of relying on SDK excess-key
+behavior. Keep existing 2.x normalization during the bridge.
+
+The collector's validation plan must expand the actual framework registration:
+explicit methods, potential GET-to-HEAD fallback and synthesized OPTIONS, with an
+explicit-over-implicit rule inside one cohesive declaration. This is a proposal,
+not new dispatch code. The preflight observations establish dispatch/status and
+handler non-execution, not provider/CORS/credential qualification.
+
+### A matching shape needs its own collision decision
+
+`/dupe/:id` and `/dupe/:slug` share a matching shape. When both define GET, the last
+native declaration wins; reversing order reverses the winner and the parameter
+name delivered to the callback. With GET on one and POST on the other, both work
+and each receives its own parameter name. An explicit HEAD and a GET fallback can
+also occupy the same matching shape. These results invalidate a collision check
+that compares only literal declaration strings or only explicit method keys.
+
+For the proposed limited grammar, compare a declaration's matching shape while
+retaining original parameter names and full source ownership for diagnostics.
+This is declaration validation, not permission to build another request router.
+Do not rewrite native paths or merge handlers under a renamed parameter: a callback
+expecting `slug` would otherwise silently receive a map keyed by `id`.
+
+The proposed default remains one intact owner per recognized matching shape, even
+when owners declare disjoint methods. That stricter default requires acceptance
+and a migration; current native dispatch demonstrably permits such compositions.
+An app can deliberately produce one cohesive method map and metadata under one
+owner. Ordinary literal/parameter/wildcard specificity is a different relationship
+and must not be rejected merely because request sets intersect. Unsupported or
+unqualified grammar needs an explicit decision before implementation, not an
+unvalidated universal overlap detector or a generic override flag.
+
+### Capture before lossy composition; stage before registry mutation
+
+The module controls preserve whole-path replacement, raw-key insertion/alias
+precedence, actual handler/OpenAPI ownership and pre-composition provenance loss.
+A later raw assignment does not move an existing JavaScript key's position, so
+module order alone is not the canonical winner rule. The existing compatibility
+assertions remain; this characterization does not prove an app intended that winner.
+
+The failed-rebuild observation first registers a valid route, then rejects an
+orphan OpenAPI declaration. The prior registry is already cleared when the error
+returns. Repeating collection with `clearRegistry: false` can append duplicate
+registry entries. Thus current 2.x collection is not an atomic candidate-snapshot
+transaction. No handler ran during these probes, but a constructor rejection alone
+does not prove there was never a transient native bind or arbitrary module side effect.
+
+Refine the proposed sequence to capture intact declarations, validate their shape,
+capabilities and effective collisions, and construct candidate route/metadata data
+before calling the current global registry's `clear`/`register` methods. Installing
+an accepted snapshot, restoring it on later startup failure and associating it with
+the actual application owner require concrete lifecycle tests. This is a proposed
+major boundary, not a source registry redesign or M2 isolation acceptance. Do not
+call a module factory twice or promise rollback of arbitrary application code.
+
+### Confirmed defect: own parameter keys
+
+The `__proto__` probe found a real published 2.2.53 defect, separate from native
+matching policy. Bun supplies an own string value; `routeParams` assigns onto `{}`
+and loses the key through its inherited legacy setter. The `constructor` control
+retains its value. These string-value observations establish parameter loss, not
+prototype pollution. The proposed grammar must not simply ban the key to hide a
+compatible helper defect.
+
+A new real-native regression fails on original source and exact published 2.2.53
+before a compatible own-data-property correction. The correction in [PR #354](https://github.com/EyK-26/strata/pull/354) (`c07cd2faa474bd15471e8b547bd9e68693ba296e`)
+retains the ordinary object prototype, coercion, request identity, repeated
+adaptation and all original assertion bodies. It is a source correction, not a
+published 2.2.53 change; later patch publication needs its own gates and qualification.
+No new version/tag is prepared here. The pinned 2.2.53 probe intentionally retains
+this dated defect reproduction; it is not a required behavior of a future candidate.
+
+### Before a breaking implementation
+
+Accept the finite declaration grammar, matching-shape ownership rule and method
+expansion policy with per-app source/metadata diffs. Confirm exact diagnostic data
+and exports; stage registry changes without losing original/cleanup failures.
+Require real negative startup controls, request-time error tests and original
+consumer preservation before introducing an implementation. A deliberate wrong-owner
+negative control must fail the probe while retaining its real observed response;
+then the unchanged normal inputs must complete again.
+
+The explicit public artifact origin remains the selected major design target.
+Whole module/asset graphs, supported browsers, selected provider HTTPS/cookie/CSP/
+CORS/publication/retention and old/new cached-client migration/deprecation/rollback
+remain separate gates. The native pipeline and mixed HTTP/WebSocket completion
+limitations remain unresolved. Shop adoption remains held for #257; timer stays off.
+
