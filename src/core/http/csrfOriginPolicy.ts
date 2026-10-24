@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { ForbiddenError } from "../errors/http";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 
 function parseAuthority(authority: string | null, protocol: string): string | null {
   if (!authority || authority.endsWith(":") || /[\s\\/@?#%,*]/.test(authority)) return null;
