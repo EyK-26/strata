@@ -111,9 +111,9 @@ describe.skipIf(!restricted || !migration)(
           await finished;
           if (!disconnect) expect(await (await response).text()).toBe("committed");
           expect(order).toEqual(["commit", "flush", "close"]);
-          expect(await admin.unsafe<{ value: number }[]>(`SELECT value FROM ${table}`)).toEqual([
-            { value: 42 },
-          ]);
+          expect(
+            Array.from(await admin.unsafe<{ value: number }[]>(`SELECT value FROM ${table}`)),
+          ).toEqual([{ value: 42 }]);
         } finally {
           release();
           abort.abort();

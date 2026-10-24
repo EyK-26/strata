@@ -116,10 +116,9 @@ async function execute(args: string[], log: string, environment: Record<string, 
   }
 }
 try {
-  assert.equal(
-    Bun.version,
-    "1.4.3",
-    "Use the separately qualified runtime; do not change the global Bun install.",
+  assert.ok(
+    Bun.semver.satisfies(Bun.version, ">=1.4.4"),
+    "Use Bun >=1.4.4; do not change the global Bun install.",
   );
   fixture = await createGeneratedSecurityApp(
     "sqlite",

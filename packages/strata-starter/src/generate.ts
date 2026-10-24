@@ -196,7 +196,7 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
     writeText(manifestPath, JSON.stringify(manifest, null, 2));
   }
 
-  writeText(join(targetDir, ".bun-version"), "1.4.3\n");
+  writeText(join(targetDir, ".bun-version"), "1.4.4\n");
   writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, layers));
   writeText(join(targetDir, ".gitignore"), renderGitignore());
   writeText(

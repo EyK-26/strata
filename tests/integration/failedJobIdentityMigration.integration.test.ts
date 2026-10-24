@@ -75,11 +75,17 @@ test.skipIf(!process.env.MIGRATION_DATABASE_URL)(
       await upgrade(db, "pgsql");
       await fixtureMigration.up(db);
       expect(
-        await db.unsafe<{ job_id: string | null }[]>("SELECT job_id FROM failed_job ORDER BY id"),
+        Array.from(
+          await db.unsafe<{ job_id: string | null }[]>("SELECT job_id FROM failed_job ORDER BY id"),
+        ),
       ).toEqual([{ job_id: null }, { job_id: null }]);
       await fixtureMigration.down(db);
       expect(
-        await db.unsafe<{ id: number; payload: string }[]>("SELECT * FROM failed_job ORDER BY id"),
+        Array.from(
+          await db.unsafe<{ id: number; payload: string }[]>(
+            "SELECT * FROM failed_job ORDER BY id",
+          ),
+        ),
       ).toEqual([
         { id: 1, payload: "old payload" },
         { id: 2, payload: "old writer" },

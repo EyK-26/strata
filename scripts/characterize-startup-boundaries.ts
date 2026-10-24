@@ -27,7 +27,10 @@ for (const item of cases) {
 }
 
 assert.equal(new Set(cases.map((v) => v.mode)).size, cases.length);
-assert.equal(Bun.version, "1.4.3", "Use the qualified native runtime without changing global Bun.");
+assert.ok(
+  Bun.semver.satisfies(Bun.version, ">=1.4.4"),
+  "Use Bun >=1.4.4 without changing global Bun.",
+);
 const baselineTag = "v2.2.54";
 function blob(name: string) {
   const result = Bun.spawnSync(

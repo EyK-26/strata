@@ -1,6 +1,6 @@
 # @getstrata/starter
 
-The `create-strata` generator for [Strata](https://github.com/EyK-26/strata). Requires Bun >=1.4.3 (tested on 1.4.3).
+The `create-strata` generator for [Strata](https://github.com/EyK-26/strata). Requires Bun >=1.4.4 (tested on 1.4.4).
 
 Prefer the short form, which resolves the [`create-strata`](https://www.npmjs.com/package/create-strata) package:
 
