@@ -1,5 +1,10 @@
 # create-strata changelog
 
+## 2.2.55
+
+- Preserve the original native server startup error as the AggregateError cause when generated server cleanup also rejects, retaining every cleanup failure and the existing cleanup order. Ordinary errors are rethrown unchanged when cleanup succeeds.
+- Generate aligned 2.2.55 dependencies. Existing customized applications require deliberate adoption of the generated src/bootstrap/server.ts correction; package upgrades must not overwrite source. Failed-drain behavior, retry policy and proposed major-version startup/asset APIs are unchanged.
+
 ## 2.2.54
 
 - Generate aligned 2.2.54 framework dependencies. Generated auth, database, tenancy and frontend source shapes remain unchanged; public artifact origin and startup-validation APIs remain major-version design proposals.

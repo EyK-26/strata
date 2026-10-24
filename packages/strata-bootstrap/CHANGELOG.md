@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.55
+
+- Align the core requirement with 2.2.55. Existing startup aggregation, provider drain/flush/close policy and server APIs are unchanged; native asset and mixed HTTP/WebSocket limitations remain.
+
 ## 2.2.54
 
 - Preserve own native route parameter keys such as __proto__ as data properties instead of losing them through an inherited setter. Keep the ordinary object prototype, string coercion, Bun-owned decoding and native request identity.
