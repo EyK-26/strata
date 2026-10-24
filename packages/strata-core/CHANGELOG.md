@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.54
+
+- Align the lockstep version with the bootstrap native parameter own-key correction; core runtime, ORM and public/protected contracts are unchanged.
+
 ## 2.2.53
 
 - Align the lockstep version with the bootstrap native-route parameter correction; core runtime, ORM and public/protected contracts are unchanged.

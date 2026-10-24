@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.54
+
+- Align core/bootstrap requirements with 2.2.54. Package upgrades do not rewrite application-owned generated source.
+
 ## 2.2.53
 
 - Align core/bootstrap requirements with 2.2.53. Existing application-owned generated sources are not rewritten by package upgrades.
