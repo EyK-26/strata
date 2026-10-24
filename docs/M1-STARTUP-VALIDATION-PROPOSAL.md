@@ -340,9 +340,9 @@ compatible helper defect.
 A new real-native regression fails on original source and exact published 2.2.53
 before a compatible own-data-property correction. The correction in [PR #354](https://github.com/EyK-26/strata/pull/354) (`c07cd2faa474bd15471e8b547bd9e68693ba296e`)
 retains the ordinary object prototype, coercion, request identity, repeated
-adaptation and all original assertion bodies. It is a source correction, not a
-published 2.2.53 change; later patch publication needs its own gates and qualification.
-No new version/tag is prepared here. The pinned 2.2.53 probe intentionally retains
+adaptation and all original assertion bodies. It was a source-only correction at the time of this pinned probe, and published
+2.2.53 remains immutable. A separate qualified 2.2.54 release now publishes it; see
+the [parameter audit](NATIVE-ROUTE-PARAMETERS.md) for actual release/159/12 gates. The pinned 2.2.53 probe intentionally retains
 this dated defect reproduction; it is not a required behavior of a future candidate.
 
 ### Before a breaking implementation
@@ -361,3 +361,132 @@ CORS/publication/retention and old/new cached-client migration/deprecation/rollb
 remain separate gates. The native pipeline and mixed HTTP/WebSocket completion
 limitations remain unresolved. Shop adoption remains held for #257; timer stays off.
 
+
+## Diagnostic and startup-publication proposal for review
+
+This advances the design after the path/method/collision observations. It does not
+implement a validator, exported error type, registry transaction or public asset
+provider. No proposed diagnostic below is an existing 2.x exception contract.
+Accept the precise fields and phase rules before adding a breaking implementation.
+
+### One diagnostic record, existing error ownership
+
+Use one plain diagnostic record through the existing bootstrap failure boundary;
+introduce an exception hierarchy only if a real consumer needs it. Proposed data:
+
+- `reason`: a stable discriminant, proposed below; useful human text is additional,
+  not something a caller must parse to distinguish failure classes.
+- `phase`: declaration, capability, artifact or publication. Request-time failures
+  are reported through the existing HTTP boundary rather than being mislabeled as
+  startup errors.
+- `owners`: all observable declaration owners, each with module identity, original
+  declared path and declared methods. A source file/line is optional, supplied by
+  its owner; never infer it from an unrelated stack or invent erased provenance.
+- `field`: the failing declaration/configuration field. Include effective methods
+  and a recognized matching shape only when the reviewed grammar establishes them.
+  These are diagnostic data, not a replacement native request router.
+- `buildId` and logical artifact identity only for relevant artifact failures;
+  never construct an unsafe fallback URL or expose a private storage path.
+
+Proposed declaration reasons are `invalid-route-value`, `invalid-route-method`,
+`invalid-route-path` and `route-owner-conflict`. Capability and artifact reasons are
+`missing-document-capability`, `invalid-artifact-manifest` and
+`artifact-build-mismatch`. These names and their exact payload/export shapes are
+review proposals, not accepted public API names or exhaustive SDK failure types.
+An unsupported grammar form must not masquerade as a proven overlap or a syntax
+error from Bun. Preserve a later native constructor rejection as its original cause
+through the transport/bootstrap boundary instead of reclassifying every exception
+as a declaration error.
+
+The original cause and all cleanup failures remain available to the existing
+internal error owner. Render safe owner/field information without request bodies,
+cookies, credentials, private manifest values or automatically emitted stack traces.
+A serializable record does not imply that every cause can safely be serialized.
+Do not change the existing 2.x logged-error or exception behavior just to expose
+this proposed new diagnostic shape.
+
+### Candidate state before publication
+
+The design has five observable phases, with the existing application lifecycle as
+owner: collect intact declarations, validate configuration/capabilities, construct a
+candidate native route/metadata snapshot, publish the accepted snapshot/listener,
+and retire resources through reverse cleanup. There is no second container/router.
+
+Collection invokes each module factory once. A module can already have arbitrary
+side effects; this proposal cannot make them transactional. Track owned disposable
+resources through existing lifecycle facilities. Static validation inspects own
+property descriptors without executing accessor values or business handlers. The
+accepted route grammar and method/owner rules determine whether a candidate is
+valid; the 2.x overwrite order is migration input, not validation success.
+Descriptor inspection avoids invoking ordinary getter values, but a Proxy can
+still execute user-supplied traps or throw. Do not advertise inspection of arbitrary
+JavaScript objects as effect-free, swallow those errors or call a module factory
+again to hide them. Preserve the original cause through the bootstrap owner and
+exercise owned cleanup separately.
+
+Do not clear/register the global route registry while still checking declarations.
+Keep candidate route/metadata data local until validation has succeeded. Defining
+how to install and restore an accepted snapshot belongs to the existing single
+active application/lifecycle boundary. Do not claim simultaneous-runtime isolation,
+change M2 ownership or roll back arbitrary module effects as part of this proposal.
+This is a startup/candidate-state boundary, not a new live-reload feature. Initial
+startup and failed-then-corrected fixture attempts must have explicit registry
+baselines; retaining a prior baseline does not promise concurrent running apps or
+zero-downtime replacement.
+
+A native constructor can still fail after static validation. That failure must
+retain the original cause and trigger owned cleanup. Distinguish “no published
+listener” from “no transient socket bind”: the current constructor observations do
+not measure every bind or cleanup edge. Prove any stronger guarantee with an actual
+listener/resource observer before advertising it. Do not instantiate another server
+or invoke module factories twice merely to test validation.
+
+### Required negative and retry evidence
+
+Before implementation is accepted, a concrete candidate must prove each of these:
+
+- Invalid own route values, method keys, accessors or a rejected path produce the
+  relevant owner/field diagnostic, execute no business handler, publish no listener
+  and leave previously accepted registry data unchanged.
+- Conflicting intact declarations report both real owners and reviewed effective
+  methods/matching shape. An earlier JavaScript overwrite is reported as outside
+  the received inventory, not reconstructed as a fictitious second owner.
+- Missing renderer capability or an invalid/mismatched artifact manifest fails
+  before accepted state is published. A valid guarded file Response remains valid;
+  an opaque native asset must not silently bypass admission.
+- A native constructor failure after validation releases only the candidate's
+  owned resources. Keep the prior accepted state where the lifecycle contract
+  requires it; do not delete another application's state or claim multi-app support.
+- When cleanup itself fails, the original startup failure remains inspectable and
+  the cleanup failures are retained. A failed cleanup is not recorded as success.
+- A corrected retry invokes each module once for that attempt, publishes one
+  coherent handler/middleware/OpenAPI owner snapshot, and creates no duplicate
+  registry entries. Stop/restart and failed-then-successful attempts need real
+  sockets and resource baselines, not a pure-map simulation alone.
+
+Late callback output and dynamic logical-name errors remain separate request-time
+cases. Their exact public status/error policy still needs acceptance; no static
+function type can prove a future callback's return value. Require a sanitized
+unsuccessful outcome, existing HEAD/body handling and no alternate-route, asset or
+WebSocket-success fallback. Preserve the current concrete error/transport contracts
+until a reviewed major change is selected.
+
+### Migration and rollback consequences
+
+Each new rejection needs an app-owned inventory diff: original owner/path/methods,
+actual 2.x winning handler/metadata, proposed diagnostic and a reviewed replacement.
+Disjoint native method maps and meaningful specificity remain evidence to consider
+before accepting a stricter one-owner rule. Do not silently combine their metadata,
+ban an otherwise supported parameter name to hide a compatible defect, normalize
+away distinct native literals or regenerate customized source during installation.
+
+Keep the agreed 2.x bridge until exact APIs, deprecation/support windows and per-app
+acceptance are selected. Major promotion still needs actual source/config/lock/
+runtime/build snapshots, old/new cached clients, retained immutable public artifacts
+and committed-data/effect preservation under rollback. The compatible twelve-profile
+2.2.53→2.2.54→2.2.53 rehearsal does not establish those major guarantees.
+
+The selected explicit public artifact origin, whole-graph/browser/provider security
+and retention gates remain unchanged. Native asynchronous-pipeline truncation and
+mixed HTTP/WebSocket completion ambiguity remain unresolved. Breaking implementation
+stays paused; shop adoption remains manually held for #257; timer stays off.
