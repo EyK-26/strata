@@ -145,3 +145,37 @@ describe("SqlSamlAssertionReplayStore", () => {
     }
   });
 });
+
+test("expired replay entries are evicted while current duplicates still fail closed", async () => {
+  const original = Date.now;
+  let now = original();
+  Date.now = () => now;
+  const store = new InMemorySamlAssertionReplayStore();
+  try {
+    await store.consume("expired");
+    await expect(store.consume("expired")).rejects.toThrow("replay");
+    now += REPLAY_RETENTION_MS + 1;
+    await store.consume("current");
+    await expect(store.consume("expired")).resolves.toBeUndefined();
+    await expect(store.consume("current")).rejects.toThrow("replay");
+  } finally {
+    Date.now = original;
+  }
+});
+
+test("replay-store infrastructure failures retain their original error", async () => {
+  const previous = currentPoolOrNull();
+  const failure = new Error("replay database unavailable");
+  const pool = fakePool([]);
+  pool.unsafe = async () => {
+    throw failure;
+  };
+  registerDefaultDatabasePool(pool);
+  setSamlAssertionReplayStoreForTests(null);
+  try {
+    await expect(consumeSamlAssertion("must-not-authorize")).rejects.toBe(failure);
+  } finally {
+    setSamlAssertionReplayStoreForTests(null);
+    restorePool(previous);
+  }
+});

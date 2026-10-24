@@ -322,3 +322,34 @@ describe("morph relation eager loading", () => {
     expect(rows[0]?.reactable).toEqual({ id: 1, title: "Thread" });
   });
 });
+
+test("orphaned and unknown morph rows cannot attach to supplied parents", async () => {
+  const orphan: Reaction = {
+    id: 1,
+    user_id: 1,
+    reactable_type: "forum_thread",
+    reactable_id: 99,
+    kind: "like",
+  };
+  expect(indexMorphManyRelation([{ id: 1, title: "one" }], [orphan], threadHasReactions)).toEqual(
+    new Map([[1, []]]),
+  );
+  const unknown = { ...orphan, reactable_type: "unknown" };
+  expect(
+    indexMorphToRelation([unknown], new Map<string, Map<number, Thread>>(), reactionMorphTo),
+  ).toEqual(new Map());
+  let calls = 0;
+  const repository = new ReactionRepository({
+    async unsafe<T>() {
+      calls++;
+      return [] as T[];
+    },
+  });
+  expect(await repository.loadMorphToForChildren([], reactionMorphTo, new Map())).toEqual(
+    new Map(),
+  );
+  expect(await repository.loadMorphToForChildren([unknown], reactionMorphTo, new Map())).toEqual(
+    new Map(),
+  );
+  expect(calls).toBe(0);
+});

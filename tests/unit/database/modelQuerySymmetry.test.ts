@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { loadNested } from "@getstrata/core/database/modelQuery";
 import { defineTable } from "@getstrata/core/database/table";
 
 type Ticket = {
@@ -133,4 +134,34 @@ describe("ModelQuery reaches the RepositoryQuery surface", () => {
 
     expect(retrieved).toEqual([1]);
   });
+});
+
+test("a custom relation count refuses malformed SQL before touching the database", () => {
+  const connection = new FakeConnection();
+  class BrokenRelation extends Model<Ticket, "id"> {
+    malformed() {
+      return { toExistsClause: () => ({ sql: "DELETE FROM tickets", params: [] }) };
+    }
+  }
+  registerModelRepository(BrokenRelation, new BaseRepository(ticketTable, connection));
+  expect(() => BrokenRelation.query().withCount("malformed")).toThrow("unexpected subquery shape");
+  expect(connection.calls).toEqual([]);
+});
+
+test("empty nested-load names leave the existing model untouched without querying", async () => {
+  let effects = 0;
+  const unexpected = () => {
+    effects++;
+    throw new Error("No effect expected");
+  };
+  const model = {
+    constructor: {},
+    loaded: unexpected,
+    getRepository: unexpected,
+    toObject: unexpected,
+    setLoaded: unexpected,
+    load: async () => unexpected(),
+  };
+  await expect(loadNested(model, "")).resolves.toBeUndefined();
+  expect(effects).toBe(0);
 });

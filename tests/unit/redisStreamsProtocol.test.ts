@@ -219,3 +219,13 @@ describe("pollStreamPriorities", () => {
     ).rejects.toThrow("stream poll response");
   });
 });
+
+test("unknown hit flags and truncated claimed entries cannot be delivered", async () => {
+  for (const response of [
+    ["unknown", "1", "9-1", "body", "0-0"],
+    ["1", "1", "9-1", "body"],
+  ])
+    await expect(
+      pollStreamPriorities(replies([response]) as never, ["only"], "owner", ["0-0"]),
+    ).rejects.toThrow("stream poll response");
+});

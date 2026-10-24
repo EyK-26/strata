@@ -173,3 +173,27 @@ describe("NotificationDispatcher", () => {
     expect(sent).toEqual([]);
   });
 });
+
+test("channels with no message or payload have no delivery side effects", async () => {
+  class EmptyNotification extends Notification<TestUser> {
+    override via(): Array<"mail" | "database"> {
+      return ["mail", "database"];
+    }
+  }
+  const calls: string[] = [];
+  const dispatcher = createNotificationDispatcher(
+    new Mailer({
+      async send() {
+        calls.push("mail");
+      },
+    }),
+    {
+      async create(input) {
+        calls.push("database");
+        return { ...input };
+      },
+    },
+  );
+  await dispatcher.send(new TestUser(1, "one@example.test"), new EmptyNotification());
+  expect(calls).toEqual([]);
+});

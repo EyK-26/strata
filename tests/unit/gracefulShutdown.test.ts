@@ -379,3 +379,29 @@ test("unexpected coordinator rejection on a signal exits with failure status", a
     logging.mockRestore();
   }
 });
+
+test("invalid environment timeout and runtime phase fail before registering resources", async () => {
+  const before = process.env.SHUTDOWN_TIMEOUT_MS;
+  try {
+    for (const value of ["0", "NaN", "2147483648"]) {
+      process.env.SHUTDOWN_TIMEOUT_MS = value;
+      expect(() => new LifecycleCoordinator()).toThrow("SHUTDOWN_TIMEOUT_MS");
+    }
+  } finally {
+    if (before === undefined) delete process.env.SHUTDOWN_TIMEOUT_MS;
+    else process.env.SHUTDOWN_TIMEOUT_MS = before;
+  }
+  const coordinator = new LifecycleCoordinator({ timeoutMs: 1000 });
+  let called = false;
+  expect(() =>
+    Reflect.apply(coordinator.register, coordinator, [
+      "bad",
+      () => {
+        called = true;
+      },
+      "unsupported",
+    ]),
+  ).toThrow("Unknown shutdown phase");
+  expect((await coordinator.shutdown()).successful).toBe(true);
+  expect(called).toBe(false);
+});

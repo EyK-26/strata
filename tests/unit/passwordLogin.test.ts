@@ -133,3 +133,13 @@ describe("completePasswordLogin", () => {
     ).rejects.toThrow("database unavailable");
   });
 });
+
+test("non-array recovery-code JSON cannot authorize an MFA login", () => {
+  for (const input of ["null", "{}", '"not-a-list"'])
+    expect(
+      completePasswordLogin(
+        { mfa_enabled: true, mfa_secret: generateTotpSecret(), mfa_recovery_codes: input },
+        { mfaCode: "invalid" },
+      ),
+    ).toEqual({ ok: false, error: "mfa_invalid" });
+});
