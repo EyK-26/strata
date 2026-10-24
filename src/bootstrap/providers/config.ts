@@ -8,6 +8,7 @@ import {
   CACHE_MAX_ENTRIES_CONFIG_KEY,
   CACHE_TTL_MS_CONFIG_KEY,
   CORE_CONFIG_TOKEN,
+  CSRF_TARGET_ORIGIN_CONFIG_KEY,
   DATABASE_URL_CONFIG_KEY,
   DEFAULT_APP_PORT,
   DEFAULT_CACHE_DRIVER,
@@ -35,6 +36,8 @@ const configProvider: ServiceProvider = {
     const env = validateEnv(appEnvSchema);
 
     container.set(CORE_CONFIG_TOKEN, config);
+    if (process.env.CSRF_TARGET_ORIGIN !== undefined)
+      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);
     config.set(DATABASE_URL_CONFIG_KEY, env.DATABASE_URL);
     config.set(APP_PORT_CONFIG_KEY, parseInteger(env.PORT ?? String(DEFAULT_APP_PORT), "PORT", 1));
     config.set(

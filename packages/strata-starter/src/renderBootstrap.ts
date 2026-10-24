@@ -67,6 +67,7 @@ function renderConfigProvider(layers: StarterLayers): string {
   APP_PORT_CONFIG_KEY,
   CORE_CONFIG_TOKEN,
   CORE_PUBLIC_TENANCY_TOKEN,
+  CSRF_TARGET_ORIGIN_CONFIG_KEY,
   DATABASE_URL_CONFIG_KEY,
   REDIS_URL_CONFIG_KEY,
 } from "@getstrata/bootstrap/config";
@@ -81,6 +82,8 @@ const configProvider: ServiceProvider = {
     const appConfig = loadConfig();
 
     container.set(CORE_CONFIG_TOKEN, config);
+    if (process.env.CSRF_TARGET_ORIGIN !== undefined)
+      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);
     // One approved origin for the starter tenant. Multi-tenant apps replace this lookup.
     if (isProductionEnv()) {
       const publicHost = normalizeTenantHostname(new URL(appConfig.appUrl).host);

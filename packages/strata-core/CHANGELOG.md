@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 2.2.57
+
+Add opt-in CsrfOptions.targetOrigin with strict request Host/URL authority and source-origin validation while retaining signed cookie/token checks and existing defaults. Preserve native Request identity and ignore forwarding claims. Fall back safely to JSON error formatting for malformed native URL metadata.
+
 ## 2.2.56
 
 - Stop adding schema CREATE to PostgreSQL runtime roles; keep USAGE, existing object/default grants and both catalog/ACL concurrency protocols. Existing grants, PUBLIC privileges, memberships and ownership are not revoked automatically; restricted deployments can use the documented public schema-only migration runner.

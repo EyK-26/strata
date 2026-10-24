@@ -17,6 +17,58 @@ function streamed(value: string) {
 }
 
 describe("native HTTP controls and streaming consumption limits", () => {
+  test("unparseable native URL metadata is refused before callbacks, routing and middleware", async () => {
+    let callbacks = 0;
+    let handlers = 0;
+    const publicDir = await mkdtemp(join(tmpdir(), "strata-http-admission-"));
+    await mkdir(join(publicDir, "assets"));
+    await Bun.write(join(publicDir, "assets", "never-read"), "asset");
+    const server = createWebServer({
+      port: 0,
+      publicDir,
+      native: { hostname: "127.0.0.1" },
+      onRequest() {
+        callbacks++;
+      },
+      routes: {
+        "/form": {
+          GET: () => {
+            handlers++;
+            return new Response("ok");
+          },
+        },
+      },
+      handle: () => {
+        handlers++;
+        return new Response("fallback");
+      },
+    });
+    try {
+      for (const [method, path] of [
+        ["GET", "/form"],
+        ["OPTIONS", "/form"],
+        ["GET", "/fallback"],
+        ["GET", "/assets/never-read"],
+      ] as const) {
+        const response = await fetch(new URL(path, server.url), {
+          method,
+          headers: { Host: "user@forms.example.test" },
+        });
+        expect(response.status).toBe(400);
+        expect(response.headers.getSetCookie()).toHaveLength(0);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+      }
+      expect(callbacks).toBe(0);
+      expect(handlers).toBe(0);
+      expect((await fetch(new URL("/form", server.url))).status).toBe(200);
+      expect(callbacks).toBe(1);
+      expect(handlers).toBe(1);
+    } finally {
+      await server.stop(true);
+      await rm(publicDir, { recursive: true, force: true });
+    }
+  });
+
   test("onRequest covers native routes, preflight, fallback and assets exactly once and can reject", async () => {
     const publicDir = await mkdtemp(join(tmpdir(), "strata-http-"));
     await mkdir(join(publicDir, "assets"));

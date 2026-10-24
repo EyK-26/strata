@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.57
+
+Expose CSRF_TARGET_ORIGIN_CONFIG_KEY and capture an explicitly configured CSRF target policy when constructing HttpKernel for web and cookie API groups. Root provider binds the optional environment value; existing default behavior and tenancy/proxy boundaries stay intact. Reject unparseable native HTTP request URL metadata with 400 before application callbacks and middleware.
+
 ## 2.2.56
 
 - Require Bun >=1.4.4 and align the core requirement with 2.2.56. Preserve bootstrap, HTTP/auth, lifecycle and extension-point contracts; the native-assets major-version proposal and mixed HTTP/WebSocket limitation are unchanged.

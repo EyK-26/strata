@@ -391,7 +391,7 @@ export {
   type CorsOptions,
   createCorsMiddleware,
 } from "../core/http/corsMiddleware.ts";
-export { createCsrfMiddleware } from "../core/http/csrfMiddleware.ts";
+export { type CsrfOptions, createCsrfMiddleware } from "../core/http/csrfMiddleware.ts";
 export { createCsrfProtection } from "../core/http/csrfProtection.ts";
 export {
   createCsrfTokenCookie,

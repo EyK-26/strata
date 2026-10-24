@@ -26,9 +26,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.56",
-        "@getstrata/cli": "^2.2.56",
-        "@getstrata/core": "^2.2.56",
+        "@getstrata/bootstrap": "^2.2.57",
+        "@getstrata/cli": "^2.2.57",
+        "@getstrata/core": "^2.2.57",
       };
   coreDeps.eta = "^4.6.0";
   if (options.layers?.database === "mysql") {

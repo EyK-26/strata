@@ -1,6 +1,7 @@
 import {
   APP_PORT_CONFIG_KEY,
   CORE_CONFIG_TOKEN,
+  CSRF_TARGET_ORIGIN_CONFIG_KEY,
   DATABASE_URL_CONFIG_KEY,
   REDIS_URL_CONFIG_KEY,
 } from "@getstrata/bootstrap/config";
@@ -13,6 +14,8 @@ const configProvider: ServiceProvider = {
     const appConfig = loadConfig();
 
     container.set(CORE_CONFIG_TOKEN, config);
+    if (process.env.CSRF_TARGET_ORIGIN !== undefined)
+      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);
     config.set(DATABASE_URL_CONFIG_KEY, appConfig.databaseUrl);
     config.set(APP_PORT_CONFIG_KEY, appConfig.port);
     config.set(REDIS_URL_CONFIG_KEY, process.env.REDIS_URL ?? "");

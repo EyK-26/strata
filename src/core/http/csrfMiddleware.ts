@@ -1,11 +1,17 @@
 import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { createCsrfOriginPolicy } from "./csrfOriginPolicy";
 import { readSubmittedCsrfTokenFromBody, resolveCsrfToken, verifyCsrfToken } from "./csrfToken";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+interface CsrfOptions {
+  /** Explicit public origin for TLS offload; requires matching URL authority and Host on every request. */
+  targetOrigin?: string;
+}
 
 function samlAcsPathname(): string {
   const configured = process.env.SAML_ACS_URL?.trim();
@@ -39,8 +45,11 @@ function appendSetCookie(response: Response, cookie: string): Response {
   });
 }
 
-function createCsrfMiddleware(): Middleware {
+function createCsrfMiddleware(options: CsrfOptions = {}): Middleware {
+  const targetOrigin = options.targetOrigin;
+  const policy = targetOrigin === undefined ? undefined : createCsrfOriginPolicy(targetOrigin);
   return async (request: Request, next: () => Promise<Response>) => {
+    policy?.assertHost(request);
     const credentialSource = currentCredentialSource();
     const developmentHeaderProof =
       credentialSource === "guest" &&
@@ -79,14 +88,18 @@ function createCsrfMiddleware(): Middleware {
 
     const originHeader = request.headers.get("origin");
     let headerOrigin: string | null = null;
-    if (originHeader) {
+    if (!policy && originHeader) {
       try {
         headerOrigin = new URL(originHeader).origin;
       } catch {
         headerOrigin = null;
       }
     }
-    if (!headerOrigin || headerOrigin !== new URL(request.url).origin) {
+    if (
+      policy
+        ? !policy.acceptsSourceOrigin(originHeader)
+        : !headerOrigin || headerOrigin !== new URL(request.url).origin
+    ) {
       throw new ForbiddenError("Cross-site cookie requests are not allowed.");
     }
 
@@ -94,4 +107,5 @@ function createCsrfMiddleware(): Middleware {
   };
 }
 
+export type { CsrfOptions };
 export { createCsrfMiddleware };

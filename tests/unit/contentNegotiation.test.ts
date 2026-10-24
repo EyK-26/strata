@@ -1,6 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { requestPrefersJson } from "@getstrata/core/http/contentNegotiation";
 
+for (const headers of [
+  new Headers({ Accept: "text/html" }),
+  new Headers({ Accept: "application/json" }),
+  new Headers({ "HX-Request": "true" }),
+])
+  test("invalid native request URL metadata uses a safe JSON error fallback", () => {
+    const request = new Request("http://example.test/form", { headers });
+    Object.defineProperty(request, "url", { value: "/form" });
+    expect(requestPrefersJson(request)).toBe(true);
+  });
+
 describe("requestPrefersJson", () => {
   test("treats API paths as JSON by default", () => {
     const request = new Request("http://example.test/api/v1/organizations");

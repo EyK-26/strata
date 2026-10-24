@@ -3,11 +3,18 @@ function requestPrefersJson(request?: Request): boolean {
     return true;
   }
 
+  // Malformed wire authorities can leave Bun with a relative request URL. Never
+  // turn an admission error into a second exception while selecting its format.
+  let pathname: string;
+  try {
+    pathname = new URL(request.url).pathname;
+  } catch {
+    return true;
+  }
+
   if (request.headers.get("HX-Request") === "true") {
     return false;
   }
-
-  const pathname = new URL(request.url).pathname;
   if (pathname.startsWith("/api/")) {
     return true;
   }
