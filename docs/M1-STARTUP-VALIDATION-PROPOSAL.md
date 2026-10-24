@@ -68,6 +68,8 @@ that the framework never received.
    after all checks pass. If provider initialization already acquired resources,
    use the existing reverse cleanup/lifecycle owner on rejection. Do not create a
    second router/container or leave partial global registry state.
+   Record failed/blocked cleanup explicitly: a failed drain retains the existing
+   infrastructure guard and cannot be turned into an automatic retry certificate.
 
 The new failed/repeated collection observations below expose current registry effects.
 Staged snapshot installation and rollback still need lifecycle characterization
@@ -490,3 +492,120 @@ The selected explicit public artifact origin, whole-graph/browser/provider secur
 and retention gates remain unchanged. Native asynchronous-pipeline truncation and
 mixed HTTP/WebSocket completion ambiguity remain unresolved. Breaking implementation
 stays paused; shop adoption remains manually held for #257; timer stays off.
+
+## Startup, cleanup and retry feasibility on published 2.2.54
+
+The [dated receipt](qualification/m1-startup-2026-10-24.json) records **16 isolated
+executions: five compatibility controls, ten feasibility observations and one
+confirmed-defect reproduction**, with zero harness failures/skips. A freshly
+generated SQLite/API app uses exact published 2.2.54 and native Bun 1.4.3. Its
+unchanged versioned native-route/collision consumers, migration and original
+strict typecheck pass before the new probe module is installed and typechecked.
+No Bun server, framework package or native driver is replaced or patched.
+
+The fixture is an ordinary module/provider extension. It acquires real owned
+loopback listeners, injects deliberate register/boot/declaration/cleanup failures,
+and exercises the generated bootstrap and actual server entrypoint. Native bind
+rejection leaves the separately owned occupier healthy. Closed resources can be
+rebound; resources intentionally left open after failed drain remain reachable
+before fixture-only recovery. These observations do not prove every transient
+socket bind, arbitrary module effect, database/worker failure or platform behavior.
+
+A separate wrong expected factory count fails the real `1 !== 99` assertion after
+all five baseline steps pass, then releases the owned fixture. The unchanged normal
+16 cases complete again afterward. The earlier 82 transport, 43 compiler and
+159/12 release/rollback records remain separate, byte-identical evidence.
+
+### Separate readiness, registry state and listener ownership
+
+Ordinary register/boot/dependency failures unwind registered resources in reverse
+order and retain the original error. A cleanup callback may close its resource and
+still reject; the failure must remain visible even when the socket was released.
+Flush failures are aggregated while close callbacks continue. These observations
+support existing lifecycle ownership, not a new transaction over arbitrary code.
+
+Route factories, getters and Proxy traps can throw after providers are ready.
+Their original marker errors survive generated bootstrap cleanup. The previous
+registry snapshot can already have been cleared by the collector. Native route
+construction can instead fail after bootstrap returns a ready context and has
+registered metadata. The public server factory alone does not own that caller's
+context: a caller must use its existing lifecycle owner to dispose it. The actual
+generated entrypoint has that ownership and performs cleanup on a bind failure.
+
+Source ordering also matters: `createAppContext` publishes the active context
+before generated `buildRoutes` runs. A listener not being published does not mean
+that context or route metadata was never published. A new route validator cannot
+obtain atomic application startup merely by wrapping the present collector and
+clearing the registry after an exception. That would lose ownership and expose
+partial state. Preparing local route/metadata data, publishing it and retiring it
+need an accepted lifecycle seam; moving active-context readiness also needs M2
+compatibility analysis. No unpublished-context constructor, registry rollback
+implementation or multi-runtime model is selected here.
+
+### Retry is conditional on cleanup disposition
+
+Twelve deliberate startup/construction failures support a corrected retry, and
+two ordinary/late-request controls support a sequential restart. In each of those
+fourteen controlled cases, the next attempt invokes the probe factory once,
+registers one matching handler/OpenAPI owner, serves the expected real HTTP body,
+and disposes its resources once even under concurrent disposal calls. This is a
+single-app, isolated-child observation, not live replacement or simultaneous apps.
+
+The two failed-drain cases deliberately **do not retry**. The existing compatibility
+test requires infrastructure to stay open rather than close beneath admitted work.
+The successful-context drain case remains active; the failed-startup drain case has
+no published ready context but still owns open resources. Context absence alone is
+therefore not a safe-retry certificate. The fixture stops only its own listeners
+at the end and explicitly reports this as harness recovery, not framework cleanup.
+It neither overrides the drain result nor silently restarts the application.
+
+Refine the proposed diagnostic envelope to distinguish an observed complete
+cleanup, a reported cleanup failure and cleanup blocked on drain. Preserve the
+original cause plus every cleanup failure. Do not infer safe retry from an error
+name, an empty registry or a missing active-context pointer. A caller may correct
+configuration and start a new attempt only after the existing lifecycle owner has
+resolved resource/work ownership. No automatic startup retry loop or new forced
+close policy is accepted. Live admitted SQL/work during failed startup drain and
+actual database-close failure remain separate qualification gates.
+
+### Compatible defect found at the generated entrypoint
+
+Published 2.2.54 loses the original native `EADDRINUSE` error if provider close also
+rejects: the generated server's `try/finally` cleanup throws the provider aggregate
+instead. The ordinary bind-failure control retains the native error, and the
+bootstrap register/boot cleanup paths already aggregate both causes. This is a
+confirmed error-retention defect, not a compatibility behavior to preserve.
+
+The new mandatory real generated-entrypoint regression fails on unchanged source
+at the missing native cause. The compatible correction uses the existing bootstrap
+aggregation pattern: attempt each owned cleanup, retain the native failure as
+`cause`, and include cleanup failures. The same regression then passes, including
+the original native-error identity, the provider-close failure, resource release
+and a corrected retry. Original lifecycle tests and their failed-drain guard remain
+byte-identical. The correction is **source-only**; no new version/tag or publication
+is prepared in this design continuation. Published 2.2.54 remains immutable.
+
+### Refined API review gates
+
+Keep the proposed diagnostic record under the existing bootstrap boundary, with
+observable owners/field/phase and optional build identity. Add cleanup disposition
+and caller-owned retry responsibility to that review; do not introduce an exception
+hierarchy or promise serializable arbitrary causes. The compatible aggregation fix
+introduces no proposed diagnostic export, new validator or route API.
+
+Require separate evidence for declaration/capability rejection, candidate metadata
+publication, native construction failure, caller cleanup and late request errors.
+The late-handler control starts successfully and then returns an unsuccessful HTTP
+response; it is not a startup rejection and must not trigger a route/asset fallback.
+Preserve bounded native error causes rather than labeling every SDK exception an
+invalid declaration. Keep getter/Proxy effects, prior JavaScript overwrites and
+module side effects outside any invented purity or rollback guarantee.
+
+Before a breaking implementation, accept precise grammar/method/owner/error/API
+shapes, stage route/metadata data without mutating accepted state, qualify resource
+and cleanup failures with real admitted work, and exercise corrected retries under
+that accepted ownership policy. The explicit public artifact origin, complete asset
+graphs, supported browsers, provider TLS/cookie/CSP/CORS/publication/retention and
+major migration/deprecation/cached-client rollback remain independent gates. Native
+pipeline truncation and mixed HTTP/WebSocket completion ambiguity remain unresolved.
+Shop adoption stays manually held for #257; timer stays off.

@@ -1,0 +1,1685 @@
+{
+  "date": "2026-10-24",
+  "runtime": {
+    "version": "1.4.3",
+    "revision": "c6da4a4d3010e5553438c60f6bd76d981976867c"
+  },
+  "publishedVersion": "2.2.54",
+  "baselineTag": "v2.2.54",
+  "originalConsumerSha256": {
+    "native": "381bc4da00267c62ee247b83d205cfa17f9b3319a7983a76309e1da5c029863a",
+    "collision": "db3a43d4416dddef98190fe0e671d98c94e0e93b5d9ee8d2a01357bfab487591"
+  },
+  "inputSha256": {
+    "runner": "099376ed19691c8e72b4d675a9684a811300cd73aced7be1a4cc41ee61fb791e",
+    "installer": "e2f7dacee6fee06bb6c9a60dbe7c429bf8cd65fbe42290773a4d8a4fcb79ad5b",
+    "consumer": "f9e8fbc6f8c4f5e52d5f42bdf7beca2cea3e137d00b7fd5e248fbcead7bd3be7",
+    "module": "3dd3eed929f44624edb48cdfb7330682c14dc2f6a87b036c56dcf74306bbe295",
+    "state": "4033056c316313a2690489df237bd0fb259b119ca415c53b6cdbf2891ce53b71",
+    "types": "4c6a254f1d295a437738dc4cbb0be76ec9407ab023b9f74c20f48bde2d9575fd",
+    "cases": "1d423eb94a68b9c9a51aa056084fc880c26195dd6bb3a23fd21b41bee42a787f"
+  },
+  "baselineSteps": [
+    {
+      "name": "original-types",
+      "exitCode": 0
+    },
+    {
+      "name": "migrate",
+      "exitCode": 0
+    },
+    {
+      "name": "original-native",
+      "exitCode": 0
+    },
+    {
+      "name": "original-collision",
+      "exitCode": 0
+    },
+    {
+      "name": "probe-types",
+      "exitCode": 0
+    }
+  ],
+  "executed": 16,
+  "contractControls": 5,
+  "feasibilityObservations": 10,
+  "confirmedDefectReproductions": 1,
+  "failed": 0,
+  "skipped": 0,
+  "correctedStartupRetries": 12,
+  "ordinaryOrLateRequestRestarts": 2,
+  "failedDrainCasesWithNoAutomaticRetry": 2,
+  "scope": "Real generated SQLite/API app and owned native sockets; bounded observation, not a new validator or major API acceptance.",
+  "negativeHarnessControl": {
+    "expectedFactoryCalls": 99,
+    "actualFactoryCalls": 1,
+    "failedAtRealAssertion": true,
+    "fiveBaselineStepsPassed": true,
+    "ownedListenersAndScratchCleaned": true,
+    "normal16CompletedAgainWithUnchangedInputs": true,
+    "rawSha256": "3c15c69ce29d34dd30ff91bf827ec71dcded3cf8e0e3f67bed996ef559dbfd70"
+  },
+  "compatibleDefect": {
+    "name": "Generated server cleanup rejection masks original native bind error",
+    "published2_2_54": "REPRODUCED through actual generated bootstrap/server.ts",
+    "sourceRed": "0 pass / 1 fail: native bind failure no longer inspectable",
+    "sourceGreen": "1 pass / 0 fail: original EADDRINUSE and provider cleanup error retained, original cause identity preserved",
+    "sourceCorrection": "Generated server uses the existing bootstrap AggregateError pattern; no drain or resource-admission policy change",
+    "publication": "SOURCE ONLY; no new version or tag prepared"
+  },
+  "cleanup": {
+    "allCapturedSqlDockerMetadataEqualsBaseline": true,
+    "frameworkCleanupAndHarnessRecoveryReportedSeparately": true,
+    "unknownResourcesRemoved": false
+  },
+  "limits": [
+    "Failed drain deliberately keeps infrastructure open; no forced-close retry policy accepted.",
+    "Resource rebinding and healthy owned occupier are observed; no universal transient-bind guarantee.",
+    "No live admitted SQL/work during drain failure; real database-close failure, worker/import effects and platform matrix remain unqualified.",
+    "Registry/context publication is not an existing atomic snapshot contract; retries measured on one generated app per isolated child, not multi-runtime/hot reload.",
+    "Existing82/43 and159/12 receipts unchanged; no new public artifact/browser/provider qualification."
+  ],
+  "retainedSetupFailures": [
+    "Initial strict fixture optional-value typing failures were corrected without compiler downgrade or assertion removal.",
+    "Early file discovery used an absent source path and an unmatched shell glob; no framework code changed as a result."
+  ],
+  "rawResultSha256": "b094bbaa451d1e2bca943f1aefb5f8e8cf37de2b13f6c99821c0fc3bf7060338",
+  "results": [
+    {
+      "name": "success",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "success",
+        "classification": "contract-control",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "contextPublishedBeforeTransport": true,
+        "firstHttp": {
+          "status": 200,
+          "bodySha256": "01e962563086bc50263ca98bf1d16ccabcd46fb3a9d7f2b008dd2c1b2120e98d"
+        },
+        "fixtureStartupMarkerRetained": false,
+        "errors": [],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/startup-probe",
+            "middleware": ["global", "api"],
+            "openApi": {
+              "summary": "owned-startup-probe"
+            }
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "register-failure",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "register-failure",
+        "classification": "contract-control",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": true,
+        "errors": [
+          {
+            "name": "Error",
+            "message": "owned register-failure startup",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "register-failure",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 0,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "boot-failure",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "boot-failure",
+        "classification": "contract-control",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": true,
+        "errors": [
+          {
+            "name": "Error",
+            "message": "owned boot-failure startup",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "boot-failure",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 0,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "dependency-missing",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "dependency-missing",
+        "classification": "contract-control",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": false,
+        "errors": [
+          {
+            "name": "Error",
+            "message": "Required dependency \"cache\" is not registered.",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "dependency-missing",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 0,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "close-failure",
+      "classification": "contract-control",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "close-failure",
+        "classification": "contract-control",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": true,
+        "errors": [
+          {
+            "name": "AggregateError",
+            "message": "Application startup and cleanup failed.",
+            "code": null
+          },
+          {
+            "name": "Error",
+            "message": "owned close-failure startup",
+            "code": null
+          },
+          {
+            "name": "AggregateError",
+            "message": "Provider cleanup failed.",
+            "code": null
+          },
+          {
+            "name": "Error",
+            "message": "owned close-failure cleanup",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "close-failure",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 0,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "flush-failure",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "flush-failure",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": true,
+        "errors": [
+          {
+            "name": "AggregateError",
+            "message": "Application startup and cleanup failed.",
+            "code": null
+          },
+          {
+            "name": "Error",
+            "message": "owned flush-failure startup",
+            "code": null
+          },
+          {
+            "name": "AggregateError",
+            "message": "Provider cleanup failed.",
+            "code": null
+          },
+          {
+            "name": "AggregateError",
+            "message": "Provider flush failed.",
+            "code": null
+          },
+          {
+            "name": "Error",
+            "message": "owned flush-failure cleanup",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "flush-failure",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 0,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "drain-failure",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "drain-failure",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "contextPublishedBeforeTransport": true,
+        "fixtureStartupMarkerRetained": false,
+        "errors": [
+          {
+            "name": "AggregateError",
+            "message": "Provider drain failed.",
+            "code": null
+          },
+          {
+            "name": "Error",
+            "message": "owned drain-failure drain",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/startup-probe",
+            "middleware": ["global", "api"],
+            "openApi": {
+              "summary": "owned-startup-probe"
+            }
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Not attempted after failed drain; infrastructure intentionally remains open.",
+        "activeAfterFailedDrain": true,
+        "attempts": [
+          {
+            "mode": "drain-failure",
+            "events": ["A.acquire", "B.acquire", "A.boot", "B.boot", "B.drain", "A.drain"],
+            "factoryCalls": 1,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 0
+              },
+              {
+                "label": "B",
+                "closedByProvider": 0
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": true,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": true,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "startup-drain-failure",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "startup-drain-failure",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": true,
+        "errors": [
+          {
+            "name": "AggregateError",
+            "message": "Application startup and cleanup failed.",
+            "code": null
+          },
+          {
+            "name": "Error",
+            "message": "owned startup-drain-failure startup",
+            "code": null
+          },
+          {
+            "name": "AggregateError",
+            "message": "Provider drain failed.",
+            "code": null
+          },
+          {
+            "name": "Error",
+            "message": "owned startup-drain-failure drain",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Not attempted after failed drain; infrastructure intentionally remains open.",
+        "activeAfterFailedDrain": false,
+        "attempts": [
+          {
+            "mode": "startup-drain-failure",
+            "events": ["A.acquire", "B.acquire", "A.boot", "B.drain", "A.drain"],
+            "factoryCalls": 0,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 0
+              },
+              {
+                "label": "B",
+                "closedByProvider": 0
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": true,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "route-factory-failure",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "route-factory-failure",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": true,
+        "errors": [
+          {
+            "name": "Error",
+            "message": "owned route-factory-failure startup",
+            "code": null
+          }
+        ],
+        "registryAfter": [],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "route-factory-failure",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "route-getter",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "route-getter",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": true,
+        "errors": [
+          {
+            "name": "Error",
+            "message": "owned route-getter startup",
+            "code": null
+          }
+        ],
+        "registryAfter": [],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "route-getter",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 0,
+            "getters": 1,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "route-proxy",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "route-proxy",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": true,
+        "errors": [
+          {
+            "name": "Error",
+            "message": "owned route-proxy startup",
+            "code": null
+          }
+        ],
+        "registryAfter": [],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "route-proxy",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 1,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "orphan-metadata",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "orphan-metadata",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "fixtureStartupMarkerRetained": false,
+        "errors": [
+          {
+            "name": "Error",
+            "message": "OpenAPI metadata has no API route: owned-startup-probe /startup-probe",
+            "code": null
+          }
+        ],
+        "registryAfter": [],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "orphan-metadata",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "native-bad-pattern",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "native-bad-pattern",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "contextPublishedBeforeTransport": true,
+        "activeAfterConstructorFailure": true,
+        "fixtureStartupMarkerRetained": false,
+        "errors": [
+          {
+            "name": "TODOError",
+            "message": "Support for duplicate route parameter names is not yet implemented.\n\nIf you run into this, please file an issue and we will add support for it.",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/duplicate/:id/:id",
+            "middleware": ["global", "api"]
+          },
+          {
+            "method": "GET",
+            "path": "/startup-probe",
+            "middleware": ["global", "api"],
+            "openApi": {
+              "summary": "owned-startup-probe"
+            }
+          }
+        ],
+        "callerCleanupAfterTransportRejection": true,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "native-bad-pattern",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "native-bind-failure",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "native-bind-failure",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "nativeBindFailureRetained": true,
+        "fixtureStartupMarkerRetained": false,
+        "errors": [
+          {
+            "name": "Error",
+            "message": "Failed to start server. Is port <owned> in use?",
+            "code": "EADDRINUSE"
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/startup-probe",
+            "middleware": ["global", "api"],
+            "openApi": {
+              "summary": "owned-startup-probe"
+            }
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "native-bind-failure",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "native-bind-close-failure",
+      "classification": "confirmed-defect-reproduction",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "native-bind-close-failure",
+        "classification": "confirmed-defect-reproduction",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "nativeBindFailureRetained": false,
+        "fixtureStartupMarkerRetained": false,
+        "errors": [
+          {
+            "name": "AggregateError",
+            "message": "Provider cleanup failed.",
+            "code": null
+          },
+          {
+            "name": "Error",
+            "message": "owned native-bind-close-failure cleanup",
+            "code": null
+          }
+        ],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/startup-probe",
+            "middleware": ["global", "api"],
+            "openApi": {
+              "summary": "owned-startup-probe"
+            }
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "native-bind-close-failure",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 0,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    },
+    {
+      "name": "late-handler-failure",
+      "classification": "feasibility-observation",
+      "outcome": "COMPLETE",
+      "observed": {
+        "mode": "late-handler-failure",
+        "classification": "feasibility-observation",
+        "registryBefore": [
+          {
+            "method": "GET",
+            "path": "/previous-snapshot",
+            "middleware": []
+          }
+        ],
+        "contextPublishedBeforeTransport": true,
+        "firstHttp": {
+          "status": 500,
+          "bodySha256": "07cf2a452e3eb04abad3d9c3bb18bd5a9f7a3e9fb866baad56c78196ec959f6e"
+        },
+        "fixtureStartupMarkerRetained": false,
+        "errors": [],
+        "registryAfter": [
+          {
+            "method": "GET",
+            "path": "/startup-probe",
+            "middleware": ["global", "api"],
+            "openApi": {
+              "summary": "owned-startup-probe"
+            }
+          }
+        ],
+        "callerCleanupAfterTransportRejection": false,
+        "retryDisposition": "Corrected retry succeeded with one factory call and one coherent metadata owner.",
+        "attempts": [
+          {
+            "mode": "late-handler-failure",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          },
+          {
+            "mode": "success",
+            "events": [
+              "A.acquire",
+              "B.acquire",
+              "A.boot",
+              "B.boot",
+              "B.drain",
+              "A.drain",
+              "B.flush",
+              "A.flush",
+              "B.close",
+              "A.close"
+            ],
+            "factoryCalls": 1,
+            "handlers": 1,
+            "getters": 0,
+            "traps": 0,
+            "resources": [
+              {
+                "label": "A",
+                "closedByProvider": 1
+              },
+              {
+                "label": "B",
+                "closedByProvider": 1
+              }
+            ]
+          }
+        ],
+        "activeBeforeHarnessRecovery": false,
+        "harnessCleanup": {
+          "ownedListenersStopped": true,
+          "unknownResourcesRemoved": false,
+          "forcedOwnedRecoveryAfterDrainFailure": false,
+          "errors": []
+        },
+        "status": "COMPLETE"
+      }
+    }
+  ]
+}
