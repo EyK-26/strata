@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.57
+
+Align the CLI with the compatible 2.2.57 core/bootstrap runtime. No new command or implicit proxy trust is introduced.
+
 ## 2.2.56
 
 - Require Bun >=1.4.4 and align core/bootstrap dependencies with 2.2.56. Existing application-owned generated files and database ACLs still require explicit reviewed adoption; package installation does not rewrite source or revoke privileges.

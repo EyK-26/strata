@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 2.2.57
+
+Generate an explicit optional CSRF_TARGET_ORIGIN provider binding and commented example for TLS termination with a preserved Host. Existing apps must deliberately adopt provider/configuration changes and qualify adapter removal. Align generated runtime dependencies to 2.2.57.
+
 ## 2.2.56
 
 - Generate Bun 1.4.4 runtime/Docker pins and >=1.4.4 engine/type requirements, accepting future 1.4.x patches. Update frontend manifest/lock artifacts and aligned 2.2.56 framework dependencies.
