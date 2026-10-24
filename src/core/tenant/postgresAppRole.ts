@@ -267,7 +267,7 @@ function postgresAppRolePrivilegeSql(options: { database: string; role?: string 
   const database = assertSafeSqlIdentifier(options.database, "database name");
   const role = assertSafeSqlIdentifier(options.role ?? POSTGRES_APP_ROLE, "role name");
   return `GRANT CONNECT ON DATABASE ${database} TO ${role};
-GRANT USAGE, CREATE ON SCHEMA public TO ${role};
+GRANT USAGE ON SCHEMA public TO ${role};
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${role};
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${role};
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${role};

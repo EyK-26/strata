@@ -8,6 +8,11 @@
       "fixCommit": "341a65f",
       "hunk": "startup-cleanup-cause",
       "purpose": "Preserve the original native startup error when generated entrypoint cleanup also fails. Historical scaffold hashes and all previous deltas remain unchanged."
+    },
+    "postgresRuntimeSchemaGrantCorrection": {
+      "beforeCommit": "2a3067f84a26fa78eeb9528743809dae568a4343",
+      "hunk": "runtime-schema-usage-only",
+      "purpose": "Stop granting runtime schema CREATE. Preserve all historical hashes and assertions; reverse and reapply only this exact SQL line."
     }
   },
   "hunks": {
@@ -369,6 +374,10 @@
         "    userKey: \"currentUser\",",
         ""
       ]
+    },
+    "runtime-schema-usage-only": {
+      "before": ["GRANT USAGE, CREATE ON SCHEMA public TO strata_app;"],
+      "after": ["GRANT USAGE ON SCHEMA public TO strata_app;"]
     }
   },
   "artifacts": {
@@ -511,6 +520,26 @@
       "beforeSha256": "19fd7603ec36b37486b807a8d0f5f8db77953136bbe29a7e50087e9d71a38931",
       "afterSha256": "1f5c343fa3e0bc986a9220485a1a674dae13fe4b3e8c11e7e9d64edf4008eb11",
       "hunks": ["h003", "h004", "h005"]
+    },
+    "starter/postgres-hybrid-combined-rls/db/ensure-postgres-app-role.sql": {
+      "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
+      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
+      "hunks": ["runtime-schema-usage-only"]
+    },
+    "starter/postgres-hybrid-combined-rls/docker/postgres-init/01-strata-app-role.sql": {
+      "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
+      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
+      "hunks": ["runtime-schema-usage-only"]
+    },
+    "starter/postgres-api-cookie-token-column-local/db/ensure-postgres-app-role.sql": {
+      "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
+      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
+      "hunks": ["runtime-schema-usage-only"]
+    },
+    "starter/postgres-htmx-cookie-local/db/ensure-postgres-app-role.sql": {
+      "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
+      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
+      "hunks": ["runtime-schema-usage-only"]
     }
   }
 }
