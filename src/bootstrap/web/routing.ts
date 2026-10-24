@@ -9,18 +9,12 @@ import { createHttpKernel } from "../httpKernel.ts";
 
 /** Read Bun native `:param` values from a route handler request. */
 export function routeParams(request: Request): Record<string, string> {
-  const normalized: Record<string, string> = {};
   const raw = (request as Request & { params?: Record<string, string> }).params;
+  if (!raw || typeof raw !== "object") return {};
 
-  if (raw && typeof raw === "object") {
-    for (const [key, value] of Object.entries(raw)) {
-      // Bun owns URL decoding; a second pass changes literal percent sequences
-      // and throws on valid parameters such as the decoded value `100%`.
-      normalized[key] = String(value);
-    }
-  }
-
-  return normalized;
+  // Bun owns decoding. Create own data properties so names such as __proto__
+  // cannot invoke Object.prototype setters or disappear from the copied map.
+  return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, String(value)]));
 }
 
 /**
