@@ -17,11 +17,18 @@ try {
     config.hostname ? { hostname: config.hostname } : undefined,
   );
 } catch (error) {
-  try {
-    await context.dispose();
-  } finally {
-    await closeDatabase();
+  const failures: unknown[] = [];
+  for (const cleanup of [() => context.dispose(), closeDatabase]) {
+    try {
+      await cleanup();
+    } catch (failure) {
+      failures.push(failure);
+    }
   }
+  if (failures.length)
+    throw new AggregateError([error, ...failures], "Application startup and cleanup failed.", {
+      cause: error,
+    });
   throw error;
 }
 console.log(`Listening on ${server.url.origin} (APP_URL ${config.appUrl})`);

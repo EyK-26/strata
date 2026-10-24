@@ -1,0 +1,82 @@
+[
+  {
+    "mode": "success",
+    "classification": "contract-control",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "register-failure",
+    "classification": "contract-control",
+    "expectedFactoryCalls": 0
+  },
+  {
+    "mode": "boot-failure",
+    "classification": "contract-control",
+    "expectedFactoryCalls": 0
+  },
+  {
+    "mode": "dependency-missing",
+    "classification": "contract-control",
+    "expectedFactoryCalls": 0
+  },
+  {
+    "mode": "close-failure",
+    "classification": "contract-control",
+    "expectedFactoryCalls": 0
+  },
+  {
+    "mode": "flush-failure",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 0
+  },
+  {
+    "mode": "drain-failure",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "startup-drain-failure",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 0
+  },
+  {
+    "mode": "route-factory-failure",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "route-getter",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "route-proxy",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "orphan-metadata",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "native-bad-pattern",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "native-bind-failure",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "native-bind-close-failure",
+    "classification": "confirmed-defect-reproduction",
+    "expectedFactoryCalls": 1
+  },
+  {
+    "mode": "late-handler-failure",
+    "classification": "feasibility-observation",
+    "expectedFactoryCalls": 1
+  }
+]
