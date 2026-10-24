@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.56
+
+- Require Bun >=1.4.4 and align core/bootstrap dependencies with 2.2.56. Existing application-owned generated files and database ACLs still require explicit reviewed adoption; package installation does not rewrite source or revoke privileges.
+
 ## 2.2.55
 
 - Align core/bootstrap requirements with 2.2.55. Dependency upgrades do not rewrite application-owned generated source.
