@@ -144,6 +144,26 @@ S3 deletion follows the provider's acknowledgement semantics: a successful DELET
 
 Applications own the order of file and SQL writes and reconciliation of orphaned uploads; SQL transactions cannot atomically commit S3 effects. Use stable object identities and explicit commerce rules. Local storage is not shared across replicas; production apps should configure shared storage through the official provider.
 
+## Repeated form fields
+
+Native `await request.formData()` already preserves entries: use `form.getAll("email")` when working directly with `FormData`. The core flat helper retains its existing last-text-value behavior, ignoring files. Opt in when a validator needs multiplicity:
+
+```typescript
+import { parseFormBody } from "@getstrata/core/http/parseFormBody";
+const fields = await parseFormBody(request, { preserveRepeated: true });
+// Record<string, (string | File)[]>: even one value is an array.
+const email = fields.email;
+if (!email || email.length !== 1 || typeof email[0] !== "string") {
+  // The application chooses its validation response; the parser does not reject duplicates.
+}
+```
+
+`formDataToRecord(form, { preserveRepeated: true })` provides the same grouping for existing form data. Values retain field order and bracketed names stay literal (`tags[]` is one field name). Files remain raw files, without upload validation. The opt-in does not impose limits, canonicalize email, select an entry or authorize a request. Keep request-size and upload checks in the existing HTTP stack.
+
+For `WebFormRequest`, use `new MyRequest({ preserveRepeated: true })` and check the arrays in the application's `parse(payload)` method. Authorization still runs before body parsing; JSON payloads retain their existing shape. Existing subclasses calling `super()` keep flat form values. `validatePayload()` still takes the caller's supplied payload directly.
+
+The older `@getstrata/bootstrap/web/forms` helper has a distinct `{ fields, files }` result and still collapses repeated names. Import the **core** helper above, or use native `FormData.getAll`, for ambiguity-sensitive fields. An upgrade does not change existing app validators or reject ambiguous submissions automatically.
+
 ## File uploads
 
 `parseMultipartUpload` (JSON / single-file API) already enforces `MAX_UPLOAD_BYTES` / `MAX_REQUEST_BODY_BYTES` and `ALLOWED_UPLOAD_MIME_TYPES` via `@getstrata/core/http/uploads`.

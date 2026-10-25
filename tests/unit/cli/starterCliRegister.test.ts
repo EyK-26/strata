@@ -51,6 +51,8 @@ function generateFromArgs(directory: string, argv: string[]): string {
 }
 
 const PRODUCT_COMMANDS = [
+  "make:model",
+  "make:view",
   "make:module",
   "make:policy",
   "make:job",

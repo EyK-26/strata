@@ -19,6 +19,16 @@
       "purpose": "Raise active runtime/type minimums and exact tested pins to 1.4.4, allow future 1.4 patches, retain all historical manifests and assertions through exact reversible literal changes.",
       "artifacts": 38,
       "hunks": 12
+    },
+    "nativeModelGenerator": {
+      "beforeCommit": "b93db69",
+      "hunk": "make-model-command",
+      "purpose": "Add only this explicit CLI entry; preserve every historical file hash and previous hunk."
+    },
+    "nativeViewGenerator": {
+      "beforeCommit": "160c57c9143c7cbef14d6f90ef85a9adb0ebfb39",
+      "hunk": "make-view-command",
+      "purpose": "Add only this explicit CLI entry; preserve every historical file hash and previous hunk."
     }
   },
   "hunks": {
@@ -464,6 +474,24 @@
         "    if (process.env.CSRF_TARGET_ORIGIN !== undefined)",
         "      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);"
       ]
+    },
+    "make-model-command": {
+      "before": [
+        "  \"make:module\": async () => (await import(\"@getstrata/cli/scaffold\")).makeModuleCommand,"
+      ],
+      "after": [
+        "  \"make:module\": async () => (await import(\"@getstrata/cli/scaffold\")).makeModuleCommand,",
+        "  \"make:model\": async () => (await import(\"@getstrata/cli/scaffold\")).makeModelCommand,"
+      ]
+    },
+    "make-view-command": {
+      "before": [
+        "  \"make:model\": async () => (await import(\"@getstrata/cli/scaffold\")).makeModelCommand,"
+      ],
+      "after": [
+        "  \"make:model\": async () => (await import(\"@getstrata/cli/scaffold\")).makeModelCommand,",
+        "  \"make:view\": async () => (await import(\"@getstrata/cli/scaffold\")).makeViewCommand,"
+      ]
     }
   },
   "artifacts": {
@@ -896,6 +924,46 @@
       "beforeSha256": "50788c82874988ec6668ddb07e2f0641624eceb4dc67338eef64a6eae1796b89",
       "afterSha256": "60c1e807917597e2bc9c5b3db2bdf26408cde04da10f9c408271d09ff57477ab",
       "hunks": ["csrf-target-provider-import", "csrf-target-provider-binding"]
+    },
+    "starter/sqlite-api-headers-local/src/cli/register.ts": {
+      "beforeSha256": "3a4cc57099a78c0ca9dcdaf87b175dc42f7ba59217fd3a535bf866b731f3cfd1",
+      "afterSha256": "c48eaa23b7aced94e8a7762762495e41a690e7ef6be687a95f401e9614be4334",
+      "hunks": ["make-model-command", "make-view-command"]
+    },
+    "starter/mysql-htmx-cookie-tools/src/cli/register.ts": {
+      "beforeSha256": "4a32defaa0320f3ca76ad10c905f02b1263dbe4bd0589927c8c7857f0b5000f1",
+      "afterSha256": "e4bec951bb450e58bced372c925aa5e9d8154daa445b45beb7ec3f0ebb626593",
+      "hunks": ["make-model-command", "make-view-command"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/cli/register.ts": {
+      "beforeSha256": "4a32defaa0320f3ca76ad10c905f02b1263dbe4bd0589927c8c7857f0b5000f1",
+      "afterSha256": "e4bec951bb450e58bced372c925aa5e9d8154daa445b45beb7ec3f0ebb626593",
+      "hunks": ["make-model-command", "make-view-command"]
+    },
+    "starter/sqlite-spa-jwt-local/src/cli/register.ts": {
+      "beforeSha256": "4a32defaa0320f3ca76ad10c905f02b1263dbe4bd0589927c8c7857f0b5000f1",
+      "afterSha256": "e4bec951bb450e58bced372c925aa5e9d8154daa445b45beb7ec3f0ebb626593",
+      "hunks": ["make-model-command", "make-view-command"]
+    },
+    "starter/mysql-api-token-column-partial-tools/src/cli/register.ts": {
+      "beforeSha256": "4a32defaa0320f3ca76ad10c905f02b1263dbe4bd0589927c8c7857f0b5000f1",
+      "afterSha256": "e4bec951bb450e58bced372c925aa5e9d8154daa445b45beb7ec3f0ebb626593",
+      "hunks": ["make-model-command", "make-view-command"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/cli/register.ts": {
+      "beforeSha256": "4a32defaa0320f3ca76ad10c905f02b1263dbe4bd0589927c8c7857f0b5000f1",
+      "afterSha256": "e4bec951bb450e58bced372c925aa5e9d8154daa445b45beb7ec3f0ebb626593",
+      "hunks": ["make-model-command", "make-view-command"]
+    },
+    "starter/postgres-htmx-cookie-local/src/cli/register.ts": {
+      "beforeSha256": "4a32defaa0320f3ca76ad10c905f02b1263dbe4bd0589927c8c7857f0b5000f1",
+      "afterSha256": "e4bec951bb450e58bced372c925aa5e9d8154daa445b45beb7ec3f0ebb626593",
+      "hunks": ["make-model-command", "make-view-command"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/src/cli/register.ts": {
+      "beforeSha256": "3a4cc57099a78c0ca9dcdaf87b175dc42f7ba59217fd3a535bf866b731f3cfd1",
+      "afterSha256": "c48eaa23b7aced94e8a7762762495e41a690e7ef6be687a95f401e9614be4334",
+      "hunks": ["make-model-command", "make-view-command"]
     }
   }
 }
