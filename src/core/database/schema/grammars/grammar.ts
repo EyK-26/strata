@@ -1,6 +1,7 @@
 import type { Blueprint } from "../blueprint.ts";
 import type { ColumnDefinition } from "../columnDefinition.ts";
 import type { DatabaseDriver } from "../driver.ts";
+import { UnsupportedSchemaFeatureError } from "../errors.ts";
 
 interface Grammar {
   readonly driver: DatabaseDriver;
@@ -15,6 +16,10 @@ function compileColumnType(driver: DatabaseDriver, column: ColumnDefinition): st
       return compileIdType(driver);
     case "string":
       return compileStringType(driver, column.length);
+    case "uuid":
+      if (column.autoIncrement)
+        throw new UnsupportedSchemaFeatureError("auto-increment UUID columns", driver);
+      return driver === "pgsql" ? "UUID" : driver === "mysql" ? "CHAR(36)" : "TEXT";
     case "text":
       return compileTextType(driver);
     case "boolean":
