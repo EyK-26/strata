@@ -104,6 +104,21 @@ Both worker helpers announce polling after application boot and report when poll
 
 `make:*` resolves paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`, `src/listeners`). `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `await discoverJobs()` on boot. `make:module` appends a `registerModelClass` hint to `src/models/register.ts` when that file exists. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
 
+`make:model <Name|Group/Name>` creates a declarative model in `src/models`, where generated startup discovers it and supplies its default repository. Migration generation stays separate. Use `--table=name`, `--primary-key=id` and `--key-type=number|string` to describe existing metadata; a UUID key uses `string`. Domain columns and writable fields remain explicit. See [model-first development](DATABASE.md#model-first-development-and-custom-repositories).
+
+Existing app-owned CLI registries require deliberate adoption after upgrading the CLI package:
+
+```ts
+"make:model": async () => (await import("@getstrata/cli/scaffold")).makeModelCommand,
+"make:view": async () => (await import("@getstrata/cli/scaffold")).makeViewCommand,
+```
+
+Or merge the exported `scaffoldCommands` map into the app registry, retaining any app-specific overrides. Fresh starters include the entry. No generator overwrites an existing file or silently adds schema changes.
+
+`make:view reports/summary` creates an escaped-output Eta HTML template at `views/reports/summary.eta` when the app has `views/`; otherwise it uses `resources/views/`, matching the existing module/view conventions. Nested names, an optional `.eta` suffix, partials such as `partials/_card`, and numeric error pages such as `errors/404` are supported. Render it through the app's existing `ViewRenderer` using `reports/summary`. The command does not create routes/controllers, enable a view provider, change its configured directory or layout, or install Eta in API-only apps.
+
+View names normalize to kebab case (preserving a partial's leading underscore). Unsafe names, symlinked output paths and existing templates are refused; there is no force option. A custom nonconventional provider directory remains an explicit application choice rather than something the generator reads from private configuration.
+
 Apps scaffolded with `create-strata@1.1.0` should merge current `src/bootstrap/providers/index.ts` and `createApp.ts` from a 1.1.x starter (module `providers` boot + `await discoverListeners()` / `await discoverJobs()`). See the package changelog rather than re-running the wizard over a filled app.
 
 `APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot. Generated `.env.example` sets `FEATURE_PUBLIC_READS=false`. `wrapWebPublicRead` then requires a login. Public catalogs may opt in per route with `{ allowAnonymous: true }` or set the default policy flag to `true`. Generated apps approve only their configured `APP_URL` hostname for anonymous tenant selection; multi-tenant applications replace that binding. Production rejects the separate `TENANT_DEV_HEADERS=true` flag. See [BUILDING-APPS.md](./BUILDING-APPS.md).

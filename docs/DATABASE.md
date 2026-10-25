@@ -170,6 +170,21 @@ const squads = await Squad.query().withCount("members").get();
 squads[0].toObject().members_count;
 ```
 
+### UUID schema columns
+
+`table.uuid("id").primary()` creates a native PostgreSQL `UUID` column. It does not change existing tables, replace UUIDs with text on PostgreSQL, or generate identifiers automatically. Supply an existing UUID or generate one deliberately in application code with `crypto.randomUUID()`. Ordinary `nullable()`, `unique()`, `default()` and explicit dialect-specific `defaultRaw()` modifiers remain available. Auto-increment UUID columns are rejected before executing SQL.
+
+MySQL uses `CHAR(36)` and SQLite uses `TEXT` for this logical column type. These engines do not acquire PostgreSQL's UUID parsing, canonicalization or format validation: use canonical strings and explicit application validation or engine-specific checks when required. The mapping does not emulate binary UUID storage or add database extensions. See the [PostgreSQL UUID type](https://www.postgresql.org/docs/18/datatype-uuid.html), [MySQL UUID conversion functions](https://dev.mysql.com/doc/refman/8.4/en/miscellaneous-functions.html#function_uuid-to-bin), and [SQLite storage classes](https://www.sqlite.org/datatype3.html).
+
+UUID foreign keys use an ordinary UUID column and the table-level constraint API; `foreignId()` retains its existing integer type:
+
+```ts
+table.uuid("document_id");
+table.foreignKey(["document_id"], "documents", ["id"]);
+```
+
+Declare the model key as `string` and allow assignment explicitly when the app supplies it. Models and repositories already support string primary keys; no custom repository is required for UUIDs. Existing explicit UUID DDL through a migration's `db.unsafe()` remains supported. Adopting the builder does not rename migrations, rewrite applied history, or authorize replaying an already-applied definition.
+
 ### Typed model inputs and projections
 
 Models with declared record fields infer column names and value types for `create`, `firstOrNew`, `firstOrCreate`, `updateOrCreate`, filters, ordering and primary-key lookups. Concrete subclasses and explicit custom repositories remain supported. Writes accept partial records so generated IDs, nullable fields and database defaults can be omitted. TypeScript interfaces do not describe DDL defaults or required inserts: the database remains responsible for those constraints, and `$fillable`/`$guarded` still control mass assignment. These contracts do not validate untrusted HTTP input at runtime. Declare field types to match casts/driver values, or normalize inputs before calling the model; cast metadata does not automatically infer different write types.
@@ -277,6 +292,23 @@ Discovery recursively imports `.ts`, `.js`, `.mts` and `.mjs` files from the tru
 For bundled deployments or models outside `src/models`, use a static manifest instead: `bootModels([Product, Category])` from `@getstrata/core/database/model`. Import all model modules first. Class-reference or lazy-reference relationships do not require name discovery; string references do. Framework discovery cannot see a class whose module has never been imported. Alternate aliases must be registered before boot if hooks depend on them.
 
 Existing `class Product extends Model<ProductRecord, "sku">` plus `registerModelRepository(Product, repository)` remains supported. To customize a declarative model, call `registerModelRepository(Product, customRepository)` before startup initialization. Explicit bindings take precedence over defaults. Custom repository methods stay available on the repository itself; registration does not add methods to the model. Keep startup bindings stable rather than rebinding per request. The default connection still resolves the framework's active request/transaction scope; discovery never selects tenants, opens a database connection, or bypasses RLS.
+
+### Model-first development and custom repositories
+
+For ordinary persistence, use `defineModel(table)` and the model's `create`, `find`, query and instance write APIs. `Model.repository()` exposes its automatically supplied repository when a repository operation is appropriate. Do not create a boilerplate repository merely to make the model work. A custom `BaseRepository` remains useful for reusable query methods, explicit connection behavior or repository-specific state; bind it explicitly before boot when needed.
+
+`make:module` generates a repository/service/controller API resource, not an Active Record model. That scaffold originated before declarative model binding (module generator commit `5e3cf78`; declarative binding and discovery commit `1468cde`). Both workflows remain supported. There is no separate `make:repository` command in the current command registry; the repository file is part of the module scaffold. Models outside the discovery directory still need explicit imports and boot/registration.
+
+`strata make:model Invoice` creates an id-only, typed declarative model under `src/models/Invoice.ts`. Nested `Billing/Invoice` produces `src/models/Billing/Invoice.ts` with the distinct class name `BillingInvoice`. The default table name is the snake-case path plus `s`; use `--table` for an existing or irregular table name. Explicit key metadata is supported:
+
+```bash
+bunx strata make:model ExperimentLead --table=experiment_lead --key-type=string
+bunx strata make:migration create_experiment_lead
+```
+
+The model generator does not create a migration, infer domain fields, enable timestamp columns, create routes, or generate a repository. Add domain fields consistently to the record, table columns and explicit `$fillable` allowlist. Numeric generated keys are not mass assignable by default; a string key is explicitly assignable so the app can supply its identifier. Empty inserts retain the existing repository rejection. Use the separate migration command and fill its up/down callbacks deliberately; generating a model never changes a database. `--primary-key=lead_id` supports a different simple key name.
+
+Generation refuses unsafe paths, reserved orchestration names, symlinked output parents, unknown options and existing files; there is no force-overwrite option. Discovery still rejects ambiguous exported class names, including collisions with manually authored models. Existing applications must add the new command to their app-owned CLI registry after upgrading a release containing it; a package install does not rewrite that file.
 
 Normal model reads, `Model.chunk()` and `Model.cursorPaginate()` retain global scopes. Each scope is grouped separately and ANDed with caller predicates, including top-level or callback OR conditions. Repeated `where()` predicates compose with AND; they no longer replace an earlier filter on the same column. Callback `where()` predicates form a group. Cursor bounds also intersect existing filters rather than overwriting a key condition or allowing an OR branch to escape the cursor. To intentionally read without model global scopes, use the explicit repository API. This does not disable database RLS or the repository's soft-delete policy.
 

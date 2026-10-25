@@ -5,6 +5,8 @@ function renderCliRegisterTs(layers?: StarterLayers): string {
 
 const commands: StrataCommandMap = {${layers && authNeedsUsers(layers.auth) ? '\n  "auth:provision-admin": async () => (await import("./initialAdmin.ts")).initialAdminCommand,' : ""}
   "make:module": async () => (await import("@getstrata/cli/scaffold")).makeModuleCommand,
+  "make:model": async () => (await import("@getstrata/cli/scaffold")).makeModelCommand,
+  "make:view": async () => (await import("@getstrata/cli/scaffold")).makeViewCommand,
   "make:policy": async () => (await import("@getstrata/cli/scaffold")).makePolicyCommand,
   "make:job": async () => (await import("@getstrata/cli/scaffold")).makeJobCommand,
   "make:listener": async () => (await import("@getstrata/cli/scaffold")).makeListenerCommand,
