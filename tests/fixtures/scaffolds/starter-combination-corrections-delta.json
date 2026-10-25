@@ -35,6 +35,11 @@
       "issue": 364,
       "hunk": "runtime-object-dml-only",
       "purpose": "Explicit runtime CRUD/sequence-use privileges, including legacy ACL removal; reverse/reapply exact SQL only. All prior hashes and hunks retained."
+    },
+    "migrationStatusReadOnly": {
+      "beforeCommit": "e46efb1da96093e4b3f43c1bb8e207c89837ac8c",
+      "issue": 374,
+      "purpose": "Read-only status opts out of generated PostgreSQL grant repair and documents history/read access. Only 14 reviewed artifacts change through five exact reversible literal hunks; every historical hash, assertion and earlier correction remains intact."
     }
   },
   "hunks": {
@@ -520,6 +525,95 @@
         "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO strata_app;",
         "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO strata_app;"
       ]
+    },
+    "migration-status-read-only-1": {
+      "before": [
+        "`openapi:generate` lists API routes only. HTML admin and storefront paths are not in that file.",
+        "",
+        "## Deploy",
+        ""
+      ],
+      "after": [
+        "`openapi:generate` lists API routes only. HTML admin and storefront paths are not in that file.",
+        "",
+        "## Migration status",
+        "",
+        "Run `bun run src/db/status.ts` to inspect existing migration history. Status does not initialize missing history or repair runtime grants; missing history/read access fails with the database error. Initialize a new database with the explicit migrate command first. Migrate, fresh and rollback remain administrative mutations. Package upgrades do not rewrite these generated application files.",
+        "",
+        "## Deploy",
+        ""
+      ]
+    },
+    "migration-status-read-only-2": {
+      "before": [
+        "`openapi:generate` lists API routes only. HTML admin and storefront paths are not in that file.",
+        "",
+        "## Deploy",
+        ""
+      ],
+      "after": [
+        "`openapi:generate` lists API routes only. HTML admin and storefront paths are not in that file.",
+        "",
+        "## Migration status",
+        "",
+        "Run `bun run src/db/status.ts` to inspect existing migration history. Status does not initialize missing history or repair runtime grants; missing history/read access fails with the database error. Initialize a new database with the explicit migrate command first. Migrate, fresh and rollback remain administrative mutations. Status needs only CONNECT, schema USAGE and SELECT on framework_migrations through its configured migration connection; it does not need schema CREATE or grant authority. The generated status call opts out of the migration helper's privilege repair, while mutation callers retain that repair. Package upgrades do not rewrite these generated application files.",
+        "",
+        "## Deploy",
+        ""
+      ]
+    },
+    "migration-status-read-only-3": {
+      "before": [
+        "  const rows = await withMigrationDatabase(async (db) => {",
+        "    return getMigrationStatus(db, await loadStarterMigrations());",
+        "  });",
+        "  console.log(\"Migrations:\");",
+        "  for (const row of rows) {"
+      ],
+      "after": [
+        "  const rows = await withMigrationDatabase(async (db) => {",
+        "    return getMigrationStatus(db, await loadStarterMigrations());",
+        "  }, { grantRuntimePrivileges: false });",
+        "  console.log(\"Migrations:\");",
+        "  for (const row of rows) {"
+      ]
+    },
+    "migration-status-read-only-4": {
+      "before": [
+        "export async function withMigrationDatabase<T>(",
+        "  fn: (db: MigrationDatabase) => Promise<T>,",
+        "): Promise<T> {",
+        "  const runtimeUrl = process.env.DATABASE_URL ?? \"\";"
+      ],
+      "after": [
+        "export async function withMigrationDatabase<T>(",
+        "  fn: (db: MigrationDatabase) => Promise<T>,",
+        "  options: { grantRuntimePrivileges?: boolean } = {},",
+        "): Promise<T> {",
+        "  const runtimeUrl = process.env.DATABASE_URL ?? \"\";"
+      ]
+    },
+    "migration-status-read-only-5": {
+      "before": [
+        "  try {",
+        "    const result = await fn(admin);",
+        "    await grantPostgresAppRolePrivileges(admin, {",
+        "      database: postgresDatabaseNameFromUrl(runtimeUrl),",
+        "    });",
+        "    return result;",
+        "  } finally {"
+      ],
+      "after": [
+        "  try {",
+        "    const result = await fn(admin);",
+        "    if (options.grantRuntimePrivileges !== false) {",
+        "      await grantPostgresAppRolePrivileges(admin, {",
+        "        database: postgresDatabaseNameFromUrl(runtimeUrl),",
+        "      });",
+        "    }",
+        "    return result;",
+        "  } finally {"
+      ]
     }
   },
   "artifacts": {
@@ -700,8 +794,8 @@
     },
     "starter/sqlite-api-headers-local/README.md": {
       "beforeSha256": "0546b6e7c22dbc6e27e0d3853f7ca9c242a8d889a2a45f23ec624c8715f2f3c0",
-      "afterSha256": "5d52eae461e626c411590d14407be204650514cdf67e6ba29bea0a971269a7d5",
-      "hunks": ["bun-1-4-4-7"]
+      "afterSha256": "a2c0484c4327a20c3345dacd599a75ae7e394d484e0b82b8a314fd57ef3206fb",
+      "hunks": ["bun-1-4-4-7", "migration-status-read-only-1"]
     },
     "starter/mysql-htmx-cookie-tools/.bun-version": {
       "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
@@ -720,8 +814,8 @@
     },
     "starter/mysql-htmx-cookie-tools/README.md": {
       "beforeSha256": "cae73e4975fdf2d5ba70d6ebbb84814014c82bfa4adc6d7b8dc493ade46a9b1e",
-      "afterSha256": "90a6433309c2024b3f2fd6c7e2497d857c2e5aabd62e8b46f87dae64c0b2ba0a",
-      "hunks": ["bun-1-4-4-7"]
+      "afterSha256": "bd96a08a8fd0bbc46a53d8575e9d563b46e3db618b67279e641fc5462d8b6118",
+      "hunks": ["bun-1-4-4-7", "migration-status-read-only-1"]
     },
     "starter/postgres-hybrid-combined-rls/.bun-version": {
       "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
@@ -740,8 +834,8 @@
     },
     "starter/postgres-hybrid-combined-rls/README.md": {
       "beforeSha256": "45151351582f2d4be713bfb6e243b16b37e90b66b42e61a19e416e3bbb5e56c6",
-      "afterSha256": "b480c08864b4ce8c98090ecc7d998f19350eba02395cc3cad20217991839d283",
-      "hunks": ["bun-1-4-4-7"]
+      "afterSha256": "2d29e6fa12e6689f926b7edc68a069f588788dab022037da9f42ab019c4b5059",
+      "hunks": ["bun-1-4-4-7", "migration-status-read-only-2"]
     },
     "starter/sqlite-spa-jwt-local/.bun-version": {
       "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
@@ -760,8 +854,8 @@
     },
     "starter/sqlite-spa-jwt-local/README.md": {
       "beforeSha256": "9087af860362958768aee5c78e665d61f2369ae28cf71860c17fb2bc65e469a3",
-      "afterSha256": "192dc677fb27099ddcbafa0f2736e5239bca17d354d06cae9560cc13fbfaff45",
-      "hunks": ["bun-1-4-4-7"]
+      "afterSha256": "c49a8e981c3888da488e438741ce86590fba6e1aea4413f1a58773fba7c95fe8",
+      "hunks": ["bun-1-4-4-7", "migration-status-read-only-1"]
     },
     "starter/mysql-api-token-column-partial-tools/.bun-version": {
       "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
@@ -780,8 +874,8 @@
     },
     "starter/mysql-api-token-column-partial-tools/README.md": {
       "beforeSha256": "55d8675eb002819c3c2ddca0dcb6318f83bce52a7dca0474848509098cd8baeb",
-      "afterSha256": "802cacdf1947fc1c0b2d95b02527041158407548fc657bb40050ae9dd30553c7",
-      "hunks": ["bun-1-4-4-7"]
+      "afterSha256": "6d351aa0f874d84ded3ee023567c266f4c867078bda131b5b7c26835be1c81d6",
+      "hunks": ["bun-1-4-4-7", "migration-status-read-only-1"]
     },
     "starter/postgres-api-cookie-token-column-local/.bun-version": {
       "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
@@ -800,8 +894,8 @@
     },
     "starter/postgres-api-cookie-token-column-local/README.md": {
       "beforeSha256": "aeb96c15ec72b2bfbff81ec3198ee686f514b383e2688b4e41c8c8faa52a680d",
-      "afterSha256": "7cec1dc6f8dc416b6b2acc5d7d0ed047653b8fc6d4e4683fc6bf2b907cc5e910",
-      "hunks": ["bun-1-4-4-7"]
+      "afterSha256": "19bb07b44ab2c90ceb92ef32aec609391b58ec4c1da81df28ba45fe8b36bb5ae",
+      "hunks": ["bun-1-4-4-7", "migration-status-read-only-2"]
     },
     "starter/postgres-htmx-cookie-local/.bun-version": {
       "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
@@ -820,8 +914,8 @@
     },
     "starter/postgres-htmx-cookie-local/README.md": {
       "beforeSha256": "cab16cc37498bb701c7470cf143b1e3fe53d8a536e0fd42466354843a116d9a1",
-      "afterSha256": "3b8ae0ecac499492c4c7ea3526001a4444f6cbcc60b12d6aba0bff751c636685",
-      "hunks": ["bun-1-4-4-7"]
+      "afterSha256": "cff71a06ab5fef3305ce2041f5ec1859fd568fe60ca01db43f29a212deb05136",
+      "hunks": ["bun-1-4-4-7", "migration-status-read-only-2"]
     },
     "starter/mysql-hybrid-headers-redis-tools/.bun-version": {
       "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",
@@ -840,8 +934,8 @@
     },
     "starter/mysql-hybrid-headers-redis-tools/README.md": {
       "beforeSha256": "5234e2475223b5a054f8cde8e13f48186c4e998b04cc8fc8b26cd2598cb0fb9a",
-      "afterSha256": "aafbb3536ac35caec7467f917d921fdb4ebe26f5d0676ccadc4e1bff5f97f494",
-      "hunks": ["bun-1-4-4-7"]
+      "afterSha256": "f60f4a4cd06ec9a6dc3efff9c4897d5a2c9dba73ed346fc4a20d71081de86846",
+      "hunks": ["bun-1-4-4-7", "migration-status-read-only-1"]
     },
     "starter/postgres-hybrid-combined-rls/frontend/bun.lock": {
       "beforeSha256": "f49f6ab8c2348f87609ca0e1cccbfae88f90f03a0fadc44695bff3a7a604bc69",
@@ -992,6 +1086,36 @@
       "beforeSha256": "3a4cc57099a78c0ca9dcdaf87b175dc42f7ba59217fd3a535bf866b731f3cfd1",
       "afterSha256": "c48eaa23b7aced94e8a7762762495e41a690e7ef6be687a95f401e9614be4334",
       "hunks": ["make-model-command", "make-view-command"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/db/status.ts": {
+      "beforeSha256": "8a92cfa9b72927a6a04318413089a3c019f3fab70bea854fd49b7d229cb6b45c",
+      "afterSha256": "05cf0bcf5a1acb0c55fdbf83b780b38f59b45f3321b34da259a4be5538bce142",
+      "hunks": ["migration-status-read-only-3"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/db/migrationRuntime.ts": {
+      "beforeSha256": "faabdae33bd8d3c8d8c3934441c62066c39da872670c3b01088362848632aca2",
+      "afterSha256": "97aace38e6abe145d77f8c701c5e573d42ada18b49613f62a37f5f71b75cbe50",
+      "hunks": ["migration-status-read-only-4", "migration-status-read-only-5"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/db/status.ts": {
+      "beforeSha256": "8a92cfa9b72927a6a04318413089a3c019f3fab70bea854fd49b7d229cb6b45c",
+      "afterSha256": "05cf0bcf5a1acb0c55fdbf83b780b38f59b45f3321b34da259a4be5538bce142",
+      "hunks": ["migration-status-read-only-3"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/db/migrationRuntime.ts": {
+      "beforeSha256": "faabdae33bd8d3c8d8c3934441c62066c39da872670c3b01088362848632aca2",
+      "afterSha256": "97aace38e6abe145d77f8c701c5e573d42ada18b49613f62a37f5f71b75cbe50",
+      "hunks": ["migration-status-read-only-4", "migration-status-read-only-5"]
+    },
+    "starter/postgres-htmx-cookie-local/src/db/status.ts": {
+      "beforeSha256": "8a92cfa9b72927a6a04318413089a3c019f3fab70bea854fd49b7d229cb6b45c",
+      "afterSha256": "05cf0bcf5a1acb0c55fdbf83b780b38f59b45f3321b34da259a4be5538bce142",
+      "hunks": ["migration-status-read-only-3"]
+    },
+    "starter/postgres-htmx-cookie-local/src/db/migrationRuntime.ts": {
+      "beforeSha256": "faabdae33bd8d3c8d8c3934441c62066c39da872670c3b01088362848632aca2",
+      "afterSha256": "97aace38e6abe145d77f8c701c5e573d42ada18b49613f62a37f5f71b75cbe50",
+      "hunks": ["migration-status-read-only-4", "migration-status-read-only-5"]
     }
   }
 }
