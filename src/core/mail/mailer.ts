@@ -347,9 +347,10 @@ function createMailDriver(): MailDriver {
   return new LogMailDriver();
 }
 
-const appMailer = new Mailer(createMailDriver());
+let appMailer: Mailer | undefined;
 
 function mailer(): Mailer {
+  if (!appMailer) appMailer = new Mailer(createMailDriver());
   return appMailer;
 }
 

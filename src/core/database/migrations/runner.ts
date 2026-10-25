@@ -106,6 +106,11 @@ async function recordAppliedMigration(
 
 async function getAppliedMigrations(db: MigrationDatabase): Promise<AppliedMigrationRow[]> {
   await ensureMigrationsTable(db);
+  return readAppliedMigrations(db);
+}
+
+/** Inspection requires existing history; only explicit migration operations initialize it. */
+async function readAppliedMigrations(db: MigrationDatabase): Promise<AppliedMigrationRow[]> {
   return (await db.unsafe(`
     SELECT name, batch
     FROM ${MIGRATIONS_TABLE}
@@ -146,7 +151,7 @@ async function getMigrationStatus(
   migrations: Migration[],
 ): Promise<MigrationStatus[]> {
   validateMigrations(migrations);
-  const applied = await getAppliedMigrations(db);
+  const applied = await readAppliedMigrations(db);
   const appliedByName = new Map(applied.map(({ name, batch }) => [name, Number(batch)]));
 
   return migrations.map(({ name }) => ({

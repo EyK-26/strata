@@ -112,6 +112,12 @@ function compileColumn(
   column: ColumnDefinition,
   mode: "create" | "alter",
 ): string {
+  if (driver === "sqlite" && mode === "alter" && column.isUnique) {
+    throw new UnsupportedSchemaFeatureError(
+      "column-level unique() in ADD COLUMN (add the column without unique() and use table.unique(columnName) in the same schema.table callback instead)",
+      driver,
+    );
+  }
   const quoteIdentifier = dialectFor(driver).quoteIdentifier;
   const parts = [quoteIdentifier(column.name), compileColumnType(driver, column)];
 

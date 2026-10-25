@@ -395,6 +395,10 @@ The app uses the database named in \`DATABASE_URL\` and creates it on first migr
 `
 }
 ${renderOpenApiReadme()}
+## Migration status
+
+Run \`bun run src/db/status.ts\` to inspect existing migration history. Status does not initialize missing history or repair runtime grants; missing history/read access fails with the database error. Initialize a new database with the explicit migrate command first. Migrate, fresh and rollback remain administrative mutations.${layers.database === "postgres" ? " Status needs only CONNECT, schema USAGE and SELECT on framework_migrations through its configured migration connection; it does not need schema CREATE or grant authority. The generated status call opts out of the migration helper's privilege repair, while mutation callers retain that repair." : ""} Package upgrades do not rewrite these generated application files.
+
 ## Deploy
 
 Bun >=1.4.4 is required. \`.bun-version\` and Docker stages pin the tested 1.4.4 runtime; upgrade pins deliberately and rerun checks before deployment. Runtime and TypeScript requirements use >=1.4.4, accepting future 1.4.x patches; the bun-types override keeps transitive shims above the same minimum. Refresh and commit root/frontend lockfiles when upgrading. Updating framework packages does not rewrite an existing app Dockerfile, runtime pin or manifest.

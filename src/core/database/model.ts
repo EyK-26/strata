@@ -114,10 +114,18 @@ function accessorName(key: string): string {
   return `get${pascal.charAt(0).toUpperCase()}${pascal.slice(1)}Attribute`;
 }
 
+/** Retain the declared table as repository() defaults without narrowing legacy explicit calls. */
+type DefinedModel<TEntity extends object, PrimaryKey extends keyof TEntity & string> = {
+  repository<
+    TRecord extends object = TEntity,
+    TKey extends keyof TRecord & string = PrimaryKey & keyof TRecord & string,
+  >(this: object): BaseRepository<TRecord, TKey>;
+} & typeof Model<TEntity, PrimaryKey>;
+
 /** Typed model base with a lazily created framework repository and active connection. */
 function defineModel<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
   table: TableDefinition<TEntity, PrimaryKey>,
-): typeof Model<TEntity, PrimaryKey> {
+): DefinedModel<TEntity, PrimaryKey> {
   class TableModel extends Model<TEntity, PrimaryKey> {}
   registerModelRepositoryFactory(TableModel, () => new BaseRepository(table));
   return TableModel;
