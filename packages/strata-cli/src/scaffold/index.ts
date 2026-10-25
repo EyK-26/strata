@@ -3,9 +3,11 @@ import { makeFactoryCommand } from "./makeFactory.ts";
 import { makeJobCommand } from "./makeJob.ts";
 import { makeListenerCommand } from "./makeListener.ts";
 import { makeMigrationCommand } from "./makeMigration.ts";
+import { makeModelCommand } from "./makeModel.ts";
 import { makeModuleCommand } from "./makeModule.ts";
 import { makePolicyCommand } from "./makePolicy.ts";
 import { makeRequestCommand } from "./makeRequest.ts";
+import { makeViewCommand } from "./makeView.ts";
 import {
   ensureDirectory,
   migrationDirectory,
@@ -18,6 +20,8 @@ import {
 } from "./utils.ts";
 
 const scaffoldCommands: StrataCommandMap = {
+  "make:model": async () => makeModelCommand,
+  "make:view": async () => makeViewCommand,
   "make:module": async () => makeModuleCommand,
   "make:policy": async () => makePolicyCommand,
   "make:job": async () => makeJobCommand,
@@ -33,9 +37,11 @@ export {
   makeJobCommand,
   makeListenerCommand,
   makeMigrationCommand,
+  makeModelCommand,
   makeModuleCommand,
   makePolicyCommand,
   makeRequestCommand,
+  makeViewCommand,
   migrationDirectory,
   moduleDirectory,
   scaffoldCommands,
