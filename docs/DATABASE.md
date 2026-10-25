@@ -202,6 +202,8 @@ Declare the model key as `string` and allow assignment explicitly when the app s
 
 Models with declared record fields infer column names and value types for `create`, `firstOrNew`, `firstOrCreate`, `updateOrCreate`, filters, ordering and primary-key lookups. Concrete subclasses and explicit custom repositories remain supported. Writes accept partial records so generated IDs, nullable fields and database defaults can be omitted. TypeScript interfaces do not describe DDL defaults or required inserts: the database remains responsible for those constraints, and `$fillable`/`$guarded` still control mass assignment. These contracts do not validate untrusted HTTP input at runtime. Declare field types to match casts/driver values, or normalize inputs before calling the model; cast metadata does not automatically infer different write types.
 
+Models created with `defineModel(defineTable<Record, Key>(...))` also retain that record and key when calling `Model.repository()`, including inherited models and non-`id` keys. Repository upsert conflict/update columns, input values and returned records keep their declared types. Existing explicit `Model.repository<Record, Key>()` calls and custom repository overrides remain supported. This is a declaration correction; it does not change runtime upsert, transaction or conflict behavior. Explicit generics remain a supported alternative on older packages.
+
 ```ts
 await Product.create({ title: "Notebook", price: 12 });
 const rows = await Product.where({ price: { gte: 10 } })

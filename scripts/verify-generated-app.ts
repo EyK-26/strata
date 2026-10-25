@@ -18,6 +18,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "bun";
+import { verifyModelRepositoryRejections } from "../tests/helpers/modelRepositoryTypeContract";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -241,6 +242,10 @@ export async function commitContract(): Promise<void> {
       join(appDir, "src/model-definition.contract.ts"),
       await readFile(join(ROOT, "tests/types/modelDefinition.contract.ts"), "utf8"),
     );
+    await writeFile(
+      join(appDir, "src/model-repository.contract.ts"),
+      await readFile(join(ROOT, "tests/types/modelRepository.contract.ts"), "utf8"),
+    );
 
     await writeFile(
       join(appDir, "src/native-http.contract.ts"),
@@ -321,6 +326,16 @@ export async function commitContract(): Promise<void> {
       }
       const checked = await run(["bun", "run", "check"], appDir);
       if (checked.exitCode === 0) {
+        if (testCase === CASES[0]) {
+          try {
+            await verifyModelRepositoryRejections(appDir);
+            console.log(`ok   inferred/explicit repository negative contracts (TS ${version})`);
+          } catch (error) {
+            failures.push(
+              `${testCase.name} (TS ${version}): repository negative contracts failed\n${error}`,
+            );
+          }
+        }
         console.log(`ok   ${testCase.name} (TS ${version})`);
         continue;
       }
