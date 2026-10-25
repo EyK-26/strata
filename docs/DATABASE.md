@@ -293,6 +293,23 @@ For bundled deployments or models outside `src/models`, use a static manifest in
 
 Existing `class Product extends Model<ProductRecord, "sku">` plus `registerModelRepository(Product, repository)` remains supported. To customize a declarative model, call `registerModelRepository(Product, customRepository)` before startup initialization. Explicit bindings take precedence over defaults. Custom repository methods stay available on the repository itself; registration does not add methods to the model. Keep startup bindings stable rather than rebinding per request. The default connection still resolves the framework's active request/transaction scope; discovery never selects tenants, opens a database connection, or bypasses RLS.
 
+### Model-first development and custom repositories
+
+For ordinary persistence, use `defineModel(table)` and the model's `create`, `find`, query and instance write APIs. `Model.repository()` exposes its automatically supplied repository when a repository operation is appropriate. Do not create a boilerplate repository merely to make the model work. A custom `BaseRepository` remains useful for reusable query methods, explicit connection behavior or repository-specific state; bind it explicitly before boot when needed.
+
+`make:module` generates a repository/service/controller API resource, not an Active Record model. That scaffold originated before declarative model binding (module generator commit `5e3cf78`; declarative binding and discovery commit `1468cde`). Both workflows remain supported. There is no separate `make:repository` command in the current command registry; the repository file is part of the module scaffold. Models outside the discovery directory still need explicit imports and boot/registration.
+
+`strata make:model Invoice` creates an id-only, typed declarative model under `src/models/Invoice.ts`. Nested `Billing/Invoice` produces `src/models/Billing/Invoice.ts` with the distinct class name `BillingInvoice`. The default table name is the snake-case path plus `s`; use `--table` for an existing or irregular table name. Explicit key metadata is supported:
+
+```bash
+bunx strata make:model ExperimentLead --table=experiment_lead --key-type=string
+bunx strata make:migration create_experiment_lead
+```
+
+The model generator does not create a migration, infer domain fields, enable timestamp columns, create routes, or generate a repository. Add domain fields consistently to the record, table columns and explicit `$fillable` allowlist. Numeric generated keys are not mass assignable by default; a string key is explicitly assignable so the app can supply its identifier. Empty inserts retain the existing repository rejection. Use the separate migration command and fill its up/down callbacks deliberately; generating a model never changes a database. `--primary-key=lead_id` supports a different simple key name.
+
+Generation refuses unsafe paths, reserved orchestration names, symlinked output parents, unknown options and existing files; there is no force-overwrite option. Discovery still rejects ambiguous exported class names, including collisions with manually authored models. Existing applications must add the new command to their app-owned CLI registry after upgrading a release containing it; a package install does not rewrite that file.
+
 Normal model reads, `Model.chunk()` and `Model.cursorPaginate()` retain global scopes. Each scope is grouped separately and ANDed with caller predicates, including top-level or callback OR conditions. Repeated `where()` predicates compose with AND; they no longer replace an earlier filter on the same column. Callback `where()` predicates form a group. Cursor bounds also intersect existing filters rather than overwriting a key condition or allowing an OR branch to escape the cursor. To intentionally read without model global scopes, use the explicit repository API. This does not disable database RLS or the repository's soft-delete policy.
 
 Model-defined relations apply the **related target model's** global filters to lazy reads, batched eager loads, existence/absence predicates and projected counts. This covers hasMany/hasOne, belongsTo, belongsToMany, hasManyThrough and polymorphic relations. Relation `where()` filters also compose with AND and are retained during eager loading; association keys and morph discriminators cannot be overwritten by those filters. Target soft-delete filters apply to existence and count subqueries as well as normal reads.
