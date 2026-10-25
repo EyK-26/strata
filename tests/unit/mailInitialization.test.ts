@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 
 const moduleUrl = import.meta.resolve("@getstrata/core/mail/mailer");
+test("the public default accessor retains a stable Mailer identity", async () => {
+  const { Mailer, mailer } = await import("@getstrata/core/mail/mailer");
+  const instance = mailer();
+  expect(instance).toBeInstanceOf(Mailer);
+  expect(mailer()).toBe(instance);
+});
 async function fresh(script: string, driver = "smtp") {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("MAIL_")),

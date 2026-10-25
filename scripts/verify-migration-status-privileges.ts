@@ -117,6 +117,23 @@ try {
   await admin.unsafe(
     `GRANT CONNECT ON DATABASE ${database} TO ${readerName};GRANT USAGE ON SCHEMA public TO ${readerName};GRANT SELECT ON framework_migrations TO ${readerName}`,
   );
+  const reader = new SQL({ url: readerUrl.href, max: 1 });
+  try {
+    const [identity] = await reader.unsafe(
+      "SELECT current_user,session_user,rolsuper,rolcreaterole,rolcreatedb,rolbypassrls,has_schema_privilege(current_user,'public','CREATE') AS can_create FROM pg_roles WHERE rolname=current_user",
+    );
+    assert.deepEqual(plain(identity), {
+      current_user: readerName,
+      session_user: readerName,
+      rolsuper: false,
+      rolcreaterole: false,
+      rolcreatedb: false,
+      rolbypassrls: false,
+      can_create: false,
+    });
+  } finally {
+    await reader.close();
+  }
   const history = plain(
     await admin.unsafe("SELECT name,batch,run_on::text FROM framework_migrations ORDER BY name"),
   );
@@ -199,6 +216,7 @@ try {
           assert.equal((await sql.unsafe("SELECT * FROM notes"))[0]?.body, "Příliš žluťoučký");
           await sql.unsafe("INSERT INTO notes(body,tenant_id) VALUES ('sequence-backed',1)");
         });
+        assert.equal((await runtime.unsafe("SELECT * FROM notes")).length, 0);
         await assert.rejects(
           runtime.unsafe("CREATE TABLE runtime_forbidden(id INT)"),
           /permission denied/,
@@ -218,22 +236,31 @@ try {
     assert.deepEqual(plain(row), { can_delete: true, can_truncate: false });
     assert.equal((await admin.unsafe("SELECT * FROM operator_keep"))[0]?.body, "operator-owned");
   });
-  if (errors.length) throw new AggregateError(errors, "Migration status privilege contract failed");
-  console.log(
-    JSON.stringify({
-      installedMigrationStatusReadOnly: true,
-      ownerAndRestrictedReader: true,
-      missingAndDeniedHistoryHonest: true,
-      explicitMigrationAndRollbackGrantsRetained: true,
-      rlsAndSequenceWritesRetained: true,
-    }),
-  );
+} catch (error) {
+  errors.push(error);
 } finally {
-  await admin.close();
-  await fixture.close();
-  try {
-    if (readerCreated) await control.unsafe(`DROP ROLE ${readerName}`);
-  } finally {
-    await control.close();
+  for (const cleanup of [
+    () => admin.close(),
+    () => fixture.close(),
+    async () => {
+      if (readerCreated) await control.unsafe(`DROP ROLE ${readerName}`);
+    },
+    () => control.close(),
+  ]) {
+    try {
+      await cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
   }
 }
+if (errors.length) throw new AggregateError(errors, "Migration status execution/cleanup failed");
+console.log(
+  JSON.stringify({
+    installedMigrationStatusReadOnly: true,
+    ownerAndRestrictedReader: true,
+    missingAndDeniedHistoryHonest: true,
+    explicitMigrationAndRollbackGrantsRetained: true,
+    rlsAndSequenceWritesRetained: true,
+  }),
+);
