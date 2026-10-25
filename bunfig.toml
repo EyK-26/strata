@@ -1,5 +1,5 @@
 [test]
-preload = ["./tests/preloadEnv.ts", "./tests/globalSetup.ts"]
+preload = ["./tests/preloadWorkerEnvironment.ts", "./tests/preloadEnv.ts", "./tests/globalSetup.ts"]
 coveragePath = ["src"]
 
 # Do not set coverageThreshold here. Per-file 100% source gates and the

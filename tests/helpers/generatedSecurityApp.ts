@@ -13,6 +13,7 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../packages/strata-starter/src/parseArgs.ts";
+import { candidatePackage } from "../../scripts/candidate-packages";
 
 const repoRoot = join(import.meta.dir, "../..");
 
@@ -117,7 +118,7 @@ export async function createGeneratedSecurityApp(
         throw new Error(
           `Published installation failed: ${new TextDecoder().decode(install.stderr)}`,
         );
-      for (const part of ["core", "bootstrap", "cli"]) {
+      for (const part of ["core", "bootstrap", "cli"] as const) {
         const manifest = JSON.parse(
           await readFile(join(app, `node_modules/@getstrata/${part}/package.json`), "utf8"),
         );
@@ -139,21 +140,8 @@ export async function createGeneratedSecurityApp(
       );
       // This suite enables SAML at runtime; an external app must install its optional peer.
       manifest.dependencies["@node-saml/node-saml"] = samlPeer.version;
-      for (const part of ["core", "bootstrap", "cli"]) {
-        const packed = Bun.spawnSync(["npm", "pack", "--silent", "--pack-destination", root], {
-          cwd: join(repoRoot, `packages/strata-${part}`),
-          stdout: "pipe",
-          stderr: "pipe",
-          timeout: 30000,
-          killSignal: "SIGKILL",
-        });
-        if (packed.exitCode !== 0)
-          throw new Error(
-            `Candidate ${part} pack failed: ${new TextDecoder().decode(packed.stderr)}`,
-          );
-        const filename = new TextDecoder().decode(packed.stdout).trim().split("\n").at(-1);
-        if (!filename) throw new Error(`Candidate ${part} pack produced no tarball.`);
-        manifest.dependencies[`@getstrata/${part}`] = `file:${join(root, filename)}`;
+      for (const part of ["core", "bootstrap", "cli"] as const) {
+        manifest.dependencies[`@getstrata/${part}`] = `file:${await candidatePackage(part, root)}`;
       }
       await writeFile(manifestPath, JSON.stringify(manifest));
       const install = Bun.spawnSync(["bun", "install", "--prefer-offline"], {
