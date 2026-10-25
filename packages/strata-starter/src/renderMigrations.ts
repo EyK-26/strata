@@ -209,6 +209,7 @@ export async function loadStarterMigrations() {
 
 export async function withMigrationDatabase<T>(
   fn: (db: MigrationDatabase) => Promise<T>,
+  options: { grantRuntimePrivileges?: boolean } = {},
 ): Promise<T> {
   const runtimeUrl = process.env.DATABASE_URL ?? "";
   const admin = await openPostgresAdminConnection({
@@ -217,9 +218,11 @@ export async function withMigrationDatabase<T>(
   });
   try {
     const result = await fn(admin);
-    await grantPostgresAppRolePrivileges(admin, {
-      database: postgresDatabaseNameFromUrl(runtimeUrl),
-    });
+    if (options.grantRuntimePrivileges !== false) {
+      await grantPostgresAppRolePrivileges(admin, {
+        database: postgresDatabaseNameFromUrl(runtimeUrl),
+      });
+    }
     return result;
   } finally {
     await admin.close?.();
@@ -445,7 +448,7 @@ import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime
 export async function status() {
 ${ensureCall(layers, false)}  const rows = await withMigrationDatabase(async (db) => {
     return getMigrationStatus(db, await loadStarterMigrations());
-  });
+  }${layers.database === "postgres" ? ", { grantRuntimePrivileges: false }" : ""});
   console.log("Migrations:");
   for (const row of rows) {
     const batch = row.batch == null ? "" : \` (batch \${row.batch})\`;
