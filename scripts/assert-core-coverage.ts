@@ -13,37 +13,53 @@ import {
   isTypeOnlyModule,
   parseCoverageRows,
 } from "./coverage-scope.ts";
+import { testWorkerCount, withTestWorkers } from "./test-workers";
 
 const env = { ...process.env };
 delete env.API_PREFIX;
 
-const proc = Bun.spawn(
-  [
-    "bun",
-    "test",
-    "--isolate",
-    "--coverage",
-    "--coverage-reporter=text",
-    "--max-concurrency=1",
-    "tests/unit",
-    "tests/integration",
-  ],
-  {
-    cwd: process.cwd(),
-    env: {
-      ...env,
-      CACHE_DRIVER: process.env.CACHE_DRIVER ?? "array",
-      QUEUE_DRIVER: process.env.QUEUE_DRIVER ?? "sync",
-      APP_KEY_PREFIX: "strata",
-      APP_NAME: "Strata",
+const workers = testWorkerCount();
+const { output, exitCode } = await withTestWorkers(workers, async (workerEnv) => {
+  const proc = Bun.spawn(
+    [
+      "bun",
+      "test",
+      "--no-orphans",
+      ...(workers > 1 ? [`--parallel=${workers}`] : []),
+      "--isolate",
+      "--coverage",
+      "--coverage-reporter=text",
+      "--max-concurrency=1",
+      "tests/unit",
+      "tests/integration",
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...env,
+        STRATA_TEST_WORKER_ENV_FILE: workerEnv.STRATA_TEST_WORKER_ENV_FILE,
+        CACHE_DRIVER: process.env.CACHE_DRIVER ?? "array",
+        QUEUE_DRIVER: process.env.QUEUE_DRIVER ?? "sync",
+        APP_KEY_PREFIX: "strata",
+        APP_NAME: "Strata",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
     },
-    stdout: "pipe",
-    stderr: "pipe",
-  },
-);
+  );
 
-const { output, exitCode } = await collectSpawnOutput(proc);
-process.stdout.write(digestBunTestOutput(output));
+  const terminate = () => proc.kill("SIGTERM");
+  process.once("SIGINT", terminate);
+  process.once("SIGTERM", terminate);
+  try {
+    const result = await collectSpawnOutput(proc);
+    process.stdout.write(digestBunTestOutput(result.output));
+    return result;
+  } finally {
+    process.off("SIGINT", terminate);
+    process.off("SIGTERM", terminate);
+  }
+});
 
 if (bunTestsFailed(output, exitCode)) {
   reportBunTestFailure("Core", output, exitCode);

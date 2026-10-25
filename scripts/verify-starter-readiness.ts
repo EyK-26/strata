@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { replaceFixtureLoopbackPort } from "../tests/helpers/fixtureLoopbackPort";
+import { candidatePackage } from "./candidate-packages";
 
 const repo = join(import.meta.dir, "..");
 const database = process.argv.find((arg) => arg.startsWith("--database="))?.slice(11);
@@ -173,16 +174,10 @@ try {
   text = text.replace(/^PORT=.*$/m, `PORT=${port}`).replace(/^APP_URL=.*$/m, `APP_URL=${origin}`);
   await writeFile(join(app, ".env"), text);
   const manifest = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
-  for (const part of ["core", "bootstrap", "cli"]) {
+  for (const part of ["core", "bootstrap", "cli"] as const) {
     if (published) manifest.dependencies[`@getstrata/${part}`] = published;
     else {
-      const packed = await command(
-        ["npm", "pack", "--silent", "--pack-destination", root],
-        join(repo, `packages/strata-${part}`),
-      );
-      const filename = packed.split("\n").at(-1);
-      assert.ok(filename);
-      manifest.dependencies[`@getstrata/${part}`] = `file:${join(root, filename)}`;
+      manifest.dependencies[`@getstrata/${part}`] = `file:${await candidatePackage(part, root)}`;
     }
   }
   await writeFile(join(app, "package.json"), JSON.stringify(manifest));
