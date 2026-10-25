@@ -19,6 +19,12 @@
       "purpose": "Raise active runtime/type minimums and exact tested pins to 1.4.4, allow future 1.4 patches, retain all historical manifests and assertions through exact reversible literal changes.",
       "artifacts": 38,
       "hunks": 12
+    },
+    "postgresRuntimeObjectGrants": {
+      "beforeCommit": "b26df8e2e78777244b0634a482cd960ba76a2d22",
+      "issue": 364,
+      "hunk": "runtime-object-dml-only",
+      "purpose": "Explicit runtime CRUD/sequence-use privileges, including legacy ACL removal; reverse/reapply exact SQL only. All prior hashes and hunks retained."
     }
   },
   "hunks": {
@@ -464,6 +470,28 @@
         "    if (process.env.CSRF_TARGET_ORIGIN !== undefined)",
         "      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);"
       ]
+    },
+    "runtime-object-dml-only": {
+      "before": [
+        "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO strata_app;",
+        "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO strata_app;",
+        "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO strata_app;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO strata_app;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO strata_app;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO strata_app;"
+      ],
+      "after": [
+        "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM strata_app;",
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO strata_app;",
+        "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM strata_app;",
+        "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO strata_app;",
+        "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO strata_app;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM strata_app;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO strata_app;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM strata_app;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO strata_app;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO strata_app;"
+      ]
     }
   },
   "artifacts": {
@@ -609,23 +637,23 @@
     },
     "starter/postgres-hybrid-combined-rls/db/ensure-postgres-app-role.sql": {
       "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
-      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
-      "hunks": ["runtime-schema-usage-only"]
+      "afterSha256": "c29953654aa0e245ec0258a572841903959d1c0bd876da504d5229ff8a21edef",
+      "hunks": ["runtime-schema-usage-only", "runtime-object-dml-only"]
     },
     "starter/postgres-hybrid-combined-rls/docker/postgres-init/01-strata-app-role.sql": {
       "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
-      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
-      "hunks": ["runtime-schema-usage-only"]
+      "afterSha256": "c29953654aa0e245ec0258a572841903959d1c0bd876da504d5229ff8a21edef",
+      "hunks": ["runtime-schema-usage-only", "runtime-object-dml-only"]
     },
     "starter/postgres-api-cookie-token-column-local/db/ensure-postgres-app-role.sql": {
       "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
-      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
-      "hunks": ["runtime-schema-usage-only"]
+      "afterSha256": "c29953654aa0e245ec0258a572841903959d1c0bd876da504d5229ff8a21edef",
+      "hunks": ["runtime-schema-usage-only", "runtime-object-dml-only"]
     },
     "starter/postgres-htmx-cookie-local/db/ensure-postgres-app-role.sql": {
       "beforeSha256": "2b91a81a01b166d1671064548260d450c12fe4d69aabe7722df8c66fa117c71f",
-      "afterSha256": "8b28dd0d68da8ca01665e62b22da18a3150f0d8d85771d560c318e67d3b708a9",
-      "hunks": ["runtime-schema-usage-only"]
+      "afterSha256": "c29953654aa0e245ec0258a572841903959d1c0bd876da504d5229ff8a21edef",
+      "hunks": ["runtime-schema-usage-only", "runtime-object-dml-only"]
     },
     "starter/sqlite-api-headers-local/.bun-version": {
       "beforeSha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1",

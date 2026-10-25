@@ -12,7 +12,7 @@ import { isProductionEnv } from "../runtime/appEnv";
  * existing volumes get the role and table GRANTs after migrate:fresh. Production
  * runtime processes only connect through the already-provisioned restricted role.
  *
- * Admin DDL (GRANT ALL TABLES, CREATE TABLE, DROP TABLE) must run on the
+ * Admin DDL (table grants, CREATE TABLE, DROP TABLE) must run on the
  * application database. postgres/template1 are only for CREATE DATABASE.
  */
 
@@ -268,11 +268,15 @@ function postgresAppRolePrivilegeSql(options: { database: string; role?: string 
   const role = assertSafeSqlIdentifier(options.role ?? POSTGRES_APP_ROLE, "role name");
   return `GRANT CONNECT ON DATABASE ${database} TO ${role};
 GRANT USAGE ON SCHEMA public TO ${role};
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${role};
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${role};
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ${role};
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${role};
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM ${role};
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${role};
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${role};
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${role};
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${role};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM ${role};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${role};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM ${role};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ${role};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO ${role};
 `;
 }

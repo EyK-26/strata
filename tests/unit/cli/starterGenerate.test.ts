@@ -454,7 +454,7 @@ describe("create-strata generate", () => {
     expect(init).toContain("NOBYPASSRLS");
     expect(init).toContain("NOSUPERUSER");
     expect(init).toContain("GRANT CONNECT ON DATABASE ent_app TO strata_app");
-    expect(init).toContain("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public");
+    expect(init).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public");
     expect(init).toContain("already-existing volume");
     expect(existsSync(join(app, "db/ensure-postgres-app-role.sql"))).toBe(true);
     const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
@@ -494,7 +494,9 @@ describe("create-strata generate", () => {
     const ensureSql = await readFile(join(app, "db/ensure-postgres-app-role.sql"), "utf8");
     expect(ensureSql).toContain("already-existing volume");
     expect(ensureSql).toContain("ALTER ROLE strata_app WITH LOGIN PASSWORD");
-    expect(ensureSql).toContain("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public");
+    expect(ensureSql).toContain(
+      "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public",
+    );
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toMatch(
       /^DATABASE_URL=postgresql:\/\/strata_app:dev-strata-app-change-me@localhost:5432\/team_local$/m,
@@ -688,7 +690,7 @@ describe("create-strata generate", () => {
     const ensure = await readFile(join(app, "db/ensure-postgres-app-role.sql"), "utf8");
     expect(init).toBe(ensure);
     expect(init).toContain("already-existing volume");
-    expect(init).toContain("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public");
+    expect(init).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public");
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
     expect(site).not.toContain("/health");
     const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
