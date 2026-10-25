@@ -1,9 +1,15 @@
 import { ForbiddenError, ValidationError } from "@getstrata/core/errors/http";
 import { requestPrefersJson } from "./contentNegotiation";
-import { parseFormBody } from "./parseFormBody";
+import { type FormBodyOptions, parseFormBody } from "./parseFormBody";
 import { parseJsonBody } from "./validation";
 
 abstract class WebFormRequest<TOutput> {
+  readonly #preserveRepeated: boolean;
+
+  constructor(options: FormBodyOptions = {}) {
+    this.#preserveRepeated = options.preserveRepeated === true;
+  }
+
   authorize(_request: Request): boolean | Promise<boolean> {
     return true;
   }
@@ -21,7 +27,7 @@ abstract class WebFormRequest<TOutput> {
 
     const payload = requestPrefersJson(request)
       ? await parseJsonBody(request, (body) => body)
-      : await parseFormBody(request);
+      : await parseFormBody(request, { preserveRepeated: this.#preserveRepeated });
 
     try {
       return this.validatePayload(payload);

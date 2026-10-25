@@ -55,11 +55,17 @@ From the current working directory, `strata` loads `strata.config.ts` if present
 
 Helpers live on package subpaths: `@getstrata/cli/queueWorker`, `@getstrata/cli/queueFailed`, `@getstrata/cli/scaffold`, `@getstrata/cli/openapi`, and `@getstrata/cli/schedule`. `queue:work` takes `{ boot, close }` and does not call `assertProductionSecrets()` (that belongs in app boot). Scaffold commands resolve paths from the app working directory (`src/modules`, `src/db/migrations`, `src/jobs`, `views/` or `resources/views`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
 
+`make:model <Name|Group/Name>` generates an id-only declarative model under `src/models`; its repository comes from `defineModel(table)` and normal startup discovery. Use `--table=existing_table`, `--primary-key=id`, and `--key-type=number|string` for explicit metadata. UUID keys use `string`. Add domain fields to the record, table columns and allowlist before writing them. Migration generation is always separate: `make:migration <name>`. No route or custom repository is generated, and existing files/symlinked parents are refused.
+
+Existing apps must register `makeModelCommand` from `@getstrata/cli/scaffold` (or merge its `scaffoldCommands` map). A dependency upgrade does not rewrite the app-owned command registry. Use `make:model --help` for options.
+
+`make:view reports/summary[.eta]` creates an Eta HTML template under an existing `views/`, or `resources/views/` otherwise. It supports nested names, leading-underscore partials and numeric error pages, and refuses unsafe paths, symlinks and overwrites. It does not create routes/controllers, enable views or change the app's layout/directory configuration. Register `makeViewCommand` from the same scaffold subpath in existing apps; fresh generated registries include it.
+
 A migrate entry may export `close()`. The CLI calls it after `migrate()` and `fresh()` so pooled drivers such as `mysql2` release the event loop instead of hanging the command.
 
 ## Creating a new app
 
-This package does not scaffold. Use the starter:
+This package does not create whole application projects. Use the starter:
 
 ```bash
 bunx create-strata my-app
