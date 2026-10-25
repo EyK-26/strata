@@ -183,9 +183,37 @@ describe("postgresAppRole", () => {
     const sql = postgresAppRoleSql({ database: "hiroapp" });
     expect(sql).toContain("NOBYPASSRLS");
     expect(sql).toContain("already-existing volume");
-    expect(sql).toContain("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public");
+    expect(sql).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public");
     expect(sql).toContain("ALTER ROLE strata_app WITH LOGIN PASSWORD");
     expect(postgresAppRoleCreateSql()).toContain("CREATE ROLE strata_app LOGIN");
+  });
+
+  test("SQL reconciles existing and future runtime object ACLs before explicit DML grants", () => {
+    const sql = postgresAppRoleSql({ database: "hiroapp", role: "runtime_custom" });
+    for (const [revoke, grant] of [
+      [
+        "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM runtime_custom;",
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO runtime_custom;",
+      ],
+      [
+        "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM runtime_custom;",
+        "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO runtime_custom;",
+      ],
+      [
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM runtime_custom;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO runtime_custom;",
+      ],
+      [
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM runtime_custom;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO runtime_custom;",
+      ],
+    ] as const) {
+      expect(sql).toContain(revoke);
+      expect(sql).toContain(grant);
+      expect(sql.indexOf(revoke)).toBeLessThan(sql.indexOf(grant));
+    }
+    expect(sql).not.toContain("GRANT ALL");
+    expect(sql).toContain("GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO runtime_custom;");
   });
 
   test("opens an admin connection to the runtime database, not postgres/template1", async () => {
@@ -233,7 +261,9 @@ describe("postgresAppRole", () => {
       expect(cluster.calls.some((line) => line.includes("CREATE ROLE"))).toBe(true);
       expect(
         cluster.calls.some(
-          (line) => line.includes("GRANT ALL PRIVILEGES ON ALL TABLES") && line.includes("@/newdb"),
+          (line) =>
+            line.includes("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES") &&
+            line.includes("@/newdb"),
         ),
       ).toBe(true);
     } finally {
@@ -292,9 +322,11 @@ describe("postgresAppRole", () => {
       connect: cluster.connect,
     });
     expect(cluster.calls.some((line) => line.startsWith("CREATE DATABASE "))).toBe(false);
-    expect(cluster.calls.some((line) => line.includes("GRANT ALL PRIVILEGES ON ALL TABLES"))).toBe(
-      true,
-    );
+    expect(
+      cluster.calls.some((line) =>
+        line.includes("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES"),
+      ),
+    ).toBe(true);
     expect(ensureFromEnableTenantRls).toBe(ensurePostgresDatabaseAndAppRole);
   });
 

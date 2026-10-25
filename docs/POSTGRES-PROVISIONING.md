@@ -46,7 +46,7 @@ try {
 }
 ```
 
-The owner must be authorized to grant the requested database/schema/object privileges. This grant-only helper does not create/alter roles, rotate passwords or lock `pg_authid`. Its default privileges apply to objects subsequently created **by that same migration identity**; another object creator needs its own default ACLs. Include all generated application migrations, including tenancy/RLS migrations. If administrators manage runtime ACLs independently, they can apply their chosen policy instead of calling the broad convenience grant helper.
+The owner must be authorized to grant/revoke the requested database/schema/object privileges. This grant-only helper does not create/alter roles, rotate passwords or lock `pg_authid`. Its default privileges apply to objects subsequently created **by that same migration identity**; another object creator needs its own default ACLs. Include all generated application migrations, including tenancy/RLS migrations. If administrators manage runtime ACLs independently, they can apply their chosen policy instead of calling the convenience grant helper.
 
 On published 2.2.54, the grant-only helper still adds schema `CREATE`. While using that version, retain an administrator-managed ACL policy or explicitly remove `CREATE` after grants; calling the old helper again restores its old grant. The migration runner itself does not grant schema privileges to runtime roles.
 
@@ -58,7 +58,7 @@ Boot an explicitly migrated generated app with `bootstrapApp({ migrate: false })
 
 The corrected shared grant renderer grants `USAGE` on `public`, without adding `CREATE`. The 2.2.54 renderer (also present before this correction in current source) explicitly granted both. Ordinary HTTP/ORM reads, updates/deletes and sequence-backed inserts, failed-job persistence and SQL outbox delivery do not need schema `CREATE`; their tables, sequences and RLS policies are installed by migrations. Runtime migrations or application-defined DDL do require a separate authorized identity.
 
-This change only stops adding the direct schema grant. It deliberately does not revoke existing grants, change schema ownership, remove role memberships or modify PUBLIC. It leaves the existing table/sequence/function grant policy unchanged. In particular, `ALL` on tables includes privileges beyond ordinary CRUD (such as `TRUNCATE`, which PostgreSQL does not subject to RLS). This helper is not a complete least-privilege ACL policy; deployments requiring CRUD-only database permissions must apply explicit object/default ACLs separately. The tested tenant guarantees concern normal scoped reads/writes, not unrestricted arbitrary SQL under every granted table privilege.
+The earlier schema correction only stopped adding the direct schema grant. It did not revoke existing schema grants, change ownership, remove role memberships or modify PUBLIC, and left table/sequence/function grants unchanged. Published 2.2.57 therefore still grants table `ALL`, including `TRUNCATE`, which PostgreSQL does not subject to RLS. The runtime-object correction below addresses that separate defect; it does not automatically remove an older schema `CREATE` grant.
 
 Fresh PostgreSQL 14 clusters normally grant schema `CREATE` to PUBLIC; fresh PostgreSQL 15+ databases normally do not and use `pg_database_owner` as the `public` schema owner. Upgrades/restores may retain the old ACL/ownership. `NOINHERIT` is not proof that a login cannot gain schema privileges: explicit membership inheritance options on newer PostgreSQL, `SET ROLE`, schema ownership, or database ownership through `pg_database_owner` can supply them.
 
@@ -97,4 +97,43 @@ Recheck effective privileges on a fresh runtime login. Verify that runtime `CREA
 
 For rollback, restore only the specific grant or membership actually removed, under administrator control. Reinstalling an older package does not undo a revocation. Restoring runtime schema `CREATE` deliberately restores its ability to create objects and should not be necessary for the framework operations above.
 
-PostgreSQL references: [table locks](https://www.postgresql.org/docs/17/sql-lock.html), [PostgreSQL 15 public schema changes](https://www.postgresql.org/docs/15/release-15.html), [role membership](https://www.postgresql.org/docs/17/role-membership.html), [RLS scope](https://www.postgresql.org/docs/17/ddl-rowsecurity.html).
+## Runtime table and sequence privileges (#364)
+
+The corrected shared renderer reserves table maintenance for the migration/administrator identity. It revokes the runtime role's existing direct table and sequence grants, then grants table `SELECT, INSERT, UPDATE, DELETE` and sequence `USAGE, SELECT`. It likewise replaces the executing migration identity's per-schema default grants for future tables/sequences. Full provisioning, the grant-only helper and generated init/repeatable SQL share this policy. Schema `USAGE` and function `EXECUTE` remain unchanged.
+
+This repairs the broad direct/default grants emitted by 2.2.57 and earlier; merely adding CRUD grants would leave existing `TRUNCATE` rights intact. It also removes `REFERENCES`, `TRIGGER`, PostgreSQL 17+ `MAINTAIN` and sequence `UPDATE` (`setval`). Ordinary ORM reads/writes, sequence-backed inserts and failed-job persistence work without those privileges. Custom runtime DDL, maintenance or sequence-reset operations must move to an explicitly authorized administrative command. Do not give the HTTP server or worker migration credentials to restore those capabilities.
+
+Real PostgreSQL 16/17 regressions cover fresh provisioning, repair of legacy current/default ACLs, and a restricted non-superuser database owner's grant-only path. Two-tenant FORCE RLS reads/writes and sequence-backed ORM inserts pass; runtime `TRUNCATE` of existing and subsequently migrated tables fails with `42501`; migration maintenance still succeeds. A late failed grant batch rolls back both current and default ACL changes. Existing database advisory and cross-database role-catalog locks are unchanged. This confirms an overbroad runtime privilege defect, not an unauthenticated HTTP exploit or a general sandbox for arbitrary SQL: application tenant-context selection and executable functions remain trusted boundaries.
+
+### Adopt the object-grant correction deliberately
+
+1. Upgrade to a release containing the #364 correction. Package installation alone does not update live ACLs or rewrite application-owned SQL files. Replace older `db/ensure-postgres-app-role.sql` and `docker/postgres-init/01-strata-app-role.sql` with the corrected generated policy, retaining your reviewed database/role/credential configuration. Old SQL or old helper versions can restore the unsafe `ALL` grants. Docker init SQL only runs automatically for an empty volume.
+2. As the authorized migration/object owner, run the corrected grant-only helper shown above after migrations, or apply the reviewed corrected SQL explicitly. Generated CLI migration commands also reapply grants, but still require full role-provisioning privileges. Externally provisioned deployments should retain their explicit schema-only migration command and invoke the grant-only helper if they want this policy; the catalog-administration constraint has not changed.
+3. Apply future-object policy for **each actual object creator**. Per-schema defaults add to global defaults: revoking a per-schema grant cannot cancel a global default grant. Review global/default ACLs separately before tightening them. This helper intentionally does not rewrite another creator's defaults, PUBLIC, memberships, ownership or shared policies. Dependent onward grants may cause revocation to fail; there is no silent skip or `CASCADE` removal.
+4. Verify effective privileges using a fresh runtime login, then run real application/worker CRUD and sequence inserts. Check both existing tables and a table created later by the actual migration identity. Verify tenant isolation, denied maintenance, and migration/admin operations separately.
+
+For example, inspect the effective runtime rights (the `MAINTAIN` privilege name is only available on PostgreSQL 17+):
+
+```sql
+SELECT current_user, session_user,
+       has_table_privilege(current_user, 'notes', 'SELECT') AS can_select,
+       has_table_privilege(current_user, 'notes', 'INSERT') AS can_insert,
+       has_table_privilege(current_user, 'notes', 'UPDATE') AS can_update,
+       has_table_privilege(current_user, 'notes', 'DELETE') AS can_delete,
+       has_table_privilege(current_user, 'notes', 'TRUNCATE') AS can_truncate,
+       has_table_privilege(current_user, 'notes', 'REFERENCES') AS can_reference,
+       has_table_privilege(current_user, 'notes', 'TRIGGER') AS can_trigger,
+       has_sequence_privilege(current_user, 'notes_id_seq', 'USAGE') AS sequence_usage,
+       has_sequence_privilege(current_user, 'notes_id_seq', 'UPDATE') AS can_reset_sequence;
+SELECT defaclrole::regrole AS creator, defaclnamespace::regnamespace AS schema,
+       defaclobjtype, defaclacl
+FROM pg_default_acl;
+```
+
+A surviving maintenance right may come from PUBLIC, inherited/assumable roles, ownership or global defaults rather than the helper's direct grant. Use the membership/ownership inspection above and inspect table ACLs (`pg_class.relacl`) and schema ACLs as well. A runtime owner, superuser or BYPASSRLS identity is not repaired into a non-owning role merely by changing object grants.
+
+The installed generated-app acceptance exercises fresh grants, CLI repair without a pending migration, and the emitted init/repeatable SQL against installed candidate packages. It boots without runtime administrator credentials, uses generated models for tenant CRUD and verifies failed-job persistence. Managed-provider behavior, including Neon, remains unverified. Existing apps' explicit migration adaptation remains necessary where cluster provisioning is unavailable.
+
+For rollback, separate application rollback from ACL rollback. Installing an older release does not restore revoked privileges, but rerunning its old provisioning helper/SQL will reintroduce broad grants. Keep the corrected ACL policy in administrative tooling when rolling back application code. If a custom maintenance operation fails, grant only its reviewed requirement to a separate maintenance identity; do not blindly restore runtime `ALL`.
+
+PostgreSQL references: [table locks](https://www.postgresql.org/docs/17/sql-lock.html), [PostgreSQL 15 public schema changes](https://www.postgresql.org/docs/15/release-15.html), [role membership](https://www.postgresql.org/docs/17/role-membership.html), [RLS scope](https://www.postgresql.org/docs/17/ddl-rowsecurity.html), [table/sequence privileges](https://www.postgresql.org/docs/17/sql-grant.html), [default ACL scope](https://www.postgresql.org/docs/17/sql-alterdefaultprivileges.html).
