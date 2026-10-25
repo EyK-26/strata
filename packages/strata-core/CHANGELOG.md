@@ -1,5 +1,13 @@
 # @getstrata/core changelog
 
+## 2.2.58
+
+PostgreSQL runtime privilege fix: Replace broad table/sequence grants with explicit CRUD and sequence usage/read permissions. Repair legacy helper-managed grants that allowed TRUNCATE across RLS tenant boundaries. Preserve provisioning locks and transactional rollback. Resolves #364 through #370.
+UUID schema columns: Add table.uuid() with PostgreSQL native UUID, MySQL CHAR(36) and SQLite TEXT. Supports explicit constraints and application-supplied identifiers; existing schemas remain unchanged. #365
+Model and view generators: Add make:model for declarative models with automatic repositories, and make:view for escaped Eta templates. Support nested names and explicit model metadata, with path validation and overwrite protection. Migrations remain explicit and separate. #368
+Repeated form values: Add opt-in { preserveRepeated: true } parsing through core form helpers and WebFormRequest, retaining repeated text and files in order. Existing parsing defaults remain unchanged; applications retain responsibility for duplicate validation. #366
+Mail extension documentation and coverage: Qualify existing injected MailDriver integrations, including HTTPS providers, cancellation, deadlines, error propagation and provider-controlled idempotency. This adds tests and guidance without changing stock mail transports. #367
+
 ## 2.2.57
 
 Add opt-in CsrfOptions.targetOrigin with strict request Host/URL authority and source-origin validation while retaining signed cookie/token checks and existing defaults. Preserve native Request identity and ignore forwarding claims. Fall back safely to JSON error formatting for malformed native URL metadata.
