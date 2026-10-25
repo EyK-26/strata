@@ -170,6 +170,21 @@ const squads = await Squad.query().withCount("members").get();
 squads[0].toObject().members_count;
 ```
 
+### UUID schema columns
+
+`table.uuid("id").primary()` creates a native PostgreSQL `UUID` column. It does not change existing tables, replace UUIDs with text on PostgreSQL, or generate identifiers automatically. Supply an existing UUID or generate one deliberately in application code with `crypto.randomUUID()`. Ordinary `nullable()`, `unique()`, `default()` and explicit dialect-specific `defaultRaw()` modifiers remain available. Auto-increment UUID columns are rejected before executing SQL.
+
+MySQL uses `CHAR(36)` and SQLite uses `TEXT` for this logical column type. These engines do not acquire PostgreSQL's UUID parsing, canonicalization or format validation: use canonical strings and explicit application validation or engine-specific checks when required. The mapping does not emulate binary UUID storage or add database extensions. See the [PostgreSQL UUID type](https://www.postgresql.org/docs/18/datatype-uuid.html), [MySQL UUID conversion functions](https://dev.mysql.com/doc/refman/8.4/en/miscellaneous-functions.html#function_uuid-to-bin), and [SQLite storage classes](https://www.sqlite.org/datatype3.html).
+
+UUID foreign keys use an ordinary UUID column and the table-level constraint API; `foreignId()` retains its existing integer type:
+
+```ts
+table.uuid("document_id");
+table.foreignKey(["document_id"], "documents", ["id"]);
+```
+
+Declare the model key as `string` and allow assignment explicitly when the app supplies it. Models and repositories already support string primary keys; no custom repository is required for UUIDs. Existing explicit UUID DDL through a migration's `db.unsafe()` remains supported. Adopting the builder does not rename migrations, rewrite applied history, or authorize replaying an already-applied definition.
+
 ### Typed model inputs and projections
 
 Models with declared record fields infer column names and value types for `create`, `firstOrNew`, `firstOrCreate`, `updateOrCreate`, filters, ordering and primary-key lookups. Concrete subclasses and explicit custom repositories remain supported. Writes accept partial records so generated IDs, nullable fields and database defaults can be omitted. TypeScript interfaces do not describe DDL defaults or required inserts: the database remains responsible for those constraints, and `$fillable`/`$guarded` still control mass assignment. These contracts do not validate untrusted HTTP input at runtime. Declare field types to match casts/driver values, or normalize inputs before calling the model; cast metadata does not automatically infer different write types.

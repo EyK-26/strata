@@ -68,6 +68,14 @@ class Blueprint {
     return column;
   }
 
+  /** Application-supplied UUID: native PostgreSQL UUID, MySQL CHAR(36), SQLite TEXT. */
+  uuid(name: string): ColumnDefinition {
+    const column = new ColumnDefinition(name, "uuid");
+    column.notNullable();
+    this.columns.push(column);
+    return column;
+  }
+
   text(name: string): ColumnDefinition {
     const column = new ColumnDefinition(name, "text");
     column.notNullable();
