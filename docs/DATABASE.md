@@ -176,6 +176,19 @@ squads[0].toObject().members_count;
 
 MySQL uses `CHAR(36)` and SQLite uses `TEXT` for this logical column type. These engines do not acquire PostgreSQL's UUID parsing, canonicalization or format validation: use canonical strings and explicit application validation or engine-specific checks when required. The mapping does not emulate binary UUID storage or add database extensions. See the [PostgreSQL UUID type](https://www.postgresql.org/docs/18/datatype-uuid.html), [MySQL UUID conversion functions](https://dev.mysql.com/doc/refman/8.4/en/miscellaneous-functions.html#function_uuid-to-bin), and [SQLite storage classes](https://www.sqlite.org/datatype3.html).
 
+SQLite permits column-level `unique()` when creating a table, but [forbids it in `ADD COLUMN`](https://www.sqlite.org/lang_altertable.html#alter_table_add_column). For an existing table, add a nullable column and declare its unique index separately in the same callback:
+
+```ts
+await Schema.run(db, "sqlite", schema => {
+  schema.table("invoices", table => {
+    table.uuid("external_id").nullable();
+    table.unique("external_id", "invoice_external_identity");
+  });
+});
+```
+
+This preserves existing rows, allows multiple null values, and rejects duplicate non-null identities. The same SQLite ALTER restriction applies to other column types. Unsupported column-level ALTER uniqueness throws during compilation, before any statement in that `Schema.run` plan executes. It is not silently omitted or automatically rewritten. PostgreSQL/MySQL alterations and SQLite CREATE behavior are unchanged. When rolling this addition back, drop the named index before dropping the column, using separate `schema.table` calls. Existing apps can already use the explicit index form; upgrading packages does not repair partially applied migrations or change their history. Inspect the physical schema and migration records before retrying an earlier failed migration.
+
 UUID foreign keys use an ordinary UUID column and the table-level constraint API; `foreignId()` retains its existing integer type:
 
 ```ts
