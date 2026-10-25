@@ -1,5 +1,11 @@
 # create-strata changelog
 
+## 2.2.59
+
+- Generate PostgreSQL status calls that opt out of the shared helper's runtime-grant repair. Status needs only existing history read access; explicit migrate/fresh/rollback retain their administrative grant-repair contract. #374
+- Document status initialization/read permissions and align generated framework dependencies with 2.2.59. Existing apps must deliberately adopt both the helper option and status call after upgrading core; package upgrades do not rewrite source.
+- Custom mail drivers can import in SMTP-selected generated apps without configuring an unused transport; actual default SMTP access still requires valid configuration. #373
+
 ## 2.2.58
 
 PostgreSQL runtime privilege fix: Replace broad table/sequence grants with explicit CRUD and sequence usage/read permissions. Repair legacy helper-managed grants that allowed TRUNCATE across RLS tenant boundaries. Preserve provisioning locks and transactional rollback. Resolves #364 through #370.

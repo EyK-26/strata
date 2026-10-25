@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.59
+
+- Align the core dependency with the compatible 2.2.59 schema, repository typing, mail initialization and migration-status corrections. Bootstrap runtime, HTTP/auth, lifecycle and public/protected extension contracts are unchanged.
+- Native assets and the explicit public artifact-origin API remain major-version design work; this release adds no breaking implementation.
+
 ## 2.2.58
 
 PostgreSQL runtime privilege fix: Replace broad table/sequence grants with explicit CRUD and sequence usage/read permissions. Repair legacy helper-managed grants that allowed TRUNCATE across RLS tenant boundaries. Preserve provisioning locks and transactional rollback. Resolves #364 through #370.

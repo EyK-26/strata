@@ -1,5 +1,12 @@
 # @getstrata/core changelog
 
+## 2.2.59
+
+- Reject unsupported SQLite column-level uniqueness during ADD COLUMN compilation, before any statement in a Schema.run plan executes. Use the existing nullable column plus table.unique() API; populated rows, duplicate rejection, CREATE behavior and PostgreSQL/MySQL SQL are preserved. #371
+- Retain defineModel's declared record/key as repository() generic defaults, preserving explicit generics, inherited/custom-key models and legacy overrides. Runtime upsert and Model.repository behavior are unchanged. #372
+- Initialize the default mailer on first successful access so custom MailDriver instances can load without configuring unused SMTP. Actual SMTP use still validates configuration; successful singleton identity, failure propagation and cancellation remain intact. #373
+- Read existing migration history without DDL from getMigrationStatus(). Missing or inaccessible history now reports the native database error; explicit migration operations still initialize history. #374
+
 ## 2.2.58
 
 PostgreSQL runtime privilege fix: Replace broad table/sequence grants with explicit CRUD and sequence usage/read permissions. Repair legacy helper-managed grants that allowed TRUNCATE across RLS tenant boundaries. Preserve provisioning locks and transactional rollback. Resolves #364 through #370.

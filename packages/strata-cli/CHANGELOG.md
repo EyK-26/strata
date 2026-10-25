@@ -1,5 +1,10 @@
 # @getstrata/cli changelog
 
+## 2.2.59
+
+- Align core/bootstrap dependencies with 2.2.59. Existing model/view commands retain their behavior and benefit from the corrected public model typing.
+- Generated application files remain app-owned. Package upgrades do not rewrite migration helpers/status entrypoints or remove an application's explicit schema-only migration command.
+
 ## 2.2.58
 
 PostgreSQL runtime privilege fix: Replace broad table/sequence grants with explicit CRUD and sequence usage/read permissions. Repair legacy helper-managed grants that allowed TRUNCATE across RLS tenant boundaries. Preserve provisioning locks and transactional rollback. Resolves #364 through #370.
