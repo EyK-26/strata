@@ -11,7 +11,7 @@ import { testWorkerEnvironment, WORKER_ENVIRONMENT_KEYS } from "../helpers/testW
 describe("test execution harness contracts", () => {
   test("partitions every file once and leaves new/unreviewed files serial", () => {
     const files = [
-      "tests/e2e/generatedReactAuth.test.ts",
+      "tests/e2e/generatedRuntime.test.ts",
       "tests/e2e/newContract.test.ts",
       "tests/e2e/generatedDocker.test.ts",
     ] as const;
@@ -19,6 +19,21 @@ describe("test execution harness contracts", () => {
     expect(plan.parallel).toEqual([files[0]]);
     expect(plan.serial).toEqual(files.slice(1));
     expect([...plan.serial, ...plan.parallel].sort()).toEqual([...files].sort());
+  });
+  test("implicit child environments and cluster-role rotation remain serial", () => {
+    const files = [
+      "formMultiplicity",
+      "generatedGuestTenancy",
+      "generatedMysqlMigrationRole",
+      "generatedReactAuth",
+      "mailDriverExtension",
+      "modelGenerator",
+      "postgresRuntimeGrants",
+      "viewGenerator",
+    ].map((name) => `tests/e2e/${name}.test.ts`);
+    const plan = e2eTestPlan(files);
+    expect(plan.serial).toEqual(files);
+    expect(plan.parallel).toEqual([]);
   });
   test("rejects duplicate and missing discovery rather than silently dropping files", () => {
     expect(() => e2eTestPlan([])).toThrow();

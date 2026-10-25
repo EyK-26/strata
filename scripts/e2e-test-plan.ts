@@ -24,33 +24,28 @@ const { DOMParser } = createRequire(import.meta.url)("@xmldom/xmldom") as {
   };
 };
 
-// Qualified for isolated backend workers. New files run serially until reviewed here.
+// Qualified for isolated backend workers, including explicit child environment forwarding.
+// Bun's isolated process.env does not replace the OS environment inherited by implicit spawns.
+// New files and implicit-environment verifiers stay serial until reviewed here.
 const PARALLEL_E2E_FILES = new Set(
   [
     "auditExportContracts",
-    "formMultiplicity",
     "generatedAdminReset",
     "generatedApp.security",
     "generatedAuthJourneys",
     "generatedBillingRollback",
-    "generatedGuestTenancy",
     "generatedModule",
-    "generatedMysqlMigrationRole",
     "generatedOidc",
-    "generatedReactAuth",
     "generatedResetContention",
     "generatedRuntime",
     "generatedSaml",
     "generatedStartupCleanup",
-    "mailDriverExtension",
     "modelAttributeContracts",
-    "modelGenerator",
     "modelQueryContracts",
     "modelRegistryContracts",
     "modelWriteHooks",
     "moduleCachedJson",
     "nativeRouteContracts",
-    "postgresRuntimeGrants",
     "providerPhaseAdmission",
     "redisProtocolContracts",
     "relationQueryContracts",
@@ -58,7 +53,6 @@ const PARALLEL_E2E_FILES = new Set(
     "routeCollisionContracts",
     "starterCombinations",
     "starterCsrfTargetOrigin",
-    "viewGenerator",
   ].map((name) => `tests/e2e/${name}.test.ts`),
 );
 
