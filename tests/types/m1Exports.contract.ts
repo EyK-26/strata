@@ -19,25 +19,28 @@ import type {
   RouteDeclaration,
   WebRouteContext,
 } from "@getstrata/bootstrap/m1";
-// @ts-expect-error Method normalization remains an implementation detail.
-// @ts-expect-error Matching-shape normalization remains an implementation detail.
-// @ts-expect-error Consumers use defineApplicationRoutes, not its internal validator.
+import * as m1 from "@getstrata/bootstrap/m1";
 import {
   collectPublicArtifactManifest,
   createPublicArtifactResolver,
   defineApplicationRoutes,
   describeM1Failure,
   getM1StartupCleanupCompletion,
-  HTTP_METHODS,
   M1ConfigurationError,
   prepareDocumentArtifacts,
-  routeShape,
   startGuardedApplication,
-  validateGuardedRoutes,
   verifyPublicArtifactFiles,
 } from "@getstrata/bootstrap/m1";
 
-void [HTTP_METHODS, routeShape, validateGuardedRoutes];
+function internalExportsStayUnavailable() {
+  // @ts-expect-error Method normalization remains an implementation detail.
+  void m1.HTTP_METHODS;
+  // @ts-expect-error Matching-shape normalization remains an implementation detail.
+  void m1.routeShape;
+  // @ts-expect-error Consumers use defineApplicationRoutes, not its internal validator.
+  void m1.validateGuardedRoutes;
+}
+void internalExportsStayUnavailable;
 
 export type PublicM1Types = [
   ApiRouteContext,
