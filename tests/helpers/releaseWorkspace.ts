@@ -5,6 +5,14 @@ import { join } from "node:path";
 const sourceRoot = join(import.meta.dir, "../..");
 const names = ["core", "bootstrap", "cli", "starter", "create-strata"];
 
+function releaseFixtureEnvironment(): NodeJS.ProcessEnv {
+  // Hooks export repository-local Git settings. A fixture cwd does not override them.
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")),
+  );
+  return { ...inherited, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+}
+
 async function createReleaseWorkspace(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "strata-channel-bump-"));
   const write = async (path: string, value: string) => {
@@ -66,6 +74,7 @@ async function createReleaseWorkspace(): Promise<string> {
 async function runReleaseFixture(root: string, args: string[]) {
   const child = Bun.spawn([process.execPath, "--no-env-file", ...args], {
     cwd: root,
+    env: releaseFixtureEnvironment(),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -77,4 +86,4 @@ async function runReleaseFixture(root: string, args: string[]) {
   return { stdout, stderr, code };
 }
 
-export { createReleaseWorkspace, runReleaseFixture };
+export { createReleaseWorkspace, releaseFixtureEnvironment, runReleaseFixture };

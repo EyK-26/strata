@@ -275,6 +275,12 @@ registry and executable dependencies. Production effects are reachable through t
 checked workflow adapter; tests use explicit recording executables, never an
 ambient PATH assumption.
 
+Temporary Git repositories also clear inherited `GIT_*` settings and ignore global
+and system Git configuration. A subprocess working directory alone cannot isolate
+Git commands launched by a push hook. The real-Git contract runs with a disposable
+caller's hook variables injected and verifies that its refs, HEAD, index,
+configuration and source bytes remain unchanged.
+
 Build validation recognizes only the two supported canonical metadata formats. It
 is read-only and cannot authorize a channel or publish. The operator `release:check`
 still defaults to stable. One existing stable CLI test now initializes an owned

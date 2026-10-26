@@ -1,13 +1,22 @@
 import { expect, test } from "bun:test";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createReleaseWorkspace, runReleaseFixture } from "../helpers/releaseWorkspace.ts";
+import {
+  createReleaseWorkspace,
+  releaseFixtureEnvironment,
+  runReleaseFixture,
+} from "../helpers/releaseWorkspace.ts";
 
 test("actual workflow preflight enforces clean annotated exact-main source in owned Git repositories", async () => {
   const root = await createReleaseWorkspace();
   const origin = `${root}-origin.git`;
   const git = async (args: string[], cwd = root) => {
-    const child = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+    const child = Bun.spawn(["git", ...args], {
+      cwd,
+      env: releaseFixtureEnvironment(),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const [stdout, stderr, code] = await Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
@@ -75,7 +84,7 @@ test("actual workflow preflight enforces clean annotated exact-main source in ow
         {
           cwd: root,
           env: {
-            ...process.env,
+            ...releaseFixtureEnvironment(),
             GITHUB_ACTIONS: "true",
             RELEASE_TAG: "v1.0.0",
             RELEASE_CHANNEL: "stable",
