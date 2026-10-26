@@ -1,5 +1,5 @@
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { sqlTimestamp } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, sqlTimestamp } from "@getstrata/core/database/dialect";
 import type { MutationValues, QueryOptions } from "@getstrata/core/database/types";
 import { failedJobTable } from "./failedJobTable";
 import type { FailedJobRecord } from "./types";
@@ -14,7 +14,16 @@ class FailedJobRepository extends BaseRepository<FailedJobRecord, "id"> {
     // replay callbacks retain the logical Record/Date contract on every driver.
     const stored = {
       ...values,
-      ...(values.payload === undefined ? {} : { payload: JSON.stringify(values.payload) }),
+      ...(values.payload === undefined
+        ? {}
+        : {
+            // Bun's PostgreSQL JSONB codec serializes objects itself; a JSON
+            // string here becomes a JSONB string rather than the original object.
+            payload:
+              currentSqlDialect().driver === "pgsql"
+                ? values.payload
+                : JSON.stringify(values.payload),
+          }),
       ...(values.failed_at === undefined ? {} : { failed_at: sqlTimestamp(values.failed_at) }),
     };
     return hydrateFailure(await super.create(stored as MutationValues<FailedJobRecord>));

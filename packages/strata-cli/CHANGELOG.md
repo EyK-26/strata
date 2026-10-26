@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 2.2.60
+
+- Align published core/bootstrap peers with 2.2.60. Failed-job operations receive the core persistence correction; CLI commands and replay admission/deletion ordering are unchanged.
+
 ## 2.2.59
 
 - Align core/bootstrap dependencies with 2.2.59. Existing model/view commands retain their behavior and benefit from the corrected public model typing.

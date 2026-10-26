@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## 2.2.60
+
+- Preserve failed-job payloads as PostgreSQL JSONB objects by letting the native driver encode them once. Retain SQLite/MySQL JSON text mapping and readable legacy JSONB strings; timestamps, projections and replay admission/deletion ordering are unchanged.
+- Add real PostgreSQL restricted-role persistence and replay regression coverage, including an independent stored-type oracle and legacy-string recovery.
+
 ## 2.2.59
 
 - Reject unsupported SQLite column-level uniqueness during ADD COLUMN compilation, before any statement in a Schema.run plan executes. Use the existing nullable column plus table.unique() API; populated rows, duplicate rejection, CREATE behavior and PostgreSQL/MySQL SQL are preserved. #371
