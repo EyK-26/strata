@@ -1,6 +1,6 @@
 # M1 C1: bounded failed-startup cleanup
 
-Status: design proposal and isolated feasibility evidence only. No C1 deadline is integrated into `startGuardedApplication`, released or deployed.
+Status: implemented in the provisional M1 startup path, with source, real PostgreSQL and packed-entrypoint acceptance. This does not approve merging, release, deployment or production adoption.
 
 Review baseline: PR #377, `f5da44063c8937ff2ced8156b91273f72df9d614`. The human selected bounded asynchronous cleanup rather than a watchdog-only policy on 2026-10-26.
 
@@ -10,17 +10,17 @@ The reconstructed C1 probe holds a real provider drain after a route factory thr
 
 This establishes the absence of a failed-startup cleanup deadline on this path. It does not establish that the documented ordinary shutdown timeout already covers it, or that a finite observation proves an infinite wait.
 
-Introduce a bounded wait for cleanup of a returned, candidate-owned context. Expiry reports pending cleanup, not cancellation, completion, successful startup, or permission to retry.
+The implementation bounds waiting for cleanup of a returned, candidate-owned context. Expiry reports pending cleanup, not cancellation, completion, successful startup, or permission to retry. The original probe only configured ordinary `SHUTDOWN_TIMEOUT_MS`; observing pending startup at 166 ms does not test the new 30-second default. Set `startupCleanupTimeoutMs` explicitly to probe that budget.
 
-## 2. Proposed configuration and scope
+## 2. Implemented provisional configuration and scope
 
-Add `startupCleanupTimeoutMs?: number` to the provisional M1 options. Proposed default: 30,000 ms. Validate a safe integer in 1..2,147,483,647 before claiming a startup reservation or acquiring providers. Reject invalid values rather than clamping them.
+The provisional M1 options include `startupCleanupTimeoutMs?: number`. The default is 30,000 ms, a policy choice rather than an experimentally established performance value. A supplied value must be a safe integer in 1..2,147,483,647; invalid values reject before claiming a startup reservation or acquiring providers.
 
 Keep this budget distinct from `SHUTDOWN_TIMEOUT_MS`. The latter retains its existing normal lifecycle meaning. Do not introduce a new environment variable or shorten production drain/queue leases. Tests can supply a short explicit budget to their own fixtures.
 
 The deadline begins when failed-startup cleanup is entered, after preserving and annotating the primary error. It covers the owned asynchronous stop/drain/flush/close sequence and confirmation of metadata restoration.
 
-Initial scope is the context already returned by `createAppContext`. Provider acquisition or cleanup hidden inside an unresolved `createAppContext` promise has no returned ownership/disposition handle today. This proposal does not silently claim to bound that path. Covering it requires a separate narrow provider-acquisition/disposition contract; the existing conservative reservation rule remains.
+Scope is the context already returned by `createAppContext`. Provider acquisition or cleanup hidden inside an unresolved `createAppContext` promise has no returned ownership/disposition handle today. The implementation does not bound that path. Covering it requires a separate narrow provider-acquisition/disposition contract; the existing conservative reservation rule remains.
 
 This is not a total startup timeout. A supervisor still needs a total startup/process watchdog for acquisition hangs, event-loop blocking, native stalls and genuinely unresolved cleanup. That limitation supplements the bounded policy; it does not replace it with the watchdog-only option.
 
@@ -39,9 +39,9 @@ A drain rejection or pending drain never permits flush/close. A flush/close reje
 
 Do not change the existing coordinator's force policy or retry the context's memoized disposal. The observer is a small private M1 operation around the existing cleanup owners, not a second container or replacement lifecycle subsystem.
 
-## 4. Proposed consumer observation
+## 4. Public M1 completion observation
 
-Expose one deliberate M1-only accessor, backed by a private WeakMap of framework-created failures:
+The deliberate M1-only accessor is exported from `@getstrata/bootstrap/m1` and backed by a private WeakMap of framework-created failures:
 
 ```ts
 type M1StartupCleanupOutcome = Readonly<{
@@ -81,7 +81,7 @@ Define the deadline race by the first terminal observer callback processed. Clea
 
 Keep a single reservation and one cleanup task alive. Do not permit an accumulating sequence of new attempts while an earlier task can still act on shared resources. Release closures/records naturally after settlement and loss of caller references; do not add a global completed-attempt history.
 
-## 7. Feasibility evidence
+## 7. Historical design-only feasibility evidence
 
 The opt-in [`scripts/fixtures/m1-startup-cleanup-design.ts`](../scripts/fixtures/m1-startup-cleanup-design.ts) is a design experiment, not imported by framework source or a replacement for M1 regression acceptance. It uses actual provider `drain`/`flush`/`dispose`, the existing reservation and registry handles, and an owned native Bun listener. Each case runs in a separate process.
 
@@ -111,17 +111,27 @@ Each late case preserved the primary cause and observed no unhandled rejection. 
 
 This evidence demonstrates an ownership-preserving observer is feasible. It does not qualify a C1 framework implementation, SQL cancellation, providers that never return context, an installed package or hosted recovery.
 
-## 8. Implementation and acceptance work still required
+## 8. Actual framework implementation and acceptance
 
-1. Review the proposed option/default, explicit completion accessor and known-context scope.
-2. Add desired-behavior regressions to the real M1 startup path before wiring the observer. Cover timely success/failure, expiry, never-settling drain, late success/rejection, close failure and foreign context/metadata replacement.
-3. Verify invalid budgets reject before reservation/provider acquisition; preserve primary error identity, safe diagnostics, exactly-once disposal and stable delivered rejection/completion objects.
-4. Verify a timed-out startup never binds later, never resolves an app, never force-closes an undrained resource and never enables premature retry. Characterize post-bind stop failure before changing that cleanup branch.
-5. Assert late failures are handled even when callers ignore the completion accessor. Test retention and recovery in isolated processes rather than resetting ownership globals.
-6. Add a real restricted-PostgreSQL lifecycle case for pending transactional work before declaring SQL/resource ordering qualified. Retain RLS, deferred observer, savepoint and drain-before-close assertions.
-7. Verify source and packed consumer ownership/diagnostics through the intended public M1 entrypoint, then run normal required gates and exact-head CI when applying the changes to the PR.
+`src/bootstrap/m1/startupCleanup.ts` observes one cleanup sequence. Both timeout and timely cleanup-failure aggregates receive the completion handle. The same sequence continues after expiry; its terminal handlers consume late outcomes and never reject the completion promise. Safe diagnostics and delivered errors are not rewritten by late settlement.
 
-F1/F2 have separate minimal runtime fixes and regression tests in this PR. Do not label C1 implemented or resolved by those fixes, this design experiment, or green CI on the old head.
+Desired-behavior tests failed on unchanged `613d817`, then passed with the runtime implementation:
+
+- `m1StartupCleanup.test.ts`: 21 process-isolated actual-startup cases covering validation, timely outcomes, default/separate budgets, pending stop/drain/flush/close, never-settling cleanup, late failures, foreign context/metadata, ignored notifications and unknown acquisition.
+- `m1StartupCleanupLocal.test.ts`: in-process public-contract and expiry assertions, including getter safety, stable frozen outcomes, ownership retention and corrected retry.
+- `m1StartupCleanupSql.integration.test.ts`: two real restricted-PostgreSQL cases. Held ORM work survives expiry, preserves RLS and savepoint rollback, commits, runs its deferred observer, then drains/flushes/closes. A native invalid-close-timeout rejection retains committed data and blocks retry. This is deterministic fault injection, not a spontaneous network-failure claim. Every UUID-owned table is dropped and checked absent.
+- `m1PackedContext.test.ts`: all original installed-context assertions plus five actual public-entrypoint cases: timely failure, late success, ignored late failure, metadata conflict and never-settling cleanup.
+- `m1StartupCleanup.contract.ts`: option and readonly-outcome typing, also included in the existing ten-profile/three-compiler generated-app gate outside repository source aliases. No extra Cartesian starter profiles were added.
+
+The focused M1/shared/database inventory passed 211 cases, zero failures, 718 assertions across 35 files, with all nine M1 source modules at 100% function/line coverage. All five packed cases passed. Normal full gates and new exact-head CI remain required for the PR update; their actual results are recorded separately.
+
+An initial focused run omitted initialization of the fresh framework fixture database and returned HTTP 500 errors. Unchanged `613d817` reproduced those failures. Initializing only that owned fixture through the real CLI restored the unchanged inventory; failed logs remain retained.
+
+### Additional confirmed stop-ordering correction
+
+The requested post-bind characterization reproduced a separate unsafe ordering: an injected listener-stop rejection left a real admitted HTTP request pending, but the old cleanup path still closed provider resources. The regression failed with close count one. Cleanup now stops at that failure, leaves providers live, exposes a failed completion handle and blocks retry. This does not claim rollback of arbitrary extension effects or support for mixed application owners.
+
+F1/F2 remain separately verified. C1 is now implemented for the returned-context scope through the actual startup path; the historical model and green CI on the old head are not substituted for the new acceptance.
 
 ## 9. Release and adoption
 

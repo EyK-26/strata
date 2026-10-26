@@ -123,6 +123,17 @@ returned context and restore metadata before allowing a corrected retry. A faile
 drain/close or changed metadata ownership remains a reported failure, with retry
 blocked. This is not a force-close or hot-replacement facility.
 
+Failed-startup cleanup for a returned context has its own M1-only
+`startupCleanupTimeoutMs` wait budget (30 seconds by default), independent of the
+ordinary shutdown timeout. Expiry reports failure while the same cleanup sequence
+continues. `getM1StartupCleanupCompletion(error)` exposes a stable, never-rejecting
+disposition for timeout and timely cleanup-failure aggregates. Providers stay open
+when admission stop is unconfirmed; late cleanup restores metadata and releases
+only its own reservation when safe. See the
+[C1 contract and acceptance](M1-C1-BOUNDED-STARTUP-CLEANUP.md). This does not bound
+unreturned provider acquisition or cancel SQL, and a released reservation does not
+override another active context.
+
 **Unresolved lifecycle choice:** when provider creation rejects before returning a
 context, the current API supplies no structured cleanup disposition. The prototype
 retains its startup reservation even if a fixture observed resource cleanup. It
