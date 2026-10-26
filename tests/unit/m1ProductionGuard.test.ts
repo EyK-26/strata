@@ -10,11 +10,24 @@ const safe = {
   SESSION_SECRET: "owned-production-fixture-secret-32-characters",
   DATABASE_URL: "sqlite://:memory:",
   APP_DATABASE_URL: "sqlite://:memory:",
+  // CI exports development tokens. This production fixture owns its token/SCIM settings.
+  FEATURE_API_TOKENS: "true",
+  FEATURE_SCIM: "true",
+  ADMIN_API_TOKEN: "owned-production-admin-fixture",
+  MEMBER_API_TOKEN: "owned-production-member-fixture",
+  SCIM_BEARER_TOKEN: "owned-production-scim-fixture",
+  TOKEN_HASH_PEPPER: "owned-production-token-fixture-pepper",
+  API_TOKEN_DEFAULT_EXPIRY_DAYS: "30",
 };
 for (const [setting, value, message] of [
   ["SESSION_SECRET", "dev-session-secret-change-me-please-32ch", /placeholder/],
   ["AUTH_DEV_HEADERS", "true", /AUTH_DEV_HEADERS=false/],
   ["APP_URL", "http://localhost:3000", /public origin/],
+  ["ADMIN_API_TOKEN", "strata-admin-test-token", /published test defaults/],
+  ["MEMBER_API_TOKEN", "strata-member-test-token", /published test defaults/],
+  ["SCIM_BEARER_TOKEN", "strata-scim-test-token", /SCIM_BEARER_TOKEN/],
+  ["TOKEN_HASH_PEPPER", "", /TOKEN_HASH_PEPPER/],
+  ["API_TOKEN_DEFAULT_EXPIRY_DAYS", "", /API_TOKEN_DEFAULT_EXPIRY_DAYS/],
 ] as const) {
   test(`M1 rejects unsafe production ${setting} before providers run`, async () => {
     const previous = new Map(Object.keys(safe).map((key) => [key, process.env[key]]));
