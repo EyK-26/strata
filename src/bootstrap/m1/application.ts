@@ -254,6 +254,9 @@ export async function startGuardedApplication<Data = unknown>(options: M1Applica
       throw new M1ConfigurationError("context-ownership-changed", "context");
     phase = "publication";
     publication = routeRegistry.installSnapshot(candidate.metadata);
+    // Registry hooks can change the active context after the collection check.
+    if (resolveApplicationDependencies() !== context.dependencies)
+      throw new M1ConfigurationError("context-ownership-changed", "context");
     phase = "bind";
     server = createWebServer<Data>({
       ...options.transport,
@@ -287,7 +290,16 @@ export async function startGuardedApplication<Data = unknown>(options: M1Applica
               });
             return result;
           }
-          if (!installed.restore())
+          if (!installed.restore()) {
+            const metadataFailure = new Error(
+              "Route metadata ownership changed; previous snapshot was not restored.",
+            );
+            recordM1Diagnostic(metadataFailure, {
+              stage: "shutdown",
+              code: "metadata-ownership-changed",
+              field: "routes",
+              owner: "application",
+            });
             return {
               ...result,
               successful: false,
@@ -296,12 +308,11 @@ export async function startGuardedApplication<Data = unknown>(options: M1Applica
                 {
                   name: "m1:metadata",
                   phase: "close" as const,
-                  error: new Error(
-                    "Route metadata ownership changed; previous snapshot was not restored.",
-                  ),
+                  error: metadataFailure,
                 },
               ],
             };
+          }
           release();
           return result;
         });
