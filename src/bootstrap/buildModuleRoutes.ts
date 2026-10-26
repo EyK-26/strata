@@ -6,12 +6,13 @@ import { applyModuleRouteMiddleware } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
 import { prefixRouteMap } from "./prefixRouteMap";
 import { registerOpenApiRouteMap } from "./routeMetadata";
-import { routeRegistry } from "./routeRegistry";
+import { type RouteRegistry, routeRegistry } from "./routeRegistry";
 
 interface BuildModuleRoutesOptions {
   apiPrefix?: string;
   modules?: AppModule[];
   clearRegistry?: boolean;
+  registry?: RouteRegistry;
 }
 
 /** Prefix handlers and their own contracts together so normalized aliases share one winner. */
@@ -36,10 +37,15 @@ function buildModuleRoutes(
   dependencies: AppDependencies,
   options: BuildModuleRoutesOptions = {},
 ): AppRouteMap {
-  const { apiPrefix = "", modules = discoverModules(), clearRegistry = true } = options;
+  const {
+    apiPrefix = "",
+    modules = discoverModules(),
+    clearRegistry = true,
+    registry = routeRegistry,
+  } = options;
 
   if (clearRegistry) {
-    routeRegistry.clear();
+    registry.clear();
   }
 
   const kernel = createHttpKernel(dependencies);
@@ -75,7 +81,7 @@ function buildModuleRoutes(
   const prefixed = prefixApiModuleRoutes(apiPrefix, moduleRoutes, metadata);
 
   return applyModuleRouteMiddleware(
-    registerOpenApiRouteMap(prefixed.routes, ["global", "api"], prefixed.metadata),
+    registerOpenApiRouteMap(prefixed.routes, ["global", "api"], prefixed.metadata, registry),
     middleware,
   ) as AppRouteMap;
 }

@@ -1,0 +1,94 @@
+[
+  {
+    "name": "window-full-map-original",
+    "mode": "window",
+    "tamper": "none",
+    "control": true,
+    "entry": "A"
+  },
+  {
+    "name": "window-shared-chunk-tamper",
+    "mode": "window",
+    "tamper": "shared",
+    "control": true,
+    "entry": null
+  },
+  {
+    "name": "window-lazy-chunk-tamper",
+    "mode": "window",
+    "tamper": "lazy",
+    "control": true,
+    "entry": "A"
+  },
+  {
+    "name": "window-missing-shared-integrity",
+    "mode": "window",
+    "tamper": "shared",
+    "omitShared": true,
+    "control": false
+  },
+  { "name": "preload-before-map", "mode": "preload", "tamper": "lazy", "control": false },
+  {
+    "name": "preload-with-integrity-before-map",
+    "mode": "preload",
+    "tamper": "lazy",
+    "preloadIntegrity": true,
+    "control": true
+  },
+  {
+    "name": "cross-origin-module-worker",
+    "mode": "worker-public",
+    "tamper": "none",
+    "control": false
+  },
+  {
+    "name": "guarded-origin-worker-original",
+    "mode": "worker-app",
+    "tamper": "none",
+    "control": true
+  },
+  {
+    "name": "document-map-worker-entry-tamper",
+    "mode": "worker-app",
+    "tamper": "worker",
+    "control": false
+  },
+  {
+    "name": "document-map-worker-child-tamper",
+    "mode": "worker-app",
+    "tamper": "worker-child",
+    "control": false
+  },
+  { "name": "inline-css-assets-original", "mode": "css-inline", "tamper": "none", "control": true },
+  { "name": "inline-css-tamper", "mode": "css-inline", "tamper": "css", "control": true },
+  {
+    "name": "external-css-assets-original",
+    "mode": "css-external",
+    "tamper": "none",
+    "control": true
+  },
+  {
+    "name": "external-css-image-tamper",
+    "mode": "css-external",
+    "tamper": "image",
+    "control": false
+  },
+  {
+    "name": "external-css-font-tamper",
+    "mode": "css-external",
+    "tamper": "font",
+    "control": false
+  },
+  {
+    "name": "retained-A-B-cached-clients-rollback",
+    "mode": "cached",
+    "tamper": "none",
+    "control": true
+  },
+  {
+    "name": "old-client-missing-retired-chunk",
+    "mode": "missing-old",
+    "tamper": "none",
+    "control": true
+  }
+]

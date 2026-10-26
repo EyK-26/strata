@@ -14,8 +14,22 @@ import { appLogger, type Logger } from "../logging/logger";
 import type { Queue } from "../queue";
 
 const APPLICATION_CONTEXT_KEY = Symbol.for("@getstrata/applicationContext");
+const APPLICATION_STARTUP_KEY = Symbol.for("@getstrata/applicationStartup");
 
 let activeContext: AppContext | undefined;
+
+/** Prototype startup reservation shares the existing process-wide ownership boundary.
+ * A failed cleanup deliberately retains the reservation until process recovery. */
+function claimApplicationStartup(): () => void {
+  const shared = globalThis as Record<symbol, unknown>;
+  if (readStoredApplicationContext() || shared[APPLICATION_STARTUP_KEY])
+    throw new Error("An application context or startup attempt is already active.");
+  const owner = {};
+  shared[APPLICATION_STARTUP_KEY] = owner;
+  return () => {
+    if (shared[APPLICATION_STARTUP_KEY] === owner) delete shared[APPLICATION_STARTUP_KEY];
+  };
+}
 
 function readStoredApplicationContext(): AppContext | undefined {
   const globalContext = (globalThis as Record<symbol, AppContext | undefined>)[
@@ -84,6 +98,7 @@ function resolveApplicationDependencies() {
 }
 
 export {
+  claimApplicationStartup,
   clearActiveApplicationContext,
   resolveApplicationAuth,
   resolveApplicationCache,

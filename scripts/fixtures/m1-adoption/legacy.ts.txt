@@ -1,0 +1,10 @@
+import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
+import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
+import { createAppContext } from "@getstrata/bootstrap/context";
+import { createWebServer } from "@getstrata/bootstrap/web/server";
+import { api, providers, raw, verify } from "./common";
+const context = await createAppContext(providers);
+const modules = [{ name: "owned", routes: () => api, webRoutes: ({ kernel }: import("@getstrata/bootstrap/contracts").ModuleRouteContext) => ({ "/form": { GET: kernel.wrapWeb(raw.GET), POST: kernel.wrapWeb(raw.POST) } }) }];
+const routes = { ...buildModuleRoutes(context.dependencies, { modules }), ...buildWebModuleRoutes(context.dependencies, { modules, clearRegistry: false }) };
+const server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" }, routes });
+try { await verify(server, context); } finally { await server.stop(true); await context.dispose(); }

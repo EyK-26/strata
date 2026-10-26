@@ -138,6 +138,11 @@ class HttpKernel {
     return withMiddleware(...this.responseMiddleware("web"))(handler);
   }
 
+  /** Explicit document capability owns flash and configured CSRF independently of frontend labels. */
+  documentMiddleware(): Middleware[] {
+    return [createFlashMiddleware(), this.configuredCsrfMiddleware];
+  }
+
   group(name: MiddlewareGroupName): Middleware[] {
     const auth = this.dependencies.container.resolve<AuthManager>(CORE_AUTH_TOKEN);
 
@@ -145,7 +150,7 @@ class HttpKernel {
       case "authenticated":
         return [createRequireAuthMiddleware(auth)];
       case "web":
-        return isViewsEnabled() ? [createFlashMiddleware(), this.configuredCsrfMiddleware] : [];
+        return isViewsEnabled() ? this.documentMiddleware() : [];
       case "api": {
         const csrf = this.configuredCsrfMiddleware;
 

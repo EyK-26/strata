@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import { readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import type { AppContext } from "@getstrata/bootstrap/contracts";
+import type { CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
+import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
+import { defineModel } from "@getstrata/core/database/model";
+import { defineTable } from "@getstrata/core/database/table";
+import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { EtaViewEngine, textResponse, ViewRenderer } from "@getstrata/core/view";
+import { starterAuthDirectory } from "../bootstrap/authDirectory";
+import { closeDatabase, getSql } from "../bootstrap/database";
+import { starterProviders } from "../bootstrap/providers/index";
+import { User } from "../models/User";
+
+const table = defineTable<{ id: number; label: string }, "id">({ name: "m1_adoption_items", primaryKey: "id", columns: ["id", "label"] });
+class Item extends defineModel(table) { static override $timestamps = false; static override $fillable = ["id", "label"]; }
+export const stage = process.argv[2];
+assert.ok(stage === "baseline" || stage === "candidate" || stage === "rollback");
+const statePath = process.env.M1_ADOPTION_STATE;
+assert.ok(statePath);
+const stateFile: string = statePath;
+const root = dirname(stateFile);
+getSql();
+let state: { session: string; token?: string; csrf?: string; userId: number };
+if (stage === "baseline") {
+  await Item.create({ id: 1, label: "Příliš žluťoučký kůň" });
+  await Item.create({ id: 2, label: "second existing row" });
+  const user = await User.create({ name: "Owned qualification", email: "m1-owned@example.test", password: await Bun.password.hash("Owned-password-123456"), is_admin: false, is_active: true, auth_version: 0 });
+  const verified = await starterAuthDirectory.verifyCredentials("m1-owned@example.test", "Owned-password-123456");
+  assert.equal(verified?.id, user.get("id"));
+  state = { userId: Number(user.get("id")), session: "" };
+} else state = JSON.parse(await readFile(stateFile, "utf8"));
+await writeFile(join(root, "page.eta"), '<!doctype html><p><%= it.label %></p><form method="post"><input name="_token" value="<%= it.token %>"><button>Save</button></form>');
+export const documents = new ViewRenderer(new EtaViewEngine(root), false);
+export const providers = [...starterProviders, { name: "owned.database", register({ onCleanup }: import("@getstrata/core/contracts/di").ProviderContext) { onCleanup(closeDatabase); } }];
+export const raw = {
+  GET: async (request: Request) => documents.render("page", { nonce: currentRequestMeta().cspNonce, token: resolveCsrfTokenForRequest(request), label: (await Item.findOrFail(1)).get("label") }),
+  POST: () => textResponse(`authenticated:${currentAuthUser()?.id}`),
+};
+export const api = { "/identity": () => Response.json({ user: currentAuthUser()?.id ?? null }) };
+export async function verify(server: { url: URL }, context: Pick<AppContext, "container">) {
+  if (stage === "baseline") {
+    const auth = context.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+    const signed = await auth.signIn({ id: state.userId, name: "Owned qualification", email: "m1-owned@example.test", is_admin: false, is_active: true, auth_version: 0 });
+    state.session = signed.setCookie.split(";")[0] ?? "";
+  }
+  const identity = await fetch(new URL("/identity", server.url), { headers: { cookie: state.session } });
+  assert.deepEqual(await identity.json(), { user: state.userId });
+  const invalid = await fetch(new URL("/identity", server.url), { headers: { cookie: state.session + "corrupted" } });
+  assert.deepEqual(await invalid.json(), { user: null });
+  const form = await fetch(new URL("/form", server.url), { headers: { cookie: state.session } });
+  const html = await form.text();
+  assert.ok(html.includes("Příliš žluťoučký kůň"));
+  const token = /name="_token" value="([^"]+)"/.exec(html)?.[1];
+  assert.ok(token);
+  const csrf = form.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
+  if (stage === "baseline") { state.token = token; state.csrf = csrf; }
+  assert.ok(state.token && state.csrf);
+  const accepted = await fetch(new URL("/form", server.url), { method: "POST", headers: { cookie: `${state.session}; ${state.csrf}`, origin: server.url.origin }, body: new URLSearchParams({ _token: state.token }) });
+  assert.equal(accepted.status, 200); assert.equal(await accepted.text(), `authenticated:${state.userId}`);
+  const rejected = await fetch(new URL("/form", server.url), { method: "POST", headers: { cookie: `${state.session}; ${state.csrf}`, origin: "https://evil.example.test" }, body: new URLSearchParams({ _token: state.token }) });
+  assert.equal(rejected.status, 403);
+  if (stage === "candidate") await Item.create({ id: 3, label: "written by unpublished M1 candidate" });
+  const rows = (await Item.query().orderBy({ id: "asc" }).get()).map((row) => row.toObject());
+  assert.deepEqual(rows, [{ id: 1, label: "Příliš žluťoučký kůň" }, { id: 2, label: "second existing row" }, ...(stage === "baseline" ? [] : [{ id: 3, label: "written by unpublished M1 candidate" }])]);
+  await writeFile(stateFile, JSON.stringify(state), { mode: 0o600 });
+  await writeFile(join(root, `${stage}-receipt.json`), JSON.stringify({ stage, rows, realGeneratedDirectorySessionAccepted: true, corruptedSessionRejected: true, originalCsrfCookieAndTokenAccepted: true, crossOriginRejected: true }, null, 2));
+}

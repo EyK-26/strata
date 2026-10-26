@@ -1,19 +1,21 @@
 import type { OpenApiOperation, OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
-import { routeRegistry } from "./routeRegistry";
+import { type RouteRegistry, routeRegistry } from "./routeRegistry";
 
 function registerOpenApiRoute(
   method: string,
   path: string,
   middleware: string[],
   openApi?: OpenApiOperation,
+  registry: RouteRegistry = routeRegistry,
 ): void {
-  routeRegistry.register({ method, path, middleware, ...(openApi ? { openApi } : {}) });
+  registry.register({ method, path, middleware, ...(openApi ? { openApi } : {}) });
 }
 
 function registerOpenApiRouteMap(
   routes: Record<string, unknown>,
   middleware: string[],
   metadata: OpenApiRouteMap = {},
+  registry: RouteRegistry = routeRegistry,
 ): Record<string, unknown> {
   const registered: Record<string, unknown> = {};
 
@@ -28,13 +30,14 @@ function registerOpenApiRouteMap(
           path,
           middleware,
           metadata[path]?.[method.toUpperCase() as keyof OpenApiRouteMap[string]],
+          registry,
         );
       }
       continue;
     }
 
     registered[path] = handler;
-    registerOpenApiRoute("GET", path, middleware, metadata[path]?.GET);
+    registerOpenApiRoute("GET", path, middleware, metadata[path]?.GET, registry);
   }
 
   return registered;

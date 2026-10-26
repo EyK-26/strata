@@ -1,0 +1,10 @@
+@import "./base.css";
+@font-face {
+  font-family: M1Fixture;
+  src: url("__FONT_URL__") format("truetype");
+}
+body {
+  color: rgb(12, 34, 56);
+  font-family: M1Fixture, sans-serif;
+  background-image: url("__IMAGE_URL__");
+}

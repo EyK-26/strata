@@ -21,7 +21,7 @@ export interface WebServerOptions<T = unknown> {
   native?: NativeServerOptions<T>;
   lifecycle?: LifecycleCoordinator;
   routes?: AppRouteMap;
-  publicDir?: string;
+  publicDir?: string | false;
   /** Additional approved headers for synthesized route preflights; origins still use framework policy. */
   cors?: CorsOptions;
   // biome-ignore lint/suspicious/noConfusingVoidType: existing void callbacks remain compatible.
@@ -213,7 +213,7 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
               if (intercepted instanceof Response) return intercepted;
 
               const url = new URL(request.url);
-              if (url.pathname.startsWith("/assets/")) {
+              if (publicDir !== false && url.pathname.startsWith("/assets/")) {
                 try {
                   const filePath = assertUrlPathUnderRoot(publicDir, url.pathname);
                   const file = Bun.file(filePath);
@@ -237,43 +237,70 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
       );
     },
   };
-  const server = websocket
-    ? Bun.serve<T, string>({ ...configuration, websocket })
-    : Bun.serve<T, string>({
-        ...configuration,
-        async fetch(request, server) {
-          return (await configuration.fetch(request, server)) ?? (await missingHtmlResponse());
-        },
-      });
-  if (options.lifecycle) {
-    const lifecycle = options.lifecycle;
-    const name = `http:${crypto.randomUUID()}`;
-    let draining: Promise<void> | undefined;
-    lifecycle.register(
-      `${name}:stop`,
-      () => {
-        draining ??= server.stop(false);
-        void draining.catch(() => {});
-      },
-      "stop",
-    );
-    lifecycle.register(
-      `${name}:drain`,
-      async () => {
-        await draining;
-        // A disconnected socket does not imply its async business handler finished.
-        await Promise.allSettled([...active]);
-        if (abortedDuringShutdown > 0) {
-          throw new Error(
-            `${abortedDuringShutdown} admitted HTTP request(s) aborted during shutdown; response completion is unconfirmed.`,
-          );
-        }
-      },
-      "drain",
-    );
-    lifecycle.register(`${name}:force`, () => server.stop(true), "force");
+  // Prepare fallible lifecycle ownership before acquiring the native listener.
+  // Until this function returns, failed acquisition must leave no live socket.
+  let server: Server<T> | undefined;
+  const unregister: Array<() => void> = [];
+  try {
+    if (options.lifecycle) {
+      const lifecycle = options.lifecycle;
+      const name = `http:${crypto.randomUUID()}`;
+      let draining: Promise<void> | undefined;
+      unregister.push(
+        lifecycle.register(
+          `${name}:stop`,
+          () => {
+            draining ??= server?.stop(false);
+            void draining?.catch(() => {});
+          },
+          "stop",
+        ),
+      );
+      unregister.push(
+        lifecycle.register(
+          `${name}:drain`,
+          async () => {
+            await draining;
+            // A disconnected socket does not imply its async business handler finished.
+            await Promise.allSettled([...active]);
+            if (abortedDuringShutdown > 0) {
+              throw new Error(
+                `${abortedDuringShutdown} admitted HTTP request(s) aborted during shutdown; response completion is unconfirmed.`,
+              );
+            }
+          },
+          "drain",
+        ),
+      );
+      unregister.push(lifecycle.register(`${name}:force`, () => server?.stop(true), "force"));
+    }
+    if (options.lifecycle?.isShuttingDown) throw new Error("Cannot start HTTP during shutdown.");
+    server = websocket
+      ? Bun.serve<T, string>({ ...configuration, websocket })
+      : Bun.serve<T, string>({
+          ...configuration,
+          async fetch(request, server) {
+            return (await configuration.fetch(request, server)) ?? (await missingHtmlResponse());
+          },
+        });
+    return server;
+  } catch (error) {
+    const failures: unknown[] = [];
+    for (const remove of unregister.reverse()) {
+      try {
+        remove();
+      } catch (failure) {
+        failures.push(failure);
+      }
+    }
+    if (failures.length)
+      throw new AggregateError(
+        [error, ...failures],
+        "HTTP acquisition and lifecycle cleanup failed.",
+        { cause: error },
+      );
+    throw error;
   }
-  return server;
 }
 
 export { convertAppRoutesToBunRoutes };

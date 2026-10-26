@@ -32,7 +32,7 @@
     "test:host": "scripts/with-host-env.sh sh -c 'bun run build:framework && bun run build:bootstrap && STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed && SKIP_FIXTURE_TEST_BOOTSTRAP=1 QUEUE_DRIVER=sync bun run test:coverage'",
     "fixture:fresh": "STRATA_SCHEMA=fixture bun run cli migrate:fresh --seed",
     "prepare": "lefthook install || true",
-    "unit": "bun test tests/unit",
+    "unit": "bun test --isolate tests/unit",
     "integration": "bun test ./tests/integration/redisCache.integration.test.ts ./tests/integration/queue.integration.test.ts",
     "test:all": "QUEUE_DRIVER=sync bun run unit && QUEUE_DRIVER=sync bun run integration",
     "test:coverage": "bun scripts/assert-core-coverage.ts",
