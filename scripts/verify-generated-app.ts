@@ -298,6 +298,10 @@ export async function commitContract(): Promise<void> {
       join(appDir, "src/default-subpath-exports.contract.ts"),
       await readFile(join(ROOT, "tests/types/defaultSubpathExports.contract.ts"), "utf8"),
     );
+    await writeFile(
+      join(appDir, "src/m1-startup-cleanup.contract.ts"),
+      await readFile(join(ROOT, "tests/types/m1StartupCleanup.contract.ts"), "utf8"),
+    );
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");

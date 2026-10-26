@@ -38,6 +38,7 @@ import {
   type PublicArtifactPolicy,
   prepareDocumentArtifacts,
 } from "./publicArtifacts";
+import { rejectAfterStartupCleanup, resolveStartupCleanupTimeoutMs } from "./startupCleanup";
 import { dataArray, dataRecord, M1ConfigurationError } from "./validation";
 
 export type GuardedModule<Data = unknown> = Omit<AppModule, "routes" | "webRoutes"> & {
@@ -46,6 +47,8 @@ export type GuardedModule<Data = unknown> = Omit<AppModule, "routes" | "webRoute
 };
 export type M1ApplicationOptions<Data = unknown> = {
   modules: readonly GuardedModule<Data>[];
+  /** Caller wait budget for failed-startup cleanup after context acquisition. */
+  startupCleanupTimeoutMs?: number;
   providers?: readonly ServiceProvider[];
   apiPrefix?: string;
   documents?: DocumentRenderer;
@@ -218,6 +221,7 @@ function collectHttpCandidate<Data>(
 
 export async function startGuardedApplication<Data = unknown>(options: M1ApplicationOptions<Data>) {
   assertProductionSecrets();
+  const cleanupTimeoutMs = resolveStartupCleanupTimeoutMs(options.startupCleanupTimeoutMs);
   const modules = snapshotModules(options.modules);
   const prefix = options.apiPrefix ?? "";
   if (prefix && (routeShape(prefix) !== prefix || prefix.endsWith("/") || /[:*]/.test(prefix)))
@@ -328,35 +332,18 @@ export async function startGuardedApplication<Data = unknown>(options: M1Applica
       lifecycle: { code: "lifecycle-registration-failed", field: "lifecycle" },
     };
     recordM1Diagnostic(error, { stage: phase, ...labels[phase], owner: "application" });
-    const failures: unknown[] = [];
-    try {
-      await server?.stop(true);
-    } catch (failure) {
-      failures.push(failure);
-    }
-    try {
-      await context?.dispose();
-    } catch (failure) {
-      failures.push(failure);
-    }
     // Without a returned context, provider acquisition/cleanup disposition is not
     // observable through today's API. Keep the reservation rather than invent retry safety.
-    if (context && !failures.length) {
-      if (publication && !publication.restore())
-        failures.push(new Error("Route metadata ownership changed during startup cleanup."));
-      if (!failures.length) release();
-    }
-    if (failures.length) {
-      const failure = new AggregateError([error, ...failures], "M1 startup and cleanup failed.", {
-        cause: error,
-      });
-      recordM1Diagnostic(failure, {
-        stage: "cleanup",
-        code: "startup-cleanup-failed",
-        field: "application",
-      });
-      throw failure;
-    }
-    throw error;
+    if (!context) throw error;
+    const ownedContext = context;
+    const ownedServer = server;
+    return rejectAfterStartupCleanup({
+      primary: error,
+      timeoutMs: cleanupTimeoutMs,
+      stop: ownedServer ? () => ownedServer.stop(true) : undefined,
+      dispose: () => ownedContext.dispose(),
+      restore: publication?.restore,
+      release,
+    });
   }
 }
