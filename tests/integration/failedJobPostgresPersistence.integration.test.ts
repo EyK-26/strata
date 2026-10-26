@@ -22,7 +22,7 @@ test("native PostgreSQL retains JSONB object storage, restricted-role replay and
     adminUrl.pathname = `/${database}`;
     owner = new SQL({ url: adminUrl.href, max: 1 });
     await owner.unsafe(
-      "CREATE TABLE failed_job(id SERIAL PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload JSONB NOT NULL,exception TEXT NOT NULL,failed_at TIMESTAMPTZ NOT NULL)",
+      "CREATE TABLE failed_job(id SERIAL PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload JSONB NOT NULL DEFAULT '{}'::jsonb,exception TEXT NOT NULL,failed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
     );
     const runtimeUrl = new URL(restrictedUrl);
     await grantPostgresAppRolePrivileges(owner, {
@@ -78,6 +78,15 @@ test("native PostgreSQL retains JSONB object storage, restricted-role replay and
       });
       expect((await service.listRecent()).some((item) => item.id === record.id)).toBe(false);
       expect((await repository.findByIdOrThrow(legacy.id)).payload).toEqual(payload);
+      // Partial repository writes must leave omitted values to database defaults.
+      const defaulted = await repository.create({ job_name: "defaulted", exception: "failure" });
+      expect(defaulted.payload).toEqual({});
+      expect(defaulted.failed_at).toBeInstanceOf(Date);
+      const [storedDefault] = await ownerConnection.unsafe<{ kind: string; payload: unknown }[]>(
+        "SELECT jsonb_typeof(payload) AS kind,payload FROM failed_job WHERE id=$1",
+        [defaulted.id],
+      );
+      expect(storedDefault).toEqual({ kind: "object", payload: {} });
     });
   } finally {
     await runtime?.close();
