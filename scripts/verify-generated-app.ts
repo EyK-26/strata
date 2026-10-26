@@ -302,6 +302,10 @@ export async function commitContract(): Promise<void> {
       join(appDir, "src/m1-startup-cleanup.contract.ts"),
       await readFile(join(ROOT, "tests/types/m1StartupCleanup.contract.ts"), "utf8"),
     );
+    await writeFile(
+      join(appDir, "src/m1-exports.contract.ts"),
+      await readFile(join(ROOT, "tests/types/m1Exports.contract.ts"), "utf8"),
+    );
     let migrationScaffolded = false;
     for (const version of TYPESCRIPT_VERSIONS) {
       const manifestPath = join(appDir, "package.json");

@@ -40,9 +40,14 @@ test("installed M1 reuses the public context owner and restores it after native 
       join(directory, "startup-cleanup.ts"),
       await readFile(join(import.meta.dir, "../fixtures/m1PackedStartupCleanup.ts")),
     );
+    await writeFile(
+      join(directory, "exports.ts"),
+      await readFile(join(import.meta.dir, "../fixtures/m1PackedExports.ts")),
+    );
     for (const args of [
       ["install", "--ignore-scripts", "--no-save"],
       ["--no-env-file", "run", "consumer.ts"],
+      ["--no-env-file", "run", "exports.ts"],
       ...[
         "timely-failure",
         "late-success",
