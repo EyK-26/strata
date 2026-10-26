@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 2.2.60
+
+- Align the core requirement with the 2.2.60 PostgreSQL failed-job persistence correction. Bootstrap, HTTP/auth, lifecycle and public/protected contracts are unchanged.
+
 ## 2.2.59
 
 - Align the core dependency with the compatible 2.2.59 schema, repository typing, mail initialization and migration-status corrections. Bootstrap runtime, HTTP/auth, lifecycle and public/protected extension contracts are unchanged.
