@@ -1,3 +1,8 @@
+import {
+  type ReleaseChannel,
+  resolveReleasePolicy,
+  resolveReleaseTagPolicy,
+} from "./release-policy.ts";
 import { parseStableVersion } from "./stable-version.ts";
 
 interface PackageVersion {
@@ -18,7 +23,10 @@ function parseReleaseTag(tag: string): string | null {
   return parseStableVersion(version) === null ? null : version;
 }
 
-function resolveLockstepVersion(packages: readonly PackageVersion[]): ReleaseReadiness {
+function resolveLockstepVersion(
+  packages: readonly PackageVersion[],
+  channel: ReleaseChannel = "stable",
+): ReleaseReadiness {
   if (packages.length === 0) {
     return { version: null, errors: ["No packages were checked."] };
   }
@@ -31,13 +39,21 @@ function resolveLockstepVersion(packages: readonly PackageVersion[]): ReleaseRea
     };
   }
 
-  const invalid = packages.filter((entry) => parseStableVersion(entry.version) === null);
+  const invalid = packages.filter((entry) => {
+    if (channel === "stable") return parseStableVersion(entry.version) === null;
+    try {
+      resolveReleasePolicy(entry.version, channel);
+      return false;
+    } catch {
+      return true;
+    }
+  });
   if (invalid.length > 0) {
     return {
       version: null,
       errors: invalid.map(
         (entry) =>
-          `${entry.name} version "${entry.version}" is not a canonical stable version with safe integer components.`,
+          `${entry.name} version "${entry.version}" is not a canonical ${channel === "stable" ? "stable" : "next"} version with safe integer components.`,
       ),
     };
   }
@@ -82,21 +98,43 @@ function checkReleaseReadiness(input: {
   packages: readonly PackageVersion[];
   tag?: string;
   publishedVersions?: readonly string[];
+  channel?: ReleaseChannel;
 }): ReleaseReadiness {
-  const lockstep = resolveLockstepVersion(input.packages);
+  const channel = input.channel ?? "stable";
+  const lockstep = resolveLockstepVersion(input.packages, channel);
   const errors = [...lockstep.errors, ...checkPackagePeerCompatibility(input.packages)];
   const version = lockstep.version;
 
   if (input.tag !== undefined) {
-    const tagged = parseReleaseTag(input.tag);
+    let tagged: string | null;
+    if (channel === "stable") tagged = parseReleaseTag(input.tag);
+    else {
+      try {
+        tagged = resolveReleaseTagPolicy(input.tag.trim(), channel).version;
+      } catch {
+        tagged = null;
+      }
+    }
 
     if (tagged === null) {
-      errors.push(`Tag "${input.tag}" is not a release tag of the form v1.2.3.`);
+      errors.push(
+        `Tag "${input.tag}" is not a release tag of the form ${channel === "stable" ? "v1.2.3" : "v1.2.3-alpha.0 for channel next"}.`,
+      );
     } else if (version !== null && tagged !== version) {
       errors.push(
         `Tag ${input.tag} does not match the package version ${version}. ` +
           `Bump every package to ${tagged}, or tag this commit v${version}.`,
       );
+    }
+  }
+
+  if (channel === "next" && version !== null) {
+    const names = new Set(input.packages.map((entry) => entry.name));
+    for (const entry of input.packages) {
+      for (const [name, range] of Object.entries(entry.peerDependencies ?? {})) {
+        if (names.has(name) && range !== version)
+          errors.push(`${entry.name} must pin candidate peer ${name} exactly to ${version}.`);
+      }
     }
   }
 

@@ -3,6 +3,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { RELEASE_PACKAGES } from "./release-packages.ts";
 import { checkPackagePeerCompatibility, type PackageVersion } from "./release-readiness";
 
 const ROOT = join(import.meta.dir, "..");
@@ -15,13 +16,9 @@ const EXPECTED: Record<string, string> = {
   "create-strata": "2.2.59",
 };
 
-const PACKAGE_DIRS: Record<string, string> = {
-  "@getstrata/core": "packages/strata-core/package.json",
-  "@getstrata/bootstrap": "packages/strata-bootstrap/package.json",
-  "@getstrata/cli": "packages/strata-cli/package.json",
-  "@getstrata/starter": "packages/strata-starter/package.json",
-  "create-strata": "packages/create-strata/package.json",
-};
+const PACKAGE_DIRS: Record<string, string> = Object.fromEntries(
+  RELEASE_PACKAGES.map(([name, directory]) => [name, `${directory}/package.json`]),
+);
 
 const mismatches: string[] = [];
 const packages: PackageVersion[] = [];
