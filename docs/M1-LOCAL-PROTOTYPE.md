@@ -1,13 +1,16 @@
 # M1 local implementation for design review
 
 Current follow-up: [26 October qualification](M1-QUALIFICATION-2026-10-26.md).
+The human accepted [contract decisions A1–A6](M1-CONTRACT-AND-ADOPTION-PROPOSAL.md),
+including the explicit export refinement. Hosted delivery, publication and
+application adoption remain separate approvals.
 The gate counts below describe the earlier tree; the follow-up retains all earlier
 assertions and records new fixes, browser/TLS and adoption evidence separately.
 
 This is an **unpublished review prototype**, based on release 2.2.59.
 It implements the selected explicitly public artifact origin and one guarded
-application listener. It does not approve the major-version contract, change the
-published release, or migrate existing applications. The earlier design documents
+application listener. The accepted bounded contract does not change the
+published release or migrate existing applications. The earlier design documents
 are retained byte-for-byte as historical inputs; their “no implementation” status
 describes those earlier checkpoints.
 
@@ -134,11 +137,11 @@ only its own reservation when safe. See the
 unreturned provider acquisition or cancel SQL, and a released reservation does not
 override another active context.
 
-**Unresolved lifecycle choice:** when provider creation rejects before returning a
+**Accepted lifecycle limit:** when provider creation rejects before returning a
 context, the current API supplies no structured cleanup disposition. The prototype
 retains its startup reservation even if a fixture observed resource cleanup. It
-requires process recovery rather than claiming a retry certificate. Approval must
-resolve whether a narrow provider cleanup-result contract is needed. Module import,
+requires process recovery rather than claiming a retry certificate. A3 retains
+that supervised boundary; a new provider cleanup-result API needs a separate case. Module import,
 worker and arbitrary callback side effects are not transactional.
 
 Native `BuildArtifact` values are file-backed. Collection attests the bytes read
