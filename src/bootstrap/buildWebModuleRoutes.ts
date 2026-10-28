@@ -4,22 +4,28 @@ import { createHttpKernel } from "./httpKernel";
 import { applyModuleRouteMiddleware } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
 import { registerOpenApiRouteMap } from "./routeMetadata";
-import { routeRegistry } from "./routeRegistry";
+import { type RouteRegistry, routeRegistry } from "./routeRegistry";
 
 interface BuildWebModuleRoutesOptions {
   modules?: AppModule[];
   clearRegistry?: boolean;
   seedRoutes?: Record<string, unknown>;
+  registry?: RouteRegistry;
 }
 
 function buildWebModuleRoutes(
   dependencies: AppDependencies,
   options: BuildWebModuleRoutesOptions = {},
 ): AppRouteMap {
-  const { modules = discoverModules(), clearRegistry = true, seedRoutes = {} } = options;
+  const {
+    modules = discoverModules(),
+    clearRegistry = true,
+    seedRoutes = {},
+    registry = routeRegistry,
+  } = options;
 
   if (clearRegistry) {
-    routeRegistry.clear();
+    registry.clear();
   }
 
   const kernel = createHttpKernel(dependencies);
@@ -43,7 +49,7 @@ function buildWebModuleRoutes(
   }
 
   return applyModuleRouteMiddleware(
-    registerOpenApiRouteMap(moduleRoutes, ["global", "web"]),
+    registerOpenApiRouteMap(moduleRoutes, ["global", "web"], {}, registry),
     middleware,
   ) as AppRouteMap;
 }

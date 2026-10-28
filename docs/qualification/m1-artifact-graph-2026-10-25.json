@@ -1,0 +1,1432 @@
+{
+  "format": 1,
+  "status": "BOUNDED_FEASIBILITY_WITH_OPEN_BROWSER_GATES",
+  "recordedOn": "2026-10-25",
+  "scope": "M1 design-only native SDK/browser graph controls. No runtime/public API, provider/CDN/TLS, all-browser, whole-arbitrary-graph or major migration acceptance.",
+  "frameworkBaseline": {
+    "version": "2.2.59",
+    "commit": "a87baf07126b14b6d1ce3898c6b59e9eb512ce35",
+    "releaseQualificationRerun": false
+  },
+  "runtime": {
+    "bun": "1.4.4",
+    "revision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
+    "typescript": "7.0.2",
+    "bunTypes": "1.4.4"
+  },
+  "sourceInputs": {
+    "source": "sha256-iLenGZ6u9DRM18rCM5Gt3/f61SE65jP8LNjNu1K5zgg=",
+    "cases": "sha256-71lsA4FI201RlHBcgraSoCnriIscfyr7eesLq5cokuM=",
+    "fixtures": {
+      "assets.js": "sha256-RXvISpiyUk1PVxTI+zRcVjTqcbJ9RKrlDuxxYqYVghI=",
+      "base.css": "sha256-Iimpsnp8KyI0YTKbwfTLz7IpWyh5DyC2O5SNGHLVsDs=",
+      "entry.js": "sha256-UcxhoZ/NKABz870gCW2jTq6667bSjLa2XKEWQdyJwlE=",
+      "external-style.css": "sha256-6xmELGWU093w5DpuOu0HBkQkm7SLBMZB3ArmsY4QbJY=",
+      "lazy.js": "sha256-rxoqDN/JbIZQs4y68AzbpGI00/kkYL/VGY2zUSX0aMY=",
+      "mark.svg": "sha256-z9A+GVRHQ1SJ876IP2xF/9UwTcYE9fjs8WVL67Ui22w=",
+      "second.js": "sha256-ezaeaVau+2F1YM6Dx/OOs7hDfFpzR26CuJtJLIDx2jM=",
+      "shared.js": "sha256-C++B99teJJHARmDQzvDf9/vUvyTqSX1ALm0cXtUEP5Q=",
+      "style.css": "sha256-wKH5W8mIHuHe1hqok6qfQfSROl1Kwk8lQyAE2b2G52Q=",
+      "worker-child.js": "sha256-RIbPwaTCnz6+gU1G2mJanjdSlP8CkJeFepoiwEmf/ok=",
+      "worker.js": "sha256-vSFZPn32K0qsWuH/qHawWRxBqBDY7J3O/19QNL7Yses="
+    }
+  },
+  "retainedBrowser": {
+    "sourceUnchanged": true,
+    "executed": 10,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "chromium": "156.0.8078.4",
+    "caseNames": [
+      "native-plain",
+      "native-source-integrity",
+      "valid",
+      "script-tamper",
+      "style-tamper",
+      "no-cors",
+      "split-module",
+      "map-original",
+      "map-tamper",
+      "map-missing-chunk-integrity"
+    ]
+  },
+  "retainedCompiler": {
+    "sourceAndFixturesUnchanged": true,
+    "executed": 43,
+    "passed": 43,
+    "failed": 0,
+    "skipped": 0,
+    "classifications": {
+      "proposed-positive": 13,
+      "proposed-rejection": 23,
+      "known-type-limit": 6,
+      "current-compatibility": 1
+    },
+    "unrelatedDiagnostics": 0
+  },
+  "browsers": {
+    "chromium": {
+      "version": "156.0.8078.4",
+      "executed": 17,
+      "controls": 10,
+      "observationsOnly": 7,
+      "failed": 0,
+      "skipped": 0,
+      "positiveNegativeRestoredSequenceVerified": true,
+      "nativeOutputsUnchanged": true,
+      "cases": [
+        {
+          "name": "window-full-map-original",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": "A",
+            "shared": "shared-original",
+            "second": "shared-original",
+            "lazy": "lazy-original-A",
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "not-requested",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 1
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 5,
+            "public": 5,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "window-shared-chunk-tamper",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "not-requested",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 0
+          },
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/releases/A/chunk-hb1ke4cg.js' with computed SHA-256 integrity 'D4AACjIG49vRKcBQBKeuUaY8ZbTHmXe45UgoGmKn66w='. The resource has been blocked."
+          ],
+          "failure": null,
+          "requests": {
+            "count": 4,
+            "public": 4,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "window-lazy-chunk-tamper",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": "A",
+            "shared": "shared-original",
+            "second": "shared-original",
+            "lazy": "rejected",
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "not-requested",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 1
+          },
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/releases/A/chunk-hhzp0fkk.js' with computed SHA-256 integrity 'pWiq9O7A1A+SHGnO94Ak7dUMfQ0O8x2ZpSjhXmepi8g='. The resource has been blocked."
+          ],
+          "failure": null,
+          "requests": {
+            "count": 5,
+            "public": 5,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "window-missing-shared-integrity",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "entry": "A",
+            "shared": "shared-tampered",
+            "second": "shared-tampered",
+            "lazy": null,
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "not-requested",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 1
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 4,
+            "public": 4,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "preload-before-map",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "preload": "loaded",
+            "state": {
+              "entry": "A",
+              "shared": "shared-original",
+              "second": null,
+              "lazy": "lazy-tampered-A",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            }
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 4,
+            "public": 4,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "preload-with-integrity-before-map",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "preload": "rejected",
+            "state": {
+              "entry": "A",
+              "shared": "shared-original",
+              "second": null,
+              "lazy": "rejected",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            }
+          },
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/releases/A/chunk-hhzp0fkk.js' with computed SHA-256 integrity 'pWiq9O7A1A+SHGnO94Ak7dUMfQ0O8x2ZpSjhXmepi8g='. The resource has been blocked.",
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/releases/A/chunk-hhzp0fkk.js' with computed SHA-256 integrity 'pWiq9O7A1A+SHGnO94Ak7dUMfQ0O8x2ZpSjhXmepi8g='. The resource has been blocked."
+          ],
+          "failure": null,
+          "requests": {
+            "count": 4,
+            "public": 4,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "cross-origin-module-worker",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "value": "constructor-rejected",
+            "error": "SecurityError: Failed to construct 'Worker': Script at '<public-origin>/releases/A/worker-7x1r27ed.js' cannot be accessed from origin '<guarded-app-origin>'."
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 0,
+            "public": 0,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "guarded-origin-worker-original",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "value": "worker-child-original"
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 2,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "document-map-worker-entry-tamper",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "value": "worker-entry-tampered"
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 2,
+            "public": 1,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "document-map-worker-child-tamper",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "value": "worker-child-tampered"
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 2,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "inline-css-assets-original",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(12, 34, 56)",
+            "background": "url(\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3IiBoZWlnaHQ9IjUiPjx0aXRsZT5Pd25lZCBncmFwaCBmaXh0dXJlPC90aXRsZT48cGF0aCBmaWxsPSJyZWQiIGQ9Ik0wIDBoN3Y1SDB6Ii8+PC9zdmc+Cg==\")",
+            "font": "loaded",
+            "nestedStyle": "nested-original",
+            "image": null,
+            "sharedEvaluations": 0
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 1,
+            "public": 1,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "inline-css-tamper",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 0
+          },
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/releases/A/style-9p5f5da8.css' with computed SHA-256 integrity 'ONeVEQg4U3suKA+yuo1BLzfXT7+qJPA5Vk+DkJ6f+9Q='. The resource has been blocked."
+          ],
+          "failure": null,
+          "requests": {
+            "count": 1,
+            "public": 1,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "external-css-assets-original",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(12, 34, 56)",
+            "background": "url(\"<public-origin>/releases/A/mark-3123fbhp.svg\")",
+            "font": "loaded",
+            "nestedStyle": "nested-original",
+            "image": {
+              "width": 7,
+              "height": 5
+            },
+            "sharedEvaluations": 0
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 3,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "external-css-image-tamper",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(12, 34, 56)",
+            "background": "url(\"<public-origin>/releases/A/mark-3123fbhp.svg\")",
+            "font": "loaded",
+            "nestedStyle": "nested-original",
+            "image": {
+              "width": 9,
+              "height": 6
+            },
+            "sharedEvaluations": 0
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 3,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "external-css-font-tamper",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(12, 34, 56)",
+            "background": "url(\"<public-origin>/releases/A/mark-3123fbhp.svg\")",
+            "font": "loaded",
+            "nestedStyle": "nested-original",
+            "image": {
+              "width": 7,
+              "height": 5
+            },
+            "sharedEvaluations": 0
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 3,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "retained-A-B-cached-clients-rollback",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "oldClient": {
+              "entry": "A",
+              "shared": "shared-original",
+              "second": "shared-original",
+              "lazy": "lazy-original-A",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            },
+            "newClient": {
+              "entry": "B",
+              "shared": "shared-original",
+              "second": "shared-original",
+              "lazy": "lazy-original-B",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            },
+            "rolledBackEntry": "A",
+            "retainedBuilds": ["A", "B"]
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 10,
+            "public": 10,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "old-client-missing-retired-chunk",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "oldClient": {
+              "entry": "A",
+              "shared": "shared-original",
+              "second": "shared-original",
+              "lazy": "rejected",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            },
+            "newClient": {
+              "entry": "B",
+              "shared": "shared-original",
+              "second": "shared-original",
+              "lazy": "lazy-original-B",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            },
+            "rolledBackEntry": "A",
+            "retainedBuilds": ["A", "B"]
+          },
+          "errors": [
+            "Failed to load resource: the server responded with a status of 404 (Not Found)"
+          ],
+          "failure": null,
+          "requests": {
+            "count": 10,
+            "public": 10,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        }
+      ]
+    },
+    "webkit": {
+      "version": "27.2",
+      "playwrightBuild": 2370,
+      "executed": 17,
+      "passed": 16,
+      "failedControls": [
+        {
+          "name": "preload-with-integrity-before-map",
+          "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'loaded'\n- 'rejected'\n"
+        }
+      ],
+      "notExecuted": 0,
+      "nativeOutputsUnchanged": true,
+      "classification": "Preload event notification mismatch; altered module execution blocked. Not an observed SRI execution bypass. Not shipping Safari qualification.",
+      "cases": [
+        {
+          "name": "window-full-map-original",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": "A",
+            "shared": "shared-original",
+            "second": "shared-original",
+            "lazy": "lazy-original-A",
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "not-requested",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 1
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 5,
+            "public": 5,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "window-shared-chunk-tamper",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "not-requested",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 0
+          },
+          "errors": [
+            "Cannot load script <public-origin>/releases/A/chunk-8v848b30.js. Failed integrity metadata check. Content length: 203, Expected content length: 203, Expected metadata: sha256-u6+sft3vP7+Ij9HBV3wQhlzwX8uODWU8G2CO4T+0cNA=",
+            "Cannot load script due to integrity mismatch"
+          ],
+          "failure": null,
+          "requests": {
+            "count": 4,
+            "public": 4,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "window-lazy-chunk-tamper",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": "A",
+            "shared": "shared-original",
+            "second": "shared-original",
+            "lazy": "rejected",
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "not-requested",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 1
+          },
+          "errors": [
+            "Cannot load script <public-origin>/releases/A/chunk-5h93f0f9.js. Failed integrity metadata check. Content length: 209, Expected content length: 209, Expected metadata: sha256-UqX/o6twIO3Ferz9lCcej76BWAP+d1QbAfI8oPCPsPY="
+          ],
+          "failure": null,
+          "requests": {
+            "count": 5,
+            "public": 5,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "window-missing-shared-integrity",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "entry": "A",
+            "shared": "shared-tampered",
+            "second": "shared-tampered",
+            "lazy": null,
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "not-requested",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 1
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 4,
+            "public": 4,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "preload-before-map",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "preload": "loaded",
+            "state": {
+              "entry": "A",
+              "shared": "shared-original",
+              "second": null,
+              "lazy": "rejected",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            }
+          },
+          "errors": [
+            "Cannot load script <public-origin>/releases/A/chunk-5h93f0f9.js. Failed integrity metadata check. Content length: 209, Expected content length: 209, Expected metadata: sha256-UqX/o6twIO3Ferz9lCcej76BWAP+d1QbAfI8oPCPsPY="
+          ],
+          "failure": null,
+          "requests": {
+            "count": 4,
+            "public": 4,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "preload-with-integrity-before-map",
+          "classification": "control",
+          "status": "failed",
+          "detail": {
+            "preload": "loaded",
+            "state": {
+              "entry": "A",
+              "shared": "shared-original",
+              "second": null,
+              "lazy": "rejected",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            }
+          },
+          "errors": [
+            "Cannot load script <public-origin>/releases/A/chunk-5h93f0f9.js. Failed integrity metadata check. Content length: 209, Expected content length: 209, Expected metadata: sha256-UqX/o6twIO3Ferz9lCcej76BWAP+d1QbAfI8oPCPsPY="
+          ],
+          "failure": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'loaded'\n- 'rejected'\n",
+          "requests": {
+            "count": 4,
+            "public": 4,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "cross-origin-module-worker",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "value": "rejected"
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 0,
+            "public": 0,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "guarded-origin-worker-original",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "value": "worker-child-original"
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 2,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "document-map-worker-entry-tamper",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "value": "worker-entry-tampered"
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 2,
+            "public": 1,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "document-map-worker-child-tamper",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "value": "worker-child-tampered"
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 2,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "inline-css-assets-original",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(12, 34, 56)",
+            "background": "url(\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3IiBoZWlnaHQ9IjUiPjx0aXRsZT5Pd25lZCBncmFwaCBmaXh0dXJlPC90aXRsZT48cGF0aCBmaWxsPSJyZWQiIGQ9Ik0wIDBoN3Y1SDB6Ii8+PC9zdmc+Cg==\")",
+            "font": "loaded",
+            "nestedStyle": "nested-original",
+            "image": null,
+            "sharedEvaluations": 0
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 1,
+            "public": 1,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "inline-css-tamper",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(0, 0, 0)",
+            "background": "none",
+            "font": "",
+            "nestedStyle": "",
+            "image": null,
+            "sharedEvaluations": 0
+          },
+          "errors": [
+            "Cannot load stylesheet <public-origin>/releases/A/style-c1kh444v.css. Failed integrity metadata check. Content length: 107746, Expected content length: 107746, Expected metadata: sha256-schb7gb1ibt/NicKKtyZUY7AeohMuOGj8k8zQ0oHYEo="
+          ],
+          "failure": null,
+          "requests": {
+            "count": 1,
+            "public": 1,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "external-css-assets-original",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(12, 34, 56)",
+            "background": "url(\"<public-origin>/releases/A/mark-3123fbhp.svg\")",
+            "font": "loaded",
+            "nestedStyle": "nested-original",
+            "image": {
+              "width": 7,
+              "height": 5
+            },
+            "sharedEvaluations": 0
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 3,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "external-css-image-tamper",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(12, 34, 56)",
+            "background": "url(\"<public-origin>/releases/A/mark-3123fbhp.svg\")",
+            "font": "loaded",
+            "nestedStyle": "nested-original",
+            "image": {
+              "width": 9,
+              "height": 6
+            },
+            "sharedEvaluations": 0
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 3,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "external-css-font-tamper",
+          "classification": "observation",
+          "status": "passed",
+          "detail": {
+            "entry": null,
+            "shared": null,
+            "second": null,
+            "lazy": null,
+            "color": "rgb(12, 34, 56)",
+            "background": "url(\"<public-origin>/releases/A/mark-3123fbhp.svg\")",
+            "font": "loaded",
+            "nestedStyle": "nested-original",
+            "image": {
+              "width": 7,
+              "height": 5
+            },
+            "sharedEvaluations": 0
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 3,
+            "public": 3,
+            "tamperedWire": 1,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "retained-A-B-cached-clients-rollback",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "oldClient": {
+              "entry": "A",
+              "shared": "shared-original",
+              "second": "shared-original",
+              "lazy": "lazy-original-A",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            },
+            "newClient": {
+              "entry": "B",
+              "shared": "shared-original",
+              "second": "shared-original",
+              "lazy": "lazy-original-B",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            },
+            "rolledBackEntry": "A",
+            "retainedBuilds": ["A", "B"]
+          },
+          "errors": [],
+          "failure": null,
+          "requests": {
+            "count": 14,
+            "public": 14,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        },
+        {
+          "name": "old-client-missing-retired-chunk",
+          "classification": "control",
+          "status": "passed",
+          "detail": {
+            "oldClient": {
+              "entry": "A",
+              "shared": "shared-original",
+              "second": "shared-original",
+              "lazy": "rejected",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            },
+            "newClient": {
+              "entry": "B",
+              "shared": "shared-original",
+              "second": "shared-original",
+              "lazy": "lazy-original-B",
+              "color": "rgb(0, 0, 0)",
+              "background": "none",
+              "font": "not-requested",
+              "nestedStyle": "",
+              "image": null,
+              "sharedEvaluations": 1
+            },
+            "rolledBackEntry": "A",
+            "retainedBuilds": ["A", "B"]
+          },
+          "errors": [
+            "Failed to load resource: the server responded with a status of 404 (Not Found)"
+          ],
+          "failure": null,
+          "requests": {
+            "count": 14,
+            "public": 14,
+            "tamperedWire": 0,
+            "publicCredentialPresence": false
+          }
+        }
+      ]
+    },
+    "firefox": {
+      "requestedVersion": "157",
+      "playwrightBuild": 1555,
+      "executed": 0,
+      "notExecuted": 17,
+      "status": "LAUNCH_FAILED_BEFORE_CASES",
+      "classification": "macOS sandbox-extension/profile error on original and canonical owned paths; no sandbox or host-policy changes; browser remains unqualified."
+    }
+  },
+  "negativeHarnessControl": {
+    "executed": 1,
+    "failed": 1,
+    "case": "window-full-map-original",
+    "wrongExpectation": "intentionally-wrong",
+    "actualEntry": "A",
+    "originalCaseFileUnchanged": true,
+    "restoredAllSeventeenPassed": true
+  },
+  "nativeOutputInventory": {
+    "actualArtifacts": [
+      {
+        "release": "A",
+        "path": "/releases/A/entry-gn71pjy9.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-DuHXZ0JiW0rdpWZ7Z8hNNGuhKm00A+fzPX28MlYkMqU=",
+        "kind": "entry-point",
+        "metafilePresent": true,
+        "bytes": 1050,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/chunk-hb1ke4cg.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-R8UjGX7U3kGkzd+zd25Trskohb6y4WIrLL4IgPY9S4I=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 211,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/chunk-p3e5a7p1.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-OyGcFGgMZvs0pRtoBc8c9PDnxdvCIwhQl6zxCE9Z1p4=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 1173,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/chunk-pnf2f374.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 0,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/second-3hmyac1e.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-NgQj45qUMYgSY+fP40eKwv4SZarA07+Mq86ZIAYILTY=",
+        "kind": "entry-point",
+        "metafilePresent": true,
+        "bytes": 203,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/worker-7x1r27ed.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-rJQja+bfIfyfGI1PoFU2s8qYdewavTS0eA1CVXNbKAM=",
+        "kind": "entry-point",
+        "metafilePresent": true,
+        "bytes": 579,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/chunk-hhzp0fkk.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-6+RRT3y73OSKTVG8mcufu/GsvipFhPVFUV5ExW7tXyA=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 217,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/chunk-wy11br24.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-nuLXmCWW5wPyhanI8/nc9PoK02erW+zQQryAZIuQ+7I=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 146,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/style-9p5f5da8.css",
+        "mediaType": "text/css",
+        "integrity": "sha256-/WFQN0Iz4EmjTmzaGSir/iidQf2Mpz/Jp98Pli23Shw=",
+        "kind": "asset",
+        "metafilePresent": true,
+        "bytes": 107736,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/assets-25zb8r1s.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-udvdNO6CswFHw+LJWjX8VTCe3vWAf/BA6WZvRDXCa7w=",
+        "kind": "entry-point",
+        "metafilePresent": true,
+        "bytes": 383,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/fixture-mfbhv96m.ttf",
+        "mediaType": "font/ttf",
+        "integrity": "sha256-Dx1SGZNOlug7jbFi1gtNjAm13h59OAMcuv5KPA8oick=",
+        "kind": "asset",
+        "metafilePresent": false,
+        "bytes": 80340,
+        "inputMetadataKnown": false,
+        "importMetadataKnown": false
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/mark-3123fbhp.svg",
+        "mediaType": "image/svg+xml",
+        "integrity": "sha256-z9A+GVRHQ1SJ876IP2xF/9UwTcYE9fjs8WVL67Ui22w=",
+        "kind": "asset",
+        "metafilePresent": false,
+        "bytes": 136,
+        "inputMetadataKnown": false,
+        "importMetadataKnown": false
+      },
+      {
+        "release": "A",
+        "path": "/releases/A/external-style-8j4amhwq.css",
+        "mediaType": "text/css",
+        "integrity": "sha256-1XdfmDESVcTe0onfKDIdkuFH0xD31vdl6PMYE4xIviY=",
+        "kind": "asset",
+        "metafilePresent": true,
+        "bytes": 499,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/entry-b5exdavr.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-ibAF0fB55dR103hnpqtVGCAqCkFb9et1t+VLzLQmdMw=",
+        "kind": "entry-point",
+        "metafilePresent": true,
+        "bytes": 1050,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/chunk-j79rgc18.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-rU1gV6RURFrsnTEeTNto6ONpEdFloqr1L/3OUd8gD7w=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 211,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/chunk-s6mpt4bk.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-OyGcFGgMZvs0pRtoBc8c9PDnxdvCIwhQl6zxCE9Z1p4=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 1173,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/chunk-8pzcvt13.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 0,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/second-krw86y2a.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-t/f+pIn/lPyfbsOxjFqoBiQ2gVvumbAatp2oHcNuTJE=",
+        "kind": "entry-point",
+        "metafilePresent": true,
+        "bytes": 203,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/worker-9dxepdaf.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-g2c5LpvEOycJ3nmjUEVLVoQi73zeJmo/BvQ5ghoAuAQ=",
+        "kind": "entry-point",
+        "metafilePresent": true,
+        "bytes": 579,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/chunk-q5tak7cr.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-0X1HiaTMjInZdl8DCBZoGEcMzy4zXwecYwl0CbN1LXc=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 217,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/chunk-5f1ydm3k.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-cmz8B8t+S+ZupqB0CDEZ1Om9yO4arNLRMI79AVLFJdQ=",
+        "kind": "chunk",
+        "metafilePresent": true,
+        "bytes": 146,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/style-988vc8vd.css",
+        "mediaType": "text/css",
+        "integrity": "sha256-Wj3zv2zLxCjv0m4t1bOrNBdkilGfFlv+hnxuRxyiJPs=",
+        "kind": "asset",
+        "metafilePresent": true,
+        "bytes": 107736,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/assets-yrte6cct.js",
+        "mediaType": "text/javascript",
+        "integrity": "sha256-2FRZva9bSEx1y1DJJEUtouBr4jFwy8Z/S008MAsdVGM=",
+        "kind": "entry-point",
+        "metafilePresent": true,
+        "bytes": 383,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/fixture-mfbhv96m.ttf",
+        "mediaType": "font/ttf",
+        "integrity": "sha256-Dx1SGZNOlug7jbFi1gtNjAm13h59OAMcuv5KPA8oick=",
+        "kind": "asset",
+        "metafilePresent": false,
+        "bytes": 80340,
+        "inputMetadataKnown": false,
+        "importMetadataKnown": false
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/mark-3123fbhp.svg",
+        "mediaType": "image/svg+xml",
+        "integrity": "sha256-z9A+GVRHQ1SJ876IP2xF/9UwTcYE9fjs8WVL67Ui22w=",
+        "kind": "asset",
+        "metafilePresent": false,
+        "bytes": 136,
+        "inputMetadataKnown": false,
+        "importMetadataKnown": false
+      },
+      {
+        "release": "B",
+        "path": "/releases/B/external-style-9d39gerb.css",
+        "mediaType": "text/css",
+        "integrity": "sha256-J5NC+Ui7L8CfL1rjtmAI/kizxwoBO0O+sb4XJ0AwKfU=",
+        "kind": "asset",
+        "metafilePresent": true,
+        "bytes": 499,
+        "inputMetadataKnown": true,
+        "importMetadataKnown": true
+      }
+    ],
+    "metafileSufficientForWholeInventory": false,
+    "cssGraphCompletenessEstablished": false,
+    "originalNativeOutputsRewritten": false,
+    "externalCSSURLsAuthoredBeforeBuild": true
+  },
+  "classifications": {
+    "confirmedNewFrameworkDefects": [],
+    "nativeSDKObservations": [
+      "Actual emitted font/image records absent from metafile.outputs.",
+      "CSS metadata does not describe every authored resource dependency."
+    ],
+    "openDesignLimits": [
+      "Incomplete/late import-map metadata is insufficient for window graph protection.",
+      "Document metadata does not protect worker graphs.",
+      "External image/font digests are not browser enforcement.",
+      "Old open clients need retained deferred chunks."
+    ],
+    "compatibilityGuaranteeExpanded": false,
+    "browserDiscrepancyRemainsRed": true,
+    "originalLargePipelineAndMixedWebSocketLimitsUnresolved": true
+  },
+  "validation": {
+    "rootTypesExitCode": 0,
+    "scopedBiomeExitCode": 0,
+    "fullCoverageOrE2ERerun": false,
+    "ordinaryTestsReplacedByTheseProbes": false,
+    "registeredNewCases": 17,
+    "originalAssertionsWeakened": false
+  },
+  "preservation": {
+    "allPreservedInputsByteIdentical": true,
+    "preservedInputCount": 1309,
+    "frozenOriginalPlanFiles": 26,
+    "frozenOriginalPlanByteIdentical": true,
+    "oldBrowserProbeByteIdentical": true,
+    "assertionsWeakened": false,
+    "runtimeOrPackageEdits": false,
+    "fullGateRerun": false
+  },
+  "cleanup": {
+    "ownedBrowserDownloadsRemoved": true,
+    "ownedTemporaryProfilesRemoved": true,
+    "globalBrowserCacheModified": false,
+    "nativeInputsOutputsReceiptsAndFailureLogsRetained": true,
+    "ownedSQLOrDockerResourcesCreated": 0,
+    "ownedProbeProcessesRemaining": 0,
+    "unknownResourcesTouched": false
+  },
+  "boundaries": {
+    "breakingImplementationPaused": true,
+    "separateAppModifiedByThisTask": false,
+    "shopAdoption": "HELD #257",
+    "timer": "OFF; not restarted",
+    "pushOrPR": false,
+    "releaseOrDeployment": false
+  },
+  "rawEvidenceDigests": [
+    {
+      "relativeEvidencePath": "retained-ten/receipt.json",
+      "sha256": "8375e9114d403913448b37ad8417943807867989b3d08e6e6ab9f7b4dd9a109a"
+    },
+    {
+      "relativeEvidencePath": "retained-43-types/results.json",
+      "sha256": "736285f67b9d49b5d16f54e85f7ac74693c3fe3f35cab065e32eb27abebe264b"
+    },
+    {
+      "relativeEvidencePath": "qualified-chromium-before/receipt.json",
+      "sha256": "bb0bcb7394d7a4af688598e3edf6e07489b865fdac941e7d1072ce6b6e8df50d"
+    },
+    {
+      "relativeEvidencePath": "qualified-negative-control/failure.json",
+      "sha256": "302a7a0d8f3221c4f8b592a6c12dc7a857394f95d3bddcb479e9794cd5175f27"
+    },
+    {
+      "relativeEvidencePath": "qualified-chromium-after/receipt.json",
+      "sha256": "95c15c0d0f98592c1e620e4b555ce014a075747217f09eec81541a266e72bbd7"
+    },
+    {
+      "relativeEvidencePath": "qualified-webkit/failure.json",
+      "sha256": "0168804751b76d8ff5f35dfd93425834ef6aca5e0bf9bf7e1624b778ec9978da"
+    },
+    {
+      "relativeEvidencePath": "firefox-first/failure.json",
+      "sha256": "fe7e976fd879e52e4b0da5ab9a89e0eb694aa49de96455951f94917c766fc5c2"
+    },
+    {
+      "relativeEvidencePath": "firefox-canonical/failure.json",
+      "sha256": "f0c1334619262edb90b07465b704e9a47d58e7a6e4ce309c7bb860ab57620ddb"
+    },
+    {
+      "relativeEvidencePath": "qualified-check-outcomes.json",
+      "sha256": "1ee9849f9bf5da228e45fc02faab6751f8e2f03bb5f77ecd7757286e4a1a5f29"
+    },
+    {
+      "relativeEvidencePath": "final-check-outcomes.json",
+      "sha256": "63538f189006f4d97c91e104a28b806eb9cb45e792592c511653daf78185ad4c"
+    },
+    {
+      "relativeEvidencePath": "preservation.json",
+      "sha256": "0ca453a8fde3e9cb5252c444686f6fd41a16e34083a2a855577dd524d166a2b7"
+    },
+    {
+      "relativeEvidencePath": "browser-cleanup.json",
+      "sha256": "831daecf2391af6e5136a30423d9f5b9ac8f8915c2b8be97823c679d0933043f"
+    },
+    {
+      "relativeEvidencePath": "graph-first/failure.json",
+      "sha256": "ea6941a6aad39132956614ec3163e14bac4bc95afad2fa5735f19ba4c4d020f6"
+    },
+    {
+      "relativeEvidencePath": "graph-second/failure.json",
+      "sha256": "59a095eb2b81bc52b56fad66bb0b628808c65ce139624a5fb4c24ca3a64fe665"
+    },
+    {
+      "relativeEvidencePath": "graph-third/failure.json",
+      "sha256": "3f1ef03c7da75d79e69dde4301db7d1026cb62b357841853185566618c2855a0"
+    },
+    {
+      "relativeEvidencePath": "graph-fourth/failure.json",
+      "sha256": "36c7a162286d89c854a91d5128c8dfcebe659e46ac5fd0024fffa77806617862"
+    },
+    {
+      "relativeEvidencePath": "webkit-first/failure.json",
+      "sha256": "998dce9bb67686f7f605b801fd46cd3e44503ba8d70b644bac2980c582aa3fb9"
+    },
+    {
+      "relativeEvidencePath": "webkit-canonical/failure.json",
+      "sha256": "257c63ab6a2789740e8f78c9b71d55715c3cf111042a920dd6014344d88c2133"
+    }
+  ]
+}

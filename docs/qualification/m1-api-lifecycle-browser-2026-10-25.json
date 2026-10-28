@@ -1,0 +1,1115 @@
+{
+  "format": 1,
+  "status": "DESIGN_REFINED_WITH_EXPLICIT_BROWSER_AND_LIFECYCLE_LIMITS",
+  "recordedOn": "2026-10-25",
+  "scope": "M1 design and isolated feasibility only. No implementation, runtime export, new compatibility guarantee, shipping-browser/provider/TLS or major migration acceptance.",
+  "baseline": {
+    "publishedVersion": "2.2.59",
+    "commit": "a87baf07126b14b6d1ce3898c6b59e9eb512ce35",
+    "releaseQualificationRepeated": false
+  },
+  "runtime": {
+    "bun": "1.4.4",
+    "revision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
+    "osVersion": "27.0.1",
+    "architecture": "arm64"
+  },
+  "browserDiagnostic": {
+    "expectedCases": 10,
+    "candidatePersistentRejectionExpectationsRetained": true,
+    "persistentRejectionIsNotAssertedAsHTMLGuarantee": true,
+    "chromium": {
+      "browserVersion": "156.0.8078.4",
+      "executed": 10,
+      "passed": 6,
+      "failed": 4,
+      "skipped": 0,
+      "eventMismatches": 0,
+      "cases": [
+        {
+          "name": "original",
+          "expected": {
+            "event": "load",
+            "imported": "original"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "original",
+            "afterImport": "original"
+          },
+          "failures": [],
+          "errors": [],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            }
+          ],
+          "passed": true
+        },
+        {
+          "name": "altered-no-map",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "altered",
+            "afterImport": "altered"
+          },
+          "failures": [
+            "import expected rejected, observed altered",
+            "unexpected executed marker altered"
+          ],
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/module.js' with computed SHA-256 integrity '6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q='. The resource has been blocked."
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            },
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "altered-map-first",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "rejected",
+            "afterImport": null
+          },
+          "failures": [],
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/module.js' with computed SHA-256 integrity '6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q='. The resource has been blocked.",
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/module.js' with computed SHA-256 integrity '6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q='. The resource has been blocked."
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            },
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": true
+        },
+        {
+          "name": "wrong-digest",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-14dxv+NZDkO1hCNYKC5pGMWf6NLQLFKqE3LhXxLxpqU=",
+            "beforeImport": null,
+            "imported": "original",
+            "afterImport": "original"
+          },
+          "failures": [
+            "import expected rejected, observed original",
+            "unexpected executed marker original"
+          ],
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/module.js' with computed SHA-256 integrity 'Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4='. The resource has been blocked."
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            },
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "missing",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "rejected",
+            "afterImport": null
+          },
+          "failures": [],
+          "errors": [
+            "Failed to load resource: the server responded with a status of 404 (Not Found)",
+            "Failed to load resource: the server responded with a status of 404 (Not Found)"
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 404,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            },
+            {
+              "path": "/module.js",
+              "status": 404,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            }
+          ],
+          "passed": true
+        },
+        {
+          "name": "denied-cors",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "rejected",
+            "afterImport": null
+          },
+          "failures": [],
+          "errors": [
+            "Access to script at '<public-origin>/module.js' from origin '<guarded-app-origin>' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+            "Failed to load resource: net::ERR_FAILED",
+            "Access to script at '<public-origin>/module.js' from origin '<guarded-app-origin>' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+            "Failed to load resource: net::ERR_FAILED"
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            },
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            }
+          ],
+          "passed": true
+        },
+        {
+          "name": "altered-same-origin",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "altered",
+            "afterImport": "altered"
+          },
+          "failures": [
+            "import expected rejected, observed altered",
+            "unexpected executed marker altered"
+          ],
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<guarded-app-origin>/module.js' with computed SHA-256 integrity '6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q='. The resource has been blocked."
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            },
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "altered-direct-module",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "altered",
+            "afterImport": "altered"
+          },
+          "failures": [
+            "import expected rejected, observed altered",
+            "unexpected executed marker altered"
+          ],
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/module.js' with computed SHA-256 integrity '6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q='. The resource has been blocked."
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            },
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "altered-classic-preload",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-HSidVaJtUGEPLq1+xlawDAA376FHtNFlOYAcb/jz2yE=",
+            "beforeImport": null,
+            "imported": "rejected",
+            "afterImport": null
+          },
+          "failures": [],
+          "errors": [
+            "Failed to find a valid digest in the 'integrity' attribute for resource '<public-origin>/module.js' with computed SHA-256 integrity 'ZKuObKxuz0xWSKBbLAxboaPyoQYQT8RjYQIfAnsQ5q4='. The resource has been blocked."
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-ZKuObKxuz0xWSKBbLAxboaPyoQYQT8RjYQIfAnsQ5q4="
+            }
+          ],
+          "passed": true
+        },
+        {
+          "name": "altered-without-integrity",
+          "expected": {
+            "event": "load",
+            "imported": "altered"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": null,
+            "beforeImport": null,
+            "imported": "altered",
+            "afterImport": "altered"
+          },
+          "failures": [],
+          "errors": [],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": true
+        }
+      ]
+    },
+    "webkit": {
+      "browserVersion": "27.2",
+      "executed": 10,
+      "passed": 4,
+      "failed": 6,
+      "skipped": 0,
+      "eventMismatches": 5,
+      "playwrightBuild": 2370,
+      "cases": [
+        {
+          "name": "original",
+          "expected": {
+            "event": "load",
+            "imported": "original"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "original",
+            "afterImport": "original"
+          },
+          "failures": [],
+          "errors": [],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            }
+          ],
+          "passed": true
+        },
+        {
+          "name": "altered-no-map",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "altered",
+            "afterImport": "altered"
+          },
+          "failures": [
+            "event expected error, observed load",
+            "import expected rejected, observed altered",
+            "unexpected executed marker altered"
+          ],
+          "errors": [],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "altered-map-first",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "rejected",
+            "afterImport": null
+          },
+          "failures": ["event expected error, observed load"],
+          "errors": [
+            "Cannot load script <public-origin>/module.js. Failed integrity metadata check. Content length: 62, Expected content length: 62, Expected metadata: sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "wrong-digest",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": "sha256-14dxv+NZDkO1hCNYKC5pGMWf6NLQLFKqE3LhXxLxpqU=",
+            "beforeImport": null,
+            "imported": "original",
+            "afterImport": "original"
+          },
+          "failures": [
+            "event expected error, observed load",
+            "import expected rejected, observed original",
+            "unexpected executed marker original"
+          ],
+          "errors": [],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "missing",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "rejected",
+            "afterImport": null
+          },
+          "failures": [],
+          "errors": [
+            "Failed to load resource: the server responded with a status of 404 (Not Found)"
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 404,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            }
+          ],
+          "passed": true
+        },
+        {
+          "name": "denied-cors",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "rejected",
+            "afterImport": null
+          },
+          "failures": [],
+          "errors": [
+            "Origin <guarded-app-origin> is not allowed by Access-Control-Allow-Origin. Status code: 200",
+            "Failed to load resource: Origin <guarded-app-origin> is not allowed by Access-Control-Allow-Origin. Status code: 200"
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4="
+            }
+          ],
+          "passed": true
+        },
+        {
+          "name": "altered-same-origin",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "altered",
+            "afterImport": "altered"
+          },
+          "failures": [
+            "event expected error, observed load",
+            "import expected rejected, observed altered",
+            "unexpected executed marker altered"
+          ],
+          "errors": [],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "altered-direct-module",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "error",
+            "appliedIntegrity": "sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "beforeImport": null,
+            "imported": "altered",
+            "afterImport": "altered"
+          },
+          "failures": [
+            "import expected rejected, observed altered",
+            "unexpected executed marker altered"
+          ],
+          "errors": [
+            "Cannot load script <public-origin>/module.js. Failed integrity metadata check. Content length: 62, Expected content length: 62, Expected metadata: sha256-Dh3K3pbc1jpwcvROJkSocNuN3RabdgxkN6V6fcKLqM4=",
+            "Cannot load script due to integrity mismatch"
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            },
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "altered-classic-preload",
+          "expected": {
+            "event": "error",
+            "imported": "rejected"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": "sha256-HSidVaJtUGEPLq1+xlawDAA376FHtNFlOYAcb/jz2yE=",
+            "beforeImport": null,
+            "imported": "rejected",
+            "afterImport": null
+          },
+          "failures": ["event expected error, observed load"],
+          "errors": [
+            "Cannot load script <public-origin>/module.js. Failed integrity metadata check. Content length: 33, Expected content length: 33, Expected metadata: sha256-HSidVaJtUGEPLq1+xlawDAA376FHtNFlOYAcb/jz2yE="
+          ],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-ZKuObKxuz0xWSKBbLAxboaPyoQYQT8RjYQIfAnsQ5q4="
+            }
+          ],
+          "passed": false
+        },
+        {
+          "name": "altered-without-integrity",
+          "expected": {
+            "event": "load",
+            "imported": "altered"
+          },
+          "actual": {
+            "event": "load",
+            "appliedIntegrity": null,
+            "beforeImport": null,
+            "imported": "altered",
+            "afterImport": "altered"
+          },
+          "failures": [],
+          "errors": [],
+          "requests": [
+            {
+              "path": "/module.js",
+              "status": 200,
+              "cookie": false,
+              "authorization": false,
+              "integrity": "sha256-6C0WdHYMRUgdtU2YuDvhqjD2+4aePZGNjvxzRE7hE7Q="
+            }
+          ],
+          "passed": true
+        }
+      ]
+    },
+    "classifications": {
+      "webkitPreloadIntegrityGap": "Confirmed in this pinned engine: applied integrity is not enforced at preload; load fires; later unmapped import executes altered bytes with one observed request. Not a Strata runtime bug or shipping Safari qualification.",
+      "chromiumLaterUnverifiedImports": "Failed stronger candidate hypothesis: SRI error does not impose a permanent URL ban; a new unverified import makes another request. Not classified as four Chromium defects.",
+      "mapFirst": "Altered later window import rejected in both engines; no whole-arbitrary-graph or worker claim."
+    },
+    "executedSourceIntegrity": "sha256-ja7RjCCJw/b3atNOMWtMwHDzxrzfuVG02koZHPGfAHU=",
+    "postExecutionTypeOnlyChange": {
+      "executedSourceSha256": "8daed18c2089c3f6f76ad34e316b4cc070f3c6bcdfb951b4da4a191cf19f0075",
+      "finalSourceSha256": "e37032569adb9652c8134af619ed2968bd3e903ec0a39bfbd03b84903fc26323",
+      "change": "Nonempty fixture tuple removes the unnecessary non-null type assertion only.",
+      "nativeJavaScriptIdentical": true,
+      "transpiledSha256": "728beef313dcf4563dffabbb46194283724c85f52922a9532b547c6213c10fe5",
+      "allRuntimeExpectationsIntact": true
+    }
+  },
+  "pinnedSourceExplanation": {
+    "playwrightTag": "v1.64.1",
+    "webkitBaseRevision": "56453fdfe0b0ca6258c23e6453b34f70b885d13f",
+    "filesReviewed": [
+      "Source/WebCore/html/HTMLLinkElement.cpp",
+      "Source/WebCore/loader/LinkLoader.h",
+      "Source/WebCore/loader/LinkLoader.cpp",
+      "Source/WebCore/loader/LinkPreloadResourceClients.cpp"
+    ],
+    "integrityMissingFromPreloadHandoff": true,
+    "preloadEventsDependOnResourceError": true,
+    "officialBootstrapPatchTouchesThesePathsOrIntegrity": false,
+    "patchSha256": "2b2991efb60cf2339dff0b7538b9bcf99ce8442b6f77e659e9b29e6fc91d24e1",
+    "upstreamIssueOrPatchPosted": false
+  },
+  "retainedGraph": {
+    "sourceAndAllExpectationsUnchanged": true,
+    "webkitExecuted": 17,
+    "webkitPassed": 16,
+    "webkitFailed": 1,
+    "failedCase": "preload-with-integrity-before-map",
+    "laterMappedImport": "rejected",
+    "nativeOutputsUnchanged": true
+  },
+  "firefox": {
+    "build": 1555,
+    "requestedVersion": "157",
+    "executedCases": 0,
+    "supportedBrowserAcceptance": false,
+    "nodeLaunch": "LAUNCH_FAILED",
+    "bunLaunch": "LAUNCH_FAILED",
+    "sameMissingProfileErrorInBoth": true,
+    "directoryAccess": {
+      "osVersion": "27.0.1",
+      "machine": "arm64",
+      "checks": [
+        {
+          "name": "owned-profile-root",
+          "operation": "stat and open directory descriptor only; no enumeration, files read or write",
+          "exists": true,
+          "mode": "0o755",
+          "ownedByCurrentUser": true,
+          "directoryDescriptorOpen": "allowed"
+        },
+        {
+          "name": "firefox-shared-appdata",
+          "operation": "stat and open directory descriptor only; no enumeration, files read or write",
+          "exists": true,
+          "mode": "0o700",
+          "ownedByCurrentUser": true,
+          "directoryDescriptorOpen": "denied",
+          "openErrno": 1
+        }
+      ],
+      "noAppdataContentsRead": true,
+      "noPermissionsChanged": true
+    },
+    "classification": "Host app-data directory access restriction strongly matches Playwright #42768. Exact macOS policy not independently proved; no Bun-only launch defect established.",
+    "upstreamReference": "https://github.com/microsoft/playwright/issues/42768",
+    "browserPersonalProfileRead": false,
+    "hostSecuritySettingsOrHomeChanged": false
+  },
+  "lifecycle": {
+    "publicInstalledPackages": {
+      "packages": [
+        {
+          "name": "@getstrata/core",
+          "version": "2.2.59",
+          "packageJsonSha256": "39f9bd072925d57773b9b48e2a483aff92a3b017884369bd8383405d5d254751"
+        },
+        {
+          "name": "@getstrata/bootstrap",
+          "version": "2.2.59",
+          "packageJsonSha256": "6315c7e61a5389a34e329389e505d56dd8416ecffa1e57870546cdd56f99c606"
+        },
+        {
+          "name": "@types/bun",
+          "version": "1.4.4",
+          "packageJsonSha256": "edb33154598d9add2941aa6a27d32e961fbcbff88ffc593ea66b0418289b38d5"
+        }
+      ],
+      "entryArtifacts": [
+        {
+          "package": "@getstrata/bootstrap",
+          "version": "2.2.59",
+          "export": "./context",
+          "artifact": "./dist/entries/context.js",
+          "sha256": "1126a78d2e726dbafe7ebe2c393bb7140c1df6e9d5f68f30cb5c196eb7745e8f",
+          "bytes": 35922
+        },
+        {
+          "package": "@getstrata/bootstrap",
+          "version": "2.2.59",
+          "export": "./buildModuleRoutes",
+          "artifact": "./dist/entries/buildModuleRoutes.js",
+          "sha256": "32a9409dbfb818677c6f482c7f78282bf6ebfc1624321323daa7ff0f008f95f7",
+          "bytes": 27721
+        },
+        {
+          "package": "@getstrata/bootstrap",
+          "version": "2.2.59",
+          "export": "./routeRegistry",
+          "artifact": "./dist/entries/routeRegistry.js",
+          "sha256": "c1e7b9d0009cb3ed66ccc15f7bec80976ee754f9c47e3a7fec4e62682810ae6b",
+          "bytes": 697
+        },
+        {
+          "package": "@getstrata/bootstrap",
+          "version": "2.2.59",
+          "export": "./web/server",
+          "artifact": "./dist/entries/web/server.js",
+          "sha256": "eed7556f53b3aff35731436d9d2b66385baf8004fc4f59ebd7ed4594ccb73800",
+          "bytes": 7004
+        },
+        {
+          "package": "@getstrata/core",
+          "version": "2.2.59",
+          "export": "./runtime/applicationRegistry",
+          "artifact": "./dist/entries/runtime/applicationRegistry.js",
+          "sha256": "834c5457cbd8912130d76bbaa6ca0a71aadff549a0b1e3412eb12fe043cdf173",
+          "bytes": 32
+        }
+      ],
+      "lockSha256": "6a3d9c41f27920ca058057269813dd9cfbe09f31c1c0d920fd6b503607cd509e",
+      "consumerSha256": "15857b41ce176427fe07f41511b9b096e8d34458baa518d38ac7b1167450f1aa",
+      "repositoryFixtureIdentical": true,
+      "rootPathAliasesUsed": false,
+      "nodeModulesPatched": false
+    },
+    "strictInstalledTypingExitCode": 0,
+    "nativeTests": {
+      "executed": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "expects": 29
+    },
+    "negativeControl": {
+      "executed": 4,
+      "passed": 3,
+      "failed": 1,
+      "skipped": 0,
+      "wrongFactoryCountExpectation": 2,
+      "restoredPasses": 4
+    },
+    "retainedSourceTests": {
+      "executed": 26,
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "expects": 77,
+      "filesUnchanged": true
+    },
+    "setupFailure": "Initial minimal fixture omitted real auth/policy providers and failed two cases; same assertions pass with required actual built-in providers. No package mock/patch or weakened assertion.",
+    "postExecutionFormatting": {
+      "executedSourceSha256": "15857b41ce176427fe07f41511b9b096e8d34458baa518d38ac7b1167450f1aa",
+      "formattedSourceSha256": "324b5e14d32825a83a5b55c3300b36926af5afcd24fbd9c8251d54baaf6bedef",
+      "nativeTranspiledJavaScriptIdentical": true,
+      "transpiledSha256": "6082cd95ab752635b47817c3eb7304b47d016904058d8ee28b17c9c33c48b131",
+      "allAssertionsIntact": true
+    },
+    "observations": [
+      "Provider context is published before module factory collection.",
+      "Raw collection can clear prior registry before a factory rejects; raw builder does not dispose context.",
+      "Raw native bind failure leaves supplied context and collected metadata caller-owned.",
+      "Close can report failure after actual socket release; separate native rebind confirms disposition.",
+      "Failed drain retains services/socket and memoized rejected disposal does not recover."
+    ],
+    "newConfirmedFrameworkDefects": [],
+    "liveSQLWorkOrDatabaseCloseFailureQualified": false
+  },
+  "proposal": {
+    "documentPlanAndRendererAPI": "Unimplemented review sketch only; same immutable build snapshot; no AppDependencies/export mutation.",
+    "preferredFirstPublication": "Validate static data, existing provider readiness, single local HTTP candidate, validated metadata ownership then native bind and existing lifecycle. Reversible snapshot operation and extension semantics require acceptance before implementation.",
+    "safeSerializationQualified": false,
+    "automaticRetryCertificate": false,
+    "singleActiveRuntimeRetained": true
+  },
+  "preservation": {
+    "allPreexistingTrackedAndLocalFilesByteIdentical": 1548,
+    "previousFifteenLocalReviewFilesUnchanged": true,
+    "allFrozenOriginalPlanFilesByteIdentical": 26,
+    "originalAssertionsOrSkipsOrCoverageWeakened": false,
+    "runtimePackageGeneratedEdits": false
+  },
+  "validation": {
+    "rootTypesExitCode": 0,
+    "scopedLintExitCode": 0,
+    "scopedLintWarnings": 0,
+    "fullCoverageE2ERunClaimed": false,
+    "published159ProfilesRepeated": false
+  },
+  "cleanup": {
+    "status": "OWNED_SCRATCH_REMOVED",
+    "targets": [
+      {
+        "relativePath": "owned-browsers",
+        "regularFiles": 7068,
+        "symlinks": 40,
+        "selectedBinaryDigests": [
+          {
+            "path": "firefox-1555/INSTALLATION_COMPLETE",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "firefox-1555/firefox/Nightly.app/Contents/MacOS/firefox",
+            "sha256": "65f70a725a576763c36634d63407fad91d898d522f25a5ca9caf748b3e3be005"
+          },
+          {
+            "path": "webkit-2370/INSTALLATION_COMPLETE",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "webkit-2370/Playwright.app/Contents/MacOS/Playwright",
+            "sha256": "18775828b550e916840169243afdacec3b3411a5ccd5ebf2da7eb401b68f7900"
+          },
+          {
+            "path": "ffmpeg-1013/INSTALLATION_COMPLETE",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "removed": true
+      },
+      {
+        "relativePath": "owned-package-cache",
+        "regularFiles": 6307,
+        "symlinks": 24,
+        "removed": true
+      },
+      {
+        "relativePath": "owned-runtime-cache",
+        "regularFiles": 58,
+        "symlinks": 0,
+        "removed": true
+      },
+      {
+        "relativePath": "installed-consumer/node_modules",
+        "regularFiles": 6217,
+        "symlinks": 1,
+        "removed": true
+      },
+      {
+        "relativePath": "owned-profiles",
+        "regularFiles": 0,
+        "symlinks": 0,
+        "removed": true
+      },
+      {
+        "relativePath": "owned-storage",
+        "alreadyAbsent": true
+      },
+      {
+        "relativePath": "firefox-node/owned-profile",
+        "regularFiles": 0,
+        "symlinks": 0,
+        "removed": true
+      },
+      {
+        "relativePath": "firefox-bun/owned-profile",
+        "regularFiles": 0,
+        "symlinks": 0,
+        "removed": true
+      }
+    ],
+    "ownedSQLDockerCreated": 0,
+    "unknownResourcesTouched": false,
+    "hostPermissionsChanged": false,
+    "globalBrowserCacheModified": false
+  },
+  "boundaries": {
+    "breakingImplementationPaused": true,
+    "separateAppModified": false,
+    "shopAdoption": "HELD #257",
+    "timer": "OFF; not restarted",
+    "pushPRReleaseDeployment": false
+  },
+  "rawEvidenceDigests": [
+    {
+      "relativePath": "firefox-directory-access.json",
+      "sha256": "735a9d58d554ca612afaa12bfe42a0863cb30a436d7d885f55012093bfc18a61"
+    },
+    {
+      "relativePath": "firefox-node/result.json",
+      "sha256": "10c8cd0807f9260ca42052926c653f556bcd692a68719b59a0f41bf5d91bbee7"
+    },
+    {
+      "relativePath": "firefox-bun/result.json",
+      "sha256": "8c1a7778c1b68844273aab2f164a7933a9fdbb44ec28a311a8e46f21bd0fff44"
+    },
+    {
+      "relativePath": "firefox-launch-outcomes.json",
+      "sha256": "9a040e4737959ea5513f03bcb55896ca152cbc892054af3851d6d987aef1f0d2"
+    },
+    {
+      "relativePath": "chromium-preload/result.json",
+      "sha256": "ec4da1e3d650ff19e7e33fdbc7dc83758f08dc9dbffbc9b49cc791ada0d4e225"
+    },
+    {
+      "relativePath": "webkit-preload/result.json",
+      "sha256": "45d54c3f32909f901519ddbbc087af98bf7bd78266026fffcb74eafb9cdd9882"
+    },
+    {
+      "relativePath": "final-chromium-preload/result.json",
+      "sha256": "ebdc28c69ac960cae3c6e4bd912c79f65b1ecb56015264c0cc7d1a4847a635c8"
+    },
+    {
+      "relativePath": "final-webkit-preload/result.json",
+      "sha256": "f0a3b2dcc584355b0b79d5962fb38187818a87a88cbe5b3d4c1ed411c52cec4b"
+    },
+    {
+      "relativePath": "retained-webkit-graph/failure.json",
+      "sha256": "6cbf4e6e9b4ba5e379010898503e253fb272755627024f01eecefe7f38ef2757"
+    },
+    {
+      "relativePath": "retained-lifecycle-tests.log",
+      "sha256": "77a323c66fd5833da9f4b86e0a4c5be077e9a31cda156824b74d7fbac2669f8a"
+    },
+    {
+      "relativePath": "retained-lifecycle-outcome.json",
+      "sha256": "489f9006ee883af0bcd43038e529837a976cdef4be19d3359530383c6aac77bb"
+    },
+    {
+      "relativePath": "installed-lifecycle.log",
+      "sha256": "dea7be1cef395535405dc71e671a68bb9b61186b4c898f2304e19cda7a569a65"
+    },
+    {
+      "relativePath": "lifecycle-initial-source.ts",
+      "sha256": "13909f76d808540c300ece7cb85a2052b00b3f6b87dda58cab667b62aa17bba6"
+    },
+    {
+      "relativePath": "preload-initial-source.ts",
+      "sha256": "f6b4322399736b63ac2e2ccffc6926f752907f4c8b4f55404fee8b6574f4a7e9"
+    },
+    {
+      "relativePath": "installed-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "relativePath": "installed-lifecycle-final.log",
+      "sha256": "4d0033e3a5e0459a7d53cc5bbb728d85aac80a5d41d9c2452c709412f9e06e87"
+    },
+    {
+      "relativePath": "installed-negative.log",
+      "sha256": "aef497d0a7352c591dc02cb831b5e7519d9f5ddd0e83f9f83888cbc6c2ff3615"
+    },
+    {
+      "relativePath": "installed-restored.log",
+      "sha256": "fbe29136a7704310c620aa77fcdfe2d247ff3f5c927ba18c086cb5ec9c8e8c03"
+    },
+    {
+      "relativePath": "installed-package-artifacts.json",
+      "sha256": "10be7e9bc5e728704e5f53c88d3c2662f29fb7e31c3f8cf254033feecff84ade"
+    },
+    {
+      "relativePath": "consumer-format-equivalence.json",
+      "sha256": "4df53f6db0d8e8acf479bf003cbe0ac9e07b49912047fee8b7bc121a78742515"
+    },
+    {
+      "relativePath": "upstream-source-receipts.json",
+      "sha256": "ac8d3090eefe625412234d82df361b1223dad09107d8462155b0f05ca8895828"
+    },
+    {
+      "relativePath": "upstream-source-extra.json",
+      "sha256": "3186e3f89b173d499d2ef5d97a2eaa519a317b2cb2388f85d18646b36a03fc52"
+    },
+    {
+      "relativePath": "playwright-webkit-patch-index.json",
+      "sha256": "26e2da60c23c97c4335663e71170b327096ee4a3bb8360428f2ad47245300170"
+    },
+    {
+      "relativePath": "playwright-webkit-bootstrap.diff",
+      "sha256": "2b2991efb60cf2339dff0b7538b9bcf99ce8442b6f77e659e9b29e6fc91d24e1"
+    },
+    {
+      "relativePath": "upstream-LinkLoader.cpp",
+      "sha256": "f9806bdbdfc5d740dd43d0f4bc1334ec2d115d56630b5d91727a59f1b98cd60d"
+    },
+    {
+      "relativePath": "upstream-LinkLoader.h",
+      "sha256": "f06cf8ddd55a9dc7f64fac7c1f5afd3081c77eacd291de919d30eca946f163d1"
+    },
+    {
+      "relativePath": "upstream-HTMLLinkElement.cpp",
+      "sha256": "660ad14a02e601d0416f6733e47b6ccc5acf3483e1f3130e2ca192d9026cb3c4"
+    },
+    {
+      "relativePath": "upstream-LinkPreloadResourceClients.cpp",
+      "sha256": "14d3de2aa093245df9ae28e16154925a7aec06d6a94d1e1b7a31499e52020a02"
+    },
+    {
+      "relativePath": "cleanup.json",
+      "sha256": "5973deb61ae5ba3b0132ba741c7fe9a3983791eb680d5e7d4d533a0355da08d7"
+    },
+    {
+      "relativePath": "root-types-final.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    },
+    {
+      "relativePath": "scoped-lint-first.log",
+      "sha256": "57a5eb17c4434e5e3c3b32e3f553d2663c802394e746b63828e5f07b9885539a"
+    },
+    {
+      "relativePath": "scoped-lint-final.log",
+      "sha256": "4d643f74f1b2ad5c988b63d04ba866c3c41c7927e3d7b963d49a233a3141b113"
+    },
+    {
+      "relativePath": "preload-executed-source.ts",
+      "sha256": "8daed18c2089c3f6f76ad34e316b4cc070f3c6bcdfb951b4da4a191cf19f0075"
+    },
+    {
+      "relativePath": "preload-type-equivalence.json",
+      "sha256": "b3f7a64d811b81b642552cfc228d8dec09d4dc7060b3252aaca434c11b9c0ae6"
+    },
+    {
+      "relativePath": "root-types-after-equivalence.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    },
+    {
+      "relativePath": "scoped-lint-after-equivalence.log",
+      "sha256": "1f1adba93f64924afa72b98359e6574ae17d607e6084e458e2f6a95cd35d0a21"
+    }
+  ]
+}

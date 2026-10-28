@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "scope": "Historical pre-commit local qualification of the draft M1 review prototype; not registry, hosted-provider, major-contract or deployment acceptance. Subsequent PR submission is separately authorized.",
+  "qualifiedBaseHead": "a87baf07126b14b6d1ce3898c6b59e9eb512ce35",
+  "packageVersions": "2.2.59: unpublished local candidates unless a scenario explicitly identifies its exact published rollback baseline",
+  "qualifiedSourceSha256": {
+    "src/core/runtime/applicationRegistry.ts": "28c734fd44d3be539bf0f569be7a8d2d0fe3a7c70ae88b0fe10561eefaf24e57",
+    "src/bootstrap/m1/validation.ts": "bac69efbe56ede98d8c323522b7a56eff3665dd6a7823efc84e19a361459c80c",
+    "src/bootstrap/m1/guardedRoutes.ts": "0ca60bd2f304f44c3fc70e26e2907a181d9f840571695d0acf20b2aa2bd0529d",
+    "src/bootstrap/m1/artifactFiles.ts": "15263027977ee8d78fc4c786b1871ade172b380e8ae0e89eb65bd8db41604d67",
+    "src/bootstrap/m1/publicArtifacts.ts": "9a29e2bc7185bf6baff78f02c5784801d4761f23d6b0c7482173bdfd4b162725",
+    "src/bootstrap/m1/application.ts": "bf79536bbcd9d05a114142d34cec98cc9db21032df09ac05e134816f0749b649",
+    "src/bootstrap/m1/artifactManifest.ts": "a24980402aca09e2f022593dc3e0e532b5c4001c5c6feb685b54e20ced437d3d",
+    "src/bootstrap/m1/diagnostics.ts": "a439d8181768737f6888a6cfd4e3dfc83271d308816bd2fea94b348a44eaf25e",
+    "src/bootstrap/m1/index.ts": "44eec8650084f0491d87b2d415576274bd1a9714579c4c84914d9cbfa270f13e",
+    "src/bootstrap/web/server.ts": "a990c358b83f1a20806443852d6f5002d9bb5ed1ff2949d37320e69833ec8069",
+    "tests/unit/m1DocumentSecurity.test.ts": "b39c38bd886e6db1f732043ab99798b6ab48b52ce35732938e36a510abc6cdc9",
+    "tests/unit/m1OwnershipChanged.test.ts": "dde2423807fca446eedc92d2490961667eeabe020294956d4bfdeb5e60b25391",
+    "tests/unit/m1FailedDrain.test.ts": "3f0618ab88d5cfe28c878356a437151938e9c0e23f5d5e8e171d3b942485ce6a",
+    "tests/unit/m1Application.test.ts": "6b649687678eb617e7c5023839d3d1fd7726bf5a48cd772eaa4235760751f04f",
+    "tests/unit/m1PostBindFailure.test.ts": "cf7fd200d14fa2b2b01a4af9fb287302a3bd7943614b7cc8148cfc6bf677b46e",
+    "tests/unit/m1HttpAcquisition.test.ts": "2ea16a5d1bf144531cf500b79c31f0e3c383ec26e3d70ee64cf957987b778734",
+    "tests/unit/m1ProviderRejection.test.ts": "f441a2da569aec690a3f722e6cf3f314557b5005aa711f8cd3889635164a0bcd",
+    "tests/unit/m1DocumentNonce.test.ts": "951ff1a8c58f6088c0494642e5297663c6049881d113e44517117dbd57713280",
+    "tests/unit/m1StartupOwnershipChanged.test.ts": "790a6fefb2162a18f271378b8f0080e811162d4f8e69208caeb4e4920d6e8bdb",
+    "tests/unit/m1RendererCapability.test.ts": "21f510108113f5c8d7e418084e43653608bf9f6feb3a6b8dcac3d389db577a39",
+    "tests/unit/m1Diagnostics.test.ts": "cd99d1931fa79132c6d77d644232b16894f40f65f2ece1336432b1f18db6ef87",
+    "tests/unit/m1PublicArtifacts.test.ts": "a29609125f0191dc29a68b027bb17ea3c5d38adf466414c8b8b81c5fbf744a50",
+    "tests/unit/m1ProductionGuard.test.ts": "348eac7fb017889ae9367ba436e4f2a9e563dced72e605e128e9ecdb66500cf8",
+    "tests/unit/m1GuardedRoutes.test.ts": "d7ef6c94b9ca60894146cfccae2ae0dd03a562660d8352f2161c8ffef9c2957d",
+    "tests/unit/m1FailedClose.test.ts": "2cec5db087976aef2538023f497f2d84034f3e0a9fa2be4bf3b461c8e416229d",
+    "tests/unit/m1StartupSettings.test.ts": "45bff0abd931401e092000b2cad0b6213312a3f7832c5be527f982bb4fa76f37",
+    "tests/unit/m1PreparedRoutes.test.ts": "21b92b15a6bcfbb5bfb38586250571d83cec7fe84d81018621e8498af1d93c37",
+    "tests/types/m1HandlerInputs.contract.ts": "965f60c3990ef829f6ac3fabff50df73bbfaf526553e4bb910eb2d45c80628a6",
+    "tests/types/m1Routes.contract.ts": "f72f929ecbec0d74f27c32b9a6f0c15307a77f18701346abcbda9027f8e39e06",
+    "tests/integration/m1SqlLifecycle.integration.test.ts": "bf7590168d81dee93e761904ce8ceed23a318b0f44dd5799c58b4e9d9289fc20",
+    "tests/fixtures/m1LifecycleProbe.ts": "e0c986a8732ddf626c2379acb4f0e2e0ce653ad6ab31baf776edc94bb38e757f",
+    "tests/fixtures/m1PackedContext.ts": "3281ddee386ce979374e15e80e278cae306edc843f6b450caf6c65dd7bec1bc2",
+    "tests/fixtures/m1SqlLifecycle.ts": "9da412bbf675b73445b33b0b52eaefe762271a64973ea76c7f011d6462cad94c",
+    "tests/e2e/m1PackedContext.test.ts": "a44974e8ddb1bc965eac1c4048033034ec99298388d7d8c52bcfda266332762c",
+    "scripts/characterize-m1-prototype.ts": "2ad4f5545110cb6cfbd516a3011a425a8339092163a6ee94b58fae2dd748d83f",
+    "scripts/qualify-m1-adoption.ts": "21ad25442ca5cd5da6050a5e193756b6ffc0bea5f411f1da6181a0e943d7fcd9",
+    "scripts/qualify-m1-entrypoints.ts": "1114250af7da6df4f42dda205f7f02440d9cfae073fdfbee9ba16d06388b6a72",
+    "scripts/qualify-m1-tls.ts": "1809dfe614aed70f125eed50a87bfff8a86c0b7da687dab08aff7a7c132c42fb",
+    "scripts/fixtures/m1-adoption/common.ts.txt": "636ffe243c8e425556a5a2480dfb14a1f8db7e9c7536c419ef3749d913453242",
+    "scripts/fixtures/m1-adoption/legacy.ts.txt": "2736f6000f0445da749456bb1e4d0c6fd92d8685471c1de7771af9e8abc7a313",
+    "scripts/fixtures/m1-adoption/modern.ts.txt": "56033bdf3ff2aa9b18e9edc69d36491b9d315d7bd2888fd223bbd4eda4edc2ca"
+  },
+  "fullGate": {
+    "exitCode": 0,
+    "elapsedSeconds": 701.673,
+    "command": "bun --no-env-file run validate:ci"
+  },
+  "checks": {
+    "unitIntegration": {
+      "pass": 3097,
+      "fail": 0,
+      "existingSkips": 3,
+      "assertions": 74381,
+      "files": 399
+    },
+    "coverage": {
+      "enforcedAt100Percent": 160,
+      "existingExempt": 272
+    },
+    "e2e": {
+      "pass": 201,
+      "fail": 0,
+      "skip": 0,
+      "assertions": 336,
+      "files": 41,
+      "serialFiles": 17,
+      "isolatedWorkerFiles": 24
+    },
+    "generatedCompilerCombinations": 30,
+    "prototypeBrowsers": {
+      "engines": ["chromium", "firefox", "webkit"],
+      "eachPass": 3,
+      "fail": 0,
+      "skip": 0
+    },
+    "localValidatedTls": {
+      "pass": 16,
+      "fail": 0,
+      "skip": 0
+    },
+    "restrictedSqlLifecycle": {
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "nativeCloseFault": "actual invalid-timeout rejection, not a network-close reproduction"
+    },
+    "populatedGeneratedAppAdoptionRollback": {
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "route": "published 2.2.59 -> unpublished same-version tarball candidate -> exact original source/manifest/lock published 2.2.59"
+    },
+    "installedStrictTypes": ["5.9.3", "6.0.3", "7.0.2"],
+    "unchangedInstalledRuntimeAssertions": {
+      "pass": 3,
+      "fail": 0
+    },
+    "sharedSourcePackedOwner": {
+      "pass": 2,
+      "fail": 0
+    },
+    "retainedGraph": {
+      "executedPerEngine": 17,
+      "chromiumPass": 17,
+      "firefoxPass": 16,
+      "webkitPass": 16,
+      "failedControls": 2,
+      "skip": 0
+    },
+    "retainedPreloadHypotheses": {
+      "executedPerEngine": 10,
+      "chromiumMismatches": 4,
+      "firefoxMismatches": 5,
+      "webkitMismatches": 6,
+      "eventMismatches": [0, 1, 5],
+      "skip": 0
+    }
+  },
+  "confirmedDefectsFixed": [
+    "fallible HTTP lifecycle registration after listener acquisition",
+    "missing existing production guard in M1 startup",
+    "bivariant native request handler typing"
+  ],
+  "preservation": {
+    "oldTestsByteIdentical": 522,
+    "copiedDesignInputsByteIdentical": 20,
+    "frozenPlanFilesByteIdentical": 26,
+    "treeIdenticalToFinalGateSnapshot": true,
+    "originalFrameworkCleanAndUnchanged": true,
+    "shopCleanAndUnchanged": true,
+    "separateAppAccessedOrModified": false
+  },
+  "cleanup": {
+    "ownedContainersRemoved": 3,
+    "ownedVolumesRemoved": 3,
+    "dockerBaselineExact": {
+      "containers": 17,
+      "volumes": 181,
+      "networks": 9
+    },
+    "ownedSqlMetadataRestored": true,
+    "ownedScratchItemsRemoved": 62,
+    "unknownResourcesRemoved": false
+  },
+  "remaining": [
+    "Review staging-provider proposal; actual hosted delivery/publication/cache/failure/retention qualification awaits approved resources",
+    "Review provisional M1 API/path/method/metadata-extension and single-runtime adoption contract",
+    "Provider-rejection cleanup disposition still conservative; failed cleanup requires investigation/process recovery; spontaneous network-close behavior is not qualified",
+    "Retained preload-before-map browser control failures; no automatic arbitrary worker/CSS-resource/WASM/unknown graph integrity guarantee",
+    "Native Bun 64 MiB and mixed HTTP/WebSocket completion limits remain; local nginx 70 MiB success does not resolve them",
+    "Per-application production providers, role checks, data/schema migrations and deployment rollback require deliberate adoption beyond this owned rehearsal"
+  ],
+  "evidenceSha256": {
+    "final-full-gate.log": "2c1fc9cea230f5e28dc022b8c4b6efa0ce913bcb65c9885e387e83894e63bd30",
+    "final-full-gate-outcome.json": "0714e78d1c0ec812acb82a69f90a9739beada6dbc68a5e64abc91971989ab6e7",
+    "preservation-final.json": "d634c89c29a931445ecb0040e8bf90a5eff344e7f152acde2db77e5fd9106341",
+    "final-fixture-cleanup.json": "eeaee145cd81fa5639e978505ee789714ceecf5c91e6a51a1242abd82e8f2baf",
+    "browser-retained-summary.json": "910f73e21b4e39acb02a64be67e9122bba30be8c7ab4b91aef73d80067be8c54",
+    "tls-11/receipt.json": "34605ec7a21a1d89423f696356ca461853195b45201bcb54adf1127346604232",
+    "adoption-3/receipt.json": "6b26eb953d6750cbdd92315fc2fa49e5a7febbe91ab136d3c5a797dd9fa77bc6",
+    "installed-current/results.json": "f4b4b2ef1f67f921230934d68133f0c525d1115204d82ccff0ff851b369e567e",
+    "M1-current-prototype.patch": "c814944d00f16c01e3556764a11f99f9f21c03714acf72047020198329742441"
+  },
+  "shopAdoption": "HELD #257",
+  "separateAppAccessedOrModified": false,
+  "timerRestarted": false,
+  "publicationOrDeployment": false,
+  "evidenceRetention": "Raw RED/GREEN, incomplete harness attempts and full logs retained in the local qualification evidence directory. No failed browser controls were weakened or reported as passing."
+}

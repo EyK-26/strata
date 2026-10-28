@@ -1,0 +1,6 @@
+import { startGuardedApplication } from "@getstrata/bootstrap/m1";
+import { api, documents, providers, raw, verify } from "./common";
+const app = await startGuardedApplication({ providers, documents,
+  modules: [{ name: "owned", routes: () => api, webRoutes: () => ({ "/form": raw }) }],
+});
+try { await verify(app.server, app.context); } finally { const result = await app.shutdown(); if (!result.successful) throw new Error("M1 shutdown failed"); }
