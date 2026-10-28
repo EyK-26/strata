@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { compareVersions, parseVersion } from "../../scripts/bump-version.ts";
 import { fetchPublishedVersions } from "../../scripts/published-package-versions.ts";
 import { checkReleaseReadiness, parseReleaseTag } from "../../scripts/release-readiness.ts";
+import { createReleaseWorkspace, runReleaseFixture } from "../helpers/releaseWorkspace.ts";
 
 const root = join(import.meta.dir, "../..");
 const names = [
@@ -57,22 +58,35 @@ describe("canonical stable release inputs", () => {
   }
 
   test("actual read-only bump CLI rejects invalid pins and normalizes outer whitespace", async () => {
-    const manifest = join(root, "packages/strata-core/package.json");
-    const before = await readFile(manifest, "utf8");
-    for (const version of invalid) {
-      const result = Bun.spawnSync([process.execPath, "scripts/bump.ts", version, "--check"], {
-        cwd: root,
-      });
-      expect(result.exitCode, version).toBe(1);
-      expect(result.stderr.toString()).toContain("Usage:");
+    // This is the stable CLI contract even when the surrounding checkout is a
+    // candidate. Keep every assertion, using the same official CLI in an owned
+    // stable workspace instead of assuming the repository version is stable.
+    const root = await createReleaseWorkspace();
+    try {
+      const initialized = await runReleaseFixture(root, ["scripts/bump.ts", "1.0.0"]);
+      if (initialized.code !== 0) throw new Error(initialized.stderr);
+      const manifest = join(root, "packages/strata-core/package.json");
+      const before = await readFile(manifest, "utf8");
+      for (const version of invalid) {
+        const result = Bun.spawnSync([process.execPath, "scripts/bump.ts", version, "--check"], {
+          cwd: root,
+        });
+        expect(result.exitCode, version).toBe(1);
+        expect(result.stderr.toString()).toContain("Usage:");
+      }
+      const current = JSON.parse(before).version as string;
+      const result = Bun.spawnSync(
+        [process.execPath, "scripts/bump.ts", ` ${current} `, "--check"],
+        {
+          cwd: root,
+        },
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toContain(`every file already targets ${current}.`);
+      expect(await readFile(manifest, "utf8")).toBe(before);
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
-    const current = JSON.parse(before).version as string;
-    const result = Bun.spawnSync([process.execPath, "scripts/bump.ts", ` ${current} `, "--check"], {
-      cwd: root,
-    });
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString()).toContain(`every file already targets ${current}.`);
-    expect(await readFile(manifest, "utf8")).toBe(before);
   });
 });
 

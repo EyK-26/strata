@@ -3,6 +3,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fetchPublishedVersions } from "./published-package-versions.ts";
+import { takeReleaseChannel } from "./release-channel-options.ts";
+import { RELEASE_PACKAGES } from "./release-packages.ts";
 import {
   checkReleaseReadiness,
   checkReleaseTarget,
@@ -12,15 +14,9 @@ import {
 
 const ROOT = join(import.meta.dir, "..");
 
-const PACKAGE_FILES = [
-  "packages/strata-core/package.json",
-  "packages/strata-bootstrap/package.json",
-  "packages/strata-cli/package.json",
-  "packages/strata-starter/package.json",
-  "packages/create-strata/package.json",
-];
+const PACKAGE_FILES = RELEASE_PACKAGES.map(([, directory]) => `${directory}/package.json`);
 
-const args = process.argv.slice(2);
+const { args, channel } = takeReleaseChannel(process.argv.slice(2));
 const checkNpm = args.includes("--check-npm");
 const tag = args.find((arg) => !arg.startsWith("--"));
 const skipTarget = args.includes("--no-target-check");
@@ -75,14 +71,15 @@ if (tag !== undefined && !skipTarget) {
     ...checkReleaseTarget({
       ref: targetRef,
       refResolved: refPackages !== null,
-      refVersion: refPackages === null ? null : resolveLockstepVersion(refPackages).version,
-      workingTreeVersion: resolveLockstepVersion(packages).version,
+      refVersion:
+        refPackages === null ? null : resolveLockstepVersion(refPackages, channel).version,
+      workingTreeVersion: resolveLockstepVersion(packages, channel).version,
       headOnRef,
     }),
   );
 }
 
-const result = checkReleaseReadiness({ packages, tag, publishedVersions });
+const result = checkReleaseReadiness({ packages, tag, publishedVersions, channel });
 
 const allErrors = [...result.errors, ...targetErrors];
 

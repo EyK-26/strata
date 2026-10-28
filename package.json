@@ -16,7 +16,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "validate": "bun run check && bun run lint && bun run verify:generated-runtime && bun run test:all",
-    "validate:ci": "bun run check && bun run lint:ci && bun run check:module-imports && bun run verify:versions && bun run release:check && bun run build:framework && bun run build:bootstrap && bun run verify:framework && bun run verify:bootstrap && bun run verify:starter && bun run verify:cli && bun run verify:create-strata && bun run verify:generated-app && bun run test:coverage && bun run test:e2e && bun run smoke:extras",
+    "validate:ci": "bun run check && bun run lint:ci && bun run check:module-imports && bun run verify:versions && bun scripts/verify-build-release.ts && bun run build:framework && bun run build:bootstrap && bun run verify:framework && bun run verify:bootstrap && bun run verify:starter && bun run verify:cli && bun run verify:create-strata && bun run verify:generated-app && bun run test:coverage && bun run test:e2e && bun run smoke:extras",
     "verify:versions": "bun scripts/verify-package-versions.ts",
     "release:check": "bun scripts/verify-release-ready.ts",
     "bump": "bun scripts/bump.ts",

@@ -26,6 +26,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .eslintcache
 .biome
 .cache
+/.candidate/
 *.tsbuildinfo
 
 # user uploads (repo root only; do not match packages/*/entries/storage/)
