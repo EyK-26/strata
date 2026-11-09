@@ -487,6 +487,8 @@ test("two same-process supervisors retain separate native PIDs and exact signal 
   const directory = await mkdtemp(join(tmpdir(), "strata-child-isolation-"));
   const before = { SIGINT: process.listeners("SIGINT"), SIGTERM: process.listeners("SIGTERM") };
   const children: Bun.Subprocess<"inherit", "inherit", "inherit">[] = [];
+  const signalTargets: Array<{ pid: number; signal: ParentSignal }> = [];
+  const firstSignalSent = deferred();
   const ownedCallbacks: Array<{ signal: ParentSignal; callback: () => void }> = [];
   const create = (name: string) => {
     const ready = join(directory, `${name}.ready`);
@@ -497,7 +499,17 @@ test("two same-process supervisors retain separate native PIDs and exact signal 
         spawn(argv, options) {
           const child = Bun.spawn([...argv], { ...options });
           children.push(child);
-          return child;
+          return {
+            exited: child.exited,
+            get exitCode() {
+              return child.exitCode;
+            },
+            kill(signal) {
+              signalTargets.push({ pid: child.pid, signal });
+              child.kill(signal);
+              firstSignalSent.resolve();
+            },
+          };
         },
         signals: {
           on(signal, callback) {
@@ -519,7 +531,10 @@ test("two same-process supervisors retain separate native PIDs and exact signal 
     await Promise.all([fileReady(first.ready), fileReady(second.ready)]);
     assert.equal(children.length, 2);
     assert.notEqual(children[0]?.pid, children[1]?.pid);
-    await bounded(first.supervisor.application.stop({ reason: "SIGINT" }));
+    const firstStop = first.supervisor.application.stop({ reason: "SIGINT" });
+    await bounded(firstSignalSent.promise);
+    assert.deepEqual(signalTargets, [{ pid: children[0]?.pid, signal: "SIGINT" }]);
+    await bounded(firstStop);
     assert.equal(await bounded(a), 7);
     assert.equal(children[1]?.exitCode, null);
     await pending(b);
@@ -527,6 +542,10 @@ test("two same-process supervisors retain separate native PIDs and exact signal 
     assert.equal(process.listeners("SIGTERM").length, before.SIGTERM.length + 1);
     await bounded(second.supervisor.application.stop({ reason: "SIGTERM" }));
     assert.equal(await bounded(b), 7);
+    assert.deepEqual(signalTargets, [
+      { pid: children[0]?.pid, signal: "SIGINT" },
+      { pid: children[1]?.pid, signal: "SIGTERM" },
+    ]);
     assert.deepEqual(process.listeners("SIGINT"), before.SIGINT);
     assert.deepEqual(process.listeners("SIGTERM"), before.SIGTERM);
   } finally {
