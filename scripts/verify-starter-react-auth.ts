@@ -4,6 +4,7 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium } from "playwright";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
+import { installerEnvironment } from "./installer-environment";
 
 const auth = process.argv.find((a) => a.startsWith("--auth="))?.slice(7);
 const frontend = process.argv.find((a) => a.startsWith("--frontend="))?.slice(11);
@@ -62,10 +63,11 @@ const env = {
   TENANCY_DRIVER: tenancy,
   OTEL_SDK_DISABLED: "true",
 };
-async function command(args: string[]) {
+const installerEnv = installerEnvironment();
+async function command(args: string[], commandEnv: Record<string, string | undefined> = env) {
   const p = Bun.spawn([process.execPath, ...args], {
     cwd: fixture.app,
-    env,
+    env: commandEnv,
     stdout: "pipe",
     stderr: "pipe",
     timeout: 90000,
@@ -168,7 +170,7 @@ try{const tenants=new BaseRepository(defineTable<{id:number;slug:string},'id'>({
     );
     await command(["other-tenant.ts"]);
   }
-  await command(["run", "frontend:install"]);
+  await command(["run", "frontend:install"], installerEnv);
   await command(["run", "frontend:build"]);
   await command([
     join(fixture.app, "node_modules/typescript/bin/tsc"),
