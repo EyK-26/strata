@@ -141,6 +141,28 @@ function inspectModule(file: string, source: string) {
 }
 
 describe("M2.1 neutral value graph", () => {
+  test("view token artifact imports only its canonical factory and erased renderer type", () => {
+    const file = "src/core/view/tokens.ts";
+    expect(
+      inspectModule(
+        file,
+        'import { createServiceToken } from "@getstrata/core/contracts/token"; import type { ViewRenderer } from "./viewRenderer"; export const CORE_VIEW_RENDERER_TOKEN = createServiceToken<ViewRenderer>("core.viewRenderer");',
+      ),
+    ).toEqual([]);
+    expect(
+      inspectModule(
+        file,
+        'import { createServiceToken } from "../contracts/token"; export const token = createServiceToken("view");',
+      ).some((issue) => issue.rule === "dependency"),
+    ).toBe(true);
+    expect(
+      inspectModule(
+        file,
+        'import { ViewRenderer } from "./viewRenderer"; export const renderer = ViewRenderer;',
+      ).some((issue) => issue.rule === "dependency"),
+    ).toBe(true);
+  });
+
   test.each([
     [
       "src/core/contracts/token.ts",

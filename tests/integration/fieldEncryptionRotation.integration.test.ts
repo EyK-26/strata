@@ -570,21 +570,28 @@ test("MySQL published entrypoints resume and serialize maintenance batches acros
     };
     expect((await runFieldEncryptionRotationBatch(options)).changed).toBe(1);
     const program = `import{BaseRepository,defineTable,bindDatabaseConnection,useSqlDialect,createMysqlConnection,runFieldEncryptionRotationBatch}from ${JSON.stringify(resolve("packages/strata-core/dist/index.js"))};import{runFieldEncryptionRotationBatch as shared}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/fieldEncryptionRotation.js"))};import{createFieldEncryptionKeyring}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/fieldEncryption.js"))};if(shared!==runFieldEncryptionRotationBatch)throw Error('Entry identity mismatch');const db=createMysqlConnection(process.env.ROTATION_MYSQL_URL);bindDatabaseConnection(db);useSqlDialect('mysql');const repository=new BaseRepository(defineTable({name:'rotation_accounts',primaryKey:'id',columns:['id','email','lookup','mfa','deleted_at'],softDeletes:true}));const source=createFieldEncryptionKeyring({activeKeyId:'old',encryptionKeys:{old:Buffer.alloc(32,11)},legacyV1Key:Buffer.alloc(32,11),lookupKey:Buffer.alloc(32,11)});const target=createFieldEncryptionKeyring({activeKeyId:'next',encryptionKeys:{next:Buffer.alloc(32,22)},lookupKey:Buffer.alloc(32,33)});try{console.log(JSON.stringify(await shared({repository,runId:'mysql',scopeId:'global',maintenanceMode:true,source,target,fields:[{column:'email',purpose:'email',lookupColumn:'lookup'}],batchSize:1})));}finally{await db.close();}`;
-    const results = await Promise.all(
+    const actors = await Promise.all(
       Array.from({ length: 3 }, async () => {
         const actor = Bun.spawn(
           [process.execPath, "--no-env-file", "--config=/dev/null", "-e", program],
           {
             env: { PATH: process.env.PATH, ROTATION_MYSQL_URL: url.toString() },
             stdout: "pipe",
-            stderr: "ignore",
+            stderr: "pipe",
           },
         );
-        const body = await new Response(actor.stdout).text();
-        expect(await actor.exited).toBe(0);
-        return JSON.parse(body);
+        const [body, errors, exit] = await Promise.all([
+          new Response(actor.stdout).text(),
+          new Response(actor.stderr).text(),
+          actor.exited,
+        ]);
+        return { body, errors, exit };
       }),
     );
+    const results = actors.map(({ body, errors, exit }) => {
+      expect(exit, errors).toBe(0);
+      return JSON.parse(body);
+    });
     expect(results.reduce((sum, row) => sum + row.changed, 0)).toBe(3);
     expect(results.filter((row) => row.completed).length).toBe(1);
     const audit = await runFieldEncryptionRotationBatch({

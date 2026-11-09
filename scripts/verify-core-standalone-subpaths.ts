@@ -13,6 +13,30 @@ const bootstrap = JSON.parse(
   await readFile(join(root, "packages/strata-bootstrap/package.json"), "utf8"),
 );
 
+// A package-root external flag matches every self subpath in Bun, splitting legacy
+// owners between source aliases and this root bundle (notably SQL dialect state).
+const rootBuildArguments = (core.scripts["build:bundle"] as string).split(/\s+/);
+for (let index = 0; index < rootBuildArguments.length; index++) {
+  if (rootBuildArguments[index] !== "--external") continue;
+  const external = rootBuildArguments[index + 1]?.replace(/^['"]|['"]$/g, "");
+  if (external === "@getstrata/core" || external?.startsWith("@getstrata/core/")) {
+    assert(
+      external !== "@getstrata/core" && canonical.has(external.slice("@getstrata/core/".length)),
+      `Core root build externalizes a legacy owner: ${external}`,
+    );
+  }
+}
+const rootSource = await readFile(join(root, "packages/strata-core/dist/index.js"), "utf8");
+for (const dependency of transpiler.scan(rootSource).imports) {
+  const prefix = "@getstrata/core/";
+  assert(dependency.path !== "@getstrata/core", "Core root bundle must not import its own root");
+  if (!dependency.path.startsWith(prefix)) continue;
+  assert(
+    dependency.kind === "import-statement" && canonical.has(dependency.path.slice(prefix.length)),
+    `Core root bundle imports noncanonical legacy owner: ${dependency.path}`,
+  );
+}
+
 for (const subpath of canonical) {
   assert(!CORE_SHARED_SUBPATH_SET.has(subpath), `${subpath} must never shim the legacy root`);
   assert.equal(core.exports[`./${subpath}`].import, `./dist/entries/${subpath}.js`);

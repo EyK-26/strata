@@ -209,6 +209,7 @@ const CORE_SUBPATHS = [
   "tracing/tracingMiddleware",
   "validation/rules",
   "view",
+  "view/tokens",
 ] as const;
 
 const BOOTSTRAP_SUBPATHS = [
@@ -394,7 +395,11 @@ async function updatePackageJson(
   const telemetryExternals = packageDir.includes("strata-core")
     ? " --external '@opentelemetry/*'"
     : "";
-  const standaloneExternal = ` ${coreSubpathExternalFlags(CORE_STANDALONE_SUBPATHS)}`;
+  // Unlike subpath bundles, the core root must retain every legacy shared owner.
+  // Externalizing the package root also externalizes all subpaths in Bun.
+  const standaloneExternal = CORE_STANDALONE_SUBPATHS.map(
+    (subpath) => ` --external @getstrata/core/${subpath}`,
+  ).join("");
   packageJson.scripts["build:bundle"] =
     `bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}${standaloneExternal}`;
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { realpath } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import * as BootstrapRoot from "@getstrata/bootstrap";
+import * as BootstrapConfig from "@getstrata/bootstrap/config";
 import { CORE_CACHE_TOKEN as bootstrapCacheToken } from "@getstrata/bootstrap/config";
 import { createServiceToken as bootstrapToken } from "@getstrata/bootstrap/contracts";
+import { createViewProvider as granularViewProvider } from "@getstrata/bootstrap/providers/view";
 import * as Root from "@getstrata/core";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
@@ -10,9 +13,11 @@ import { CORE_CACHE_TOKEN as cacheToken } from "@getstrata/core/cache/tokens";
 import { configInteger, parseApplicationConfig } from "@getstrata/core/config/applicationConfig";
 import * as Container from "@getstrata/core/contracts/container";
 import * as Services from "@getstrata/core/contracts/services";
+import * as ServiceTokens from "@getstrata/core/contracts/serviceTokens";
 import { CORE_CACHE_TOKEN as serviceToken } from "@getstrata/core/contracts/serviceTokens";
 import * as Tokens from "@getstrata/core/contracts/token";
 import { createApplication } from "@getstrata/core/runtime/application";
+import * as Views from "@getstrata/core/view";
 
 assert.equal(Root.createServiceToken, Tokens.createServiceToken);
 assert.equal(Container.createServiceToken, Tokens.createServiceToken);
@@ -24,6 +29,79 @@ assert.equal(Root.aliasService, Services.aliasService);
 for (const token of [Root.CORE_CACHE_TOKEN, serviceToken, bootstrapCacheToken])
   assert.equal(token, cacheToken);
 assert.equal(Tokens.isServiceToken(cacheToken), true);
+
+// Compare every built-in constant on every SUPPORTED public path that exports it.
+// Keep opaque identities explicit so a newly added constant cannot silently disappear.
+const publicModules: Record<string, Record<string, unknown>> = {
+  core: Root,
+  serviceTokens: ServiceTokens,
+  view: Views,
+  bootstrap: BootstrapRoot,
+  bootstrapConfig: BootstrapConfig,
+};
+const opaqueConstants = new Map<string, Array<{ path: string; value: unknown }>>();
+for (const [path, module] of Object.entries(publicModules)) {
+  for (const [name, value] of Object.entries(module)) {
+    if (!name.endsWith("_TOKEN")) continue;
+    if (name in ServiceTokens)
+      assert.equal(value, Reflect.get(ServiceTokens, name), `${name} differs on ${path}`);
+    if (Tokens.isServiceToken(value)) {
+      const entries = opaqueConstants.get(name) ?? [];
+      entries.push({ path, value });
+      opaqueConstants.set(name, entries);
+    }
+  }
+}
+const expectedOpaque = [
+  "CORE_CACHE_TOKEN",
+  "CORE_HTTP_CLEANUP_TOKEN",
+  "CORE_PUBLIC_TENANCY_TOKEN",
+  "CORE_TENANT_RESOLVER_TOKEN",
+  "CORE_THROTTLE_QUOTA_POLICY_TOKEN",
+  "CORE_VIEW_RENDERER_TOKEN",
+];
+for (const name of expectedOpaque)
+  assert.ok(opaqueConstants.has(name), `${name} missing from public inventory`);
+for (const [name, entries] of opaqueConstants) {
+  assert.ok(entries.length >= 2, `${name} needs a real cross-path identity comparison`);
+  for (const entry of entries)
+    assert.equal(entry.value, entries[0]?.value, `${name} differs on ${entry.path}`);
+}
+
+const viewsDirectory = await mkdtemp(join(process.cwd(), "owned-view-identity-"));
+let viewProvidersResolved = 0;
+try {
+  await writeFile(join(viewsDirectory, "identity.eta"), "<p><%= it.label %></p>");
+  for (const create of [granularViewProvider]) {
+    const container = new Container.ServiceContainer();
+    const config = new Container.ConfigStore();
+    const provider = create({
+      enabled: true,
+      directory: viewsDirectory,
+      layout: false,
+      data: { loadUser: async () => null },
+    });
+    await provider.register?.({ container, config, dependencies: { container }, onCleanup() {} });
+    const renderer = container.resolve(Root.CORE_VIEW_RENDERER_TOKEN);
+    assert.equal(container.resolve(Views.CORE_VIEW_RENDERER_TOKEN), renderer);
+    assert.equal(
+      await (await renderer.render("identity", { label: "provider-token-identity" })).text(),
+      "<p>provider-token-identity</p>",
+    );
+    viewProvidersResolved++;
+  }
+  // New canonical paths are compared when advertised; old archives do not invent APIs.
+  const manifest = await Bun.file(
+    join(process.cwd(), "node_modules/@getstrata/core/package.json"),
+  ).json();
+  if (manifest.exports?.["./view/tokens"]) {
+    const entry = "@getstrata/core/view/tokens";
+    const canonical = await import(entry);
+    assert.equal(canonical.CORE_VIEW_RENDERER_TOKEN, Root.CORE_VIEW_RENDERER_TOKEN);
+  }
+} finally {
+  await rm(viewsDirectory, { recursive: true, force: true });
+}
 
 const paths = [];
 for (const entry of [
@@ -90,6 +168,11 @@ try {
     JSON.stringify({
       mixedFactoryIdentity: true,
       mixedCacheIdentity: true,
+      opaqueConstants: [...opaqueConstants.keys()].sort(),
+      serviceConstants: Object.keys(ServiceTokens)
+        .filter((name) => name.endsWith("_TOKEN"))
+        .sort(),
+      viewProvidersResolved,
       resolved: 49,
       expiredResolver: true,
       paths,

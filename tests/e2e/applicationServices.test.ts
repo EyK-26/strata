@@ -82,6 +82,9 @@ test("clean installed services share canonical mixed-import tokens and pass exte
     const report = JSON.parse((await run([process.execPath, "consumer.ts"], directory)).trim());
     assert.equal(report.mixedFactoryIdentity, true);
     assert.equal(report.mixedCacheIdentity, true);
+    assert.equal(report.viewProvidersResolved, 1);
+    assert.ok(report.opaqueConstants.includes("CORE_VIEW_RENDERER_TOKEN"));
+    assert.ok(report.serviceConstants.includes("CORE_HTTP_CLEANUP_TOKEN"));
     assert.equal(report.resolved, 49);
     assert.equal(report.expiredResolver, true);
     const lockHash = createHash("sha256")

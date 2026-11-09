@@ -185,7 +185,7 @@ auth/ORM isolation, the full starter matrix or a release.
 owner, service composition, token contracts and configuration modules. It is also
 part of `check:module-imports` and the existing validation gate. Contract-only
 modules must erase completely; runtime edges are limited to the declared neutral
-modules. Six standalone public artifacts have separate built-import checks. Ambient resource names are conservatively reserved even
+modules. Seven standalone public artifacts have separate built-import checks. Ambient resource names are conservatively reserved even
 for local bindings. This is a maintenance rule, not a sandbox for hostile code.
 
 The remaining legacy owners, string keys and consumers are enumerated in

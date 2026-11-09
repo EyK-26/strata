@@ -21,6 +21,7 @@ export {
   type ServiceToken,
 } from "@getstrata/core/contracts/container";
 export { aliasService, service, valueService } from "@getstrata/core/contracts/services";
+export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
 export type {
   AdminColumn,
   AdminColumnType,
@@ -753,7 +754,6 @@ export {
   validateObject,
 } from "../core/validation/rules.ts";
 export {
-  CORE_VIEW_RENDERER_TOKEN,
   configureWebErrorView,
   configureWebLayoutData,
   createWebLayoutDataResolver,

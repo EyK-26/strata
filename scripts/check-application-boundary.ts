@@ -36,6 +36,7 @@ const neutralEdges: Readonly<
     values: ["contracts/token", "contracts/services"],
     types: ["contracts/token", "contracts/services"],
   },
+  [PATH("view/tokens")]: { values: ["contracts/token"], types: ["view/viewRenderer"] },
   [PATH("cache/tokens")]: { values: ["contracts/token"], types: ["../types/services"] },
   [PATH("config/configSnapshot")]: { values: [], types: ["contracts/application"] },
   [PATH("config/applicationConfig")]: {
@@ -62,6 +63,7 @@ const canonicalValues = new Set(
     "contracts/serviceTokens",
     "cache/tokens",
     "config/applicationConfig",
+    "view/tokens",
   ].map(PATH),
 );
 const AMBIENT_CAPABILITIES = new Set([

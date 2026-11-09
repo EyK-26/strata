@@ -16,6 +16,7 @@ export const CORE_STANDALONE_SUBPATHS = [
   "contracts/services",
   "cache/tokens",
   "config/applicationConfig",
+  "view/tokens",
 ] as const;
 
 export const CORE_SHARED_SUBPATHS = [
