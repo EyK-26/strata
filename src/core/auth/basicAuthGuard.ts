@@ -1,6 +1,6 @@
+import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
 import type { AuthUserRecord } from "../contracts/authUserDirectory";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { getBoundDatabaseConnection } from "../database/boundConnection";
 import { getActiveDatabaseConnection } from "../database/connectionContext";
 import { getDefaultDatabasePool } from "../database/defaultConnection";

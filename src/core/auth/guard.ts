@@ -1,6 +1,6 @@
+import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
 import { envFlagEnabled, isProductionEnv } from "../runtime/appEnv";
 import { timingSafeCompareString } from "../security/timingSafeCompare";

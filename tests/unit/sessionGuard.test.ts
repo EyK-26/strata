@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import { CORE_AUTH_USER_DIRECTORY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import type { AnyServiceToken } from "@getstrata/core/contracts/token";
 
 function requestWithSession(userId = 1): Request {
   const cookie = createSessionCookie(userId).split(";")[0] ?? "";
@@ -13,10 +14,10 @@ function requestWithSession(userId = 1): Request {
 
 function containerWith(directory: unknown) {
   return {
-    has(key: string) {
+    has(key: string | AnyServiceToken) {
       return key === CORE_AUTH_USER_DIRECTORY_TOKEN && directory !== null;
     },
-    resolve<T>(_key: string): T {
+    resolve<T>(_key: string | AnyServiceToken): T {
       return directory as T;
     },
   };

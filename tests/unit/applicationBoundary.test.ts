@@ -135,3 +135,116 @@ describe("M1 application owner boundary", () => {
     }
   });
 });
+
+function inspectModule(file: string, source: string) {
+  return checkApplicationBoundary({ runtime, contract, modules: { [file]: source } });
+}
+
+describe("M2.1 neutral value graph", () => {
+  test("view token artifact imports only its canonical factory and erased renderer type", () => {
+    const file = "src/core/view/tokens.ts";
+    expect(
+      inspectModule(
+        file,
+        'import { createServiceToken } from "@getstrata/core/contracts/token"; import type { ViewRenderer } from "./viewRenderer"; export const CORE_VIEW_RENDERER_TOKEN = createServiceToken<ViewRenderer>("core.viewRenderer");',
+      ),
+    ).toEqual([]);
+    expect(
+      inspectModule(
+        file,
+        'import { createServiceToken } from "../contracts/token"; export const token = createServiceToken("view");',
+      ).some((issue) => issue.rule === "dependency"),
+    ).toBe(true);
+    expect(
+      inspectModule(
+        file,
+        'import { ViewRenderer } from "./viewRenderer"; export const renderer = ViewRenderer;',
+      ).some((issue) => issue.rule === "dependency"),
+    ).toBe(true);
+  });
+
+  test.each([
+    [
+      "src/core/contracts/token.ts",
+      'export const createServiceToken = () => Object.freeze({ key: Symbol("token") });',
+    ],
+    [
+      "src/core/contracts/services.ts",
+      'import { assertServiceToken } from "@getstrata/core/contracts/token"; export const service = assertServiceToken;',
+    ],
+    [
+      "src/core/contracts/container.ts",
+      'import { serviceTokenKey } from "@getstrata/core/contracts/token"; export const key = serviceTokenKey;',
+    ],
+    [
+      "src/core/cache/tokens.ts",
+      'import type { CacheLike } from "../../types/services"; import { createServiceToken } from "@getstrata/core/contracts/token"; export const CORE_CACHE_TOKEN = createServiceToken<CacheLike>("core.cache");',
+    ],
+    [
+      "src/core/config/configSnapshot.ts",
+      'import type { ApplicationConfigValue } from "../contracts/application"; export const copy = (value: ApplicationConfigValue) => value;',
+    ],
+    [
+      "src/core/config/applicationConfig.ts",
+      'import { copy } from "./configSnapshot"; import { validateEnv } from "@getstrata/core/config/envSchema"; export const parse = (input: Record<string,string>) => copy(validateEnv({}, input));',
+    ],
+    [
+      "src/core/runtime/serviceGraph.ts",
+      'import { serviceTokenKey } from "@getstrata/core/contracts/token"; export const validate = serviceTokenKey;',
+    ],
+    [
+      "src/core/contracts/serviceTokens.ts",
+      'export { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";',
+    ],
+  ])("accepts explicit neutral edges in %s", (file, source) => {
+    expect(inspectModule(file, source)).toEqual([]);
+  });
+
+  test("accepts application composition and erases application contract type dependencies", () => {
+    expect(
+      checkApplicationBoundary({
+        runtime:
+          'import { ServiceContainer } from "@getstrata/core/contracts/container"; import { validate } from "./serviceGraph"; import { copy } from "../config/configSnapshot"; export { service } from "@getstrata/core/contracts/services";',
+        contract:
+          'import type { ServiceToken } from "./token"; import type { ServiceDeclaration } from "./services"; export type Definitions = ServiceDeclaration[];',
+      }),
+    ).toEqual([]);
+  });
+
+  test.each([
+    [
+      "src/core/runtime/serviceGraph.ts",
+      'import { resolveApplicationCache } from "./applicationRegistry";',
+    ],
+    ["src/core/runtime/serviceGraph.ts", 'import type { Request } from "../http/route";'],
+    [
+      "src/core/runtime/application.ts",
+      'import { parseApplicationConfig } from "../config/applicationConfig";',
+    ],
+    ["src/core/runtime/application.ts", 'import { validateEnv } from "../config/envSchema";'],
+    ["src/core/contracts/container.ts", 'import { createServiceToken } from "./token";'],
+    ["src/core/cache/tokens.ts", 'import { createServiceToken } from "../contracts/token";'],
+    [
+      "src/core/contracts/token.ts",
+      'import { ServiceContainer } from "@getstrata/core/contracts/container";',
+    ],
+    ["src/core/contracts/services.ts", 'import type { AuthManager } from "../auth/guard";'],
+    ["src/core/config/configSnapshot.ts", 'import { validateEnv } from "./envSchema";'],
+    ["src/core/runtime/unapprovedHelper.ts", "export const helper = 1;"],
+    ["src/core/contracts/token.ts", 'const token = import("./container");'],
+    ["src/core/contracts/services.ts", 'export type { AppContext } from "./di";'],
+  ])("rejects unapproved or noncanonical edges in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
+  });
+
+  test.each([
+    ["src/core/contracts/token.ts", 'const key = Symbol.for("application.tokens");'],
+    ["src/core/config/applicationConfig.ts", "const input = process.env;"],
+    ["src/core/runtime/serviceGraph.ts", "resolveApplicationCache();"],
+    ["src/core/config/configSnapshot.ts", "const input = globalThis.config;"],
+  ])("rejects ambient ownership in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "ambient-capability")).toBe(
+      true,
+    );
+  });
+});

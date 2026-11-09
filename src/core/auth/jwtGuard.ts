@@ -1,6 +1,6 @@
+import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
 import type { AuthUserDirectory } from "../contracts/authUserDirectory";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { readBearerToken } from "../http/statelessAuth";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";

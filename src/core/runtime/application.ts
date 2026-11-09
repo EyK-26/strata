@@ -1,7 +1,8 @@
+import { ServiceContainer } from "@getstrata/core/contracts/container";
+import { copyApplicationConfig } from "../config/configSnapshot";
 import type {
   Application,
   ApplicationConfig,
-  ApplicationConfigValue,
   ApplicationDefinition,
   ApplicationDiagnostic,
   ApplicationPhase,
@@ -18,8 +19,14 @@ import type {
   ResourceSpec,
   StopResult,
 } from "../contracts/application";
+import type { ServiceToken } from "../contracts/token";
+import { compileServiceGraph, type ServiceGraph } from "./serviceGraph";
 
-type Deferred<T> = { promise: Promise<T>; resolve(value: T): void; reject(error: unknown): void };
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve(value: T | PromiseLike<T>): void;
+  reject(error: unknown): void;
+};
 type Hook = (context: CleanupContext) => void | Promise<void>;
 type Resource = {
   name: string;
@@ -35,10 +42,11 @@ type Definition = {
   transports: readonly ProviderDefinition[];
   shutdownTimeoutMs: number;
   startupCleanupTimeoutMs: number;
+  services: ServiceGraph;
 };
 
 function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
+  let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (error: unknown) => void;
   const promise = new Promise<T>((fulfill, fail) => {
     resolve = fulfill;
@@ -63,58 +71,45 @@ function timeout(value: number | undefined): number {
   return result;
 }
 
-function copyConfig(value: unknown, ancestors = new Set<object>()): ApplicationConfigValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value !== "object" || ancestors.has(value)) {
-    throw new TypeError("Application config must contain acyclic plain data.");
-  }
-  const array = Array.isArray(value);
-  const prototype = Object.getPrototypeOf(value);
-  if (
-    prototype !== (array ? Array.prototype : Object.prototype) &&
-    !(prototype === null && !array)
-  ) {
-    throw new TypeError("Application config must contain only plain objects and arrays.");
-  }
-  if (Object.getOwnPropertySymbols(value).length > 0) {
-    throw new TypeError("Application config cannot contain symbol keys.");
-  }
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  for (const [key, descriptor] of Object.entries(descriptors)) {
-    if (!(array && key === "length") && (!descriptor.enumerable || !("value" in descriptor))) {
-      throw new TypeError("Application config cannot contain accessors or hidden properties.");
-    }
-  }
-  ancestors.add(value);
+/** Descriptor inspection does not execute a caller's then getter. */
+function mayBeThenable(value: unknown): boolean {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) return false;
   try {
-    if (array) {
-      // Every genuine array owns its nonconfigurable length data property.
-      const length = (descriptors.length as PropertyDescriptor).value as number;
-      if (Object.keys(descriptors).length !== length + 1) {
-        throw new TypeError(
-          "Application config arrays must be dense and have no extra properties.",
-        );
-      }
-      const result: ApplicationConfigValue[] = [];
-      for (let index = 0; index < length; index++) {
-        const descriptor = descriptors[String(index)];
-        if (!descriptor) throw new TypeError("Application config arrays must be dense.");
-        result.push(copyConfig(descriptor.value, ancestors));
-      }
-      return Object.freeze(result);
+    let current: object | null = value;
+    const visited = new Set<object>();
+    while (current !== null) {
+      if (visited.has(current)) return true;
+      visited.add(current);
+      const then = Object.getOwnPropertyDescriptor(current, "then");
+      if (then) return !("value" in then) || typeof then.value === "function";
+      current = Object.getPrototypeOf(current);
     }
-    const result: Record<string, ApplicationConfigValue> = {};
-    for (const [key, descriptor] of Object.entries(descriptors)) {
-      Object.defineProperty(result, key, {
-        value: copyConfig(descriptor.value, ancestors),
-        enumerable: true,
-      });
-    }
-    return Object.freeze(result);
-  } finally {
-    ancestors.delete(value);
+    return false;
+  } catch {
+    // Descriptor visibility is only a synchronous-expiration optimization. Native
+    // Promise normalization remains authoritative for opaque/proxy return values.
+    return true;
   }
+}
+
+function leasedOperation<T>(work: () => T | Promise<T>, close: () => void) {
+  const result = deferred<T>();
+  observed(result.promise);
+  void result.promise.then(close, close);
+  return {
+    promise: result.promise,
+    invoke(): void {
+      try {
+        const value = work();
+        if (!mayBeThenable(value)) close();
+        // Native assimilation reads a callable/accessor candidate; no manual then read.
+        result.resolve(value);
+      } catch (error) {
+        close();
+        result.reject(error);
+      }
+    },
+  };
 }
 
 function declarationName(value: unknown): asserts value is string {
@@ -158,7 +153,7 @@ function openOutcome<T>(value: unknown): OpenOutcome<T> {
 }
 
 function normalize(input: ApplicationDefinition): Definition {
-  const copied = copyConfig(input.config === undefined ? {} : input.config);
+  const copied = copyApplicationConfig(input.config === undefined ? {} : input.config);
   if (copied === null || typeof copied !== "object" || Array.isArray(copied)) {
     throw new TypeError("Application config must be a plain object.");
   }
@@ -218,6 +213,7 @@ function normalize(input: ApplicationDefinition): Definition {
     transports: orderedTransports,
     shutdownTimeoutMs: timeout(input.shutdownTimeoutMs),
     startupCleanupTimeoutMs: timeout(input.startupCleanupTimeoutMs),
+    services: compileServiceGraph(input.services, input.overrides),
   };
 }
 
@@ -242,6 +238,7 @@ class OwnedApplication implements Application {
   private readonly providerOrder = new Map<string, number>();
   private readonly transportNames = new Set<string>();
   private readonly commands = new Set<Promise<unknown>>();
+  private readonly services = new ServiceContainer();
   private readonly diagnostics: ApplicationDiagnostic[] = [];
   private changed = deferred<void>();
   private phase: ApplicationPhase = "constructed";
@@ -300,17 +297,29 @@ class OwnedApplication implements Application {
     if (this.phase !== "ready") {
       return observed(Promise.reject(new ApplicationStateError("APPLICATION_NOT_READY", this.id)));
     }
-    const scope = Object.freeze({
+    let active = true;
+    const scope: CommandScope = Object.freeze({
       applicationId: this.id,
       config: this.definition.config,
       signal: this.cancellation.signal,
+      resolve: <T>(token: ServiceToken<T>): T => {
+        if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+        return this.services.resolve(token);
+      },
     });
-    const result = observed(Promise.resolve().then(() => work(scope)));
+    const operation = leasedOperation(
+      () => work(scope),
+      () => {
+        active = false;
+      },
+    );
+    const result = operation.promise;
     this.commands.add(result);
     void result.then(
       () => this.commandSettled(result),
       () => this.commandSettled(result),
     );
+    void Promise.resolve().then(() => operation.invoke());
     return result;
   }
 
@@ -321,6 +330,7 @@ class OwnedApplication implements Application {
 
   private async startProviders(): Promise<void> {
     try {
+      await this.definition.services.start(this.services, this.cancellation.signal);
       for (const provider of [...this.definition.providers, ...this.definition.transports]) {
         if (this.cancellation.signal.aborted) throw this.cancelled;
         let active = true;
@@ -329,6 +339,10 @@ class OwnedApplication implements Application {
           applicationId: this.id,
           config: this.definition.config,
           signal: this.cancellation.signal,
+          resolve: <T>(token: ServiceToken<T>): T => {
+            if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+            return this.services.resolve(token);
+          },
           acquire: <T>(spec: ResourceSpec<T>): Promise<T> => {
             if (!active || this.cancellation.signal.aborted) {
               return observed(Promise.reject(this.cancelled));
@@ -338,11 +352,14 @@ class OwnedApplication implements Application {
             return result;
           },
         });
-        try {
-          await provider.setup(scope);
-        } finally {
-          active = false;
-        }
+        const operation = leasedOperation(
+          () => provider.setup(scope),
+          () => {
+            active = false;
+          },
+        );
+        operation.invoke();
+        await operation.promise;
         // Even an unawaited acquisition remains part of this owner's startup attempt.
         for (const acquisition of acquisitions) await acquisition;
       }
@@ -640,5 +657,7 @@ function createApplication(definition: ApplicationDefinition): Application {
   return new OwnedApplication(normalize(definition));
 }
 
+export { aliasService, service, valueService } from "@getstrata/core/contracts/services";
 export type * from "../contracts/application";
+export type * from "../contracts/services";
 export { createApplication };

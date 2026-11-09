@@ -7,6 +7,7 @@ import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { hashPassword } from "@getstrata/core/auth/password";
 import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
 import { CORE_AUTH_USER_DIRECTORY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import type { AnyServiceToken } from "@getstrata/core/contracts/token";
 import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
@@ -16,10 +17,10 @@ import { restoreEnvVar } from "../helpers/restoreEnv";
 
 function directoryContainer(directory: AuthUserDirectory | null) {
   return {
-    has(token: string) {
+    has(token: string | AnyServiceToken) {
       return directory !== null && token === CORE_AUTH_USER_DIRECTORY_TOKEN;
     },
-    resolve<T>(_key: string): T {
+    resolve<T>(_key: string | AnyServiceToken): T {
       if (!directory) {
         throw new Error("missing directory");
       }

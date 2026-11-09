@@ -1,9 +1,11 @@
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { AbilityChecker } from "../auth/abilityChecker";
 import type { ThrottleQuotaPolicy } from "../http/throttleMiddleware";
 import type { PublicTenancyOptions, TenantResolver } from "../tenant/tenantMiddleware";
 import type { AuthUserDirectory } from "./authUserDirectory";
 import type { ServiceContainerLike } from "./container";
-import { createServiceToken } from "./container";
+
+export { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";
 
 const CORE_THROTTLE_QUOTA_POLICY_TOKEN = createServiceToken<ThrottleQuotaPolicy>(
   "core.throttleQuotaPolicy",
@@ -15,7 +17,6 @@ const CORE_HTTP_CLEANUP_TOKEN =
   createServiceToken<(cleanup: () => void) => void>("core.httpCleanup");
 
 const CORE_CONFIG_TOKEN = "core.config";
-const CORE_CACHE_TOKEN = "core.cache";
 const CORE_QUEUE_TOKEN = "core.queue";
 const CORE_EVENT_BUS_TOKEN = "core.eventBus";
 const CORE_POLICY_GATE_TOKEN = "core.policyGate";
@@ -74,7 +75,6 @@ export {
   CORE_ABILITY_CHECKER_TOKEN,
   CORE_AUTH_TOKEN,
   CORE_AUTH_USER_DIRECTORY_TOKEN,
-  CORE_CACHE_TOKEN,
   CORE_CONFIG_TOKEN,
   CORE_EVENT_BUS_TOKEN,
   CORE_HTTP_CLEANUP_TOKEN,

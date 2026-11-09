@@ -3,6 +3,25 @@
  * Import from `@getstrata/core` (workspace) or `src/framework/public-api`.
  */
 
+export { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";
+export type {
+  ConfigIntegerBounds,
+  DeepReadonly,
+  ValidatedEnvironment,
+} from "@getstrata/core/config/applicationConfig";
+export {
+  configEnum,
+  configInteger,
+  parseApplicationConfig,
+} from "@getstrata/core/config/applicationConfig";
+export {
+  ConfigStore,
+  createServiceToken,
+  ServiceContainer,
+  type ServiceToken,
+} from "@getstrata/core/contracts/container";
+export { aliasService, service, valueService } from "@getstrata/core/contracts/services";
+export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
 export type {
   AdminColumn,
   AdminColumnType,
@@ -90,12 +109,6 @@ export {
 } from "../core/cache/createCacheStore.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
 export { CACHE_TAGS } from "../core/cache/tags.ts";
-export {
-  ConfigStore,
-  createServiceToken,
-  ServiceContainer,
-  type ServiceToken,
-} from "../core/contracts/container.ts";
 export type { ServiceProvider } from "../core/contracts/di.ts";
 export { resolveService } from "../core/contracts/di.ts";
 export type {
@@ -741,7 +754,6 @@ export {
   validateObject,
 } from "../core/validation/rules.ts";
 export {
-  CORE_VIEW_RENDERER_TOKEN,
   configureWebErrorView,
   configureWebLayoutData,
   createWebLayoutDataResolver,

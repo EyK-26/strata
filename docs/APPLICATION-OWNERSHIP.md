@@ -60,6 +60,84 @@ operations are still running; settled unknown ownership can complete with a
 failed disposition and retained obligations. Caller-owned error payloads retain
 their identity and are not inspected or frozen.
 
+## Typed application services and settings
+
+Use opaque tokens and declaration helpers to compose application values. Two tokens
+with the same diagnostic name have different identities. Import shared constants
+instead of reconstructing them by name. The supported core and bootstrap contract
+exports preserve each token's identity; strings remain legacy container keys.
+
+```ts
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import { service, valueService } from "@getstrata/core/contracts/services";
+import {
+  configEnum,
+  configInteger,
+  parseApplicationConfig,
+} from "@getstrata/core/config/applicationConfig";
+import { createApplication } from "@getstrata/core/runtime/application";
+
+const settings = parseApplicationConfig(
+  { PORT: { required: true }, DRIVER: { default: "memory" } },
+  { PORT: "3000" }, // Explicit input; pass process.env here when intended.
+  (values) => ({
+    port: configInteger("PORT", values.PORT, { minimum: 1, maximum: 65535 }),
+    driver: configEnum("DRIVER", values.DRIVER, ["memory", "redis"]),
+  }),
+);
+const Settings = createServiceToken<typeof settings>("orders.settings");
+const Endpoint = createServiceToken<string>("orders.endpoint");
+const app = createApplication({
+  providers: [],
+  services: [
+    valueService(Settings, settings),
+    service(Endpoint, {
+      lifetime: "application",
+      dependencies: [Settings],
+      create: (config) => `http://localhost:${config.port}`,
+    }),
+  ],
+});
+await app.start();
+const endpoint = await app.run((scope) => scope.resolve(Endpoint));
+await app.stop();
+```
+
+The parser validates selected own input fields, calls the converter with frozen
+validated strings, then copies and deeply freezes plain settings. It rejects
+accessors, cycles and exotic output values. Input is always explicit. Framework
+validation errors identify fields and rules without including their input values;
+converter-thrown errors remain caller-owned and retain their identity. Service
+values themselves are not copied or frozen.
+
+Graph validation occurs during construction, before any factories or providers
+run. It rejects duplicates, missing dependencies, cycles, invalid overrides and
+application services that depend on execution services, including through aliases.
+Factories initialize exactly once in dependency order during `start()`, before
+providers and transports. They receive only the values in their dependency tuple.
+Async factories initialize a value; Promise/thenable payloads are unsupported.
+
+Declarations are immutable helper-issued objects. Do not spread or reconstruct
+their erased fields: copies are rejected before effects. Use a new helper call
+for replacements.
+
+Use `aliasService(aliasToken, targetToken)` for another token of the same value
+type. `overrides` accepts replacement declarations for existing tokens. Replacing
+a target updates all its aliases; replacing an alias changes only that node. The
+final graph is validated after replacements. Composition is sealed before provider
+setup, and the application exposes only typed resolution.
+
+A command's resolver expires when its callback finishes. Ordinary synchronous
+results close it immediately; callable/accessor `then` candidates use native
+Promise normalization and close it before completion observers run. Saved scopes
+cannot regain access. Provider resolution similarly expires after setup. An
+aborted startup cannot publish a late factory result as a ready service.
+
+This checkpoint supports resource-free application values. Execution lifetimes
+are recognized for graph diagnostics but reject as unsupported. Request/job
+scopes and resource service declarations follow in the next checkpoint. Existing
+provider acquisition remains the resource ownership API described above.
+
 ## Migration boundary
 
 The new owner never delegates to the existing global owners. The CLI's direct-child
@@ -103,8 +181,13 @@ Source unit tests, installed-package acceptance and import-boundary checks are
 separate evidence. A passing ownership proof does not qualify browser behavior,
 auth/ORM isolation, the full starter matrix or a release.
 
-`bun run check:application-boundary` enforces the two migrated source files. It is
-also part of `check:module-imports` and the existing validation gate. The check
-allows only erased imports/reexports of the application contract; that contract
-must erase completely. Ambient resource names are conservatively reserved even
+`bun run check:application-boundary` enforces the explicit dependency graph of the
+owner, service composition, token contracts and configuration modules. It is also
+part of `check:module-imports` and the existing validation gate. Contract-only
+modules must erase completely; runtime edges are limited to the declared neutral
+modules. Seven standalone public artifacts have separate built-import checks. Ambient resource names are conservatively reserved even
 for local bindings. This is a maintenance rule, not a sandbox for hostile code.
+
+The remaining legacy owners, string keys and consumers are enumerated in
+[the migration ledger](architecture/m21-legacy-callers.txt). Their continued
+presence does not establish application isolation for those paths.

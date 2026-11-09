@@ -33,10 +33,11 @@ describe("@getstrata/core contracts", () => {
     expect(container.make<string>("demo")).toBe("value");
   });
 
-  test("typed tokens preserve string identity and binding lifecycle", () => {
+  test("typed tokens preserve opaque identity and binding lifecycle", () => {
     const container = new ServiceContainer();
     const token = createServiceToken<{ count: number }>("typed.counter");
-    expect(String(token)).toBe("typed.counter");
+    expect(Object.isFrozen(token)).toBe(true);
+    expect(createServiceToken<{ count: number }>("typed.counter")).not.toBe(token);
     let calls = 0;
     container.singleton(token, () => ({ count: ++calls }));
     expect(container.has(token)).toBe(true);
@@ -49,13 +50,16 @@ describe("@getstrata/core contracts", () => {
     expect(container.instance(token, instance)).toBe(instance);
     expect(container.resolve(token)).toBe(instance);
     container.set("typed.counter", { count: 11 });
-    expect(container.resolve(token).count).toBe(11);
+    expect(container.resolve(token).count).toBe(10);
+    expect(container.resolve<{ count: number }>("typed.counter").count).toBe(11);
     const dependencies = { container, cache: {} as never, storage: {} as never };
-    expect(resolveService(dependencies, token).count).toBe(11);
+    expect(resolveService(dependencies, token).count).toBe(10);
     expect(() => container.resolve(createServiceToken<number>("missing"))).toThrow(
       'Service "missing" is not registered.',
     );
-    expect(() => createServiceToken("   ")).toThrow("Service token key must not be empty.");
+    expect(() => createServiceToken("   ")).toThrow(
+      "Service token name must be a nonempty string.",
+    );
   });
 
   test("assertAppDependenciesComplete requires cache and storage", () => {

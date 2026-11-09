@@ -1,4 +1,3 @@
-import { createServiceToken } from "../contracts/container";
 import { currentRequestMeta } from "../http/requestMetaContext";
 import type { ViewEngine } from "./viewEngine";
 
@@ -128,12 +127,11 @@ class ViewRenderer {
   }
 }
 
-const CORE_VIEW_RENDERER_TOKEN = createServiceToken<ViewRenderer>("core.viewRenderer");
-
+export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
 export type {
   HtmxViewResponseOptions,
   NamespacedViewRenderer,
   ViewNamespaceOptions,
   ViewResponseOptions,
 };
-export { CORE_VIEW_RENDERER_TOKEN, ViewRenderer };
+export { ViewRenderer };

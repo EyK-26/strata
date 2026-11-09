@@ -128,7 +128,6 @@ coveragePathIgnorePatterns = [
   "src/core/facades/**",
   "src/core/runtime/applicationRegistry.ts",
   "src/core/queue/jobRegistry.ts",
-  "src/core/contracts/container.ts",
   "src/core/contracts/di.ts",
   "src/core/contracts/serviceTokens.ts",
   "src/core/tracing/otel.ts",
@@ -208,7 +207,7 @@ coveragePathIgnorePatterns = [
   "src/core/view/webLayoutData.ts",
 
   # Environment schema (validated at bootstrap)
-  "src/core/config/**",
+  "src/core/config/envSchema.ts",
 
   # Infrastructure drivers and observability plumbing
   # Preserve the existing cache baseline; new protocol owners remain instrumented.

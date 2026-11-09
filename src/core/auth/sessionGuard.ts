@@ -1,5 +1,5 @@
+import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { resolveAbilitiesForRole } from "./abilityCatalog";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";

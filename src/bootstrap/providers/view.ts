@@ -3,7 +3,6 @@ import { appDisplayName } from "@getstrata/core/runtime/appKeyPrefix";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import type { WebLayoutDataOptions } from "@getstrata/core/view";
 import {
-  CORE_VIEW_RENDERER_TOKEN,
   configureWebErrorView,
   configureWebLayoutData,
   createWebLayoutDataResolver,
@@ -13,6 +12,7 @@ import {
   resolveWebLayoutData,
   ViewRenderer,
 } from "@getstrata/core/view";
+import { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
 import type { ServiceProvider } from "../contracts";
 
 const CORE_VIEW_TOKEN = "core.view";
