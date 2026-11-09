@@ -106,7 +106,33 @@ interface ApplicationDefinition {
   readonly startupCleanupTimeoutMs?: number;
 }
 
+type ExecutionActor =
+  | { readonly kind: "principal"; readonly claims: ApplicationConfig }
+  | { readonly kind: "system"; readonly policy: string };
+
+interface ExecutionEnvelopeFields {
+  readonly externalId?: string;
+  readonly metadata?: ApplicationConfig;
+  readonly tenant?: ApplicationConfig;
+  readonly signal?: AbortSignal;
+  readonly deadlineAtMs?: number;
+}
+
+type ExecutionEnvelope = ExecutionEnvelopeFields &
+  (
+    | { readonly kind: "request" | "command"; readonly actor?: ExecutionActor }
+    | { readonly kind: "job"; readonly actor: ExecutionActor }
+  );
+
+type ExecutionContext = ExecutionEnvelope & {
+  readonly applicationId: string;
+  readonly executionId: string;
+  readonly metadata: ApplicationConfig;
+  readonly signal: AbortSignal;
+};
+
 interface CommandScope {
+  readonly context: ExecutionContext;
   readonly applicationId: string;
   readonly config: ApplicationConfig;
   readonly signal: AbortSignal;
@@ -124,6 +150,7 @@ interface Application {
   /** Stable, never rejecting; remains pending while owned operations are actually still running. */
   readonly completion: Promise<CompletionResult>;
   run<T>(work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
+  run<T>(envelope: ExecutionEnvelope, work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
 }
 
 export type {
@@ -139,6 +166,9 @@ export type {
   CleanupDisposition,
   CommandScope,
   CompletionResult,
+  ExecutionActor,
+  ExecutionContext,
+  ExecutionEnvelope,
   OpenOutcome,
   ProviderDefinition,
   ProviderScope,

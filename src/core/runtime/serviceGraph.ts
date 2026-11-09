@@ -1,3 +1,4 @@
+import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
 import {
   aliasService,
   isServiceDeclaration,
@@ -72,6 +73,11 @@ function dependencies(item: ServiceDeclaration): readonly AnyServiceToken[] {
 /** Definitions and order only. ServiceContainer owns every initialized value and promise. */
 interface ServiceGraph {
   start(container: ServiceContainer, signal: AbortSignal): Promise<void>;
+  startExecution(
+    container: ServiceContainer,
+    signal: AbortSignal,
+    checkpoint?: () => void,
+  ): Promise<void>;
 }
 
 function compileServiceGraph(
@@ -83,6 +89,7 @@ function compileServiceGraph(
   for (const input of declarations) {
     const item = declaration(input);
     const key = serviceTokenKey(item.token);
+    if (key === serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN)) return fail("RESERVED_TOKEN");
     if (nodes.has(key)) return fail("DUPLICATE_TOKEN");
     nodes.set(key, item);
   }
@@ -90,6 +97,7 @@ function compileServiceGraph(
   for (const input of overrides) {
     const item = declaration(input);
     const key = serviceTokenKey(item.token);
+    if (key === serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN)) return fail("RESERVED_TOKEN");
     if (!nodes.has(key)) return fail("UNKNOWN_OVERRIDE");
     if (replaced.has(key)) return fail("DUPLICATE_OVERRIDE");
     replaced.add(key);
@@ -97,12 +105,18 @@ function compileServiceGraph(
   }
   for (const item of nodes.values()) {
     for (const dependency of dependencies(item)) {
-      if (!nodes.has(serviceTokenKey(dependency))) return fail("MISSING_DEPENDENCY");
+      if (
+        serviceTokenKey(dependency) !== serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN) &&
+        !nodes.has(serviceTokenKey(dependency))
+      )
+        return fail("MISSING_DEPENDENCY");
     }
   }
   const remaining = [...nodes.values()];
   const ordered: ServiceDeclaration[] = [];
-  const lifetimes = new Map<symbol, ServiceLifetime>();
+  const lifetimes = new Map<symbol, ServiceLifetime>([
+    [serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN), "execution"],
+  ]);
   while (remaining.length > 0) {
     const index = remaining.findIndex((item) =>
       dependencies(item).every((dependency) => lifetimes.has(serviceTokenKey(dependency))),
@@ -116,7 +130,7 @@ function compileServiceGraph(
     lifetimes.set(serviceTokenKey(item.token), lifetime);
     ordered.push(item);
   }
-  // Check the final graph BEFORE capability rejection, including aliases and overrides.
+  // Validate final lifetimes after aliases and overrides have been resolved.
   for (const item of ordered) {
     if (lifetimes.get(serviceTokenKey(item.token)) !== "application") continue;
     if (
@@ -127,32 +141,43 @@ function compileServiceGraph(
       return fail("CAPTIVE_DEPENDENCY");
     }
   }
-  if ([...lifetimes.values()].includes("execution")) return fail("UNSUPPORTED_LIFETIME");
   Object.freeze(ordered);
-  return Object.freeze({
-    async start(container: ServiceContainer, signal: AbortSignal): Promise<void> {
-      for (const item of ordered) {
-        if (signal.aborted) throw signal.reason;
-        const token = item.token as ServiceToken<unknown>;
-        if (item.kind === "value") container.set(token, item.value);
-        else if (item.kind === "alias")
-          container.alias(token, item.target as ServiceToken<unknown>);
-        else {
-          await container.initialize(
-            token,
-            () => {
-              const values = item.dependencies.map((dependency) =>
-                container.resolve(dependency as ServiceToken<unknown>),
-              );
-              return (item.create as (...values: unknown[]) => unknown)(...values);
-            },
-            signal,
-          );
-        }
-      }
+  async function initialize(
+    container: ServiceContainer,
+    signal: AbortSignal,
+    lifetime: ServiceLifetime,
+    checkpoint?: () => void,
+  ): Promise<void> {
+    for (const item of ordered) {
+      if (lifetimes.get(serviceTokenKey(item.token)) !== lifetime) continue;
+      checkpoint?.();
       if (signal.aborted) throw signal.reason;
-      container.seal();
-    },
+      const token = item.token as ServiceToken<unknown>;
+      if (item.kind === "value") container.set(token, item.value);
+      else if (item.kind === "alias") container.alias(token, item.target as ServiceToken<unknown>);
+      else {
+        await container.initialize(
+          token,
+          () => {
+            const values = item.dependencies.map((dependency) =>
+              container.resolve(dependency as ServiceToken<unknown>),
+            );
+            return (item.create as (...values: unknown[]) => unknown)(...values);
+          },
+          signal,
+          checkpoint,
+        );
+      }
+    }
+    checkpoint?.();
+    if (signal.aborted) throw signal.reason;
+    container.seal();
+  }
+  return Object.freeze({
+    start: (container: ServiceContainer, signal: AbortSignal) =>
+      initialize(container, signal, "application"),
+    startExecution: (container: ServiceContainer, signal: AbortSignal, checkpoint?: () => void) =>
+      initialize(container, signal, "execution", checkpoint),
   });
 }
 

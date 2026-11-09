@@ -64,6 +64,7 @@ const CORE_SUBPATHS = [
   "config/applicationConfig",
   "contracts/token",
   "contracts/services",
+  "contracts/executionContext",
   "contracts/serviceTokens",
   "contracts/authUserDirectory",
   "contracts/container",
