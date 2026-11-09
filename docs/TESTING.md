@@ -33,6 +33,43 @@ scripts/with-host-env.sh bun test tests/e2e/generatedDocker.test.ts
 
 Docker acceptance creates its own network, Postgres and Redis containers and credentials. It never resets the contributor/shop databases or changes their Redis connections. Owned resources use unique `strata-docker-*` names and `strata-acceptance:*` image tags. After forcibly terminating a verifier, inspect those names before assuming cleanup ran.
 
+### Optional proxy CA trust for Docker acceptance
+
+If your configured outbound proxy uses a private CA, Docker build processes need
+that CA as well as the host. Keep the supplied proxy configuration and TLS
+verification enabled. Set the following opt-in path to a readable CA certificate
+file to run the existing Docker verifier without editing tracked files:
+
+```bash
+STRATA_DOCKER_PROXY_CA=/path/to/configured-proxy-ca.crt bun run verify:docker-runtime
+```
+
+The verifier validates the file and passes it as the optional BuildKit secret
+`proxy_ca`. Both the framework install stage and the later generated acceptance
+app install mount this secret only for their networked `RUN`. They set
+`NODE_EXTRA_CA_CERTS` for that command, and do not copy the certificate or persist
+the build-only environment setting in the release image. Acceptance also checks
+the release image configuration and running filesystem for that separation.
+With `STRATA_DOCKER_PROXY_CA` unset, the normal no-secret build is unchanged.
+
+For the standalone CI install-stage command, pass the same optional secret
+explicitly:
+
+```bash
+docker build --pull --target install \
+  --secret id=proxy_ca,src=/path/to/configured-proxy-ca.crt \
+  -t strata-install .
+```
+
+When checking trust changes, force the install command to execute with Docker's
+`--no-cache` (or Buildx's `--no-cache-filter install`). This bypasses image-layer
+reuse but does **not** empty persistent cache mounts. To prove uncached dependency
+access, also use a fresh builder or a distinct cache-mount namespace such as
+BuildKit's `BUILDKIT_CACHE_MOUNT_NS`, and confirm that its cache is initially
+empty. Do not prune shared caches. On a proxy that requires this CA, a cold build
+without it must still fail certificate validation. Do not disable TLS verification
+or include the CA in product images.
+
 ## Tenant-scoped database access
 
 Postgres RLS reads `app.tenant_id` on the connection that runs the query. With a pool (`DB_POOL_MAX > 1`), a session-level `SET app.tenant_id` is not reliable.

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
+import { installerEnvironment } from "./installer-environment";
 
 const frontend = process.argv.find((arg) => arg.startsWith("--frontend="))?.slice(11);
 const rawPrefix = process.argv.find((arg) => arg.startsWith("--prefix="))?.slice(9);
@@ -44,6 +45,7 @@ const env = {
   SPA_PREFIX: prefix,
   OTEL_SDK_DISABLED: "true",
 };
+const installerEnv = installerEnvironment();
 await writeFile(
   join(fixture.app, ".env"),
   await readFile(join(fixture.app, ".env.example"), "utf8"),
@@ -53,10 +55,14 @@ const dockerImage = process.argv.includes("--docker")
   : undefined;
 let dockerBuilt = false;
 const children = new Set<ReturnType<typeof Bun.spawn>>();
-async function command(args: string[], cwd = fixture.app) {
+async function command(
+  args: string[],
+  cwd = fixture.app,
+  commandEnv: Record<string, string | undefined> = env,
+) {
   const child = Bun.spawn([process.execPath, ...args], {
     cwd,
-    env,
+    env: commandEnv,
     stdout: "pipe",
     stderr: "pipe",
     timeout: 90000,
@@ -168,7 +174,7 @@ const terminate = () => {
 };
 process.once("SIGTERM", terminate);
 try {
-  await command(["run", "frontend:install"]);
+  await command(["run", "frontend:install"], fixture.app, installerEnv);
   await command(["run", "frontend:build"]);
   await command([
     join(fixture.app, "node_modules/typescript/bin/tsc"),
@@ -190,7 +196,7 @@ try {
       }
     }
     await writeFile(join(fixture.app, "package.json"), JSON.stringify(manifest));
-    await command(["install"]);
+    await command(["install"], fixture.app, installerEnv);
     if (candidateArchives) {
       const dockerfile = join(fixture.app, "Dockerfile");
       await writeFile(

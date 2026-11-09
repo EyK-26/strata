@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { replaceFixtureLoopbackPort } from "../tests/helpers/fixtureLoopbackPort";
 import { candidatePackage } from "./candidate-packages";
+import { installerEnvironment } from "./installer-environment";
 
 const repo = join(import.meta.dir, "..");
 const database = process.argv.find((arg) => arg.startsWith("--database="))?.slice(11);
@@ -20,6 +21,7 @@ const env = Object.fromEntries(
     ["PATH", "HOME", "TMPDIR", "USER", "SHELL"].includes(key),
   ),
 );
+const installerEnv = installerEnvironment();
 let composeCreated = false;
 const ownedVolumes = new Set<string>();
 async function rememberOwnedVolumes() {
@@ -33,8 +35,20 @@ async function rememberOwnedVolumes() {
   }
 }
 let server: ReturnType<typeof Bun.spawn> | undefined;
-async function command(args: string[], cwd = app, expected = 0, timeout = 180000) {
-  const child = Bun.spawn(args, { cwd, env, stdout: "pipe", stderr: "pipe", timeout });
+async function command(
+  args: string[],
+  cwd = app,
+  expected = 0,
+  timeout = 180000,
+  commandEnv: Record<string, string | undefined> = env,
+) {
+  const child = Bun.spawn(args, {
+    cwd,
+    env: commandEnv,
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout,
+  });
   const [code, out, err] = await Promise.all([
     child.exited,
     new Response(child.stdout).text(),
@@ -126,6 +140,9 @@ try {
       "--docker",
     ],
     root,
+    0,
+    180000,
+    published ? installerEnv : env,
   );
   const readme = await readFile(join(app, "README.md"), "utf8");
   const startup = "docker compose up -d --wait --wait-timeout 180";
@@ -181,7 +198,7 @@ try {
     }
   }
   await writeFile(join(app, "package.json"), JSON.stringify(manifest));
-  await command([process.execPath, "install"]);
+  await command([process.execPath, "install"], app, 0, 180000, installerEnv);
   if (published)
     for (const part of ["core", "bootstrap", "cli"])
       assert.equal(

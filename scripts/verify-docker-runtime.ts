@@ -3,8 +3,11 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeOwnedDockerContainers } from "../tests/helpers/ownedDockerContainers";
+import { dockerProxyCaBuildArgs } from "./docker-build-proxy-ca";
 
 const root = join(import.meta.dir, "..");
+// Validate an explicitly supplied trust file before allocating acceptance fixtures.
+const proxyCaBuildArgs = dockerProxyCaBuildArgs();
 const id = crypto.randomUUID().replaceAll("-", "");
 const image = `strata-acceptance:${id}`;
 const database = `strata-docker-db-${id}`;
@@ -113,7 +116,20 @@ try {
     assert.ok(config.services.migrate.command.includes("migrate"));
   }
   console.log("Building generated candidate acceptance image...");
-  await run(["docker", "build", "--target", "release", "-t", image, "."], 240000);
+  await run(
+    ["docker", "build", ...proxyCaBuildArgs, "--target", "release", "-t", image, "."],
+    240000,
+  );
+  const imageConfig = JSON.parse(
+    await run(["docker", "image", "inspect", image, "--format", "{{json .Config}}"]),
+  ) as { Env?: string[] };
+  assert.ok(
+    !(imageConfig.Env ?? []).some(
+      (value) =>
+        value.startsWith("NODE_EXTRA_CA_CERTS=") || value.startsWith("STRATA_DOCKER_PROXY_CA="),
+    ),
+    "Build-only CA configuration must not persist in the release image",
+  );
   await run(["docker", "network", "create", networkName]);
   networkCreated = true;
   await run([
@@ -373,6 +389,8 @@ try {
     "-e",
     `
     if (process.env.MIGRATION_DATABASE_URL) throw new Error("HTTP inherited admin credentials");
+    if (process.env.NODE_EXTRA_CA_CERTS || process.env.STRATA_DOCKER_PROXY_CA) throw new Error("Build-only CA configuration leaked into runtime");
+    if (await Bun.file("/run/secrets/proxy_ca").exists()) throw new Error("Build-only CA secret copied into release image");
     if (await Bun.file("/workspace/apps/hiroapp/package.json").exists() || await Bun.file("/app/apps/hiroapp/package.json").exists()) throw new Error("Legacy app copied into image");
     const db = new Bun.SQL(process.env.DATABASE_URL);
     console.log(JSON.stringify(await db.unsafe("SELECT rolname,rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user")));

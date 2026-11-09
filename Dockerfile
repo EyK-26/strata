@@ -9,13 +9,18 @@ COPY packages/strata-bootstrap/package.json packages/strata-bootstrap/
 COPY packages/strata-cli/package.json packages/strata-cli/
 COPY packages/strata-starter/package.json packages/strata-starter/
 COPY packages/create-strata/package.json packages/create-strata/
-RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    bun install --frozen-lockfile --ignore-scripts
 
 FROM base AS build
 COPY --from=install /workspace/node_modules ./node_modules
 COPY . .
 RUN bun run build:framework && bun run build:bootstrap
-RUN bun scripts/build-docker-acceptance.ts /opt/strata-acceptance
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    bun scripts/build-docker-acceptance.ts /opt/strata-acceptance
 
 FROM oven/bun:1.4.4 AS release
 WORKDIR /app
