@@ -1,0 +1,206 @@
+M2.1 legacy composition caller/deletion ledger
+Base: f762ae6ddabf97c581a3ebc17f7ce08288a432e8. This is a migration inventory, not an assertion that the old framework is isolated. Existing legacy consumers stay on their old view; the new application command/provider resolver has typed tokens and no string overload or full-container exposure.
+
+Canonical artifacts and retained boundaries
+- contracts/token: sole fresh-symbol opaque token construction/inspection implementation; same labels do not alias. container/core/bootstrap reexport the same factory.
+- contracts/services: sole service descriptor brands/helpers; graph validation consumes these declarations, ServiceContainer alone owns values/initialization/cache.
+- cache/tokens: sole CORE_CACHE_TOKEN value. contracts/serviceTokens and bootstrap/config reexport it; no parallel string constant named CORE_CACHE_TOKEN survives.
+- contracts/container: canonical engine plus deliberately quarantined legacy methods below; no dist/index shim.
+- contracts/serviceTokens: canonical compatibility facade, retaining listed old string keys and old type-only coupling until their migrations.
+- config/applicationConfig: explicit-input adapter; config/configSnapshot is private shared plain-data validation/copying. runtime/application imports the snapshot helper, never the adapter or envSchema. Legacy envSchema's ambient default remains outside the neutral owner graph; the target adapter always supplies input.
+- runtime/serviceGraph is private validation/ordering/startup orchestration, not another value cache. No public helper subpath added.
+
+Legacy symbols and removal ownership
+1. core/contracts/container.ts: LegacyServiceKey and unchecked string get/resolve/set/singleton/bind/make/instance overloads, ServiceContainerLike and ServiceFactory(container). Owner A (composition), remove old consumers M2-M5, delete overloads/aliases by M7. M2.1 does not expose these through Application/CommandScope/ProviderScope. Legacy mutation remains outside sealed application composition. Do not add a second resolver engine to preserve callers.
+2. core/contracts/container.ts: ConfigStore/ConfigStoreLike mutable set/get<T>/require<T>. Owner B for snapshot replacement; A for bootstrap wiring. Existing bootstrap/context.ts creates it, bootstrap/providers/config.ts populates it, bootstrap/httpKernel.ts consumes it and generated renderBootstrap emits it. Delete migrated adapter use M2/M4/M5; remove public compatibility API M7. Arbitrary get<T> and mutation tests are compatibility assertions, not new configuration contracts.
+3. core/contracts/di.ts: AppDependencies.container, resolveService unchecked overload, legacy ServiceProvider register/boot and ProviderContext full container/config. Owner A, replace composition in M2-M4; generated consumers M5; remove by M7. Mechanical new token identity typing is allowed in M2.1, behavioral old-context migration is not included.
+4. core/contracts/serviceTokens.ts: resolveAbilityChecker/resolveAuthUserDirectory capability guessing through CORE_TOKEN_SERVICE_TOKEN and legacy container. Owner D auth M4; remove guessing and old contracts M4, public aliases M7. Existing HTTP/tenant type imports are an explicit compatibility debt, not neutral-domain direction.
+5. core/runtime/applicationRegistry.ts: process-global active context and resolveApplication* helpers; core/facades/index.ts delegates to them. Owner A, replace lifecycle/composition and delivery M1-M4; generated consumers M5; delete all last-app fallback and facade ownership bridges by M7. The M2.1 neutral module checker forbids imports/references from migrated owner modules.
+6. bootstrap/providers/cache.ts: singleton(CORE_CACHE_TOKEN, () => ...), full-container lookup and direct cleanup. Owner B cache/A composition, replace in M2.3 using the new engine and old consumer bridge only as explicitly scoped there; remove old provider construction/cleanup then. Retained Redis construction/namespace ownership is not proved by M2.1 token identity.
+7. bootstrap/providers/view.ts: CORE_VIEW_TOKEN string and full-container mutation; core/view/viewRenderer.ts typed CORE_VIEW_RENDERER_TOKEN stays defined once through existing shared view bundle and canonical factory. Owner A transport/view M4/M5, remove string/view-container bridge M7.
+8. core/queue/createAppQueue.ts: FAILED_JOB_SERVICE_TOKEN string plus queue bootstrap/generated full-container lookup. Owner A worker composition M2/M6, remove service-location bridge by M7. Keep failed-job JSONB persistence behavior from #379 unchanged.
+
+Remaining plain-string service keys (not credential strings)
+
+CORE_CONFIG_TOKEN — B config / A composition; target adapter M2, HTTP M4, generator M5; delete M7
+  src/bootstrap/health.ts:6,25,29
+  src/bootstrap/httpKernel.ts:44,64,66,152,159,412,414
+  src/bootstrap/public-api.ts:41
+  src/bootstrap/config.ts:14
+  src/bootstrap/providers/config.ts:10,38
+  src/core/contracts/serviceTokens.ts:17,78
+  packages/strata-starter/src/renderBootstrap.ts:68,84
+  packages/strata-starter/templates/src/bootstrap/providers/config.ts:3,16
+
+CORE_QUEUE_TOKEN — A worker composition; migrate M2/M6, generator M5; delete M7
+  src/bootstrap/public-api.ts:44
+  src/bootstrap/config.ts:19
+  src/bootstrap/providers/queue.ts:6,31
+  src/core/contracts/serviceTokens.ts:19,83
+  src/core/runtime/applicationRegistry.ts:11,59
+  packages/strata-starter/src/renderBootstrap.ts:113,130
+
+CORE_EVENT_BUS_TOKEN — A events/composition; migrate M3/M6; delete M7
+  src/bootstrap/public-api.ts:42
+  src/bootstrap/config.ts:15
+  src/bootstrap/providers/events.ts:2,8,13
+  src/core/contracts/serviceTokens.ts:20,79
+  src/core/runtime/applicationRegistry.ts:9,63
+
+CORE_POLICY_GATE_TOKEN — D auth/policy with A HTTP wiring; migrate M4/M5; delete M7
+  src/bootstrap/httpKernel.ts:46,365
+  src/bootstrap/public-api.ts:43
+  src/bootstrap/config.ts:17
+  src/bootstrap/providers/policy.ts:2,8
+  src/core/contracts/serviceTokens.ts:21,81
+  src/core/runtime/applicationRegistry.ts:10,71
+  packages/strata-starter/src/renderBootstrap.ts:139,146
+
+CORE_AUTH_TOKEN — D auth/policy with A HTTP wiring; migrate M4/M5; delete M7
+  src/bootstrap/middleware.ts:4,8
+  src/bootstrap/httpKernel.ts:43,103,142,228,289,304,364,392,402
+  src/bootstrap/public-api.ts:38
+  src/bootstrap/config.ts:11
+  src/bootstrap/providers/auth.ts:12,38
+  src/core/contracts/serviceTokens.ts:22,75
+  src/core/runtime/applicationRegistry.ts:8,67
+  packages/strata-starter/src/renderAuth.ts:179,192,236,279
+  packages/strata-starter/src/auth/renderApiRoutes.ts:68,79,149,158,211,225,238,244,278,288,300,457
+  packages/strata-starter/src/auth/renderImports.ts:34
+  packages/strata-starter/src/auth/renderBrowserRoutes.ts:74
+  packages/strata-starter/src/auth/renderWorkflows.ts:232
+  packages/strata-starter/templates/src/bootstrap/providers/auth.ts:1,48
+
+CORE_TOKEN_SERVICE_TOKEN — D auth/policy with A HTTP wiring; migrate M4/M5; delete M7
+  src/bootstrap/public-api.ts:45
+  src/bootstrap/config.ts:22
+  src/core/contracts/serviceTokens.ts:23,50,62,63,86
+
+CORE_ABILITY_CHECKER_TOKEN — D auth/policy with A HTTP wiring; migrate M4/M5; delete M7
+  src/bootstrap/public-api.ts:37
+  src/bootstrap/config.ts:10
+  src/core/contracts/serviceTokens.ts:24,46,47,74
+  packages/strata-starter/src/renderAuth.ts:181,193,234,259
+
+CORE_AUTH_USER_DIRECTORY_TOKEN — D auth/policy with A HTTP wiring; migrate M4/M5; delete M7
+  src/bootstrap/public-api.ts:39
+  src/bootstrap/config.ts:12
+  src/core/contracts/serviceTokens.ts:25,54,55,76
+  packages/strata-starter/src/renderAuth.ts:259,273
+
+CORE_VIEW_TOKEN — A HTTP/view; migrate M4/M5; delete M7
+  src/bootstrap/providers/view.ts:18,45,64,85
+
+FAILED_JOB_SERVICE_TOKEN — A worker composition; migrate M2/M6, generator M5; delete M7
+  src/bootstrap/providers/queue.ts:4,22
+  src/core/queue/createAppQueue.ts:11,31
+  packages/strata-starter/src/renderBootstrap.ts:117,125
+
+CORE_CACHE_TOKEN deliberately excluded above: its old string definition is replaced in M2.1 with cache/tokens' opaque constant. Typed CORE_HTTP_CLEANUP_TOKEN, CORE_PUBLIC_TENANCY_TOKEN, CORE_TENANT_RESOLVER_TOKEN, CORE_THROTTLE_QUOTA_POLICY_TOKEN and CORE_VIEW_RENDERER_TOKEN now use opaque identity; none may retain string equality assumptions. Their legacy consumers still need the composition migrations listed above.
+
+Existing caller inventory by mechanism (source locations; generated string bodies included)
+
+Full-container lookup/mutation/factory surface
+  src/bootstrap/middleware.ts:8
+  src/bootstrap/health.ts:29
+  src/bootstrap/httpKernel.ts:65,71,103,111,114,142,157,159,228,289,304,364,365,392,402,413
+  src/bootstrap/context.ts:126
+  src/bootstrap/providers/view.ts:45,46,64,65
+  src/bootstrap/providers/policy.ts:8
+  src/bootstrap/providers/cache.ts:16,29
+  src/bootstrap/providers/queue.ts:22,31
+  src/bootstrap/providers/events.ts:8
+  src/bootstrap/providers/config.ts:38
+  src/bootstrap/providers/auth.ts:38
+  src/core/contracts/serviceTokens.ts:47,50,55,63
+  src/core/runtime/applicationRegistry.ts:59,63,67,71
+  src/core/auth/resolveMembershipService.ts:8
+  packages/strata-starter/src/renderBootstrap.ts:84,90,125,130,146
+  packages/strata-starter/src/renderAuth.ts:192,193,234,273,279
+  packages/strata-starter/src/renderAuthFlows.ts:30
+  packages/strata-starter/src/auth/renderApiRoutes.ts:68,79,149,158,211,225,238,244,278,288,300,457,458
+  packages/strata-starter/src/auth/renderBrowserRoutes.ts:74,75
+  packages/strata-starter/src/auth/renderWorkflows.ts:232
+  packages/strata-starter/templates/src/modules/site/index.ts:10
+  packages/strata-starter/templates/src/bootstrap/providers/cache.ts:9,26
+  packages/strata-starter/templates/src/bootstrap/providers/config.ts:16
+  packages/strata-starter/templates/src/bootstrap/providers/auth.ts:48
+
+Legacy type/full-container constructor contracts
+  src/bootstrap/dependencies.ts:7
+  src/bootstrap/middleware.ts:5,7
+  src/bootstrap/createWebRoutes.ts:6,18,52
+  src/bootstrap/health.ts:7,24,101,121
+  src/bootstrap/httpKernel.ts:53,63,456
+  src/bootstrap/context.ts:10,12,23,28,30,38,113
+  src/bootstrap/buildModuleRoutes.ts:3,36
+  src/bootstrap/contracts.ts:6,11,15,16,17,26,29,34,49
+  src/bootstrap/public-api.ts:55,62,63,64
+  src/bootstrap/createSpaRoutes.ts:6,65,87
+  src/bootstrap/buildWebModuleRoutes.ts:2,16
+  src/bootstrap/cachedJson.ts:2,4
+  src/bootstrap/createRoutes.ts:6,17
+  src/framework/public-api.ts:99
+  src/bootstrap/providers/view.ts:16,30,51
+  src/bootstrap/providers/index.ts:1,13
+  src/bootstrap/providers/policy.ts:3,5
+  src/bootstrap/providers/cache.ts:11,13
+  src/bootstrap/providers/queue.ts:7,11
+  src/bootstrap/providers/storage.ts:2,4
+  src/bootstrap/providers/events.ts:3,5
+  src/bootstrap/providers/config.ts:19,33
+  src/bootstrap/providers/listeners.ts:1,5
+  src/bootstrap/providers/tracing.ts:2,4
+  src/bootstrap/providers/auth.ts:13,15
+  src/bootstrap/web/routing.ts:5,100
+  src/core/contracts/serviceContainer.ts:1
+  src/core/contracts/serviceTokens.ts:5,45,53
+  src/core/auth/jwtGuard.ts:2,14,17,21,48
+  src/core/auth/basicAuthGuard.ts:2,17
+  src/core/auth/guard.ts:2,76
+  src/core/auth/sessionGuard.ts:1,10
+  src/core/view/webLayoutData.ts:3,28,53,92,102,113
+  packages/strata-starter/src/renderBootstrap.ts:76,79,112,120,141,143,158,167,178,246,331,333
+  packages/strata-starter/src/renderAuth.ts:183,186,258,270
+  packages/strata-starter/templates/src/routes.ts:2,5
+  packages/strata-starter/templates/src/bootstrap/providers/index.ts:1,8
+  packages/strata-starter/templates/src/bootstrap/providers/cache.ts:4,6
+  packages/strata-starter/templates/src/bootstrap/providers/storage.ts:1,4
+  packages/strata-starter/templates/src/bootstrap/providers/config.ts:8,11
+  packages/strata-starter/templates/src/bootstrap/providers/auth.ts:4,45
+
+Mutable config API consumers
+  src/bootstrap/health.ts:6,7,25,29
+  src/bootstrap/httpKernel.ts:44,53,64,66,152,159,412,414
+  src/bootstrap/context.ts:8,43
+  src/bootstrap/contracts.ts:2,3
+  src/bootstrap/public-api.ts:41,59
+  src/bootstrap/config.ts:14
+  src/framework/public-api.ts:94
+  src/bootstrap/providers/config.ts:10,38
+  src/core/contracts/serviceTokens.ts:17,78
+  packages/strata-starter/src/renderBootstrap.ts:68,84
+  packages/strata-starter/templates/src/bootstrap/providers/config.ts:3,16
+
+Global application resolver consumers
+  src/bootstrap/applicationRegistry.ts:2,3,4,5,6,7,8,9,10
+  src/bootstrap/context.ts:2,3,99,140
+  src/bootstrap/public-api.ts:20,21,22,23,24,25,26,27,28
+  src/framework/public-api.ts:637,638,639,640,641,642,643,644,645,646
+  src/bootstrap/queue/defaultJobs.ts:4,8
+  src/bootstrap/listeners/invalidateCacheOnModelWrite.ts:7,41,115,116
+  src/core/runtime/applicationRegistry.ts:33,38,54,58,62,66,70,74,78,82,87,88,89,90,91,92,93,94,95,96
+  src/core/auth/resolveMembershipService.ts:1,5
+  src/core/http/securedRouteModelBinding.ts:5,6,82,83,125,126
+  src/core/facades/index.ts:3,4,5,6,7,8,9,15,19,23,27,32,39,43
+  packages/strata-starter/src/renderIntegrations.ts:222,235
+
+Compatibility assertions to replace deliberately
+- tests/unit/coreContracts.test.ts string-token equality becomes fresh opaque identity and same-label distinctness; keep singleton/transient/legacy engine behavior while its callers remain.
+- Packed root/container/token/bootstrap factory equality and cache constant equality are behavior required by the new API, not optional compatibility snapshots.
+- Existing provider/context tests preserve their old behavior pending migration; they do not prove new application isolation. New graph/override/expiry tests prove only value composition, not M2.2 execution resources or M2.3 cache drain.
+- tests/unit/cli/starterRendering.test.ts exact emitted bytes/import-function identities remain historical compatibility records for M5 replacement; generated security, CSRF, tenancy and runtime behavior remains required.
+
+Boundary enforcement scope and limits
+The exact neutral DAG is encoded in scripts/check-application-boundary.ts, including private serviceGraph/configSnapshot and the explicitly bounded legacy serviceTokens facade. Dependency changes require changing that named graph plus positive/negative fixtures; there is no wildcard allowance for contracts/runtime modules. Bun validates executable syntax/import kinds; a TypeScript lexical scan retains erased type-import edges. Ambient checking is deliberately conservative and reserves banned identifiers even for local bindings/method names; it is not arbitrary-code sandboxing or general scope analysis. No Node service or added parser dependency is required.
+The standalone bundle verifier rejects root shims/noncanonical runtime imports and verifies build externalization. Installed mixed-import runtime/type evidence is required independently; source aliases alone cannot establish package identity.

@@ -1,3 +1,6 @@
+import type { ServiceDeclaration } from "./services";
+import type { ServiceToken } from "./token";
+
 /** Plain configuration data is copied and frozen before any application work begins. */
 type ApplicationConfigValue =
   | string
@@ -80,6 +83,7 @@ interface ProviderScope {
   readonly applicationId: string;
   readonly config: ApplicationConfig;
   readonly signal: AbortSignal;
+  resolve<T>(token: ServiceToken<T>): T;
   acquire<T>(spec: ResourceSpec<T>): Promise<T>;
 }
 
@@ -96,6 +100,8 @@ interface ApplicationDefinition {
   readonly config?: ApplicationConfig;
   readonly providers: readonly ProviderDefinition[];
   readonly transports?: readonly TransportDefinition[];
+  readonly services?: readonly ServiceDeclaration[];
+  readonly overrides?: readonly ServiceDeclaration[];
   readonly shutdownTimeoutMs?: number;
   readonly startupCleanupTimeoutMs?: number;
 }
@@ -104,6 +110,8 @@ interface CommandScope {
   readonly applicationId: string;
   readonly config: ApplicationConfig;
   readonly signal: AbortSignal;
+  /** Composition-only access; expires with this admitted callback, not an execution resource scope. */
+  resolve<T>(token: ServiceToken<T>): T;
 }
 
 interface Application {

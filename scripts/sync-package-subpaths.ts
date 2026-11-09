@@ -9,6 +9,7 @@ import { dirname, join, relative } from "node:path";
 import {
   bootstrapSubpathExternalFlags,
   CORE_SHARED_SUBPATH_SET,
+  CORE_STANDALONE_SUBPATHS,
   coreSubpathExternalFlags,
 } from "./core-shared-subpaths.ts";
 
@@ -54,11 +55,15 @@ const CORE_SUBPATHS = [
   "admin/registry",
   "admin/types",
   "cache/tags",
+  "cache/tokens",
   "cache/createCacheStore",
   "cache/repository",
   "cache/simpleCache",
   "cache/simpleCacheStore",
   "config/envSchema",
+  "config/applicationConfig",
+  "contracts/token",
+  "contracts/services",
   "contracts/serviceTokens",
   "contracts/authUserDirectory",
   "contracts/container",
@@ -389,8 +394,9 @@ async function updatePackageJson(
   const telemetryExternals = packageDir.includes("strata-core")
     ? " --external '@opentelemetry/*'"
     : "";
+  const standaloneExternal = ` ${coreSubpathExternalFlags(CORE_STANDALONE_SUBPATHS)}`;
   packageJson.scripts["build:bundle"] =
-    `bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}`;
+    `bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}${standaloneExternal}`;
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
     ? "bun ../../scripts/write-core-shared-shims.ts"
     : "true";
@@ -406,6 +412,10 @@ async function updatePackageJson(
   packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
     ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"
     : "tsc -p tsconfig.types.json";
+  if (packageDir.includes("strata-core")) {
+    packageJson.scripts["build:verify-standalone"] =
+      "bun ../../scripts/verify-core-standalone-subpaths.ts";
+  }
   // Clear dist so removed subpaths do not linger in the tarball.
   packageJson.scripts["build"] =
     "rm -rf dist && bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";

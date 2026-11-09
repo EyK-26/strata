@@ -1,7 +1,7 @@
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { resolveAuthUserDirectory } from "../contracts/serviceTokens";
 import { resolveCsrfTokenForRequest } from "../http/csrfToken";
 import { pullFlash } from "../http/flashSession";
 

@@ -1,82 +1,149 @@
-declare const serviceTokenType: unique symbol;
+import { valueService } from "@getstrata/core/contracts/services";
+import {
+  type AnyServiceToken,
+  assertServiceToken,
+  createServiceToken,
+  type ServiceToken,
+  serviceTokenKey,
+  serviceTokenName,
+} from "@getstrata/core/contracts/token";
 
-/** Invariant service identity; its runtime value remains the existing string key. */
-type ServiceToken<T> = string & { readonly [serviceTokenType]: (value: T) => T };
-/** Prevent a typed token from falling back to an unchecked legacy overload. */
-type LegacyServiceKey = string & { readonly [serviceTokenType]?: never };
-
-function createServiceToken<T>(key: string): ServiceToken<T> {
-  if (!key.trim()) throw new Error("Service token key must not be empty.");
-  return key as ServiceToken<T>;
-}
-
+/** Transitional old-composition keys; new application scopes expose no string overload. */
+type LegacyServiceKey = string;
+type ServiceKey = AnyServiceToken | LegacyServiceKey;
+type Key = symbol | string;
 type ServiceFactory<T> = (container: ServiceContainer) => T;
 
 interface ServiceContainerLike {
-  has(key: string): boolean;
+  has(key: ServiceKey): boolean;
   resolve<T>(key: ServiceToken<T>): T;
   resolve<T>(key: LegacyServiceKey): T;
 }
 
+function identity(key: ServiceKey): Key {
+  if (typeof key === "string") return key;
+  assertServiceToken(key);
+  return serviceTokenKey(key);
+}
+
+function display(key: ServiceKey): string {
+  return typeof key === "string" ? key : serviceTokenName(key);
+}
+
+/** One engine for cached values, legacy factories, aliases and eager initialization. */
 class ServiceContainer implements ServiceContainerLike {
-  private readonly services = new Map<string, unknown>();
-  private readonly singletonFactories = new Map<string, ServiceFactory<unknown>>();
-  private readonly bindings = new Map<string, ServiceFactory<unknown>>();
-  private readonly resolutionPath: string[] = [];
+  private readonly services = new Map<Key, unknown>();
+  private readonly singletonFactories = new Map<Key, ServiceFactory<unknown>>();
+  private readonly bindings = new Map<Key, ServiceFactory<unknown>>();
+  private readonly aliases = new Map<Key, ServiceKey>();
+  private readonly initializations = new Map<Key, Promise<unknown>>();
+  private readonly resolutionPath: ServiceKey[] = [];
+  private sealed = false;
+
+  private mutable(): void {
+    if (this.sealed) throw new Error("Service composition is sealed.");
+  }
+
+  private clearDefinition(key: Key): void {
+    this.services.delete(key);
+    this.singletonFactories.delete(key);
+    this.bindings.delete(key);
+    this.aliases.delete(key);
+    this.initializations.delete(key);
+  }
 
   set<T>(key: ServiceToken<T>, value: NoInfer<T>): T;
   set<T>(key: LegacyServiceKey, value: T): T;
-  set<T>(key: string, value: T): T {
-    this.singletonFactories.delete(key);
-    this.bindings.delete(key);
-    this.services.set(key, value);
+  set<T>(key: ServiceKey, value: T): T {
+    this.mutable();
+    const id = identity(key);
+    this.clearDefinition(id);
+    this.services.set(id, value);
     return value;
   }
 
   singleton<T>(key: ServiceToken<T>, factory: ServiceFactory<NoInfer<T>>): void;
   singleton<T>(key: LegacyServiceKey, factory: ServiceFactory<T>): void;
-  singleton<T>(key: string, factory: ServiceFactory<T>): void {
-    this.bindings.delete(key);
-    this.services.delete(key);
-    this.singletonFactories.set(key, factory);
+  singleton<T>(key: ServiceKey, factory: ServiceFactory<T>): void {
+    this.mutable();
+    const id = identity(key);
+    this.clearDefinition(id);
+    this.singletonFactories.set(id, factory);
   }
 
   bind<T>(key: ServiceToken<T>, factory: ServiceFactory<NoInfer<T>>): void;
   bind<T>(key: LegacyServiceKey, factory: ServiceFactory<T>): void;
-  bind<T>(key: string, factory: ServiceFactory<T>): void {
-    this.singletonFactories.delete(key);
-    this.services.delete(key);
-    this.bindings.set(key, factory);
+  bind<T>(key: ServiceKey, factory: ServiceFactory<T>): void {
+    this.mutable();
+    const id = identity(key);
+    this.clearDefinition(id);
+    this.bindings.set(id, factory);
+  }
+
+  /** Assembly-only: graph.start uses this engine's sole in-flight slot and value cache. */
+  initialize<T>(
+    key: ServiceToken<T>,
+    factory: () => T | Promise<T>,
+    signal: AbortSignal,
+  ): Promise<T> {
+    const id = identity(key);
+    const existing = this.initializations.get(id);
+    if (existing) return existing as Promise<T>;
+    this.mutable();
+    const initializing = Promise.resolve()
+      .then(() => {
+        if (signal.aborted) throw signal.reason;
+        return factory();
+      })
+      .then((value) => {
+        if (signal.aborted) throw signal.reason;
+        // Share the declaration validator; never freeze arbitrary service instances.
+        valueService(key as ServiceToken<unknown>, value);
+        this.services.set(id, value);
+        return value;
+      });
+    this.initializations.set(id, initializing);
+    void initializing.catch(() => {});
+    return initializing;
+  }
+
+  alias<T>(key: ServiceToken<T>, target: ServiceToken<NoInfer<T>>): void;
+  alias(key: AnyServiceToken, target: AnyServiceToken): void {
+    this.mutable();
+    const id = identity(key);
+    this.clearDefinition(id);
+    identity(target);
+    this.aliases.set(id, target);
+  }
+
+  seal(): void {
+    this.sealed = true;
   }
 
   get<T>(key: ServiceToken<T>): T;
   get<T>(key: LegacyServiceKey): T;
-  get<T>(key: string): T {
-    if (this.services.has(key)) {
-      return this.services.get(key) as T;
+  get<T>(key: ServiceKey): T {
+    const id = identity(key);
+    if (this.services.has(id)) return this.services.get(id) as T;
+    const target = this.aliases.get(id);
+    if (target !== undefined) {
+      return this.resolveFactory(key, () => this.get(target as ServiceToken<T>));
     }
-
-    const singletonFactory = this.singletonFactories.get(key);
-
+    const singletonFactory = this.singletonFactories.get(id);
     if (singletonFactory) {
       const value = this.resolveFactory(key, singletonFactory);
-      this.services.set(key, value);
+      this.services.set(id, value);
       return value as T;
     }
-
-    const binding = this.bindings.get(key);
-
-    if (binding) {
-      return this.resolveFactory(key, binding) as T;
-    }
-
-    throw new Error(`Service "${key}" is not registered.`);
+    const binding = this.bindings.get(id);
+    if (binding) return this.resolveFactory(key, binding) as T;
+    throw new Error(`Service "${display(key)}" is not registered.`);
   }
 
-  private resolveFactory<T>(key: string, factory: ServiceFactory<T>): T {
-    if (this.resolutionPath.includes(key)) {
+  private resolveFactory<T>(key: ServiceKey, factory: ServiceFactory<T>): T {
+    if (this.resolutionPath.some((entry) => identity(entry) === identity(key))) {
       throw new Error(
-        `Circular service dependency: ${[...this.resolutionPath, key].join(" -> ")}.`,
+        `Circular service dependency: ${[...this.resolutionPath, key].map(display).join(" -> ")}.`,
       );
     }
     this.resolutionPath.push(key);
@@ -89,24 +156,30 @@ class ServiceContainer implements ServiceContainerLike {
 
   resolve<T>(key: ServiceToken<T>): T;
   resolve<T>(key: LegacyServiceKey): T;
-  resolve<T>(key: string): T {
-    return this.get<T>(key);
+  resolve<T>(key: ServiceKey): T {
+    return this.get(key as ServiceToken<T>);
   }
 
   make<T>(key: ServiceToken<T>): T;
   make<T>(key: LegacyServiceKey): T;
-  make<T>(key: string): T {
-    return this.resolve<T>(key);
+  make<T>(key: ServiceKey): T {
+    return this.resolve(key as ServiceToken<T>);
   }
 
   instance<T>(key: ServiceToken<T>, value: NoInfer<T>): T;
   instance<T>(key: LegacyServiceKey, value: T): T;
-  instance<T>(key: string, value: T): T {
-    return this.set(key, value);
+  instance<T>(key: ServiceKey, value: T): T {
+    return this.set(key as ServiceToken<T>, value);
   }
 
-  has(key: string): boolean {
-    return this.services.has(key) || this.singletonFactories.has(key) || this.bindings.has(key);
+  has(key: ServiceKey): boolean {
+    const id = identity(key);
+    return (
+      this.services.has(id) ||
+      this.singletonFactories.has(id) ||
+      this.bindings.has(id) ||
+      this.aliases.has(id)
+    );
   }
 }
 
@@ -116,6 +189,7 @@ interface ConfigStoreLike {
   has(key: string): boolean;
 }
 
+/** Legacy mutable configuration; target applications inject validated immutable settings. */
 class ConfigStore implements ConfigStoreLike {
   private readonly values = new Map<string, unknown>();
 
@@ -129,10 +203,7 @@ class ConfigStore implements ConfigStoreLike {
   }
 
   require<T>(key: string): T {
-    if (!this.values.has(key)) {
-      throw new Error(`Config key "${key}" is not defined.`);
-    }
-
+    if (!this.values.has(key)) throw new Error(`Config key "${key}" is not defined.`);
     return this.values.get(key) as T;
   }
 

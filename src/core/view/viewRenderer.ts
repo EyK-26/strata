@@ -1,4 +1,4 @@
-import { createServiceToken } from "../contracts/container";
+import { createServiceToken } from "@getstrata/core/contracts/container";
 import { currentRequestMeta } from "../http/requestMetaContext";
 import type { ViewEngine } from "./viewEngine";
 

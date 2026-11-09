@@ -8,6 +8,16 @@
  * Synced by: scripts/sync-package-subpaths.ts, scripts/write-core-shared-shims.ts
  * Verified by: scripts/verify-core-shared-subpaths.ts
  */
+/** Canonical standalone artifacts: externalize these edges even from the root bundle. */
+export const CORE_STANDALONE_SUBPATHS = [
+  "contracts/token",
+  "contracts/container",
+  "contracts/serviceTokens",
+  "contracts/services",
+  "cache/tokens",
+  "config/applicationConfig",
+] as const;
+
 export const CORE_SHARED_SUBPATHS = [
   "auth/authContext",
   "auth/guard",

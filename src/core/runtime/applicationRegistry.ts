@@ -1,15 +1,15 @@
 import type { AuthManager } from "@getstrata/core/auth/guard";
 import type { PolicyGate } from "@getstrata/core/auth/policy";
-import type { EventBus } from "@getstrata/core/events";
-import type { CacheLike } from "../../types/services";
-import type { AppContext } from "../contracts/di";
-import { getRequiredDependency } from "../contracts/di";
 import {
   CORE_AUTH_TOKEN,
   CORE_EVENT_BUS_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
-} from "../contracts/serviceTokens";
+} from "@getstrata/core/contracts/serviceTokens";
+import type { EventBus } from "@getstrata/core/events";
+import type { CacheLike } from "../../types/services";
+import type { AppContext } from "../contracts/di";
+import { getRequiredDependency } from "../contracts/di";
 import { appLogger, type Logger } from "../logging/logger";
 import type { Queue } from "../queue";
 
