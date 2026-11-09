@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-/** Bounded M2.1 graph: application ownership stays independent of legacy adapters. */
+/** Application ownership and its private journal stay independent of legacy adapters. */
 import { readFile } from "node:fs/promises";
 import { posix, resolve } from "node:path";
 import { createScanner, SyntaxKind, tokenIsIdentifierOrKeyword } from "typescript/unstable/ast";
@@ -16,11 +16,13 @@ const neutralEdges: Readonly<
       "contracts/container",
       "contracts/services",
       "runtime/serviceGraph",
+      "runtime/resourceJournal",
       "config/configSnapshot",
     ],
     types: ["contracts/application", "contracts/services", "contracts/token"],
   },
   [CONTRACT_PATH]: { values: [], types: ["contracts/token", "contracts/services"] },
+  [PATH("runtime/resourceJournal")]: { values: [], types: ["contracts/application"] },
   [PATH("runtime/serviceGraph")]: {
     values: ["contracts/token", "contracts/services"],
     types: [

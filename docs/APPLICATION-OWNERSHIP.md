@@ -182,11 +182,18 @@ separate evidence. A passing ownership proof does not qualify browser behavior,
 auth/ORM isolation, the full starter matrix or a release.
 
 `bun run check:application-boundary` enforces the explicit dependency graph of the
-owner, service composition, token contracts and configuration modules. It is also
+owner, its private resource journal, service composition, token contracts and configuration modules. It is also
 part of `check:module-imports` and the existing validation gate. Contract-only
 modules must erase completely; runtime edges are limited to the declared neutral
 modules. Seven standalone public artifacts have separate built-import checks. Ambient resource names are conservatively reserved even
 for local bindings. This is a maintenance rule, not a sandbox for hostile code.
+
+The private resource journal holds acquisition records, captured hooks and dependency
+retention. The application owner retains admission, callback leases, startup and command
+barriers, cancellation, deadlines and outcome publication. Cleanup still stops producers,
+drains resources, joins admitted commands, flushes eligible resources and then closes them.
+Within each provider, reservation order determines reverse cleanup order even when opens
+finish in a different order. This extraction adds no public entrypoint or execution scope.
 
 The remaining legacy owners, string keys and consumers are enumerated in
 [the migration ledger](architecture/m21-legacy-callers.txt). Their continued
