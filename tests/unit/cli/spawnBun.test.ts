@@ -44,7 +44,7 @@ await Bun.write("ready", "ready");`,
       expect(errors).toBe("");
       expect(await readFile(join(directory, "drained"), "utf8")).toBe(signal);
     } finally {
-      if (child?.exitCode === null) child.kill("SIGKILL");
+      if (child?.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
       await child?.exited;
       await rm(directory, { recursive: true, force: true });
     }

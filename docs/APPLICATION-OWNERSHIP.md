@@ -1,6 +1,6 @@
 # Explicit application ownership
 
-This is the first bounded proof of the breaking framework refactor. The candidate
+This is the ownership foundation of the breaking framework refactor. The candidate
 entrypoint is `@getstrata/core/runtime/application`. It owns provider setup,
 resource acquisition, admitted commands and cleanup. It does not yet replace the
 existing starter, `App`, HTTP kernel, auth services or ORM.
@@ -62,8 +62,9 @@ their identity and are not inspected or frozen.
 
 ## Migration boundary
 
-The new owner never delegates to the existing global owners. Their consumers
-remain unchanged in this proof and must migrate before final acceptance:
+The new owner never delegates to the existing global owners. The CLI's direct-child
+supervisor now uses it as described below. The remaining consumers must migrate
+before final acceptance:
 
 | Existing mechanism | Replacement milestone |
 | --- | --- |
@@ -73,6 +74,26 @@ remain unchanged in this proof and must migrate before final acceptance:
 | Auth/policy lookup and duplicated HTTP routing | Explicit security dependencies and one route plan, M4 |
 | Generated entrypoints and CLI composition | Candidate-package commercial apps, M5/M6 |
 | Superseded exports and compatibility paths | Complete deletion and distribution qualification, M7 |
+
+### CLI direct-child supervision
+
+The existing `start`, `dev` and `run` commands use the owner to supervise their direct
+Bun child and the supervisor's own SIGINT/SIGTERM callbacks. The child is journaled
+before signal registration. The first observed signal determines shutdown; repeated
+signals do not repeat the supervisor's kill operation. Cleanup waits for acknowledged
+child exit before removing its callbacks, preserving unrelated listeners.
+
+A successful kill call or elapsed stop deadline does not prove the child exited.
+Signal-delivery errors remain failures even if the child later exits safely. Rejected
+exit observation retains ownership instead of claiming disposal. The private adapter
+keeps any known exit code separate from startup, relay and cleanup failures; a clean
+run returns the child's actual numeric exit code.
+
+This owns a direct child, not its arbitrary descendants. Signals before relay
+installation are outside this helper's observation window. Parent configuration,
+preload and custom-command discovery happen before this supervisor and retain their
+existing behavior. The child's auth, database and application state also remain on
+their existing runtime. Those paths still need the migrations in the table above.
 
 The final framework must have one owner. Keeping this proof alongside the old
 implementation permanently, or falling back to the last started application,
