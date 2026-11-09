@@ -40,8 +40,9 @@ A raw throw or rejection means `unknown`; an error name or code cannot prove
 that a partially opened resource was cleaned. Adapters may attest `cleaned` only
 after their internal cleanup actually succeeds.
 
-Stop closes admission, stops producers, waits for active setup and admitted work,
-drains, flushes and closes resources in dependency order. A failed stop/drain or
+Stop closes admission, stops producers, waits for active setup and producer stop
+convergence, then drains providers. It waits for admitted execution initialization
+and callbacks to settle before flushing and closing resources in dependency order. A failed stop/drain or
 unknown acquisition retains the resources whose safe release cannot be proven.
 An abort signal or elapsed timeout does not prove that an operation stopped.
 Callbacks must not await their own containing start/stop/run operation.
@@ -113,8 +114,9 @@ values themselves are not copied or frozen.
 Graph validation occurs during construction, before any factories or providers
 run. It rejects duplicates, missing dependencies, cycles, invalid overrides and
 application services that depend on execution services, including through aliases.
-Factories initialize exactly once in dependency order during `start()`, before
-providers and transports. They receive only the values in their dependency tuple.
+Application factories initialize exactly once in dependency order during `start()`,
+before providers and transports. Execution factories initialize eagerly for each
+`run()` before its callback. Both receive only the values in their dependency tuple.
 Async factories initialize a value; Promise/thenable payloads are unsupported.
 
 Declarations are immutable helper-issued objects. Do not spread or reconstruct
@@ -133,10 +135,95 @@ Promise normalization and close it before completion observers run. Saved scopes
 cannot regain access. Provider resolution similarly expires after setup. An
 aborted startup cannot publish a late factory result as a ready service.
 
-This checkpoint supports resource-free application values. Execution lifetimes
-are recognized for graph diagnostics but reject as unsupported. Request/job
-scopes and resource service declarations follow in the next checkpoint. Existing
-provider acquisition remains the resource ownership API described above.
+## Explicit executions
+
+This checkpoint supports resource-free application and execution values. Each
+`run()` creates a fresh child of the selected application's sealed service
+container. Typed dependencies fall back to that explicit parent; legacy string
+keys remain local. Execution factories and aliases initialize in dependency order,
+then the child seals before the callback runs. Application values retain their
+identity across runs, while execution values and context belong to one run.
+
+```ts
+import {
+  CORE_EXECUTION_CONTEXT_TOKEN,
+  createApplication,
+  service,
+} from "@getstrata/core/runtime/application";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+
+const Correlation = createServiceToken<string>("orders.correlation");
+const app = createApplication({
+  providers: [],
+  services: [
+    service(Correlation, {
+      lifetime: "execution",
+      dependencies: [CORE_EXECUTION_CONTEXT_TOKEN],
+      create: (context) => context.externalId ?? context.executionId,
+    }),
+  ],
+});
+await app.start();
+const correlation = await app.run(
+  {
+    kind: "job",
+    actor: { kind: "system", policy: "orders.reconcile" },
+    externalId: "reconcile-42",
+    metadata: { source: "scheduler" },
+  },
+  (scope) => {
+    // scope.signal === scope.context.signal
+    return scope.resolve(Correlation);
+  },
+);
+await app.stop();
+```
+
+The callback-only overload uses `{ kind: "command" }`. Explicit envelopes use
+`request`, `command` or `job`; jobs require an actor. An actor is either a
+`principal` with plain `claims`, or a `system` with a nonempty `policy` string.
+Optional tenant, actor and external ID do not inherit from another execution.
+These fields carry metadata and grant no authority. Security adapters remain
+responsible for validating and interpreting their values.
+
+The immutable context includes owner-generated application/execution IDs, the
+composed cancellation signal and copied, deeply frozen plain metadata. Metadata
+defaults to an empty record; other absent optional fields stay absent. Envelope
+and actor records reject unknown fields, symbols, accessors and hidden fields.
+Metadata, tenant and principal claims use the same plain-data rules as application
+configuration. Signals must pass platform brand checks; shadow signal getters and
+listener methods are ignored. Invalid input returns an observed rejected promise
+before factories or callback admission, without changing application boot.
+
+`CORE_EXECUTION_CONTEXT_TOKEN` is the canonical implicit execution dependency.
+Aliases to it are execution-lived. Declaring or overriding that token rejects with
+`SERVICE_GRAPH_RESERVED_TOKEN`; an application factory capturing it or an
+execution alias rejects with `SERVICE_GRAPH_CAPTIVE_DEPENDENCY`. Providers resolve
+only application values and cannot resolve execution context.
+
+Each execution composes application cancellation, an optional external signal and
+an optional `deadlineAtMs` epoch deadline. Deadlines must be nonnegative safe
+integers. A pre-aborted external signal wins over an already expired deadline;
+otherwise the first observed cancellation reason wins, preserving opaque reason
+identity. Deadlines are checked at factory admission, before successful value
+publication and before callback admission, even while timer delivery is delayed.
+Deadline errors have code `EXECUTION_DEADLINE` and owner IDs. The owner
+removes its listeners and timer after actual settlement; later cancellation cannot
+change a settled context's signal.
+
+Cancellation before callback admission skips remaining factories and the callback.
+An already admitted factory remains owned until its actual promise settles. A late
+successful factory cannot publish readiness after cancellation; an actual factory
+rejection preserves its original error. Once the callback is invoked, its actual
+success or rejection determines the run result even after cancellation. Its resolver
+stays available until actual callback settlement, then expires. Cancellation and
+stop deadlines never release unfinished work from the application's cleanup barrier.
+Execution failures do not become startup failures or poison otherwise clean disposal.
+
+Execution factories must yield ordinary values. The owner makes no disposal claim
+for handles allocated inside them. Provider acquisition remains the resource
+ownership API described above. Execution resource declarations, task acquisition,
+spawn and ambient context are outside this checkpoint.
 
 ## Migration boundary
 
@@ -185,7 +272,7 @@ auth/ORM isolation, the full starter matrix or a release.
 owner, its private resource journal, service composition, token contracts and configuration modules. It is also
 part of `check:module-imports` and the existing validation gate. Contract-only
 modules must erase completely; runtime edges are limited to the declared neutral
-modules. Seven standalone public artifacts have separate built-import checks. Ambient resource names are conservatively reserved even
+modules. Eight canonical standalone public artifacts have separate built-import checks. Ambient resource names are conservatively reserved even
 for local bindings. This is a maintenance rule, not a sandbox for hostile code.
 
 The private resource journal holds acquisition records, captured hooks and dependency
@@ -193,7 +280,8 @@ retention. The application owner retains admission, callback leases, startup and
 barriers, cancellation, deadlines and outcome publication. Cleanup still stops producers,
 drains resources, joins admitted commands, flushes eligible resources and then closes them.
 Within each provider, reservation order determines reverse cleanup order even when opens
-finish in a different order. This extraction adds no public entrypoint or execution scope.
+finish in a different order. Execution initialization and callback settlement share the
+application's admitted-work barrier.
 
 The remaining legacy owners, string keys and consumers are enumerated in
 [the migration ledger](architecture/m21-legacy-callers.txt). Their continued

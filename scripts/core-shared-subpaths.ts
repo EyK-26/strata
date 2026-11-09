@@ -14,6 +14,7 @@ export const CORE_STANDALONE_SUBPATHS = [
   "contracts/container",
   "contracts/serviceTokens",
   "contracts/services",
+  "contracts/executionContext",
   "cache/tokens",
   "config/applicationConfig",
   "view/tokens",

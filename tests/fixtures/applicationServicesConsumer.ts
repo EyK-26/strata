@@ -12,11 +12,13 @@ import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { CORE_CACHE_TOKEN as cacheToken } from "@getstrata/core/cache/tokens";
 import { configInteger, parseApplicationConfig } from "@getstrata/core/config/applicationConfig";
 import * as Container from "@getstrata/core/contracts/container";
+import * as Execution from "@getstrata/core/contracts/executionContext";
 import * as Services from "@getstrata/core/contracts/services";
 import * as ServiceTokens from "@getstrata/core/contracts/serviceTokens";
 import { CORE_CACHE_TOKEN as serviceToken } from "@getstrata/core/contracts/serviceTokens";
 import * as Tokens from "@getstrata/core/contracts/token";
-import { createApplication } from "@getstrata/core/runtime/application";
+import * as Runtime from "@getstrata/core/runtime/application";
+import { type CommandScope, createApplication } from "@getstrata/core/runtime/application";
 import * as Views from "@getstrata/core/view";
 
 assert.equal(Root.createServiceToken, Tokens.createServiceToken);
@@ -35,6 +37,8 @@ assert.equal(Tokens.isServiceToken(cacheToken), true);
 const publicModules: Record<string, Record<string, unknown>> = {
   core: Root,
   serviceTokens: ServiceTokens,
+  executionContext: Execution,
+  runtime: Runtime,
   view: Views,
   bootstrap: BootstrapRoot,
   bootstrapConfig: BootstrapConfig,
@@ -54,6 +58,7 @@ for (const [path, module] of Object.entries(publicModules)) {
 }
 const expectedOpaque = [
   "CORE_CACHE_TOKEN",
+  "CORE_EXECUTION_CONTEXT_TOKEN",
   "CORE_HTTP_CLEANUP_TOKEN",
   "CORE_PUBLIC_TENANCY_TOKEN",
   "CORE_TENANT_RESOLVER_TOKEN",
@@ -108,6 +113,8 @@ for (const entry of [
   "@getstrata/core",
   "@getstrata/core/contracts/token",
   "@getstrata/core/contracts/services",
+  "@getstrata/core/contracts/executionContext",
+  "@getstrata/core/runtime/application",
   "@getstrata/core/cache/tokens",
   "@getstrata/bootstrap/contracts",
   "@getstrata/bootstrap/config",
@@ -127,6 +134,13 @@ const first = Root.createServiceToken<number>("same-label");
 const second = bootstrapToken<number>("same-label");
 const Alias = Tokens.createServiceToken<number>("alias");
 const Result = Tokens.createServiceToken<number>("result");
+const Scoped = Root.createServiceToken<{ context: Runtime.ExecutionContext; result: number }>(
+  "execution",
+);
+const ContextAlias = Tokens.createServiceToken<Runtime.ExecutionContext>("context alias");
+let executionFactories = 0;
+assert.equal(Root.CORE_EXECUTION_CONTEXT_TOKEN, Execution.CORE_EXECUTION_CONTEXT_TOKEN);
+assert.equal(Runtime.CORE_EXECUTION_CONTEXT_TOKEN, Execution.CORE_EXECUTION_CONTEXT_TOKEN);
 const settings = parseApplicationConfig(
   { PORT: { required: true, integer: true } },
   { PORT: "42" },
@@ -138,6 +152,15 @@ const app = createApplication({
   providers: [],
   services: [
     Root.valueService(first, 1),
+    Root.aliasService(ContextAlias, Runtime.CORE_EXECUTION_CONTEXT_TOKEN),
+    Services.service(Scoped, {
+      lifetime: "execution",
+      dependencies: [Execution.CORE_EXECUTION_CONTEXT_TOKEN, Result],
+      create: async (context, result) => {
+        executionFactories++;
+        return { context, result };
+      },
+    }),
     Services.valueService(second, 2),
     Services.valueService(Settings, settings),
     Root.aliasService(Alias, first),
@@ -150,11 +173,20 @@ const app = createApplication({
   ],
   overrides: [Services.valueService(first, 5)],
 });
-let saved: Parameters<Parameters<typeof app.run>[0]>[0] | undefined;
+let saved: CommandScope | undefined;
 try {
   await app.start();
+  assert.equal(executionFactories, 0);
+  const contexts: Runtime.ExecutionContext[] = [];
   await app.run(async (scope) => {
     saved = scope;
+    assert.equal(executionFactories, 1);
+    assert.equal(scope.resolve(Scoped).context, scope.context);
+    assert.equal(scope.resolve(Scoped).result, 49);
+    assert.equal(scope.resolve(ContextAlias), scope.context);
+    assert.equal(scope.resolve(Root.CORE_EXECUTION_CONTEXT_TOKEN), scope.context);
+    assert.equal(scope.context.signal, scope.signal);
+    contexts.push(scope.context);
     assert.equal(scope.resolve(Alias), 5);
     assert.equal(scope.resolve(second), 2);
     assert.equal(scope.resolve(Result), 49);
@@ -163,10 +195,24 @@ try {
     assert.equal(await scope.resolve(serviceToken).remember("identity", async () => 7), 7);
   });
   assert.throws(() => saved?.resolve(Result));
+  await app.run(
+    { kind: "job", actor: { kind: "system", policy: "packed-worker" }, metadata: { packed: true } },
+    (scope) => {
+      assert.equal(executionFactories, 2);
+      assert.equal(scope.resolve(Scoped).context, scope.context);
+      assert.equal(scope.context.actor?.kind, "system");
+      assert.deepEqual(scope.context.metadata, { packed: true });
+      contexts.push(scope.context);
+    },
+  );
+  assert.notEqual(contexts[0], contexts[1]);
+  assert.notEqual(contexts[0]?.executionId, contexts[1]?.executionId);
   assert.equal((await app.stop()).successful, true);
   console.log(
     JSON.stringify({
       mixedFactoryIdentity: true,
+      mixedExecutionContextIdentity: true,
+      executionFactories,
       mixedCacheIdentity: true,
       opaqueConstants: [...opaqueConstants.keys()].sort(),
       serviceConstants: Object.keys(ServiceTokens)

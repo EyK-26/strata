@@ -257,3 +257,67 @@ describe("M2.1 neutral value graph", () => {
     );
   });
 });
+
+describe("M2.2b execution context boundary", () => {
+  test.each([
+    [
+      "src/core/contracts/executionContext.ts",
+      'import { createServiceToken } from "@getstrata/core/contracts/token"; import type { ExecutionContext } from "./application"; export const CORE_EXECUTION_CONTEXT_TOKEN = createServiceToken<ExecutionContext>("core.executionContext");',
+    ],
+    [
+      "src/core/runtime/executionContext.ts",
+      'import { copyApplicationConfig } from "../config/configSnapshot"; import type { ExecutionEnvelope } from "../contracts/application"; export const normalize = (envelope: ExecutionEnvelope) => copyApplicationConfig(envelope.metadata);',
+    ],
+    [
+      "src/core/runtime/application.ts",
+      'import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext"; import { normalizeExecutionEnvelope } from "./executionContext"; export { CORE_EXECUTION_CONTEXT_TOKEN };',
+    ],
+    [
+      "src/core/runtime/serviceGraph.ts",
+      'import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext"; export const token = CORE_EXECUTION_CONTEXT_TOKEN;',
+    ],
+  ])("accepts explicit execution context edge in %s", (file, source) => {
+    expect(inspectModule(file, source)).toEqual([]);
+  });
+
+  test.each([
+    [
+      "src/core/contracts/executionContext.ts",
+      'import { createServiceToken } from "./token"; export const token = createServiceToken("context");',
+    ],
+    [
+      "src/core/contracts/executionContext.ts",
+      'import { createApplication } from "../runtime/application";',
+    ],
+    ["src/core/contracts/executionContext.ts", 'import { ExecutionContext } from "./application";'],
+    [
+      "src/core/runtime/executionContext.ts",
+      'import { ServiceContainer } from "@getstrata/core/contracts/container";',
+    ],
+    [
+      "src/core/runtime/executionContext.ts",
+      'import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";',
+    ],
+    ["src/core/runtime/executionContext.ts", 'import type { Request } from "../http/route";'],
+    [
+      "src/core/runtime/application.ts",
+      'import { CORE_EXECUTION_CONTEXT_TOKEN } from "../contracts/executionContext";',
+    ],
+    [
+      "src/core/runtime/serviceGraph.ts",
+      'import { CORE_EXECUTION_CONTEXT_TOKEN } from "../contracts/executionContext";',
+    ],
+  ])("rejects broadened or relative canonical execution edge in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
+  });
+
+  test.each([
+    ["src/core/contracts/executionContext.ts", 'const token = Symbol.for("execution.context");'],
+    ["src/core/runtime/executionContext.ts", "const context = process.env;"],
+    ["src/core/runtime/executionContext.ts", "const value = resolveApplicationConfig();"],
+  ])("rejects ambient execution ownership in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "ambient-capability")).toBe(
+      true,
+    );
+  });
+});

@@ -15,16 +15,26 @@ const neutralEdges: Readonly<
     values: [
       "contracts/container",
       "contracts/services",
+      "contracts/executionContext",
       "runtime/serviceGraph",
       "runtime/resourceJournal",
+      "runtime/executionContext",
       "config/configSnapshot",
     ],
     types: ["contracts/application", "contracts/services", "contracts/token"],
   },
   [CONTRACT_PATH]: { values: [], types: ["contracts/token", "contracts/services"] },
   [PATH("runtime/resourceJournal")]: { values: [], types: ["contracts/application"] },
+  [PATH("runtime/executionContext")]: {
+    values: ["config/configSnapshot"],
+    types: ["contracts/application"],
+  },
+  [PATH("contracts/executionContext")]: {
+    values: ["contracts/token"],
+    types: ["contracts/application"],
+  },
   [PATH("runtime/serviceGraph")]: {
-    values: ["contracts/token", "contracts/services"],
+    values: ["contracts/token", "contracts/services", "contracts/executionContext"],
     types: [
       "contracts/container",
       "contracts/services",
@@ -62,6 +72,7 @@ const canonicalValues = new Set(
     "contracts/token",
     "contracts/container",
     "contracts/services",
+    "contracts/executionContext",
     "contracts/serviceTokens",
     "cache/tokens",
     "config/applicationConfig",

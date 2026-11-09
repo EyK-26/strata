@@ -1,4 +1,5 @@
 import { ServiceContainer } from "@getstrata/core/contracts/container";
+import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
 import { copyApplicationConfig } from "../config/configSnapshot";
 import type {
   Application,
@@ -12,12 +13,14 @@ import type {
   CleanupDisposition,
   CommandScope,
   CompletionResult,
+  ExecutionEnvelope,
   ProviderDefinition,
   ProviderScope,
   ResourceSpec,
   StopResult,
 } from "../contracts/application";
 import type { ServiceToken } from "../contracts/token";
+import { normalizeExecutionEnvelope, ownExecutionContext } from "./executionContext";
 import { ResourceJournal } from "./resourceJournal";
 import { compileServiceGraph, type ServiceGraph } from "./serviceGraph";
 
@@ -256,34 +259,83 @@ class OwnedApplication implements Application {
     return this.beginStop(options.reason ?? "shutdown", this.definition.shutdownTimeoutMs);
   }
 
-  run<T>(work: (scope: CommandScope) => T | Promise<T>): Promise<T> {
+  run<T>(work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
+  run<T>(envelope: ExecutionEnvelope, work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
+  run<T>(
+    input: ExecutionEnvelope | ((scope: CommandScope) => T | Promise<T>),
+    callback?: (scope: CommandScope) => T | Promise<T>,
+  ): Promise<T> {
     if (this.phase !== "ready") {
       return observed(Promise.reject(new ApplicationStateError("APPLICATION_NOT_READY", this.id)));
     }
-    let active = true;
-    const scope: CommandScope = Object.freeze({
-      applicationId: this.id,
-      config: this.definition.config,
-      signal: this.cancellation.signal,
-      resolve: <T>(token: ServiceToken<T>): T => {
-        if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
-        return this.services.resolve(token);
-      },
-    });
-    const operation = leasedOperation(
-      () => work(scope),
-      () => {
-        active = false;
-      },
+    let envelope: ExecutionEnvelope;
+    let work: (scope: CommandScope) => T | Promise<T>;
+    try {
+      const candidate = typeof input === "function" && callback === undefined ? input : callback;
+      if (typeof candidate !== "function")
+        throw new TypeError("Execution callback must be a function.");
+      work = candidate;
+      envelope = normalizeExecutionEnvelope(
+        typeof input === "function" && callback === undefined ? { kind: "command" } : input,
+      );
+      // Reflection during normalization can synchronously reenter application.stop().
+      if (this.phase !== "ready" || this.cancellation.signal.aborted) {
+        throw new ApplicationStateError("APPLICATION_NOT_READY", this.id);
+      }
+    } catch (error) {
+      return observed(Promise.reject(error));
+    }
+    const result = deferred<T>();
+    observed(result.promise);
+    // Reserve the entire initialization and callback attempt before any user factory runs.
+    this.commands.add(result.promise);
+    void result.promise.then(
+      () => this.commandSettled(result.promise),
+      () => this.commandSettled(result.promise),
     );
-    const result = operation.promise;
-    this.commands.add(result);
-    void result.then(
-      () => this.commandSettled(result),
-      () => this.commandSettled(result),
-    );
-    void Promise.resolve().then(() => operation.invoke());
-    return result;
+    void this.execute(envelope, work).then(result.resolve, result.reject);
+    return result.promise;
+  }
+
+  private async execute<T>(
+    envelope: ExecutionEnvelope,
+    work: (scope: CommandScope) => T | Promise<T>,
+  ): Promise<T> {
+    const owner = ownExecutionContext(envelope, this.id, this.cancellation.signal);
+    try {
+      const { context } = owner;
+      if (this.phase !== "ready" || this.cancellation.signal.aborted) {
+        throw new ApplicationStateError("APPLICATION_NOT_READY", this.id);
+      }
+      owner.check();
+      const services = new ServiceContainer(this.services);
+      services.set(CORE_EXECUTION_CONTEXT_TOKEN, context);
+      await this.definition.services.startExecution(services, context.signal, owner.check);
+      owner.check();
+      let active = true;
+      const scope: CommandScope = Object.freeze({
+        applicationId: this.id,
+        config: this.definition.config,
+        context,
+        signal: context.signal,
+        resolve: <T>(token: ServiceToken<T>): T => {
+          if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+          return services.resolve(token);
+        },
+      });
+      const operation = leasedOperation(
+        () => work(scope),
+        () => {
+          active = false;
+        },
+      );
+      // No asynchronous gap between the final admission check and callback invocation.
+      owner.check();
+      operation.invoke();
+      return await operation.promise;
+    } finally {
+      owner.dispose();
+    }
   }
 
   private commandSettled(promise: Promise<unknown>): void {
@@ -455,4 +507,4 @@ function createApplication(definition: ApplicationDefinition): Application {
 export { aliasService, service, valueService } from "@getstrata/core/contracts/services";
 export type * from "../contracts/application";
 export type * from "../contracts/services";
-export { createApplication };
+export { CORE_EXECUTION_CONTEXT_TOKEN, createApplication };

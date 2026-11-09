@@ -5,7 +5,7 @@ import { isServiceToken } from "@getstrata/core/contracts/token";
 import { CORE_VIEW_RENDERER_TOKEN as sourceViewToken } from "@getstrata/core/view";
 import { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
 
-async function mixedConsumer(mode: "view" | "dialect") {
+async function mixedConsumer(mode: "view" | "dialect" | "execution") {
   const repository = join(import.meta.dir, "../..");
   const fixture = join(import.meta.dir, "../fixtures/applicationTokenIdentityMixedConsumer.ts");
   const child = Bun.spawn(
@@ -35,4 +35,11 @@ test("mixed workspace source/built view provider resolves through both public to
 
 test("built root MySQL dialect drives its query compiler despite source aliases and ambient PostgreSQL", async () => {
   assert.equal((await mixedConsumer("dialect")).dialect, "mysql");
+});
+
+test("mixed workspace execution uses one canonical context across built root runtime and source", async () => {
+  const report = await mixedConsumer("execution");
+  assert.equal(report.contextIdentity, true);
+  assert.equal(report.eagerFactories, 2);
+  assert.equal(report.isolatedContexts, true);
 });

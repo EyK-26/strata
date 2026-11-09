@@ -40,6 +40,10 @@ class ServiceContainer implements ServiceContainerLike {
   private readonly resolutionPath: ServiceKey[] = [];
   private sealed = false;
 
+  constructor(private readonly parent?: ServiceContainer) {
+    if (parent && !parent.sealed) throw new Error("Service container parent must be sealed.");
+  }
+
   private mutable(): void {
     if (this.sealed) throw new Error("Service composition is sealed.");
   }
@@ -85,6 +89,7 @@ class ServiceContainer implements ServiceContainerLike {
     key: ServiceToken<T>,
     factory: () => T | Promise<T>,
     signal: AbortSignal,
+    checkpoint?: () => void,
   ): Promise<T> {
     const id = identity(key);
     const existing = this.initializations.get(id);
@@ -92,13 +97,18 @@ class ServiceContainer implements ServiceContainerLike {
     this.mutable();
     const initializing = Promise.resolve()
       .then(() => {
+        checkpoint?.();
         if (signal.aborted) throw signal.reason;
         return factory();
       })
       .then((value) => {
+        checkpoint?.();
         if (signal.aborted) throw signal.reason;
         // Share the declaration validator; never freeze arbitrary service instances.
         valueService(key as ServiceToken<unknown>, value);
+        // Payload reflection may cancel initialization or cross its execution deadline.
+        checkpoint?.();
+        if (signal.aborted) throw signal.reason;
         this.services.set(id, value);
         return value;
       });
@@ -137,6 +147,7 @@ class ServiceContainer implements ServiceContainerLike {
     }
     const binding = this.bindings.get(id);
     if (binding) return this.resolveFactory(key, binding) as T;
+    if (typeof key !== "string" && this.parent) return this.parent.get(key as ServiceToken<T>);
     throw new Error(`Service "${display(key)}" is not registered.`);
   }
 
@@ -178,7 +189,8 @@ class ServiceContainer implements ServiceContainerLike {
       this.services.has(id) ||
       this.singletonFactories.has(id) ||
       this.bindings.has(id) ||
-      this.aliases.has(id)
+      this.aliases.has(id) ||
+      (typeof key !== "string" && this.parent !== undefined && this.parent.has(key))
     );
   }
 }

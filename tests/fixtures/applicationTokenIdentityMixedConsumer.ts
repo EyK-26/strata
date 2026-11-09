@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
+import { CORE_EXECUTION_CONTEXT_TOKEN as canonicalContext } from "@getstrata/core/contracts/executionContext";
 import { CORE_VIEW_RENDERER_TOKEN as sourceBarrel } from "@getstrata/core/view";
+import { CORE_EXECUTION_CONTEXT_TOKEN as sourceContext } from "../../src/core/contracts/executionContext";
 import { CORE_VIEW_RENDERER_TOKEN as sourceRenderer } from "../../src/core/view/viewRenderer";
 
 const repository = resolve(import.meta.dir, "../..");
@@ -15,7 +17,64 @@ const core = await import(
 const bootstrap = await import(
   pathToFileURL(join(repository, "packages/strata-bootstrap/dist/entries/providers/view.js")).href
 );
-if (process.argv[2] === "dialect") {
+if (process.argv[2] === "execution") {
+  const runtime = await import(
+    pathToFileURL(join(repository, "packages/strata-core/dist/entries/runtime/application.js")).href
+  );
+  // Built consumers externalize the public canonical specifier to the source owner.
+  // Direct disk imports of the standalone built owner are proved in packed consumers.
+  for (const token of [
+    core.CORE_EXECUTION_CONTEXT_TOKEN,
+    runtime.CORE_EXECUTION_CONTEXT_TOKEN,
+    canonicalContext,
+  ])
+    assert.equal(token, sourceContext);
+  const Scoped = core.createServiceToken("mixed execution value");
+  let eagerFactories = 0;
+  const app = runtime.createApplication({
+    providers: [],
+    services: [
+      core.service(Scoped, {
+        lifetime: "execution",
+        dependencies: [sourceContext],
+        create: async (context: unknown) => {
+          eagerFactories++;
+          return { context };
+        },
+      }),
+    ],
+  });
+  const contexts: unknown[] = [];
+  try {
+    await app.start();
+    assert.equal(eagerFactories, 0);
+    for (let index = 0; index < 2; index++)
+      await app.run(
+        (scope: { context: unknown; resolve(token: unknown): { context: unknown } }) => {
+          assert.equal(eagerFactories, index + 1);
+          assert.equal(scope.resolve(Scoped).context, scope.context);
+          for (const token of [
+            core.CORE_EXECUTION_CONTEXT_TOKEN,
+            runtime.CORE_EXECUTION_CONTEXT_TOKEN,
+            sourceContext,
+          ])
+            assert.equal(scope.resolve(token), scope.context);
+          contexts.push(scope.context);
+        },
+      );
+    assert.notEqual(contexts[0], contexts[1]);
+    console.log(
+      JSON.stringify({
+        evidence: "mixed-workspace-source-built",
+        contextIdentity: true,
+        eagerFactories,
+        isolatedContexts: true,
+      }),
+    );
+  } finally {
+    await app.stop();
+  }
+} else if (process.argv[2] === "dialect") {
   core.useSqlDialect("mysql");
   try {
     const table = core.defineTable({

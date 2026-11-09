@@ -20,6 +20,7 @@ export {
   ServiceContainer,
   type ServiceToken,
 } from "@getstrata/core/contracts/container";
+export { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
 export { aliasService, service, valueService } from "@getstrata/core/contracts/services";
 export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
 export type {
@@ -109,6 +110,11 @@ export {
 } from "../core/cache/createCacheStore.ts";
 export { default as CacheRepository } from "../core/cache/repository.ts";
 export { CACHE_TAGS } from "../core/cache/tags.ts";
+export type {
+  ExecutionActor,
+  ExecutionContext,
+  ExecutionEnvelope,
+} from "../core/contracts/application";
 export type { ServiceProvider } from "../core/contracts/di.ts";
 export { resolveService } from "../core/contracts/di.ts";
 export type {

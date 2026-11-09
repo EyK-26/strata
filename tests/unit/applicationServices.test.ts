@@ -546,7 +546,7 @@ test("invalid final dependency and override graphs reject before any factory or 
   assert.equal(effects, 0);
 });
 
-test("transitive and aliased captive dependencies are rejected distinctly from unsupported execution capability", () => {
+test("transitive and aliased captive dependencies remain rejected with execution capability enabled", () => {
   const Scoped = createServiceToken<number>("execution");
   const Alias = createServiceToken<number>("alias");
   const Outer = createServiceToken<number>("outer");
@@ -569,7 +569,8 @@ test("transitive and aliased captive dependencies are rejected distinctly from u
       },
     );
   };
-  checkCode([execution], "SERVICE_GRAPH_UNSUPPORTED_LIFETIME");
+  // Valid execution declarations are enabled; graph capture diagnostics stay specific.
+  assert.doesNotThrow(() => createApplication({ providers: [], services: [execution] }));
   checkCode(
     [
       execution,
