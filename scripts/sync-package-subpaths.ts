@@ -173,6 +173,7 @@ const CORE_SUBPATHS = [
   "queue/types",
   "runtime/appEnv",
   "runtime/appKeyPrefix",
+  "runtime/application",
   "runtime/frontendMode",
   "runtime/applicationRegistry",
   "runtime/asyncContextStore",

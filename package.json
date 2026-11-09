@@ -47,12 +47,13 @@
     "smoke": "bun run verify:generated-runtime && bun run smoke:extras",
     "smoke:extras": "bun scripts/smoke-integrations.ts && bun scripts/smoke-spa.ts",
     "smoke:webview": "bun scripts/smoke-webview.ts",
-    "check:module-imports": "bun scripts/check-module-imports.ts",
+    "check:module-imports": "bun scripts/check-module-imports.ts && bun run check:application-boundary",
     "cli": "bun src/cli/index.ts",
     "build:create-strata": "bun run --filter create-strata build",
     "verify:create-strata": "bun run build:create-strata && bun packages/create-strata/dist/cli.js --help",
     "verify:generated-app": "bun scripts/verify-generated-app.ts",
-    "verify:docker-runtime": "bun test tests/e2e/generatedDocker.test.ts"
+    "verify:docker-runtime": "bun test tests/e2e/generatedDocker.test.ts",
+    "check:application-boundary": "bun scripts/check-application-boundary.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.7",
