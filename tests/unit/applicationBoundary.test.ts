@@ -193,6 +193,10 @@ describe("M2.1 neutral value graph", () => {
       'import { serviceTokenKey } from "@getstrata/core/contracts/token"; export const validate = serviceTokenKey;',
     ],
     [
+      "src/core/runtime/resourceJournal.ts",
+      'import type { ResourceSpec } from "../contracts/application"; export type Spec = ResourceSpec<unknown>;',
+    ],
+    [
       "src/core/contracts/serviceTokens.ts",
       'export { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";',
     ],
@@ -218,6 +222,10 @@ describe("M2.1 neutral value graph", () => {
     ],
     ["src/core/runtime/serviceGraph.ts", 'import type { Request } from "../http/route";'],
     [
+      "src/core/runtime/resourceJournal.ts",
+      'import { ServiceContainer } from "@getstrata/core/contracts/container";',
+    ],
+    [
       "src/core/runtime/application.ts",
       'import { parseApplicationConfig } from "../config/applicationConfig";',
     ],
@@ -241,6 +249,7 @@ describe("M2.1 neutral value graph", () => {
     ["src/core/contracts/token.ts", 'const key = Symbol.for("application.tokens");'],
     ["src/core/config/applicationConfig.ts", "const input = process.env;"],
     ["src/core/runtime/serviceGraph.ts", "resolveApplicationCache();"],
+    ["src/core/runtime/resourceJournal.ts", "const input = process.env;"],
     ["src/core/config/configSnapshot.ts", "const input = globalThis.config;"],
   ])("rejects ambient ownership in %s", (file, source) => {
     expect(inspectModule(file, source).some((issue) => issue.rule === "ambient-capability")).toBe(

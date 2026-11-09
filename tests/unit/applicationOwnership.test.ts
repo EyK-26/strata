@@ -23,8 +23,30 @@ test("one owner runs phases in dependency order and releases resources LIFO exac
         name: "dependent",
         requires: ["backing"],
         async setup(scope) {
-          await scope.acquire(resource("B1", events));
-          await scope.acquire(resource("B2", events));
+          const firstOpen = deferred<OpenOutcome<string>>();
+          const secondOpen = deferred<OpenOutcome<string>>();
+          const first = scope.acquire(
+            resource("B1", events, {
+              open() {
+                events.push("B1.open");
+                return firstOpen.promise;
+              },
+            }),
+          );
+          const second = scope.acquire(
+            resource("B2", events, {
+              open() {
+                events.push("B2.open");
+                return secondOpen.promise;
+              },
+            }),
+          );
+          secondOpen.resolve({ ok: true, value: "B2" });
+          await second;
+          events.push("B2.acquired");
+          firstOpen.resolve({ ok: true, value: "B1" });
+          await first;
+          events.push("B1.acquired");
         },
       },
       {
@@ -44,6 +66,8 @@ test("one owner runs phases in dependency order and releases resources LIFO exac
     "A.open",
     "B1.open",
     "B2.open",
+    "B2.acquired",
+    "B1.acquired",
     ...["stop", "drain", "flush", "close"].flatMap((phase) =>
       ["B2", "B1", "A"].map((name) => `${name}.${phase}`),
     ),
