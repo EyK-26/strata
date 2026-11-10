@@ -79,6 +79,22 @@ test("installed canonical cache bindings own loaders, honor overrides and retain
     assert.equal(report.operationIdentity, true);
     assert.equal(report.canonicalBindings, true);
     assert.equal(report.actualLoaderJoined, true);
+    assert.equal(report.handoff.sourceResult, "request-result");
+    assert.deepEqual(report.handoff.jobOutcome, { ok: true, value: "job-result" });
+    assert.equal(report.handoff.freshExecution, true);
+    assert.deepEqual(report.handoff.actor, { kind: "system", policy: "packed-handoff" });
+    assert.deepEqual(report.handoff.tenant, { id: "job-tenant" });
+    assert.equal(report.handoff.targetValueBefore, 41);
+    assert.equal(report.handoff.targetValueAfter, 41);
+    assert.equal(report.handoff.capturedHandleUse, "alive:job");
+    assert.deepEqual(report.handoff.lifecycle, [
+      "request.open",
+      "job.open",
+      "request.body.end",
+      "request.close",
+      "job.body.end",
+      "job.close",
+    ]);
     assert.equal(report.fakeCalls, 3);
     assert.equal(report.loads, 1);
     assert.deepEqual(report.responseStatuses, [200, 304, 200]);
