@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import {
@@ -10,6 +11,7 @@ import {
 import { defineTable } from "@getstrata/core/database/table";
 import { runInTransaction } from "@getstrata/core/database/transaction";
 import { NotFoundError } from "@getstrata/core/errors/http";
+import { errorResponse } from "@getstrata/core/http/response";
 
 type CrewMember = {
   id: number;
@@ -478,9 +480,23 @@ test("empty parent loads and invalid chunk/page bounds never query the database"
 test("missing writes and lookups preserve their documented absence results", async () => {
   const connection = new FakeConnection();
   const repository = new CrewRepository(connection);
-  await expect(
+  let creationFailure: Error | undefined;
+  await assert.rejects(
     repository.create({ name: "missing", squad_id: 1, is_active: true }),
-  ).rejects.toThrow("Internal server error.");
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.constructor, Error);
+      assert.equal(error.message, "Insert into crew_member did not return a record.");
+      assert.equal("status" in error, false);
+      creationFailure = error;
+      return true;
+    },
+  );
+  assert.ok(creationFailure);
+  const response = errorResponse(creationFailure);
+  assert.equal(response.status, 500);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(await response.json(), { error: "Internal server error." });
   await expect(repository.findByIdOrThrow(404, () => new Error("custom missing"))).rejects.toThrow(
     "custom missing",
   );
@@ -541,7 +557,7 @@ test("MySQL adapter failures cannot report an unidentified write as a persisted 
     missingId.queue([{ affectedRows: 1 }]);
     await expect(
       new CrewRepository(missingId).create({ name: "one", squad_id: 1, is_active: true }),
-    ).rejects.toThrow("Internal server error.");
+    ).rejects.toThrow("MySQL write to crew_member did not identify its persisted primary key.");
     expect(missingId.calls).toHaveLength(1);
     expect(missingId.commits).toBe(0);
     expect(missingId.rollbacks).toBe(1);
@@ -550,7 +566,9 @@ test("MySQL adapter failures cannot report an unidentified write as a persisted 
       invalidMetadata.queue([{ affectedRows }]);
       await expect(
         new CrewRepository(invalidMetadata).updateById(1, { name: "one" }),
-      ).rejects.toThrow("Internal server error.");
+      ).rejects.toThrow(
+        "MySQL mutations require affectedRows metadata from the framework adapter.",
+      );
       expect(invalidMetadata.calls).toHaveLength(1);
       expect(invalidMetadata.commits).toBe(0);
       expect(invalidMetadata.rollbacks).toBe(1);
@@ -558,7 +576,9 @@ test("MySQL adapter failures cannot report an unidentified write as a persisted 
       invalidCount.queue([{ affectedRows }]);
       await expect(
         new CrewRepository(invalidCount).deleteWhere({ where: { id: 1 } }),
-      ).rejects.toThrow("Internal server error.");
+      ).rejects.toThrow(
+        "MySQL conditional writes require affectedRows metadata from the framework adapter.",
+      );
       expect(invalidCount.calls).toHaveLength(1);
     }
   });
@@ -569,14 +589,14 @@ test("MySQL upsert rejects absent conflict identities and rolls back an unresolv
     const absentConflict = new TransactionalAdapterFixture();
     await expect(
       new CrewRepository(absentConflict).upsert({ name: "one" }, ["squad_id"]),
-    ).rejects.toThrow("Internal server error.");
+    ).rejects.toThrow("MySQL upsert requires non-null supplied conflict-column values.");
     expect(absentConflict.calls).toEqual([]);
     expect(absentConflict.rollbacks).toBe(1);
     const noReadback = new TransactionalAdapterFixture();
     noReadback.queue([{ insertId: 0, affectedRows: 1 }]);
     await expect(
       new CrewRepository(noReadback).upsert({ id: 1, name: "one" }, ["id"]),
-    ).rejects.toThrow("Internal server error.");
+    ).rejects.toThrow("MySQL upsert could not resolve the persisted row; transaction rolled back.");
     expect(noReadback.calls).toHaveLength(2);
     expect(noReadback.commits).toBe(0);
     expect(noReadback.rollbacks).toBe(1);
