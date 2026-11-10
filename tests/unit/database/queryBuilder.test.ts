@@ -7,6 +7,7 @@ import {
   parseQualifiedColumn,
   resolveQualifiedColumn,
 } from "@getstrata/core/database/query";
+import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { defineTable } from "@getstrata/core/database/table";
 import { WhereBuilder } from "@getstrata/core/database/whereBuilder";
 
@@ -26,7 +27,7 @@ const articleTable = defineTable<Article, "id">({
 
 describe("Phase 3 query builder: orWhere and nested groups", () => {
   test("rejects malformed qualified column references", () => {
-    expect(() => resolveQualifiedColumn("article", "bad.")).toThrow(
+    expect(() => resolveQualifiedColumn(dialectFor("pgsql"), "article", "bad.")).toThrow(
       "Invalid qualified column: bad.",
     );
     expect(() => parseQualifiedColumn("invalid")).toThrow(
@@ -35,10 +36,15 @@ describe("Phase 3 query builder: orWhere and nested groups", () => {
   });
 
   test("builds OR conditions from where nodes", () => {
-    const { clause, params } = buildAdvancedWhereClause<Article>("article", {}, [
-      { kind: "or", where: { status: "draft" } },
-      { kind: "or", where: { status: "published" } },
-    ]);
+    const { clause, params } = buildAdvancedWhereClause<Article>(
+      dialectFor("pgsql"),
+      "article",
+      {},
+      [
+        { kind: "or", where: { status: "draft" } },
+        { kind: "or", where: { status: "published" } },
+      ],
+    );
 
     expect(clause).toBe(' WHERE "article"."status" = $1 OR "article"."status" = $2');
     expect(params).toEqual(["draft", "published"]);
@@ -50,7 +56,12 @@ describe("Phase 3 query builder: orWhere and nested groups", () => {
       group.where({ title: { ilike: "%query%" } }).orWhere({ title: { ilike: "%builder%" } });
     });
 
-    const { clause, params } = buildAdvancedWhereClause("article", {}, builder.nodes);
+    const { clause, params } = buildAdvancedWhereClause(
+      dialectFor("pgsql"),
+      "article",
+      {},
+      builder.nodes,
+    );
 
     expect(clause).toBe(
       ' WHERE "article"."status" = $1 AND ("article"."title" ILIKE $2 OR "article"."title" ILIKE $3)',
@@ -59,7 +70,7 @@ describe("Phase 3 query builder: orWhere and nested groups", () => {
   });
 
   test("supports full-text match operators", () => {
-    const { clause, params } = buildAdvancedWhereClause<Article>("article", {
+    const { clause, params } = buildAdvancedWhereClause<Article>(dialectFor("pgsql"), "article", {
       search_vector: { tsMatch: "roadmap" },
     } as never);
 
@@ -71,7 +82,7 @@ describe("Phase 3 query builder: orWhere and nested groups", () => {
 describe("Phase 3 query builder: joins, groupBy, and having", () => {
   test("builds typed inner and left joins", () => {
     expect(
-      buildJoinClause([
+      buildJoinClause(dialectFor("pgsql"), [
         {
           type: "inner",
           table: "category",
@@ -99,7 +110,7 @@ describe("Phase 3 query builder: joins, groupBy, and having", () => {
   });
 
   test("builds select queries with joins, groupBy, and having", () => {
-    const { text, params } = buildSelectQuery(articleTable, {
+    const { text, params } = buildSelectQuery(dialectFor("pgsql"), articleTable, {
       joins: [
         {
           type: "inner",
@@ -129,6 +140,7 @@ describe("Phase 3 query builder: joins, groupBy, and having", () => {
 
   test("builds count queries with joins", () => {
     const { text } = buildCountQuery(
+      dialectFor("pgsql"),
       articleTable,
       { status: "published" },
       {
@@ -153,7 +165,7 @@ describe("Phase 3 query builder: joins, groupBy, and having", () => {
   });
 
   test("builds custom select expressions for search projections", () => {
-    const { text, params } = buildSelectQuery(articleTable, {
+    const { text, params } = buildSelectQuery(dialectFor("pgsql"), articleTable, {
       select: [
         { kind: "literalText", value: "article", as: "type" },
         { kind: "column", table: "article", column: "id", as: "id" },

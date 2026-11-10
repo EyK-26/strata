@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { buildSelectQuery } from "@getstrata/core/database/query";
+import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { defineTable } from "@getstrata/core/database/table";
 import { eventBus } from "@getstrata/core/events";
 
@@ -40,19 +41,19 @@ class SoftRepository extends BaseRepository<SoftRecord, "id"> {
 
 describe("soft delete query scoping", () => {
   test("excludes trashed rows by default", () => {
-    const { text } = buildSelectQuery(softTable);
+    const { text } = buildSelectQuery(dialectFor("pgsql"), softTable);
 
     expect(text).toContain('"soft_item"."deleted_at" IS NULL');
   });
 
   test("includes trashed rows when withTrashed is enabled", () => {
-    const { text } = buildSelectQuery(softTable, { withTrashed: true });
+    const { text } = buildSelectQuery(dialectFor("pgsql"), softTable, { withTrashed: true });
 
     expect(text).not.toContain('"soft_item"."deleted_at" IS NULL');
   });
 
   test("returns only trashed rows when onlyTrashed is enabled", () => {
-    const { text } = buildSelectQuery(softTable, { onlyTrashed: true });
+    const { text } = buildSelectQuery(dialectFor("pgsql"), softTable, { onlyTrashed: true });
 
     expect(text).toContain('"soft_item"."deleted_at" IS NOT NULL');
   });

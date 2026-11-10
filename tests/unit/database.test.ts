@@ -13,6 +13,7 @@ import {
   quoteIdentifier,
 } from "@getstrata/core/database/query";
 import { hasMany, indexHasManyRelation } from "@getstrata/core/database/relationships";
+import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { defineTable } from "@getstrata/core/database/table";
 
 type Project = {
@@ -38,11 +39,13 @@ const projectHasManyTasks = hasMany<Project, Task, "id", "project_id">({
 
 describe("database query helpers", () => {
   test("rejects invalid SQL identifiers", () => {
-    expect(() => quoteIdentifier("bad-name")).toThrow("Invalid SQL identifier");
+    expect(() => quoteIdentifier(dialectFor("pgsql"), "bad-name")).toThrow(
+      "Invalid SQL identifier",
+    );
   });
 
   test("builds where clauses with equality, ranges, and IN filters", () => {
-    const { clause, params } = buildWhereClause<Task>("task", {
+    const { clause, params } = buildWhereClause<Task>(dialectFor("pgsql"), "task", {
       status: "todo",
       priority: { gte: 1, lte: 5 },
       project_id: [1, 2],
@@ -55,7 +58,7 @@ describe("database query helpers", () => {
   });
 
   test("builds where clauses with null checks and operator filters", () => {
-    const { clause, params } = buildWhereClause<Task>("task", {
+    const { clause, params } = buildWhereClause<Task>(dialectFor("pgsql"), "task", {
       status: null,
       priority: { gt: 0, lt: 10, gte: 1, lte: 5, in: [1, 2] },
     });
@@ -68,7 +71,7 @@ describe("database query helpers", () => {
   });
 
   test("buildInClause returns false guard for empty arrays", () => {
-    const { clause } = buildWhereClause<Task>("task", {
+    const { clause } = buildWhereClause<Task>(dialectFor("pgsql"), "task", {
       project_id: { in: [] },
     });
 
@@ -76,18 +79,22 @@ describe("database query helpers", () => {
   });
 
   test("builds operator clauses for equality and nullability", () => {
-    const { clause: nullClause } = buildWhereClause<Task>("task", {
+    const { clause: nullClause } = buildWhereClause<Task>(dialectFor("pgsql"), "task", {
       priority: { isNull: true },
     });
-    const { clause: notNullClause } = buildWhereClause<Task>("task", {
+    const { clause: notNullClause } = buildWhereClause<Task>(dialectFor("pgsql"), "task", {
       priority: { isNull: false },
     });
-    const { clause: eqNullClause } = buildWhereClause<Task>("task", {
+    const { clause: eqNullClause } = buildWhereClause<Task>(dialectFor("pgsql"), "task", {
       priority: { eq: null },
     });
-    const { clause: eqValueClause, params: eqValueParams } = buildWhereClause<Task>("task", {
-      priority: { eq: 3 },
-    });
+    const { clause: eqValueClause, params: eqValueParams } = buildWhereClause<Task>(
+      dialectFor("pgsql"),
+      "task",
+      {
+        priority: { eq: 3 },
+      },
+    );
 
     expect(nullClause).toContain("IS NULL");
     expect(notNullClause).toContain("IS NOT NULL");
@@ -103,10 +110,10 @@ describe("database query helpers", () => {
       columns: ["id", "name"],
     });
 
-    expect(() => buildSelectQuery(userTable, { limit: 0 })).toThrow(
+    expect(() => buildSelectQuery(dialectFor("pgsql"), userTable, { limit: 0 })).toThrow(
       "Query limit must be a positive integer.",
     );
-    expect(() => buildSelectQuery(userTable, { offset: -1 })).toThrow(
+    expect(() => buildSelectQuery(dialectFor("pgsql"), userTable, { offset: -1 })).toThrow(
       "Query offset must be a non-negative integer.",
     );
   });
@@ -119,30 +126,51 @@ describe("database query helpers", () => {
       softDeletes: { column: "deleted_at" },
     });
 
-    expect(buildInsertQuery(userTable, { id: 1, name: "Ada" }).text).toContain("INSERT INTO");
+    expect(buildInsertQuery(dialectFor("pgsql"), userTable, { id: 1, name: "Ada" }).text).toContain(
+      "INSERT INTO",
+    );
     expect(
-      buildInsertQuery(userTable, { id: 1, name: undefined as unknown as string }).text,
+      buildInsertQuery(dialectFor("pgsql"), userTable, {
+        id: 1,
+        name: undefined as unknown as string,
+      }).text,
     ).toContain("INSERT INTO");
-    expect(() => buildInsertQuery(userTable, {})).toThrow("Cannot insert into user_account");
-    expect(buildUpdateQuery(userTable, 1, { name: "Grace" }).text).toContain("UPDATE");
-    expect(() => buildUpdateQuery(userTable, 1, {})).toThrow("Cannot update user_account");
-    expect(buildDeleteByIdQuery(userTable, 1).text).toContain("DELETE FROM");
-    expect(buildCountQuery(userTable, { name: "Ada" }, { onlyTrashed: true }).text).toContain(
-      "COUNT(*)",
+    expect(() => buildInsertQuery(dialectFor("pgsql"), userTable, {})).toThrow(
+      "Cannot insert into user_account",
     );
+    expect(buildUpdateQuery(dialectFor("pgsql"), userTable, 1, { name: "Grace" }).text).toContain(
+      "UPDATE",
+    );
+    expect(() => buildUpdateQuery(dialectFor("pgsql"), userTable, 1, {})).toThrow(
+      "Cannot update user_account",
+    );
+    expect(buildDeleteByIdQuery(dialectFor("pgsql"), userTable, 1).text).toContain("DELETE FROM");
     expect(
-      buildProjectionQuery(userTable, "COUNT(*)", "total", { where: { name: "Ada" } }).text,
+      buildCountQuery(dialectFor("pgsql"), userTable, { name: "Ada" }, { onlyTrashed: true }).text,
+    ).toContain("COUNT(*)");
+    expect(
+      buildProjectionQuery(dialectFor("pgsql"), userTable, "COUNT(*)", "total", {
+        where: { name: "Ada" },
+      }).text,
     ).toContain('AS "total"');
-    expect(() => buildProjectionQuery(userTable, "AVG(name); DROP TABLE users;", "total")).toThrow(
-      "Unsafe projection expression",
+    expect(() =>
+      buildProjectionQuery(dialectFor("pgsql"), userTable, "AVG(name); DROP TABLE users;", "total"),
+    ).toThrow("Unsafe projection expression");
+    expect(buildGroupedCountQuery(dialectFor("pgsql"), userTable, "name").text).toContain(
+      "GROUP BY",
     );
-    expect(buildGroupedCountQuery(userTable, "name").text).toContain("GROUP BY");
     expect(
-      buildSoftDeleteByIdQuery(userTable, 1, new Date("2026-01-01T00:00:00.000Z")).text,
+      buildSoftDeleteByIdQuery(
+        dialectFor("pgsql"),
+        userTable,
+        1,
+        new Date("2026-01-01T00:00:00.000Z"),
+      ).text,
     ).toContain('"deleted_at" = $1');
-    expect(buildRestoreByIdQuery(userTable, 1).text).toContain("IS NOT NULL");
+    expect(buildRestoreByIdQuery(dialectFor("pgsql"), userTable, 1).text).toContain("IS NOT NULL");
     expect(() =>
       buildRestoreByIdQuery(
+        dialectFor("pgsql"),
         defineTable<{ id: number; name: string }, "id">({
           name: "plain",
           primaryKey: "id",
@@ -153,6 +181,7 @@ describe("database query helpers", () => {
     ).toThrow("does not support soft deletes");
     expect(() =>
       buildSoftDeleteByIdQuery(
+        dialectFor("pgsql"),
         defineTable<{ id: number; name: string }, "id">({
           name: "plain",
           primaryKey: "id",
@@ -172,7 +201,7 @@ describe("database query helpers", () => {
       defaultOrderBy: { column: "id", direction: "DESC" },
     });
 
-    const { text, params } = buildSelectQuery(userTable, {
+    const { text, params } = buildSelectQuery(dialectFor("pgsql"), userTable, {
       where: { id: { gte: 10 } },
       limit: 5,
     });
@@ -191,7 +220,7 @@ describe("database query helpers", () => {
       softDeletes: true,
     });
 
-    const { text } = buildSelectQuery(userTable, {});
+    const { text } = buildSelectQuery(dialectFor("pgsql"), userTable, {});
     expect(text).toContain('"user_account"."deleted_at" IS NULL');
   });
 
@@ -202,7 +231,7 @@ describe("database query helpers", () => {
       columns: ["id", "name"],
     });
 
-    const { text } = buildSelectQuery(userTable, {
+    const { text } = buildSelectQuery(dialectFor("pgsql"), userTable, {
       limit: 15,
       offset: 30,
     });
@@ -258,18 +287,18 @@ describe("database relationship helpers", () => {
       columns: ["id", "project_id", "title", "status", "priority"],
     });
 
-    const explicit = buildSelectQuery(table, {
+    const explicit = buildSelectQuery(dialectFor("pgsql"), table, {
       orderBy: { column: "priority", direction: "desc" },
     });
     expect(explicit.text).toContain('"tasks"."priority" DESC');
 
-    const shorthand = buildSelectQuery(table, {
+    const shorthand = buildSelectQuery(dialectFor("pgsql"), table, {
       orderBy: { priority: "desc", title: "asc" },
     });
     expect(shorthand.text).toContain('"tasks"."priority" DESC');
     expect(shorthand.text).toContain('"tasks"."title" ASC');
 
-    const arrayForm = buildSelectQuery(table, {
+    const arrayForm = buildSelectQuery(dialectFor("pgsql"), table, {
       orderBy: [
         { column: "priority", direction: "desc" },
         { column: "title", direction: "asc" },

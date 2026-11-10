@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { runWithDatabaseConnection } from "@getstrata/core/database/connectionContext";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { defineModel } from "@getstrata/core/database/model";
 import { buildSelectQuery } from "@getstrata/core/database/query";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
@@ -24,12 +24,12 @@ for (const driver of ["pgsql", "sqlite", "mysql"] as const) {
         driver === "mysql"
           ? "`null_order_receipts`.`attempted`"
           : '"null_order_receipts"."attempted"';
-      expect(buildSelectQuery(table, { orderBy: { attempted: "asc" } }).text).toEndWith(
-        `${reference} ASC`,
-      );
+      expect(
+        buildSelectQuery(currentSqlDialect(), table, { orderBy: { attempted: "asc" } }).text,
+      ).toEndWith(`${reference} ASC`);
       for (const direction of ["ASC", "DESC"] as const)
         for (const nulls of ["first", "last"] as const) {
-          const query = buildSelectQuery(table, {
+          const query = buildSelectQuery(currentSqlDialect(), table, {
             where: { id: { gt: 0 } },
             orderBy: [{ column: "attempted", direction, nulls }, { column: "id" }],
             limit: 2,
@@ -48,7 +48,7 @@ for (const driver of ["pgsql", "sqlite", "mysql"] as const) {
         }
       for (const nulls of [null, "FIRST", "last; DROP TABLE receipts", 1, {}])
         expect(() =>
-          buildSelectQuery(table, {
+          buildSelectQuery(currentSqlDialect(), table, {
             orderBy: JSON.parse(JSON.stringify({ column: "attempted", nulls })),
           }),
         ).toThrow("null ordering");

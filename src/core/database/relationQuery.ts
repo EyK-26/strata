@@ -18,6 +18,7 @@ import type {
 } from "./relationships.ts";
 import { repositoryConnection } from "./repositoryConnection.ts";
 import type { RepositoryQuery } from "./repositoryQuery.ts";
+import type { SqlDialect } from "./sqlDialects";
 import { runInTransaction } from "./transaction.ts";
 import type { QueryOptions, QueryWhere } from "./types.ts";
 
@@ -127,6 +128,7 @@ function relatedRead<T extends object, K extends keyof T & string>(
 }
 
 function relatedConditions<T extends object, K extends keyof T & string>(
+  dialect: SqlDialect,
   model: RelatedModelClass<T, K>,
   filters: QueryWhere<T>[],
   options: Omit<QueryOptions<T>, "where"> = {},
@@ -140,6 +142,7 @@ function relatedConditions<T extends object, K extends keyof T & string>(
     );
   }
   const extra = buildQueryWhereClause(
+    dialect,
     model.repository().getTable(),
     compiled,
     compiled.whereNodes,
@@ -148,7 +151,7 @@ function relatedConditions<T extends object, K extends keyof T & string>(
   const predicate = extra.clause.replace(/^ WHERE /, "");
   return {
     sql: predicate ? ` AND (${predicate})` : "",
-    joins: buildJoinClause(compiled.joins),
+    joins: buildJoinClause(dialect, compiled.joins),
     params: extra.params,
   };
 }
@@ -200,15 +203,17 @@ class HasManyRelationQuery<
   }
 
   toExistsClause(parentTable: string): ExistsClause {
+    const dialect = currentSqlDialect();
     const childTable = this.related.repository().getTable().name;
     const extra = relatedConditions(
+      dialect,
       this.related,
       this.extraWhere,
       this.extraOptions,
       [],
       [parentTable],
     );
-    const sql = `SELECT 1 FROM ${quoteIdentifier(childTable)}${extra.joins} WHERE ${qualifyColumn(childTable, this.relation.foreignKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extra.sql}`;
+    const sql = `SELECT 1 FROM ${quoteIdentifier(dialect, childTable)}${extra.joins} WHERE ${qualifyColumn(dialect, childTable, this.relation.foreignKey)} = ${qualifyColumn(dialect, parentTable, this.relation.localKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
@@ -416,15 +421,17 @@ class BelongsToRelationQuery<
   }
 
   toExistsClause(parentTable: string): ExistsClause {
+    const dialect = currentSqlDialect();
     const relatedTable = this.related.repository().getTable().name;
     const extra = relatedConditions(
+      dialect,
       this.related,
       this.extraWhere,
       this.extraOptions,
       [],
       [parentTable],
     );
-    const sql = `SELECT 1 FROM ${quoteIdentifier(relatedTable)}${extra.joins} WHERE ${qualifyColumn(relatedTable, this.relation.ownerKey)} = ${qualifyColumn(parentTable, this.relation.foreignKey)}${extra.sql}`;
+    const sql = `SELECT 1 FROM ${quoteIdentifier(dialect, relatedTable)}${extra.joins} WHERE ${qualifyColumn(dialect, relatedTable, this.relation.ownerKey)} = ${qualifyColumn(dialect, parentTable, this.relation.foreignKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
@@ -582,15 +589,17 @@ class BelongsToManyRelationQuery<
   }
 
   toExistsClause(parentTable: string): ExistsClause {
+    const dialect = currentSqlDialect();
     const relatedTable = this.related.repository().getTable().name;
     const extra = relatedConditions(
+      dialect,
       this.related,
       this.extraWhere,
       this.extraOptions,
       [],
       [parentTable, this.relation.pivotTable],
     );
-    const sql = `SELECT 1 FROM ${quoteIdentifier(relatedTable)} INNER JOIN ${quoteIdentifier(this.relation.pivotTable)} ON ${qualifyColumn(this.relation.pivotTable, this.relation.relatedPivotKey)} = ${qualifyColumn(relatedTable, this.relation.relatedKey)}${extra.joins} WHERE ${qualifyColumn(this.relation.pivotTable, this.relation.foreignPivotKey)} = ${qualifyColumn(parentTable, this.relation.parentKey)}${extra.sql}`;
+    const sql = `SELECT 1 FROM ${quoteIdentifier(dialect, relatedTable)} INNER JOIN ${quoteIdentifier(dialect, this.relation.pivotTable)} ON ${qualifyColumn(dialect, this.relation.pivotTable, this.relation.relatedPivotKey)} = ${qualifyColumn(dialect, relatedTable, this.relation.relatedKey)}${extra.joins} WHERE ${qualifyColumn(dialect, this.relation.pivotTable, this.relation.foreignPivotKey)} = ${qualifyColumn(dialect, parentTable, this.relation.parentKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
@@ -647,9 +656,10 @@ class BelongsToManyRelationQuery<
   }
 
   private async relatedQuery(): Promise<RepositoryQuery<TRelated, RelatedKey> | null> {
+    const dialect = currentSqlDialect();
     const parentId = this.parent.get(this.relation.parentKey);
     const pivotRows = await this.connection().unsafe<Pivot>(
-      `SELECT * FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)}`,
+      `SELECT * FROM ${quoteIdentifier(dialect, this.relation.pivotTable)} WHERE ${quoteIdentifier(dialect, String(this.relation.foreignPivotKey))} = ${dialect.placeholder(1)}`,
       [parentId],
     );
 
@@ -688,6 +698,7 @@ class BelongsToManyRelationQuery<
   }
 
   async toggle(ids: unknown | readonly unknown[]): Promise<void> {
+    const dialect = currentSqlDialect();
     const list = Array.isArray(ids) ? ids : [ids];
     if (list.length === 0) return;
     await this.atomically(async (connection) => {
@@ -696,11 +707,11 @@ class BelongsToManyRelationQuery<
         return;
       }
       const parentId = this.parent.get(this.relation.parentKey);
-      const relatedColumn = quoteIdentifier(String(this.relation.relatedPivotKey));
-      const parentColumn = quoteIdentifier(String(this.relation.foreignPivotKey));
-      const placeholders = list.map((_, index) => currentSqlDialect().placeholder(index + 2));
+      const relatedColumn = quoteIdentifier(dialect, String(this.relation.relatedPivotKey));
+      const parentColumn = quoteIdentifier(dialect, String(this.relation.foreignPivotKey));
+      const placeholders = list.map((_, index) => dialect.placeholder(index + 2));
       const existing = await connection.unsafe<Record<string, unknown>>(
-        `SELECT ${relatedColumn} FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${parentColumn} = ${currentSqlDialect().placeholder(1)} AND ${relatedColumn} IN (${placeholders.join(", ")})`,
+        `SELECT ${relatedColumn} FROM ${quoteIdentifier(dialect, this.relation.pivotTable)} WHERE ${parentColumn} = ${dialect.placeholder(1)} AND ${relatedColumn} IN (${placeholders.join(", ")})`,
         [parentId, ...list],
       );
       const existingIds = new Set(
@@ -714,11 +725,12 @@ class BelongsToManyRelationQuery<
   }
 
   async detach(ids?: unknown | readonly unknown[]): Promise<void> {
+    const dialect = currentSqlDialect();
     const parentId = this.parent.get(this.relation.parentKey);
 
     if (ids === undefined) {
       await this.connection().unsafe(
-        `DELETE FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)}`,
+        `DELETE FROM ${quoteIdentifier(dialect, this.relation.pivotTable)} WHERE ${quoteIdentifier(dialect, String(this.relation.foreignPivotKey))} = ${dialect.placeholder(1)}`,
         [parentId],
       );
       return;
@@ -730,9 +742,10 @@ class BelongsToManyRelationQuery<
   }
 
   private async toggleOne(connection: DatabaseConnection, id: unknown): Promise<void> {
+    const dialect = currentSqlDialect();
     const parentId = this.parent.get(this.relation.parentKey);
     const existing = await connection.unsafe(
-      `SELECT 1 FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)} AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} = ${currentSqlDialect().placeholder(2)} LIMIT 1`,
+      `SELECT 1 FROM ${quoteIdentifier(dialect, this.relation.pivotTable)} WHERE ${quoteIdentifier(dialect, String(this.relation.foreignPivotKey))} = ${dialect.placeholder(1)} AND ${quoteIdentifier(dialect, String(this.relation.relatedPivotKey))} = ${dialect.placeholder(2)} LIMIT 1`,
       [parentId, id],
     );
     if (existing.length > 0) await this.deletePivotRows(connection, [id]);
@@ -743,22 +756,25 @@ class BelongsToManyRelationQuery<
     connection: DatabaseConnection,
     list: readonly unknown[],
   ): Promise<void> {
+    const dialect = currentSqlDialect();
     const parentId = this.parent.get(this.relation.parentKey);
     const extraKeys = Object.keys(this.pivotValues);
     const extraColumns =
-      extraKeys.length > 0 ? `, ${extraKeys.map((key) => quoteIdentifier(key)).join(", ")}` : "";
+      extraKeys.length > 0
+        ? `, ${extraKeys.map((key) => quoteIdentifier(dialect, key)).join(", ")}`
+        : "";
     const extraValues = extraKeys.map((key) => this.pivotValues[key]);
     const width = 2 + extraKeys.length;
     const tuples = list.map((_, row) => {
       const slots = Array.from({ length: width }, (__, column) =>
-        currentSqlDialect().placeholder(row * width + column + 1),
+        dialect.placeholder(row * width + column + 1),
       );
       return `(${slots.join(", ")})`;
     });
     const params: unknown[] = [];
     for (const id of list) params.push(parentId, id, ...extraValues);
     await connection.unsafe(
-      `INSERT INTO ${quoteIdentifier(this.relation.pivotTable)} (${quoteIdentifier(String(this.relation.foreignPivotKey))}, ${quoteIdentifier(String(this.relation.relatedPivotKey))}${extraColumns}) VALUES ${tuples.join(", ")}`,
+      `INSERT INTO ${quoteIdentifier(dialect, this.relation.pivotTable)} (${quoteIdentifier(dialect, String(this.relation.foreignPivotKey))}, ${quoteIdentifier(dialect, String(this.relation.relatedPivotKey))}${extraColumns}) VALUES ${tuples.join(", ")}`,
       params,
     );
   }
@@ -767,10 +783,11 @@ class BelongsToManyRelationQuery<
     connection: DatabaseConnection,
     list: readonly unknown[],
   ): Promise<void> {
+    const dialect = currentSqlDialect();
     const parentId = this.parent.get(this.relation.parentKey);
-    const placeholders = list.map((_, index) => currentSqlDialect().placeholder(index + 2));
+    const placeholders = list.map((_, index) => dialect.placeholder(index + 2));
     await connection.unsafe(
-      `DELETE FROM ${quoteIdentifier(this.relation.pivotTable)} WHERE ${quoteIdentifier(String(this.relation.foreignPivotKey))} = ${currentSqlDialect().placeholder(1)} AND ${quoteIdentifier(String(this.relation.relatedPivotKey))} IN (${placeholders.join(", ")})`,
+      `DELETE FROM ${quoteIdentifier(dialect, this.relation.pivotTable)} WHERE ${quoteIdentifier(dialect, String(this.relation.foreignPivotKey))} = ${dialect.placeholder(1)} AND ${quoteIdentifier(dialect, String(this.relation.relatedPivotKey))} IN (${placeholders.join(", ")})`,
       [parentId, ...list],
     );
   }
@@ -833,8 +850,10 @@ class MorphManyRelationQuery<
   }
 
   toExistsClause(parentTable: string): ExistsClause {
+    const dialect = currentSqlDialect();
     const childTable = this.related.repository().getTable().name;
     const extra = relatedConditions(
+      dialect,
       this.related,
       [
         asWhere<TChild>({ [this.relation.morphTypeKey]: this.relation.morphType }),
@@ -844,7 +863,7 @@ class MorphManyRelationQuery<
       [],
       [parentTable],
     );
-    const sql = `SELECT 1 FROM ${quoteIdentifier(childTable)}${extra.joins} WHERE ${qualifyColumn(childTable, this.relation.morphIdKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extra.sql}`;
+    const sql = `SELECT 1 FROM ${quoteIdentifier(dialect, childTable)}${extra.joins} WHERE ${qualifyColumn(dialect, childTable, this.relation.morphIdKey)} = ${qualifyColumn(dialect, parentTable, this.relation.localKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 
@@ -1034,6 +1053,7 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
   }
 
   toExistsClause(parentTable: string): ExistsClause {
+    const dialect = currentSqlDialect();
     const params: unknown[] = [];
     const type = this.parent.get(this.relation.morphTypeKey);
     if (type !== undefined && type !== null && !this.relatedByType[String(type)]) {
@@ -1041,10 +1061,10 @@ class MorphToRelationQuery<TChild extends object, ChildKey extends keyof TChild 
     }
     const branches = Object.entries(this.relatedByType).map(([type, related]) => {
       params.push(type);
-      const discriminator = currentSqlDialect().placeholder(params.length);
+      const discriminator = dialect.placeholder(params.length);
       const table = related.repository().getTable();
-      const extra = relatedConditions(related, this.extraWhere, {}, params, [parentTable]);
-      return `(${qualifyColumn(parentTable, this.relation.morphTypeKey)} = ${discriminator} AND EXISTS (SELECT 1 FROM ${quoteIdentifier(table.name)}${extra.joins} WHERE ${qualifyColumn(table.name, table.primaryKey)} = ${qualifyColumn(parentTable, this.relation.morphIdKey)}${extra.sql}))`;
+      const extra = relatedConditions(dialect, related, this.extraWhere, {}, params, [parentTable]);
+      return `(${qualifyColumn(dialect, parentTable, this.relation.morphTypeKey)} = ${discriminator} AND EXISTS (SELECT 1 FROM ${quoteIdentifier(dialect, table.name)}${extra.joins} WHERE ${qualifyColumn(dialect, table.name, table.primaryKey)} = ${qualifyColumn(dialect, parentTable, this.relation.morphIdKey)}${extra.sql}))`;
     });
     return {
       sql: `SELECT 1 WHERE ${branches.length > 0 ? branches.join(" OR ") : "1 = 0"}`,
@@ -1158,15 +1178,17 @@ class HasManyThroughRelationQuery<
   }
 
   toExistsClause(parentTable: string): ExistsClause {
+    const dialect = currentSqlDialect();
     const farTable = this.related.repository().getTable().name;
     const extra = relatedConditions(
+      dialect,
       this.related,
       this.extraWhere,
       this.extraOptions,
       [],
       [parentTable, this.relation.throughTable],
     );
-    const sql = `SELECT 1 FROM ${quoteIdentifier(farTable)} INNER JOIN ${quoteIdentifier(this.relation.throughTable)} ON ${qualifyColumn(this.relation.throughTable, this.relation.secondLocalKey)} = ${qualifyColumn(farTable, this.relation.secondKey)}${extra.joins} WHERE ${qualifyColumn(this.relation.throughTable, this.relation.firstKey)} = ${qualifyColumn(parentTable, this.relation.localKey)}${extra.sql}`;
+    const sql = `SELECT 1 FROM ${quoteIdentifier(dialect, farTable)} INNER JOIN ${quoteIdentifier(dialect, this.relation.throughTable)} ON ${qualifyColumn(dialect, this.relation.throughTable, this.relation.secondLocalKey)} = ${qualifyColumn(dialect, farTable, this.relation.secondKey)}${extra.joins} WHERE ${qualifyColumn(dialect, this.relation.throughTable, this.relation.firstKey)} = ${qualifyColumn(dialect, parentTable, this.relation.localKey)}${extra.sql}`;
     return { sql, params: extra.params };
   }
 

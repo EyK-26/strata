@@ -4,7 +4,10 @@ import * as Core from "@getstrata/core";
 import { createTransactionAcquisitionMetrics } from "@getstrata/core/database/acquisitionMetrics";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { PersistenceError } from "@getstrata/core/database/errors";
+// M3b1 installed compiler imports; existing public package entrypoints.
+import { buildSelectQuery } from "@getstrata/core/database/query";
 import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
+import { defineTable } from "@getstrata/core/database/table";
 import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 import { errorResponse } from "@getstrata/core/http/response";
 import { createApplication } from "@getstrata/core/runtime/application";
@@ -55,6 +58,27 @@ function publicTypes(db: DatabaseSession, tx: TransactionSession) {
   return { result, registration };
 }
 void publicTypes;
+// M3b1 external compiler contracts: existing installed strict tsc compiles this block.
+function explicitCompilerTypes(session: DatabaseSession) {
+  const table = defineTable<{ id: number; label: string }, "id">({
+    name: "packed_compiler",
+    primaryKey: "id",
+    columns: ["id", "label"],
+  });
+  const positive: { text: string; params: unknown[] } = buildSelectQuery(session.dialect, table, {
+    where: { id: 17 },
+  });
+  // @ts-expect-error Installed compiler no longer accepts a dialect-free call.
+  buildSelectQuery(table, { where: { id: 17 } });
+  // @ts-expect-error A driver string is not an explicit SqlDialect value.
+  buildSelectQuery("sqlite", table);
+  // @ts-expect-error Partial descriptors do not satisfy the installed compiler contract.
+  Core.buildInsertQuery({ driver: "sqlite" }, table, { id: 17 });
+  return positive;
+}
+void explicitCompilerTypes;
+// End M3b1 external compiler contracts.
+
 const declarations = createDatabaseBindings({
   default: "primary",
   connections: {
@@ -71,6 +95,31 @@ try {
   await app.start();
   await app.run(async (scope) => {
     const db = scope.resolve(DATABASE_SESSION_TOKEN);
+    // M3b1 installed compiler runtime proof uses the actual execution session descriptor.
+    const compilerPath = await realpath(
+      new URL(import.meta.resolve("@getstrata/core/database/query")),
+    );
+    assert.ok(
+      compilerPath.startsWith(`${process.cwd()}/node_modules/@getstrata/core/`),
+      compilerPath,
+    );
+    const compilerTable = defineTable<{ id: number; label: string }, "id">({
+      name: "packed_compiler",
+      primaryKey: "id",
+      columns: ["id", "label"],
+    });
+    assert.deepEqual(buildSelectQuery(db.dialect, compilerTable, { where: { id: 17 } }), {
+      text: 'SELECT "packed_compiler"."id", "packed_compiler"."label" FROM "packed_compiler" WHERE "packed_compiler"."id" = ?',
+      params: [17],
+    });
+    assert.deepEqual(
+      Core.buildInsertQuery(db.dialect, compilerTable, { id: 17, label: "packed" }),
+      {
+        text: 'INSERT INTO "packed_compiler" ("id", "label") VALUES (?, ?) RETURNING "packed_compiler"."id", "packed_compiler"."label"',
+        params: [17, "packed"],
+      },
+    );
+    // End M3b1 installed compiler runtime proof.
     stale = db;
     const other = db.connection("secondary");
     const execute = (executor: Pick<DatabaseSession, "execute">, text: string) =>

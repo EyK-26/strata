@@ -140,6 +140,31 @@ function inspectModule(file: string, source: string) {
   return checkApplicationBoundary({ runtime, contract, modules: { [file]: source } });
 }
 
+describe("M3b1 explicit SQL compiler boundary", () => {
+  test("permits explicit compiler inputs and rejects ambient dialect and connection dependencies", () => {
+    const query = "src/core/database/query.ts";
+    const relations = "src/core/database/relationQueries.ts";
+    expect(inspectModule(query, 'import type { SqlDialect } from "./sqlDialects.ts";')).toEqual([]);
+    expect(inspectModule(relations, 'import { buildSelectQuery } from "./query.ts";')).toEqual([]);
+    for (const file of [query, relations]) {
+      for (const source of [
+        'import { currentSqlDialect } from "@getstrata/core/database/dialect";',
+        'import type { Connection } from "./connection.ts";',
+        'import { getDatabaseDriver } from "../schema/driver.ts";',
+        'import { getDefaultConnection } from "./defaultConnection.ts";',
+        'import { resolveApplicationDependencies } from "../runtime/applicationRegistry.ts";',
+      ]) {
+        expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
+      }
+      expect(
+        inspectModule(file, "const dialect = process.env.DB_CONNECTION;").some(
+          (issue) => issue.rule === "ambient-capability",
+        ),
+      ).toBe(true);
+    }
+  });
+});
+
 describe("M2.3 cache and operation boundaries", () => {
   test.each([
     ["src/core/runtime/application.ts", 'import { AsyncLocalStorage } from "node:async_hooks";'],

@@ -35,7 +35,7 @@ describe("SQL dialect", () => {
       expect(dialect.nullsLastSuffix()).toBe(" NULLS LAST");
       expect(dialect.castToText("$1")).toBe("$1::text");
 
-      const insert = buildInsertQuery(seatTable, { name: "Backend" });
+      const insert = buildInsertQuery(currentSqlDialect(), seatTable, { name: "Backend" });
       expect(insert.text).toContain('INSERT INTO "seats"');
       expect(insert.text).toContain("$1");
       expect(insert.text).toContain("RETURNING");
@@ -53,15 +53,17 @@ describe("SQL dialect", () => {
       expect(dialect.nullsLastSuffix()).toBe("");
       expect(dialect.castToText("?")).toBe("CAST(? AS CHAR)");
 
-      const insert = buildInsertQuery(seatTable, { name: "Backend" });
+      const insert = buildInsertQuery(currentSqlDialect(), seatTable, { name: "Backend" });
       expect(insert.text).toContain("INSERT INTO `seats`");
       expect(insert.text).toContain("?");
       expect(insert.text).not.toContain("RETURNING");
 
-      const select = buildSelectQuery(seatTable, { where: { name: { ilike: "%eng%" } } });
+      const select = buildSelectQuery(currentSqlDialect(), seatTable, {
+        where: { name: { ilike: "%eng%" } },
+      });
       expect(select.text).toContain("LIKE ?");
 
-      const del = buildDeleteByIdQuery(seatTable, 9);
+      const del = buildDeleteByIdQuery(currentSqlDialect(), seatTable, 9);
       expect(del.text).toContain("DELETE FROM `seats`");
       expect(del.text).not.toContain("RETURNING");
       expect(del.params).toEqual([9]);
@@ -80,7 +82,7 @@ describe("SQL dialect", () => {
 
       expect(dialect.castToText("?")).toBe("CAST(? AS TEXT)");
 
-      const insert = buildInsertQuery(seatTable, { name: "Design" });
+      const insert = buildInsertQuery(currentSqlDialect(), seatTable, { name: "Design" });
       expect(insert.text).toContain("RETURNING");
       expect(insert.params).toEqual(["Design"]);
     });
@@ -147,7 +149,7 @@ describe("SQL dialect", () => {
   test("full-text search is refused off PostgreSQL", () => {
     runWithSqlDialect("mysql", () => {
       expect(() =>
-        buildSelectQuery(seatTable, {
+        buildSelectQuery(currentSqlDialect(), seatTable, {
           where: { name: { tsMatch: "backend" } } as never,
         }),
       ).toThrow("Full-text search (tsMatch) is only available on PostgreSQL.");

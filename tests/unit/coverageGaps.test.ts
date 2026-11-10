@@ -18,6 +18,7 @@ import {
 } from "@getstrata/core/crypto/fieldEncryption";
 import { Factory } from "@getstrata/core/database/factory";
 import { buildWhereClause } from "@getstrata/core/database/query";
+import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { EventBus } from "@getstrata/core/events";
 import { Job } from "@getstrata/core/queue";
 import { FailedJobService } from "@getstrata/core/queue/failedJobService";
@@ -182,12 +183,12 @@ describe("coverage gap helpers", () => {
     expect(positiveIntegerRule()("count", "", {})).toBeUndefined();
     expect(pattern(/^[a-z]+$/)("slug", 42, {})).toBeUndefined();
 
-    const { clause: nullClause } = buildWhereClause("task", {
+    const { clause: nullClause } = buildWhereClause(dialectFor("pgsql"), "task", {
       status: { eq: null },
     });
     expect(nullClause).toContain("IS NULL");
 
-    const { clause: valueClause } = buildWhereClause("task", {
+    const { clause: valueClause } = buildWhereClause(dialectFor("pgsql"), "task", {
       status: { eq: "active" },
     });
     expect(valueClause).toContain("=");

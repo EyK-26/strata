@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import {
   buildIncrementQuery,
   buildSelectQuery,
@@ -44,7 +44,7 @@ describe("upsert", () => {
   test("postgres and sqlite use ON CONFLICT DO UPDATE with excluded", () => {
     for (const driver of ["pgsql", "sqlite"] as const) {
       const { text } = runWithSqlDialect(driver, () =>
-        buildUpsertQuery(counterTable, { slug: "a", hits: 1 }, ["slug"]),
+        buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a", hits: 1 }, ["slug"]),
       ) as unknown as { text: string };
 
       expect(text).toContain('ON CONFLICT ("slug") DO UPDATE SET');
@@ -54,7 +54,7 @@ describe("upsert", () => {
 
   test("mysql uses ON DUPLICATE KEY UPDATE", () => {
     const { text } = runWithSqlDialect("mysql", () =>
-      buildUpsertQuery(counterTable, { slug: "a", hits: 1 }, ["slug"]),
+      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a", hits: 1 }, ["slug"]),
     ) as unknown as { text: string };
 
     expect(text).toContain("ON DUPLICATE KEY UPDATE");
@@ -63,7 +63,7 @@ describe("upsert", () => {
 
   test("an empty update list becomes DO NOTHING", () => {
     const { text } = runWithSqlDialect("pgsql", () =>
-      buildUpsertQuery(counterTable, { slug: "a" }, ["slug"], []),
+      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a" }, ["slug"], []),
     ) as unknown as { text: string };
 
     expect(text).toContain("DO NOTHING");
@@ -71,7 +71,7 @@ describe("upsert", () => {
 
   test("sqlite also uses DO NOTHING for an empty update list", () => {
     const { text } = runWithSqlDialect("sqlite", () =>
-      buildUpsertQuery(counterTable, { slug: "a" }, ["slug"], []),
+      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a" }, ["slug"], []),
     ) as unknown as { text: string };
 
     expect(text).toContain('ON CONFLICT ("slug") DO NOTHING');
@@ -79,7 +79,7 @@ describe("upsert", () => {
 
   test("mysql anchors its no-op update on a real conflict column", () => {
     const { text } = runWithSqlDialect("mysql", () =>
-      buildUpsertQuery(counterTable, { slug: "a" }, ["slug"], []),
+      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a" }, ["slug"], []),
     ) as unknown as { text: string };
 
     expect(text).toContain("ON DUPLICATE KEY UPDATE `slug` = `slug`");
@@ -88,7 +88,7 @@ describe("upsert", () => {
 
   test("conflict columns are excluded from the update set by default", () => {
     const { text } = runWithSqlDialect("pgsql", () =>
-      buildUpsertQuery(counterTable, { slug: "a", hits: 1 }, ["slug"]),
+      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a", hits: 1 }, ["slug"]),
     ) as unknown as { text: string };
 
     expect(text).not.toContain('"slug" = excluded."slug"');
@@ -96,7 +96,7 @@ describe("upsert", () => {
 
   test("values are bound, never inlined", () => {
     const { params } = runWithSqlDialect("pgsql", () =>
-      buildUpsertQuery(counterTable, { slug: "a", hits: 1 }, ["slug"]),
+      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a", hits: 1 }, ["slug"]),
     ) as unknown as { params: unknown[] };
 
     expect(params).toEqual(["a", 1]);
@@ -104,8 +104,10 @@ describe("upsert", () => {
 
   test("no values or no conflict columns is an error", () => {
     runWithSqlDialect("pgsql", () => {
-      expect(() => buildUpsertQuery(counterTable, {}, ["slug"])).toThrow(/without any column/);
-      expect(() => buildUpsertQuery(counterTable, { slug: "a" }, [])).toThrow(
+      expect(() => buildUpsertQuery(currentSqlDialect(), counterTable, {}, ["slug"])).toThrow(
+        /without any column/,
+      );
+      expect(() => buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a" }, [])).toThrow(
         /without any conflict/,
       );
     });
@@ -127,7 +129,7 @@ describe("upsert", () => {
 describe("increment and decrement", () => {
   test("increment emits a self-referential assignment", () => {
     const { text, params } = runWithSqlDialect("pgsql", () =>
-      buildIncrementQuery(counterTable, 1, "hits", 5),
+      buildIncrementQuery(currentSqlDialect(), counterTable, 1, "hits", 5),
     ) as unknown as { text: string; params: unknown[] };
 
     expect(text).toContain('"hits" = "hits" + $1');
@@ -136,7 +138,7 @@ describe("increment and decrement", () => {
 
   test("extra columns are set alongside the counter", () => {
     const { text } = runWithSqlDialect("pgsql", () =>
-      buildIncrementQuery(counterTable, 1, "hits", 1, { slug: "b" } as never),
+      buildIncrementQuery(currentSqlDialect(), counterTable, 1, "hits", 1, { slug: "b" } as never),
     ) as unknown as { text: string };
 
     expect(text).toContain('"slug" = $2');
@@ -154,18 +156,20 @@ describe("increment and decrement", () => {
 
   test("an unknown column is rejected", () => {
     runWithSqlDialect("pgsql", () => {
-      expect(() => buildIncrementQuery(counterTable, 1, "nope" as never, 1)).toThrow(
-        /Unknown column/,
-      );
+      expect(() =>
+        buildIncrementQuery(currentSqlDialect(), counterTable, 1, "nope" as never, 1),
+      ).toThrow(/Unknown column/);
     });
   });
 
   test("a non-finite amount is rejected", () => {
     runWithSqlDialect("pgsql", () => {
-      expect(() => buildIncrementQuery(counterTable, 1, "hits", Number.NaN)).toThrow(/finite/);
-      expect(() => buildIncrementQuery(counterTable, 1, "hits", Number.POSITIVE_INFINITY)).toThrow(
-        /finite/,
-      );
+      expect(() =>
+        buildIncrementQuery(currentSqlDialect(), counterTable, 1, "hits", Number.NaN),
+      ).toThrow(/finite/);
+      expect(() =>
+        buildIncrementQuery(currentSqlDialect(), counterTable, 1, "hits", Number.POSITIVE_INFINITY),
+      ).toThrow(/finite/);
     });
   });
 });
@@ -173,7 +177,7 @@ describe("increment and decrement", () => {
 describe("subquery counts", () => {
   test("the subquery is aliased and its placeholders are renumbered before the where clause", () => {
     const { text, params } = runWithSqlDialect("pgsql", () =>
-      buildSelectQuery(counterTable, {
+      buildSelectQuery(currentSqlDialect(), counterTable, {
         select: [
           { kind: "column", table: "counters", column: "id" },
           {

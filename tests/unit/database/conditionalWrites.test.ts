@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { buildConditionalWriteQuery } from "@getstrata/core/database/query";
 import { defineTable } from "@getstrata/core/database/table";
 import { modelEventName } from "@getstrata/core/events";
@@ -14,6 +14,7 @@ test("conditional mutation binding and RETURNING across dialects", () => {
   for (const driver of ["pgsql", "sqlite", "mysql"] as const)
     runWithSqlDialect(driver, () => {
       const built = buildConditionalWriteQuery(
+        currentSqlDialect(),
         table,
         "update",
         { stock: 9 },
@@ -46,19 +47,35 @@ test("empty predicates and unsupported selection options are rejected before mut
       "do not support",
     );
   expect(writes).toBe(0);
-  expect(() => buildConditionalWriteQuery(table, "update", {}, { where: { id: 1 } })).toThrow(
-    "value",
-  );
+  expect(() =>
+    buildConditionalWriteQuery(currentSqlDialect(), table, "update", {}, { where: { id: 1 } }),
+  ).toThrow("value");
   for (const changes of [JSON.parse('{"id":2}'), JSON.parse('{"stock;DROP":2}')])
     expect(() =>
-      buildConditionalWriteQuery(table, "update", changes, { where: { id: 1 } }),
+      buildConditionalWriteQuery(currentSqlDialect(), table, "update", changes, {
+        where: { id: 1 },
+      }),
     ).toThrow("non-primary");
   expect(() =>
-    buildConditionalWriteQuery(table, "update", { stock: 2 }, { where: { id: 1 } }, []),
+    buildConditionalWriteQuery(
+      currentSqlDialect(),
+      table,
+      "update",
+      { stock: 2 },
+      { where: { id: 1 } },
+      [],
+    ),
   ).toThrow("nonempty");
   runWithSqlDialect("mysql", () =>
     expect(() =>
-      buildConditionalWriteQuery(table, "update", { stock: 2 }, { where: { id: 1 } }, ["stock"]),
+      buildConditionalWriteQuery(
+        currentSqlDialect(),
+        table,
+        "update",
+        { stock: 2 },
+        { where: { id: 1 } },
+        ["stock"],
+      ),
     ).toThrow("not supported"),
   );
 });
@@ -71,14 +88,20 @@ test("protected predicates survive OR, and deletes respect soft-deletion scopes"
     .where({ id: 1 })
     .orWhere({ id: 2 })
     .getOptions();
-  const query = buildConditionalWriteQuery(repo.getTable(), "delete", {}, options);
+  const query = buildConditionalWriteQuery(
+    currentSqlDialect(),
+    repo.getTable(),
+    "delete",
+    {},
+    options,
+  );
   expect(query.text).toStartWith('UPDATE "stock" SET "deleted_at" = $1');
   expect(query.text).toContain('"stock"."deleted_at" IS NULL');
   expect(query.params.slice(1)).toEqual(["tenant-owner", 1, 2]);
   expect(query.text).toContain("AND (");
-  expect(buildConditionalWriteQuery(table, "delete", {}, { where: { id: 1 } }).text).toStartWith(
-    "DELETE FROM",
-  );
+  expect(
+    buildConditionalWriteQuery(currentSqlDialect(), table, "delete", {}, { where: { id: 1 } }).text,
+  ).toStartWith("DELETE FROM");
 });
 test("MySQL affectedRows metadata is used rather than result array length", async () => {
   await runWithSqlDialect("mysql", async () => {

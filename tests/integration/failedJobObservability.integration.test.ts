@@ -10,7 +10,11 @@ import {
   getDefaultDatabasePool,
   registerDefaultDatabasePool,
 } from "@getstrata/core/database/defaultConnection";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
+import {
+  currentSqlDialect,
+  resetSqlDialect,
+  useSqlDialect,
+} from "@getstrata/core/database/dialect";
 import { buildSelectQuery } from "@getstrata/core/database/query";
 import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
 import { Schema } from "@getstrata/core/database/schema";
@@ -99,7 +103,7 @@ describe.skipIf(!adminUrl || !restrictedUrl)("bounded Postgres failed-job observ
         "SELECT COUNT(*)::integer AS count FROM failed_job WHERE payload->>'secret'='private-payload' AND exception='private-exception'",
       );
       expect(source?.count).toBe(20000);
-      const query = buildSelectQuery(failedJobTable, {
+      const query = buildSelectQuery(currentSqlDialect(), failedJobTable, {
         limit: 3,
         orderBy: { column: "id", direction: "ASC" },
         select: [{ kind: "column", table: "failed_job", column: "id" }],
