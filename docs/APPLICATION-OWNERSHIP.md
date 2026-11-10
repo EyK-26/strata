@@ -493,6 +493,70 @@ environment inputs at composition. It has no public subpath and must be removed 
 M4/M5 composition changes. Generated starter composition still migrates in M5/M6;
 its existing cache template now passes an explicit namespace.
 
+## Deliberate job execution
+
+Start new background work with the same application's explicit job overload. Call
+`app.run(envelope, work)` before the originating request returns, resolve fresh job
+dependencies, and retain its original promise. This starts a separate owned execution;
+work already admitted to the request remains request-owned.
+
+Using the cache application above:
+
+```ts
+const { job } = await app.run(
+  {
+    kind: "request",
+    actor: { kind: "principal", claims: { id: "member-7" } },
+    tenant: { id: "org-42" },
+  },
+  () => {
+    const job = app.run(
+      {
+        kind: "job",
+        externalId: "rebuild-report-42",
+        actor: { kind: "system", policy: "reports.rebuild" },
+        tenant: { id: "org-42" },
+      },
+      async (jobScope) => {
+        const cache = jobScope.resolve(CORE_CACHE_TOKEN);
+        return await cache.remember("report:org-42", async () => ({ count: 3 }));
+      },
+    );
+    return { job };
+  },
+);
+// The request has settled; the application still owns any remaining job work.
+const report = await job;
+```
+
+Each job has a fresh execution identity and its own execution resources. Returning
+`{ job }` does not await the promise inside that object. The request's resources can
+close while the job remains active. Its guarded cache or operation capability cannot
+be borrowed by the job, even while the request body is still alive. Arbitrary captured
+JavaScript references are not mechanically revoked or transferred; pass data and
+compose fresh dependencies.
+
+The job must supply an actor. Actor and tenant values describe already established
+context; this runtime does not authenticate those claims or grant authorization.
+Omitted tenant, signal and deadline fields do not inherit from the request. Supplying
+the request signal explicitly couples cancellation; omitting it lets the job outlive
+request cancellation. Both executions still receive application shutdown cancellation.
+Cancellation is cooperative, and actual admitted work and descendants remain owned
+until they settle. Starting a timer first leaves a gap before any job is admitted.
+
+Observe the original job result through the application's existing result or failure
+reporting path. An ordinary job failure can leave its originating request successful,
+and a clean application stop does not establish that every job succeeded. Acquisition
+and cleanup failures retain their normal ownership consequences. The original run
+promise is internally observed; any additional reporting continuations must handle
+their own failures. This in-process idiom provides no durable delivery, retry, crash
+survival, automatic logging or job-status registry.
+
+These guarantees apply to the explicit execution context and guarded dependencies.
+Legacy auth and tenant async stores still have consumers awaiting M4/M5 migration;
+this checkpoint does not promise to clear those stores or third-party async context.
+Worker and outbox adapters must enter deliberate job envelopes when they migrate.
+
 ## Migration boundary
 
 The new owner never delegates to the existing global owners. The CLI's direct-child
