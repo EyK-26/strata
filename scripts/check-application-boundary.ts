@@ -128,7 +128,7 @@ const neutralEdges: Readonly<
       "database/sessionFactory",
       "database/tokens",
     ],
-    types: ["database/driverPorts"],
+    types: ["contracts/application", "database/driverPorts"],
   },
   [PATH("database/manager")]: { values: ["database/errors"], types: ["database/driverPorts"] },
   [PATH("database/sessionFactory")]: {
