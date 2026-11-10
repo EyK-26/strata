@@ -1,4 +1,5 @@
 import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
+import { CORE_EXECUTION_OPERATIONS_TOKEN } from "@getstrata/core/contracts/executionOperations";
 import {
   aliasService,
   isServiceDeclaration,
@@ -105,11 +106,15 @@ function compileServiceGraph(
   overrides: readonly ServiceDeclaration[] = [],
 ): ServiceGraph {
   if (!Array.isArray(declarations) || !Array.isArray(overrides)) return fail("INVALID_DECLARATION");
+  const implicit = new Set([
+    serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN),
+    serviceTokenKey(CORE_EXECUTION_OPERATIONS_TOKEN),
+  ]);
   const nodes = new Map<symbol, ServiceDeclaration>();
   for (const input of declarations) {
     const item = declaration(input);
     const key = serviceTokenKey(item.token);
-    if (key === serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN)) return fail("RESERVED_TOKEN");
+    if (implicit.has(key)) return fail("RESERVED_TOKEN");
     if (nodes.has(key)) return fail("DUPLICATE_TOKEN");
     nodes.set(key, item);
   }
@@ -117,7 +122,7 @@ function compileServiceGraph(
   for (const input of overrides) {
     const item = declaration(input);
     const key = serviceTokenKey(item.token);
-    if (key === serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN)) return fail("RESERVED_TOKEN");
+    if (implicit.has(key)) return fail("RESERVED_TOKEN");
     if (!nodes.has(key)) return fail("UNKNOWN_OVERRIDE");
     if (replaced.has(key)) return fail("DUPLICATE_OVERRIDE");
     replaced.add(key);
@@ -125,10 +130,7 @@ function compileServiceGraph(
   }
   for (const item of nodes.values()) {
     for (const dependency of dependencies(item)) {
-      if (
-        serviceTokenKey(dependency) !== serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN) &&
-        !nodes.has(serviceTokenKey(dependency))
-      )
+      if (!implicit.has(serviceTokenKey(dependency)) && !nodes.has(serviceTokenKey(dependency)))
         return fail("MISSING_DEPENDENCY");
     }
   }
@@ -136,6 +138,7 @@ function compileServiceGraph(
   const ordered: ServiceDeclaration[] = [];
   const lifetimes = new Map<symbol, ServiceLifetime>([
     [serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN), "execution"],
+    [serviceTokenKey(CORE_EXECUTION_OPERATIONS_TOKEN), "execution"],
   ]);
   while (remaining.length > 0) {
     const index = remaining.findIndex((item) =>

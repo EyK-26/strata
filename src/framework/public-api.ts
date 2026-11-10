@@ -22,6 +22,10 @@ export {
 } from "@getstrata/core/contracts/container";
 export { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
 export {
+  CORE_EXECUTION_OPERATIONS_TOKEN,
+  type ExecutionOperations,
+} from "@getstrata/core/contracts/executionOperations";
+export {
   aliasService,
   resourceService,
   service,
@@ -394,7 +398,10 @@ export {
 } from "../core/facades/index.ts";
 export { createBodySizeLimitMiddleware } from "../core/http/bodySizeLimitMiddleware.ts";
 export { readClientIp, trustForwardedFor } from "../core/http/clientIp.ts";
-export { conditionalJsonResponse } from "../core/http/conditionalResponse.ts";
+export {
+  conditionalJsonResponse,
+  type JsonResponsePolicy,
+} from "../core/http/conditionalResponse.ts";
 export type {
   ContentSecurityPolicyDirectives,
   ContentSecurityPolicyOptions,

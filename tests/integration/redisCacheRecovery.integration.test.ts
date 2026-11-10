@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import RedisCacheStore from "../../src/core/cache/redisCacheStore";
-import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const upstreamUrl = process.env.REDIS_URL?.trim();
 const suite = upstreamUrl ? describe : describe.skip;
@@ -62,15 +61,19 @@ suite("Redis cache transport recovery", () => {
     const url = new URL(upstreamUrl!);
     url.hostname = "127.0.0.1";
     url.port = String(proxy.port);
-    const previous = process.env.APP_KEY_PREFIX;
-    process.env.APP_KEY_PREFIX = `cache-recovery-${crypto.randomUUID()}`;
-    const store = new RedisCacheStore(url.href, 10000, 10, {
-      commandTimeoutMs: 200,
-      leaseMs: 300,
-      fillTimeoutMs: 2000,
-      metadataTtlMs: 4000,
-    });
-    restoreEnvVar("APP_KEY_PREFIX", previous);
+    const namespace = `cache-recovery-${crypto.randomUUID()}:cache:v3:`;
+    const store = new RedisCacheStore(
+      url.href,
+      10000,
+      10,
+      {
+        commandTimeoutMs: 200,
+        leaseMs: 300,
+        fillTimeoutMs: 2000,
+        metadataTtlMs: 4000,
+      },
+      namespace,
+    );
     try {
       await store.set("retained", "value");
       online = false;

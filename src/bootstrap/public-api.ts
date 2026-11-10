@@ -32,6 +32,7 @@ export { buildModuleRoutes } from "./buildModuleRoutes.ts";
 export type { BuildWebModuleRoutesOptions } from "./buildWebModuleRoutes.ts";
 export { buildWebModuleRoutes } from "./buildWebModuleRoutes.ts";
 export { cacheTagsForModelWrite, discoverModelTableNames } from "./cache/modelCacheTags.ts";
+export { createCachedJson } from "./cachedJson.ts";
 export {
   APP_PORT_CONFIG_KEY,
   CORE_ABILITY_CHECKER_TOKEN,
@@ -99,6 +100,7 @@ export type {
 } from "./metricsRoutes.ts";
 export { createMetricsRoutes, createMetricsRuntime } from "./metricsRoutes.ts";
 export { prefixRouteMap } from "./prefixRouteMap.ts";
+export { type CacheBindingOptions, createCacheBindings } from "./providers/cache.ts";
 export { coreProviders } from "./providers/index.ts";
 export { default as tracingProvider } from "./providers/tracing.ts";
 export { registerDefaultJobs } from "./queue/defaultJobs.ts";

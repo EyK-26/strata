@@ -1,6 +1,6 @@
 import type { ServiceProvider } from "../contracts";
+import { legacyCacheProvider } from "../legacyCache";
 import authProvider from "./auth";
-import cacheProvider from "./cache";
 import configProvider from "./config";
 import eventsProvider from "./events";
 import listenersProvider from "./listeners";
@@ -13,7 +13,7 @@ import { viewProvider } from "./view";
 const coreProviders: ServiceProvider[] = [
   configProvider,
   tracingProvider,
-  cacheProvider,
+  legacyCacheProvider,
   storageProvider,
   authProvider,
   eventsProvider,

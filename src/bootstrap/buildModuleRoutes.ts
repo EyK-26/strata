@@ -1,7 +1,7 @@
 import type { OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
-import { createCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
+import { createLegacyCachedJson } from "./legacyCache";
 import { applyModuleRouteMiddleware } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
 import { prefixRouteMap } from "./prefixRouteMap";
@@ -44,7 +44,7 @@ function buildModuleRoutes(
 
   const kernel = createHttpKernel(dependencies);
   const middleware = [...kernel.globalMiddleware(), ...kernel.group("api")];
-  const cachedJson = createCachedJson(dependencies);
+  const cachedJson = createLegacyCachedJson(dependencies);
   const moduleRoutes: Record<string, unknown> = {};
   const metadata: OpenApiRouteMap = {};
 

@@ -35,14 +35,22 @@ describe("createCacheStore", () => {
       ttlMs: 1_000,
       maxEntries: 10,
       redisUrl,
+      namespace: `cache-factory-${crypto.randomUUID()}:cache:v3:`,
     });
 
-    await store.clear();
-    await store.set("redis-key", { ok: true });
-    expect(await store.get<{ ok: boolean }>("redis-key")).toEqual({ ok: true });
+    try {
+      await store.set("redis-key", { ok: true });
+      expect(await store.get<{ ok: boolean }>("redis-key")).toEqual({ ok: true });
 
-    await store.attachTags("redis-key", ["demo"]);
-    expect(await store.flushTags(["demo"])).toBe(1);
-    expect(await store.get("redis-key")).toBeUndefined();
+      await store.attachTags("redis-key", ["demo"]);
+      expect(await store.flushTags(["demo"])).toBe(1);
+      expect(await store.get("redis-key")).toBeUndefined();
+    } finally {
+      try {
+        await store.clear();
+      } finally {
+        await store.close?.();
+      }
+    }
   });
 });

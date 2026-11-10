@@ -1,5 +1,5 @@
 import { RedisClient } from "bun";
-import { namespacedRedisKey } from "../runtime/appKeyPrefix";
+import { copyApplicationConfig } from "../config/configSnapshot";
 import { CACHE_SCRIPT } from "./redisCacheScript.ts";
 import type { CacheStore } from "./store";
 
@@ -12,6 +12,47 @@ type RedisCacheOptions = {
   metadataTtlMs?: number;
   metadataLimit?: number;
 };
+
+const DEFAULT_CACHE_NAMESPACE = "strata:cache:v3:";
+
+function validateCacheNamespace(namespace: string): void {
+  if (typeof namespace !== "string" || namespace.length === 0)
+    throw new TypeError("Cache namespace must be a nonempty string.");
+}
+
+function normalizeRedisCacheOptions(
+  ttlMs: number,
+  maxEntries: number,
+  options: Readonly<RedisCacheOptions> = {},
+): Readonly<Required<RedisCacheOptions>> {
+  if (!Number.isSafeInteger(ttlMs) || ttlMs < 0)
+    throw new RangeError("ttlMs must be a non-negative safe integer.");
+  if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 10_000)
+    throw new RangeError("maxEntries must be between 1 and 10000.");
+  const copied = copyApplicationConfig(options) as RedisCacheOptions;
+  const resolved = {
+    commandTimeoutMs: 5000,
+    leaseMs: 10_000,
+    fillTimeoutMs: 30_000,
+    waitTimeoutMs: 35_000,
+    pollMs: 25,
+    metadataTtlMs: 60_000,
+    metadataLimit: 4096,
+    ...copied,
+  };
+  for (const [key, value] of Object.entries(resolved))
+    if (!Number.isSafeInteger(value) || value < 1)
+      throw new RangeError(`${key} must be a positive safe integer.`);
+  if (
+    resolved.leaseMs < 30 ||
+    resolved.fillTimeoutMs < resolved.leaseMs ||
+    resolved.metadataTtlMs < resolved.fillTimeoutMs + resolved.leaseMs ||
+    resolved.metadataLimit < 66 ||
+    resolved.metadataLimit > 100_000
+  )
+    throw new RangeError("Invalid Redis cache lease, deadline or metadata bounds.");
+  return Object.freeze(resolved);
+}
 
 // Only these five explicitly supplied keys are accessed. Values and identities
 // are fields/members, so eviction never enumerates the Redis keyspace. All keys
@@ -28,7 +69,7 @@ type ScriptResult = {
 class RedisCacheStore implements CacheStore {
   private client: RedisClient | undefined;
   private readonly keys: string[];
-  private readonly options: Required<RedisCacheOptions>;
+  private readonly options: Readonly<Required<RedisCacheOptions>>;
   private readonly fills = new Set<AbortController>();
   private closed = false;
 
@@ -37,33 +78,12 @@ class RedisCacheStore implements CacheStore {
     private readonly ttlMs: number,
     private readonly maxEntries: number,
     options: RedisCacheOptions = {},
+    namespace = DEFAULT_CACHE_NAMESPACE,
   ) {
-    if (!Number.isSafeInteger(ttlMs) || ttlMs < 0)
-      throw new RangeError("ttlMs must be a non-negative safe integer.");
-    if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 10_000)
-      throw new RangeError("maxEntries must be between 1 and 10000.");
-    this.options = {
-      commandTimeoutMs: 5000,
-      leaseMs: 10_000,
-      fillTimeoutMs: 30_000,
-      waitTimeoutMs: 35_000,
-      pollMs: 25,
-      metadataTtlMs: 60_000,
-      metadataLimit: 4096,
-      ...options,
-    };
-    for (const [key, value] of Object.entries(this.options))
-      if (!Number.isSafeInteger(value) || value < 1)
-        throw new RangeError(`${key} must be a positive safe integer.`);
-    if (
-      this.options.leaseMs < 30 ||
-      this.options.fillTimeoutMs < this.options.leaseMs ||
-      this.options.metadataTtlMs < this.options.fillTimeoutMs + this.options.leaseMs ||
-      this.options.metadataLimit < 66 ||
-      this.options.metadataLimit > 100_000
-    )
-      throw new RangeError("Invalid Redis cache lease, deadline or metadata bounds.");
-    const namespace = namespacedRedisKey("cache:v3:");
+    if (typeof redisUrl !== "string" || !redisUrl)
+      throw new TypeError("Redis cache requires an explicit URL.");
+    this.options = normalizeRedisCacheOptions(ttlMs, maxEntries, options);
+    validateCacheNamespace(namespace);
     const slot = new Bun.CryptoHasher("sha256").update(namespace).digest("hex");
     this.keys = ["entries", "expiry", "order", "metadata", "metadata-expiry"].map(
       (name) => `${namespace}{${slot}}:${name}`,
@@ -290,4 +310,5 @@ class RedisCacheStore implements CacheStore {
 }
 
 export type { RedisCacheOptions };
+export { DEFAULT_CACHE_NAMESPACE, normalizeRedisCacheOptions, validateCacheNamespace };
 export default RedisCacheStore;

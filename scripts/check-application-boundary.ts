@@ -16,6 +16,7 @@ const neutralEdges: Readonly<
       "contracts/container",
       "contracts/services",
       "contracts/executionContext",
+      "contracts/executionOperations",
       "runtime/serviceGraph",
       "runtime/resourceJournal",
       "runtime/executionContext",
@@ -26,7 +27,10 @@ const neutralEdges: Readonly<
   },
   [CONTRACT_PATH]: { values: [], types: ["contracts/token", "contracts/services"] },
   [PATH("runtime/resourceJournal")]: { values: [], types: ["contracts/application"] },
-  [PATH("runtime/executionTasks")]: { values: [], types: ["contracts/application"] },
+  [PATH("runtime/executionTasks")]: {
+    values: [],
+    types: ["contracts/application", "contracts/executionOperations"],
+  },
   [PATH("runtime/executionContext")]: {
     values: ["config/configSnapshot"],
     types: ["contracts/application"],
@@ -35,8 +39,14 @@ const neutralEdges: Readonly<
     values: ["contracts/token"],
     types: ["contracts/application"],
   },
+  [PATH("contracts/executionOperations")]: { values: ["contracts/token"], types: [] },
   [PATH("runtime/serviceGraph")]: {
-    values: ["contracts/token", "contracts/services", "contracts/executionContext"],
+    values: [
+      "contracts/token",
+      "contracts/services",
+      "contracts/executionContext",
+      "contracts/executionOperations",
+    ],
     types: [
       "contracts/container",
       "contracts/services",
@@ -55,7 +65,38 @@ const neutralEdges: Readonly<
     types: ["contracts/token", "contracts/services"],
   },
   [PATH("view/tokens")]: { values: ["contracts/token"], types: ["view/viewRenderer"] },
-  [PATH("cache/tokens")]: { values: ["contracts/token"], types: ["../types/services"] },
+  [PATH("cache/tokens")]: {
+    values: ["contracts/token"],
+    types: ["../types/services", "cache/repository"],
+  },
+  [PATH("cache/repository")]: {
+    values: ["cache/taggedCache"],
+    types: ["cache/store", "../types/services", "contracts/executionOperations"],
+  },
+  [PATH("cache/createCacheStore")]: {
+    values: [
+      "cache/redisCacheStore",
+      "cache/simpleCache",
+      "cache/simpleCacheStore",
+      "config/configSnapshot",
+    ],
+    types: ["cache/store"],
+  },
+  [PATH("../bootstrap/providers/cache")]: {
+    values: [
+      "contracts/services",
+      "contracts/executionOperations",
+      "cache/tokens",
+      "cache/createCacheStore",
+      "cache/repository",
+    ],
+    types: ["runtime/application"],
+  },
+  [PATH("../bootstrap/cachedJson")]: {
+    values: ["http/conditionalResponse"],
+    types: ["../bootstrap/contracts", "../types/services", "cache/tokens"],
+  },
+  [PATH("http/conditionalResponse")]: { values: ["http/etag"], types: [] },
   [PATH("config/configSnapshot")]: { values: [], types: ["contracts/application"] },
   [PATH("config/applicationConfig")]: {
     values: ["config/configSnapshot", "config/envSchema"],
@@ -79,6 +120,7 @@ const canonicalValues = new Set(
     "contracts/container",
     "contracts/services",
     "contracts/executionContext",
+    "contracts/executionOperations",
     "contracts/serviceTokens",
     "cache/tokens",
     "config/applicationConfig",
@@ -120,6 +162,8 @@ const AMBIENT_CAPABILITIES = new Set([
   "registerDefaultDatabasePool",
   "getDefaultDatabasePool",
   "getDefaultDatabaseQuery",
+  "isEtagEnabled",
+  "namespacedRedisKey",
 ]);
 
 interface BoundaryDiagnostic {
@@ -192,6 +236,8 @@ function resolveEdge(file: string, edge: string): string | undefined {
   return undefined;
 }
 function allows(file: string, edge: DependencyEdge): boolean {
+  // Only this application owner may instantiate its private async propagation store.
+  if (file === RUNTIME_PATH && edge.path === "node:async_hooks") return true;
   const rules = neutralEdges[file];
   const target = resolveEdge(file, edge.path);
   if (!rules || !target) return false;
@@ -355,7 +401,9 @@ if (import.meta.main) {
       console.error(`${issue.file}:${issue.line}:${issue.column} [${issue.rule}] ${issue.message}`);
     if (diagnostics.length) process.exitCode = 1;
     else
-      console.log("Application owner and type contract satisfy the M2.1 neutral module boundary.");
+      console.log(
+        "Application owner and migrated modules satisfy their explicit dependency boundaries.",
+      );
   } catch (error) {
     console.error("Application boundary check could not inspect its required sources:", error);
     process.exitCode = 1;

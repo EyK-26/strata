@@ -140,6 +140,52 @@ function inspectModule(file: string, source: string) {
   return checkApplicationBoundary({ runtime, contract, modules: { [file]: source } });
 }
 
+describe("M2.3 cache and operation boundaries", () => {
+  test.each([
+    ["src/core/runtime/application.ts", 'import { AsyncLocalStorage } from "node:async_hooks";'],
+    [
+      "src/core/runtime/serviceGraph.ts",
+      'import { CORE_EXECUTION_OPERATIONS_TOKEN } from "@getstrata/core/contracts/executionOperations";',
+    ],
+    [
+      "src/bootstrap/providers/cache.ts",
+      'import { resourceService, service } from "@getstrata/core/contracts/services"; import { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";',
+    ],
+  ])("accepts the explicit ownership edge in %s", (file, source) => {
+    expect(inspectModule(file, source)).toEqual([]);
+  });
+
+  test.each([
+    ["src/core/runtime/executionTasks.ts", 'import { AsyncLocalStorage } from "node:async_hooks";'],
+    ["src/core/runtime/application.ts", 'import { env } from "node:process";'],
+    [
+      "src/core/runtime/application.ts",
+      'import { CORE_EXECUTION_OPERATIONS_TOKEN } from "../contracts/executionOperations";',
+    ],
+    ["src/bootstrap/providers/cache.ts", 'import { legacyCacheProvider } from "../legacyCache";'],
+    [
+      "src/bootstrap/cachedJson.ts",
+      'import { resolveApplicationCache } from "./applicationRegistry";',
+    ],
+    [
+      "src/core/cache/repository.ts",
+      'import { createAsyncContextStore } from "../runtime/asyncContextStore";',
+    ],
+  ])("rejects a second owner or legacy lookup in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
+  });
+
+  test.each([
+    ["src/bootstrap/providers/cache.ts", "const namespace = process.env.APP_KEY_PREFIX;"],
+    ["src/core/http/conditionalResponse.ts", 'import { isEtagEnabled } from "./etag";'],
+    ["src/core/contracts/executionOperations.ts", 'const token = Symbol.for("operations");'],
+  ])("rejects mutable ambient policy in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "ambient-capability")).toBe(
+      true,
+    );
+  });
+});
+
 describe("M2.1 neutral value graph", () => {
   test("view token artifact imports only its canonical factory and erased renderer type", () => {
     const file = "src/core/view/tokens.ts";

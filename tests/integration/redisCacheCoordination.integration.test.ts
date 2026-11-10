@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { RedisClient } from "bun";
 import RedisCacheStore from "../../src/core/cache/redisCacheStore";
 import { CacheRepository } from "../../src/core/cache/repository";
-import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
 const describeRedis = redisUrl ? describe : describe.skip;
@@ -17,15 +16,12 @@ const options = {
 
 function fixture(ttlMs = 10_000, capacity = 10) {
   const prefix = `cache-coordination-${crypto.randomUUID()}`;
-  const previous = process.env.APP_KEY_PREFIX;
-  process.env.APP_KEY_PREFIX = prefix;
-  const stores: [RedisCacheStore, RedisCacheStore, RedisCacheStore] = [
-    new RedisCacheStore(redisUrl, ttlMs, capacity, options),
-    new RedisCacheStore(redisUrl, ttlMs, capacity, options),
-    new RedisCacheStore(redisUrl, ttlMs, capacity, options),
-  ];
-  restoreEnvVar("APP_KEY_PREFIX", previous);
   const namespace = `${prefix}:cache:v3:`;
+  const stores: [RedisCacheStore, RedisCacheStore, RedisCacheStore] = [
+    new RedisCacheStore(redisUrl, ttlMs, capacity, options, namespace),
+    new RedisCacheStore(redisUrl, ttlMs, capacity, options, namespace),
+    new RedisCacheStore(redisUrl, ttlMs, capacity, options, namespace),
+  ];
   const slot = new Bun.CryptoHasher("sha256").update(namespace).digest("hex");
   const keys = ["entries", "expiry", "order", "metadata", "metadata-expiry"].map(
     (name) => `${namespace}{${slot}}:${name}`,
@@ -35,6 +31,7 @@ function fixture(ttlMs = 10_000, capacity = 10) {
   const children: ReturnType<typeof spawn>[] = [];
   return {
     prefix,
+    namespace,
     stores,
     keys,
     client,
@@ -78,7 +75,7 @@ import { RedisClient } from 'bun';
 import RedisCacheStore from ${JSON.stringify(new URL("../../src/core/cache/redisCacheStore.ts", import.meta.url).href)};
 const redis = new RedisClient(process.env.REDIS_URL);
 const control = process.env.CACHE_CONTROL;
-const store = new RedisCacheStore(process.env.REDIS_URL, 10000, 10, JSON.parse(process.env.CACHE_OPTIONS));
+const store = new RedisCacheStore(process.env.REDIS_URL, 10000, 10, JSON.parse(process.env.CACHE_OPTIONS), process.env.CACHE_NAMESPACE);
 try {
   await redis.incr(control + ':ready');
   while (!(await redis.get(control + ':start'))) await Bun.sleep(10);
@@ -95,7 +92,7 @@ try {
   return Bun.spawn([process.execPath, "-e", script], {
     env: {
       ...process.env,
-      APP_KEY_PREFIX: prefix,
+      CACHE_NAMESPACE: `${prefix}:cache:v3:`,
       CACHE_CONTROL: control,
       CACHE_OPTIONS: JSON.stringify(options),
       CACHE_VALUE: value,
@@ -339,14 +336,17 @@ describeRedis("bounded shared Redis cache coordination", () => {
 
   test("deadline aborts the loader, and ignored cancellation cannot publish later", async () => {
     const f = fixture();
-    const previous = process.env.APP_KEY_PREFIX;
-    process.env.APP_KEY_PREFIX = f.prefix;
-    const store = new RedisCacheStore(redisUrl, 10_000, 10, {
-      ...options,
-      leaseMs: 40,
-      fillTimeoutMs: 120,
-    });
-    restoreEnvVar("APP_KEY_PREFIX", previous);
+    const store = new RedisCacheStore(
+      redisUrl,
+      10_000,
+      10,
+      {
+        ...options,
+        leaseMs: 40,
+        fillTimeoutMs: 120,
+      },
+      f.namespace,
+    );
     let signal: AbortSignal | undefined;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -374,15 +374,18 @@ describeRedis("bounded shared Redis cache coordination", () => {
 
   test("metadata expires independently of permanent data and missing tags retain no entries", async () => {
     const f = fixture(0);
-    const previous = process.env.APP_KEY_PREFIX;
-    process.env.APP_KEY_PREFIX = f.prefix;
-    const store = new RedisCacheStore(redisUrl, 0, 10, {
-      ...options,
-      leaseMs: 30,
-      fillTimeoutMs: 60,
-      metadataTtlMs: 100,
-    });
-    restoreEnvVar("APP_KEY_PREFIX", previous);
+    const store = new RedisCacheStore(
+      redisUrl,
+      0,
+      10,
+      {
+        ...options,
+        leaseMs: 30,
+        fillTimeoutMs: 60,
+        metadataTtlMs: 100,
+      },
+      f.namespace,
+    );
     try {
       await store.getOrSetTagged("permanent", async () => 1, ["catalog"]);
       await store.attachTags("missing", ["ghost"]);
@@ -507,10 +510,7 @@ describeRedis("bounded shared Redis cache coordination", () => {
         "-keys",
         "-scan",
       ]);
-      const previous = process.env.APP_KEY_PREFIX;
-      process.env.APP_KEY_PREFIX = f.prefix;
-      restricted = new RedisCacheStore(url.href, 1000, 10, options);
-      restoreEnvVar("APP_KEY_PREFIX", previous);
+      restricted = new RedisCacheStore(url.href, 1000, 10, options, f.namespace);
       await restricted.getOrSetTagged("item", async () => 1, ["catalog"]);
       expect(await restricted.get<number>("item")).toBe(1);
       expect(await restricted.size()).toBe(1);
