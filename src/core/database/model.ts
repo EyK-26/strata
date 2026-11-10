@@ -1,4 +1,5 @@
-import { ConflictError, NotFoundError } from "@getstrata/core/errors/http";
+import { isUniqueConstraintError } from "@getstrata/core/database/errors";
+import { NotFoundError } from "@getstrata/core/errors/http";
 import { onDeferredModelRollback } from "../events/deferredModelEvents.ts";
 import type { KeysetOptions } from "../pagination/index.ts";
 import BaseRepository from "./baseRepository.ts";
@@ -781,7 +782,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
         ) => Promise<Model<Record<string, unknown>, "id">>
       ).call(this, { ...where, ...values });
     } catch (error) {
-      if (!(error instanceof ConflictError)) {
+      if (!isUniqueConstraintError(error)) {
         throw error;
       }
 

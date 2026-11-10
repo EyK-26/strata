@@ -1,10 +1,10 @@
 import { type HttpError, toHttpError, ValidationError } from "@getstrata/core/errors/http";
 import { appLogger } from "@getstrata/core/logging/logger";
-import { mapDatabaseError } from "../database/errors";
 import { isProductionEnv } from "../runtime/appEnv";
 import { isViewsEnabled } from "../runtime/frontendMode";
 import { htmlErrorResponse } from "../view/webErrorView";
 import { requestPrefersJson } from "./contentNegotiation";
+import { mapDatabaseHttpError } from "./databaseError";
 import { currentRequestMeta } from "./requestMetaContext";
 import { loginRedirectLocation } from "./safeInternalPath";
 
@@ -76,7 +76,7 @@ async function webErrorResponse(error: unknown, request?: Request): Promise<Resp
     return null;
   }
 
-  const mappedError = toHttpError(error) ?? mapDatabaseError(error);
+  const mappedError = toHttpError(error) ?? mapDatabaseHttpError(error);
   logServerError(error, mappedError);
 
   if (mappedError.status === 401) {

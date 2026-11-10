@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { quoteIdentifier } from "@getstrata/core/database/query";
 import { hasMany } from "@getstrata/core/database/relationships";
 import { projectPluck, uniqueColumnSelect } from "@getstrata/core/database/repositoryQuery";
 import { defineTable } from "@getstrata/core/database/table";
+import { errorResponse } from "@getstrata/core/http/response";
 
 type Squad = { id: number; label: string | null; active: boolean };
 type Member = { id: number; name: string; squad_id: number | null };
@@ -279,9 +281,21 @@ describe("RepositoryQuery pluck and value", () => {
     expect(connection.calls.at(-1)?.query).toContain('SELECT "squad"."label" AS "label"');
 
     expect(() => quoteIdentifier("label;drop")).toThrow("Invalid SQL identifier");
-    await expect(squads.query().pluck("label;drop" as never)).rejects.toThrow(
-      "Internal server error.",
-    );
+    const callsBeforeInvalidIdentifier = connection.calls.length;
+    let identifierFailure: Error | undefined;
+    await assert.rejects(squads.query().pluck("label;drop" as never), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.constructor, Error);
+      assert.equal(error.message, "Invalid SQL identifier: label;drop");
+      assert.equal("status" in error, false);
+      identifierFailure = error;
+      return true;
+    });
+    assert.equal(connection.calls.length, callsBeforeInvalidIdentifier);
+    assert.ok(identifierFailure);
+    const response = errorResponse(identifierFailure);
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { error: "Internal server error." });
   });
 
   test("soft-delete scope applies unless withTrashed, and onlyTrashed inverts it", async () => {

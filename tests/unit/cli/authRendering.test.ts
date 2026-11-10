@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { isUniqueConstraintError, PersistenceError } from "@getstrata/core/database/errors";
+import { ConflictError } from "@getstrata/core/errors/http";
 import {
   layersFromFlags,
   parseCreateStrataArgs,
@@ -63,3 +65,102 @@ test("legacy auth imports retain the same flow function identities", () => {
 test("current password-operation artifact inventory retains every historical profile", () => {
   expect(Object.keys(currentModules).sort()).toEqual(baselines.map(({ name }) => name).sort());
 });
+
+function renderedSignup() {
+  const layers = layersFromFlags(
+    parseCreateStrataArgs([
+      "--frontend=api",
+      "--auth=token",
+      "--database=sqlite",
+      "--tenancy=none",
+    ]),
+  );
+  const source = auth.renderAuthModule(layers);
+  if (source === null) throw new Error("Missing generated signup module");
+  return source;
+}
+
+test("generated signup imports the neutral unique classifier and preserves domain conflicts", () => {
+  const source = renderedSignup();
+  expect(source).toContain(
+    'import { isUniqueConstraintError } from "@getstrata/core/database/errors";',
+  );
+  expect(source).toContain(
+    "if (!isUniqueConstraintError(error) || !(await starterAuthDirectory.findByEmail(email))) throw error;",
+  );
+  expect(source).not.toContain("if (!(error instanceof ConflictError)");
+  const profile = baselines.find(
+    ({ args }) => args.includes("--mfa") && args.includes("--auth=cookie"),
+  );
+  if (!profile) throw new Error("Missing MFA rendering profile");
+  expect(auth.renderAuthModule(layersFromFlags(parseCreateStrataArgs(profile.args)))).toContain(
+    'throw new ConflictError("MFA configuration changed. Reload and confirm again.")',
+  );
+});
+
+async function invokeRenderedSignup(failure: unknown, accountExists: boolean) {
+  const source = renderedSignup();
+  const start = source.indexOf("async function createRegistration(");
+  const end = source.indexOf("\nasync function consumeSignedAuthToken", start);
+  if (start < 0 || end < 0) throw new Error("Missing generated registration function boundaries");
+  const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source.slice(start, end));
+  let readbacks = 0;
+  const createRegistration = new Function(
+    "runAuthWrite",
+    "runInTransaction",
+    "User",
+    "starterAuthDirectory",
+    "isUniqueConstraintError",
+    `${javascript}\nreturn createRegistration;`,
+  )(
+    (_identifier: unknown, work: () => Promise<unknown>) => work(),
+    (work: () => Promise<unknown>) => work(),
+    {
+      create: async () => {
+        throw failure;
+      },
+    },
+    {
+      findByEmail: async () => {
+        readbacks++;
+        return accountExists ? { id: 1 } : null;
+      },
+    },
+    isUniqueConstraintError,
+  ) as (credentials: { name: string; email: string; password: string }) => Promise<unknown>;
+  const outcome = await createRegistration({
+    name: "Account",
+    email: "account@example.test",
+    password: "password",
+  }).then(
+    (value) => ({ ok: true as const, value }),
+    (error) => ({ ok: false as const, error }),
+  );
+  return { outcome, readbacks };
+}
+
+for (const accountExists of [true, false]) {
+  test(`generated signup neutralizes a unique failure only with account readback: ${accountExists}`, async () => {
+    const failure = new PersistenceError("DATABASE_UNIQUE_CONSTRAINT");
+    const { outcome, readbacks } = await invokeRenderedSignup(failure, accountExists);
+    expect(readbacks).toBe(1);
+    if (accountExists) expect(outcome).toEqual({ ok: true, value: undefined });
+    else {
+      expect(outcome.ok).toBe(false);
+      if (!outcome.ok) expect(outcome.error).toBe(failure);
+    }
+  });
+}
+
+for (const [name, failure] of [
+  ["nonunique persistence", new PersistenceError("DATABASE_NOT_NULL_CONSTRAINT")],
+  ["domain conflict", new ConflictError("Account conflict")],
+  ["unrelated opaque", Symbol("unrelated")],
+] as const) {
+  test(`generated signup propagates ${name} failure without account readback`, async () => {
+    const { outcome, readbacks } = await invokeRenderedSignup(failure, true);
+    expect(readbacks).toBe(0);
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error).toBe(failure);
+  });
+}

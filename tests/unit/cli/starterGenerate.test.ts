@@ -1259,8 +1259,8 @@ export default probeModule;
       expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");
       expect(context.config).toBeInstanceOf(ConfigStore);
       context.config.set("generator.probe", "shared-store");
-      expect(context.config.require("generator.probe")).toBe("shared-store");
-      expect(() => context.config.require("generator.missing")).toThrow(
+      expect(context.config.getRequired("generator.probe")).toBe("shared-store");
+      expect(() => context.config.getRequired("generator.missing")).toThrow(
         'Config key "generator.missing" is not defined.',
       );
       await context.dispose();

@@ -1,9 +1,9 @@
-import { afterCommit, runWithDeferredModelEvents } from "../events/deferredModelEvents.ts";
-import { createAsyncContextStore } from "../runtime/asyncContextStore.ts";
 import {
   observeTransactionAcquisition,
   type TransactionAcquisitionMetrics,
-} from "./acquisitionMetrics.ts";
+} from "@getstrata/core/database/acquisitionMetrics";
+import { afterCommit, runWithDeferredModelEvents } from "../events/deferredModelEvents.ts";
+import { createAsyncContextStore } from "../runtime/asyncContextStore.ts";
 import { createDatabaseConnection, type UnsafeQueryable } from "./connection.ts";
 import {
   getActiveDatabaseConnection,
@@ -176,11 +176,11 @@ async function runInTransaction<TValue>(
 export type {
   TransactionAcquisitionMetrics,
   TransactionAcquisitionSnapshot,
-} from "./acquisitionMetrics.ts";
+} from "@getstrata/core/database/acquisitionMetrics";
 export {
   createTransactionAcquisitionMetrics,
   renderTransactionAcquisitionMetrics,
-} from "./acquisitionMetrics.ts";
+} from "@getstrata/core/database/acquisitionMetrics";
 export type { TransactionOptions };
 /** Register process-local work for the successful outermost commit. Awaiting
  * registration does not execute it early inside an active transaction. Outside

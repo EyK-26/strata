@@ -178,8 +178,12 @@ describe("MySQL connection adapter", () => {
       });
       const messages = warn.mock.calls.map((call) => String(call[0]));
       expect(messages).toHaveLength(2);
-      expect(messages[0]).toContain("SET not allowed");
-      expect(messages[1]).toContain("denied");
+      expect(messages).toEqual([
+        "[mysql] Could not set the session time zone to UTC; DATETIME comparisons may drift.",
+        "[mysql] Could not set the session time zone to UTC; DATETIME comparisons may drift.",
+      ]);
+      expect(messages.join(" ")).not.toContain("SET not allowed");
+      expect(messages.join(" ")).not.toContain("denied");
     } finally {
       warn.mockRestore();
       await pool.end();

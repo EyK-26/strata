@@ -8,9 +8,11 @@ import type { UnsafeQueryable } from "@getstrata/core/database/connection";
 import {
   currentSqlDialect,
   resetSqlDialect,
+  type SqlDialect,
   useSqlDialect,
 } from "@getstrata/core/database/dialect";
 import { createOutboxMetricsCollector, renderOutboxMetrics } from "@getstrata/core/events/outbox";
+import { createAsyncContextStore } from "@getstrata/core/runtime/asyncContextStore";
 import { createReadOnlyCollector } from "../../src/core/database/readOnlyCollector";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -150,18 +152,34 @@ test("portable observation refuses invalid adapter clocks and row timestamps", a
 
 test("an unsupported runtime dialect descriptor is rejected before observation effects", async () => {
   const dialect = currentSqlDialect();
-  const previousDriver = dialect.driver;
+  expect(Object.isFrozen(dialect)).toBe(true);
+  expect(Reflect.set(dialect, "driver", "unsupported")).toBe(false);
   let effects = 0;
+  bindDatabaseConnection({
+    async unsafe<T>(): Promise<T[]> {
+      effects++;
+      return [];
+    },
+    async reserve() {
+      effects++;
+      throw new Error("Unsupported dialect must not reserve a pin");
+    },
+  });
+  // The legacy collector still consumes this established context seam. Inject an
+  // invalid fixture record there instead of mutating a canonical frozen dialect.
+  const context = createAsyncContextStore<SqlDialect>("@getstrata/sqlDialect");
+  const unsupported = Object.freeze({ ...dialect, driver: "unsupported" }) as unknown as SqlDialect;
   const collector = createReadOnlyCollector("Qualification", 100, async () => {
     effects++;
     return 0;
   });
   try {
-    Reflect.set(dialect, "driver", "unsupported");
-    await expect(collector.collect()).rejects.toThrow("require Postgres or an interruptible");
+    await expect(context.run(unsupported, () => collector.collect())).rejects.toThrow(
+      "require Postgres or an interruptible",
+    );
     expect(effects).toBe(0);
+    expect(currentSqlDialect()).toBe(dialect);
   } finally {
-    Reflect.set(dialect, "driver", previousDriver);
     await collector.close();
   }
 });

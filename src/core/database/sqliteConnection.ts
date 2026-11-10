@@ -1,5 +1,3 @@
-import { Database } from "bun:sqlite";
-import { resolve } from "node:path";
 import {
   type ActiveDatabaseHandle,
   getActiveDatabaseConnection,
@@ -10,6 +8,8 @@ import {
   observeIsolatedReadOnly,
   type ReadOnlyObservationOptions,
 } from "./isolatedReadOnlyObservation.ts";
+import { legacyNativeTransaction } from "./legacyNativeTransaction";
+import { createRawSqlitePool, sqliteFilename } from "./rawSqlite";
 
 type SqliteConnection = ActiveDatabaseHandle & {
   begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T>;
@@ -20,94 +20,24 @@ type SqliteConnection = ActiveDatabaseHandle & {
   close(): void;
 };
 
-function isRowReturning(sql: string): boolean {
-  const upper = sql.replace(/\s+/g, " ").trim().toUpperCase();
-  if (upper.includes(" RETURNING ")) {
-    return true;
-  }
-  return (
-    upper.startsWith("SELECT") ||
-    upper.startsWith("WITH") ||
-    upper.startsWith("PRAGMA") ||
-    upper.startsWith("EXPLAIN")
-  );
-}
-
 function createSqliteConnection(filename: string): SqliteConnection {
-  if (!filename.trim()) {
-    throw new Error("SQLite path is not configured. Pass a filename or :memory:.");
-  }
-
-  const absoluteFilename = filename === ":memory:" ? filename : resolve(filename);
-  const db = new Database(absoluteFilename, { create: true });
-  db.exec("PRAGMA foreign_keys = ON");
-  // Web apps run concurrent requests against one file: WAL lets readers proceed
-  // during writes and busy_timeout waits instead of throwing SQLITE_BUSY.
-  db.exec("PRAGMA busy_timeout = 5000");
-  if (filename !== ":memory:") {
-    db.exec("PRAGMA journal_mode = WAL");
-    db.exec("PRAGMA synchronous = NORMAL");
-  }
-
-  let tail = Promise.resolve();
-  let pending = 0;
-  let closed = false;
+  const absoluteFilename = sqliteFilename(filename);
+  const pool = createRawSqlitePool({ driver: "sqlite", filename });
   const transactions = new WeakSet<ActiveDatabaseHandle>();
-
-  function execute<T>(query: string, params: readonly unknown[]): T[] {
-    const statement = db.query(query);
-    const args = params.map((value) =>
-      value instanceof Date ? value.toISOString() : value,
-    ) as never[];
-    if (isRowReturning(query)) return statement.all(...args) as T[];
-    statement.run(...args);
-    return [];
-  }
-
-  function enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
-    if (closed) return Promise.reject(new Error("SQLite connection is closed."));
-    pending++;
-    const result = tail.then(operation).finally(() => {
-      pending--;
-    });
-    tail = result.then(
-      () => {},
-      () => {},
-    );
-    return result;
-  }
-
+  let observations = 0;
+  let closed = false;
   const connection: SqliteConnection = {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
       const active = getActiveDatabaseConnection(connection);
       if (transactions.has(active)) return active.unsafe<T>(query, params);
-      return enqueue(() => execute<T>(query, params));
+      return [...(await pool.execute<T>({ text: query, params }))];
     },
     async begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T> {
-      if (transactions.has(getActiveDatabaseConnection(connection))) {
+      if (transactions.has(getActiveDatabaseConnection(connection)))
         throw new Error("Use runInTransaction for nested SQLite transactions.");
-      }
-      return enqueue(async () => {
-        db.exec("BEGIN IMMEDIATE");
-        let open = true;
-        const transaction: ActiveDatabaseHandle = {
-          async unsafe<TValue>(query: string, params: readonly unknown[] = []): Promise<TValue[]> {
-            if (!open) throw new Error("SQLite transaction is no longer active.");
-            return execute<TValue>(query, params);
-          },
-        };
-        transactions.add(transaction);
-        try {
-          const result = await runWithDatabaseConnection(transaction, () => callback(transaction));
-          db.exec("COMMIT");
-          return result;
-        } catch (error) {
-          db.exec("ROLLBACK");
-          throw error;
-        } finally {
-          open = false;
-        }
-      });
+      const outcome = await pool.checkout();
+      if (!outcome.ok) throw outcome.error;
+      return legacyNativeTransaction(outcome.value, callback, transactions);
     },
     async observeReadOnly<T>(
       operation: (connection: DatabaseConnection) => Promise<T>,
@@ -116,7 +46,7 @@ function createSqliteConnection(filename: string): SqliteConnection {
       if (closed) throw new Error("SQLite connection is closed.");
       if (absoluteFilename === ":memory:")
         throw new Error("SQL observations require file-backed SQLite.");
-      pending++;
+      observations++;
       try {
         return await observeIsolatedReadOnly(
           { driver: "sqlite", filename: absoluteFilename },
@@ -127,13 +57,13 @@ function createSqliteConnection(filename: string): SqliteConnection {
           options,
         );
       } finally {
-        pending--;
+        observations--;
       }
     },
-    close(): void {
-      if (pending > 0) throw new Error("Drain SQLite operations before closing the connection.");
+    close() {
+      if (observations) throw new Error("Drain SQLite operations before closing the connection.");
+      pool.close();
       closed = true;
-      db.close();
     },
   };
   return connection;

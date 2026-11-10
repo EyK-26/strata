@@ -1,5 +1,6 @@
 import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
 import { CORE_EXECUTION_OPERATIONS_TOKEN } from "@getstrata/core/contracts/executionOperations";
+import { CORE_EXECUTION_OWNERSHIP_TOKEN } from "@getstrata/core/contracts/executionOwnership";
 import {
   aliasService,
   isServiceDeclaration,
@@ -109,6 +110,7 @@ function compileServiceGraph(
   const implicit = new Set([
     serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN),
     serviceTokenKey(CORE_EXECUTION_OPERATIONS_TOKEN),
+    serviceTokenKey(CORE_EXECUTION_OWNERSHIP_TOKEN),
   ]);
   const nodes = new Map<symbol, ServiceDeclaration>();
   for (const input of declarations) {
@@ -139,6 +141,7 @@ function compileServiceGraph(
   const lifetimes = new Map<symbol, ServiceLifetime>([
     [serviceTokenKey(CORE_EXECUTION_CONTEXT_TOKEN), "execution"],
     [serviceTokenKey(CORE_EXECUTION_OPERATIONS_TOKEN), "execution"],
+    [serviceTokenKey(CORE_EXECUTION_OWNERSHIP_TOKEN), "execution"],
   ]);
   while (remaining.length > 0) {
     const index = remaining.findIndex((item) =>

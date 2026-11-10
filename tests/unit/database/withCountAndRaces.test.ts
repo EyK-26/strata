@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { PersistenceError } from "@getstrata/core/database/errors";
 import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 import { ConflictError } from "@getstrata/core/errors/http";
@@ -195,48 +197,85 @@ describe("firstOrCreate races", () => {
     expect(squad.toObject().id).toBe(2);
   });
 
-  test("a concurrent insert is recovered by re-reading instead of surfacing a conflict", async () => {
-    const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([]);
-    connection.failNextInsertWith = new ConflictError("duplicate key");
-    connection.queue([{ id: 3, label: "gamma" }]);
+  test("a concurrent unique insert is recovered by re-reading neutral and native duplicate failures", async () => {
+    for (const duplicate of [
+      new PersistenceError("DATABASE_UNIQUE_CONSTRAINT"),
+      Object.assign(new Error("native duplicate key"), { code: "23505" }),
+    ]) {
+      const connection = new FakeConnection();
+      const { SquadModel } = createGraph(connection);
+      connection.queue([]);
+      connection.failNextInsertWith = duplicate;
+      connection.queue([{ id: 3, label: "gamma" }]);
 
-    const squad = await runWithSqlDialect("pgsql", async () =>
-      SquadModel.firstOrCreate({ label: "gamma" }),
-    );
+      const squad = await runWithSqlDialect("pgsql", async () =>
+        SquadModel.firstOrCreate({ label: "gamma" }),
+      );
 
-    expect(squad.toObject().id).toBe(3);
+      expect(squad.toObject()).toEqual({ id: 3, label: "gamma" });
+      expect(connection.calls).toHaveLength(3);
+      expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
+      expect(connection.calls.filter((call) => call.query.startsWith("SELECT"))).toHaveLength(2);
+      expect(connection.calls[0]?.params).toEqual(["gamma"]);
+      expect(connection.calls[2]?.params).toEqual(["gamma"]);
+    }
   });
 
-  test("a conflict with no winning row still surfaces", async () => {
+  test("a unique violation with no winning row preserves the original neutral error", async () => {
     const connection = new FakeConnection();
     const { SquadModel } = createGraph(connection);
+    const duplicate = new PersistenceError("DATABASE_UNIQUE_CONSTRAINT");
     connection.queue([]);
-    connection.failNextInsertWith = new ConflictError("duplicate key");
+    connection.failNextInsertWith = duplicate;
     connection.queue([]);
 
-    await expect(
-      runWithSqlDialect("pgsql", async () => SquadModel.firstOrCreate({ label: "delta" })),
-    ).rejects.toThrow(ConflictError);
+    await assert.rejects(
+      async () =>
+        await runWithSqlDialect("pgsql", async () => SquadModel.firstOrCreate({ label: "delta" })),
+      (error: unknown) => error === duplicate,
+    );
+    expect(connection.calls).toHaveLength(3);
+    expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
+  });
+
+  test("domain conflicts and non-unique persistence failures propagate without a race reread", async () => {
+    for (const failure of [
+      new ConflictError("unrelated domain conflict"),
+      new PersistenceError("DATABASE_CHECK_CONSTRAINT"),
+    ]) {
+      const connection = new FakeConnection();
+      const { SquadModel } = createGraph(connection);
+      connection.queue([]);
+      connection.failNextInsertWith = failure;
+      // A row available to a mistaken reread must not hide the unrelated failure.
+      connection.queue([{ id: 4, label: "unrelated" }]);
+      await assert.rejects(
+        async () =>
+          await runWithSqlDialect("pgsql", async () =>
+            SquadModel.firstOrCreate({ label: "unrelated" }),
+          ),
+        (error: unknown) => error === failure,
+      );
+      expect(connection.calls).toHaveLength(2);
+      expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
+      expect(connection.calls.filter((call) => call.query.startsWith("SELECT"))).toHaveLength(1);
+    }
   });
 
   test("a non-conflict error is not swallowed or mistaken for a race", async () => {
     const connection = new FakeConnection();
     const { SquadModel } = createGraph(connection);
+    const failure = new Error("connection reset");
     connection.queue([]);
-    connection.failNextInsertWith = new Error("connection reset");
+    connection.failNextInsertWith = failure;
 
-    const caught = await runWithSqlDialect("pgsql", async () => {
-      try {
-        await SquadModel.firstOrCreate({ label: "epsilon" });
-        return null;
-      } catch (error) {
-        return error;
-      }
-    });
-
-    expect(caught).not.toBeNull();
-    expect(caught).not.toBeInstanceOf(ConflictError);
+    await assert.rejects(
+      async () =>
+        await runWithSqlDialect("pgsql", async () =>
+          SquadModel.firstOrCreate({ label: "epsilon" }),
+        ),
+      (error: unknown) => error === failure,
+    );
+    expect(connection.calls).toHaveLength(2);
   });
 });

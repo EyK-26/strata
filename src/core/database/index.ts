@@ -1,3 +1,4 @@
+export { mapDatabaseError, withDatabaseErrorHandling } from "@getstrata/core/database/errors";
 export { default as BaseRepository } from "./baseRepository.ts";
 export { createDatabaseConnection } from "./connection.ts";
 export type { ActiveDatabaseHandle } from "./connectionContext.ts";
@@ -15,7 +16,6 @@ export {
   runWithSqlDialect,
   useSqlDialect,
 } from "./dialect.ts";
-export { mapDatabaseError, withDatabaseErrorHandling } from "./errors.ts";
 export { Factory } from "./factory.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "./inflection.ts";
 export type { CastType, GlobalScopeFn, ModelConstructor } from "./model.ts";

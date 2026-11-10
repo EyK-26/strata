@@ -1,7 +1,7 @@
 import { toHttpError } from "@getstrata/core/errors/http";
 import { logServerError, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
-import { mapDatabaseError } from "../database/errors";
 import { requestTransactionRollback } from "../database/transactionControl";
+import { mapDatabaseHttpError } from "./databaseError";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
 
@@ -28,7 +28,7 @@ function noContentResponse(): Response {
 }
 
 function errorResponse(error: unknown): Response {
-  const mappedError = toHttpError(error) ?? mapDatabaseError(error);
+  const mappedError = toHttpError(error) ?? mapDatabaseHttpError(error);
   logServerError(error, mappedError);
 
   return Response.json(

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { EventEmitter } from "node:events";
 import {
   bindDatabaseConnection,
   resetBoundDatabaseConnection,
@@ -14,7 +15,9 @@ afterEach(() => {
   resetSqlDialect();
 });
 function fixture(fail?: "start" | "commit" | "rollback") {
+  const socket = new EventEmitter();
   const reserved = {
+    connection: { stream: socket },
     execute: mock(
       async (_query: string, _params?: unknown[]) =>
         [[{ source: "reserved" }], []] as [unknown, unknown],
@@ -29,7 +32,9 @@ function fixture(fail?: "start" | "commit" | "rollback") {
       if (fail === "rollback") throw new Error("rollback failed");
     }),
     release: mock(() => {}),
-    destroy: mock(() => {}),
+    destroy: mock(() => {
+      socket.emit("close");
+    }),
   };
   const pool = {
     execute: mock(

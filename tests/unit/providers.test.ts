@@ -35,8 +35,10 @@ describe("config store", () => {
     config.set("app.name", "BunTesting");
 
     expect(config.get<string>("app.name")).toBe("BunTesting");
-    expect(config.require<string>("app.name")).toBe("BunTesting");
-    expect(() => config.require("missing.key")).toThrow('Config key "missing.key" is not defined.');
+    expect(config.getRequired<string>("app.name")).toBe("BunTesting");
+    expect(() => config.getRequired("missing.key")).toThrow(
+      'Config key "missing.key" is not defined.',
+    );
   });
 });
 
@@ -64,9 +66,9 @@ describe("app providers", () => {
     try {
       const context = await createAppContext();
 
-      expect(context.config.require<number>(APP_PORT_CONFIG_KEY)).toBe(4100);
-      expect(context.config.require<number>(CACHE_TTL_MS_CONFIG_KEY)).toBe(2500);
-      expect(context.config.require<number>(CACHE_MAX_ENTRIES_CONFIG_KEY)).toBe(25);
+      expect(context.config.getRequired<number>(APP_PORT_CONFIG_KEY)).toBe(4100);
+      expect(context.config.getRequired<number>(CACHE_TTL_MS_CONFIG_KEY)).toBe(2500);
+      expect(context.config.getRequired<number>(CACHE_MAX_ENTRIES_CONFIG_KEY)).toBe(25);
       expect(context.dependencies.cache).toBe(context.container.resolve(CORE_CACHE_TOKEN));
     } finally {
       restoreEnvVar("PORT", previousPort);

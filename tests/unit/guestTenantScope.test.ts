@@ -6,6 +6,7 @@ import {
   resetBoundDatabaseConnection,
 } from "@getstrata/core/database/boundConnection";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { withJsonErrorHandling } from "@getstrata/core/http/response";
 import { currentTenant } from "@getstrata/core/tenant/tenantContext";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -15,7 +16,7 @@ async function scenario(
   flag: string,
   source: CredentialSource,
   hostPolicy?: "approved" | "unknown",
-): Promise<{ response: Response; queries: string[]; tenantId: number | null }> {
+): Promise<{ response: Response; queries: string[]; tenantId: number | null; nextCalls: number }> {
   const keys = ["APP_ENV", "TENANCY_DRIVER", "TENANT_DEV_HEADERS"] as const;
   const before = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   const bound = getBoundDatabaseConnection();
@@ -28,6 +29,7 @@ async function scenario(
     },
   });
   let tenantId: number | null = null;
+  let nextCalls = 0;
   try {
     const middleware = createTenantMiddleware({
       resolveTenant: async (id) => ({ id, slug: `tenant-${id}` }),
@@ -42,18 +44,20 @@ async function scenario(
     });
     const response = await runWithSqlDialect("sqlite", () =>
       runWithAuthContext({ id: 42, role: "admin" }, source, () =>
-        middleware(
+        withJsonErrorHandling((request: Request) =>
+          middleware(request, async () => {
+            nextCalls++;
+            tenantId = currentTenant()?.id ?? null;
+            return Response.json({ ok: true });
+          }),
+        )(
           new Request("https://approved.example.test/api/notes", {
             headers: { "x-tenant-id": "999", "x-forwarded-host": "untrusted.example.test" },
           }),
-          async () => {
-            tenantId = currentTenant()?.id ?? null;
-            return Response.json({ ok: true });
-          },
         ),
       ),
     );
-    return { response, queries, tenantId };
+    return { response, queries, tenantId, nextCalls };
   } finally {
     for (const key of keys) restoreEnvVar(key, before[key]);
     if (bound) bindDatabaseConnection(bound);
@@ -75,11 +79,15 @@ for (const [mode, flag, policy, status, tenant] of [
     expect(result.response.status).toBe(status);
     expect(result.tenantId).toBe(tenant);
     expect(result.queries).toEqual([]);
+    expect(result.nextCalls).toBe(status === 200 ? 1 : 0);
   });
 for (const source of ["session", "bearer", "basic", null] as const)
   test(`persisted ${source ?? "legacy"} identity retains membership lookup and fails closed on database failure`, async () => {
     const result = await scenario("local", "false", source);
     expect(result.response.status).toBe(500);
+    expect(result.response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await result.response.json()).toEqual({ error: "Internal server error." });
     expect(result.tenantId).toBeNull();
+    expect(result.nextCalls).toBe(0);
     expect(result.queries.some((query) => query.includes("users"))).toBe(true);
   });
