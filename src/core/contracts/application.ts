@@ -1,4 +1,4 @@
-import type { ServiceDeclaration } from "./services";
+import type { NonPromisePayload, ServiceDeclaration } from "./services";
 import type { ServiceToken } from "./token";
 
 /** Plain configuration data is copied and frozen before any application work begins. */
@@ -131,7 +131,7 @@ type ExecutionContext = ExecutionEnvelope & {
   readonly signal: AbortSignal;
 };
 
-/** A child observation settles after its body and all admitted descendants. */
+/** A child observation settles after its body, admitted descendants and owned cleanup. */
 type ExecutionTaskOutcome<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: unknown };
@@ -141,9 +141,11 @@ interface CommandScope {
   readonly applicationId: string;
   readonly config: ApplicationConfig;
   readonly signal: AbortSignal;
-  /** Composition-only access; expires with this admitted callback, not an execution resource scope. */
+  /** Composition access expires with this callback's body lease; owned resources remain through its joined subtree. */
   resolve<T>(token: ServiceToken<T>): T;
-  /** Joined resource-free work in this execution; observation does not recover failures. */
+  /** Own a resource through this callback's actual subtree and cleanup. */
+  readonly acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>) => Promise<T>;
+  /** Joined work in this execution; observation does not recover failures. */
   readonly spawn: <T>(
     work: (scope: CommandScope) => T | Promise<T>,
   ) => Promise<ExecutionTaskOutcome<T>>;

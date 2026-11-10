@@ -1,5 +1,6 @@
 import { ServiceContainer } from "@getstrata/core/contracts/container";
 import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
+import { assertServicePayload, type NonPromisePayload } from "@getstrata/core/contracts/services";
 import { copyApplicationConfig } from "../config/configSnapshot";
 import type {
   Application,
@@ -21,7 +22,7 @@ import type {
 } from "../contracts/application";
 import type { ServiceToken } from "../contracts/token";
 import { normalizeExecutionEnvelope, ownExecutionContext } from "./executionContext";
-import { runExecutionTasks } from "./executionTasks";
+import { runExecutionTasks, type TaskResources } from "./executionTasks";
 import { type ResourceGroup, ResourceJournal } from "./resourceJournal";
 import { compileServiceGraph, type ServiceGraph } from "./serviceGraph";
 
@@ -327,33 +328,62 @@ class OwnedApplication implements Application {
       services.set(CORE_EXECUTION_CONTEXT_TOKEN, context);
       await this.definition.services.startExecution(services, context.signal, owner.check);
       owner.check();
-      return await runExecutionTasks(work, owner.check, (body, spawn) => {
-        let active = true;
-        const scope: CommandScope = Object.freeze({
-          applicationId: this.id,
-          config: this.definition.config,
-          context,
-          signal: context.signal,
-          resolve: <T>(token: ServiceToken<T>): T => {
-            if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
-            return services.resolve(token);
-          },
-          spawn: <T>(childWork: (scope: CommandScope) => T | Promise<T>) => {
-            if (!active) {
-              return observed(
-                Promise.reject(new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id)),
-              );
-            }
-            return spawn(childWork);
-          },
-        });
-        return leasedOperation(
-          () => body(scope),
-          () => {
-            active = false;
-          },
-        );
+      const cleanupContext = Object.freeze({
+        signal: this.cleanupCancellation.signal,
+        reason: "task-complete",
       });
+      const taskResources = (parent?: ResourceGroup): TaskResources => {
+        const group = this.journal.createTaskGroup(parent);
+        return Object.freeze({
+          acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>) =>
+            this.journal.acquire(group, spec, context.signal, assertServicePayload, owner.check),
+          child: () => taskResources(group),
+          seal: () => this.journal.sealGroup(group),
+          finalize: () => this.journal.finalizeGroup(group, cleanupContext),
+        });
+      };
+      return await runExecutionTasks(
+        work,
+        owner.check,
+        (body, spawn, resources) => {
+          let active = true;
+          const scope: CommandScope = Object.freeze({
+            applicationId: this.id,
+            config: this.definition.config,
+            context,
+            signal: context.signal,
+            resolve: <T>(token: ServiceToken<T>): T => {
+              if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+              return services.resolve(token);
+            },
+            acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>): Promise<T> => {
+              try {
+                if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+                owner.check();
+                return resources.acquire(spec);
+              } catch (error) {
+                return observed(Promise.reject(error));
+              }
+            },
+            spawn: <T>(childWork: (scope: CommandScope) => T | Promise<T>) => {
+              if (!active) {
+                return observed(
+                  Promise.reject(new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id)),
+                );
+              }
+              return spawn(childWork);
+            },
+          });
+          return leasedOperation(
+            () => body(scope),
+            () => {
+              active = false;
+              resources.seal();
+            },
+          );
+        },
+        taskResources(),
+      );
     } finally {
       owner.dispose();
     }
@@ -456,11 +486,13 @@ class OwnedApplication implements Application {
       const changed = this.changed.promise;
       if (!(await this.journal.scanStop(context))) unsafe = true;
       const view = this.journal.view();
+      if (view.unsafe) unsafe = true;
       if (!this.startupRunning && view.pendingAcquisitions.length === 0 && !view.unstopped) break;
       await changed;
     }
     if (!(await this.journal.drain(context))) unsafe = true;
     while (this.commands.size > 0) await this.changed.promise;
+    if (this.journal.view().unsafe) unsafe = true;
 
     if (!unsafe) await this.journal.flushAndClose(context);
     const retained = this.journal.view().retainedResources.length > 0;

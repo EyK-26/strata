@@ -217,12 +217,29 @@ const app = createApplication({
 });
 let saved: CommandScope | undefined;
 let joinedTasks = 0;
+const taskResourceEvents: string[] = [];
+const packedTaskResource = (name: string): Runtime.ResourceSpec<{ name: string }> => {
+  const handle = { name };
+  return {
+    name,
+    open: () => {
+      taskResourceEvents.push(`${name}.open`);
+      return { ok: true, value: handle };
+    },
+    close(value, context) {
+      assert.equal(value, handle);
+      assert.equal(context.reason, "task-complete");
+      taskResourceEvents.push(`${name}.close`);
+    },
+  };
+};
 try {
   await app.start();
   assert.equal(executionFactories, 0);
   const contexts: Runtime.ExecutionContext[] = [];
   await app.run(async (scope) => {
     saved = scope;
+    await scope.acquire(packedTaskResource("root"));
     assert.equal(scope.resolve(ManagedAlias), managedValue);
     assert.equal(scope.resolve(Managed), managedValue);
     assert.equal(executionFactories, 1);
@@ -236,6 +253,7 @@ try {
       assert.equal(child.context, scope.context);
       assert.equal(child.resolve(Scoped), scope.resolve(Scoped));
       joinedTasks++;
+      await child.acquire(packedTaskResource("child"));
       return child.spawn((grandchild) => {
         joinedTasks++;
         assert.equal(grandchild.resolve(Scoped), child.resolve(Scoped));
@@ -243,6 +261,16 @@ try {
       });
     });
     assert.equal(Object.isFrozen(childOutcome), true);
+    assert.equal(
+      taskResourceEvents.includes("child.close"),
+      true,
+      "packed child cleanup precedes public outcome",
+    );
+    assert.equal(
+      taskResourceEvents.includes("root.close"),
+      false,
+      "packed parent resource survives child outcome",
+    );
     assert.deepEqual(childOutcome, { ok: true, value: { ok: true, value: 49 } });
     assert.equal(scope.resolve(Alias), 5);
     assert.equal(scope.resolve(second), 2);
@@ -252,6 +280,11 @@ try {
     assert.equal(await scope.resolve(serviceToken).remember("identity", async () => 7), 7);
   });
   assert.throws(() => saved?.resolve(Result));
+  assert.deepEqual(
+    taskResourceEvents,
+    ["root.open", "child.open", "child.close", "root.close"],
+    "packed root cleanup precedes run resolution",
+  );
   await app.run(
     { kind: "job", actor: { kind: "system", policy: "packed-worker" }, metadata: { packed: true } },
     (scope) => {
@@ -276,6 +309,7 @@ try {
       mixedExecutionContextIdentity: true,
       executionFactories,
       joinedTasks,
+      taskResourceEvents,
       mixedCacheIdentity: true,
       opaqueConstants: [...opaqueConstants.keys()].sort(),
       serviceConstants: Object.keys(ServiceTokens)

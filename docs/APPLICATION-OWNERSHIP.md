@@ -179,12 +179,13 @@ A failed flush is reported even when a subsequent successful close releases the
 resource. Resource names are diagnostic labels: duplicates are rejected within one
 owner, while separate owners may use the same name without sharing obligations.
 
-Managed services currently support only the `application` lifetime. Execution
-bindings and child tasks do not acquire resources through this API yet.
+Managed service bindings currently support only the `application` lifetime.
+Callbacks can own task resources through `scope.acquire`, described below.
 
 ## Explicit executions
 
-This checkpoint supports managed application services and resource-free execution values. Each
+This checkpoint supports managed application services, ordinary execution values,
+and task-owned resources. Each
 `run()` creates a fresh child of the selected application's sealed service
 container. Typed dependencies fall back to that explicit parent; legacy string
 keys remain local. Execution factories and aliases initialize in dependency order,
@@ -269,15 +270,16 @@ Execution failures do not become startup failures or poison otherwise clean disp
 
 Execution factories must yield ordinary values. The owner makes no disposal claim
 for handles allocated inside them. Application resource bindings and provider
-acquisition provide the ownership APIs described above. Execution resource declarations, task acquisition
-and ambient context are outside this checkpoint.
+acquisition provide application ownership; `scope.acquire` provides callback-tree
+ownership. Execution resource declarations and ambient context remain outside this
+checkpoint.
 
 ## Joined child callbacks
 
-`scope.spawn(work)` admits resource-free child work in the same execution. Children
+`scope.spawn(work)` admits child work in the same execution. Children
 share the existing container, context, signal, configuration and initialized service
 values; no factory runs again and no authority is added. The callback is scheduled
-after `spawn` returns. Each frozen scope has its own resolver and spawn lease,
+after `spawn` returns. Each frozen scope has its own resolver, spawn and acquisition lease,
 which expires when that body's actual return value or promise settles. A live
 child can admit grandchildren after its parent's lease has expired.
 
@@ -292,12 +294,16 @@ const result = await app.run(async (scope) => {
 An admitted child's promise fulfills with a shallow frozen
 `ExecutionTaskOutcome<T>`: `{ ok: true, value }` after a successful subtree, or
 `{ ok: false, error }` after a failed subtree. It settles only after the actual
-body and all descendants finish. Ignoring, catching or returning this outcome
-does not recover a failure; recovery must occur inside the failing callback.
+body, descendants and owned cleanup finish. Ignoring, catching or returning this
+outcome does not recover a failure. Body errors can be handled inside their own
+callback; admitted acquisition failures remain failures even when caught there.
 Thus the example's fallback cannot make a failed child into a successful run.
 
-Each own-body failure occurs once in recursive admission-tree preorder, independent
-of settlement order. A single failure rejects `run` with its exact opaque payload,
+For each node, failure order is its own body, its admitted acquisitions in reservation
+order, each child's private failures in admission-tree order, then its own cleanup.
+Acquisition-internal cleanup errors keep acquisition/array order; hook errors keep
+invocation order, independent of rejection settlement order. A single failure rejects
+`run` with its exact opaque payload,
 including `undefined`, `false` or `0`. Multiple failures produce a fresh native
 `AggregateError` with message `Execution task failures.` and the first occurrence
 as `cause`. Only the owner-created aggregate and its copied `errors` array are
@@ -313,11 +319,72 @@ bodies, and body failure does not cancel siblings. Resolve access remains availa
 until actual body settlement; new spawn calls check cancellation and wall time.
 
 The root run and application cleanup barrier join every admitted descendant,
-including ignored children and grandchildren. Producer stop and drain precede the
-join; backing flush and close follow it. A stop deadline may expire while actual
+including ignored children and grandchildren. During application shutdown, global
+producer stop and drain precede the join; backing flush and close follow it.
+A stop deadline may expire while actual
 completion remains pending. Execution signal listeners and deadline timer stay
 owned until the whole tree settles, even if the root body fails first, and are
 then disposed once.
+
+## Task-owned resources
+
+`scope.acquire(spec)` uses the same explicit `ResourceSpec`/`OpenOutcome` protocol
+as provider acquisition. Each root callback and child has a private resource owner.
+Acquisition is allowed only while that body's lease is active and its execution
+has not been cancelled or expired. Resource names must be unique within that owner;
+siblings and separate runs can use identical names.
+
+```ts
+const report = await app.run(async (scope) => {
+  const session = await scope.acquire({
+    name: "report-session",
+    open: (signal) => openReportSession(signal), // Explicit OpenOutcome<ReportSession>.
+    close: (value, context) => value.close(context.signal),
+  });
+  const child = await scope.spawn(() => session.readReport());
+  if (!child.ok) throw child.error;
+  return child.value;
+});
+// The session has finished owned cleanup before report becomes available.
+```
+
+A parent's resources remain alive until its actual descendants and admitted opens
+settle. A child's resources finish cleanup before its outcome is available. Return
+ordinary results, not an owned handle for a parent or another run to use later:
+returning a handle does not extend its lifetime. Borrowing ancestor resources is
+supported; arbitrary sibling sharing or escaped references require a separate
+ownership contract and cannot be prevented by JavaScript reference checks.
+
+An ignored acquisition still holds the owner open. Cancellation prevents new
+reservations and publication of late success, while the original acquired handle
+and captured hooks remain owned for cleanup. Promise-like resource payloads are
+unsupported; validation precedes native promise assimilation. Invalid descriptors,
+duplicates and expired-scope calls rejected before reservation create no acquisition
+failure occurrence, though an uncaught rejection still fails the body.
+
+Every admitted acquisition rejection fails its node, even if caught. An uncaught
+`await scope.acquire(...)` therefore records both the acquisition failure and the
+body failure, preserving the same opaque error twice as two distinct occurrences.
+Fallback work inside a catch does not recover that admitted acquisition. Cleanup
+failures also remain failures regardless of whether the body handles other errors.
+
+Normal cleanup uses reason `task-complete` and the application's cleanup signal,
+which stays independent of execution cancellation. Task completion and application
+shutdown share each actual hook attempt; the first caller's context wins for that
+phase. Neither an attempted hook nor a stop timeout proves settlement. There is no
+separate task cleanup timeout; pending hooks keep actual run completion pending.
+
+Unknown acquisition or failed stop, drain or close retains the owner's backing
+dependencies, including empty ancestor groups and application services/providers/
+transports. Settled retained ownership can produce a failed outcome; still-pending
+work cannot. Independent safe task groups can finish cleanup. Application shutdown
+preserves its conservative stop/drain safety barrier.
+
+Failed runs leave the application available unless shutdown was separately started.
+Disposed acquisition/body failures alone do not make application cleanup fail.
+Cleanup failures remain in application diagnostics even if close later succeeds.
+Successful dynamic history is retired after its result is transferred; unresolved
+ownership and cleanup-failure history remain proportional to actual failed work.
 
 ## Migration boundary
 
