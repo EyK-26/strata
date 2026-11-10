@@ -89,6 +89,9 @@ test("clean installed services share canonical mixed-import tokens and pass exte
     );
     const report = JSON.parse((await run([process.execPath, "consumer.ts"], directory)).trim());
     assert.equal(report.mixedFactoryIdentity, true);
+    assert.equal(report.mixedManagedHelperIdentity, true);
+    assert.equal(report.managedOpens, 1);
+    assert.deepEqual(report.managedLifecycle, ["open", "stop", "drain", "flush", "close"]);
     assert.equal(report.mixedExecutionContextIdentity, true);
     assert.equal(report.executionFactories, 2);
     assert.equal(report.joinedTasks, 2);

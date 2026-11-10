@@ -137,9 +137,54 @@ Promise normalization and close it before completion observers run. Saved scopes
 cannot regain access. Provider resolution similarly expires after setup. An
 aborted startup cannot publish a late factory result as a ready service.
 
+## Managed application services
+
+Use `resourceService` for an application service that owns a resource. Its factory
+receives the declared dependency values and synchronously returns a `ResourceSpec`;
+only the spec's `open` function acquires the resource. Return an explicit
+`OpenOutcome` so failed acquisition distinguishes `not-acquired`, `cleaned` and
+`unknown` ownership. Ordinary `service` factories do not imply resource disposal.
+
+```ts
+import { resourceService } from "@getstrata/core/contracts/services";
+
+const poolBinding = resourceService(Pool, {
+  lifetime: "application",
+  dependencies: [Settings],
+  create: (settings) => ({
+    name: "orders.pool",
+    open: (signal) => openPool(settings, signal), // Returns OpenOutcome<Pool>.
+    close: (pool, context) => pool.close(context.signal),
+  }),
+});
+// Include poolBinding in createApplication({ services: [...], providers: [...] }).
+```
+
+Bindings open eagerly once in dependency order, before providers and transports.
+Aliases share the acquired value; overrides replace the final graph before any
+factory runs. Application resources cannot capture execution services or context.
+The factory must not acquire resources or return a promise for its spec.
+
+The existing application journal owns each admitted open and its captured cleanup
+hooks. Cancellation can reject startup while an open is still pending; completion
+continues to wait for the actual outcome. A late successful open remains owned and
+is cleaned without publishing a ready service. A successful handle rejected by
+service payload validation also remains owned for cleanup.
+
+Cleanup retains managed backing dependencies through aliases and ordinary service
+factories. Every provider and transport conservatively depends on all managed
+services because its setup scope can resolve any of them. Unknown acquisition or
+failed close retains that owner's backing resources; independent groups can close.
+A failed flush is reported even when a subsequent successful close releases the
+resource. Resource names are diagnostic labels: duplicates are rejected within one
+owner, while separate owners may use the same name without sharing obligations.
+
+Managed services currently support only the `application` lifetime. Execution
+bindings and child tasks do not acquire resources through this API yet.
+
 ## Explicit executions
 
-This checkpoint supports resource-free application and execution values. Each
+This checkpoint supports managed application services and resource-free execution values. Each
 `run()` creates a fresh child of the selected application's sealed service
 container. Typed dependencies fall back to that explicit parent; legacy string
 keys remain local. Execution factories and aliases initialize in dependency order,
@@ -223,8 +268,8 @@ stop deadlines never release unfinished work from the application's cleanup barr
 Execution failures do not become startup failures or poison otherwise clean disposal.
 
 Execution factories must yield ordinary values. The owner makes no disposal claim
-for handles allocated inside them. Provider acquisition remains the resource
-ownership API described above. Execution resource declarations, task acquisition
+for handles allocated inside them. Application resource bindings and provider
+acquisition provide the ownership APIs described above. Execution resource declarations, task acquisition
 and ambient context are outside this checkpoint.
 
 ## Joined child callbacks

@@ -9,15 +9,16 @@ import type {
 type Hook = (context: CleanupContext) => void | Promise<void>;
 type Resource = {
   name: string;
-  provider: string;
+  group: ResourceGroup;
   order: number;
   status: "opening" | "acquired" | "released" | "discharged" | "unknown";
   hooks: Partial<Record<ResourcePhase, Hook>>;
   attempted: Set<ResourcePhase>;
 };
-type Group = {
+export type ResourceGroup = {
+  readonly key: symbol;
   readonly name: string;
-  readonly requires: readonly string[];
+  readonly requires: readonly symbol[];
 };
 type Observer = {
   record(diagnostic: ApplicationDiagnostic): void;
@@ -26,22 +27,27 @@ type Observer = {
 
 /** Private resource ownership engine; application admission and barriers stay with its owner. */
 export class ResourceJournal {
-  private readonly resources = new Map<string, Resource>();
-  private readonly definitions = new Map<string, Group>();
-  private readonly providerOrder = new Map<string, number>();
+  private readonly resources = new Map<symbol, Resource>();
+  private readonly definitions = new Map<symbol, ResourceGroup>();
+  private readonly providerOrder = new Map<symbol, number>();
   private nextResource = 0;
 
   constructor(
-    groups: readonly Group[],
+    groups: readonly ResourceGroup[],
     private readonly observer: Observer,
   ) {
     for (const [index, group] of groups.entries()) {
-      this.definitions.set(group.name, group);
-      this.providerOrder.set(group.name, index);
+      this.definitions.set(group.key, group);
+      this.providerOrder.set(group.key, index);
     }
   }
 
-  acquire<T>(provider: string, spec: ResourceSpec<T>, signal: AbortSignal): Promise<T> {
+  acquire<T>(
+    group: ResourceGroup,
+    spec: ResourceSpec<T>,
+    signal: AbortSignal,
+    validate?: (value: T) => void,
+  ): Promise<T> {
     let resource: Resource;
     let open: ResourceSpec<T>["open"];
     let close: ResourceSpec<T>["close"];
@@ -51,7 +57,13 @@ export class ResourceJournal {
     try {
       const name = dataField(spec, "name", true);
       declarationName(name);
-      if (this.resources.has(name)) throw new Error(`Duplicate resource name: ${name}.`);
+      if (
+        [...this.resources.values()].some(
+          (item) => item.group.key === group.key && item.name === name,
+        )
+      ) {
+        throw new Error(`Duplicate resource name: ${name}.`);
+      }
       open = dataField(spec, "open", true) as ResourceSpec<T>["open"];
       close = dataField(spec, "close", true) as ResourceSpec<T>["close"];
       stop = dataField(spec, "stop") as ResourceSpec<T>["stop"];
@@ -65,15 +77,16 @@ export class ResourceJournal {
           throw new TypeError("Resource lifecycle hooks must be functions.");
         }
       }
+      if (signal.aborted) throw signal.reason;
       resource = {
         name,
-        provider,
+        group,
         order: this.nextResource++,
         status: "opening",
         hooks: {},
         attempted: new Set(),
       };
-      this.resources.set(resource.name, resource);
+      this.resources.set(Symbol(), resource);
       this.observer.changed();
     } catch (error) {
       return observed(Promise.reject(error));
@@ -105,6 +118,8 @@ export class ResourceJournal {
           if (drain) resource.hooks.drain = (context) => drain(value, context);
           if (flush) resource.hooks.flush = (context) => flush(value, context);
           this.observer.changed();
+          // A rejected service payload still has a known handle and captured disposal hooks.
+          validate?.(value);
           if (signal.aborted) throw signal.reason;
           return value;
         } catch (error) {
@@ -136,17 +151,17 @@ export class ResourceJournal {
   }
 
   async flushAndClose(context: CleanupContext): Promise<void> {
-    const blocked = new Set<string>();
+    const blocked = new Set<symbol>();
     for (const resource of this.resources.values()) {
-      if (resource.status === "unknown") this.blockDependencies(resource.provider, blocked);
+      if (resource.status === "unknown") this.blockDependencies(resource.group.key, blocked);
     }
     for (const resource of this.reverseResources()) {
-      if (!blocked.has(resource.provider)) await this.hook(resource, "flush", context);
+      if (!blocked.has(resource.group.key)) await this.hook(resource, "flush", context);
     }
     for (const resource of this.reverseResources()) {
-      if (blocked.has(resource.provider)) continue;
+      if (blocked.has(resource.group.key)) continue;
       if (!(await this.hook(resource, "close", context))) {
-        this.blockDependencies(resource.provider, blocked);
+        this.blockDependencies(resource.group.key, blocked);
       }
     }
   }
@@ -171,7 +186,7 @@ export class ResourceJournal {
     });
   }
 
-  private blockDependencies(provider: string, blocked: Set<string>): void {
+  private blockDependencies(provider: symbol, blocked: Set<symbol>): void {
     if (blocked.has(provider)) return;
     blocked.add(provider);
     for (const dependency of this.definitions.get(provider)?.requires ?? []) {
@@ -182,8 +197,8 @@ export class ResourceJournal {
   private reverseResources(): Resource[] {
     return [...this.resources.values()].sort(
       (left, right) =>
-        (this.providerOrder.get(right.provider) ?? 0) -
-          (this.providerOrder.get(left.provider) ?? 0) || right.order - left.order,
+        (this.providerOrder.get(right.group.key) ?? 0) -
+          (this.providerOrder.get(left.group.key) ?? 0) || right.order - left.order,
     );
   }
 
@@ -219,7 +234,7 @@ export class ResourceJournal {
         kind,
         code,
         error,
-        ...(resource ? { provider: resource.provider, resource: resource.name } : {}),
+        ...(resource ? { provider: resource.group.name, resource: resource.name } : {}),
         ...(phase ? { phase } : {}),
       }),
     );

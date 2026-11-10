@@ -593,7 +593,7 @@ test("transitive and aliased captive dependencies remain rejected with execution
         },
       } as never,
     ],
-    "SERVICE_GRAPH_UNSUPPORTED_RESOURCE",
+    "SERVICE_GRAPH_INVALID_DECLARATION",
   );
   assert.equal(effects, 0);
 });

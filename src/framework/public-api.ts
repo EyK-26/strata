@@ -21,7 +21,12 @@ export {
   type ServiceToken,
 } from "@getstrata/core/contracts/container";
 export { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
-export { aliasService, service, valueService } from "@getstrata/core/contracts/services";
+export {
+  aliasService,
+  resourceService,
+  service,
+  valueService,
+} from "@getstrata/core/contracts/services";
 export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
 export type {
   AdminColumn,

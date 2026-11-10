@@ -22,7 +22,7 @@ import type {
 import type { ServiceToken } from "../contracts/token";
 import { normalizeExecutionEnvelope, ownExecutionContext } from "./executionContext";
 import { runExecutionTasks } from "./executionTasks";
-import { ResourceJournal } from "./resourceJournal";
+import { type ResourceGroup, ResourceJournal } from "./resourceJournal";
 import { compileServiceGraph, type ServiceGraph } from "./serviceGraph";
 
 type Deferred<T> = {
@@ -194,6 +194,7 @@ class OwnedApplication implements Application {
   private readonly cleanupCancellation = new AbortController();
   private readonly cancelled = new ApplicationStateError("APPLICATION_START_CANCELLED", this.id);
   private readonly journal: ResourceJournal;
+  private readonly providerGroups = new Map<ProviderDefinition, ResourceGroup>();
   private readonly commands = new Set<Promise<unknown>>();
   private readonly services = new ServiceContainer();
   private readonly diagnostics: ApplicationDiagnostic[] = [];
@@ -213,17 +214,30 @@ class OwnedApplication implements Application {
 
   constructor(private readonly definition: Definition) {
     this.completion = this.completed.promise;
-    const providerNames = definition.providers.map((item) => item.name);
-    const groups = Object.freeze([
-      ...definition.providers.map((item) =>
-        Object.freeze({ name: item.name, requires: item.requires ?? Object.freeze([]) }),
-      ),
-      ...definition.transports.map((item) =>
+    const providerKeys = new Map(
+      [...definition.providers, ...definition.transports].map((item) => [item.name, Symbol()]),
+    );
+    const managedKeys = definition.services.resourceGroups.map((group) => group.key);
+    const providerKeysOnly = definition.providers.map(
+      (item) => providerKeys.get(item.name) as symbol,
+    );
+    for (const item of [...definition.providers, ...definition.transports]) {
+      this.providerGroups.set(
+        item,
         Object.freeze({
+          key: providerKeys.get(item.name) as symbol,
           name: item.name,
-          requires: Object.freeze([...providerNames, ...(item.requires ?? [])]),
+          requires: Object.freeze([
+            ...managedKeys,
+            ...(definition.transports.includes(item) ? providerKeysOnly : []),
+            ...(item.requires ?? []).map((name) => providerKeys.get(name) as symbol),
+          ]),
         }),
-      ),
+      );
+    }
+    const groups = Object.freeze([
+      ...definition.services.resourceGroups,
+      ...this.providerGroups.values(),
     ]);
     this.journal = new ResourceJournal(groups, {
       record: (diagnostic) => this.diagnostics.push(diagnostic),
@@ -352,7 +366,14 @@ class OwnedApplication implements Application {
 
   private async startProviders(): Promise<void> {
     try {
-      await this.definition.services.start(this.services, this.cancellation.signal);
+      await this.definition.services.start(this.services, this.cancellation.signal, {
+        acquire: <T>(
+          group: ResourceGroup,
+          spec: ResourceSpec<T>,
+          signal: AbortSignal,
+          validate?: (value: T) => void,
+        ) => this.journal.acquire(group, spec, signal, validate),
+      });
       for (const provider of [...this.definition.providers, ...this.definition.transports]) {
         if (this.cancellation.signal.aborted) throw this.cancelled;
         let active = true;
@@ -369,7 +390,11 @@ class OwnedApplication implements Application {
             if (!active || this.cancellation.signal.aborted) {
               return observed(Promise.reject(this.cancelled));
             }
-            const result = this.journal.acquire(provider.name, spec, this.cancellation.signal);
+            const result = this.journal.acquire(
+              this.providerGroups.get(provider) as ResourceGroup,
+              spec,
+              this.cancellation.signal,
+            );
             acquisitions.push(result);
             return result;
           },
@@ -511,7 +536,12 @@ function createApplication(definition: ApplicationDefinition): Application {
   return new OwnedApplication(normalize(definition));
 }
 
-export { aliasService, service, valueService } from "@getstrata/core/contracts/services";
+export {
+  aliasService,
+  resourceService,
+  service,
+  valueService,
+} from "@getstrata/core/contracts/services";
 export type * from "../contracts/application";
 export type * from "../contracts/services";
 export { CORE_EXECUTION_CONTEXT_TOKEN, createApplication };

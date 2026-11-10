@@ -3,6 +3,7 @@ import {
   assertServiceToken,
   type ServiceToken,
 } from "@getstrata/core/contracts/token";
+import type { ResourceSpec } from "./application";
 
 type ServiceLifetime = "application" | "execution";
 const serviceDeclarationType: unique symbol = Symbol("ServiceDeclaration");
@@ -41,6 +42,22 @@ interface FactoryServiceDeclaration extends DeclarationBrand {
   readonly create: (...dependencies: never[]) => unknown;
 }
 
+interface ResourceServiceOptions<T, D extends readonly AnyServiceToken[]> {
+  readonly lifetime: "application";
+  readonly dependencies: D;
+  /** Assemble a resource-free descriptor; acquisition belongs in ResourceSpec.open. */
+  readonly create: (...dependencies: DependencyValues<D>) => ResourceSpec<NoInfer<T>>;
+}
+
+interface ResourceServiceDeclaration extends DeclarationBrand {
+  readonly kind: "resource";
+  readonly token: AnyServiceToken;
+  readonly lifetime: "application";
+  readonly dependencies: readonly AnyServiceToken[];
+  /** Erased assembly signature; callers use the typed resourceService helper. */
+  readonly create: (...dependencies: never[]) => unknown;
+}
+
 interface ValueServiceDeclaration extends DeclarationBrand {
   readonly kind: "value";
   readonly token: AnyServiceToken;
@@ -57,6 +74,7 @@ interface AliasServiceDeclaration extends DeclarationBrand {
 
 type ServiceDeclaration =
   | FactoryServiceDeclaration
+  | ResourceServiceDeclaration
   | ValueServiceDeclaration
   | AliasServiceDeclaration;
 
@@ -126,6 +144,27 @@ function valueService<T>(
   });
 }
 
+function resourceService<T, const D extends readonly AnyServiceToken[]>(
+  token: ServiceToken<T> & NonPromisePayload<T>,
+  options: ResourceServiceOptions<T, D>,
+): ResourceServiceDeclaration {
+  assertServiceToken(token);
+  if (options.lifetime !== "application") {
+    throw new TypeError("Resource services support application lifetime only.");
+  }
+  if (!Array.isArray(options.dependencies) || typeof options.create !== "function") {
+    throw new TypeError("Resource services must declare a dependency tuple and factory.");
+  }
+  for (const dependency of options.dependencies) assertServiceToken(dependency);
+  return declaration({
+    kind: "resource",
+    token,
+    lifetime: "application",
+    dependencies: Object.freeze([...options.dependencies]),
+    create: options.create,
+  });
+}
+
 function aliasService<T>(
   aliasToken: ServiceToken<T> & NonPromisePayload<T>,
   targetToken: ServiceToken<NoInfer<T>>,
@@ -143,9 +182,11 @@ export type {
   AliasServiceDeclaration,
   DependencyValues,
   FactoryServiceDeclaration,
+  ResourceServiceDeclaration,
+  ResourceServiceOptions,
   ServiceDeclaration,
   ServiceLifetime,
   ServiceOptions,
   ValueServiceDeclaration,
 };
-export { aliasService, isServiceDeclaration, service, valueService };
+export { aliasService, isServiceDeclaration, resourceService, service, valueService };

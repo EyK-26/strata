@@ -26,6 +26,11 @@ assert.equal(Container.createServiceToken, Tokens.createServiceToken);
 assert.equal(bootstrapToken, Tokens.createServiceToken);
 assert.equal(Root.ServiceContainer, Container.ServiceContainer);
 assert.equal(Root.service, Services.service);
+assert.equal(
+  Root.resourceService,
+  Services.resourceService,
+  "packed managed helper retains canonical identity",
+);
 assert.equal(Root.valueService, Services.valueService);
 assert.equal(Root.aliasService, Services.aliasService);
 for (const token of [Root.CORE_CACHE_TOKEN, serviceToken, bootstrapCacheToken])
@@ -141,6 +146,11 @@ const ContextAlias = Tokens.createServiceToken<Runtime.ExecutionContext>("contex
 let executionFactories = 0;
 assert.equal(Root.CORE_EXECUTION_CONTEXT_TOKEN, Execution.CORE_EXECUTION_CONTEXT_TOKEN);
 assert.equal(Runtime.CORE_EXECUTION_CONTEXT_TOKEN, Execution.CORE_EXECUTION_CONTEXT_TOKEN);
+const Managed = Tokens.createServiceToken<{ count: number }>("packed managed");
+const ManagedAlias = Tokens.createServiceToken<{ count: number }>("packed managed alias");
+const managedValue = { count: 9 };
+const managedLifecycle: string[] = [];
+let managedOpens = 0;
 const settings = parseApplicationConfig(
   { PORT: { required: true, integer: true } },
   { PORT: "42" },
@@ -151,6 +161,38 @@ const cache = new Root.CacheRepository(new SimpleCacheStore(new SimpleCache()));
 const app = createApplication({
   providers: [],
   services: [
+    Root.resourceService(Managed, {
+      lifetime: "application",
+      dependencies: [second],
+      create(value): Runtime.ResourceSpec<{ count: number }> {
+        assert.equal(value, 2);
+        return {
+          name: "packed managed",
+          open(): Runtime.OpenOutcome<{ count: number }> {
+            managedOpens++;
+            managedLifecycle.push("open");
+            return { ok: true, value: managedValue };
+          },
+          stop(value) {
+            assert.equal(value, managedValue);
+            managedLifecycle.push("stop");
+          },
+          drain(value) {
+            assert.equal(value, managedValue);
+            managedLifecycle.push("drain");
+          },
+          flush(value) {
+            assert.equal(value, managedValue);
+            managedLifecycle.push("flush");
+          },
+          close(value) {
+            assert.equal(value, managedValue);
+            managedLifecycle.push("close");
+          },
+        };
+      },
+    }),
+    Services.aliasService(ManagedAlias, Managed),
     Root.valueService(first, 1),
     Root.aliasService(ContextAlias, Runtime.CORE_EXECUTION_CONTEXT_TOKEN),
     Services.service(Scoped, {
@@ -181,6 +223,8 @@ try {
   const contexts: Runtime.ExecutionContext[] = [];
   await app.run(async (scope) => {
     saved = scope;
+    assert.equal(scope.resolve(ManagedAlias), managedValue);
+    assert.equal(scope.resolve(Managed), managedValue);
     assert.equal(executionFactories, 1);
     assert.equal(scope.resolve(Scoped).context, scope.context);
     assert.equal(scope.resolve(Scoped).result, 49);
@@ -221,9 +265,14 @@ try {
   assert.notEqual(contexts[0], contexts[1]);
   assert.notEqual(contexts[0]?.executionId, contexts[1]?.executionId);
   assert.equal((await app.stop()).successful, true);
+  assert.equal(managedOpens, 1, "packed aliases share one managed acquisition");
+  assert.deepEqual(managedLifecycle, ["open", "stop", "drain", "flush", "close"]);
   console.log(
     JSON.stringify({
       mixedFactoryIdentity: true,
+      mixedManagedHelperIdentity: true,
+      managedOpens,
+      managedLifecycle,
       mixedExecutionContextIdentity: true,
       executionFactories,
       joinedTasks,
