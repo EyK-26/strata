@@ -40,6 +40,12 @@
       "beforeCommit": "e46efb1da96093e4b3f43c1bb8e207c89837ac8c",
       "issue": 374,
       "purpose": "Read-only status opts out of generated PostgreSQL grant repair and documents history/read access. Only 14 reviewed artifacts change through five exact reversible literal hunks; every historical hash, assertion and earlier correction remains intact."
+    },
+    "ownedCacheNamespace": {
+      "beforeCommit": "8c4e7171933db591e97ec508f6446586364a8527",
+      "purpose": "M2.3 cache stores require explicit composition namespaces. Record only the reviewed namespace capture and argument; preserve historical manifests and all previous corrections.",
+      "artifacts": 8,
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
     }
   },
   "hunks": {
@@ -614,6 +620,17 @@
         "    return result;",
         "  } finally {"
       ]
+    },
+    "owned-cache-namespace-capture": {
+      "before": ["  register({ container, config, dependencies, onCleanup }) {"],
+      "after": [
+        "  register({ container, config, dependencies, onCleanup }) {",
+        "    const namespace = `${process.env.APP_KEY_PREFIX?.trim() || \"strata\"}:cache:v3:`;"
+      ]
+    },
+    "owned-cache-explicit-namespace": {
+      "before": ["          redisUrl: process.env.REDIS_URL,"],
+      "after": ["          redisUrl: process.env.REDIS_URL,", "          namespace,"]
     }
   },
   "artifacts": {
@@ -1116,6 +1133,46 @@
       "beforeSha256": "faabdae33bd8d3c8d8c3934441c62066c39da872670c3b01088362848632aca2",
       "afterSha256": "97aace38e6abe145d77f8c701c5e573d42ada18b49613f62a37f5f71b75cbe50",
       "hunks": ["migration-status-read-only-4", "migration-status-read-only-5"]
+    },
+    "starter/sqlite-api-headers-local/src/bootstrap/providers/cache.ts": {
+      "beforeSha256": "2115d40886b442361dac6f54b4872ebafd63881ce2b811ac9c51bf9d7f0ac45b",
+      "afterSha256": "661ad8b5aeb34f347347671148307e343dd3759cc543284db70821a9b290edf3",
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
+    },
+    "starter/mysql-htmx-cookie-tools/src/bootstrap/providers/cache.ts": {
+      "beforeSha256": "2115d40886b442361dac6f54b4872ebafd63881ce2b811ac9c51bf9d7f0ac45b",
+      "afterSha256": "661ad8b5aeb34f347347671148307e343dd3759cc543284db70821a9b290edf3",
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
+    },
+    "starter/postgres-hybrid-combined-rls/src/bootstrap/providers/cache.ts": {
+      "beforeSha256": "2115d40886b442361dac6f54b4872ebafd63881ce2b811ac9c51bf9d7f0ac45b",
+      "afterSha256": "661ad8b5aeb34f347347671148307e343dd3759cc543284db70821a9b290edf3",
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
+    },
+    "starter/sqlite-spa-jwt-local/src/bootstrap/providers/cache.ts": {
+      "beforeSha256": "2115d40886b442361dac6f54b4872ebafd63881ce2b811ac9c51bf9d7f0ac45b",
+      "afterSha256": "661ad8b5aeb34f347347671148307e343dd3759cc543284db70821a9b290edf3",
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
+    },
+    "starter/mysql-api-token-column-partial-tools/src/bootstrap/providers/cache.ts": {
+      "beforeSha256": "2115d40886b442361dac6f54b4872ebafd63881ce2b811ac9c51bf9d7f0ac45b",
+      "afterSha256": "661ad8b5aeb34f347347671148307e343dd3759cc543284db70821a9b290edf3",
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
+    },
+    "starter/postgres-api-cookie-token-column-local/src/bootstrap/providers/cache.ts": {
+      "beforeSha256": "2115d40886b442361dac6f54b4872ebafd63881ce2b811ac9c51bf9d7f0ac45b",
+      "afterSha256": "661ad8b5aeb34f347347671148307e343dd3759cc543284db70821a9b290edf3",
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
+    },
+    "starter/postgres-htmx-cookie-local/src/bootstrap/providers/cache.ts": {
+      "beforeSha256": "2115d40886b442361dac6f54b4872ebafd63881ce2b811ac9c51bf9d7f0ac45b",
+      "afterSha256": "661ad8b5aeb34f347347671148307e343dd3759cc543284db70821a9b290edf3",
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
+    },
+    "starter/mysql-hybrid-headers-redis-tools/src/bootstrap/providers/cache.ts": {
+      "beforeSha256": "2115d40886b442361dac6f54b4872ebafd63881ce2b811ac9c51bf9d7f0ac45b",
+      "afterSha256": "661ad8b5aeb34f347347671148307e343dd3759cc543284db70821a9b290edf3",
+      "hunks": ["owned-cache-namespace-capture", "owned-cache-explicit-namespace"]
     }
   }
 }
