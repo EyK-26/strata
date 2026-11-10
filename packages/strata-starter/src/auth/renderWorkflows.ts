@@ -109,7 +109,7 @@ async function createRegistration(credentials: { name: string; email: string; pa
   } catch (error) {
     // The failed transaction/savepoint is already rolled back before readback.
     // Only an actual account race is neutral; unrelated persistence failures propagate.
-    if (!(error instanceof ConflictError) || !(await starterAuthDirectory.findByEmail(email))) throw error;
+    if (!isUniqueConstraintError(error) || !(await starterAuthDirectory.findByEmail(email))) throw error;
     return undefined;
   }
 }

@@ -55,6 +55,7 @@ export function renderAuthImports({
     }
   }
   imports.push(`import { ConflictError } from "@getstrata/core/errors/http";`);
+  imports.push(`import { isUniqueConstraintError } from "@getstrata/core/database/errors";`);
   if (bearerApi) {
     imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
   }
