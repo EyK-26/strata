@@ -31,6 +31,22 @@ export type ResourceGroup = {
   readonly name: string;
   readonly requires: readonly symbol[];
 };
+export type ExecutionResourceTemplate = {
+  readonly key: symbol;
+  readonly name: string;
+  readonly requires: readonly symbol[];
+};
+export type ExecutionResources = {
+  acquire<T>(
+    template: ExecutionResourceTemplate,
+    spec: ResourceSpec<T>,
+    signal: AbortSignal,
+    validate?: (value: T) => void,
+    check?: () => void,
+  ): Promise<T>;
+  createRootTaskGroup(): ResourceGroup;
+  finalize(context: CleanupContext): Promise<TaskResourceResult>;
+};
 export type TaskResourceResult = {
   readonly acquisitionFailures: readonly unknown[];
   readonly cleanupFailures: readonly unknown[];
@@ -76,11 +92,51 @@ export class ResourceJournal {
     ) {
       throw new Error("Task resource parent is not admitting children.");
     }
-    const group = Object.freeze({
-      key: Symbol(),
-      name: "execution task",
-      requires: Object.freeze(parent ? [parent.key] : [...this.staticKeys]),
+    return this.registerDynamicGroup("execution task", parent ? [parent.key] : this.staticKeys);
+  }
+
+  createExecutionResources(templates: readonly ExecutionResourceTemplate[]): ExecutionResources {
+    const keys = new Map(templates.map((template) => [template.key, Symbol()]));
+    const groups = new Map<symbol, ResourceGroup>();
+    for (const template of templates) {
+      groups.set(
+        template.key,
+        this.registerDynamicGroup(
+          template.name,
+          [...this.staticKeys, ...template.requires.map((key) => keys.get(key) ?? key)],
+          keys.get(template.key),
+        ),
+      );
+    }
+    let finalization: Promise<TaskResourceResult> | undefined;
+    return Object.freeze({
+      acquire: <T>(
+        template: ExecutionResourceTemplate,
+        spec: ResourceSpec<T>,
+        signal: AbortSignal,
+        validate?: (value: T) => void,
+        check?: () => void,
+      ) => this.acquire(groups.get(template.key) as ResourceGroup, spec, signal, validate, check),
+      createRootTaskGroup: () => {
+        if (finalization) throw new Error("Execution resources are no longer admitting tasks.");
+        return this.registerDynamicGroup("execution task", [
+          ...this.staticKeys,
+          ...[...groups.values()].map((group) => group.key),
+        ]);
+      },
+      finalize: (context: CleanupContext) => {
+        finalization ??= this.finalizeGroups([...groups.values()], context);
+        return finalization;
+      },
     });
+  }
+
+  private registerDynamicGroup(
+    name: string,
+    requires: readonly symbol[],
+    key = Symbol(),
+  ): ResourceGroup {
+    const group = Object.freeze({ key, name, requires: Object.freeze([...requires]) });
     this.definitions.set(group.key, group);
     this.providerOrder.set(group.key, this.nextGroup++);
     this.taskGroups.set(group, { sealed: false });
@@ -94,17 +150,28 @@ export class ResourceJournal {
 
   finalizeGroup(group: ResourceGroup, context: CleanupContext): Promise<TaskResourceResult> {
     const state = this.taskGroups.get(group) as TaskGroup;
-    state.sealed = true;
-    state.finalization ??= Promise.resolve().then(async () => {
-      const resources = this.groupResources(group);
+    state.finalization ??= this.finalizeGroups([group], context);
+    return state.finalization;
+  }
+
+  private finalizeGroups(
+    groups: readonly ResourceGroup[],
+    context: CleanupContext,
+  ): Promise<TaskResourceResult> {
+    const selected = new Set(groups.map((group) => group.key));
+    for (const group of groups) this.sealGroup(group);
+    return Promise.resolve().then(async () => {
+      const resources = [...this.resources.values()].filter((resource) =>
+        selected.has(resource.group.key),
+      );
       const acquisitions = await Promise.all(
         resources.map((resource) => resource.acquisition as Promise<AcquisitionSettlement>),
       );
-      for (const resource of this.reverseResources(group))
+      for (const resource of this.reverseResources(selected))
         await this.hook(resource, "stop", context);
-      for (const resource of this.reverseResources(group))
+      for (const resource of this.reverseResources(selected))
         await this.hook(resource, "drain", context);
-      await this.flushAndClose(context, group);
+      await this.flushAndClose(context, selected);
       // A concurrent global sweep can already own an attempt; join its actual result too.
       await Promise.all(
         resources.flatMap((resource) =>
@@ -132,7 +199,7 @@ export class ResourceJournal {
       // The copied ledger outlives clean records; failed cleanup diagnostics live with the app.
       for (const [key, resource] of this.resources) {
         if (
-          resource.group === group &&
+          selected.has(resource.group.key) &&
           (resource.status === "released" || resource.status === "discharged")
         ) {
           this.resources.delete(key);
@@ -142,7 +209,6 @@ export class ResourceJournal {
       this.observer.changed();
       return result;
     });
-    return state.finalization;
   }
 
   acquire<T>(
@@ -272,7 +338,7 @@ export class ResourceJournal {
     return safe && !this.unsafe;
   }
 
-  async flushAndClose(context: CleanupContext, selected?: ResourceGroup): Promise<void> {
+  async flushAndClose(context: CleanupContext, selected?: ReadonlySet<symbol>): Promise<void> {
     let blocked = this.blockedGroups(selected);
     for (const resource of this.reverseResources(selected)) {
       if (!blocked.has(resource.group.key)) await this.hook(resource, "flush", context);
@@ -313,7 +379,7 @@ export class ResourceJournal {
     return [...this.resources.values()].filter((resource) => resource.group === group);
   }
 
-  private blockedGroups(selected?: ResourceGroup): Set<symbol> {
+  private blockedGroups(selected?: ReadonlySet<symbol>): Set<symbol> {
     const blocked = new Set<symbol>();
     for (const resource of this.resources.values()) {
       if (
@@ -325,7 +391,7 @@ export class ResourceJournal {
         this.blockDependencies(resource.group.key, blocked);
       } else if (
         selected &&
-        resource.group !== selected &&
+        !selected.has(resource.group.key) &&
         (resource.status === "acquired" || resource.status === "opening")
       ) {
         for (const dependency of resource.group.requires)
@@ -343,9 +409,9 @@ export class ResourceJournal {
     }
   }
 
-  private reverseResources(selected?: ResourceGroup): Resource[] {
+  private reverseResources(selected?: ReadonlySet<symbol>): Resource[] {
     return [...this.resources.values()]
-      .filter((resource) => !selected || resource.group === selected)
+      .filter((resource) => !selected || selected.has(resource.group.key))
       .sort(
         (left, right) =>
           (this.providerOrder.get(right.group.key) ?? 0) -

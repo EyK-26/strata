@@ -17,7 +17,7 @@ import {
 } from "@getstrata/core/contracts/token";
 import type { ResourceSpec } from "../contracts/application";
 import type { ServiceContainer } from "../contracts/container";
-import type { ResourceGroup, ResourceJournal } from "./resourceJournal";
+import type { ExecutionResourceTemplate, ResourceGroup, ResourceJournal } from "./resourceJournal";
 
 type ResourceAcquisition = Pick<ResourceJournal, "acquire">;
 
@@ -61,7 +61,6 @@ function declaration(input: unknown): ServiceDeclaration {
       return fail("INVALID_DECLARATION");
     }
     if (kind === "resource") {
-      if (lifetime !== "application") return fail("INVALID_LIFETIME");
       normalized = resourceService(typed, {
         lifetime,
         dependencies,
@@ -87,6 +86,7 @@ function dependencies(item: ServiceDeclaration): readonly AnyServiceToken[] {
 /** Definitions and order only. ServiceContainer owns every initialized value and promise. */
 interface ServiceGraph {
   readonly resourceGroups: readonly ResourceGroup[];
+  readonly executionResourceTemplates: readonly ExecutionResourceTemplate[];
   start(
     container: ServiceContainer,
     signal: AbortSignal,
@@ -96,6 +96,7 @@ interface ServiceGraph {
     container: ServiceContainer,
     signal: AbortSignal,
     checkpoint?: () => void,
+    acquisition?: ResourceAcquisition,
   ): Promise<void>;
 }
 
@@ -163,6 +164,7 @@ function compileServiceGraph(
   Object.freeze(ordered);
   const backing = new Map<symbol, readonly symbol[]>();
   const resourceGroups: ResourceGroup[] = [];
+  const executionResourceTemplates: ExecutionResourceTemplate[] = [];
   const resourceOwners = new Map<symbol, ResourceGroup>();
   for (const item of ordered) {
     const closure = new Set<symbol>();
@@ -175,13 +177,15 @@ function compileServiceGraph(
         name: serviceTokenName(item.token),
         requires: Object.freeze([...closure]),
       });
-      resourceGroups.push(group);
+      if (item.lifetime === "application") resourceGroups.push(group);
+      else executionResourceTemplates.push(group);
       resourceOwners.set(serviceTokenKey(item.token), group);
       closure.add(group.key);
     }
     backing.set(serviceTokenKey(item.token), Object.freeze([...closure]));
   }
   Object.freeze(resourceGroups);
+  Object.freeze(executionResourceTemplates);
   async function initialize(
     container: ServiceContainer,
     signal: AbortSignal,
@@ -189,6 +193,7 @@ function compileServiceGraph(
     checkpoint?: () => void,
     acquisition?: ResourceAcquisition,
   ): Promise<void> {
+    // Eager sequential initialization stops at the first rejection; stage accounting relies on it.
     for (const item of ordered) {
       if (lifetimes.get(serviceTokenKey(item.token)) !== lifetime) continue;
       checkpoint?.();
@@ -206,6 +211,7 @@ function compileServiceGraph(
             const value = (item.create as (...values: unknown[]) => unknown)(...values);
             if (item.kind !== "resource") return value;
             // Descriptor assembly may itself cancel startup. No new admission follows it.
+            checkpoint?.();
             if (signal.aborted) throw signal.reason;
             return (acquisition as ResourceAcquisition).acquire(
               resourceOwners.get(serviceTokenKey(item.token)) as ResourceGroup,
@@ -214,6 +220,7 @@ function compileServiceGraph(
               (payload) => {
                 valueService(token, payload);
               },
+              checkpoint,
             );
           },
           signal,
@@ -227,10 +234,15 @@ function compileServiceGraph(
   }
   return Object.freeze({
     resourceGroups,
+    executionResourceTemplates,
     start: (container: ServiceContainer, signal: AbortSignal, acquisition: ResourceAcquisition) =>
       initialize(container, signal, "application", undefined, acquisition),
-    startExecution: (container: ServiceContainer, signal: AbortSignal, checkpoint?: () => void) =>
-      initialize(container, signal, "execution", checkpoint),
+    startExecution: (
+      container: ServiceContainer,
+      signal: AbortSignal,
+      checkpoint?: () => void,
+      acquisition?: ResourceAcquisition,
+    ) => initialize(container, signal, "execution", checkpoint, acquisition),
   });
 }
 

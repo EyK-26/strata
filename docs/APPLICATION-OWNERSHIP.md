@@ -179,13 +179,44 @@ A failed flush is reported even when a subsequent successful close releases the
 resource. Resource names are diagnostic labels: duplicates are rejected within one
 owner, while separate owners may use the same name without sharing obligations.
 
-Managed service bindings currently support only the `application` lifetime.
-Callbacks can own task resources through `scope.acquire`, described below.
+Use `lifetime: "execution"` for a managed service whose handle belongs to one run.
+Callbacks can also own task resources through `scope.acquire`, described below.
+
+## Managed execution services
+
+Execution resource bindings use the same `resourceService` and explicit outcome
+protocol. They initialize eagerly in dependency order before the run's callback,
+once per run. All descendants share those initialized values. Concurrent runs and
+separate applications have distinct resource owners, even with identical labels.
+An application service cannot depend on an execution service through an alias or
+override. Execution resources can depend on application services and earlier
+execution services.
+
+The owner exists before initialization effects. If a later initializer fails, the
+callback is skipped and already acquired resources finish eligible cleanup before
+the run rejects. Initialization is sequential and stops at its first failure. An
+admitted acquisition failure is reported once from the journal; a pure factory,
+invalid descriptor or other initialization failure without a failed acquisition
+keeps its exact error. Internal propagation through initialization does not invent
+a callback-body failure. Multiple actual failures, including cleanup failures, use
+the same frozen owner aggregate as task failures; caller errors remain opaque.
+
+Binding resources outlive the actual callback subtree and its task cleanup. Their
+normal cleanup reason is `execution-complete`, using the application's cleanup
+signal. All selected bindings pass through stop, drain, flush and close phases in
+dependency order; shutdown shares each actual attempt. A pending open or hook keeps
+run completion pending even after a bounded stop result is delivered.
+
+A retained task keeps all its run's execution bindings and application backing
+alive. A binding's own unknown acquisition or failed close retains its dependencies;
+independent eligible bindings can close. Clean per-run history is retired, while
+unresolved ownership and cleanup failures remain observable. A failed run does not
+automatically stop the application or other runs.
 
 ## Explicit executions
 
-This checkpoint supports managed application services, ordinary execution values,
-and task-owned resources. Each
+This checkpoint supports managed application and execution services, ordinary
+execution values, and task-owned resources. Each
 `run()` creates a fresh child of the selected application's sealed service
 container. Typed dependencies fall back to that explicit parent; legacy string
 keys remain local. Execution factories and aliases initialize in dependency order,
@@ -268,11 +299,11 @@ available until actual body settlement, then expires. Cancellation and
 stop deadlines never release unfinished work from the application's cleanup barrier.
 Execution failures do not become startup failures or poison otherwise clean disposal.
 
-Execution factories must yield ordinary values. The owner makes no disposal claim
-for handles allocated inside them. Application resource bindings and provider
-acquisition provide application ownership; `scope.acquire` provides callback-tree
-ownership. Execution resource declarations and ambient context remain outside this
-checkpoint.
+Ordinary execution factories must yield values without an implied disposal claim.
+Use execution `resourceService` bindings for owned handles shared by the run, or
+`scope.acquire` for handles owned by one callback subtree. Application resource
+bindings and provider acquisition provide application ownership. Ambient resolution
+remains outside this checkpoint.
 
 ## Joined child callbacks
 
