@@ -42,12 +42,12 @@ function outcome<T>(result: Settlement<T>): ExecutionTaskOutcome<T> {
 }
 
 /** Joins actual bodies recursively; public subtree summaries never enter the ledger. */
-function runExecutionTasks<T>(
+function settleExecutionTasks<T>(
   work: Work<T>,
   check: () => void,
   createOperation: OperationFactory,
   resources: TaskResources,
-): Promise<T> {
+): Promise<Settlement<T>> {
   const node = <T>(
     body: Work<T>,
     resources: TaskResources,
@@ -102,12 +102,15 @@ function runExecutionTasks<T>(
   };
   const root = node(work, resources);
   root.invoke();
-  return root.settlement.then((result) => {
-    const observed = outcome(result);
-    if (observed.ok) return observed.value;
-    throw observed.error;
-  });
+  return root.settlement;
 }
 
-export type { TaskResources };
-export { runExecutionTasks };
+/** Build the public root observation only after all execution-owned cleanup is included. */
+function completeExecution<T>(result: Settlement<T>): T {
+  const observed = outcome(result);
+  if (observed.ok) return observed.value;
+  throw observed.error;
+}
+
+export type { Settlement, TaskResources };
+export { completeExecution, settleExecutionTasks };

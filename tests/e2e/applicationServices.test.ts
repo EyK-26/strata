@@ -94,6 +94,8 @@ test("clean installed services share canonical mixed-import tokens and pass exte
     assert.deepEqual(report.managedLifecycle, ["open", "stop", "drain", "flush", "close"]);
     assert.equal(report.mixedExecutionContextIdentity, true);
     assert.equal(report.executionFactories, 2);
+    assert.equal(report.executionResourceOpens, 2);
+    assert.deepEqual(report.executionResourceEvents, ["open", "close", "open", "close"]);
     assert.equal(report.joinedTasks, 2);
     assert.deepEqual(report.taskResourceEvents, [
       "root.open",

@@ -22,7 +22,12 @@ import type {
 } from "../contracts/application";
 import type { ServiceToken } from "../contracts/token";
 import { normalizeExecutionEnvelope, ownExecutionContext } from "./executionContext";
-import { runExecutionTasks, type TaskResources } from "./executionTasks";
+import {
+  completeExecution,
+  type Settlement,
+  settleExecutionTasks,
+  type TaskResources,
+} from "./executionTasks";
 import { type ResourceGroup, ResourceJournal } from "./resourceJournal";
 import { compileServiceGraph, type ServiceGraph } from "./serviceGraph";
 
@@ -326,14 +331,37 @@ class OwnedApplication implements Application {
       owner.check();
       const services = new ServiceContainer(this.services);
       services.set(CORE_EXECUTION_CONTEXT_TOKEN, context);
-      await this.definition.services.startExecution(services, context.signal, owner.check);
-      owner.check();
+      const executionResources = this.journal.createExecutionResources(
+        this.definition.services.executionResourceTemplates,
+      );
       const cleanupContext = Object.freeze({
         signal: this.cleanupCancellation.signal,
         reason: "task-complete",
       });
+      const bindingCleanupContext = Object.freeze({
+        signal: this.cleanupCancellation.signal,
+        reason: "execution-complete",
+      });
+      let initialization: { readonly ok: true } | { readonly ok: false; readonly error: unknown };
+      try {
+        await this.definition.services.startExecution(services, context.signal, owner.check, {
+          acquire: <T>(
+            template: ResourceGroup,
+            spec: ResourceSpec<T>,
+            signal: AbortSignal,
+            validate?: (value: T) => void,
+            check?: () => void,
+          ) => executionResources.acquire(template, spec, signal, validate, check),
+        });
+        owner.check();
+        initialization = { ok: true };
+      } catch (error) {
+        initialization = { ok: false, error };
+      }
       const taskResources = (parent?: ResourceGroup): TaskResources => {
-        const group = this.journal.createTaskGroup(parent);
+        const group = parent
+          ? this.journal.createTaskGroup(parent)
+          : executionResources.createRootTaskGroup();
         return Object.freeze({
           acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>) =>
             this.journal.acquire(group, spec, context.signal, assertServicePayload, owner.check),
@@ -342,48 +370,66 @@ class OwnedApplication implements Application {
           finalize: () => this.journal.finalizeGroup(group, cleanupContext),
         });
       };
-      return await runExecutionTasks(
-        work,
-        owner.check,
-        (body, spawn, resources) => {
-          let active = true;
-          const scope: CommandScope = Object.freeze({
-            applicationId: this.id,
-            config: this.definition.config,
-            context,
-            signal: context.signal,
-            resolve: <T>(token: ServiceToken<T>): T => {
-              if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
-              return services.resolve(token);
+      const callbacks: Settlement<T> = initialization.ok
+        ? await settleExecutionTasks(
+            work,
+            owner.check,
+            (body, spawn, resources) => {
+              let active = true;
+              const scope: CommandScope = Object.freeze({
+                applicationId: this.id,
+                config: this.definition.config,
+                context,
+                signal: context.signal,
+                resolve: <T>(token: ServiceToken<T>): T => {
+                  if (!active)
+                    throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+                  return services.resolve(token);
+                },
+                acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>): Promise<T> => {
+                  try {
+                    if (!active)
+                      throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+                    owner.check();
+                    return resources.acquire(spec);
+                  } catch (error) {
+                    return observed(Promise.reject(error));
+                  }
+                },
+                spawn: <T>(childWork: (scope: CommandScope) => T | Promise<T>) => {
+                  if (!active) {
+                    return observed(
+                      Promise.reject(
+                        new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id),
+                      ),
+                    );
+                  }
+                  return spawn(childWork);
+                },
+              });
+              return leasedOperation(
+                () => body(scope),
+                () => {
+                  active = false;
+                  resources.seal();
+                },
+              );
             },
-            acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>): Promise<T> => {
-              try {
-                if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
-                owner.check();
-                return resources.acquire(spec);
-              } catch (error) {
-                return observed(Promise.reject(error));
-              }
-            },
-            spawn: <T>(childWork: (scope: CommandScope) => T | Promise<T>) => {
-              if (!active) {
-                return observed(
-                  Promise.reject(new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id)),
-                );
-              }
-              return spawn(childWork);
-            },
-          });
-          return leasedOperation(
-            () => body(scope),
-            () => {
-              active = false;
-              resources.seal();
-            },
-          );
-        },
-        taskResources(),
-      );
+            taskResources(),
+          )
+        : { body: { ok: false, error: initialization.error }, failures: [] };
+      const bindings = await executionResources.finalize(bindingCleanupContext);
+      const failures: unknown[] = [];
+      // Initialization is sequential, one acquire per binding, stopping at first failure.
+      // Its propagated acquire rejection is already represented by the binding ledger.
+      // Parallel/recovering initialization would require a new provenance contract.
+      if (!initialization.ok && bindings.acquisitionFailures.length === 0) {
+        failures.push(initialization.error);
+      }
+      for (const failure of bindings.acquisitionFailures) failures.push(failure);
+      for (const failure of callbacks.failures) failures.push(failure);
+      for (const failure of bindings.cleanupFailures) failures.push(failure);
+      return completeExecution({ body: callbacks.body, failures });
     } finally {
       owner.dispose();
     }

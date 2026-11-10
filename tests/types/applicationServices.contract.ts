@@ -118,8 +118,18 @@ export function applicationServiceContracts(scope: CommandScope): void {
   // @ts-expect-error A validated input mapping is mandatory; ambient defaults are forbidden.
   parseApplicationConfig({}, () => ({}));
   resourceService(N, {
-    // @ts-expect-error Managed service lifetime is application-only.
     lifetime: "execution",
+    dependencies: [S, Settings],
+    create(text, config) {
+      const typed: string = text;
+      const port: number = config.port;
+      void [typed, port];
+      return managedSpec;
+    },
+  });
+  resourceService(N, {
+    // @ts-expect-error Resource lifetimes remain limited to application and execution.
+    lifetime: "task",
     dependencies: [],
     create: () => managedSpec,
   });

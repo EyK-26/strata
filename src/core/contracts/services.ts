@@ -43,7 +43,7 @@ interface FactoryServiceDeclaration extends DeclarationBrand {
 }
 
 interface ResourceServiceOptions<T, D extends readonly AnyServiceToken[]> {
-  readonly lifetime: "application";
+  readonly lifetime: ServiceLifetime;
   readonly dependencies: D;
   /** Assemble a resource-free descriptor; acquisition belongs in ResourceSpec.open. */
   readonly create: (...dependencies: DependencyValues<D>) => ResourceSpec<NoInfer<T>>;
@@ -52,7 +52,7 @@ interface ResourceServiceOptions<T, D extends readonly AnyServiceToken[]> {
 interface ResourceServiceDeclaration extends DeclarationBrand {
   readonly kind: "resource";
   readonly token: AnyServiceToken;
-  readonly lifetime: "application";
+  readonly lifetime: ServiceLifetime;
   readonly dependencies: readonly AnyServiceToken[];
   /** Erased assembly signature; callers use the typed resourceService helper. */
   readonly create: (...dependencies: never[]) => unknown;
@@ -149,8 +149,8 @@ function resourceService<T, const D extends readonly AnyServiceToken[]>(
   options: ResourceServiceOptions<T, D>,
 ): ResourceServiceDeclaration {
   assertServiceToken(token);
-  if (options.lifetime !== "application") {
-    throw new TypeError("Resource services support application lifetime only.");
+  if (options.lifetime !== "application" && options.lifetime !== "execution") {
+    throw new TypeError("Unsupported resource service lifetime declaration.");
   }
   if (!Array.isArray(options.dependencies) || typeof options.create !== "function") {
     throw new TypeError("Resource services must declare a dependency tuple and factory.");
@@ -159,7 +159,7 @@ function resourceService<T, const D extends readonly AnyServiceToken[]>(
   return declaration({
     kind: "resource",
     token,
-    lifetime: "application",
+    lifetime: options.lifetime,
     dependencies: Object.freeze([...options.dependencies]),
     create: options.create,
   });

@@ -144,6 +144,15 @@ const Scoped = Root.createServiceToken<{ context: Runtime.ExecutionContext; resu
 );
 const ContextAlias = Tokens.createServiceToken<Runtime.ExecutionContext>("context alias");
 let executionFactories = 0;
+const ExecutionResource = Tokens.createServiceToken<{ executionId: string }>(
+  "packed execution resource",
+);
+const ExecutionResourceAlias = Tokens.createServiceToken<{ executionId: string }>(
+  "packed execution alias",
+);
+const executionResourceEvents: string[] = [];
+const executionResourceOpened: object[] = [];
+const executionResourceClosed: object[] = [];
 assert.equal(Root.CORE_EXECUTION_CONTEXT_TOKEN, Execution.CORE_EXECUTION_CONTEXT_TOKEN);
 assert.equal(Runtime.CORE_EXECUTION_CONTEXT_TOKEN, Execution.CORE_EXECUTION_CONTEXT_TOKEN);
 const Managed = Tokens.createServiceToken<{ count: number }>("packed managed");
@@ -195,10 +204,35 @@ const app = createApplication({
     Services.aliasService(ManagedAlias, Managed),
     Root.valueService(first, 1),
     Root.aliasService(ContextAlias, Runtime.CORE_EXECUTION_CONTEXT_TOKEN),
+    Services.resourceService(ExecutionResource, {
+      lifetime: "execution",
+      dependencies: [Execution.CORE_EXECUTION_CONTEXT_TOKEN, Managed],
+      create(context, backing): Runtime.ResourceSpec<{ executionId: string }> {
+        assert.equal(backing, managedValue);
+        const handle = { executionId: context.executionId };
+        return {
+          name: "packed execution resource",
+          open() {
+            executionResourceOpened.push(handle);
+            executionResourceEvents.push("open");
+            return { ok: true, value: handle };
+          },
+          close(value, cleanup) {
+            assert.equal(value, handle);
+            assert.equal(cleanup.reason, "execution-complete");
+            assert.notEqual(cleanup.signal, context.signal);
+            executionResourceClosed.push(value);
+            executionResourceEvents.push("close");
+          },
+        };
+      },
+    }),
+    Root.aliasService(ExecutionResourceAlias, ExecutionResource),
     Services.service(Scoped, {
       lifetime: "execution",
-      dependencies: [Execution.CORE_EXECUTION_CONTEXT_TOKEN, Result],
-      create: async (context, result) => {
+      dependencies: [Execution.CORE_EXECUTION_CONTEXT_TOKEN, Result, ExecutionResourceAlias],
+      create: async (context, result, handle) => {
+        assert.equal(handle.executionId, context.executionId);
         executionFactories++;
         return { context, result };
       },
@@ -239,6 +273,8 @@ try {
   const contexts: Runtime.ExecutionContext[] = [];
   await app.run(async (scope) => {
     saved = scope;
+    const executionHandle = scope.resolve(ExecutionResourceAlias);
+    assert.equal(scope.resolve(ExecutionResource), executionHandle);
     await scope.acquire(packedTaskResource("root"));
     assert.equal(scope.resolve(ManagedAlias), managedValue);
     assert.equal(scope.resolve(Managed), managedValue);
@@ -251,6 +287,7 @@ try {
     contexts.push(scope.context);
     const childOutcome = await scope.spawn(async (child) => {
       assert.equal(child.context, scope.context);
+      assert.equal(child.resolve(ExecutionResourceAlias), executionHandle);
       assert.equal(child.resolve(Scoped), scope.resolve(Scoped));
       joinedTasks++;
       await child.acquire(packedTaskResource("child"));
@@ -281,6 +318,11 @@ try {
   });
   assert.throws(() => saved?.resolve(Result));
   assert.deepEqual(
+    executionResourceEvents,
+    ["open", "close"],
+    "packed execution binding cleanup precedes first run resolution",
+  );
+  assert.deepEqual(
     taskResourceEvents,
     ["root.open", "child.open", "child.close", "root.close"],
     "packed root cleanup precedes run resolution",
@@ -296,6 +338,14 @@ try {
     },
   );
   assert.notEqual(contexts[0], contexts[1]);
+  assert.equal(
+    new Set(executionResourceOpened).size,
+    2,
+    "packed runs own distinct execution resource instances",
+  );
+  assert.equal(executionResourceClosed.length, 2);
+  assert.deepEqual(new Set(executionResourceClosed), new Set(executionResourceOpened));
+  assert.deepEqual(executionResourceEvents, ["open", "close", "open", "close"]);
   assert.notEqual(contexts[0]?.executionId, contexts[1]?.executionId);
   assert.equal((await app.stop()).successful, true);
   assert.equal(managedOpens, 1, "packed aliases share one managed acquisition");
@@ -308,6 +358,8 @@ try {
       managedLifecycle,
       mixedExecutionContextIdentity: true,
       executionFactories,
+      executionResourceOpens: executionResourceOpened.length,
+      executionResourceEvents,
       joinedTasks,
       taskResourceEvents,
       mixedCacheIdentity: true,

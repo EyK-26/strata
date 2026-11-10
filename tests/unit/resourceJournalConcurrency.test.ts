@@ -357,3 +357,145 @@ test("journal rejects unregistered sealed and reflection-sealed owners before re
     );
   }
 });
+
+test("execution journal materializes fresh binding sets before effects and finalizes phases across the selection", async () => {
+  const { journal, signal, task } = fixture();
+  const baseline = journal.view();
+  const A = { key: Symbol("A template"), name: "same", requires: [] };
+  const B = { key: Symbol("B template"), name: "same", requires: [A.key] };
+  const execution = journal.createExecutionResources([A, B]);
+  assert.equal(Object.isFrozen(execution), true);
+  assert.equal(
+    journal.view().groupCount,
+    baseline.groupCount + 2,
+    "all concrete execution binding owners exist before descriptor or open effects",
+  );
+  assert.equal(journal.view().resourceCount, baseline.resourceCount);
+  const events: string[] = [];
+  const stopEntered = deferred();
+  const stopRelease = deferred();
+  await execution.acquire(A, resource("A", events, { name: "same" }), signal);
+  await execution.acquire(
+    B,
+    resource("B", events, {
+      name: "same",
+      async stop() {
+        events.push("B.stop");
+        stopEntered.resolve();
+        await stopRelease.promise;
+      },
+    }),
+    signal,
+  );
+  const root = execution.createRootTaskGroup();
+  journal.sealGroup(root);
+  await journal.finalizeGroup(root, task);
+  const context = Object.freeze({ signal, reason: "execution-complete" });
+  const finalization = execution.finalize(context);
+  assert.equal(
+    execution.finalize(context),
+    finalization,
+    "execution binding set caches one actual finalization promise",
+  );
+  assert.throws(() => execution.createRootTaskGroup(), /no longer admitting tasks/);
+  let extraOpens = 0;
+  await rejected(
+    execution.acquire(
+      A,
+      {
+        name: "after seal",
+        open() {
+          extraOpens++;
+          return { ok: true, value: "late" };
+        },
+        close() {},
+      },
+      signal,
+    ),
+  );
+  try {
+    await bounded(stopEntered.promise);
+    await pending(finalization);
+    assert.equal(
+      events.some((event) => /\.(drain|flush|close)$/.test(event)),
+      false,
+      "execution selection cannot advance while any stop is actually pending",
+    );
+  } finally {
+    stopRelease.resolve();
+  }
+  const result = await bounded(finalization);
+  assert.equal(
+    extraOpens,
+    0,
+    "execution selection seals admission synchronously before cleanup hooks",
+  );
+  assert.deepEqual(result.acquisitionFailures, []);
+  assert.deepEqual(result.cleanupFailures, []);
+  assert.equal(result.retained, false);
+  assert.deepEqual(
+    events,
+    [
+      "A.open",
+      "B.open",
+      "B.stop",
+      "A.stop",
+      "B.drain",
+      "A.drain",
+      "B.flush",
+      "A.flush",
+      "B.close",
+      "A.close",
+    ],
+    "execution set finalization runs whole-selection phases instead of per-binding lifecycles",
+  );
+  assert.equal(journal.view().groupCount, baseline.groupCount);
+  assert.equal(journal.view().resourceCount, baseline.resourceCount);
+});
+
+test("execution journal prunes clean binding metadata and discharged initialization diagnostics", async () => {
+  const { journal, diagnostics, signal, task } = fixture();
+  const baseline = journal.view();
+  const template = { key: Symbol("stable template"), name: "same", requires: [] };
+  const context = Object.freeze({ signal, reason: "execution-complete" });
+  for (let index = 0; index < 32; index++) {
+    const execution = journal.createExecutionResources([template]);
+    await execution.acquire(template, resource("same", []), signal);
+    const root = execution.createRootTaskGroup();
+    journal.sealGroup(root);
+    await journal.finalizeGroup(root, task);
+    await execution.finalize(context);
+  }
+  assert.equal(
+    journal.view().groupCount,
+    baseline.groupCount,
+    "successful runs retire execution template instantiations to static baseline",
+  );
+  assert.equal(journal.view().taskGroupCount, baseline.taskGroupCount);
+  assert.equal(journal.view().resourceCount, baseline.resourceCount);
+  const failed = journal.createExecutionResources([template]);
+  assert.equal(
+    await rejected(
+      failed.acquire(
+        template,
+        {
+          name: "failed",
+          open: () => ({ ok: false, error: undefined, disposition: "not-acquired" }),
+          close() {},
+        },
+        signal,
+      ),
+    ),
+    undefined,
+  );
+  const result = await failed.finalize(context);
+  assert.deepEqual(result.acquisitionFailures, [undefined]);
+  assert.deepEqual(result.cleanupFailures, []);
+  assert.deepEqual(
+    diagnostics,
+    [],
+    "discharged execution initialization errors do not accumulate application history",
+  );
+  assert.equal(journal.view().groupCount, baseline.groupCount);
+  assert.equal(journal.view().resourceCount, baseline.resourceCount);
+});

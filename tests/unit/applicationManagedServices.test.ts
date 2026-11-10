@@ -226,14 +226,14 @@ test("managed graphs reject final captive alias paths and unsupported lifetimes 
   assert.throws(
     () =>
       resourceService(A, {
-        lifetime: "execution" as never,
+        lifetime: "task" as never,
         dependencies: [],
         create() {
           effects++;
           return resource("A", []);
         },
       }),
-    /application lifetime only/,
+    /Unsupported resource service lifetime declaration/,
   );
   assert.equal(effects, 0, "managed graph failures happen before every effect");
 });
@@ -834,7 +834,8 @@ test("managed helper authenticity and malformed graphs reject before descriptor 
   assert.equal(Object.isFrozen(declaration.dependencies), true);
   for (const [declarations, code] of [
     [[{ ...declaration }], "SERVICE_GRAPH_INVALID_DECLARATION"],
-    [[{ ...declaration, lifetime: "execution" }], "SERVICE_GRAPH_INVALID_LIFETIME"],
+    [[{ ...declaration, lifetime: "task" }], "SERVICE_GRAPH_INVALID_LIFETIME"],
+    [[{ ...declaration, lifetime: "execution" }], "SERVICE_GRAPH_INVALID_DECLARATION"],
     [
       [resourceService(A, { lifetime: "application", dependencies: [Missing], create })],
       "SERVICE_GRAPH_MISSING_DEPENDENCY",
