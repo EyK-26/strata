@@ -114,6 +114,7 @@ export type {
   ExecutionActor,
   ExecutionContext,
   ExecutionEnvelope,
+  ExecutionTaskOutcome,
 } from "../core/contracts/application";
 export type { ServiceProvider } from "../core/contracts/di.ts";
 export { resolveService } from "../core/contracts/di.ts";

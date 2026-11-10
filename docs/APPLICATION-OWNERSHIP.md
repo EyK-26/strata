@@ -42,10 +42,12 @@ after their internal cleanup actually succeeds.
 
 Stop closes admission, stops producers, waits for active setup and producer stop
 convergence, then drains providers. It waits for admitted execution initialization
-and callbacks to settle before flushing and closing resources in dependency order. A failed stop/drain or
-unknown acquisition retains the resources whose safe release cannot be proven.
+and entire admitted callback trees to settle before flushing and closing resources
+in dependency order. A failed stop/drain or unknown acquisition retains the
+resources whose safe release cannot be proven.
 An abort signal or elapsed timeout does not prove that an operation stopped.
-Callbacks must not await their own containing start/stop/run operation.
+Callbacks must not await their own containing start/run/spawn operation or application
+stop/completion; arbitrary promise cycles are not detected.
 
 `start()` shares a promise while starting or ready. Once stopping begins, new
 calls return a cached rejection: instances cannot restart. Previously obtained
@@ -214,16 +216,63 @@ change a settled context's signal.
 Cancellation before callback admission skips remaining factories and the callback.
 An already admitted factory remains owned until its actual promise settles. A late
 successful factory cannot publish readiness after cancellation; an actual factory
-rejection preserves its original error. Once the callback is invoked, its actual
-success or rejection determines the run result even after cancellation. Its resolver
-stays available until actual callback settlement, then expires. Cancellation and
+rejection preserves its original error. Once a callback is invoked, its actual
+success or rejection is retained even after cancellation. Its resolver stays
+available until actual body settlement, then expires. Cancellation and
 stop deadlines never release unfinished work from the application's cleanup barrier.
 Execution failures do not become startup failures or poison otherwise clean disposal.
 
 Execution factories must yield ordinary values. The owner makes no disposal claim
 for handles allocated inside them. Provider acquisition remains the resource
-ownership API described above. Execution resource declarations, task acquisition,
-spawn and ambient context are outside this checkpoint.
+ownership API described above. Execution resource declarations, task acquisition
+and ambient context are outside this checkpoint.
+
+## Joined child callbacks
+
+`scope.spawn(work)` admits resource-free child work in the same execution. Children
+share the existing container, context, signal, configuration and initialized service
+values; no factory runs again and no authority is added. The callback is scheduled
+after `spawn` returns. Each frozen scope has its own resolver and spawn lease,
+which expires when that body's actual return value or promise settles. A live
+child can admit grandchildren after its parent's lease has expired.
+
+```ts
+const result = await app.run(async (scope) => {
+  const child = await scope.spawn((childScope) => childScope.resolve(Correlation));
+  if (child.ok) return child.value;
+  return "fallback";
+});
+```
+
+An admitted child's promise fulfills with a shallow frozen
+`ExecutionTaskOutcome<T>`: `{ ok: true, value }` after a successful subtree, or
+`{ ok: false, error }` after a failed subtree. It settles only after the actual
+body and all descendants finish. Ignoring, catching or returning this outcome
+does not recover a failure; recovery must occur inside the failing callback.
+Thus the example's fallback cannot make a failed child into a successful run.
+
+Each own-body failure occurs once in recursive admission-tree preorder, independent
+of settlement order. A single failure rejects `run` with its exact opaque payload,
+including `undefined`, `false` or `0`. Multiple failures produce a fresh native
+`AggregateError` with message `Execution task failures.` and the first occurrence
+as `cause`. Only the owner-created aggregate and its copied `errors` array are
+frozen. Caller values and errors retain identity and mutability; caller aggregates
+are opaque. Explicitly throwing a child's observed error adds a new body failure,
+so throwing the summary of two child failures produces three occurrences.
+
+Expired scope, malformed callback, cancellation or deadline rejection at the spawn
+call creates an observed rejected promise without admitting a child. Cancellation
+between admission and scheduled invocation skips that child's body and records
+its exact reason as one failure. Cancellation does not automatically end active
+bodies, and body failure does not cancel siblings. Resolve access remains available
+until actual body settlement; new spawn calls check cancellation and wall time.
+
+The root run and application cleanup barrier join every admitted descendant,
+including ignored children and grandchildren. Producer stop and drain precede the
+join; backing flush and close follow it. A stop deadline may expire while actual
+completion remains pending. Execution signal listeners and deadline timer stay
+owned until the whole tree settles, even if the root body fails first, and are
+then disposed once.
 
 ## Migration boundary
 
@@ -280,8 +329,8 @@ retention. The application owner retains admission, callback leases, startup and
 barriers, cancellation, deadlines and outcome publication. Cleanup still stops producers,
 drains resources, joins admitted commands, flushes eligible resources and then closes them.
 Within each provider, reservation order determines reverse cleanup order even when opens
-finish in a different order. Execution initialization and callback settlement share the
-application's admitted-work barrier.
+finish in a different order. Execution initialization and entire callback-tree
+settlement share the application's admitted-work barrier.
 
 The remaining legacy owners, string keys and consumers are enumerated in
 [the migration ledger](architecture/m21-legacy-callers.txt). Their continued

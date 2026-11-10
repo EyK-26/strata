@@ -131,6 +131,11 @@ type ExecutionContext = ExecutionEnvelope & {
   readonly signal: AbortSignal;
 };
 
+/** A child observation settles after its body and all admitted descendants. */
+type ExecutionTaskOutcome<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: unknown };
+
 interface CommandScope {
   readonly context: ExecutionContext;
   readonly applicationId: string;
@@ -138,6 +143,10 @@ interface CommandScope {
   readonly signal: AbortSignal;
   /** Composition-only access; expires with this admitted callback, not an execution resource scope. */
   resolve<T>(token: ServiceToken<T>): T;
+  /** Joined resource-free work in this execution; observation does not recover failures. */
+  readonly spawn: <T>(
+    work: (scope: CommandScope) => T | Promise<T>,
+  ) => Promise<ExecutionTaskOutcome<T>>;
 }
 
 interface Application {
@@ -169,6 +178,7 @@ export type {
   ExecutionActor,
   ExecutionContext,
   ExecutionEnvelope,
+  ExecutionTaskOutcome,
   OpenOutcome,
   ProviderDefinition,
   ProviderScope,
