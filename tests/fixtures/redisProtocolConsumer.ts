@@ -118,10 +118,22 @@ try {
   assert.equal(await streams.cancel(jobId), false);
 
   cacheA = new CacheRepository(
-    createCacheStore({ driver: "redis", redisUrl: url, ttlMs: 60_000, maxEntries: 10 }),
+    createCacheStore({
+      driver: "redis",
+      redisUrl: url,
+      ttlMs: 60_000,
+      maxEntries: 10,
+      namespace: `${scope}:cache:v3:`,
+    }),
   );
   cacheB = new CacheRepository(
-    createCacheStore({ driver: "redis", redisUrl: url, ttlMs: 60_000, maxEntries: 10 }),
+    createCacheStore({
+      driver: "redis",
+      redisUrl: url,
+      ttlMs: 60_000,
+      maxEntries: 10,
+      namespace: `${scope}:cache:v3:`,
+    }),
   );
   let fills = 0;
   assert.deepEqual(

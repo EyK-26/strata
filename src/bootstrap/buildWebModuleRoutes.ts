@@ -1,6 +1,6 @@
-import { createCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
+import { createLegacyCachedJson } from "./legacyCache";
 import { applyModuleRouteMiddleware } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
 import { registerOpenApiRouteMap } from "./routeMetadata";
@@ -23,7 +23,7 @@ function buildWebModuleRoutes(
   }
 
   const kernel = createHttpKernel(dependencies);
-  const cachedJson = createCachedJson(dependencies);
+  const cachedJson = createLegacyCachedJson(dependencies);
   const middleware = kernel.globalMiddleware("web");
   const moduleRoutes: Record<string, unknown> = { ...seedRoutes };
 

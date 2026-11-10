@@ -1,3 +1,5 @@
+import type { CacheLike } from "../../types/services";
+import type { ExecutionOperations } from "../contracts/executionOperations";
 import type { CacheStore } from "./store";
 import TaggedCache from "./taggedCache";
 
@@ -57,5 +59,40 @@ class CacheRepository {
   }
 }
 
-export { CacheRepository };
+/** Scoped authority delegates to the existing backend; the kernel owns actual work. */
+function createGuardedCache(backend: CacheRepository, operations: ExecutionOperations): CacheLike {
+  const remember: CacheLike["remember"] = (key, loader, ttlMs) =>
+    operations.operation(() =>
+      backend.remember(key, (signal) => operations.operation(() => loader(signal)), ttlMs),
+    );
+  const forget: CacheLike["forget"] = (key) => operations.operation(() => backend.forget(key));
+  const flush: CacheLike["flush"] = () => operations.operation(() => backend.flush());
+  return Object.freeze({
+    get: <T>(key: string) => operations.operation(() => backend.get<T>(key)),
+    remember,
+    forget,
+    flush,
+    tags: (...names: string[]) => {
+      operations.assertActive();
+      const tags = [...names];
+      return Object.freeze({
+        remember: <T>(key: string, loader: (signal?: AbortSignal) => Promise<T>, ttlMs?: number) =>
+          operations.operation(() =>
+            backend
+              .tags(...tags)
+              .remember(key, (signal) => operations.operation(() => loader(signal)), ttlMs),
+          ),
+        flush: () => operations.operation(() => backend.tags(...tags).flush()),
+      });
+    },
+    getOrSet: remember,
+    invalidate: forget,
+    invalidateByPrefix: (prefix: string) =>
+      operations.operation(() => backend.invalidateByPrefix(prefix)),
+    clear: flush,
+    size: () => operations.operation(() => backend.size()),
+  });
+}
+
+export { CacheRepository, createGuardedCache };
 export default CacheRepository;

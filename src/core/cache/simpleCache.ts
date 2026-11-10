@@ -4,6 +4,15 @@ type CacheEntry<T> = {
   lastAccessedAt: number;
 };
 
+function validateSimpleCacheOptions(ttlMs: number, maxEntries: number): void {
+  if (!Number.isFinite(ttlMs) || ttlMs < 0) {
+    throw new RangeError("ttlMs must be a non-negative number.");
+  }
+  if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+    throw new RangeError("maxEntries must be a positive integer.");
+  }
+}
+
 class SimpleCache {
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private readonly inflight = new Map<string, Promise<unknown>>();
@@ -14,13 +23,7 @@ class SimpleCache {
     private readonly ttlMs: number = 3_600_000,
     private readonly maxEntries: number = 100,
   ) {
-    if (!Number.isFinite(ttlMs) || ttlMs < 0) {
-      throw new RangeError("ttlMs must be a non-negative number.");
-    }
-
-    if (!Number.isInteger(maxEntries) || maxEntries < 1) {
-      throw new RangeError("maxEntries must be a positive integer.");
-    }
+    validateSimpleCacheOptions(ttlMs, maxEntries);
   }
 
   get<T>(key: string): T | undefined {
@@ -243,5 +246,5 @@ class SimpleCache {
   }
 }
 
-export { SimpleCache };
+export { SimpleCache, validateSimpleCacheOptions };
 export default SimpleCache;

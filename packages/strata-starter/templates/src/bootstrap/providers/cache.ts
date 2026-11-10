@@ -6,6 +6,7 @@ import type { ServiceProvider } from "@getstrata/core/contracts/di";
 const cacheProvider: ServiceProvider = {
   name: "starter.cache",
   register({ container, config, dependencies, onCleanup }) {
+    const namespace = `${process.env.APP_KEY_PREFIX?.trim() || "strata"}:cache:v3:`;
     container.singleton(CORE_CACHE_TOKEN, () => {
       const ttlMs = config.get<number>("cache.ttlMs") ?? 3_600_000;
       const maxEntries = config.get<number>("cache.maxEntries") ?? 100;
@@ -17,6 +18,7 @@ const cacheProvider: ServiceProvider = {
           ttlMs,
           maxEntries,
           redisUrl: process.env.REDIS_URL,
+          namespace,
         }),
       );
       onCleanup(() => cache.close());

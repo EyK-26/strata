@@ -1,5 +1,10 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { ServiceContainer } from "@getstrata/core/contracts/container";
 import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";
+import {
+  CORE_EXECUTION_OPERATIONS_TOKEN,
+  type ExecutionOperations,
+} from "@getstrata/core/contracts/executionOperations";
 import { assertServicePayload, type NonPromisePayload } from "@getstrata/core/contracts/services";
 import { copyApplicationConfig } from "../config/configSnapshot";
 import type {
@@ -14,6 +19,7 @@ import type {
   CleanupDisposition,
   CommandScope,
   CompletionResult,
+  ExecutionContext,
   ExecutionEnvelope,
   ProviderDefinition,
   ProviderScope,
@@ -43,6 +49,12 @@ type Definition = {
   shutdownTimeoutMs: number;
   startupCleanupTimeoutMs: number;
   services: ServiceGraph;
+};
+type TaskFrame = {
+  readonly application: object;
+  readonly context: ExecutionContext;
+  readonly lease: { active: boolean };
+  readonly operation: ExecutionOperations["operation"];
 };
 
 function deferred<T>(): Deferred<T> {
@@ -193,6 +205,7 @@ class ApplicationStateError extends Error {
 }
 
 class OwnedApplication implements Application {
+  private readonly taskStorage = new AsyncLocalStorage<TaskFrame | undefined>();
   readonly id = crypto.randomUUID();
   readonly completion: Promise<CompletionResult>;
   private readonly completed = deferred<CompletionResult>();
@@ -272,12 +285,14 @@ class OwnedApplication implements Application {
     this.startupRunning = true;
     this.publish();
     // The promise and state already exist when synchronous or reentrant user work runs.
-    void Promise.resolve().then(() => this.startProviders());
+    void Promise.resolve().then(() => this.taskStorage.run(undefined, () => this.startProviders()));
     return this.startup.promise;
   }
 
   stop(options: { readonly reason?: string } = {}): Promise<StopResult> {
-    return this.beginStop(options.reason ?? "shutdown", this.definition.shutdownTimeoutMs);
+    return this.taskStorage.run(undefined, () =>
+      this.beginStop(options.reason ?? "shutdown", this.definition.shutdownTimeoutMs),
+    );
   }
 
   run<T>(work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
@@ -286,36 +301,40 @@ class OwnedApplication implements Application {
     input: ExecutionEnvelope | ((scope: CommandScope) => T | Promise<T>),
     callback?: (scope: CommandScope) => T | Promise<T>,
   ): Promise<T> {
-    if (this.phase !== "ready") {
-      return observed(Promise.reject(new ApplicationStateError("APPLICATION_NOT_READY", this.id)));
-    }
-    let envelope: ExecutionEnvelope;
-    let work: (scope: CommandScope) => T | Promise<T>;
-    try {
-      const candidate = typeof input === "function" && callback === undefined ? input : callback;
-      if (typeof candidate !== "function")
-        throw new TypeError("Execution callback must be a function.");
-      work = candidate;
-      envelope = normalizeExecutionEnvelope(
-        typeof input === "function" && callback === undefined ? { kind: "command" } : input,
-      );
-      // Reflection during normalization can synchronously reenter application.stop().
-      if (this.phase !== "ready" || this.cancellation.signal.aborted) {
-        throw new ApplicationStateError("APPLICATION_NOT_READY", this.id);
+    return this.taskStorage.run(undefined, () => {
+      if (this.phase !== "ready") {
+        return observed(
+          Promise.reject(new ApplicationStateError("APPLICATION_NOT_READY", this.id)),
+        );
       }
-    } catch (error) {
-      return observed(Promise.reject(error));
-    }
-    const result = deferred<T>();
-    observed(result.promise);
-    // Reserve the entire initialization and callback attempt before any user factory runs.
-    this.commands.add(result.promise);
-    void result.promise.then(
-      () => this.commandSettled(result.promise),
-      () => this.commandSettled(result.promise),
-    );
-    void this.execute(envelope, work).then(result.resolve, result.reject);
-    return result.promise;
+      let envelope: ExecutionEnvelope;
+      let work: (scope: CommandScope) => T | Promise<T>;
+      try {
+        const candidate = typeof input === "function" && callback === undefined ? input : callback;
+        if (typeof candidate !== "function")
+          throw new TypeError("Execution callback must be a function.");
+        work = candidate;
+        envelope = normalizeExecutionEnvelope(
+          typeof input === "function" && callback === undefined ? { kind: "command" } : input,
+        );
+        // Reflection during normalization can synchronously reenter application.stop().
+        if (this.phase !== "ready" || this.cancellation.signal.aborted) {
+          throw new ApplicationStateError("APPLICATION_NOT_READY", this.id);
+        }
+      } catch (error) {
+        return observed(Promise.reject(error));
+      }
+      const result = deferred<T>();
+      observed(result.promise);
+      // Reserve the entire initialization and callback attempt before any user factory runs.
+      this.commands.add(result.promise);
+      void result.promise.then(
+        () => this.commandSettled(result.promise),
+        () => this.commandSettled(result.promise),
+      );
+      void this.execute(envelope, work).then(result.resolve, result.reject);
+      return result.promise;
+    });
   }
 
   private async execute<T>(
@@ -331,6 +350,32 @@ class OwnedApplication implements Application {
       owner.check();
       const services = new ServiceContainer(this.services);
       services.set(CORE_EXECUTION_CONTEXT_TOKEN, context);
+      const activeFrame = (): TaskFrame => {
+        const frame = this.taskStorage.getStore();
+        if (
+          !frame ||
+          frame.application !== this ||
+          frame.context !== context ||
+          !frame.lease.active
+        ) {
+          throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+        }
+        owner.check();
+        return frame;
+      };
+      const operations: ExecutionOperations = Object.freeze({
+        assertActive: () => {
+          activeFrame();
+        },
+        operation: <T>(work: () => T | Promise<T>): Promise<T> => {
+          try {
+            return activeFrame().operation(work);
+          } catch (error) {
+            return observed(Promise.reject(error));
+          }
+        },
+      });
+      services.set(CORE_EXECUTION_OPERATIONS_TOKEN, operations);
       const executionResources = this.journal.createExecutionResources(
         this.definition.services.executionResourceTemplates,
       );
@@ -367,28 +412,37 @@ class OwnedApplication implements Application {
             this.journal.acquire(group, spec, context.signal, assertServicePayload, owner.check),
           child: () => taskResources(group),
           seal: () => this.journal.sealGroup(group),
-          finalize: () => this.journal.finalizeGroup(group, cleanupContext),
+          finalize: () =>
+            this.taskStorage.run(undefined, () =>
+              this.journal.finalizeGroup(group, cleanupContext),
+            ),
         });
       };
       const callbacks: Settlement<T> = initialization.ok
         ? await settleExecutionTasks(
             work,
             owner.check,
-            (body, spawn, resources) => {
-              let active = true;
+            (body, spawn, resources, operation) => {
+              const lease = { active: true };
+              const frame: TaskFrame = Object.freeze({
+                application: this,
+                context,
+                lease,
+                operation,
+              });
               const scope: CommandScope = Object.freeze({
                 applicationId: this.id,
                 config: this.definition.config,
                 context,
                 signal: context.signal,
                 resolve: <T>(token: ServiceToken<T>): T => {
-                  if (!active)
+                  if (!lease.active)
                     throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
                   return services.resolve(token);
                 },
                 acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>): Promise<T> => {
                   try {
-                    if (!active)
+                    if (!lease.active)
                       throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
                     owner.check();
                     return resources.acquire(spec);
@@ -397,7 +451,7 @@ class OwnedApplication implements Application {
                   }
                 },
                 spawn: <T>(childWork: (scope: CommandScope) => T | Promise<T>) => {
-                  if (!active) {
+                  if (!lease.active) {
                     return observed(
                       Promise.reject(
                         new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id),
@@ -407,18 +461,26 @@ class OwnedApplication implements Application {
                   return spawn(childWork);
                 },
               });
-              return leasedOperation(
+              const bodyOperation = leasedOperation(
                 () => body(scope),
                 () => {
-                  active = false;
+                  lease.active = false;
                   resources.seal();
                 },
               );
+              return {
+                promise: bodyOperation.promise,
+                // Include reflection and native thenable assimilation, not only body(scope).
+                invoke: () => this.taskStorage.run(frame, bodyOperation.invoke),
+              };
             },
             taskResources(),
+            (work) => this.taskStorage.run(undefined, work),
           )
         : { body: { ok: false, error: initialization.error }, failures: [] };
-      const bindings = await executionResources.finalize(bindingCleanupContext);
+      const bindings = await this.taskStorage.run(undefined, () =>
+        executionResources.finalize(bindingCleanupContext),
+      );
       const failures: unknown[] = [];
       // Initialization is sequential, one acquire per binding, stopping at first failure.
       // Its propagated acquire rejection is already represented by the binding ledger.
@@ -520,7 +582,9 @@ class OwnedApplication implements Application {
       this.rejectStartup();
     }, timeoutMs);
     // Cache stop and schedule its owner before abort listeners can reenter the handle.
-    void Promise.resolve().then(() => this.finishCleanup(context));
+    void Promise.resolve().then(() =>
+      this.taskStorage.run(undefined, () => this.finishCleanup(context)),
+    );
     this.cancellation.abort(this.cancelled);
     return this.stopping.promise;
   }

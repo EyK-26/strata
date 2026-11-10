@@ -417,6 +417,82 @@ Cleanup failures remain in application diagnostics even if close later succeeds.
 Successful dynamic history is retired after its result is transferred; unresolved
 ownership and cleanup-failure history remain proportional to actual failed work.
 
+## Owned cache operations
+
+The canonical cache provider declares one application backend and an execution-bound
+facade. Configuration is copied and validated before startup. The namespace is the
+full Redis namespace, used byte for byte; equal namespaces deliberately share data.
+Neither the driver nor the response helper reads environment policy during a call.
+
+```ts
+import { createCacheBindings } from "@getstrata/bootstrap/providers/cache";
+import { createCachedJson } from "@getstrata/bootstrap/cachedJson";
+import { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";
+import { createApplication } from "@getstrata/core/runtime/application";
+
+const app = createApplication({
+  services: createCacheBindings({
+    driver: "array",
+    namespace: "reports:cache:v3:",
+    ttlMs: 60_000,
+    maxEntries: 100,
+  }),
+});
+await app.start();
+try {
+  const response = await app.run(async (scope) => {
+    const json = createCachedJson(scope.resolve(CORE_CACHE_TOKEN), { etagEnabled: true });
+    return await json("report", async () => ({ count: 3 }), ["reports"],
+      new Request("https://example.test/report"));
+  });
+  await response.json();
+} finally {
+  await app.stop();
+}
+```
+
+Each asynchronous facade call reserves an operation in the existing task tree before
+backend work begins. Only an elected loader reserves another actual body; hits and
+deduplicated waiters do not invent loaders. A store timeout can reject the public
+waiter while an uncooperative loader continues. Its actual work and descendants keep
+execution resources alive, and the application backend closes only after drainage.
+Clearing a cache still fences stale publication independently of this ownership.
+
+The reserved `CORE_EXECUTION_OPERATIONS_TOKEN` supplies only `assertActive()` and
+`operation(work)`. A call uses the current active body in its bound execution. The
+operation promise reports that body's value or error; the execution separately joins
+its complete subtree and cleanup. An ordinary loader/store error can be caught and
+recovered. Admitted acquisition failures, cleanup failures, strict spawned-task
+failures and an admitted operation skipped by cancellation remain execution failures.
+Public cache waiters are observed internally without changing caller-visible errors.
+Consumer helpers such as `cachedJson` return ordinary promises that callers must await
+or handle. An already published cache value is not rolled back if later cleanup fails.
+
+Saved facades reject outside their active execution, after their invoking body lease
+expires, or under another run of the same application. An active child can use a
+facade or tag object created by its root after that root returns. This does not renew
+captured root `resolve`, `acquire` or `spawn` methods, or transfer arbitrary foreign
+resource references. The low-level repository/store constructors are infrastructure
+APIs and do not provide the guarded facade's execution ownership by themselves.
+
+Async propagation belongs to each application. A deliberately passed A capability
+used while B is nested inside a still-active A body remains A-owned, including during
+B initialization or cleanup; it never adopts B's actor. Independent B execution has
+no such A authority. Graph initializers, engine orchestration and cleanup clear their
+own application's frame. A task resource's `open` runs with its calling body's
+authority while that body is active. There is no global innermost-application lookup.
+
+Same-key recursive fills and callbacks awaiting their own containing run can still
+form wait cycles. Clean journal records retire, but the task tree can retain settled
+child entries until its root settles. Neither arbitrary cycle detection nor fixed
+memory for an indefinitely active execution is promised.
+
+The existing provider and helper now use these contracts. `bootstrap/legacyCache.ts`
+temporarily adapts the old provider graph and route builders, snapshotting their
+environment inputs at composition. It has no public subpath and must be removed with
+M4/M5 composition changes. Generated starter composition still migrates in M5/M6;
+its existing cache template now passes an explicit namespace.
+
 ## Migration boundary
 
 The new owner never delegates to the existing global owners. The CLI's direct-child
@@ -464,7 +540,7 @@ auth/ORM isolation, the full starter matrix or a release.
 owner, its private resource journal, service composition, token contracts and configuration modules. It is also
 part of `check:module-imports` and the existing validation gate. Contract-only
 modules must erase completely; runtime edges are limited to the declared neutral
-modules. Eight canonical standalone public artifacts have separate built-import checks. Ambient resource names are conservatively reserved even
+modules. Nine canonical standalone public artifacts have separate built-import checks. Ambient resource names are conservatively reserved even
 for local bindings. This is a maintenance rule, not a sandbox for hostile code.
 
 The private resource journal holds acquisition records, captured hooks and dependency

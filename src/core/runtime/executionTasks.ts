@@ -1,4 +1,5 @@
 import type { CommandScope, ExecutionTaskOutcome } from "../contracts/application";
+import type { ExecutionOperations } from "../contracts/executionOperations";
 
 type Work<T> = (scope: CommandScope) => T | Promise<T>;
 type Operation<T> = { readonly promise: Promise<T>; invoke(): void };
@@ -17,6 +18,7 @@ type OperationFactory = <T>(
   work: Work<T>,
   spawn: CommandScope["spawn"],
   resources: TaskResources,
+  operation: ExecutionOperations["operation"],
 ) => Operation<T>;
 type BodyOutcome<T> =
   | { readonly ok: true; readonly value: T }
@@ -41,48 +43,72 @@ function outcome<T>(result: Settlement<T>): ExecutionTaskOutcome<T> {
   return Object.freeze({ ok: false, error: summary(result.failures) });
 }
 
+function rejected<T>(error: unknown): Promise<T> {
+  const promise = Promise.reject<T>(error);
+  void promise.catch(() => {});
+  return promise;
+}
+
 /** Joins actual bodies recursively; public subtree summaries never enter the ledger. */
 function settleExecutionTasks<T>(
   work: Work<T>,
   check: () => void,
   createOperation: OperationFactory,
   resources: TaskResources,
+  blank: <T>(work: () => T) => T,
 ): Promise<Settlement<T>> {
   const node = <T>(
     body: Work<T>,
     resources: TaskResources,
+    mode: "strict" | "operation",
   ): {
+    body: Promise<T>;
     settlement: Promise<Settlement<T>>;
     invoke(): void;
   } => {
     const children: Promise<Settlement<unknown>>[] = [];
+    const launch = <T>(childWork: Work<T>, mode: "strict" | "operation") => {
+      if (typeof childWork !== "function") {
+        throw new TypeError("Execution task callback must be a function.");
+      }
+      check();
+      // Engine callbacks must not inherit an active same-app parent body frame.
+      return blank(() => {
+        const child = node(childWork, resources.child(), mode);
+        children.push(child.settlement);
+        // Register ownership before scheduling; user callbacks never run inline.
+        void Promise.resolve().then(child.invoke);
+        return child;
+      });
+    };
     const spawn: CommandScope["spawn"] = <T>(childWork: Work<T>) => {
       try {
-        if (typeof childWork !== "function") {
-          throw new TypeError("Execution task callback must be a function.");
-        }
-        check();
+        return launch(childWork, "strict").settlement.then(outcome);
       } catch (error) {
-        const rejected = Promise.reject<ExecutionTaskOutcome<T>>(error);
-        void rejected.catch(() => {});
-        return rejected;
+        return rejected<ExecutionTaskOutcome<T>>(error);
       }
-      const child = node(childWork, resources.child());
-      children.push(child.settlement);
-      // Register ownership before scheduling; user callbacks never run inside spawn.
-      void Promise.resolve().then(child.invoke);
-      return child.settlement.then(outcome);
     };
-    const operation = createOperation<T>(
+    const operation: ExecutionOperations["operation"] = <T>(work: () => T | Promise<T>) => {
+      try {
+        // The actual body promise is already observed by the private tagged own outcome.
+        return launch(work, "operation").body;
+      } catch (error) {
+        return rejected<T>(error);
+      }
+    };
+    let invoked = false;
+    const bodyOperation = createOperation<T>(
       (scope) => {
         // Inside the leased body: a skipped invocation still closes its own lease.
         check();
-        return body(scope);
+        invoked = true;
+        return mode === "operation" ? (body as () => T | Promise<T>)() : body(scope);
       },
       spawn,
       resources,
+      operation,
     );
-    const own: Promise<BodyOutcome<T>> = operation.promise.then(
+    const own: Promise<BodyOutcome<T>> = bodyOperation.promise.then(
       (value) => ({ ok: true, value }),
       (error: unknown) => ({ ok: false, error }),
     );
@@ -90,7 +116,9 @@ function settleExecutionTasks<T>(
       // Actual body settlement closes admission on this node, finalizing its list.
       const descendants = await Promise.all(children);
       const owned = await resources.finalize();
-      const failures: unknown[] = result.ok ? [] : [result.error];
+      const failures: unknown[] = [];
+      // Only ordinary work that actually ran is recoverable; reserved skips stay strict.
+      if (!result.ok && (mode === "strict" || !invoked)) failures.push(result.error);
       for (const failure of owned.acquisitionFailures) failures.push(failure);
       for (const child of descendants) {
         for (const failure of child.failures) failures.push(failure);
@@ -98,11 +126,13 @@ function settleExecutionTasks<T>(
       for (const failure of owned.cleanupFailures) failures.push(failure);
       return { body: result, failures };
     });
-    return { settlement, invoke: operation.invoke };
+    return { body: bodyOperation.promise, settlement, invoke: bodyOperation.invoke };
   };
-  const root = node(work, resources);
-  root.invoke();
-  return root.settlement;
+  return blank(() => {
+    const root = node(work, resources, "strict");
+    root.invoke();
+    return root.settlement;
+  });
 }
 
 /** Build the public root observation only after all execution-owned cleanup is included. */

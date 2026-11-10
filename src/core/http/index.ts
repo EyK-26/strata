@@ -13,7 +13,7 @@ export {
 export type { PaginatedResult, PaginationMeta } from "../pagination";
 export { createAuthMiddleware } from "./authMiddleware";
 export { createAuthorizeMiddleware } from "./authorizeMiddleware";
-export { conditionalJsonResponse } from "./conditionalResponse";
+export { conditionalJsonResponse, type JsonResponsePolicy } from "./conditionalResponse";
 export type { EtagVersioned } from "./etag";
 export {
   applyConditionalGet,

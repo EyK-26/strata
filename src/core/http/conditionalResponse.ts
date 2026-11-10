@@ -1,9 +1,14 @@
-import {
-  computeEtagFromJson,
-  ifNoneMatchSatisfied,
-  isEtagEnabled,
-  notModifiedResponse,
-} from "./etag";
+import { computeEtagFromJson, ifNoneMatchSatisfied, notModifiedResponse } from "./etag";
+
+type JsonResponsePolicy = Readonly<{ etagEnabled: boolean }>;
+
+function snapshotJsonResponsePolicy(policy: JsonResponsePolicy): JsonResponsePolicy {
+  const descriptor = policy && Object.getOwnPropertyDescriptor(policy, "etagEnabled");
+  if (!descriptor || !("value" in descriptor) || typeof descriptor.value !== "boolean") {
+    throw new TypeError("JSON response policy requires an explicit etagEnabled boolean.");
+  }
+  return Object.freeze({ etagEnabled: descriptor.value });
+}
 
 function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
   return Response.json(data, {
@@ -15,9 +20,11 @@ function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
 function conditionalJsonResponse(
   request: Request | undefined,
   data: unknown,
+  policy: JsonResponsePolicy,
   init: ResponseInit = {},
 ): Response {
-  if (!request || !isEtagEnabled()) {
+  const { etagEnabled } = snapshotJsonResponsePolicy(policy);
+  if (!request || !etagEnabled) {
     return jsonResponse(data, init);
   }
 
@@ -41,4 +48,5 @@ function conditionalJsonResponse(
   });
 }
 
-export { conditionalJsonResponse };
+export type { JsonResponsePolicy };
+export { conditionalJsonResponse, snapshotJsonResponsePolicy };

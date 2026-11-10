@@ -1,7 +1,13 @@
-import { conditionalJsonResponse } from "@getstrata/core/http/conditionalResponse";
-import type { AppDependencies, CachedJson } from "./contracts";
+import type { CacheLike } from "@getstrata/core/cache/tokens";
+import {
+  conditionalJsonResponse,
+  type JsonResponsePolicy,
+  snapshotJsonResponsePolicy,
+} from "@getstrata/core/http/conditionalResponse";
+import type { CachedJson } from "./contracts";
 
-function createCachedJson(dependencies: Pick<AppDependencies, "cache">): CachedJson {
+function createCachedJson(cache: CacheLike, policy: JsonResponsePolicy): CachedJson {
+  const responsePolicy = snapshotJsonResponsePolicy(policy);
   return async <T>(
     cacheKey: string,
     loader: () => Promise<T>,
@@ -10,11 +16,12 @@ function createCachedJson(dependencies: Pick<AppDependencies, "cache">): CachedJ
   ): Promise<Response> => {
     const data =
       tags.length > 0
-        ? await dependencies.cache.tags(...tags).remember(cacheKey, loader)
-        : await dependencies.cache.remember(cacheKey, loader);
+        ? await cache.tags(...tags).remember(cacheKey, loader)
+        : await cache.remember(cacheKey, loader);
 
-    return conditionalJsonResponse(request, data);
+    return conditionalJsonResponse(request, data, responsePolicy);
   };
 }
 
+export type { JsonResponsePolicy };
 export { createCachedJson };

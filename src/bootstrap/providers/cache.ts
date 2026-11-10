@@ -1,33 +1,45 @@
-import type { CacheDriver } from "@getstrata/core/cache/createCacheStore";
-import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
-import { CacheRepository } from "@getstrata/core/cache/repository";
 import {
-  CACHE_DRIVER_CONFIG_KEY,
-  CACHE_MAX_ENTRIES_CONFIG_KEY,
-  CACHE_TTL_MS_CONFIG_KEY,
-  CORE_CACHE_TOKEN,
-  REDIS_URL_CONFIG_KEY,
-} from "../config";
-import type { ServiceProvider } from "../contracts";
+  type CreateCacheStoreOptions,
+  createCacheStore,
+  snapshotCacheStoreOptions,
+} from "@getstrata/core/cache/createCacheStore";
+import { CacheRepository, createGuardedCache } from "@getstrata/core/cache/repository";
+import { CORE_CACHE_BACKEND_TOKEN, CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";
+import { CORE_EXECUTION_OPERATIONS_TOKEN } from "@getstrata/core/contracts/executionOperations";
+import {
+  type FactoryServiceDeclaration,
+  type ResourceServiceDeclaration,
+  resourceService,
+  service,
+} from "@getstrata/core/contracts/services";
+import type { ResourceSpec } from "@getstrata/core/runtime/application";
 
-const cacheProvider: ServiceProvider = {
-  name: "core.cache",
-  register({ container, config, dependencies, onCleanup }) {
-    container.singleton(CORE_CACHE_TOKEN, () => {
-      const store = createCacheStore({
-        driver: config.require<CacheDriver>(CACHE_DRIVER_CONFIG_KEY),
-        ttlMs: config.require<number>(CACHE_TTL_MS_CONFIG_KEY),
-        maxEntries: config.require<number>(CACHE_MAX_ENTRIES_CONFIG_KEY),
-        redisUrl: config.get<string>(REDIS_URL_CONFIG_KEY) || undefined,
-      });
+type CacheBindingOptions = Readonly<
+  Omit<CreateCacheStoreOptions, "namespace"> & { namespace: string }
+>;
 
-      const cache = new CacheRepository(store);
-      onCleanup(() => cache.close());
-      return cache;
-    });
+/** One application backend and a guarded value facade for each entered execution. */
+function createCacheBindings(
+  options: CacheBindingOptions,
+): readonly [ResourceServiceDeclaration, FactoryServiceDeclaration] {
+  const snapshot = snapshotCacheStoreOptions(options, true);
+  return Object.freeze([
+    resourceService(CORE_CACHE_BACKEND_TOKEN, {
+      lifetime: "application",
+      dependencies: [] as const,
+      create: (): ResourceSpec<CacheRepository> => ({
+        name: "core.cache.backend",
+        open: () => ({ ok: true, value: new CacheRepository(createCacheStore(snapshot)) }),
+        close: (backend) => backend.close(),
+      }),
+    }),
+    service(CORE_CACHE_TOKEN, {
+      lifetime: "execution",
+      dependencies: [CORE_CACHE_BACKEND_TOKEN, CORE_EXECUTION_OPERATIONS_TOKEN] as const,
+      create: (backend, operations) => createGuardedCache(backend, operations),
+    }),
+  ] as const);
+}
 
-    dependencies.cache = container.resolve(CORE_CACHE_TOKEN);
-  },
-};
-
-export default cacheProvider;
+export type { CacheBindingOptions };
+export { createCacheBindings };

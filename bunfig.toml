@@ -19,7 +19,8 @@ coveragePathIgnorePatterns = [
   "src/bootstrap/http/**",
   "src/bootstrap/listeners/**",
   "src/bootstrap/providers/auth.ts",
-  "src/bootstrap/providers/cache.ts",
+  # Private M4/M5 bridge retains the former legacy cache provider exclusion.
+  "src/bootstrap/legacyCache.ts",
   "src/bootstrap/providers/config.ts",
   "src/bootstrap/providers/events.ts",
   "src/bootstrap/providers/index.ts",
