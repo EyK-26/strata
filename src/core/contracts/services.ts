@@ -91,7 +91,7 @@ function declaration<T extends object>(value: T): Readonly<T> & DeclarationBrand
 }
 
 /** PromiseLike payloads are not values; inspect descriptors without invoking then getters. */
-function assertValue(value: unknown): void {
+function assertServicePayload(value: unknown): void {
   if (value === null || (typeof value !== "object" && typeof value !== "function")) return;
   let current: object | null = value;
   const visited = new Set<object>();
@@ -135,7 +135,7 @@ function valueService<T>(
   value: NoInfer<T>,
 ): ValueServiceDeclaration {
   assertServiceToken(token);
-  assertValue(value);
+  assertServicePayload(value);
   return declaration({
     kind: "value",
     token,
@@ -182,6 +182,7 @@ export type {
   AliasServiceDeclaration,
   DependencyValues,
   FactoryServiceDeclaration,
+  NonPromisePayload,
   ResourceServiceDeclaration,
   ResourceServiceOptions,
   ServiceDeclaration,
@@ -189,4 +190,11 @@ export type {
   ServiceOptions,
   ValueServiceDeclaration,
 };
-export { aliasService, isServiceDeclaration, resourceService, service, valueService };
+export {
+  aliasService,
+  assertServicePayload,
+  isServiceDeclaration,
+  resourceService,
+  service,
+  valueService,
+};

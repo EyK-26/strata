@@ -1,12 +1,87 @@
 /** Compiled in source and installed consumers; never executed. */
 import type { ExecutionTaskOutcome as RootOutcome } from "@getstrata/core";
 import type { ExecutionTaskOutcome as ContextOutcome } from "@getstrata/core/contracts/executionContext";
-import type { CommandScope, ExecutionTaskOutcome } from "@getstrata/core/runtime/application";
+import type {
+  CommandScope,
+  ExecutionTaskOutcome,
+  OpenOutcome,
+  ResourceSpec,
+} from "@getstrata/core/runtime/application";
 
 export async function taskContracts(scope: CommandScope) {
+  const spec: ResourceSpec<number> = {
+    name: "typed task resource",
+    open(signal): OpenOutcome<number> {
+      const aborted: boolean = signal.aborted;
+      void aborted;
+      return { ok: true, value: 7 };
+    },
+    close(value, context) {
+      const count: number = value;
+      const cleanupSignal: AbortSignal = context.signal;
+      void [count, cleanupSignal];
+    },
+  };
+  const acquired: Promise<number> = scope.acquire(spec);
+  const sameAcquire: CommandScope["acquire"] = scope.acquire;
+  void [acquired, sameAcquire];
+  // @ts-expect-error Scope acquire identity is readonly.
+  scope.acquire = sameAcquire;
+  // @ts-expect-error Resource specifications are required.
+  scope.acquire();
+  // @ts-expect-error Explicit acquired payload must match the resource specification.
+  scope.acquire<string>(spec);
+  // @ts-expect-error Open returns an explicit outcome, not a raw handle.
+  scope.acquire({ name: "raw handle", open: () => 1, close() {} });
+  // @ts-expect-error Acquisition accepts a synchronous descriptor, not an async factory or Promise.
+  scope.acquire(Promise.resolve(spec));
+  // @ts-expect-error No incidental per-task timeout or ownership options overload.
+  scope.acquire(spec, { timeoutMs: 1 });
+  // @ts-expect-error Inline descriptor inference cannot widen away an assimilable Promise handle.
+  scope.acquire({
+    name: "inline promise",
+    open: () => ({ ok: true, value: Promise.resolve(1) }),
+    close() {},
+  });
+  const promiseSpec: ResourceSpec<Promise<number>> = {
+    name: "promise",
+    open: () => ({ ok: true, value: Promise.resolve(1) }),
+    close() {},
+  };
+  // @ts-expect-error Promise handles cannot be returned through native acquisition Promise assimilation.
+  scope.acquire(promiseSpec);
+  const unionSpec: ResourceSpec<number | Promise<number>> = {
+    name: "union",
+    open: () => ({ ok: true, value: 1 }),
+    close() {},
+  };
+  // @ts-expect-error Union payloads cannot hide a Promise resource handle.
+  scope.acquire(unionSpec);
+  const callable = {
+    // biome-ignore lint/suspicious/noThenProperty: Negative type contract intentionally declares an assimilable resource handle.
+    then(resolve: (value: number) => void) {
+      resolve(1);
+    },
+  };
+  const callableSpec: ResourceSpec<typeof callable> = {
+    name: "callable",
+    open: () => ({ ok: true, value: callable }),
+    close() {},
+  };
+  // @ts-expect-error Callable-then resource handles are forbidden even without the full PromiseLike shape.
+  scope.acquire(callableSpec);
+  const optionalSpec: ResourceSpec<{ then?: (resolve: (value: number) => void) => void }> = {
+    name: "optional",
+    open: () => ({ ok: true, value: {} }),
+    close() {},
+  };
+  // @ts-expect-error Optional callable then is still an assimilable resource payload type.
+  scope.acquire(optionalSpec);
   const result: Promise<ExecutionTaskOutcome<number>> = scope.spawn((child) => {
     const same: CommandScope = child;
     void same;
+    const childAcquired: Promise<number> = child.acquire(spec);
+    void childAcquired;
     return 7;
   });
   const outcome = await result;

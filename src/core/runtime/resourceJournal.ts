@@ -7,39 +7,142 @@ import type {
 } from "../contracts/application";
 
 type Hook = (context: CleanupContext) => void | Promise<void>;
+type AcquisitionSettlement =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: unknown };
+type HookResult = { readonly ok: true } | { readonly ok: false; readonly error: unknown };
+type Attempt = {
+  readonly promise: Promise<boolean>;
+  order: number;
+  result?: HookResult;
+};
 type Resource = {
   name: string;
   group: ResourceGroup;
   order: number;
   status: "opening" | "acquired" | "released" | "discharged" | "unknown";
   hooks: Partial<Record<ResourcePhase, Hook>>;
-  attempted: Set<ResourcePhase>;
+  attempts: Map<ResourcePhase, Attempt>;
+  acquisition?: Promise<AcquisitionSettlement>;
+  internalCleanupErrors: readonly unknown[];
 };
 export type ResourceGroup = {
   readonly key: symbol;
   readonly name: string;
   readonly requires: readonly symbol[];
 };
+export type TaskResourceResult = {
+  readonly acquisitionFailures: readonly unknown[];
+  readonly cleanupFailures: readonly unknown[];
+  readonly retained: boolean;
+};
+type TaskGroup = {
+  sealed: boolean;
+  finalization?: Promise<TaskResourceResult>;
+};
 type Observer = {
   record(diagnostic: ApplicationDiagnostic): void;
   changed(): void;
 };
 
-/** Private resource ownership engine; application admission and barriers stay with its owner. */
+/** The sole acquisition and lifecycle engine for static and task-owned resources. */
 export class ResourceJournal {
   private readonly resources = new Map<symbol, Resource>();
   private readonly definitions = new Map<symbol, ResourceGroup>();
   private readonly providerOrder = new Map<symbol, number>();
+  private readonly taskGroups = new WeakMap<ResourceGroup, TaskGroup>();
+  private readonly taskKeys = new Set<symbol>();
+  private readonly staticKeys: readonly symbol[];
   private nextResource = 0;
+  private nextGroup = 0;
+  private nextHook = 0;
+  private unsafe = false;
 
   constructor(
     groups: readonly ResourceGroup[],
     private readonly observer: Observer,
   ) {
-    for (const [index, group] of groups.entries()) {
+    this.staticKeys = Object.freeze(groups.map((group) => group.key));
+    for (const group of groups) {
       this.definitions.set(group.key, group);
-      this.providerOrder.set(group.key, index);
+      this.providerOrder.set(group.key, this.nextGroup++);
     }
+  }
+
+  createTaskGroup(parent?: ResourceGroup): ResourceGroup {
+    if (
+      parent &&
+      (!this.definitions.has(parent.key) || this.taskGroups.get(parent)?.sealed !== false)
+    ) {
+      throw new Error("Task resource parent is not admitting children.");
+    }
+    const group = Object.freeze({
+      key: Symbol(),
+      name: "execution task",
+      requires: Object.freeze(parent ? [parent.key] : [...this.staticKeys]),
+    });
+    this.definitions.set(group.key, group);
+    this.providerOrder.set(group.key, this.nextGroup++);
+    this.taskGroups.set(group, { sealed: false });
+    this.taskKeys.add(group.key);
+    return group;
+  }
+
+  sealGroup(group: ResourceGroup): void {
+    (this.taskGroups.get(group) as TaskGroup).sealed = true;
+  }
+
+  finalizeGroup(group: ResourceGroup, context: CleanupContext): Promise<TaskResourceResult> {
+    const state = this.taskGroups.get(group) as TaskGroup;
+    state.sealed = true;
+    state.finalization ??= Promise.resolve().then(async () => {
+      const resources = this.groupResources(group);
+      const acquisitions = await Promise.all(
+        resources.map((resource) => resource.acquisition as Promise<AcquisitionSettlement>),
+      );
+      for (const resource of this.reverseResources(group))
+        await this.hook(resource, "stop", context);
+      for (const resource of this.reverseResources(group))
+        await this.hook(resource, "drain", context);
+      await this.flushAndClose(context, group);
+      // A concurrent global sweep can already own an attempt; join its actual result too.
+      await Promise.all(
+        resources.flatMap((resource) =>
+          [...resource.attempts.values()].map((attempt) => attempt.promise),
+        ),
+      );
+      const acquisitionFailures: unknown[] = [];
+      for (const acquisition of acquisitions) {
+        if (!acquisition.ok) acquisitionFailures.push(acquisition.error);
+      }
+      const cleanupFailures = resources.flatMap((resource) => [...resource.internalCleanupErrors]);
+      const attempts = resources.flatMap((resource) => [...resource.attempts.values()]);
+      attempts.sort((left, right) => left.order - right.order);
+      for (const attempt of attempts) {
+        if (attempt.result && !attempt.result.ok) cleanupFailures.push(attempt.result.error);
+      }
+      const retained = resources.some(
+        (resource) => resource.status === "acquired" || resource.status === "unknown",
+      );
+      const result = Object.freeze({
+        acquisitionFailures: Object.freeze(acquisitionFailures),
+        cleanupFailures: Object.freeze(cleanupFailures),
+        retained,
+      });
+      // The copied ledger outlives clean records; failed cleanup diagnostics live with the app.
+      for (const [key, resource] of this.resources) {
+        if (
+          resource.group === group &&
+          (resource.status === "released" || resource.status === "discharged")
+        ) {
+          this.resources.delete(key);
+        }
+      }
+      this.pruneGroups();
+      this.observer.changed();
+      return result;
+    });
+    return state.finalization;
   }
 
   acquire<T>(
@@ -47,6 +150,7 @@ export class ResourceJournal {
     spec: ResourceSpec<T>,
     signal: AbortSignal,
     validate?: (value: T) => void,
+    check?: () => void,
   ): Promise<T> {
     let resource: Resource;
     let open: ResourceSpec<T>["open"];
@@ -55,15 +159,11 @@ export class ResourceJournal {
     let drain: ResourceSpec<T>["drain"];
     let flush: ResourceSpec<T>["flush"];
     try {
+      if (this.definitions.get(group.key) !== group || this.taskGroups.get(group)?.sealed) {
+        throw new Error("Resource owner is not admitting acquisitions.");
+      }
       const name = dataField(spec, "name", true);
       declarationName(name);
-      if (
-        [...this.resources.values()].some(
-          (item) => item.group.key === group.key && item.name === name,
-        )
-      ) {
-        throw new Error(`Duplicate resource name: ${name}.`);
-      }
       open = dataField(spec, "open", true) as ResourceSpec<T>["open"];
       close = dataField(spec, "close", true) as ResourceSpec<T>["close"];
       stop = dataField(spec, "stop") as ResourceSpec<T>["stop"];
@@ -77,29 +177,42 @@ export class ResourceJournal {
           throw new TypeError("Resource lifecycle hooks must be functions.");
         }
       }
+      check?.();
       if (signal.aborted) throw signal.reason;
+      // Reflection/checkpoints may reenter acquisition or seal this owner.
+      if (this.definitions.get(group.key) !== group || this.taskGroups.get(group)?.sealed) {
+        throw new Error("Resource owner is not admitting acquisitions.");
+      }
+      if (
+        [...this.resources.values()].some(
+          (item) => item.group.key === group.key && item.name === name,
+        )
+      ) {
+        throw new Error(`Duplicate resource name: ${name}.`);
+      }
       resource = {
         name,
         group,
         order: this.nextResource++,
         status: "opening",
         hooks: {},
-        attempted: new Set(),
+        attempts: new Map(),
+        internalCleanupErrors: [],
       };
       this.resources.set(Symbol(), resource);
-      this.observer.changed();
     } catch (error) {
       return observed(Promise.reject(error));
     }
-    // The validated hook values are captured before open; mutable declarations cannot replace them.
-    return observed(
+    // Hook values are captured before open; mutable declarations cannot replace them.
+    const result = observed(
       Promise.resolve().then(async () => {
         try {
           const outcome = openOutcome<T>(await open(signal));
           if (!outcome.ok) {
             resource.status = outcome.disposition === "unknown" ? "unknown" : "discharged";
+            resource.internalCleanupErrors = outcome.cleanupErrors ?? [];
             this.record("acquisition", "ACQUISITION_FAILED", outcome.error, resource);
-            for (const error of outcome.cleanupErrors ?? []) {
+            for (const error of resource.internalCleanupErrors) {
               this.record(
                 "cleanup",
                 "INTERNAL_ACQUISITION_CLEANUP_FAILED",
@@ -118,8 +231,9 @@ export class ResourceJournal {
           if (drain) resource.hooks.drain = (context) => drain(value, context);
           if (flush) resource.hooks.flush = (context) => flush(value, context);
           this.observer.changed();
-          // A rejected service payload still has a known handle and captured disposal hooks.
+          // Validation failure keeps the actual acquired handle and its captured hooks.
           validate?.(value);
+          check?.();
           if (signal.aborted) throw signal.reason;
           return value;
         } catch (error) {
@@ -132,6 +246,12 @@ export class ResourceJournal {
         }
       }),
     );
+    resource.acquisition = result.then<AcquisitionSettlement, AcquisitionSettlement>(
+      () => ({ ok: true }),
+      (error: unknown) => ({ ok: false, error }),
+    );
+    this.observer.changed();
+    return result;
   }
 
   async scanStop(context: CleanupContext): Promise<boolean> {
@@ -139,30 +259,29 @@ export class ResourceJournal {
     for (const resource of this.reverseResources()) {
       if (!(await this.hook(resource, "stop", context))) safe = false;
     }
-    return safe;
+    return safe && !this.unsafe;
   }
 
   async drain(context: CleanupContext): Promise<boolean> {
     let safe = true;
     for (const resource of this.reverseResources()) {
+      // A selected finalizer may have started a late producer after scanStop's snapshot.
+      if (!(await this.hook(resource, "stop", context))) safe = false;
       if (!(await this.hook(resource, "drain", context))) safe = false;
     }
-    return safe;
+    return safe && !this.unsafe;
   }
 
-  async flushAndClose(context: CleanupContext): Promise<void> {
-    const blocked = new Set<symbol>();
-    for (const resource of this.resources.values()) {
-      if (resource.status === "unknown") this.blockDependencies(resource.group.key, blocked);
-    }
-    for (const resource of this.reverseResources()) {
+  async flushAndClose(context: CleanupContext, selected?: ResourceGroup): Promise<void> {
+    let blocked = this.blockedGroups(selected);
+    for (const resource of this.reverseResources(selected)) {
       if (!blocked.has(resource.group.key)) await this.hook(resource, "flush", context);
     }
-    for (const resource of this.reverseResources()) {
+    for (const resource of this.reverseResources(selected)) {
+      // Other selected finalizers may have failed while a flush was pending.
+      blocked = this.blockedGroups(selected);
       if (blocked.has(resource.group.key)) continue;
-      if (!(await this.hook(resource, "close", context))) {
-        this.blockDependencies(resource.group.key, blocked);
-      }
+      await this.hook(resource, "close", context);
     }
   }
 
@@ -181,9 +300,39 @@ export class ResourceJournal {
         (resource) =>
           resource.status === "acquired" &&
           resource.hooks.stop !== undefined &&
-          !resource.attempted.has("stop"),
+          resource.attempts.get("stop")?.result === undefined,
       ),
+      unsafe: this.unsafe,
+      resourceCount: resources.length,
+      groupCount: this.definitions.size,
+      taskGroupCount: this.taskKeys.size,
     });
+  }
+
+  private groupResources(group: ResourceGroup): Resource[] {
+    return [...this.resources.values()].filter((resource) => resource.group === group);
+  }
+
+  private blockedGroups(selected?: ResourceGroup): Set<symbol> {
+    const blocked = new Set<symbol>();
+    for (const resource of this.resources.values()) {
+      if (
+        resource.status === "unknown" ||
+        [...resource.attempts.entries()].some(
+          ([phase, attempt]) => phase !== "flush" && attempt.result?.ok === false,
+        )
+      ) {
+        this.blockDependencies(resource.group.key, blocked);
+      } else if (
+        selected &&
+        resource.group !== selected &&
+        (resource.status === "acquired" || resource.status === "opening")
+      ) {
+        for (const dependency of resource.group.requires)
+          this.blockDependencies(dependency, blocked);
+      }
+    }
+    return blocked;
   }
 
   private blockDependencies(provider: symbol, blocked: Set<symbol>): void {
@@ -194,31 +343,67 @@ export class ResourceJournal {
     }
   }
 
-  private reverseResources(): Resource[] {
-    return [...this.resources.values()].sort(
-      (left, right) =>
-        (this.providerOrder.get(right.group.key) ?? 0) -
-          (this.providerOrder.get(left.group.key) ?? 0) || right.order - left.order,
-    );
+  private reverseResources(selected?: ResourceGroup): Resource[] {
+    return [...this.resources.values()]
+      .filter((resource) => !selected || resource.group === selected)
+      .sort(
+        (left, right) =>
+          (this.providerOrder.get(right.group.key) ?? 0) -
+            (this.providerOrder.get(left.group.key) ?? 0) || right.order - left.order,
+      );
   }
 
-  private async hook(
+  private hook(
     resource: Resource,
     phase: ResourcePhase,
     context: CleanupContext,
   ): Promise<boolean> {
+    const existing = resource.attempts.get(phase);
+    if (existing) return existing.promise;
     const handler = resource.hooks[phase];
-    if (resource.status !== "acquired" || !handler || resource.attempted.has(phase)) return true;
-    resource.attempted.add(phase);
-    try {
-      await handler(context);
-      if (phase === "close") resource.status = "released";
-      this.observer.changed();
-      return true;
-    } catch (error) {
-      this.record("cleanup", "RESOURCE_CLEANUP_FAILED", error, resource, phase);
-      this.observer.changed();
-      return false;
+    if (resource.status !== "acquired" || !handler) return Promise.resolve(true);
+    // Install the attempt before invoking caller code, including synchronous reentry.
+    const attempt: Attempt = {
+      order: -1,
+      promise: Promise.resolve().then(async () => {
+        attempt.order = this.nextHook++;
+        try {
+          await handler(context);
+          attempt.result = { ok: true };
+          if (phase === "close") resource.status = "released";
+          this.observer.changed();
+          return true;
+        } catch (error) {
+          attempt.result = { ok: false, error };
+          if (phase === "stop" || phase === "drain") this.unsafe = true;
+          this.record("cleanup", "RESOURCE_CLEANUP_FAILED", error, resource, phase);
+          this.observer.changed();
+          return false;
+        }
+      }),
+    };
+    resource.attempts.set(phase, attempt);
+    return attempt.promise;
+  }
+
+  private pruneGroups(): void {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const key of this.taskKeys) {
+        const group = this.definitions.get(key) as ResourceGroup;
+        const state = this.taskGroups.get(group) as TaskGroup;
+        if (
+          !state.sealed ||
+          this.groupResources(group).length > 0 ||
+          [...this.definitions.values()].some((item) => item.requires.includes(key))
+        )
+          continue;
+        this.taskKeys.delete(key);
+        this.definitions.delete(key);
+        this.providerOrder.delete(key);
+        changed = true;
+      }
     }
   }
 
@@ -226,18 +411,24 @@ export class ResourceJournal {
     kind: ApplicationDiagnostic["kind"],
     code: string,
     error: unknown,
-    resource?: Resource,
+    resource: Resource,
     phase?: ResourcePhase,
   ): void {
-    this.observer.record(
-      Object.freeze({
-        kind,
-        code,
-        error,
-        ...(resource ? { provider: resource.group.name, resource: resource.name } : {}),
-        ...(phase ? { phase } : {}),
-      }),
-    );
+    const diagnostic = Object.freeze({
+      kind,
+      code,
+      error,
+      provider: resource.group.name,
+      resource: resource.name,
+      ...(phase ? { phase } : {}),
+    });
+    if (
+      kind === "acquisition" &&
+      this.taskKeys.has(resource.group.key) &&
+      resource.status !== "unknown"
+    )
+      return;
+    this.observer.record(diagnostic);
   }
 }
 

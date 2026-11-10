@@ -95,6 +95,12 @@ test("clean installed services share canonical mixed-import tokens and pass exte
     assert.equal(report.mixedExecutionContextIdentity, true);
     assert.equal(report.executionFactories, 2);
     assert.equal(report.joinedTasks, 2);
+    assert.deepEqual(report.taskResourceEvents, [
+      "root.open",
+      "child.open",
+      "child.close",
+      "root.close",
+    ]);
     assert.ok(report.opaqueConstants.includes("CORE_EXECUTION_CONTEXT_TOKEN"));
     assert.equal(report.mixedCacheIdentity, true);
     assert.equal(report.viewProvidersResolved, 1);

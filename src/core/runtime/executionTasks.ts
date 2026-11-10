@@ -2,8 +2,22 @@ import type { CommandScope, ExecutionTaskOutcome } from "../contracts/applicatio
 
 type Work<T> = (scope: CommandScope) => T | Promise<T>;
 type Operation<T> = { readonly promise: Promise<T>; invoke(): void };
+type TaskResources = {
+  readonly acquire: CommandScope["acquire"];
+  child(): TaskResources;
+  seal(): void;
+  finalize(): Promise<{
+    readonly acquisitionFailures: readonly unknown[];
+    readonly cleanupFailures: readonly unknown[];
+    readonly retained: boolean;
+  }>;
+};
 /** The application supplies its existing body lease and the execution's resolver. */
-type OperationFactory = <T>(work: Work<T>, spawn: CommandScope["spawn"]) => Operation<T>;
+type OperationFactory = <T>(
+  work: Work<T>,
+  spawn: CommandScope["spawn"],
+  resources: TaskResources,
+) => Operation<T>;
 type BodyOutcome<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: unknown };
@@ -32,9 +46,11 @@ function runExecutionTasks<T>(
   work: Work<T>,
   check: () => void,
   createOperation: OperationFactory,
+  resources: TaskResources,
 ): Promise<T> {
   const node = <T>(
     body: Work<T>,
+    resources: TaskResources,
   ): {
     settlement: Promise<Settlement<T>>;
     invoke(): void;
@@ -51,17 +67,21 @@ function runExecutionTasks<T>(
         void rejected.catch(() => {});
         return rejected;
       }
-      const child = node(childWork);
+      const child = node(childWork, resources.child());
       children.push(child.settlement);
       // Register ownership before scheduling; user callbacks never run inside spawn.
       void Promise.resolve().then(child.invoke);
       return child.settlement.then(outcome);
     };
-    const operation = createOperation<T>((scope) => {
-      // Inside the leased body: a skipped invocation still closes its own lease.
-      check();
-      return body(scope);
-    }, spawn);
+    const operation = createOperation<T>(
+      (scope) => {
+        // Inside the leased body: a skipped invocation still closes its own lease.
+        check();
+        return body(scope);
+      },
+      spawn,
+      resources,
+    );
     const own: Promise<BodyOutcome<T>> = operation.promise.then(
       (value) => ({ ok: true, value }),
       (error: unknown) => ({ ok: false, error }),
@@ -69,15 +89,18 @@ function runExecutionTasks<T>(
     const settlement = own.then(async (result): Promise<Settlement<T>> => {
       // Actual body settlement closes admission on this node, finalizing its list.
       const descendants = await Promise.all(children);
+      const owned = await resources.finalize();
       const failures: unknown[] = result.ok ? [] : [result.error];
+      for (const failure of owned.acquisitionFailures) failures.push(failure);
       for (const child of descendants) {
         for (const failure of child.failures) failures.push(failure);
       }
+      for (const failure of owned.cleanupFailures) failures.push(failure);
       return { body: result, failures };
     });
     return { settlement, invoke: operation.invoke };
   };
-  const root = node(work);
+  const root = node(work, resources);
   root.invoke();
   return root.settlement.then((result) => {
     const observed = outcome(result);
@@ -86,4 +109,5 @@ function runExecutionTasks<T>(
   });
 }
 
+export type { TaskResources };
 export { runExecutionTasks };
