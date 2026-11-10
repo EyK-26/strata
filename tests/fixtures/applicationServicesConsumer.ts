@@ -174,6 +174,7 @@ const app = createApplication({
   overrides: [Services.valueService(first, 5)],
 });
 let saved: CommandScope | undefined;
+let joinedTasks = 0;
 try {
   await app.start();
   assert.equal(executionFactories, 0);
@@ -187,6 +188,18 @@ try {
     assert.equal(scope.resolve(Root.CORE_EXECUTION_CONTEXT_TOKEN), scope.context);
     assert.equal(scope.context.signal, scope.signal);
     contexts.push(scope.context);
+    const childOutcome = await scope.spawn(async (child) => {
+      assert.equal(child.context, scope.context);
+      assert.equal(child.resolve(Scoped), scope.resolve(Scoped));
+      joinedTasks++;
+      return child.spawn((grandchild) => {
+        joinedTasks++;
+        assert.equal(grandchild.resolve(Scoped), child.resolve(Scoped));
+        return 49;
+      });
+    });
+    assert.equal(Object.isFrozen(childOutcome), true);
+    assert.deepEqual(childOutcome, { ok: true, value: { ok: true, value: 49 } });
     assert.equal(scope.resolve(Alias), 5);
     assert.equal(scope.resolve(second), 2);
     assert.equal(scope.resolve(Result), 49);
@@ -213,6 +226,7 @@ try {
       mixedFactoryIdentity: true,
       mixedExecutionContextIdentity: true,
       executionFactories,
+      joinedTasks,
       mixedCacheIdentity: true,
       opaqueConstants: [...opaqueConstants.keys()].sort(),
       serviceConstants: Object.keys(ServiceTokens)

@@ -21,6 +21,7 @@ import type {
 } from "../contracts/application";
 import type { ServiceToken } from "../contracts/token";
 import { normalizeExecutionEnvelope, ownExecutionContext } from "./executionContext";
+import { runExecutionTasks } from "./executionTasks";
 import { ResourceJournal } from "./resourceJournal";
 import { compileServiceGraph, type ServiceGraph } from "./serviceGraph";
 
@@ -312,27 +313,33 @@ class OwnedApplication implements Application {
       services.set(CORE_EXECUTION_CONTEXT_TOKEN, context);
       await this.definition.services.startExecution(services, context.signal, owner.check);
       owner.check();
-      let active = true;
-      const scope: CommandScope = Object.freeze({
-        applicationId: this.id,
-        config: this.definition.config,
-        context,
-        signal: context.signal,
-        resolve: <T>(token: ServiceToken<T>): T => {
-          if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
-          return services.resolve(token);
-        },
+      return await runExecutionTasks(work, owner.check, (body, spawn) => {
+        let active = true;
+        const scope: CommandScope = Object.freeze({
+          applicationId: this.id,
+          config: this.definition.config,
+          context,
+          signal: context.signal,
+          resolve: <T>(token: ServiceToken<T>): T => {
+            if (!active) throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+            return services.resolve(token);
+          },
+          spawn: <T>(childWork: (scope: CommandScope) => T | Promise<T>) => {
+            if (!active) {
+              return observed(
+                Promise.reject(new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id)),
+              );
+            }
+            return spawn(childWork);
+          },
+        });
+        return leasedOperation(
+          () => body(scope),
+          () => {
+            active = false;
+          },
+        );
       });
-      const operation = leasedOperation(
-        () => work(scope),
-        () => {
-          active = false;
-        },
-      );
-      // No asynchronous gap between the final admission check and callback invocation.
-      owner.check();
-      operation.invoke();
-      return await operation.promise;
     } finally {
       owner.dispose();
     }

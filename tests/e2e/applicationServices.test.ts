@@ -63,6 +63,10 @@ test("clean installed services share canonical mixed-import tokens and pass exte
       join(root, "tests/types/applicationExecutions.contract.ts"),
       join(directory, "executions.contract.ts"),
     );
+    await copyFile(
+      join(root, "tests/types/applicationTasks.contract.ts"),
+      join(directory, "tasks.contract.ts"),
+    );
     await writeFile(
       join(directory, "tsconfig.json"),
       JSON.stringify({
@@ -76,7 +80,7 @@ test("clean installed services share canonical mixed-import tokens and pass exte
           types: ["bun"],
           allowImportingTsExtensions: true,
         },
-        include: ["consumer.ts", "contracts.ts", "executions.contract.ts"],
+        include: ["consumer.ts", "contracts.ts", "executions.contract.ts", "tasks.contract.ts"],
       }),
     );
     await run(
@@ -87,6 +91,7 @@ test("clean installed services share canonical mixed-import tokens and pass exte
     assert.equal(report.mixedFactoryIdentity, true);
     assert.equal(report.mixedExecutionContextIdentity, true);
     assert.equal(report.executionFactories, 2);
+    assert.equal(report.joinedTasks, 2);
     assert.ok(report.opaqueConstants.includes("CORE_EXECUTION_CONTEXT_TOKEN"));
     assert.equal(report.mixedCacheIdentity, true);
     assert.equal(report.viewProvidersResolved, 1);

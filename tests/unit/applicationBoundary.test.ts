@@ -321,3 +321,43 @@ describe("M2.2b execution context boundary", () => {
     );
   });
 });
+
+describe("M2.2c joined task boundary", () => {
+  test.each([
+    [
+      "src/core/runtime/application.ts",
+      'import { runExecutionTasks } from "./executionTasks"; export const run = runExecutionTasks;',
+    ],
+    [
+      "src/core/runtime/executionTasks.ts",
+      'import type { CommandScope, ExecutionTaskOutcome } from "../contracts/application"; export type Task = (scope: CommandScope) => ExecutionTaskOutcome<unknown>;',
+    ],
+  ])("accepts explicit task coordinator edge in %s", (file, source) => {
+    expect(inspectModule(file, source)).toEqual([]);
+  });
+  test.each([
+    'import { ServiceContainer } from "@getstrata/core/contracts/container";',
+    'import { ResourceJournal } from "./resourceJournal";',
+    'import { createApplication } from "./application";',
+    'import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executionContext";',
+    'import type { Request } from "../http/route";',
+    'import type { AppContext } from "../contracts/di";',
+  ])("rejects task coordinator dependency %s", (source) => {
+    expect(
+      inspectModule("src/core/runtime/executionTasks.ts", source).some(
+        (issue) => issue.rule === "dependency",
+      ),
+    ).toBe(true);
+  });
+  test.each([
+    "const current = process.env;",
+    "const tasks = globalThis.tasks;",
+    'const key = Symbol.for("current.execution");',
+  ])("rejects ambient task ownership %s", (source) => {
+    expect(
+      inspectModule("src/core/runtime/executionTasks.ts", source).some(
+        (issue) => issue.rule === "ambient-capability",
+      ),
+    ).toBe(true);
+  });
+});
