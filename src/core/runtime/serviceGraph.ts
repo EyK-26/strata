@@ -2,6 +2,7 @@ import { CORE_EXECUTION_CONTEXT_TOKEN } from "@getstrata/core/contracts/executio
 import {
   aliasService,
   isServiceDeclaration,
+  resourceService,
   type ServiceDeclaration,
   type ServiceLifetime,
   service,
@@ -12,8 +13,13 @@ import {
   assertServiceToken,
   type ServiceToken,
   serviceTokenKey,
+  serviceTokenName,
 } from "@getstrata/core/contracts/token";
+import type { ResourceSpec } from "../contracts/application";
 import type { ServiceContainer } from "../contracts/container";
+import type { ResourceGroup, ResourceJournal } from "./resourceJournal";
+
+type ResourceAcquisition = Pick<ResourceJournal, "acquire">;
 
 class ServiceGraphError extends Error {
   constructor(readonly code: string) {
@@ -34,7 +40,6 @@ function field(record: unknown, name: string): unknown {
 
 function declaration(input: unknown): ServiceDeclaration {
   const kind = field(input, "kind");
-  if (kind === "resource") return fail("UNSUPPORTED_RESOURCE");
   const token = field(input, "token");
   assertServiceToken(token);
   const typed = token as ServiceToken<unknown>;
@@ -47,7 +52,7 @@ function declaration(input: unknown): ServiceDeclaration {
     assertServiceToken(target);
     normalized = aliasService(typed, target as ServiceToken<unknown>);
   } else {
-    if (kind !== "factory") return fail("INVALID_DECLARATION");
+    if (kind !== "factory" && kind !== "resource") return fail("INVALID_DECLARATION");
     const lifetime = field(input, "lifetime");
     if (lifetime !== "application" && lifetime !== "execution") return fail("INVALID_LIFETIME");
     const dependencies = field(input, "dependencies");
@@ -55,11 +60,20 @@ function declaration(input: unknown): ServiceDeclaration {
     if (!Array.isArray(dependencies) || typeof create !== "function") {
       return fail("INVALID_DECLARATION");
     }
-    normalized = service(typed, {
-      lifetime,
-      dependencies,
-      create: create as (...values: unknown[]) => unknown,
-    });
+    if (kind === "resource") {
+      if (lifetime !== "application") return fail("INVALID_LIFETIME");
+      normalized = resourceService(typed, {
+        lifetime,
+        dependencies,
+        create: create as (...values: unknown[]) => ResourceSpec<unknown>,
+      });
+    } else {
+      normalized = service(typed, {
+        lifetime,
+        dependencies,
+        create: create as (...values: unknown[]) => unknown,
+      });
+    }
   }
   if (!isServiceDeclaration(input)) return fail("INVALID_DECLARATION");
   return normalized;
@@ -67,12 +81,17 @@ function declaration(input: unknown): ServiceDeclaration {
 
 function dependencies(item: ServiceDeclaration): readonly AnyServiceToken[] {
   if (item.kind === "alias") return [item.target];
-  return item.kind === "factory" ? item.dependencies : [];
+  return item.kind === "factory" || item.kind === "resource" ? item.dependencies : [];
 }
 
 /** Definitions and order only. ServiceContainer owns every initialized value and promise. */
 interface ServiceGraph {
-  start(container: ServiceContainer, signal: AbortSignal): Promise<void>;
+  readonly resourceGroups: readonly ResourceGroup[];
+  start(
+    container: ServiceContainer,
+    signal: AbortSignal,
+    acquisition: ResourceAcquisition,
+  ): Promise<void>;
   startExecution(
     container: ServiceContainer,
     signal: AbortSignal,
@@ -142,11 +161,33 @@ function compileServiceGraph(
     }
   }
   Object.freeze(ordered);
+  const backing = new Map<symbol, readonly symbol[]>();
+  const resourceGroups: ResourceGroup[] = [];
+  const resourceOwners = new Map<symbol, ResourceGroup>();
+  for (const item of ordered) {
+    const closure = new Set<symbol>();
+    for (const dependency of dependencies(item)) {
+      for (const key of backing.get(serviceTokenKey(dependency)) ?? []) closure.add(key);
+    }
+    if (item.kind === "resource") {
+      const group: ResourceGroup = Object.freeze({
+        key: Symbol(),
+        name: serviceTokenName(item.token),
+        requires: Object.freeze([...closure]),
+      });
+      resourceGroups.push(group);
+      resourceOwners.set(serviceTokenKey(item.token), group);
+      closure.add(group.key);
+    }
+    backing.set(serviceTokenKey(item.token), Object.freeze([...closure]));
+  }
+  Object.freeze(resourceGroups);
   async function initialize(
     container: ServiceContainer,
     signal: AbortSignal,
     lifetime: ServiceLifetime,
     checkpoint?: () => void,
+    acquisition?: ResourceAcquisition,
   ): Promise<void> {
     for (const item of ordered) {
       if (lifetimes.get(serviceTokenKey(item.token)) !== lifetime) continue;
@@ -162,7 +203,18 @@ function compileServiceGraph(
             const values = item.dependencies.map((dependency) =>
               container.resolve(dependency as ServiceToken<unknown>),
             );
-            return (item.create as (...values: unknown[]) => unknown)(...values);
+            const value = (item.create as (...values: unknown[]) => unknown)(...values);
+            if (item.kind !== "resource") return value;
+            // Descriptor assembly may itself cancel startup. No new admission follows it.
+            if (signal.aborted) throw signal.reason;
+            return (acquisition as ResourceAcquisition).acquire(
+              resourceOwners.get(serviceTokenKey(item.token)) as ResourceGroup,
+              value as ResourceSpec<unknown>,
+              signal,
+              (payload) => {
+                valueService(token, payload);
+              },
+            );
           },
           signal,
           checkpoint,
@@ -174,8 +226,9 @@ function compileServiceGraph(
     container.seal();
   }
   return Object.freeze({
-    start: (container: ServiceContainer, signal: AbortSignal) =>
-      initialize(container, signal, "application"),
+    resourceGroups,
+    start: (container: ServiceContainer, signal: AbortSignal, acquisition: ResourceAcquisition) =>
+      initialize(container, signal, "application", undefined, acquisition),
     startExecution: (container: ServiceContainer, signal: AbortSignal, checkpoint?: () => void) =>
       initialize(container, signal, "execution", checkpoint),
   });

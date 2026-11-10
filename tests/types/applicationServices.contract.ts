@@ -10,12 +10,18 @@ import {
 import { ServiceContainer } from "@getstrata/core/contracts/container";
 import {
   aliasService,
+  resourceService,
   type ServiceDeclaration,
   service,
   valueService,
 } from "@getstrata/core/contracts/services";
 import { createServiceToken, type ServiceToken } from "@getstrata/core/contracts/token";
-import { type CommandScope, createApplication } from "@getstrata/core/runtime/application";
+import {
+  type CommandScope,
+  createApplication,
+  type OpenOutcome,
+  type ResourceSpec,
+} from "@getstrata/core/runtime/application";
 
 interface Settings {
   port: number;
@@ -49,6 +55,32 @@ export function applicationServiceContracts(scope: CommandScope): void {
   );
   const Settings = createServiceToken<typeof settings>("settings");
   const A = createServiceToken<number>("alias");
+  const managedSpec: ResourceSpec<number> = {
+    name: "typed managed",
+    open(signal): OpenOutcome<number> {
+      const cancelled: boolean = signal.aborted;
+      void cancelled;
+      return { ok: true, value: 1 };
+    },
+    close(value, context) {
+      const payload: number = value;
+      const signal: AbortSignal = context.signal;
+      void [payload, signal];
+      // @ts-expect-error Resource close receives the token payload, never a different type.
+      const wrong: string = value;
+      void wrong;
+    },
+  };
+  const managed = resourceService(N, {
+    lifetime: "application",
+    dependencies: [S, Settings],
+    create(text, config) {
+      const typed: string = text;
+      const port: number = config.port;
+      void [typed, port];
+      return managedSpec;
+    },
+  });
   const declarations = [
     valueService(Settings, settings),
     valueService(N, 1),
@@ -66,7 +98,7 @@ export function applicationServiceContracts(scope: CommandScope): void {
   });
   const count: number = scope.resolve(rootToken<number>("root"));
   const text: string = scope.resolve(bootstrapToken<string>("bootstrap"));
-  void [app, count, text, aliasService(A, N)];
+  void [app, count, text, managed, aliasService(A, N)];
   // @ts-expect-error Typed values cannot be widened to satisfy a wrong payload.
   valueService(N, "wrong");
   // @ts-expect-error Alias targets must have the same invariant service type.
@@ -85,12 +117,68 @@ export function applicationServiceContracts(scope: CommandScope): void {
   void wrongDriver;
   // @ts-expect-error A validated input mapping is mandatory; ambient defaults are forbidden.
   parseApplicationConfig({}, () => ({}));
+  resourceService(N, {
+    // @ts-expect-error Managed service lifetime is application-only.
+    lifetime: "execution",
+    dependencies: [],
+    create: () => managedSpec,
+  });
+  resourceService(N, {
+    lifetime: "application",
+    dependencies: [],
+    // @ts-expect-error Descriptor construction is synchronous; open owns async work.
+    create: async () => managedSpec,
+  });
+  resourceService(N, {
+    lifetime: "application",
+    dependencies: [],
+    // @ts-expect-error Managed open outcomes must match the invariant token payload.
+    create: () => ({ name: "wrong", open: () => ({ ok: true, value: "wrong" }), close() {} }),
+  });
+  resourceService(N, {
+    lifetime: "application",
+    dependencies: [S],
+    // @ts-expect-error Managed descriptor factories receive their declared dependency tuple.
+    create: (value: number) => {
+      void value;
+      return managedSpec;
+    },
+  });
+  // @ts-expect-error Erased managed declarations require the original private helper brand.
+  const rawResource: ServiceDeclaration = {
+    kind: "resource",
+    token: N,
+    lifetime: "application",
+    dependencies: [],
+    create: () => managedSpec,
+  };
+  void rawResource;
   const promise = createServiceToken<Promise<number>>("promise");
+  // @ts-expect-error Managed resources cannot publish Promise payloads.
+  resourceService(promise, {
+    lifetime: "application",
+    dependencies: [],
+    create: () => ({
+      name: "forbidden payload",
+      open: () => ({ ok: true, value: scope.resolve(promise) }),
+      close() {},
+    }),
+  });
   // @ts-expect-error A Promise is not a supported service payload.
   valueService(promise, Promise.resolve(1));
   // @ts-expect-error Async initialization must produce a non-Promise payload T.
   service(promise, { lifetime: "application", dependencies: [], create: () => Promise.resolve(1) });
   const union = createServiceToken<number | Promise<number>>("union");
+  // @ts-expect-error Managed resources also reject union payloads concealing Promises.
+  resourceService(union, {
+    lifetime: "application",
+    dependencies: [],
+    create: () => ({
+      name: "forbidden payload",
+      open: () => ({ ok: true, value: scope.resolve(union) }),
+      close() {},
+    }),
+  });
   // @ts-expect-error Union payloads cannot conceal Promise-valued services.
   valueService(union, 1);
   const callable = createServiceToken<{ then(resolve: (n: number) => void): void }>("callable");
@@ -100,6 +188,16 @@ export function applicationServiceContracts(scope: CommandScope): void {
     then(resolve) {
       resolve(1);
     },
+  });
+  // @ts-expect-error Managed payloads cannot introduce callable-then assimilation.
+  resourceService(callable, {
+    lifetime: "application",
+    dependencies: [],
+    create: () => ({
+      name: "forbidden payload",
+      open: () => ({ ok: true, value: scope.resolve(callable) }),
+      close() {},
+    }),
   });
   // @ts-expect-error Callable-then tokens cannot enter through alias helpers either.
   aliasService(callable, callable);

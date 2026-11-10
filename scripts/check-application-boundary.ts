@@ -42,10 +42,14 @@ const neutralEdges: Readonly<
       "contracts/services",
       "contracts/token",
       "contracts/application",
+      "runtime/resourceJournal",
     ],
   },
   [PATH("contracts/token")]: { values: [], types: [] },
-  [PATH("contracts/services")]: { values: ["contracts/token"], types: ["contracts/token"] },
+  [PATH("contracts/services")]: {
+    values: ["contracts/token"],
+    types: ["contracts/token", "contracts/application"],
+  },
   [PATH("contracts/container")]: {
     values: ["contracts/token", "contracts/services"],
     types: ["contracts/token", "contracts/services"],
