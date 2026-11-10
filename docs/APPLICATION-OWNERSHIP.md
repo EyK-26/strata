@@ -618,3 +618,22 @@ settlement share the application's admitted-work barrier.
 The remaining legacy owners, string keys and consumers are enumerated in
 [the migration ledger](architecture/m21-legacy-callers.txt). Their continued
 presence does not establish application isolation for those paths.
+
+### Internal completion bookkeeping
+
+An internal owned boundary can reserve a strict bookkeeping callback from its
+exact live direct body. This completion path remains available after cancellation
+and runs an admitted callback even if cancellation or parent-body settlement occurs
+before invocation. The existing task tree joins the callback and records each
+failure once; inspecting its joined result does not duplicate that failure.
+
+Bookkeeping receives no scope or boundary. Its whole invocation, including return
+value reflection and native thenable assimilation, runs without current authority
+in this application's task context. An unexpected runtime thenable is still joined.
+Ordinary operations, tasks and resource admission retain their cancellation checks.
+
+This mechanism is reserved for framework-owned snapshot restoration, which must
+run only after the persistence layer confirms rollback. It is not a public rollback
+hook or a sandbox that revokes previously captured objects and capabilities. This
+prerequisite does not itself register model snapshots or change native transaction
+outcomes; the subsequent persistence migration supplies that integration.

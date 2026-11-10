@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { realpath } from "node:fs/promises";
 import * as Core from "@getstrata/core";
+// M3b2a internal bookkeeping proof uses the existing canonical private subpath.
+import { CORE_EXECUTION_OPERATIONS_TOKEN } from "@getstrata/core/contracts/executionOperations";
+import {
+  CORE_EXECUTION_OWNERSHIP_TOKEN,
+  type Joined,
+  type OwnedBoundary,
+  type OwnedExecution,
+} from "@getstrata/core/contracts/executionOwnership";
+
 import { createTransactionAcquisitionMetrics } from "@getstrata/core/database/acquisitionMetrics";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { PersistenceError } from "@getstrata/core/database/errors";
@@ -10,7 +19,7 @@ import type { DatabaseSession, TransactionSession } from "@getstrata/core/databa
 import { defineTable } from "@getstrata/core/database/table";
 import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 import { errorResponse } from "@getstrata/core/http/response";
-import { createApplication } from "@getstrata/core/runtime/application";
+import { type CommandScope, createApplication } from "@getstrata/core/runtime/application";
 
 assert.equal(Core.DATABASE_SESSION_TOKEN, DATABASE_SESSION_TOKEN);
 assert.equal(Core.PersistenceError, PersistenceError);
@@ -58,6 +67,31 @@ function publicTypes(db: DatabaseSession, tx: TransactionSession) {
   return { result, registration };
 }
 void publicTypes;
+// M3b2a external strict contracts; this function is never executed.
+function installedBookkeepingTypes(
+  boundary: OwnedBoundary,
+  ownership: OwnedExecution,
+  session: DatabaseSession,
+  scope: CommandScope,
+) {
+  const positive: Promise<Joined<void>> = boundary.finalize(() => undefined);
+  // @ts-expect-error Internal bookkeeping does not accept async restoration callbacks.
+  boundary.finalize(async () => {});
+  // @ts-expect-error Internal bookkeeping does not accept arbitrary result values.
+  boundary.finalize(() => 1);
+  // @ts-expect-error No required callback arguments or scope are supplied.
+  boundary.finalize((_scope: CommandScope) => undefined);
+  // @ts-expect-error Execution-wide ownership does not gain finalize.
+  ownership.finalize(() => undefined);
+  // @ts-expect-error Public sessions do not gain finalize.
+  session.finalize(() => undefined);
+  // @ts-expect-error Public scopes do not gain finalize.
+  scope.finalize(() => undefined);
+  return positive;
+}
+void installedBookkeepingTypes;
+// End M3b2a external strict contracts.
+
 // M3b1 external compiler contracts: existing installed strict tsc compiles this block.
 function explicitCompilerTypes(session: DatabaseSession) {
   const table = defineTable<{ id: number; label: string }, "id">({
@@ -95,6 +129,41 @@ try {
   await app.start();
   await app.run(async (scope) => {
     const db = scope.resolve(DATABASE_SESSION_TOKEN);
+    // M3b2a bounded installed bookkeeping block; saved scopes are not claimed revoked.
+    const ownershipPath = await realpath(
+      new URL(import.meta.resolve("@getstrata/core/contracts/executionOwnership")),
+    );
+    assert.ok(
+      ownershipPath.startsWith(`${process.cwd()}/node_modules/@getstrata/core/`),
+      ownershipPath,
+    );
+    const bookkeepingOwner = scope.resolve(CORE_EXECUTION_OWNERSHIP_TOKEN);
+    const currentOperations = scope.resolve(CORE_EXECUTION_OPERATIONS_TOKEN);
+    let bookkeepingArguments = -1;
+    let bookkeepingCurrentAuthority: boolean | undefined;
+    const bookkeepingOuter = await bookkeepingOwner.joined(
+      async (boundary) =>
+        await boundary.finalize((...args: unknown[]) => {
+          bookkeepingArguments = args.length;
+          try {
+            currentOperations.assertActive();
+            bookkeepingCurrentAuthority = true;
+          } catch {
+            bookkeepingCurrentAuthority = false;
+          }
+          return undefined;
+        }),
+    );
+    assert.equal(bookkeepingArguments, 0);
+    assert.equal(bookkeepingCurrentAuthority, false);
+    assert.equal(bookkeepingOuter.body.ok, true);
+    if (bookkeepingOuter.body.ok) {
+      assert.equal(bookkeepingOuter.body.value.invoked, true);
+      assert.deepEqual(bookkeepingOuter.body.value.body, { ok: true, value: undefined });
+      assert.equal(bookkeepingOuter.body.value.strictFailed, false);
+    }
+    currentOperations.assertActive();
+    // End M3b2a installed bookkeeping block.
     // M3b1 installed compiler runtime proof uses the actual execution session descriptor.
     const compilerPath = await realpath(
       new URL(import.meta.resolve("@getstrata/core/database/query")),
