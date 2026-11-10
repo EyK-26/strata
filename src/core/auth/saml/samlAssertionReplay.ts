@@ -1,5 +1,5 @@
+import { isUniqueConstraintError } from "@getstrata/core/database/errors";
 import { currentSqlDialect } from "../../database/dialect";
-import { isUniqueConstraintError } from "../../database/errors";
 import { runInTransaction } from "../../database/transaction";
 
 interface SamlAssertionReplayStore {

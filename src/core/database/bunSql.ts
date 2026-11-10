@@ -1,29 +1,10 @@
-import { SQL } from "bun";
 import { bindDatabaseConnection } from "./boundConnection";
 import type { DatabaseConnection, SqlDatabaseConnection } from "./connectionContracts";
 import { registerDefaultDatabasePool } from "./defaultConnection";
 
-interface CreateBunSqlPoolOptions {
-  url: string;
-  max?: number;
-  idleTimeout?: number;
-  maxLifetime?: number;
-  connectionTimeout?: number;
-}
+import { type CreateBunSqlPoolOptions, createNativePostgresPool } from "./postgresNative";
 
-function createBunSqlPool(options: CreateBunSqlPoolOptions): InstanceType<typeof SQL> {
-  if (!options.url) {
-    throw new Error("DATABASE_URL is not configured. Set url before creating a Bun SQL pool.");
-  }
-
-  return new SQL({
-    url: options.url,
-    max: options.max ?? 10,
-    idleTimeout: options.idleTimeout ?? 30,
-    maxLifetime: options.maxLifetime ?? 3600,
-    connectionTimeout: options.connectionTimeout ?? 10,
-  });
-}
+const createBunSqlPool = createNativePostgresPool;
 
 function bindBunSql(sql: DatabaseConnection): DatabaseConnection {
   bindDatabaseConnection(sql);

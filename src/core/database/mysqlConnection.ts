@@ -1,4 +1,3 @@
-import { missingOptionalPeer } from "../runtime/optionalPeer.ts";
 import {
   type ActiveDatabaseHandle,
   getActiveDatabaseConnection,
@@ -9,30 +8,17 @@ import {
   observeIsolatedReadOnly,
   type ReadOnlyObservationOptions,
 } from "./isolatedReadOnlyObservation.ts";
-
-type MysqlPromiseModule = {
-  createPool: (config: { uri: string; timezone: string }) => MysqlPool;
-};
-
-type MysqlExecutable = {
-  execute: (sql: string, params?: unknown[]) => Promise<[unknown, unknown]>;
-  query?: (sql: string) => Promise<[unknown, unknown]>;
-  end?: () => Promise<void>;
-  getConnection?: () => Promise<MysqlPoolConnection>;
-};
-
-type MysqlPool = MysqlExecutable & {
-  end(): Promise<void>;
-  on(event: "connection", listener: (connection: unknown) => void): void;
-};
-
-type MysqlPoolConnection = MysqlExecutable & {
-  beginTransaction(): Promise<void>;
-  commit(): Promise<void>;
-  rollback(): Promise<void>;
-  release(): void;
-  destroy(): void;
-};
+import { legacyNativeTransaction } from "./legacyNativeTransaction";
+import {
+  createMysqlPool,
+  executeMysql,
+  loadMysql,
+  type MysqlExecutable,
+  type MysqlPool,
+  type MysqlPoolConnection,
+  resetMysqlLoaderForTests,
+} from "./mysqlNative";
+import { createMysqlPin } from "./rawMysql";
 
 type MysqlConnection = ActiveDatabaseHandle & {
   begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T>;
@@ -42,88 +28,6 @@ type MysqlConnection = ActiveDatabaseHandle & {
     options: ReadOnlyObservationOptions,
   ): Promise<T>;
 };
-
-const MYSQL_SESSION_UTC = "SET time_zone = '+00:00'";
-
-type RawPoolConnection = {
-  query: (sql: string, callback: (error: unknown) => void) => unknown;
-};
-
-type MysqlModuleLike = MysqlPromiseModule | { default?: MysqlPromiseModule };
-
-let mysqlModule: MysqlPromiseModule | undefined;
-let mysqlPending: Promise<MysqlPromiseModule> | undefined;
-let importMysql: () => Promise<MysqlModuleLike> = defaultImportMysql;
-
-async function defaultImportMysql(): Promise<MysqlModuleLike> {
-  return import("mysql2/promise") as Promise<MysqlModuleLike>;
-}
-
-function resetMysqlLoaderForTests(importer?: () => Promise<unknown>): void {
-  mysqlModule = undefined;
-  mysqlPending = undefined;
-  importMysql = importer ? async () => (await importer()) as MysqlModuleLike : defaultImportMysql;
-}
-
-function mysqlApi(mod: MysqlModuleLike): MysqlPromiseModule {
-  if (typeof (mod as MysqlPromiseModule).createPool === "function") {
-    return mod as MysqlPromiseModule;
-  }
-  const withDefault = mod as { default?: MysqlPromiseModule };
-  if (typeof withDefault.default?.createPool === "function") {
-    return withDefault.default;
-  }
-  throw new Error("mysql2/promise did not export createPool.");
-}
-
-async function loadMysql(): Promise<MysqlPromiseModule> {
-  if (mysqlModule) {
-    return mysqlModule;
-  }
-  if (!mysqlPending) {
-    mysqlPending = (async () => {
-      let mod: MysqlModuleLike;
-      try {
-        mod = await importMysql();
-      } catch (error: unknown) {
-        mysqlPending = undefined;
-        throw missingOptionalPeer("mysql2", "to open a MySQL connection", error);
-      }
-      try {
-        mysqlModule = mysqlApi(mod);
-        return mysqlModule;
-      } catch (error: unknown) {
-        mysqlPending = undefined;
-        throw error;
-      }
-    })();
-  }
-  return mysqlPending;
-}
-
-function rowsFromResult<T>(result: unknown): T[] {
-  if (Array.isArray(result)) {
-    return result as T[];
-  }
-  if (result && typeof result === "object") {
-    return [result as T];
-  }
-  return [];
-}
-
-async function executeMysql<T>(
-  target: MysqlExecutable,
-  query: string,
-  params: readonly unknown[],
-): Promise<T[]> {
-  // Savepoints and some DDL cannot use MySQL's prepared-statement protocol.
-  // Parameterized operations still use execute() for bound values.
-  const [result] =
-    params.length === 0 && target.query
-      ? await target.query(query)
-      : await target.execute(query, [...params]);
-  return rowsFromResult<T>(result);
-}
 
 function createMysqlAdapter(
   getPool: () => Promise<MysqlExecutable>,
@@ -150,42 +54,7 @@ function createMysqlAdapter(
       if (!pool.getConnection)
         throw new Error("MySQL transactions require a pool with getConnection().");
       const reserved = await pool.getConnection();
-      let open = false;
-      let discard = false;
-      const transaction: ActiveDatabaseHandle = {
-        async unsafe<TValue>(query: string, params: readonly unknown[] = []): Promise<TValue[]> {
-          if (!open) throw new Error("MySQL transaction is no longer active.");
-          return executeMysql<TValue>(reserved, query, params);
-        },
-      };
-      transactions.add(transaction);
-      try {
-        await reserved.beginTransaction();
-        open = true;
-        const result = await runWithDatabaseConnection(transaction, () => callback(transaction));
-        await reserved.commit();
-        return result;
-      } catch (error) {
-        if (open) {
-          try {
-            await reserved.rollback();
-          } catch (rollbackError) {
-            discard = true;
-            reserved.destroy();
-            throw new AggregateError(
-              [error, rollbackError],
-              "MySQL rollback failed; connection discarded.",
-            );
-          }
-        } else {
-          discard = true;
-          reserved.destroy();
-        }
-        throw error;
-      } finally {
-        open = false;
-        if (!discard) reserved.release();
-      }
+      return legacyNativeTransaction(createMysqlPin(reserved), callback, transactions);
     },
     async observeReadOnly<T>(
       operation: (connection: DatabaseConnection) => Promise<T>,
@@ -220,31 +89,6 @@ function createMysqlConnectionFromPool(pool: MysqlExecutable): MysqlConnection {
       await pool.end?.();
     },
   );
-}
-
-function pinSessionToUtc(connection: RawPoolConnection): void {
-  connection.query(MYSQL_SESSION_UTC, (error) => {
-    if (error) {
-      console.warn(
-        `[mysql] Could not set the session time zone to UTC; DATETIME comparisons may drift: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-  });
-}
-
-function createPoolFromModule(mysql: MysqlPromiseModule, url: string): MysqlPool {
-  // UTC on both sides: the driver parses DATETIME as UTC and NOW() runs in a UTC session.
-  const pool = mysql.createPool({ uri: url, timezone: "Z" });
-  pool.on("connection", (connection) => {
-    pinSessionToUtc(connection as RawPoolConnection);
-  });
-  return pool;
-}
-
-async function createMysqlPool(url: string): Promise<MysqlPool> {
-  return createPoolFromModule(await loadMysql(), url);
 }
 
 function createMysqlConnection(url: string): MysqlConnection {

@@ -5,6 +5,13 @@ import {
   CORE_EXECUTION_OPERATIONS_TOKEN,
   type ExecutionOperations,
 } from "@getstrata/core/contracts/executionOperations";
+import {
+  CORE_EXECUTION_OWNERSHIP_TOKEN,
+  type Joined,
+  type OwnedBoundary,
+  type OwnedExecution,
+  type OwnedInvocation,
+} from "@getstrata/core/contracts/executionOwnership";
 import { assertServicePayload, type NonPromisePayload } from "@getstrata/core/contracts/services";
 import { copyApplicationConfig } from "../config/configSnapshot";
 import type {
@@ -55,6 +62,8 @@ type TaskFrame = {
   readonly context: ExecutionContext;
   readonly lease: { active: boolean };
   readonly operation: ExecutionOperations["operation"];
+  readonly joined: OwnedExecution["joined"];
+  readonly path: readonly symbol[];
 };
 
 function deferred<T>(): Deferred<T> {
@@ -110,6 +119,10 @@ function leasedOperation<T>(work: () => T | Promise<T>, close: () => void) {
   void result.promise.then(close, close);
   return {
     promise: result.promise,
+    fail(error: unknown): void {
+      close();
+      result.reject(error);
+    },
     invoke(): void {
       try {
         const value = work();
@@ -376,6 +389,19 @@ class OwnedApplication implements Application {
         },
       });
       services.set(CORE_EXECUTION_OPERATIONS_TOKEN, operations);
+      const ownership: OwnedExecution = Object.freeze({
+        joined: <T>(
+          work: (task: OwnedBoundary) => T | Promise<T>,
+          enter?: OwnedInvocation,
+        ): Promise<Joined<T>> => {
+          try {
+            return activeFrame().joined(work, enter);
+          } catch (error) {
+            return observed(Promise.reject(error));
+          }
+        },
+      });
+      services.set(CORE_EXECUTION_OWNERSHIP_TOKEN, ownership);
       const executionResources = this.journal.createExecutionResources(
         this.definition.services.executionResourceTemplates,
       );
@@ -422,13 +448,15 @@ class OwnedApplication implements Application {
         ? await settleExecutionTasks(
             work,
             owner.check,
-            (body, spawn, resources, operation) => {
+            (body, spawn, resources, dispatch) => {
               const lease = { active: true };
               const frame: TaskFrame = Object.freeze({
                 application: this,
                 context,
                 lease,
-                operation,
+                operation: dispatch.operation,
+                joined: dispatch.joined,
+                path: dispatch.path,
               });
               const scope: CommandScope = Object.freeze({
                 applicationId: this.id,
@@ -461,8 +489,47 @@ class OwnedApplication implements Application {
                   return spawn(childWork);
                 },
               });
+              const requireDirect = (): void => {
+                if (activeFrame() !== frame)
+                  throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+              };
+              const boundary: OwnedBoundary = Object.freeze({
+                acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>): Promise<T> => {
+                  try {
+                    requireDirect();
+                    return resources.acquire(spec);
+                  } catch (error) {
+                    return observed(Promise.reject(error));
+                  }
+                },
+                assertWithin: () => {
+                  const current = activeFrame();
+                  // A live descendant remains authorized after this boundary's body lease closes.
+                  if (!current.path.includes(dispatch.path[dispatch.path.length - 1] as symbol))
+                    throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+                },
+                bindNative: <A extends readonly unknown[], R>(work: (...args: A) => Promise<R>) => {
+                  requireDirect();
+                  if (typeof work !== "function")
+                    throw new TypeError("Native continuation must be a function.");
+                  return (...args: A): Promise<R> => {
+                    try {
+                      // Explicit native delivery restores this exact live owner, even from
+                      // an unrelated delivery frame. It never chooses an ambient owner.
+                      if (!lease.active)
+                        throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+                      return this.taskStorage.run(frame, () => {
+                        owner.check();
+                        return observed(work(...args));
+                      });
+                    } catch (error) {
+                      return observed(Promise.reject(error));
+                    }
+                  };
+                },
+              });
               const bodyOperation = leasedOperation(
-                () => body(scope),
+                () => body(scope, boundary),
                 () => {
                   lease.active = false;
                   resources.seal();
@@ -471,13 +538,44 @@ class OwnedApplication implements Application {
               return {
                 promise: bodyOperation.promise,
                 // Include reflection and native thenable assimilation, not only body(scope).
-                invoke: () => this.taskStorage.run(frame, bodyOperation.invoke),
+                invoke: () =>
+                  this.taskStorage.run(frame, () => {
+                    if (!dispatch.enter) return bodyOperation.invoke();
+                    let started = false;
+                    let open = true;
+                    const protocolError = () =>
+                      new Error("Owned invocation must run synchronously exactly once.");
+                    const invoke = () => {
+                      if (!open) throw protocolError();
+                      if (started) {
+                        const error = protocolError();
+                        dispatch.entryFailed(error);
+                        throw error;
+                      }
+                      started = true;
+                      return bodyOperation.invoke();
+                    };
+                    try {
+                      dispatch.enter(invoke);
+                      if (!started) bodyOperation.fail(protocolError());
+                    } catch (error) {
+                      if (started) dispatch.entryFailed(error);
+                      else bodyOperation.fail(error);
+                    } finally {
+                      open = false;
+                    }
+                  }),
               };
             },
             taskResources(),
             (work) => this.taskStorage.run(undefined, work),
           )
-        : { body: { ok: false, error: initialization.error }, failures: [] };
+        : {
+            invoked: false,
+            retained: false,
+            body: { ok: false, error: initialization.error },
+            failures: [],
+          };
       const bindings = await this.taskStorage.run(undefined, () =>
         executionResources.finalize(bindingCleanupContext),
       );
@@ -491,7 +589,7 @@ class OwnedApplication implements Application {
       for (const failure of bindings.acquisitionFailures) failures.push(failure);
       for (const failure of callbacks.failures) failures.push(failure);
       for (const failure of bindings.cleanupFailures) failures.push(failure);
-      return completeExecution({ body: callbacks.body, failures });
+      return completeExecution({ ...callbacks, failures });
     } finally {
       owner.dispose();
     }

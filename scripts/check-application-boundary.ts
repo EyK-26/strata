@@ -17,6 +17,7 @@ const neutralEdges: Readonly<
       "contracts/services",
       "contracts/executionContext",
       "contracts/executionOperations",
+      "contracts/executionOwnership",
       "runtime/serviceGraph",
       "runtime/resourceJournal",
       "runtime/executionContext",
@@ -29,7 +30,11 @@ const neutralEdges: Readonly<
   [PATH("runtime/resourceJournal")]: { values: [], types: ["contracts/application"] },
   [PATH("runtime/executionTasks")]: {
     values: [],
-    types: ["contracts/application", "contracts/executionOperations"],
+    types: [
+      "contracts/application",
+      "contracts/executionOperations",
+      "contracts/executionOwnership",
+    ],
   },
   [PATH("runtime/executionContext")]: {
     values: ["config/configSnapshot"],
@@ -40,12 +45,17 @@ const neutralEdges: Readonly<
     types: ["contracts/application"],
   },
   [PATH("contracts/executionOperations")]: { values: ["contracts/token"], types: [] },
+  [PATH("contracts/executionOwnership")]: {
+    values: ["contracts/token"],
+    types: ["contracts/application", "contracts/services"],
+  },
   [PATH("runtime/serviceGraph")]: {
     values: [
       "contracts/token",
       "contracts/services",
       "contracts/executionContext",
       "contracts/executionOperations",
+      "contracts/executionOwnership",
     ],
     types: [
       "contracts/container",
@@ -102,6 +112,84 @@ const neutralEdges: Readonly<
     values: ["config/configSnapshot", "config/envSchema"],
     types: ["contracts/application", "config/envSchema"],
   },
+  [PATH("database/bindings")]: {
+    values: [
+      "contracts/executionContext",
+      "contracts/executionOperations",
+      "contracts/executionOwnership",
+      "contracts/services",
+      "contracts/token",
+      "config/configSnapshot",
+      "database/errors",
+      "database/manager",
+      "database/rawMysql",
+      "database/rawPostgres",
+      "database/rawSqlite",
+      "database/sessionFactory",
+      "database/tokens",
+    ],
+    types: ["database/driverPorts"],
+  },
+  [PATH("database/manager")]: { values: ["database/errors"], types: ["database/driverPorts"] },
+  [PATH("database/sessionFactory")]: {
+    values: ["database/errors", "database/transactionSession"],
+    types: [
+      "contracts/application",
+      "contracts/executionOperations",
+      "contracts/executionOwnership",
+      "database/driverPorts",
+      "database/manager",
+      "database/session",
+    ],
+  },
+  [PATH("database/session")]: {
+    values: [],
+    types: ["database/driverPorts", "database/sqlDialects", "database/transactionSession"],
+  },
+  [PATH("database/transactionSession")]: {
+    values: ["database/errors"],
+    types: [
+      "contracts/application",
+      "contracts/executionOperations",
+      "contracts/executionOwnership",
+      "database/driverPorts",
+      "database/sqlDialects",
+    ],
+  },
+  [PATH("database/tokens")]: {
+    values: ["contracts/token"],
+    types: ["database/manager", "database/session"],
+  },
+  [PATH("database/errors")]: { values: [], types: [] },
+  [PATH("database/sqlDialects")]: { values: [], types: [] },
+  [PATH("database/driverPorts")]: {
+    values: [],
+    types: ["contracts/application", "database/acquisitionMetrics", "database/sqlDialects"],
+  },
+  [PATH("database/rawSqlite")]: {
+    values: ["database/nativeTransactions", "database/sqlDialects"],
+    types: ["contracts/application", "database/driverPorts"],
+  },
+  [PATH("database/rawMysql")]: {
+    values: ["database/mysqlNative", "database/nativeTransactions", "database/sqlDialects"],
+    types: ["contracts/application", "database/driverPorts"],
+  },
+  [PATH("database/rawPostgres")]: {
+    values: [
+      "database/acquisitionMetrics",
+      "database/nativeTransactions",
+      "database/postgresNative",
+      "database/sqlDialects",
+    ],
+    types: ["contracts/application", "database/driverPorts"],
+  },
+  [PATH("database/nativeTransactions")]: { values: [], types: ["database/driverPorts"] },
+  [PATH("database/mysqlNative")]: { values: ["runtime/optionalPeer"], types: [] },
+  [PATH("database/postgresNative")]: { values: [], types: [] },
+  [PATH("database/acquisitionMetrics")]: { values: [], types: [] },
+  [PATH("runtime/optionalPeer")]: { values: [], types: [] },
+  [PATH("http/databaseError")]: { values: ["database/errors", "errors/http"], types: [] },
+  [PATH("errors/http")]: { values: [], types: [] },
   // Legacy compatibility facade: preserve only its enumerated type debt, never runtime ownership.
   [PATH("contracts/serviceTokens")]: {
     values: ["contracts/token", "cache/tokens"],
@@ -121,6 +209,11 @@ const canonicalValues = new Set(
     "contracts/services",
     "contracts/executionContext",
     "contracts/executionOperations",
+    "contracts/executionOwnership",
+    "database/tokens",
+    "database/errors",
+    "database/acquisitionMetrics",
+    "errors/http",
     "contracts/serviceTokens",
     "cache/tokens",
     "config/applicationConfig",
@@ -162,6 +255,12 @@ const AMBIENT_CAPABILITIES = new Set([
   "registerDefaultDatabasePool",
   "getDefaultDatabasePool",
   "getDefaultDatabaseQuery",
+  "getActiveDatabaseConnection",
+  "getDatabaseConnection",
+  "setDatabaseConnection",
+  "currentSqlDialect",
+  "overrideSqlDialect",
+  "withConnection",
   "isEtagEnabled",
   "namespacedRedisKey",
 ]);
@@ -188,7 +287,22 @@ interface Token {
 function tokensOf(source: string): Token[] {
   const scanner = createScanner(true, undefined, source);
   const tokens: Token[] = [];
+  const templates: number[] = [];
+  let previousEnd = -1;
   for (let kind = scanner.scan(); kind !== SyntaxKind.EndOfFile; kind = scanner.scan()) {
+    const top = templates.length - 1;
+    if (kind === SyntaxKind.CloseBraceToken && top >= 0) {
+      if (templates[top] === 0) {
+        kind = scanner.reScanTemplateToken(false);
+        if (kind === SyntaxKind.TemplateTail) templates.pop();
+      } else templates[top] = (templates[top] ?? 0) - 1;
+    } else if (kind === SyntaxKind.OpenBraceToken && top >= 0) {
+      templates[top] = (templates[top] ?? 0) + 1;
+    }
+    if (kind === SyntaxKind.TemplateHead) templates.push(0);
+    const end = scanner.getTokenEnd();
+    if (end <= previousEnd) throw new Error("Boundary scanner did not advance.");
+    previousEnd = end;
     tokens.push({
       kind,
       text: scanner.getTokenText(),
@@ -236,8 +350,18 @@ function resolveEdge(file: string, edge: string): string | undefined {
   return undefined;
 }
 function allows(file: string, edge: DependencyEdge): boolean {
-  // Only this application owner may instantiate its private async propagation store.
-  if (file === RUNTIME_PATH && edge.path === "node:async_hooks") return true;
+  // Only the existing task owner and execution-local TransactionRuntime own propagation.
+  if (
+    [RUNTIME_PATH, PATH("database/transactionSession")].includes(file) &&
+    edge.path === "node:async_hooks"
+  )
+    return true;
+  const nativeEdges: Readonly<Record<string, readonly string[]>> = {
+    [PATH("database/rawSqlite")]: ["bun:sqlite", "node:path"],
+    [PATH("database/postgresNative")]: ["bun"],
+    [PATH("database/rawPostgres")]: edge.typeOnly ? ["bun"] : [],
+  };
+  if (nativeEdges[file]?.includes(edge.path)) return true;
   const rules = neutralEdges[file];
   const target = resolveEdge(file, edge.path);
   if (!rules || !target) return false;
@@ -270,8 +394,13 @@ function checkApplicationBoundary(sources: ApplicationBoundarySources): Boundary
       // Bun validates syntax and scans executable imports, including require and dynamic import.
       for (const edge of transpiler.scan(source).imports) {
         if (
-          edge.kind !== "import-statement" ||
-          !allows(file, { path: edge.path, typeOnly: false })
+          !(
+            (edge.kind === "import-statement" &&
+              allows(file, { path: edge.path, typeOnly: false })) ||
+            (file === PATH("database/mysqlNative") &&
+              edge.kind === "dynamic-import" &&
+              edge.path === "mysql2/promise")
+          )
         ) {
           report(
             0,
@@ -295,7 +424,13 @@ function checkApplicationBoundary(sources: ApplicationBoundarySources): Boundary
       report(0, "dependency", "No neutral boundary rule exists for this module.");
       continue;
     }
-    const tokens = tokensOf(source);
+    let tokens: Token[];
+    try {
+      tokens = tokensOf(source);
+    } catch (error) {
+      report(0, "syntax", `Cannot scan application source: ${String(error)}`);
+      continue;
+    }
     for (let index = 0; index < tokens.length; index++) {
       const token = tokens[index];
       if (!token) continue;
@@ -304,7 +439,14 @@ function checkApplicationBoundary(sources: ApplicationBoundarySources): Boundary
       const propertyAccess = previous === "." || previous === "?.";
       if (token.text === "import" && !propertyAccess) {
         const edge = dependencyEdge(tokens, index);
-        if (!edge || !allows(file, edge)) {
+        // The optional native peer loader has exactly one literal dynamic-import authority.
+        const mysqlPeer =
+          file === PATH("database/mysqlNative") &&
+          next === "(" &&
+          tokens[index + 2]?.kind === SyntaxKind.StringLiteral &&
+          tokens[index + 2]?.value === "mysql2/promise" &&
+          tokens[index + 3]?.text === ")";
+        if (!mysqlPeer && (!edge || !allows(file, edge))) {
           report(
             token.start,
             file === CONTRACT_PATH ? "contract-value" : "dependency",

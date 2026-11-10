@@ -92,7 +92,9 @@ describe("@getstrata/core contracts", () => {
     config.set("app.port", 3000);
 
     expect(config.get<number>("app.port")).toBe(3000);
-    expect(() => config.require<string>("missing")).toThrow('Config key "missing" is not defined.');
+    expect(() => config.getRequired<string>("missing")).toThrow(
+      'Config key "missing" is not defined.',
+    );
   });
 
   test("ServiceProvider type accepts register and boot hooks", () => {
@@ -108,6 +110,6 @@ describe("@getstrata/core contracts", () => {
     provider.register?.({ container, config, dependencies: { container }, onCleanup() {} });
 
     expect(config.has("demo")).toBe(true);
-    expect(config.require<boolean>("demo")).toBe(true);
+    expect(config.getRequired<boolean>("demo")).toBe(true);
   });
 });

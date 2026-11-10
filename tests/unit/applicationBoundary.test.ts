@@ -407,3 +407,131 @@ describe("M2.2c joined task boundary", () => {
     ).toBe(true);
   });
 });
+
+describe("M3a explicit persistence boundaries", () => {
+  test("scans quoted native metric templates and checks nested interpolation expressions", () => {
+    const file = "src/core/database/acquisitionMetrics.ts";
+    expect(inspectModule(file, 'const text = `bucket{outcome="${outcome}"} ${value}`;')).toEqual(
+      [],
+    );
+    expect(
+      inspectModule(file, "const text = `outer ${`inner ${globalThis.secret}`} end`;").some(
+        (issue) => issue.rule === "ambient-capability",
+      ),
+    ).toBe(true);
+    expect(
+      inspectModule(file, "const text = `outer ${({ name: process.env }).name} end`;").some(
+        (issue) => issue.rule === "ambient-capability",
+      ),
+    ).toBe(true);
+  });
+  test("keeps acquisition metrics factory and native observation on one canonical weak-map identity", () => {
+    expect(
+      inspectModule(
+        "src/core/database/rawPostgres.ts",
+        'import { observeTransactionAcquisition } from "@getstrata/core/database/acquisitionMetrics";',
+      ),
+    ).toEqual([]);
+    expect(
+      inspectModule(
+        "src/core/database/rawPostgres.ts",
+        'import { observeTransactionAcquisition } from "./acquisitionMetrics";',
+      ).some((issue) => issue.rule === "dependency"),
+    ).toBe(true);
+  });
+  test.each([
+    [
+      "src/core/contracts/executionOwnership.ts",
+      'import { createServiceToken } from "@getstrata/core/contracts/token"; import type { ResourceSpec } from "./application";',
+    ],
+    [
+      "src/core/runtime/application.ts",
+      'import { CORE_EXECUTION_OWNERSHIP_TOKEN } from "@getstrata/core/contracts/executionOwnership";',
+    ],
+    [
+      "src/core/database/bindings.ts",
+      'import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens"; import { createRawSqlitePool } from "./rawSqlite";',
+    ],
+    [
+      "src/core/database/transactionSession.ts",
+      'import { AsyncLocalStorage } from "node:async_hooks"; import type { OwnedExecution } from "../contracts/executionOwnership";',
+    ],
+    [
+      "src/core/database/rawSqlite.ts",
+      'import { Database } from "bun:sqlite"; import { resolve } from "node:path"; import { nativeTransaction } from "./nativeTransactions";',
+    ],
+    [
+      "src/core/database/rawPostgres.ts",
+      'import type { ReservedSQL } from "bun"; import { createNativePostgresPool } from "./postgresNative";',
+    ],
+    ["src/core/database/postgresNative.ts", 'import { SQL } from "bun";'],
+    [
+      "src/core/database/mysqlNative.ts",
+      'import { missingOptionalPeer } from "../runtime/optionalPeer.ts"; async function load() { return import("mysql2/promise"); }',
+    ],
+    [
+      "src/core/http/databaseError.ts",
+      'import { PersistenceError } from "@getstrata/core/database/errors"; import { ConflictError } from "@getstrata/core/errors/http";',
+    ],
+  ])("accepts the exact persistence authority in %s", (file, source) => {
+    expect(inspectModule(file, source)).toEqual([]);
+  });
+
+  test.each([
+    ["src/core/database/errors.ts", 'import { ConflictError } from "@getstrata/core/errors/http";'],
+    ["src/core/database/session.ts", 'import type { HttpError } from "../errors/http";'],
+    [
+      "src/core/database/transactionSession.ts",
+      'import { mapDatabaseHttpError } from "../http/databaseError";',
+    ],
+    [
+      "src/core/database/rawSqlite.ts",
+      'import { getActiveDatabaseConnection } from "./connectionContext";',
+    ],
+    [
+      "src/core/database/rawMysql.ts",
+      'import { createAsyncContextStore } from "../runtime/asyncContextStore";',
+    ],
+    ["src/core/database/rawPostgres.ts", 'import { currentSqlDialect } from "./dialect";'],
+    ["src/core/database/manager.ts", 'import { getDefaultConnection } from "./defaultConnection";'],
+    [
+      "src/core/database/sessionFactory.ts",
+      'import { defaultConnection } from "./defaultConnection";',
+    ],
+    ["src/core/database/session.ts", 'import { AsyncLocalStorage } from "node:async_hooks";'],
+    ["src/core/database/rawMysql.ts", 'import { AsyncLocalStorage } from "node:async_hooks";'],
+    ["src/core/database/rawSqlite.ts", 'import { SQL } from "bun";'],
+    ["src/core/database/rawMysql.ts", 'import { resolve } from "node:path";'],
+    ["src/core/database/postgresNative.ts", 'import { Database } from "bun:sqlite";'],
+    ["src/core/database/mysqlNative.ts", 'import mysql from "mysql2/promise";'],
+    [
+      "src/core/database/mysqlNative.ts",
+      'const path = "mysql2/promise"; const load = import(path);',
+    ],
+    ["src/core/database/mysqlNative.ts", 'const load = import("mysql2");'],
+    ["src/core/database/rawMysql.ts", 'const load = import("mysql2/promise");'],
+    ["src/core/database/bindings.ts", 'import { DATABASE_SESSION_TOKEN } from "./tokens";'],
+    ["src/core/http/databaseError.ts", 'import { PersistenceError } from "../database/errors";'],
+    ["src/core/http/databaseError.ts", 'import { ConflictError } from "../errors/http";'],
+    ["src/core/database/driverPorts.ts", 'export type { HttpError } from "../errors/http";'],
+  ])(
+    "rejects HTTP leakage, native broadening, legacy routing, or duplicate identity in %s",
+    (file, source) => {
+      expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
+    },
+  );
+
+  test.each([
+    ["src/core/database/mysqlNative.ts", 'const load = require("mysql2/promise");'],
+    ["src/core/database/bindings.ts", "const definition = process.env;"],
+    ["src/core/database/manager.ts", "const pools = globalThis.pools;"],
+    ["src/core/database/sessionFactory.ts", "const current = getActiveDatabaseConnection();"],
+    ["src/core/database/transactionSession.ts", "const current = currentSqlDialect();"],
+    ["src/core/database/rawMysql.ts", "const inherited = globalThis.connection;"],
+    ["src/core/database/tokens.ts", 'const token = Symbol.for("database.session");'],
+  ])("rejects root/session/native ambient ownership in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "ambient-capability")).toBe(
+      true,
+    );
+  });
+});

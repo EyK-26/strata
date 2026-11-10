@@ -31,6 +31,26 @@ export {
   service,
   valueService,
 } from "@getstrata/core/contracts/services";
+export type {
+  TransactionAcquisitionMetrics,
+  TransactionAcquisitionSnapshot,
+} from "@getstrata/core/database/acquisitionMetrics";
+export {
+  createTransactionAcquisitionMetrics,
+  renderTransactionAcquisitionMetrics,
+} from "@getstrata/core/database/acquisitionMetrics";
+export type {
+  PersistenceErrorCode,
+  PersistenceErrorOptions,
+  PersistenceResult,
+  TransactionDataDisposition,
+} from "@getstrata/core/database/errors";
+export {
+  mapDatabaseError,
+  PersistenceError,
+  withDatabaseErrorHandling,
+} from "@getstrata/core/database/errors";
+export { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
 export type {
   AdminColumn,
@@ -135,20 +155,13 @@ export {
   createFieldEncryptionRotationMigration,
   runFieldEncryptionRotationBatch,
 } from "../core/crypto/fieldEncryptionRotation";
-export type {
-  TransactionAcquisitionMetrics,
-  TransactionAcquisitionSnapshot,
-} from "../core/database/acquisitionMetrics.ts";
-export {
-  createTransactionAcquisitionMetrics,
-  renderTransactionAcquisitionMetrics,
-} from "../core/database/acquisitionMetrics.ts";
 export { default as BaseRepository } from "../core/database/baseRepository.ts";
 export {
   bindDatabaseConnection,
   getBoundDatabaseConnection,
   resetBoundDatabaseConnection,
 } from "../core/database/bindConnection.ts";
+export { createDatabaseBindings } from "../core/database/bindings";
 export { bindBunSql, createBunSqlPool } from "../core/database/bunSql.ts";
 export { createDatabaseConnection } from "../core/database/connection.ts";
 export {
@@ -173,7 +186,6 @@ export {
   sqlTimestamp,
   useSqlDialect,
 } from "../core/database/dialect.ts";
-export { mapDatabaseError, withDatabaseErrorHandling } from "../core/database/errors.ts";
 export { Factory } from "../core/database/factory.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "../core/database/inflection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";
@@ -326,9 +338,17 @@ export {
   runSeedersFromDirectory,
 } from "../core/database/seeders/runner.ts";
 export type { Seeder, SeederDatabase } from "../core/database/seeders/types.ts";
+export type {
+  DatabaseCapabilities,
+  DatabaseConnectionOptions,
+  DatabaseDefinition,
+  DatabaseSession,
+  SqlStatement,
+  TransactionOptions,
+  TransactionSession,
+} from "../core/database/session";
 export { createSqliteConnection } from "../core/database/sqliteConnection.ts";
 export { defineTable } from "../core/database/table.ts";
-export type { TransactionOptions } from "../core/database/transaction.ts";
 export {
   afterCommit,
   hasActiveTransaction,

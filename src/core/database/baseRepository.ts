@@ -1,3 +1,4 @@
+import { withDatabaseErrorHandling } from "@getstrata/core/database/errors";
 import { eventBus } from "../events/eventBus.ts";
 import { dispatchModelEvent, modelEventName } from "../events/index.ts";
 import type { KeysetCursor, KeysetOptions } from "../pagination/index.ts";
@@ -8,7 +9,6 @@ import {
 } from "../pagination/index.ts";
 import type { DatabaseConnection, SqlDatabaseConnection } from "./connectionContracts";
 import { currentSqlDialect } from "./dialect.ts";
-import { withDatabaseErrorHandling } from "./errors.ts";
 import { KEYSET_ALIAS_PREFIX, keysetBoundary, validateKeyset } from "./keyset.ts";
 import {
   buildConditionalWriteQuery,

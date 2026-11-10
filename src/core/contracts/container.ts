@@ -197,7 +197,7 @@ class ServiceContainer implements ServiceContainerLike {
 
 interface ConfigStoreLike {
   get<T>(key: string): T | undefined;
-  require<T>(key: string): T;
+  getRequired<T>(key: string): T;
   has(key: string): boolean;
 }
 
@@ -214,7 +214,7 @@ class ConfigStore implements ConfigStoreLike {
     return this.values.get(key) as T | undefined;
   }
 
-  require<T>(key: string): T {
+  getRequired<T>(key: string): T {
     if (!this.values.has(key)) throw new Error(`Config key "${key}" is not defined.`);
     return this.values.get(key) as T;
   }

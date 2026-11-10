@@ -20,9 +20,9 @@ const legacyCacheProvider: ServiceProvider = {
   name: "core.cache",
   register({ container, config, dependencies, onCleanup }) {
     const options = snapshotCacheStoreOptions({
-      driver: config.require<CacheDriver>(CACHE_DRIVER_CONFIG_KEY),
-      ttlMs: config.require<number>(CACHE_TTL_MS_CONFIG_KEY),
-      maxEntries: config.require<number>(CACHE_MAX_ENTRIES_CONFIG_KEY),
+      driver: config.getRequired<CacheDriver>(CACHE_DRIVER_CONFIG_KEY),
+      ttlMs: config.getRequired<number>(CACHE_TTL_MS_CONFIG_KEY),
+      maxEntries: config.getRequired<number>(CACHE_MAX_ENTRIES_CONFIG_KEY),
       redisUrl: config.get<string>(REDIS_URL_CONFIG_KEY) || undefined,
       namespace: `${process.env.APP_KEY_PREFIX?.trim() || "strata"}:cache:v3:`,
     });
