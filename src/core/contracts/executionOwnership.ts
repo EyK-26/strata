@@ -18,6 +18,8 @@ interface Joined<T> {
 /** Internal authority for one actual node; never supplied to public operation work. */
 interface OwnedBoundary {
   readonly acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>) => Promise<T>;
+  /** Complete trusted framework bookkeeping from this exact live direct body. */
+  readonly finalize: (work: () => undefined) => Promise<Joined<void>>;
   /** Validate the current live body is this boundary or one of its actual descendants. */
   readonly assertWithin: () => void;
   /** Restore this exact live direct body for a native continuation, without reviving it. */

@@ -9,7 +9,7 @@ import type {
 
 type Work<T> = (scope: CommandScope) => T | Promise<T>;
 type NodeWork<T> = Work<T> | (() => T | Promise<T>) | ((task: OwnedBoundary) => T | Promise<T>);
-type Mode = "strict" | "operation" | "joined";
+type Mode = "strict" | "operation" | "joined" | "bookkeeping";
 type Operation<T> = { readonly promise: Promise<T>; invoke(): void };
 type TaskResources = {
   readonly acquire: CommandScope["acquire"];
@@ -31,6 +31,8 @@ type OperationFactory = <T>(
 type TaskDispatch = {
   readonly operation: ExecutionOperations["operation"];
   readonly joined: OwnedExecution["joined"];
+  readonly finalize: OwnedBoundary["finalize"];
+  readonly bookkeeping: boolean;
   readonly path: readonly symbol[];
   readonly enter?: OwnedInvocation;
   entryFailed(error: unknown): void;
@@ -104,7 +106,8 @@ function settleExecutionTasks<T>(
       if (enter !== undefined && typeof enter !== "function") {
         throw new TypeError("Owned invocation context must be a function.");
       }
-      check();
+      // Bookkeeping completes existing ownership rather than admitting new business work.
+      if (mode !== "bookkeeping") check();
       // Engine callbacks must not inherit an active same-app parent body frame.
       return blank(() => {
         const child = node<T>(childWork, resources.child(), mode, path, enter);
@@ -139,14 +142,21 @@ function settleExecutionTasks<T>(
         return rejected<Joined<T>>(error);
       }
     };
+    const finalize: OwnedBoundary["finalize"] = (work) => {
+      try {
+        return launch<void>(work, "bookkeeping").settlement.then(joinedOutcome);
+      } catch (error) {
+        return rejected<Joined<void>>(error);
+      }
+    };
     let invoked = false;
     let entryFailure: { error: unknown } | undefined;
     const bodyOperation = createOperation<T>(
       (scope, task) => {
         // Inside the leased body: a skipped invocation still closes its own lease.
-        check();
+        if (mode !== "bookkeeping") check();
         invoked = true;
-        if (mode === "operation") return (body as () => T | Promise<T>)();
+        if (mode === "operation" || mode === "bookkeeping") return (body as () => T | Promise<T>)();
         if (mode === "joined") return (body as (task: OwnedBoundary) => T | Promise<T>)(task);
         return (body as Work<T>)(scope);
       },
@@ -155,6 +165,8 @@ function settleExecutionTasks<T>(
       {
         operation,
         joined,
+        finalize,
+        bookkeeping: mode === "bookkeeping",
         path,
         enter,
         entryFailed: (error) => {
@@ -172,7 +184,8 @@ function settleExecutionTasks<T>(
       const owned = await resources.finalize();
       const failures: unknown[] = [];
       // Only ordinary work that actually ran is recoverable; reserved skips stay strict.
-      if (!result.ok && (mode === "strict" || !invoked)) failures.push(result.error);
+      if (!result.ok && (mode === "strict" || mode === "bookkeeping" || !invoked))
+        failures.push(result.error);
       if (entryFailure) failures.push(entryFailure.error);
       for (const failure of owned.acquisitionFailures) failures.push(failure);
       for (const child of descendants) {

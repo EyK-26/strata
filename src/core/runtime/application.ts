@@ -363,7 +363,7 @@ class OwnedApplication implements Application {
       owner.check();
       const services = new ServiceContainer(this.services);
       services.set(CORE_EXECUTION_CONTEXT_TOKEN, context);
-      const activeFrame = (): TaskFrame => {
+      const identityFrame = (): TaskFrame => {
         const frame = this.taskStorage.getStore();
         if (
           !frame ||
@@ -373,6 +373,10 @@ class OwnedApplication implements Application {
         ) {
           throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
         }
+        return frame;
+      };
+      const activeFrame = (): TaskFrame => {
+        const frame = identityFrame();
         owner.check();
         return frame;
       };
@@ -494,6 +498,16 @@ class OwnedApplication implements Application {
                   throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
               };
               const boundary: OwnedBoundary = Object.freeze({
+                finalize: (work: () => undefined): Promise<Joined<void>> => {
+                  try {
+                    // Exact direct admission remains required even after cancellation.
+                    if (identityFrame() !== frame)
+                      throw new ApplicationStateError("APPLICATION_SCOPE_EXPIRED", this.id);
+                    return dispatch.finalize(work);
+                  } catch (error) {
+                    return observed(Promise.reject(error));
+                  }
+                },
                 acquire: <T>(spec: ResourceSpec<T> & NonPromisePayload<T>): Promise<T> => {
                   try {
                     requireDirect();
@@ -539,7 +553,7 @@ class OwnedApplication implements Application {
                 promise: bodyOperation.promise,
                 // Include reflection and native thenable assimilation, not only body(scope).
                 invoke: () =>
-                  this.taskStorage.run(frame, () => {
+                  this.taskStorage.run(dispatch.bookkeeping ? undefined : frame, () => {
                     if (!dispatch.enter) return bodyOperation.invoke();
                     let started = false;
                     let open = true;
