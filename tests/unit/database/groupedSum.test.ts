@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { buildGroupedSumQuery } from "@getstrata/core/database/query";
 import { hasMany } from "@getstrata/core/database/relationships";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
@@ -23,7 +23,7 @@ const table = defineTable<Line, "id">({
 test("grouped sums bind predicates, validate columns and quote identifiers across dialects", () => {
   for (const driver of ["pgsql", "mysql", "sqlite"] as const)
     runWithSqlDialect(driver, () => {
-      const built = buildGroupedSumQuery(table, "product_id", "quantity", {
+      const built = buildGroupedSumQuery(currentSqlDialect(), table, "product_id", "quantity", {
         where: { deleted_at: "malicious'; DROP TABLE lines;--" },
       });
       const scoped = new BaseRepository(table)
@@ -33,26 +33,36 @@ test("grouped sums bind predicates, validate columns and quote identifiers acros
         .where({ product_id: 11 })
         .orWhere({ tenant_id: 2 })
         .getOptions();
-      expect(buildGroupedSumQuery(table, "product_id", "quantity", scoped).params).toEqual([
-        1, 11, 2,
-      ]);
+      expect(
+        buildGroupedSumQuery(currentSqlDialect(), table, "product_id", "quantity", scoped).params,
+      ).toEqual([1, 11, 2]);
       expect(built.params).toEqual(["malicious'; DROP TABLE lines;--"]);
       expect(built.text).not.toContain("DROP TABLE");
       expect(built.text).toContain("SUM(");
       expect(built.text).toContain("GROUP BY");
       expect(() =>
-        buildGroupedSumQuery({ ...table, name: "lines;DROP" }, "product_id", "quantity"),
+        buildGroupedSumQuery(
+          currentSqlDialect(),
+          { ...table, name: "lines;DROP" },
+          "product_id",
+          "quantity",
+        ),
       ).toThrow("Invalid SQL identifier");
       expect(built.text).toContain(
         driver === "mysql" ? "AS CHAR" : driver === "pgsql" ? "::text" : "AS TEXT",
       );
       for (const column of ["unknown", "quantity); DROP TABLE lines;--"])
         expect(() =>
-          buildGroupedSumQuery(table, JSON.parse(JSON.stringify(column)), "quantity"),
+          buildGroupedSumQuery(
+            currentSqlDialect(),
+            table,
+            JSON.parse(JSON.stringify(column)),
+            "quantity",
+          ),
         ).toThrow("declared columns");
-      expect(() => buildGroupedSumQuery(table, "product_id", JSON.parse('"unknown"'))).toThrow(
-        "declared columns",
-      );
+      expect(() =>
+        buildGroupedSumQuery(currentSqlDialect(), table, "product_id", JSON.parse('"unknown"')),
+      ).toThrow("declared columns");
     });
 });
 test("unsupported aggregate transformations and eager loading reject before SQL", async () => {

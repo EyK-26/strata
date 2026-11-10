@@ -162,6 +162,14 @@ const neutralEdges: Readonly<
   },
   [PATH("database/errors")]: { values: [], types: [] },
   [PATH("database/sqlDialects")]: { values: [], types: [] },
+  [PATH("database/query")]: {
+    values: [],
+    types: ["database/sqlDialects", "database/table", "database/types", "database/whereBuilder"],
+  },
+  [PATH("database/relationQueries")]: {
+    values: ["database/query"],
+    types: ["database/sqlDialects", "database/table", "database/types"],
+  },
   [PATH("database/driverPorts")]: {
     values: [],
     types: ["contracts/application", "database/acquisitionMetrics", "database/sqlDialects"],

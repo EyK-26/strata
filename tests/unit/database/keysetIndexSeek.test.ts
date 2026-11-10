@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { buildSelectQuery } from "@getstrata/core/database/query";
 import { defineTable } from "@getstrata/core/database/table";
 import type { KeysetCursor } from "@getstrata/core/pagination";
@@ -23,6 +23,7 @@ test("Postgres same-direction bounds become qualified, parameterized row compari
     for (const direction of ["asc", "desc"] as const) {
       const order = cursor.order.map((item) => ({ ...item, direction }));
       const result = buildSelectQuery(
+        currentSqlDialect(),
         table,
         { where: { tenant_id: 7 } },
         keysetBoundary(order, { ...cursor, order }),
@@ -34,6 +35,7 @@ test("Postgres same-direction bounds become qualified, parameterized row compari
     }
     const hostile = "' OR TRUE --";
     const result = buildSelectQuery(
+      currentSqlDialect(),
       table,
       {},
       keysetBoundary(cursor.order, { ...cursor, values: [hostile, "4"] }),
@@ -66,7 +68,7 @@ test("malformed row comparisons fail before execution", () =>
       { columns: [null], values: [1], operator: "gt" },
       { columns: ["id"], values: null, operator: "gt" },
     ])
-      expect(() => buildSelectQuery(table, {}, [{ kind: "and", compareRow }] as never)).toThrow(
-        "row comparison",
-      );
+      expect(() =>
+        buildSelectQuery(currentSqlDialect(), table, {}, [{ kind: "and", compareRow }] as never),
+      ).toThrow("row comparison");
   }));

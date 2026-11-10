@@ -53,6 +53,28 @@ SQL text uses the selected driver's placeholders. The framework captures the
 statement text and parameter array before dispatch; native bind-value codecs
 retain their existing semantics. Dialect and capability descriptions are frozen.
 
+## Explicit SQL compilation
+
+Dialect-dependent helpers from `@getstrata/core/database/query` now require a
+`SqlDialect` as their first argument. Pass the executing session's `dialect`:
+
+```ts
+import { buildSelectQuery } from "@getstrata/core/database/query";
+
+const statement = buildSelectQuery(db.dialect, notesTable, { where: { id: 42 } });
+const rows = await db.execute(statement);
+```
+
+This replaces calls such as `buildSelectQuery(notesTable, options)`. The compiler
+uses the supplied descriptor throughout nested conditions and relation queries;
+it never selects a connection or reads an ambient dialect. Existing argument
+order after the dialect, SQL validation and parameter ordering are unchanged.
+`parseQualifiedColumn`, `resolveSoftDeleteColumn` and
+`assertSafeProjectionExpression` remain independent of dialect and keep their
+existing signatures. Legacy repositories still choose their dialect at the
+calling boundary; this change alone does not migrate their ownership or snapshot
+mutable query plans across asynchronous operations.
+
 ## Transaction work and outcomes
 
 Each transaction owns one physical connection, or one serialized SQLite slot.

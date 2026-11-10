@@ -1,4 +1,4 @@
-import { currentSqlDialect } from "@getstrata/core/database/dialect";
+import type { SqlDialect } from "./sqlDialects.ts";
 import type { TableDefinition } from "./table.ts";
 import type {
   MutationValues,
@@ -13,19 +13,23 @@ import type {
 } from "./types.ts";
 import type { WhereNode } from "./whereBuilder.ts";
 
-function quoteIdentifier(identifier: string): string {
-  return currentSqlDialect().quoteIdentifier(identifier);
+function quoteIdentifier(dialect: SqlDialect, identifier: string): string {
+  return dialect.quoteIdentifier(identifier);
 }
 
-function returningSuffix(columns: string): string {
-  return currentSqlDialect().returningClause(columns);
+function returningSuffix(dialect: SqlDialect, columns: string): string {
+  return dialect.returningClause(columns);
 }
 
-function qualifyColumn(tableName: string, column: string): string {
-  return `${quoteIdentifier(tableName)}.${quoteIdentifier(column)}`;
+function qualifyColumn(dialect: SqlDialect, tableName: string, column: string): string {
+  return `${quoteIdentifier(dialect, tableName)}.${quoteIdentifier(dialect, column)}`;
 }
 
-function resolveQualifiedColumn(defaultTable: string, columnName: string): string {
+function resolveQualifiedColumn(
+  dialect: SqlDialect,
+  defaultTable: string,
+  columnName: string,
+): string {
   if (columnName.includes(".")) {
     const [table, column] = columnName.split(".", 2);
 
@@ -33,10 +37,10 @@ function resolveQualifiedColumn(defaultTable: string, columnName: string): strin
       throw new Error(`Invalid qualified column: ${columnName}`);
     }
 
-    return qualifyColumn(table, column);
+    return qualifyColumn(dialect, table, column);
   }
 
-  return qualifyColumn(defaultTable, columnName);
+  return qualifyColumn(dialect, defaultTable, columnName);
 }
 
 function parseQualifiedColumn(reference: string): { table: string; column: string } {
@@ -59,9 +63,9 @@ function isQueryOperator(value: QueryFilterValue): value is QueryOperator {
   );
 }
 
-function pushParam(values: unknown[], value: unknown): string {
+function pushParam(dialect: SqlDialect, values: unknown[], value: unknown): string {
   values.push(value);
-  return currentSqlDialect().placeholder(values.length);
+  return dialect.placeholder(values.length);
 }
 
 const SUPPORTED_OPERATORS: ReadonlySet<string> = new Set([
@@ -79,6 +83,7 @@ const SUPPORTED_OPERATORS: ReadonlySet<string> = new Set([
 ]);
 
 function buildInClause(
+  dialect: SqlDialect,
   column: string,
   values: readonly unknown[],
   params: unknown[],
@@ -88,11 +93,12 @@ function buildInClause(
     return negated ? "1 = 1" : "1 = 0";
   }
 
-  const placeholders = values.map((value) => pushParam(params, value)).join(", ");
+  const placeholders = values.map((value) => pushParam(dialect, params, value)).join(", ");
   return `${column}${negated ? " NOT" : ""} IN (${placeholders})`;
 }
 
 function buildOperatorClauses(
+  dialect: SqlDialect,
   column: string,
   operator: QueryOperator,
   params: unknown[],
@@ -118,7 +124,7 @@ function buildOperatorClauses(
     if (operator.eq === null) {
       clauses.push(`${column} IS NULL`);
     } else {
-      clauses.push(`${column} = ${pushParam(params, operator.eq)}`);
+      clauses.push(`${column} = ${pushParam(dialect, params, operator.eq)}`);
     }
   }
 
@@ -126,52 +132,55 @@ function buildOperatorClauses(
     if (operator.ne === null) {
       clauses.push(`${column} IS NOT NULL`);
     } else {
-      clauses.push(`${column} <> ${pushParam(params, operator.ne)}`);
+      clauses.push(`${column} <> ${pushParam(dialect, params, operator.ne)}`);
     }
   }
 
   if (operator.in !== undefined) {
-    clauses.push(buildInClause(column, operator.in, params));
+    clauses.push(buildInClause(dialect, column, operator.in, params));
   }
 
   if (operator.notIn !== undefined) {
-    clauses.push(buildInClause(column, operator.notIn, params, true));
+    clauses.push(buildInClause(dialect, column, operator.notIn, params, true));
   }
 
   if (operator.gt !== undefined) {
-    clauses.push(`${column} > ${pushParam(params, operator.gt)}`);
+    clauses.push(`${column} > ${pushParam(dialect, params, operator.gt)}`);
   }
 
   if (operator.gte !== undefined) {
-    clauses.push(`${column} >= ${pushParam(params, operator.gte)}`);
+    clauses.push(`${column} >= ${pushParam(dialect, params, operator.gte)}`);
   }
 
   if (operator.lt !== undefined) {
-    clauses.push(`${column} < ${pushParam(params, operator.lt)}`);
+    clauses.push(`${column} < ${pushParam(dialect, params, operator.lt)}`);
   }
 
   if (operator.lte !== undefined) {
-    clauses.push(`${column} <= ${pushParam(params, operator.lte)}`);
+    clauses.push(`${column} <= ${pushParam(dialect, params, operator.lte)}`);
   }
 
   if (operator.ilike !== undefined) {
     clauses.push(
-      `${column} ${currentSqlDialect().ilikeOperator()} ${pushParam(params, operator.ilike)}`,
+      `${column} ${dialect.ilikeOperator()} ${pushParam(dialect, params, operator.ilike)}`,
     );
   }
 
   if (operator.tsMatch !== undefined) {
-    if (currentSqlDialect().driver !== "pgsql") {
+    if (dialect.driver !== "pgsql") {
       throw new Error("Full-text search (tsMatch) is only available on PostgreSQL.");
     }
 
-    clauses.push(`${column} @@ plainto_tsquery('english', ${pushParam(params, operator.tsMatch)})`);
+    clauses.push(
+      `${column} @@ plainto_tsquery('english', ${pushParam(dialect, params, operator.tsMatch)})`,
+    );
   }
 
   return clauses;
 }
 
 function appendWhereParts<TEntity extends object>(
+  dialect: SqlDialect,
   tableName: string,
   where: QueryWhere<TEntity>,
   params: unknown[],
@@ -185,15 +194,15 @@ function appendWhereParts<TEntity extends object>(
       continue;
     }
 
-    const column = resolveQualifiedColumn(tableName, columnName);
+    const column = resolveQualifiedColumn(dialect, tableName, columnName);
 
     if (Array.isArray(filterValue)) {
-      clauses.push(buildInClause(column, filterValue, params));
+      clauses.push(buildInClause(dialect, column, filterValue, params));
       continue;
     }
 
     if (isQueryOperator(filterValue)) {
-      clauses.push(...buildOperatorClauses(column, filterValue, params));
+      clauses.push(...buildOperatorClauses(dialect, column, filterValue, params));
       continue;
     }
 
@@ -202,18 +211,19 @@ function appendWhereParts<TEntity extends object>(
       continue;
     }
 
-    clauses.push(`${column} = ${pushParam(params, filterValue)}`);
+    clauses.push(`${column} = ${pushParam(dialect, params, filterValue)}`);
   }
 
   return clauses.join(" AND ");
 }
 
 function buildWhereClause<TEntity extends object>(
+  dialect: SqlDialect,
   tableName: string,
   where: QueryWhere<TEntity> = {},
 ): { clause: string; params: unknown[] } {
   const params: unknown[] = [];
-  const body = appendWhereParts(tableName, where, params);
+  const body = appendWhereParts(dialect, tableName, where, params);
 
   return {
     clause: body.length > 0 ? ` WHERE ${body}` : "",
@@ -228,6 +238,7 @@ function remapExistsSql(sql: string, existsParams: readonly unknown[], params: u
 }
 
 function buildWhereNodeClause<TEntity extends object>(
+  dialect: SqlDialect,
   tableName: string,
   node: WhereNode<TEntity>,
   params: unknown[],
@@ -243,7 +254,7 @@ function buildWhereNodeClause<TEntity extends object>(
       Array.from(columns).some((column) => typeof column !== "string" || !column.length)
     )
       throw new TypeError("Invalid row comparison columns, values or operator.");
-    return `(${columns.map((column) => qualifyColumn(tableName, column)).join(", ")}) ${operator === "lt" ? "<" : ">"} (${values.map((value) => pushParam(params, value)).join(", ")})`;
+    return `(${columns.map((column) => qualifyColumn(dialect, tableName, column)).join(", ")}) ${operator === "lt" ? "<" : ">"} (${values.map((value) => pushParam(dialect, params, value)).join(", ")})`;
   }
 
   if ("exists" in node) {
@@ -252,10 +263,10 @@ function buildWhereNodeClause<TEntity extends object>(
   }
 
   if ("where" in node) {
-    return appendWhereParts(tableName, node.where, params);
+    return appendWhereParts(dialect, tableName, node.where, params);
   }
 
-  const grouped = buildWhereGroupClause(tableName, node.group, params);
+  const grouped = buildWhereGroupClause(dialect, tableName, node.group, params);
 
   if (!grouped) {
     return "";
@@ -265,6 +276,7 @@ function buildWhereNodeClause<TEntity extends object>(
 }
 
 function buildWhereGroupClause<TEntity extends object>(
+  dialect: SqlDialect,
   tableName: string,
   nodes: readonly WhereNode<TEntity>[],
   params: unknown[],
@@ -272,7 +284,7 @@ function buildWhereGroupClause<TEntity extends object>(
   let result = "";
 
   for (const node of nodes) {
-    const part = buildWhereNodeClause(tableName, node, params);
+    const part = buildWhereNodeClause(dialect, tableName, node, params);
 
     if (!part) {
       continue;
@@ -294,6 +306,7 @@ function buildWhereGroupClause<TEntity extends object>(
 }
 
 function buildAdvancedWhereClause<TEntity extends object>(
+  dialect: SqlDialect,
   tableName: string,
   where: QueryWhere<TEntity> = {},
   whereNodes: readonly WhereNode<TEntity>[] = [],
@@ -307,7 +320,7 @@ function buildAdvancedWhereClause<TEntity extends object>(
 
   nodes.push(...whereNodes);
 
-  const combined = buildWhereGroupClause(tableName, nodes, params);
+  const combined = buildWhereGroupClause(dialect, tableName, nodes, params);
 
   return {
     clause: combined ? ` WHERE ${combined}` : "",
@@ -328,6 +341,7 @@ function resolveSoftDeleteColumn<TEntity>(table: TableDefinition<TEntity>): stri
 }
 
 function appendSoftDeleteScope<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed">,
   clauses: string[],
@@ -338,7 +352,7 @@ function appendSoftDeleteScope<TEntity extends object>(
     return;
   }
 
-  const qualifiedColumn = qualifyColumn(table.name, column);
+  const qualifiedColumn = qualifyColumn(dialect, table.name, column);
 
   if (options.onlyTrashed) {
     clauses.push(`${qualifiedColumn} IS NOT NULL`);
@@ -351,12 +365,14 @@ function appendSoftDeleteScope<TEntity extends object>(
 }
 
 function buildQueryWhereClause<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   options: Pick<QueryOptions<TEntity>, "where" | "withTrashed" | "onlyTrashed"> = {},
   whereNodes: readonly WhereNode<TEntity>[] = [],
   params: unknown[] = [],
 ): { clause: string; params: unknown[] } {
   const { clause, params: whereParams } = buildAdvancedWhereClause(
+    dialect,
     table.name,
     options.where ?? {},
     whereNodes,
@@ -364,7 +380,7 @@ function buildQueryWhereClause<TEntity extends object>(
   );
   const softDeleteClauses: string[] = [];
 
-  appendSoftDeleteScope(table, options, softDeleteClauses);
+  appendSoftDeleteScope(dialect, table, options, softDeleteClauses);
 
   if (softDeleteClauses.length === 0) {
     return { clause, params: whereParams };
@@ -407,6 +423,7 @@ function normalizeOrderBy<TEntity extends object>(
 }
 
 function buildOrderByClause<TEntity extends object>(
+  dialect: SqlDialect,
   tableName: string,
   orderBy?: QueryOptions<TEntity>["orderBy"],
 ): string {
@@ -414,12 +431,12 @@ function buildOrderByClause<TEntity extends object>(
     if (nulls !== undefined && nulls !== "first" && nulls !== "last") {
       throw new TypeError("Invalid null ordering: expected first or last.");
     }
-    const reference = resolveQualifiedColumn(tableName, column);
+    const reference = resolveQualifiedColumn(dialect, tableName, column);
     const ordered = `${reference} ${normalizeDirection(direction)}`;
     if (nulls === undefined) return ordered;
     // MySQL lacks NULLS FIRST/LAST. A null discriminator precedes the value
     // in the same order item, leaving subsequent tie-breakers unchanged.
-    if (currentSqlDialect().driver === "mysql") {
+    if (dialect.driver === "mysql") {
       return `(${reference} IS NULL) ${nulls === "first" ? "DESC" : "ASC"}, ${ordered}`;
     }
     return `${ordered} NULLS ${nulls.toUpperCase()}`;
@@ -429,6 +446,7 @@ function buildOrderByClause<TEntity extends object>(
 }
 
 function buildGroupByClause<TEntity extends object>(
+  dialect: SqlDialect,
   tableName: string,
   groupBy?: QueryOptions<TEntity>["groupBy"],
 ): string {
@@ -437,11 +455,12 @@ function buildGroupByClause<TEntity extends object>(
   }
 
   const columns = (Array.isArray(groupBy) ? groupBy : [groupBy]).map((column) => String(column));
-  const parts = columns.map((column) => resolveQualifiedColumn(tableName, column));
+  const parts = columns.map((column) => resolveQualifiedColumn(dialect, tableName, column));
   return parts.length > 0 ? ` GROUP BY ${parts.join(", ")}` : "";
 }
 
 function buildHavingClause<TEntity extends object>(
+  dialect: SqlDialect,
   tableName: string,
   having: QueryOptions<TEntity>["having"],
   params: unknown[],
@@ -450,22 +469,22 @@ function buildHavingClause<TEntity extends object>(
     return "";
   }
 
-  const body = appendWhereParts(tableName, having, params);
+  const body = appendWhereParts(dialect, tableName, having, params);
   return body.length > 0 ? ` HAVING ${body}` : "";
 }
 
-function buildJoinClause(joins: readonly QueryJoin[] = []): string {
+function buildJoinClause(dialect: SqlDialect, joins: readonly QueryJoin[] = []): string {
   return joins
     .map((join) => {
       const joinType = join.type === "left" ? "LEFT JOIN" : "INNER JOIN";
       const onClause = join.on
         .map(
           ({ left, right }) =>
-            `${qualifyColumn(left.table, left.column)} = ${qualifyColumn(right.table, right.column)}`,
+            `${qualifyColumn(dialect, left.table, left.column)} = ${qualifyColumn(dialect, right.table, right.column)}`,
         )
         .join(" AND ");
 
-      return ` ${joinType} ${quoteIdentifier(join.table)} ON ${onClause}`;
+      return ` ${joinType} ${quoteIdentifier(dialect, join.table)} ON ${onClause}`;
     })
     .join("");
 }
@@ -494,49 +513,52 @@ function buildOffsetClause(offset?: number): string {
   return ` OFFSET ${offset}`;
 }
 
-function buildReturningColumns<TEntity extends object>(table: TableDefinition<TEntity>): string {
-  return table.columns.map((column) => qualifyColumn(table.name, column)).join(", ");
+function buildReturningColumns<TEntity extends object>(
+  dialect: SqlDialect,
+  table: TableDefinition<TEntity>,
+): string {
+  return table.columns.map((column) => qualifyColumn(dialect, table.name, column)).join(", ");
 }
 
 function buildSelectList<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   select?: QuerySelectItem[],
   params: unknown[] = [],
 ): string {
   if (!select || select.length === 0) {
-    return buildReturningColumns(table);
+    return buildReturningColumns(dialect, table);
   }
 
   return select
     .map((item) => {
       if (item.kind === "column") {
-        const column = qualifyColumn(item.table, item.column);
-        return item.as ? `${column} AS ${quoteIdentifier(item.as)}` : column;
+        const column = qualifyColumn(dialect, item.table, item.column);
+        return item.as ? `${column} AS ${quoteIdentifier(dialect, item.as)}` : column;
       }
 
       if (item.kind === "textColumn") {
-        const dialect = currentSqlDialect();
-        const column = qualifyColumn(item.table, item.column);
+        const column = qualifyColumn(dialect, item.table, item.column);
         // SQLite's ordinary REAL-to-TEXT cast rounds to 15 significant digits.
         const text =
           dialect.driver === "sqlite"
             ? `CASE WHEN typeof(${column}) = 'real' THEN printf('%!.26g', ${column}) ELSE ${dialect.castToText(column)} END`
             : dialect.castToText(column);
-        return `${text} AS ${quoteIdentifier(item.as)}`;
+        return `${text} AS ${quoteIdentifier(dialect, item.as)}`;
       }
 
       if (item.kind === "literalText") {
-        return `${currentSqlDialect().castToText(pushParam(params, item.value))} AS ${quoteIdentifier(item.as)}`;
+        return `${dialect.castToText(pushParam(dialect, params, item.value))} AS ${quoteIdentifier(dialect, item.as)}`;
       }
 
       if (item.kind === "subqueryCount") {
         const body = remapExistsSql(item.sql, item.params, params);
-        return `(${body}) AS ${quoteIdentifier(item.as)}`;
+        return `(${body}) AS ${quoteIdentifier(dialect, item.as)}`;
       }
 
-      const column = qualifyColumn(item.table, item.column);
-      const placeholder = pushParam(params, item.query);
-      return `ts_rank(${column}, plainto_tsquery('english', ${placeholder})) AS ${quoteIdentifier(item.as)}`;
+      const column = qualifyColumn(dialect, item.table, item.column);
+      const placeholder = pushParam(dialect, params, item.query);
+      return `ts_rank(${column}, plainto_tsquery('english', ${placeholder})) AS ${quoteIdentifier(dialect, item.as)}`;
     })
     .join(", ");
 }
@@ -565,12 +587,13 @@ function getDefinedColumnEntries<TEntity, PrimaryKey extends keyof TEntity & str
 }
 
 function buildSelectLock<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   options: QueryOptions<TEntity>,
 ): string {
   const lock = options.lock;
   if (!lock) return "";
-  const driver = currentSqlDialect().driver;
+  const driver = dialect.driver;
   if (driver === "sqlite")
     throw new Error("Row locks are not supported on SQLite; use an explicit write transaction.");
   if (lock.mode !== "update" && lock.mode !== "share")
@@ -585,7 +608,7 @@ function buildSelectLock<TEntity extends object>(
     const tables = [table.name, ...(options.joins ?? []).map((join) => join.table)];
     if (!lock.of.length || lock.of.some((name) => !tables.includes(name)))
       throw new TypeError("Row lock targets must name tables in this query.");
-    target = ` OF ${lock.of.map(quoteIdentifier).join(", ")}`;
+    target = ` OF ${lock.of.map((column) => quoteIdentifier(dialect, column)).join(", ")}`;
   }
   const wait =
     lock.wait === "nowait" ? " NOWAIT" : lock.wait === "skipLocked" ? " SKIP LOCKED" : "";
@@ -593,23 +616,24 @@ function buildSelectLock<TEntity extends object>(
 }
 
 function buildSelectQuery<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   options: QueryOptions<TEntity> = {},
   whereNodes: readonly WhereNode<TEntity>[] = [],
 ): { text: string; params: unknown[] } {
   const params: unknown[] = [];
-  const columns = buildSelectList(table, options.select, params);
-  const { clause } = buildQueryWhereClause(table, options, whereNodes, params);
-  const joins = buildJoinClause(options.joins);
-  const groupBy = buildGroupByClause(table.name, options.groupBy);
-  const havingClause = buildHavingClause(table.name, options.having, params);
-  const orderBy = buildOrderByClause(table.name, options.orderBy ?? table.defaultOrderBy);
+  const columns = buildSelectList(dialect, table, options.select, params);
+  const { clause } = buildQueryWhereClause(dialect, table, options, whereNodes, params);
+  const joins = buildJoinClause(dialect, options.joins);
+  const groupBy = buildGroupByClause(dialect, table.name, options.groupBy);
+  const havingClause = buildHavingClause(dialect, table.name, options.having, params);
+  const orderBy = buildOrderByClause(dialect, table.name, options.orderBy ?? table.defaultOrderBy);
   const limit = buildLimitClause(options.limit);
   const offset = buildOffsetClause(options.offset);
-  const lock = buildSelectLock(table, options);
+  const lock = buildSelectLock(dialect, table, options);
 
   return {
-    text: `SELECT ${columns} FROM ${quoteIdentifier(table.name)}${joins}${clause}${groupBy}${havingClause}${orderBy}${limit}${offset}${lock}`,
+    text: `SELECT ${columns} FROM ${quoteIdentifier(dialect, table.name)}${joins}${clause}${groupBy}${havingClause}${orderBy}${limit}${offset}${lock}`,
     params,
   };
 }
@@ -618,6 +642,7 @@ const EAGER_ROW_NUMBER = "__strata_eager_row_number";
 
 /** Database-side per-owner bounds; never fetch an unbounded batch to slice in JS. */
 function buildLimitedRelationQuery<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   options: QueryOptions<TEntity>,
   partition: { table: string; column: string },
@@ -646,37 +671,39 @@ function buildLimitedRelationQuery<TEntity extends object>(
   ) {
     order.push({ column: table.primaryKey, direction: "ASC" });
   }
-  const ordering = buildOrderByClause(table.name, order);
+  const ordering = buildOrderByClause(dialect, table.name, order);
   const params: unknown[] = [];
-  const columns = buildSelectList(table, options.select, params);
-  const rank = `ROW_NUMBER() OVER (PARTITION BY ${qualifyColumn(partition.table, partition.column)}${ordering}) AS ${quoteIdentifier(EAGER_ROW_NUMBER)}`;
+  const columns = buildSelectList(dialect, table, options.select, params);
+  const rank = `ROW_NUMBER() OVER (PARTITION BY ${qualifyColumn(dialect, partition.table, partition.column)}${ordering}) AS ${quoteIdentifier(dialect, EAGER_ROW_NUMBER)}`;
   const sql = source(columns, rank, params);
   const offset = options.offset ?? 0;
   const upper =
     options.limit === undefined
       ? ""
-      : ` AND ${quoteIdentifier(EAGER_ROW_NUMBER)} <= ${offset + options.limit}`;
+      : ` AND ${quoteIdentifier(dialect, EAGER_ROW_NUMBER)} <= ${offset + options.limit}`;
   return {
-    text: `SELECT * FROM (${sql}) AS ${quoteIdentifier("__strata_eager")} WHERE ${quoteIdentifier(EAGER_ROW_NUMBER)} > ${offset}${upper} ORDER BY ${quoteIdentifier(EAGER_ROW_NUMBER)}`,
+    text: `SELECT * FROM (${sql}) AS ${quoteIdentifier(dialect, "__strata_eager")} WHERE ${quoteIdentifier(dialect, EAGER_ROW_NUMBER)} > ${offset}${upper} ORDER BY ${quoteIdentifier(dialect, EAGER_ROW_NUMBER)}`,
     params,
   };
 }
 
 function buildLimitedHasManyQuery<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   options: QueryOptions<TEntity>,
   partition: { table: string; column: string; ownerAlias?: string },
 ): { text: string; params: unknown[] } {
-  return buildLimitedRelationQuery(table, options, partition, (columns, rank, params) => {
-    const { clause } = buildQueryWhereClause(table, options, options.whereNodes, params);
+  return buildLimitedRelationQuery(dialect, table, options, partition, (columns, rank, params) => {
+    const { clause } = buildQueryWhereClause(dialect, table, options, options.whereNodes, params);
     const owner = partition.ownerAlias
-      ? `, ${qualifyColumn(partition.table, partition.column)} AS ${quoteIdentifier(partition.ownerAlias)}`
+      ? `, ${qualifyColumn(dialect, partition.table, partition.column)} AS ${quoteIdentifier(dialect, partition.ownerAlias)}`
       : "";
-    return `SELECT ${columns}${owner}, ${rank} FROM ${quoteIdentifier(table.name)}${buildJoinClause(options.joins)}${clause}`;
+    return `SELECT ${columns}${owner}, ${rank} FROM ${quoteIdentifier(dialect, table.name)}${buildJoinClause(dialect, options.joins)}${clause}`;
   });
 }
 
 function buildCountQuery<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   where: QueryWhere<TEntity> = {},
   options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed" | "joins" | "groupBy"> = {},
@@ -684,6 +711,7 @@ function buildCountQuery<TEntity extends object>(
 ): { text: string; params: unknown[] } {
   const params: unknown[] = [];
   const { clause, params: whereParams } = buildQueryWhereClause(
+    dialect,
     table,
     {
       where,
@@ -693,16 +721,17 @@ function buildCountQuery<TEntity extends object>(
     whereNodes,
   );
   params.push(...whereParams);
-  const joins = buildJoinClause(options.joins);
-  const groupBy = buildGroupByClause(table.name, options.groupBy);
+  const joins = buildJoinClause(dialect, options.joins);
+  const groupBy = buildGroupByClause(dialect, table.name, options.groupBy);
 
   return {
-    text: `SELECT COUNT(*) AS count FROM ${quoteIdentifier(table.name)}${joins}${clause}${groupBy}`,
+    text: `SELECT COUNT(*) AS count FROM ${quoteIdentifier(dialect, table.name)}${joins}${clause}${groupBy}`,
     params,
   };
 }
 
 function buildProjectionQuery<TEntity extends object>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   expression: string,
   alias: string,
@@ -711,15 +740,20 @@ function buildProjectionQuery<TEntity extends object>(
 ): { text: string; params: unknown[] } {
   assertSafeProjectionExpression(expression);
   const params: unknown[] = [];
-  const { clause, params: whereParams } = buildQueryWhereClause(table, options, whereNodes);
+  const { clause, params: whereParams } = buildQueryWhereClause(
+    dialect,
+    table,
+    options,
+    whereNodes,
+  );
   params.push(...whereParams);
-  const joins = buildJoinClause(options.joins);
-  const groupBy = buildGroupByClause(table.name, options.groupBy);
-  const orderBy = buildOrderByClause(table.name, options.orderBy);
+  const joins = buildJoinClause(dialect, options.joins);
+  const groupBy = buildGroupByClause(dialect, table.name, options.groupBy);
+  const orderBy = buildOrderByClause(dialect, table.name, options.orderBy);
   const limit = buildLimitClause(options.limit);
 
   return {
-    text: `SELECT ${expression} AS ${quoteIdentifier(alias)} FROM ${quoteIdentifier(table.name)}${joins}${clause}${groupBy}${orderBy}${limit}`,
+    text: `SELECT ${expression} AS ${quoteIdentifier(dialect, alias)} FROM ${quoteIdentifier(dialect, table.name)}${joins}${clause}${groupBy}${orderBy}${limit}`,
     params,
   };
 }
@@ -735,6 +769,7 @@ function assertSafeProjectionExpression(expression: string): void {
 
 /** Fixed aliases and textual totals avoid driver-dependent JavaScript precision loss. */
 function buildGroupedSumQuery<TEntity extends object, K extends keyof TEntity & string>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   groupColumn: K,
   column: keyof TEntity & string,
@@ -748,34 +783,36 @@ function buildGroupedSumQuery<TEntity extends object, K extends keyof TEntity & 
       throw new TypeError(
         "Grouped sums do not support joins, selection, ordering, pagination, grouping or locks.",
       );
-  const group = qualifyColumn(table.name, groupColumn);
-  const total = currentSqlDialect().castToText(`SUM(${qualifyColumn(table.name, column)})`);
-  const { clause, params } = buildQueryWhereClause(table, options, whereNodes);
+  const group = qualifyColumn(dialect, table.name, groupColumn);
+  const total = dialect.castToText(`SUM(${qualifyColumn(dialect, table.name, column)})`);
+  const { clause, params } = buildQueryWhereClause(dialect, table, options, whereNodes);
   return {
-    text: `SELECT ${group} AS ${quoteIdentifier("value")}, ${total} AS ${quoteIdentifier("sum")} FROM ${quoteIdentifier(table.name)}${clause} GROUP BY ${group} ORDER BY ${group} ASC`,
+    text: `SELECT ${group} AS ${quoteIdentifier(dialect, "value")}, ${total} AS ${quoteIdentifier(dialect, "sum")} FROM ${quoteIdentifier(dialect, table.name)}${clause} GROUP BY ${group} ORDER BY ${group} ASC`,
     params,
   };
 }
 
 function buildGroupedCountQuery<TEntity extends object, K extends keyof TEntity & string>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity>,
   column: K,
   where: QueryWhere<TEntity> = {},
   options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed"> = {},
 ): { text: string; params: unknown[] } {
-  const qualifiedColumn = qualifyColumn(table.name, column);
-  const { clause, params } = buildQueryWhereClause(table, {
+  const qualifiedColumn = qualifyColumn(dialect, table.name, column);
+  const { clause, params } = buildQueryWhereClause(dialect, table, {
     where,
     ...options,
   });
 
   return {
-    text: `SELECT ${qualifiedColumn} AS ${quoteIdentifier("value")}, COUNT(*) AS ${quoteIdentifier("count")} FROM ${quoteIdentifier(table.name)}${clause} GROUP BY ${qualifiedColumn} ORDER BY ${qualifiedColumn} ASC`,
+    text: `SELECT ${qualifiedColumn} AS ${quoteIdentifier(dialect, "value")}, COUNT(*) AS ${quoteIdentifier(dialect, "count")} FROM ${quoteIdentifier(dialect, table.name)}${clause} GROUP BY ${qualifiedColumn} ORDER BY ${qualifiedColumn} ASC`,
     params,
   };
 }
 
 function buildInsertQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity, PrimaryKey>,
   values: MutationValues<TEntity>,
 ): { text: string; params: unknown[] } {
@@ -786,17 +823,18 @@ function buildInsertQuery<TEntity extends object, PrimaryKey extends keyof TEnti
   }
 
   const params: unknown[] = [];
-  const columns = entries.map(([column]) => quoteIdentifier(column)).join(", ");
-  const placeholders = entries.map(([, value]) => pushParam(params, value)).join(", ");
-  const returningColumns = buildReturningColumns(table);
+  const columns = entries.map(([column]) => quoteIdentifier(dialect, column)).join(", ");
+  const placeholders = entries.map(([, value]) => pushParam(dialect, params, value)).join(", ");
+  const returningColumns = buildReturningColumns(dialect, table);
 
   return {
-    text: `INSERT INTO ${quoteIdentifier(table.name)} (${columns}) VALUES (${placeholders})${returningSuffix(returningColumns)}`,
+    text: `INSERT INTO ${quoteIdentifier(dialect, table.name)} (${columns}) VALUES (${placeholders})${returningSuffix(dialect, returningColumns)}`,
     params,
   };
 }
 
 function buildUpsertQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity, PrimaryKey>,
   values: MutationValues<TEntity>,
   conflictColumns: readonly string[],
@@ -819,18 +857,19 @@ function buildUpsertQuery<TEntity extends object, PrimaryKey extends keyof TEnti
   ).filter((column) => insertable.has(column));
 
   const params: unknown[] = [];
-  const columns = entries.map(([column]) => quoteIdentifier(column)).join(", ");
-  const placeholders = entries.map(([, value]) => pushParam(params, value)).join(", ");
-  const returningColumns = buildReturningColumns(table);
-  const suffix = currentSqlDialect().upsertSuffix(conflictColumns, updatable);
+  const columns = entries.map(([column]) => quoteIdentifier(dialect, column)).join(", ");
+  const placeholders = entries.map(([, value]) => pushParam(dialect, params, value)).join(", ");
+  const returningColumns = buildReturningColumns(dialect, table);
+  const suffix = dialect.upsertSuffix(conflictColumns, updatable);
 
   return {
-    text: `INSERT INTO ${quoteIdentifier(table.name)} (${columns}) VALUES (${placeholders})${suffix}${returningSuffix(returningColumns)}`,
+    text: `INSERT INTO ${quoteIdentifier(dialect, table.name)} (${columns}) VALUES (${placeholders})${suffix}${returningSuffix(dialect, returningColumns)}`,
     params,
   };
 }
 
 function buildIncrementQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
   column: keyof TEntity & string,
@@ -846,30 +885,31 @@ function buildIncrementQuery<TEntity extends object, PrimaryKey extends keyof TE
   }
 
   const params: unknown[] = [];
-  const target = quoteIdentifier(column);
-  const assignments = [`${target} = ${target} + ${pushParam(params, amount)}`];
+  const target = quoteIdentifier(dialect, column);
+  const assignments = [`${target} = ${target} + ${pushParam(dialect, params, amount)}`];
 
   for (const [name, value] of getDefinedColumnEntries(table, extra as Partial<TEntity>, {
     exclude: [table.primaryKey, column],
   })) {
-    assignments.push(`${quoteIdentifier(name)} = ${pushParam(params, value)}`);
+    assignments.push(`${quoteIdentifier(dialect, name)} = ${pushParam(dialect, params, value)}`);
   }
 
-  const primaryKeyPlaceholder = pushParam(params, id);
-  const returningColumns = buildReturningColumns(table);
+  const primaryKeyPlaceholder = pushParam(dialect, params, id);
+  const returningColumns = buildReturningColumns(dialect, table);
   const scopeClauses: string[] = [];
 
-  appendSoftDeleteScope(table, {}, scopeClauses);
+  appendSoftDeleteScope(dialect, table, {}, scopeClauses);
 
   const scopeSuffix = scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
 
   return {
-    text: `UPDATE ${quoteIdentifier(table.name)} SET ${assignments.join(", ")} WHERE ${quoteIdentifier(table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix}${returningSuffix(returningColumns)}`,
+    text: `UPDATE ${quoteIdentifier(dialect, table.name)} SET ${assignments.join(", ")} WHERE ${quoteIdentifier(dialect, table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix}${returningSuffix(dialect, returningColumns)}`,
     params,
   };
 }
 
 function buildUpdateQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
   changes: UpdateValues<TEntity, PrimaryKey>,
@@ -884,18 +924,21 @@ function buildUpdateQuery<TEntity extends object, PrimaryKey extends keyof TEnti
 
   const params: unknown[] = [];
   const setClause = entries
-    .map(([column, value]) => `${quoteIdentifier(column)} = ${pushParam(params, value)}`)
+    .map(
+      ([column, value]) =>
+        `${quoteIdentifier(dialect, column)} = ${pushParam(dialect, params, value)}`,
+    )
     .join(", ");
-  const primaryKeyPlaceholder = pushParam(params, id);
-  const returningColumns = buildReturningColumns(table);
+  const primaryKeyPlaceholder = pushParam(dialect, params, id);
+  const returningColumns = buildReturningColumns(dialect, table);
   const scopeClauses: string[] = [];
 
-  appendSoftDeleteScope(table, {}, scopeClauses);
+  appendSoftDeleteScope(dialect, table, {}, scopeClauses);
 
   const scopeSuffix = scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
 
   return {
-    text: `UPDATE ${quoteIdentifier(table.name)} SET ${setClause} WHERE ${quoteIdentifier(table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix}${returningSuffix(returningColumns)}`,
+    text: `UPDATE ${quoteIdentifier(dialect, table.name)} SET ${setClause} WHERE ${quoteIdentifier(dialect, table.primaryKey)} = ${primaryKeyPlaceholder}${scopeSuffix}${returningSuffix(dialect, returningColumns)}`,
     params,
   };
 }
@@ -904,6 +947,7 @@ function buildSoftDeleteByIdQuery<
   TEntity extends object,
   PrimaryKey extends keyof TEntity & string,
 >(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
   deletedAt: Date,
@@ -914,21 +958,22 @@ function buildSoftDeleteByIdQuery<
     throw new Error(`Table ${table.name} does not support soft deletes.`);
   }
 
-  const returningColumns = buildReturningColumns(table);
+  const returningColumns = buildReturningColumns(dialect, table);
   const scopeClauses: string[] = [];
-  appendSoftDeleteScope(table, {}, scopeClauses);
+  appendSoftDeleteScope(dialect, table, {}, scopeClauses);
   const scopeSuffix = scopeClauses.length > 0 ? ` AND ${scopeClauses.join(" AND ")}` : "";
   const params: unknown[] = [];
-  const deletedAtPlaceholder = pushParam(params, deletedAt);
-  const idPlaceholder = pushParam(params, id);
+  const deletedAtPlaceholder = pushParam(dialect, params, deletedAt);
+  const idPlaceholder = pushParam(dialect, params, id);
 
   return {
-    text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = ${deletedAtPlaceholder} WHERE ${quoteIdentifier(table.primaryKey)} = ${idPlaceholder}${scopeSuffix}${returningSuffix(returningColumns)}`,
+    text: `UPDATE ${quoteIdentifier(dialect, table.name)} SET ${quoteIdentifier(dialect, deletedAtColumn)} = ${deletedAtPlaceholder} WHERE ${quoteIdentifier(dialect, table.primaryKey)} = ${idPlaceholder}${scopeSuffix}${returningSuffix(dialect, returningColumns)}`,
     params,
   };
 }
 
 function buildRestoreByIdQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
 ): { text: string; params: unknown[] } {
@@ -938,29 +983,31 @@ function buildRestoreByIdQuery<TEntity extends object, PrimaryKey extends keyof 
     throw new Error(`Table ${table.name} does not support soft deletes.`);
   }
 
-  const returningColumns = buildReturningColumns(table);
+  const returningColumns = buildReturningColumns(dialect, table);
   const params: unknown[] = [];
-  const deletedAtPlaceholder = pushParam(params, null);
-  const idPlaceholder = pushParam(params, id);
+  const deletedAtPlaceholder = pushParam(dialect, params, null);
+  const idPlaceholder = pushParam(dialect, params, id);
 
   return {
-    text: `UPDATE ${quoteIdentifier(table.name)} SET ${quoteIdentifier(deletedAtColumn)} = ${deletedAtPlaceholder} WHERE ${quoteIdentifier(table.primaryKey)} = ${idPlaceholder} AND ${qualifyColumn(table.name, deletedAtColumn)} IS NOT NULL${returningSuffix(returningColumns)}`,
+    text: `UPDATE ${quoteIdentifier(dialect, table.name)} SET ${quoteIdentifier(dialect, deletedAtColumn)} = ${deletedAtPlaceholder} WHERE ${quoteIdentifier(dialect, table.primaryKey)} = ${idPlaceholder} AND ${qualifyColumn(dialect, table.name, deletedAtColumn)} IS NOT NULL${returningSuffix(dialect, returningColumns)}`,
     params,
   };
 }
 
 function buildDeleteByIdQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity, PrimaryKey>,
   id: TEntity[PrimaryKey],
 ): { text: string; params: unknown[] } {
   const params: unknown[] = [];
-  const idPlaceholder = pushParam(params, id);
+  const idPlaceholder = pushParam(dialect, params, id);
   const returning = returningSuffix(
-    `${quoteIdentifier(table.primaryKey)} AS ${quoteIdentifier("deleted_id")}`,
+    dialect,
+    `${quoteIdentifier(dialect, table.primaryKey)} AS ${quoteIdentifier(dialect, "deleted_id")}`,
   );
 
   return {
-    text: `DELETE FROM ${quoteIdentifier(table.name)} WHERE ${quoteIdentifier(table.primaryKey)} = ${idPlaceholder}${returning}`,
+    text: `DELETE FROM ${quoteIdentifier(dialect, table.name)} WHERE ${quoteIdentifier(dialect, table.primaryKey)} = ${idPlaceholder}${returning}`,
     params,
   };
 }
@@ -970,6 +1017,7 @@ function buildConditionalWriteQuery<
   TEntity extends object,
   PrimaryKey extends keyof TEntity & string,
 >(
+  dialect: SqlDialect,
   table: TableDefinition<TEntity, PrimaryKey>,
   operation: "update" | "delete",
   changes: UpdateValues<TEntity, PrimaryKey>,
@@ -990,12 +1038,13 @@ function buildConditionalWriteQuery<
   }
   const params: unknown[] = [];
   const predicate = buildAdvancedWhereClause(
+    dialect,
     table.name,
     options.where ?? {},
     options.whereNodes ?? [],
   );
   if (!predicate.clause) throw new Error("Conditional writes require an explicit predicate.");
-  if (returning !== undefined && currentSqlDialect().driver === "mysql")
+  if (returning !== undefined && dialect.driver === "mysql")
     throw new Error("Mutation RETURNING is not supported on MySQL.");
   const columns = returning ?? [table.primaryKey];
   if (!columns.length || columns.some((column) => !table.columns.includes(column)))
@@ -1014,13 +1063,26 @@ function buildConditionalWriteQuery<
     )
       throw new Error("Conditional updates require declared non-primary-key columns.");
     const assignments = entries.map(
-      ([column, value]) => `${quoteIdentifier(column)} = ${pushParam(params, value)}`,
+      ([column, value]) =>
+        `${quoteIdentifier(dialect, column)} = ${pushParam(dialect, params, value)}`,
     );
-    prefix = `UPDATE ${quoteIdentifier(table.name)} SET ${assignments.join(", ")}`;
-  } else prefix = `DELETE FROM ${quoteIdentifier(table.name)}`;
-  const { clause } = buildQueryWhereClause(table, options, options.whereNodes ?? [], params);
+    prefix = `UPDATE ${quoteIdentifier(dialect, table.name)} SET ${assignments.join(", ")}`;
+  } else prefix = `DELETE FROM ${quoteIdentifier(dialect, table.name)}`;
+  const { clause } = buildQueryWhereClause(
+    dialect,
+    table,
+    options,
+    options.whereNodes ?? [],
+    params,
+  );
   return {
-    text: prefix + clause + returningSuffix(columns.map(quoteIdentifier).join(", ")),
+    text:
+      prefix +
+      clause +
+      returningSuffix(
+        dialect,
+        columns.map((column) => quoteIdentifier(dialect, column)).join(", "),
+      ),
     params,
   };
 }

@@ -5,6 +5,7 @@ import { Model, registerModelRepository } from "@getstrata/core/database/model";
 import { quoteIdentifier } from "@getstrata/core/database/query";
 import { hasMany } from "@getstrata/core/database/relationships";
 import { projectPluck, uniqueColumnSelect } from "@getstrata/core/database/repositoryQuery";
+import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { defineTable } from "@getstrata/core/database/table";
 import { errorResponse } from "@getstrata/core/http/response";
 
@@ -280,7 +281,9 @@ describe("RepositoryQuery pluck and value", () => {
     expect(connection.calls.at(-1)?.query).toContain("INNER JOIN");
     expect(connection.calls.at(-1)?.query).toContain('SELECT "squad"."label" AS "label"');
 
-    expect(() => quoteIdentifier("label;drop")).toThrow("Invalid SQL identifier");
+    expect(() => quoteIdentifier(dialectFor("pgsql"), "label;drop")).toThrow(
+      "Invalid SQL identifier",
+    );
     const callsBeforeInvalidIdentifier = connection.calls.length;
     let identifierFailure: Error | undefined;
     await assert.rejects(squads.query().pluck("label;drop" as never), (error: unknown) => {

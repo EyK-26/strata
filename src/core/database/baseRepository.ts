@@ -49,6 +49,7 @@ import {
 } from "./relationships.ts";
 import { repositoryConnection } from "./repositoryConnection";
 import { RepositoryQuery } from "./repositoryQuery.ts";
+import type { SqlDialect } from "./sqlDialects";
 import type { TableDefinition } from "./table.ts";
 import { isActiveTransactionConnection, runInTransaction } from "./transaction.ts";
 import { hasActiveTransaction } from "./transactionControl.ts";
@@ -200,9 +201,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         [RELATION_WINDOW]: window,
         ...queryOptions
       } = options as RelationWindowOptions<TEntity>;
+      const dialect = currentSqlDialect();
       const { text, params } = window
-        ? buildLimitedHasManyQuery(this.table, { ...queryOptions, whereNodes }, window)
-        : buildSelectQuery(this.table, queryOptions, whereNodes ?? []);
+        ? buildLimitedHasManyQuery(dialect, this.table, { ...queryOptions, whereNodes }, window)
+        : buildSelectQuery(dialect, this.table, queryOptions, whereNodes ?? []);
       const rows = await this.connection.unsafe<TEntity & Record<string, unknown>>(text, params);
       if (window) for (const row of rows) delete row[EAGER_ROW_NUMBER];
       return rows;
@@ -497,7 +499,8 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     conflictColumns: readonly (keyof TEntity & string)[],
     updateColumns?: readonly (keyof TEntity & string)[],
   ): Promise<TEntity | null> {
-    if (currentSqlDialect().driver === "mysql")
+    const dialect = currentSqlDialect();
+    if (dialect.driver === "mysql")
       return this.mysqlMutation((repository) =>
         withDatabaseErrorHandling(async () => {
           // MySQL uses every unique index, not a named ON CONFLICT target. Require
@@ -512,7 +515,13 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
               throw new Error("MySQL upsert requires non-null supplied conflict-column values.");
             where[column] = values[column];
           }
-          const query = buildUpsertQuery(this.table, values, conflictColumns, updateColumns);
+          const query = buildUpsertQuery(
+            dialect,
+            this.table,
+            values,
+            conflictColumns,
+            updateColumns,
+          );
           const supplied = this.table.columns.filter((column) => values[column] !== undefined);
           const updates =
             updateColumns ?? supplied.filter((column) => !conflictColumns.includes(column));
@@ -542,7 +551,13 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         }),
       );
     return await withDatabaseErrorHandling(async () => {
-      const { text, params } = buildUpsertQuery(this.table, values, conflictColumns, updateColumns);
+      const { text, params } = buildUpsertQuery(
+        dialect,
+        this.table,
+        values,
+        conflictColumns,
+        updateColumns,
+      );
       const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
         text,
         params,
@@ -558,11 +573,12 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     amount = 1,
     extra: UpdateValues<TEntity, PrimaryKey> = {} as UpdateValues<TEntity, PrimaryKey>,
   ): Promise<TEntity | null> {
-    if (currentSqlDialect().driver === "mysql")
+    const dialect = currentSqlDialect();
+    if (dialect.driver === "mysql")
       return this.mysqlMutation((repository) =>
         withDatabaseErrorHandling(() =>
           repository.mysqlWriteById(
-            buildIncrementQuery(this.table, id, column, amount, extra),
+            buildIncrementQuery(dialect, this.table, id, column, amount, extra),
             id,
             false,
             true,
@@ -570,7 +586,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         ),
       );
     return await withDatabaseErrorHandling(async () => {
-      const { text, params } = buildIncrementQuery(this.table, id, column, amount, extra);
+      const { text, params } = buildIncrementQuery(dialect, this.table, id, column, amount, extra);
       const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
         text,
         params,
@@ -590,11 +606,12 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   async create(values: MutationValues<TEntity>): Promise<TEntity> {
+    const dialect = currentSqlDialect();
     this.assertTransactionalEvent("created");
-    if (currentSqlDialect().driver === "mysql")
+    if (dialect.driver === "mysql")
       return this.mysqlMutation((repository) =>
         withDatabaseErrorHandling(async () => {
-          const query = buildInsertQuery(this.table, values);
+          const query = buildInsertQuery(dialect, this.table, values);
           const [result] = await repository.connection.unsafe<{
             insertId?: number | string;
             affectedRows?: number;
@@ -612,7 +629,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       );
     return await this.runModelMutation("created", () =>
       withDatabaseErrorHandling(async () => {
-        const { text, params } = buildInsertQuery(this.table, values);
+        const { text, params } = buildInsertQuery(dialect, this.table, values);
         const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
           text,
           params,
@@ -646,7 +663,9 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     columns: readonly K[],
     options: QueryOptions<TEntity>,
   ): Promise<Pick<TEntity, K>[]> {
+    const dialect = currentSqlDialect();
     const { text, params } = buildConditionalWriteQuery(
+      dialect,
       this.table,
       "update",
       changes,
@@ -661,10 +680,17 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     changes: UpdateValues<TEntity, PrimaryKey>,
     options: QueryOptions<TEntity>,
   ): Promise<number> {
-    const { text, params } = buildConditionalWriteQuery(this.table, operation, changes, options);
+    const dialect = currentSqlDialect();
+    const { text, params } = buildConditionalWriteQuery(
+      dialect,
+      this.table,
+      operation,
+      changes,
+      options,
+    );
     return withDatabaseErrorHandling(async () => {
       const rows = await this.connection.unsafe<{ affectedRows?: number }>(text, params);
-      if (currentSqlDialect().driver !== "mysql") return rows.length;
+      if (dialect.driver !== "mysql") return rows.length;
       const affected = rows[0]?.affectedRows;
       if (!Number.isSafeInteger(affected) || affected === undefined || affected < 0)
         throw new Error(
@@ -678,12 +704,13 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     id: TEntity[PrimaryKey],
     changes: UpdateValues<TEntity, PrimaryKey>,
   ): Promise<TEntity | null> {
+    const dialect = currentSqlDialect();
     this.assertTransactionalEvent("updated");
-    if (currentSqlDialect().driver === "mysql")
+    if (dialect.driver === "mysql")
       return this.mysqlMutation((repository) =>
         withDatabaseErrorHandling(async () => {
           const row = await repository.mysqlWriteById(
-            buildUpdateQuery(this.table, id, changes),
+            buildUpdateQuery(dialect, this.table, id, changes),
             id,
             false,
             true,
@@ -694,7 +721,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       );
     return await this.runModelMutation("updated", () =>
       withDatabaseErrorHandling(async () => {
-        const { text, params } = buildUpdateQuery(this.table, id, changes);
+        const { text, params } = buildUpdateQuery(dialect, this.table, id, changes);
         const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
           text,
           params,
@@ -734,12 +761,13 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   async softDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
+    const dialect = currentSqlDialect();
     this.assertTransactionalEvent("deleted");
-    if (currentSqlDialect().driver === "mysql")
+    if (dialect.driver === "mysql")
       return this.mysqlMutation((repository) =>
         withDatabaseErrorHandling(async () => {
           const row = await repository.mysqlWriteById(
-            buildSoftDeleteByIdQuery(this.table, id, new Date()),
+            buildSoftDeleteByIdQuery(dialect, this.table, id, new Date()),
             id,
             true,
           );
@@ -750,7 +778,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       );
     return await this.runModelMutation("deleted", () =>
       withDatabaseErrorHandling(async () => {
-        const { text, params } = buildSoftDeleteByIdQuery(this.table, id, new Date());
+        const { text, params } = buildSoftDeleteByIdQuery(dialect, this.table, id, new Date());
         const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
           text,
           params,
@@ -767,11 +795,12 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   async forceDeleteById(id: TEntity[PrimaryKey]): Promise<boolean> {
+    const dialect = currentSqlDialect();
     this.assertTransactionalEvent("force-deleted");
-    if (currentSqlDialect().driver === "mysql")
+    if (dialect.driver === "mysql")
       return this.mysqlMutation((repository) =>
         withDatabaseErrorHandling(async () => {
-          const query = buildDeleteByIdQuery(this.table, id);
+          const query = buildDeleteByIdQuery(dialect, this.table, id);
           const [result] = await repository.connection.unsafe<{ affectedRows?: number }>(
             query.text,
             query.params,
@@ -783,7 +812,7 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       );
     return await this.runModelMutation("force-deleted", () =>
       withDatabaseErrorHandling(async () => {
-        const { text, params } = buildDeleteByIdQuery(this.table, id);
+        const { text, params } = buildDeleteByIdQuery(dialect, this.table, id);
         const [row] = await this.connection.unsafe<DeletedRow>(text, params);
 
         if (!row) {
@@ -799,18 +828,22 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
   }
 
   async restoreById(id: TEntity[PrimaryKey]): Promise<TEntity | null> {
+    const dialect = currentSqlDialect();
     this.assertTransactionalEvent("restored");
-    if (currentSqlDialect().driver === "mysql")
+    if (dialect.driver === "mysql")
       return this.mysqlMutation((repository) =>
         withDatabaseErrorHandling(async () => {
-          const row = await repository.mysqlWriteById(buildRestoreByIdQuery(this.table, id), id);
+          const row = await repository.mysqlWriteById(
+            buildRestoreByIdQuery(dialect, this.table, id),
+            id,
+          );
           if (row) await dispatchModelEvent(modelEventName(this.table.name, "restored"), row);
           return row;
         }),
       );
     return await this.runModelMutation("restored", () =>
       withDatabaseErrorHandling(async () => {
-        const { text, params } = buildRestoreByIdQuery(this.table, id);
+        const { text, params } = buildRestoreByIdQuery(dialect, this.table, id);
         const [record] = await this.connection.unsafe<TEntity & Record<string, unknown>>(
           text,
           params,
@@ -885,7 +918,8 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     options: Pick<QueryOptions<TEntity>, "withTrashed" | "onlyTrashed" | "joins" | "groupBy"> = {},
     whereNodes: readonly WhereNode<TEntity>[] = [],
   ): Promise<number> {
-    const { text, params } = buildCountQuery(this.table, where, options, whereNodes);
+    const dialect = currentSqlDialect();
+    const { text, params } = buildCountQuery(dialect, this.table, where, options, whereNodes);
     const [row] = await this.connection.unsafe<CountRow>(text, params);
     return Number(row?.count ?? 0);
   }
@@ -894,16 +928,20 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     column: keyof TEntity & string,
     where: QueryWhere<TEntity> = {},
   ): Promise<number> {
-    const qualifiedColumn = qualifyColumn(this.table.name, column);
-    return await this.averageExpression(`AVG(${qualifiedColumn})`, "value", where);
+    const dialect = currentSqlDialect();
+    const qualifiedColumn = qualifyColumn(dialect, this.table.name, column);
+    return await this.averageExpression(`AVG(${qualifiedColumn})`, "value", where, dialect);
   }
 
   protected async averageExpression(
     expression: string,
     alias: string,
     where: QueryWhere<TEntity> = {},
+    dialect: SqlDialect = currentSqlDialect(),
   ): Promise<number> {
-    const { text, params } = buildProjectionQuery(this.table, expression, alias, { where });
+    const { text, params } = buildProjectionQuery(dialect, this.table, expression, alias, {
+      where,
+    });
     const [row] = await this.connection.unsafe<Record<string, number | string | null>>(
       text,
       params,
@@ -918,8 +956,10 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     column: keyof TEntity & string,
     options: ExtendedQueryOptions<TEntity> = {},
   ): Promise<Array<{ value: TEntity[K] | null; sum: string | null }>> {
+    const dialect = currentSqlDialect();
     const { whereNodes, ...queryOptions } = options;
     const { text, params } = buildGroupedSumQuery(
+      dialect,
       this.table,
       groupColumn,
       column,
@@ -952,8 +992,9 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     column: keyof TEntity & string,
     where: QueryWhere<TEntity>,
   ): Promise<number> {
-    const qualifiedColumn = qualifyColumn(this.table.name, column);
-    return await this.averageExpression(`${fn}(${qualifiedColumn})`, "value", where);
+    const dialect = currentSqlDialect();
+    const qualifiedColumn = qualifyColumn(dialect, this.table.name, column);
+    return await this.averageExpression(`${fn}(${qualifiedColumn})`, "value", where, dialect);
   }
 
   protected async pluckNumberValues(
@@ -961,7 +1002,8 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     alias: string,
     options: QueryOptions<TEntity> = {},
   ): Promise<number[]> {
-    const { text, params } = buildProjectionQuery(this.table, expression, alias, options);
+    const dialect = currentSqlDialect();
+    const { text, params } = buildProjectionQuery(dialect, this.table, expression, alias, options);
     const rows = await this.connection.unsafe<Record<string, number | string | null>>(text, params);
 
     return rows.flatMap((row) => {
@@ -974,7 +1016,8 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
     column: K,
     where: QueryWhere<TEntity> = {},
   ): Promise<Array<{ value: TEntity[K] | null; count: number }>> {
-    const { text, params } = buildGroupedCountQuery(this.table, column, where);
+    const dialect = currentSqlDialect();
+    const { text, params } = buildGroupedCountQuery(dialect, this.table, column, where);
     const rows = await this.connection.unsafe<ValueCountRow<TEntity[K]>>(text, params);
 
     return rows.map(({ value, count }) => ({
@@ -1073,8 +1116,15 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
         "A related model scope joins the through table twice; use an explicitly aliased correlated predicate instead.",
       );
     }
+    const dialect = currentSqlDialect();
     const parentIds = [...new Set(parents.map((parent) => parent[relation.localKey]))];
-    const { text, params } = buildHasManyThroughQuery(this.table, relation, parentIds, options);
+    const { text, params } = buildHasManyThroughQuery(
+      dialect,
+      this.table,
+      relation,
+      parentIds,
+      options,
+    );
     const children = await this.connection.unsafe<TEntity & Record<string, unknown>>(text, params);
     for (const child of children) delete child[EAGER_ROW_NUMBER];
 
@@ -1262,8 +1312,9 @@ class BaseRepository<TEntity extends object, PrimaryKey extends keyof TEntity & 
       return indexBelongsToManyRelation(parents, [], [], relation);
     }
 
+    const dialect = currentSqlDialect();
     const parentIds = [...new Set(parents.map((parent) => parent[relation.parentKey]))];
-    const { text, params } = buildPivotLookupQuery(relation, parentIds);
+    const { text, params } = buildPivotLookupQuery(dialect, relation, parentIds);
     const pivotRows = await this.connection.unsafe<Pivot>(text, params);
 
     if (pivotRows.length === 0) {

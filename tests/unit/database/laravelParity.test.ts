@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { applyCasts, dehydrateValue, filterMassAssignable } from "@getstrata/core/database/model";
 import { buildSelectQuery } from "@getstrata/core/database/query";
 import { defineTable } from "@getstrata/core/database/table";
@@ -13,7 +13,7 @@ const notes = defineTable<{ id: number; status: string | null }, "id">({
 
 function whereSql(where: unknown): string {
   return runWithSqlDialect("sqlite", () => {
-    const { text } = buildSelectQuery(notes, { where } as never);
+    const { text } = buildSelectQuery(currentSqlDialect(), notes, { where } as never);
     return text.replace(/\s+/g, " ").split(" WHERE ")[1] ?? "";
   }) as unknown as string;
 }

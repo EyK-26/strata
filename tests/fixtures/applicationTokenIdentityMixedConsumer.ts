@@ -82,7 +82,7 @@ if (process.argv[2] === "execution") {
       primaryKey: "id",
       columns: ["id", "label"],
     });
-    const query = core.buildSelectQuery(table, { where: { id: 7 } });
+    const query = core.buildSelectQuery(core.currentSqlDialect(), table, { where: { id: 7 } });
     assert.ok(
       query.text.includes("`identity_rows`"),
       `MySQL identifiers lost root dialect: ${query.text}`,
